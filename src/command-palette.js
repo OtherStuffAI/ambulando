@@ -45,6 +45,7 @@ const COMMAND_PALETTE_ICON_SVG = {
   bot: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8V4H8"></path><rect width="16" height="12" x="4" y="8" rx="2"></rect><path d="M2 14h2"></path><path d="M20 14h2"></path><path d="M15 13v2"></path><path d="M9 13v2"></path></svg>',
   plus: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2"></rect><path d="M8 12h8"></path><path d="M12 8v8"></path></svg>',
   doc: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"></path><path d="M14 2v4a2 2 0 0 0 2 2h4"></path><path d="M10 9H8"></path><path d="M16 13H8"></path><path d="M16 17H8"></path></svg>',
+  scope: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M3 12h3"></path><path d="M18 12h3"></path><path d="M12 3v3"></path><path d="M12 18v3"></path><circle cx="12" cy="12" r="8"></circle></svg>',
   default: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18l6-6-6-6"></path></svg>',
 };
 
@@ -56,6 +57,7 @@ function readStoredScopeId(key) {
 export function createCommandPaletteState() {
   return {
     showCommandPalette: false,
+    commandPaletteMode: 'root',
     commandPaletteQuery: '',
     commandPaletteActiveId: '',
     commandPaletteIndex: [],
@@ -81,6 +83,7 @@ export function createCommandPaletteState() {
     commandPaletteNewWorkTitle: '',
     commandPaletteNewWorkDescription: '',
     commandPaletteNewWorkScopeId: '',
+    commandPaletteReturnFocusTarget: null,
   };
 }
 
@@ -280,14 +283,14 @@ export const commandPaletteMixin = {
         searchText: 'status dashboard flight deck whats on what is on',
       }),
       buildItem({
-        id: 'quick:chat-primary-agent',
+        id: 'quick:scope-switcher',
         group: 'shortcut',
-        title: 'Chat',
-        subtitle: `DM ${this.commandPalettePrimaryAgentLabel}`,
-        action: 'primary-agent-chat',
+        title: 'Scope Switcher',
+        subtitle: 'Change the active scope',
+        action: 'scope-switcher',
         shortcutKey: '2',
-        icon: 'bot',
-        searchText: 'agent bot dm direct message chat',
+        icon: 'scope',
+        searchText: 'scope switcher change focus workspace context',
       }),
       buildItem({
         id: 'quick:new-work',
@@ -320,7 +323,7 @@ export const commandPaletteMixin = {
   get commandPaletteShortcutOverlayItems() {
     const overlayLabels = {
       'all-flightdeck': 'Flight Deck all scopes',
-      'primary-agent-chat': 'Chat to your Agent',
+      'scope-switcher': 'Scope Switcher',
       'new-work': 'Quick Task / New Work',
       'quick-doc': 'Quick Doc',
     };
@@ -404,7 +407,7 @@ export const commandPaletteMixin = {
   },
 
   get commandPaletteActiveItem() {
-    const results = this.commandPaletteFlatResults;
+    const results = this.commandPaletteMode === 'scope' ? this.commandPaletteScopeItems : this.commandPaletteFlatResults;
     if (results.length === 0) return null;
     return results.find((item) => item.id === this.commandPaletteActiveId) || results[0];
   },
@@ -422,6 +425,7 @@ export const commandPaletteMixin = {
         this.hideCommandPaletteShortcutOverlay();
       }
       if (this.showCommandPalette
+        && this.commandPaletteMode === 'root'
         && !this.commandPaletteQuery
         && !event.metaKey
         && !event.ctrlKey
@@ -475,13 +479,21 @@ export const commandPaletteMixin = {
   async openCommandPalette(options = {}) {
     if (!this.isLoggedIn) return;
     this.hideCommandPaletteShortcutOverlay();
+    if (!this.showCommandPalette && typeof document !== 'undefined') {
+      this.commandPaletteReturnFocusTarget = options.launcher || document.activeElement || null;
+    }
+    this.commandPaletteMode = options.mode === 'scope' ? 'scope' : 'root';
     this.commandPaletteQuery = options.query ?? '';
     this.commandPaletteActiveId = '';
     this.commandPaletteNotice = '';
     this.showCommandPalette = true;
     this.focusCommandPaletteInput();
-    await this.refreshCommandPaletteIndex();
+    if (this.commandPaletteMode === 'root') await this.refreshCommandPaletteIndex();
     this.focusCommandPaletteInput();
+  },
+
+  openCommandPaletteScopeSwitcher(event = null) {
+    return this.openCommandPalette({ mode: 'scope', launcher: event?.currentTarget || null });
   },
 
   focusCommandPaletteInput() {
@@ -498,13 +510,17 @@ export const commandPaletteMixin = {
   closeCommandPalette() {
     this.cancelCommandPaletteSearch();
     this.showCommandPalette = false;
+    this.commandPaletteMode = 'root';
     this.commandPaletteQuery = '';
     this.commandPaletteActiveId = '';
     this.commandPaletteNotice = '';
+    const returnTarget = this.commandPaletteReturnFocusTarget;
+    this.commandPaletteReturnFocusTarget = null;
+    this.$nextTick?.(() => returnTarget?.focus?.());
   },
 
   moveCommandPaletteSelection(delta) {
-    const results = this.commandPaletteFlatResults;
+    const results = this.commandPaletteMode === 'scope' ? this.commandPaletteScopeItems : this.commandPaletteFlatResults;
     if (results.length === 0) return;
     const activeId = this.commandPaletteActiveItem?.id;
     const currentIndex = Math.max(0, results.findIndex((item) => item.id === activeId));
@@ -699,6 +715,20 @@ export const commandPaletteMixin = {
 
   async executeCommandPaletteItem(item) {
     if (!item) return;
+    if (item.action === 'scope-switcher') {
+      this.commandPaletteMode = 'scope';
+      this.commandPaletteQuery = '';
+      this.commandPaletteActiveId = this.commandPaletteScopeItems.find((scope) => scope.active)?.id
+        || this.commandPaletteScopeItems[0]?.id
+        || '';
+      this.focusCommandPaletteInput();
+      return;
+    }
+    if (item.action === 'select-scope-context') {
+      await Promise.resolve(this.selectWorkContextScope?.(item.scopeId));
+      this.closeCommandPalette();
+      return;
+    }
     this.closeCommandPalette();
     await this.runCommandPaletteAction(item);
   },
@@ -817,6 +847,7 @@ export const commandPaletteMixin = {
 
   handleCommandPaletteQueryInput() {
     this.commandPaletteActiveId = '';
+    if (this.commandPaletteMode === 'scope') return;
     this.cancelCommandPaletteSearch();
     this.commandPaletteLocalResults = [];
     this.commandPaletteGlobalResults = [];
@@ -847,11 +878,35 @@ export const commandPaletteMixin = {
       this.handleCommandPaletteQueryInput();
       return;
     }
+    if (this.commandPaletteMode === 'scope') {
+      this.commandPaletteMode = 'root';
+      this.commandPaletteActiveId = '';
+      this.focusCommandPaletteInput();
+      return;
+    }
     this.closeCommandPalette();
   },
 
   handleCommandPaletteBackspace() {
     if (!this.commandPaletteQuery) this.handleCommandPaletteEscape();
+  },
+
+  get commandPaletteScopeItems() {
+    return (this.filterFlightDeckScopeOptions?.(this.commandPaletteQuery) || []).map((board) => buildItem({
+      id: `scope-picker:${board.id}`,
+      group: 'scope',
+      title: board.label || 'Untitled scope',
+      subtitle: board.meta || board.breadcrumb || (board.id === ALL_TASK_BOARD_ID ? 'Everything' : 'Scope'),
+      action: 'select-scope-context',
+      scopeId: board.id,
+      active: Boolean(this.isFlightDeckScopeOptionActive?.(board)),
+      searchText: compactText([board.label, board.meta, board.breadcrumb]),
+    }));
+  },
+
+  get commandPaletteRecentScopeItems() {
+    const byId = new Map(this.commandPaletteScopeItems.map((item) => [item.scopeId, item]));
+    return (this.recentFocusAreas || []).map((recent) => byId.get(recent.id)).filter(Boolean).slice(0, 4);
   },
 
   async navigateCommandPaletteScopeSelection() {

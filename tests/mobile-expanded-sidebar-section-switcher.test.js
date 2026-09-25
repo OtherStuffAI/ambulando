@@ -23,7 +23,7 @@ describe('expanded left-column section switcher', () => {
     expect(mobileSelector).toContain('class="mobile-scope-context-controls"');
     expect(mobileSelector).toContain('class="mobile-scope-trigger"');
     expect(mobileSelector).toContain('class="mobile-scope-workspace-avatar-btn"');
-    expect(mobileSelector).toContain('@click="$store.chat.selectWorkContextScope(board.id, $event); open = false"');
+    expect(mobileSelector).toContain('@click="$store.chat.openCommandPaletteScopeSwitcher($event)"');
 
     expect(sidebar).toContain('class="sidebar-nav" x-show="$store.chat.navCollapsed && !$store.chat.mobileNavOpen"');
     expect(globalBar).toContain('class="channel-row-scope-switcher"');

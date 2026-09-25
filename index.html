@@ -454,8 +454,6 @@
     <div
       class="mobile-scope-switcher"
       x-show="$store.chat.isLoggedIn && !$store.chat.mobileNavOpen"
-      x-data="{ open: false }"
-      @click.outside="open = false"
     >
       <div class="mobile-scope-context-controls">
         <button
@@ -475,23 +473,13 @@
         <button
           type="button"
           class="mobile-scope-trigger"
-          @click="open = !open"
+          @click="$store.chat.openCommandPaletteScopeSwitcher($event)"
           aria-label="Current scope"
         >
           <span>Scope: </span><strong x-text="$store.chat.focusScopeTitle"></strong>
         </button>
         <button type="button" class="mobile-scope-workspace-avatar-btn" x-show="$store.chat.canAccessScopeSettings" @click="$store.chat.openScopeManagement()" title="Manage scopes" aria-label="Manage scopes">…</button>
         <span class="mobile-scope-row-spacer" x-show="!$store.chat.canAccessScopeSettings" aria-hidden="true"></span>
-        <ul class="board-picker-typeahead-results mobile-scope-results" x-show="open" x-cloak>
-          <template x-for="board in $store.chat.filterFlightDeckScopeOptions('')" :key="board.id">
-            <li
-              class="board-picker-typeahead-option"
-              :class="{ 'board-picker-typeahead-active': $store.chat.isFlightDeckScopeOptionActive(board) }"
-              @click="$store.chat.selectWorkContextScope(board.id, $event); open = false"
-              x-text="board.label"
-            ></li>
-          </template>
-        </ul>
       </div>
     </div>
 
@@ -926,9 +914,11 @@
         class="command-palette"
         role="dialog"
         aria-modal="true"
-        aria-label="Command palette"
+        :aria-label="$store.chat.commandPaletteMode === 'scope' ? 'Scope switcher' : 'Command palette'"
         @keydown.arrow-down.prevent="$store.chat.moveCommandPaletteSelection(1)"
         @keydown.arrow-up.prevent="$store.chat.moveCommandPaletteSelection(-1)"
+        @keydown.arrow-right.prevent="$store.chat.commandPaletteMode === 'scope' && $store.chat.moveCommandPaletteSelection(1)"
+        @keydown.arrow-left.prevent="$store.chat.commandPaletteMode === 'scope' && $store.chat.moveCommandPaletteSelection(-1)"
         @keydown.enter.prevent="$store.chat.selectCommandPaletteActiveItem()"
       >
         <div class="command-palette-search">
@@ -938,31 +928,33 @@
             x-model="$store.chat.commandPaletteQuery"
             @input="$store.chat.handleCommandPaletteQueryInput()"
             @keydown.backspace="$store.chat.handleCommandPaletteBackspace()"
-            placeholder="Search Flight Deck or press 1-4"
-            aria-label="Search Flight Deck"
+            :placeholder="$store.chat.commandPaletteMode === 'scope' ? 'Filter scopes…' : 'Search Flight Deck or press 1-4'"
+            :aria-label="$store.chat.commandPaletteMode === 'scope' ? 'Filter scopes' : 'Search Flight Deck'"
             role="combobox"
-            aria-controls="command-palette-results"
+            :aria-controls="$store.chat.commandPaletteMode === 'scope' ? 'command-palette-scope-results' : 'command-palette-results'"
+            :aria-activedescendant="$store.chat.commandPaletteActiveItem?.id || null"
             aria-autocomplete="list"
-            :aria-expanded="$store.chat.commandPaletteFlatResults.length > 0"
+            :aria-expanded="($store.chat.commandPaletteMode === 'scope' ? $store.chat.commandPaletteScopeItems : $store.chat.commandPaletteFlatResults).length > 0"
             autocomplete="off"
           />
-          <span class="command-palette-shortcut">⌘J</span>
+          <button type="button" class="command-palette-back" x-show="$store.chat.commandPaletteMode === 'scope'" @click="$store.chat.handleCommandPaletteEscape()" aria-label="Back to command palette">← Back</button>
+          <span class="command-palette-shortcut" x-show="$store.chat.commandPaletteMode === 'root'">⌘J</span>
         </div>
-        <p class="command-palette-scope" x-show="$store.chat.selectedBoardScope">
+        <p class="command-palette-scope" x-show="$store.chat.commandPaletteMode === 'root' && $store.chat.selectedBoardScope">
           <span>Active scope</span>
           <strong x-text="$store.chat.commandPaletteCurrentScopeLabel"></strong>
         </p>
-        <p class="command-palette-empty" x-show="!$store.chat.commandPaletteLoading && $store.chat.commandPaletteFlatResults.length === 0">
+        <p class="command-palette-empty" x-show="$store.chat.commandPaletteMode === 'root' && !$store.chat.commandPaletteLoading && $store.chat.commandPaletteFlatResults.length === 0">
           No matching scopes, records, or commands.
         </p>
-        <p class="command-palette-empty" x-show="$store.chat.commandPaletteLoading">
+        <p class="command-palette-empty" x-show="$store.chat.commandPaletteMode === 'root' && $store.chat.commandPaletteLoading">
           Indexing local records...
         </p>
         <div
           id="command-palette-results"
           class="command-palette-results"
           :class="{ 'command-palette-results-quick': !$store.chat.commandPaletteQuery }"
-          x-show="$store.chat.commandPaletteFlatResults.length > 0"
+          x-show="$store.chat.commandPaletteMode === 'root' && $store.chat.commandPaletteFlatResults.length > 0"
         >
           <template x-for="group in $store.chat.commandPaletteGroups" :key="group.id">
             <section class="command-palette-group" :class="{ 'command-palette-group-quick': !$store.chat.commandPaletteQuery && group.id === 'shortcut', 'command-palette-group-global': group.id === 'search-global' }">
@@ -993,7 +985,29 @@
             </section>
           </template>
         </div>
-        <p class="sr-only" aria-live="polite" x-text="`${$store.chat.commandPaletteFlatResults.length} search results`"></p>
+        <div class="command-palette-scope-picker" x-show="$store.chat.commandPaletteMode === 'scope'" x-cloak>
+          <section x-show="!$store.chat.commandPaletteQuery && $store.chat.commandPaletteRecentScopeItems.length > 0">
+            <h3>Recent scopes</h3>
+            <div class="command-palette-scope-recents" role="list">
+              <template x-for="item in $store.chat.commandPaletteRecentScopeItems" :key="`recent-${item.id}`">
+                <button type="button" @mouseenter="$store.chat.commandPaletteActiveId = item.id" @click="$store.chat.executeCommandPaletteItem(item)" :class="{ 'command-palette-scope-tile-active': item.active, 'command-palette-scope-tile-highlight': $store.chat.commandPaletteActiveItem?.id === item.id }" :aria-current="item.active ? 'true' : null" x-text="item.title"></button>
+              </template>
+            </div>
+          </section>
+          <section>
+            <h3 x-text="$store.chat.commandPaletteQuery ? 'Matching scopes' : 'All scopes'"></h3>
+            <div id="command-palette-scope-results" class="command-palette-scope-grid" role="listbox" aria-label="Available scopes">
+              <template x-for="item in $store.chat.commandPaletteScopeItems" :key="item.id">
+                <button type="button" role="option" class="command-palette-scope-tile" :id="item.id" @mouseenter="$store.chat.commandPaletteActiveId = item.id" @click="$store.chat.executeCommandPaletteItem(item)" :class="{ 'command-palette-scope-tile-active': item.active, 'command-palette-scope-tile-highlight': $store.chat.commandPaletteActiveItem?.id === item.id }" :aria-selected="item.active.toString()">
+                  <span x-text="item.title"></span><small x-text="item.subtitle"></small><strong x-show="item.active">Active</strong>
+                </button>
+              </template>
+            </div>
+            <p class="command-palette-empty" x-show="$store.chat.commandPaletteScopeItems.length === 0">No scopes match.</p>
+          </section>
+          <footer class="command-palette-scope-footer"><span>↑↓ Navigate · Enter select</span><span>Esc back · Esc close</span></footer>
+        </div>
+        <p class="sr-only" aria-live="polite" x-text="`${$store.chat.commandPaletteMode === 'scope' ? $store.chat.commandPaletteScopeItems.length : $store.chat.commandPaletteFlatResults.length} results`"></p>
       </section>
     </div>
 
@@ -1515,34 +1529,15 @@
               <div
                 class="channel-row-scope-switcher"
                 x-show="$store.chat.navCollapsed && !$store.chat.mobileNavOpen"
-                x-data="{ bpIdx: 0, open: false, query: '' }"
-                @click.outside="open = false; query = ''"
               >
                 <div class="board-picker-typeahead-wrapper">
-                  <input
+                  <button
                     class="board-picker-typeahead-input channel-row-scope-input"
-                    type="text"
-                    x-model="query"
-                    :placeholder="$store.chat.focusScopeTitle"
-                    @focus="open = true; bpIdx = 0"
-                    @keydown.escape="open = false; query = ''; $el.blur()"
-                    @keydown.arrow-down.prevent="bpIdx = Math.min(bpIdx + 1, $store.chat.filterFlightDeckScopeOptions(query).length - 1)"
-                    @keydown.arrow-up.prevent="bpIdx = Math.max(bpIdx - 1, 0)"
-                    @keydown.enter.prevent="if ($store.chat.filterFlightDeckScopeOptions(query)[bpIdx]) { $store.chat.selectWorkContextScope($store.chat.filterFlightDeckScopeOptions(query)[bpIdx].id, $event); open = false; query = ''; $el.blur() }"
+                    type="button"
+                    @click="$store.chat.openCommandPaletteScopeSwitcher($event)"
                     aria-label="Current scope"
-                  />
-                  <ul class="board-picker-typeahead-results channel-row-scope-results" x-show="open && $store.chat.filterFlightDeckScopeOptions(query).length > 0" x-cloak>
-                    <template x-for="(board, idx) in $store.chat.filterFlightDeckScopeOptions(query)" :key="board.id">
-                      <li
-                        class="board-picker-typeahead-option"
-                        :class="{ 'board-picker-typeahead-active': $store.chat.isFlightDeckScopeOptionActive(board), 'board-picker-typeahead-highlight': idx === bpIdx }"
-                        @click="$store.chat.selectWorkContextScope(board.id, $event); open = false; query = ''"
-                        @mouseenter="bpIdx = idx"
-                        x-text="board.label"
-                      ></li>
-                    </template>
-                  </ul>
-                  <div class="board-picker-typeahead-empty channel-row-scope-empty" x-show="open && $store.chat.filterFlightDeckScopeOptions(query).length === 0">No scopes match.</div>
+                    x-text="$store.chat.focusScopeTitle"
+                  ></button>
                 </div>
                 <span class="channel-row-scope-separator" aria-hidden="true">|</span>
               </div>

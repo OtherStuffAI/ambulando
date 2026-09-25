@@ -88,6 +88,10 @@ function createStore(overrides = {}) {
     buildTaskBoardAssignment: vi.fn((scopeId) => ({ scope_id: scopeId, group_ids: ['group-default'] })),
     handleInlineImagePaste: vi.fn(async () => {}),
     containsInlineImageUploadToken: vi.fn((value) => String(value || '').includes('[ Uploading image')),
+    filterFlightDeckScopeOptions: vi.fn(() => []),
+    isFlightDeckScopeOptionActive: vi.fn(() => false),
+    selectWorkContextScope: vi.fn(),
+    recentFocusAreas: [],
     $nextTick: (fn) => fn(),
     ...overrides,
   });
@@ -407,7 +411,7 @@ describe('command palette launchers', () => {
 
     expect(preventDefault).toHaveBeenCalledTimes(1);
     expect(store.executeCommandPaletteItem).toHaveBeenCalledWith(expect.objectContaining({
-      title: 'Chat',
+      title: 'Scope Switcher',
       shortcutKey: '2',
     }));
   });
@@ -426,6 +430,20 @@ describe('command palette launchers', () => {
     expect(preventDefault).not.toHaveBeenCalled();
     expect(store.showCommandPalette).toBe(true);
   });
+
+  it('does not run root quick-launch numbers while choosing a scope', () => {
+    let handler = null;
+    stubWindow({
+      addEventListener: vi.fn((eventName, callback) => { if (eventName === 'keydown') handler = callback; }),
+      setTimeout: vi.fn((callback) => { callback(); return 1; }),
+      clearTimeout: vi.fn(),
+    });
+    const store = createStore({ showCommandPalette: true, commandPaletteMode: 'scope' });
+    store.executeCommandPaletteItem = vi.fn();
+    store.initCommandPaletteShortcuts();
+    handler({ key: '2', metaKey: false, ctrlKey: false, altKey: false, shiftKey: false, defaultPrevented: false, preventDefault: vi.fn() });
+    expect(store.executeCommandPaletteItem).not.toHaveBeenCalled();
+  });
 });
 
 describe('command palette defaults and search', () => {
@@ -437,7 +455,7 @@ describe('command palette defaults and search', () => {
 
     const titles = store.commandPaletteFlatResults.map((item) => item.title);
 
-    expect(titles.slice(0, 4)).toEqual(["What's on", 'Chat', 'New Work', 'Quick Doc']);
+    expect(titles.slice(0, 4)).toEqual(["What's on", 'Scope Switcher', 'New Work', 'Quick Doc']);
     expect(store.commandPaletteFlatResults.slice(0, 4).map((item) => item.shortcutKey)).toEqual(['1', '2', '3', '4']);
   });
 
@@ -447,7 +465,7 @@ describe('command palette defaults and search', () => {
     expect(store.commandPaletteShortcutOverlayItems).toEqual([
       { id: 'palette', keys: ['Super', 'K'], label: 'Palette' },
       { id: 'quick:whats-on', keys: ['Palette', '1'], label: 'Flight Deck all scopes' },
-      { id: 'quick:chat-primary-agent', keys: ['Palette', '2'], label: 'Chat to your Agent' },
+      { id: 'quick:scope-switcher', keys: ['Palette', '2'], label: 'Scope Switcher' },
       { id: 'quick:new-work', keys: ['Palette', '3'], label: 'Quick Task / New Work' },
       { id: 'quick:quick-doc', keys: ['Palette', '4'], label: 'Quick Doc' },
     ]);
@@ -467,7 +485,7 @@ describe('command palette defaults and search', () => {
 
     expect(store.commandPaletteFlatResults.map((item) => item.title)).toEqual([
       "What's on",
-      'Chat',
+      'Scope Switcher',
       'New Work',
       'Quick Doc',
       'Task 6',
@@ -576,6 +594,69 @@ describe('command palette defaults and search', () => {
     expect(store.showCommandPalette).toBe(true);
     store.handleCommandPaletteEscape();
     expect(store.showCommandPalette).toBe(false);
+  });
+
+  it('opens scope mode from quick launch 2 and filters real store scope options', async () => {
+    const options = [
+      { id: 'all', label: 'All', meta: 'Everything' },
+      { id: 'scope-ops', label: 'Operations', meta: 'Scope · 4 channels' },
+      { id: 'scope-product', label: 'Product', meta: 'Scope · 2 channels' },
+    ];
+    const store = createStore({
+      showCommandPalette: true,
+      selectedBoardId: 'scope-ops',
+      recentFocusAreas: [{ id: 'scope-product' }],
+      filterFlightDeckScopeOptions: vi.fn((query) => options.filter((item) => item.label.toLowerCase().includes(String(query).toLowerCase()))),
+      isFlightDeckScopeOptionActive: vi.fn((board) => board.id === 'scope-ops'),
+    });
+
+    await store.executeCommandPaletteItem(store.commandPaletteQuickLaunchItems[1]);
+    expect(store.commandPaletteMode).toBe('scope');
+    expect(store.commandPaletteScopeItems.map((item) => item.title)).toEqual(['All', 'Operations', 'Product']);
+    expect(store.commandPaletteRecentScopeItems.map((item) => item.title)).toEqual(['Product']);
+    expect(store.commandPaletteScopeItems.find((item) => item.title === 'Operations').active).toBe(true);
+
+    store.commandPaletteQuery = 'prod';
+    store.handleCommandPaletteQueryInput();
+    expect(store.commandPaletteScopeItems.map((item) => item.title)).toEqual(['Product']);
+  });
+
+  it('navigates scope mode with arrows and selects through the canonical context path', async () => {
+    const selectWorkContextScope = vi.fn();
+    const store = createStore({
+      showCommandPalette: true,
+      commandPaletteMode: 'scope',
+      filterFlightDeckScopeOptions: vi.fn(() => [
+        { id: 'scope-a', label: 'Alpha' },
+        { id: 'scope-b', label: 'Beta' },
+      ]),
+      selectWorkContextScope,
+    });
+
+    store.commandPaletteActiveId = 'scope-picker:scope-a';
+    store.moveCommandPaletteSelection(1);
+    expect(store.commandPaletteActiveId).toBe('scope-picker:scope-b');
+    await store.selectCommandPaletteActiveItem();
+    expect(selectWorkContextScope).toHaveBeenCalledWith('scope-b');
+    expect(store.showCommandPalette).toBe(false);
+  });
+
+  it('returns from scope mode before closing and restores launcher focus on close', () => {
+    const focus = vi.fn();
+    const store = createStore({ showCommandPalette: true, commandPaletteMode: 'scope', commandPaletteReturnFocusTarget: { focus } });
+    store.handleCommandPaletteEscape();
+    expect(store.commandPaletteMode).toBe('root');
+    expect(store.showCommandPalette).toBe(true);
+    store.handleCommandPaletteEscape();
+    expect(store.showCommandPalette).toBe(false);
+    expect(focus).toHaveBeenCalledOnce();
+  });
+
+  it('routes desktop and mobile scope launchers into the same palette mode', () => {
+    expect(indexSource.match(/openCommandPaletteScopeSwitcher\(\$event\)/g)?.length).toBeGreaterThanOrEqual(2);
+    expect(indexSource).toContain('class="mobile-scope-trigger"');
+    expect(indexSource).toContain('class="board-picker-typeahead-input channel-row-scope-input"');
+    expect(indexSource).toContain('class="command-palette-scope-grid"');
   });
 });
 

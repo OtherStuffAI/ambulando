@@ -7177,6 +7177,75 @@ button:disabled {
   font-weight: 700;
 }
 
+.command-palette-back {
+  min-height: 2rem;
+  border: 1px solid rgba(100, 116, 139, 0.32);
+  border-radius: 6px;
+  background: #f1f5f9;
+  color: #334155;
+  padding: 0.25rem 0.55rem;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.command-palette-scope-picker { overflow: auto; padding: 0.7rem; }
+.command-palette-scope-picker h3 {
+  margin: 0 0 0.4rem;
+  color: #64748b;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.command-palette-scope-picker section + section { margin-top: 0.7rem; }
+.command-palette-scope-recents { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.command-palette-scope-recents button {
+  min-height: 2.75rem;
+  border: 1px solid rgba(37, 99, 235, 0.24);
+  border-radius: 8px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  padding: 0.45rem 0.7rem;
+  font-weight: 750;
+  cursor: pointer;
+}
+.command-palette-scope-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.45rem;
+}
+.command-palette-scope-tile {
+  position: relative;
+  min-height: 4rem;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 8px;
+  background: #ffffff;
+  color: #0f172a;
+  padding: 0.6rem 0.7rem;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 0.15rem;
+  text-align: left;
+  cursor: pointer;
+}
+.command-palette-scope-tile span { font-weight: 750; }
+.command-palette-scope-tile small { color: #64748b; }
+.command-palette-scope-tile strong { color: #1d4ed8; font-size: 0.68rem; text-transform: uppercase; }
+.command-palette-scope-tile-highlight { border-color: #93b4f5 !important; background: #eff6ff !important; }
+.command-palette-scope-tile-active { box-shadow: inset 0 0 0 2px #2563eb; }
+.command-palette-scope-footer {
+  margin: 0.75rem -0.7rem -0.7rem;
+  padding: 0.6rem 0.75rem;
+  border-top: 1px solid rgba(148, 163, 184, 0.22);
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  color: #64748b;
+  font-size: 0.72rem;
+}
+
 .command-palette-scope {
   margin: 0;
   padding: 0.55rem 0.95rem;
@@ -7506,6 +7575,12 @@ button:disabled {
   .command-palette-group-quick .command-palette-result {
     min-height: 3.25rem;
   }
+
+  .command-palette-overlay { padding: 0.55rem; }
+  .command-palette { max-height: calc(100dvh - 1.1rem); }
+  .command-palette-scope-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .command-palette-scope-tile { min-height: 3.25rem; }
+  .command-palette-scope-footer { flex-direction: column; gap: 0.2rem; }
 }
 
 .command-palette-empty {

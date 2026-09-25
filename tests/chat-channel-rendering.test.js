@@ -254,8 +254,7 @@ describe('Chat channel rendering hooks', () => {
     expect(homeIndex).toBeLessThan(channelLoopIndex);
     expect(globalBar).toContain("pg-all-scopes-context");
     expect(globalBar).toContain('@click="$store.chat.openAllScopesOverview()"');
-    expect(globalBar).toContain('$store.chat.selectWorkContextScope($store.chat.filterFlightDeckScopeOptions(query)[bpIdx].id, $event)');
-    expect(globalBar).toContain('@click="$store.chat.selectWorkContextScope(board.id, $event); open = false; query = \'\'"');
+    expect(globalBar).toContain('@click="$store.chat.openCommandPaletteScopeSwitcher($event)"');
     expect(globalBar).not.toContain('$store.chat.selectBoard(board.id)');
     expect(globalBar).toContain('@click="$store.chat.openWorkContextHome($event)"');
     expect(globalBar).toContain('currentWorkspaceAvatarUrl');
@@ -279,7 +278,7 @@ describe('Chat channel rendering hooks', () => {
     expect(switcherIndex).toBeGreaterThan(-1);
     expect(switcher).toContain('class="mobile-scope-workspace-avatar-btn"');
     expect(switcher).toContain('@click="$store.chat.openAllScopesOverview()"');
-    expect(switcher).toContain('@click="$store.chat.selectWorkContextScope(board.id, $event); open = false"');
+    expect(switcher).toContain('@click="$store.chat.openCommandPaletteScopeSwitcher($event)"');
     expect(switcher).not.toContain('$store.chat.selectBoard(board.id)');
     expect(switcher).toContain('currentWorkspaceAvatarUrl');
     expect(switcher).toContain('currentWorkspaceInitials');

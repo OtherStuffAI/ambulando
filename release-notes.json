@@ -2145,6 +2145,13 @@
       "notes": [
         "Preserve safe WMapp signer error codes and a correlation reference when an exact Autopilot request cannot be signed."
       ]
+    },
+    {
+      "buildNumber": 2097,
+      "label": "Fast scope switching",
+      "notes": [
+        "Open a searchable, keyboard-friendly scope grid from the command palette or the desktop and mobile scope controls."
+      ]
     }
   ]
 }
