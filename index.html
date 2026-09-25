@@ -998,14 +998,14 @@
             <h3 x-text="$store.chat.commandPaletteQuery ? 'Matching scopes' : 'All scopes'"></h3>
             <div id="command-palette-scope-results" class="command-palette-scope-grid" role="listbox" aria-label="Available scopes">
               <template x-for="item in $store.chat.commandPaletteScopeItems" :key="item.id">
-                <button type="button" role="option" class="command-palette-scope-tile" :id="item.id" @mouseenter="$store.chat.commandPaletteActiveId = item.id" @click="$store.chat.executeCommandPaletteItem(item)" :class="{ 'command-palette-scope-tile-active': item.active, 'command-palette-scope-tile-highlight': $store.chat.commandPaletteActiveItem?.id === item.id }" :aria-selected="item.active.toString()">
-                  <span x-text="item.title"></span><small x-text="item.subtitle"></small><strong x-show="item.active">Active</strong>
+                <button type="button" role="option" class="command-palette-scope-tile" :id="item.id" @mouseenter="$store.chat.commandPaletteActiveId = item.id" @click="$store.chat.executeCommandPaletteItem(item)" :class="{ 'command-palette-scope-tile-active': item.active, 'command-palette-scope-tile-highlight': $store.chat.commandPaletteActiveItem?.id === item.id }" :aria-selected="item.active.toString()" :aria-keyshortcuts="item.shortcutKey || null">
+                  <kbd class="command-palette-scope-tile-key" x-show="item.shortcutKey" x-text="item.shortcutKey" aria-hidden="true"></kbd><span x-text="item.title"></span><small x-text="item.subtitle"></small><strong x-show="item.active">Active</strong>
                 </button>
               </template>
             </div>
             <p class="command-palette-empty" x-show="$store.chat.commandPaletteScopeItems.length === 0">No scopes match.</p>
           </section>
-          <footer class="command-palette-scope-footer"><span>↑↓ Navigate · Enter select</span><span>Esc back · Esc close</span></footer>
+          <footer class="command-palette-scope-footer"><span>1–9, 0 select · ↑↓ Navigate · Enter select</span><span>Esc back · Esc close</span></footer>
         </div>
         <p class="sr-only" aria-live="polite" x-text="`${$store.chat.commandPaletteMode === 'scope' ? $store.chat.commandPaletteScopeItems.length : $store.chat.commandPaletteFlatResults.length} results`"></p>
       </section>

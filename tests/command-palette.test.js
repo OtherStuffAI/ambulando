@@ -97,6 +97,34 @@ function createStore(overrides = {}) {
   });
 }
 
+function captureCommandPaletteKeydown(store) {
+  let handler = null;
+  stubWindow({
+    addEventListener: vi.fn((eventName, callback) => {
+      if (eventName === 'keydown') handler = callback;
+    }),
+    setTimeout: vi.fn((callback) => { callback(); return 1; }),
+    clearTimeout: vi.fn(),
+  });
+  store.initCommandPaletteShortcuts();
+  return (key, overrides = {}) => {
+    const event = {
+      key,
+      code: `Digit${key}`,
+      metaKey: false,
+      ctrlKey: false,
+      altKey: false,
+      shiftKey: false,
+      isComposing: false,
+      defaultPrevented: false,
+      preventDefault: vi.fn(),
+      ...overrides,
+    };
+    handler(event);
+    return event;
+  };
+}
+
 describe('command palette launchers', () => {
   it('opens from the Flight Deck logo instead of routing the logo directly', () => {
     expect(indexSource).toContain("@click=\"if ($store.chat.isLoggedIn) $store.chat.openCommandPalette()\"");
@@ -444,6 +472,91 @@ describe('command palette launchers', () => {
     handler({ key: '2', metaKey: false, ctrlKey: false, altKey: false, shiftKey: false, defaultPrevented: false, preventDefault: vi.fn() });
     expect(store.executeCommandPaletteItem).not.toHaveBeenCalled();
   });
+
+  it('supports the full Super+K, 2, 3 sequence without selecting on scope-mode entry', async () => {
+    const options = ['Alpha', 'Beta', 'Gamma'].map((label, index) => ({ id: `scope-${index + 1}`, label }));
+    const selectWorkContextScope = vi.fn();
+    const store = createStore({
+      filterFlightDeckScopeOptions: vi.fn(() => options),
+      selectWorkContextScope,
+    });
+    store.refreshCommandPaletteIndex = vi.fn(async () => {});
+    const keydown = captureCommandPaletteKeydown(store);
+
+    keydown('k', { code: 'KeyK', metaKey: true });
+    keydown('2');
+    expect(store.commandPaletteMode).toBe('scope');
+    expect(selectWorkContextScope).not.toHaveBeenCalled();
+
+    keydown('3');
+    await vi.waitFor(() => expect(selectWorkContextScope).toHaveBeenCalledWith('scope-3'));
+    expect(store.showCommandPalette).toBe(false);
+  });
+
+  it('maps visible scope shortcuts as 1 through 9 then 0 and leaves later scopes unassigned', () => {
+    const options = Array.from({ length: 12 }, (_, index) => ({ id: `scope-${index + 1}`, label: `Scope ${index + 1}` }));
+    const store = createStore({
+      showCommandPalette: true,
+      commandPaletteMode: 'scope',
+      filterFlightDeckScopeOptions: vi.fn(() => options),
+    });
+
+    expect(store.commandPaletteScopeItems.map((item) => item.shortcutKey)).toEqual([
+      '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '', '',
+    ]);
+  });
+
+  it('uses filtered visible order and treats an unassigned digit as a no-op', async () => {
+    const allOptions = Array.from({ length: 12 }, (_, index) => ({ id: `scope-${index + 1}`, label: `Team ${index + 1}` }));
+    const selectWorkContextScope = vi.fn();
+    const store = createStore({
+      showCommandPalette: true,
+      commandPaletteMode: 'scope',
+      commandPaletteQuery: '1',
+      filterFlightDeckScopeOptions: vi.fn((query) => allOptions.filter((item) => item.label.includes(query))),
+      selectWorkContextScope,
+    });
+    const keydown = captureCommandPaletteKeydown(store);
+
+    expect(store.commandPaletteScopeItems.map((item) => item.scopeId)).toEqual(['scope-1', 'scope-10', 'scope-11', 'scope-12']);
+    keydown('2');
+    await vi.waitFor(() => expect(selectWorkContextScope).toHaveBeenCalledWith('scope-10'));
+
+    store.showCommandPalette = true;
+    store.commandPaletteMode = 'scope';
+    store.commandPaletteQuery = '1';
+    selectWorkContextScope.mockClear();
+    const event = keydown('9');
+    expect(event.preventDefault).toHaveBeenCalledOnce();
+    expect(selectWorkContextScope).not.toHaveBeenCalled();
+  });
+
+  it('ignores scope number shortcuts during composition or with modifiers and outside scope mode', () => {
+    const selectWorkContextScope = vi.fn();
+    const store = createStore({
+      showCommandPalette: true,
+      commandPaletteMode: 'scope',
+      filterFlightDeckScopeOptions: vi.fn(() => [{ id: 'scope-1', label: 'Alpha' }]),
+      selectWorkContextScope,
+    });
+    const keydown = captureCommandPaletteKeydown(store);
+
+    for (const overrides of [
+      { isComposing: true },
+      { metaKey: true },
+      { ctrlKey: true },
+      { altKey: true },
+      { shiftKey: true },
+    ]) {
+      const event = keydown('1', overrides);
+      expect(event.preventDefault).not.toHaveBeenCalled();
+    }
+    store.commandPaletteMode = 'root';
+    store.commandPaletteQuery = 'filtering disables root shortcuts';
+    const outsideEvent = keydown('1');
+    expect(outsideEvent.preventDefault).not.toHaveBeenCalled();
+    expect(selectWorkContextScope).not.toHaveBeenCalled();
+  });
 });
 
 describe('command palette defaults and search', () => {
@@ -657,6 +770,8 @@ describe('command palette defaults and search', () => {
     expect(indexSource).toContain('class="mobile-scope-trigger"');
     expect(indexSource).toContain('class="board-picker-typeahead-input channel-row-scope-input"');
     expect(indexSource).toContain('class="command-palette-scope-grid"');
+    expect(indexSource).toContain('class="command-palette-scope-tile-key"');
+    expect(stylesSource).toContain('.command-palette-scope-tile-key');
   });
 });
 

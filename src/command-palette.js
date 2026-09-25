@@ -37,6 +37,7 @@ const COMMAND_GROUP_ORDER = Object.freeze([
 const MAX_GROUP_RESULTS = 8;
 const MAX_RECENT_RESULTS = 6;
 const COMMAND_PALETTE_SHORTCUT_OVERLAY_DELAY_MS = 2000;
+const COMMAND_PALETTE_SCOPE_SHORTCUT_KEYS = Object.freeze(['1', '2', '3', '4', '5', '6', '7', '8', '9', '0']);
 const QUICK_DOC_SCOPE_STORAGE_KEY = 'flightdeck:quick-doc-default-scope-id';
 const NEW_WORK_SCOPE_STORAGE_KEY = 'flightdeck:new-work-default-scope-id';
 const SUPER_MODIFIER_KEYS = new Set(['meta', 'os', 'super', 'hyper']);
@@ -423,6 +424,19 @@ export const commandPaletteMixin = {
       }
       if (this.commandPaletteShortcutOverlayTimer || this.showCommandPaletteShortcutOverlay) {
         this.hideCommandPaletteShortcutOverlay();
+      }
+      if (this.showCommandPalette
+        && this.commandPaletteMode === 'scope'
+        && !event.isComposing
+        && !event.metaKey
+        && !event.ctrlKey
+        && !event.altKey
+        && !event.shiftKey
+        && /^\d$/.test(key)) {
+        event.preventDefault();
+        const item = this.commandPaletteScopeItems.find((scope) => scope.shortcutKey === key);
+        if (item) void this.executeCommandPaletteItem(item);
+        return;
       }
       if (this.showCommandPalette
         && this.commandPaletteMode === 'root'
@@ -892,7 +906,7 @@ export const commandPaletteMixin = {
   },
 
   get commandPaletteScopeItems() {
-    return (this.filterFlightDeckScopeOptions?.(this.commandPaletteQuery) || []).map((board) => buildItem({
+    return (this.filterFlightDeckScopeOptions?.(this.commandPaletteQuery) || []).map((board, index) => buildItem({
       id: `scope-picker:${board.id}`,
       group: 'scope',
       title: board.label || 'Untitled scope',
@@ -900,6 +914,7 @@ export const commandPaletteMixin = {
       action: 'select-scope-context',
       scopeId: board.id,
       active: Boolean(this.isFlightDeckScopeOptionActive?.(board)),
+      shortcutKey: COMMAND_PALETTE_SCOPE_SHORTCUT_KEYS[index] || '',
       searchText: compactText([board.label, board.meta, board.breadcrumb]),
     }));
   },

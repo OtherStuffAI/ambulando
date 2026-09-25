@@ -2152,6 +2152,13 @@
       "notes": [
         "Open a searchable, keyboard-friendly scope grid from the command palette or the desktop and mobile scope controls."
       ]
+    },
+    {
+      "buildNumber": 2098,
+      "label": "Numbered scope selection",
+      "notes": [
+        "Select any of the first ten visible scopes with 1–9 or 0; numbered scope shortcuts follow the current filtered order."
+      ]
     }
   ]
 }

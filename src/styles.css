@@ -7221,7 +7221,7 @@ button:disabled {
   border-radius: 8px;
   background: #ffffff;
   color: #0f172a;
-  padding: 0.6rem 0.7rem;
+  padding: 0.6rem 2.5rem 0.6rem 0.7rem;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -7229,6 +7229,22 @@ button:disabled {
   gap: 0.15rem;
   text-align: left;
   cursor: pointer;
+}
+.command-palette-scope-tile-key {
+  position: absolute;
+  top: 0.45rem;
+  right: 0.45rem;
+  min-width: 1.45rem;
+  height: 1.45rem;
+  border: 1px solid rgba(100, 116, 139, 0.3);
+  border-radius: 5px;
+  background: #f8fafc;
+  color: #475569;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font: 750 0.72rem/1 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
 }
 .command-palette-scope-tile span { font-weight: 750; }
 .command-palette-scope-tile small { color: #64748b; }
