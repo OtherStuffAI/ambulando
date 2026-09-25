@@ -2138,6 +2138,13 @@
       "label": "Validate scoped FIPS transport",
       "notes": [],
       "noUserVisibleChanges": true
+    },
+    {
+      "buildNumber": 2094,
+      "label": "Actionable Autopilot signing errors",
+      "notes": [
+        "Preserve safe WMapp signer error codes and a correlation reference when an exact Autopilot request cannot be signed."
+      ]
     }
   ]
 }

@@ -326,7 +326,18 @@ export function createAutopilotDiscoveryClient(verifiedPackage, {
       : (typeof body === 'string' ? body : JSON.stringify(body));
     let authorization;
     try { authorization = await authHeader(requestUrl, normalizedMethod, serializedBody ?? null); }
-    catch (error) { fail('auth_signing_failed', `Could not sign the exact Autopilot ${operation} request.`, { cause: error }); }
+    catch (error) {
+      const nativeError = nativePublicError(error);
+      diagnose('auth_signing_failed', requestId, {
+        publicCode: nativeError?.code || 'auth_signing_failed',
+        operation,
+      });
+      fail(
+        nativeError?.code || 'auth_signing_failed',
+        nativeError?.message || `Could not sign the exact Autopilot ${operation} request.`,
+        { cause: error, correlationId: requestId },
+      );
+    }
     let response;
     try {
       response = await handle.fetch(requestUrl, {

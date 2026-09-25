@@ -361,6 +361,38 @@ describe('Autopilot NIP-98/FIPS discovery client', () => {
     });
   });
 
+  it('preserves safe native signing errors and correlation without leaking details', async () => {
+    const authHeader = vi.fn(async () => {
+      throw new Error('fips_signing_scope_required: Reconnect the exact FIPS service grant.');
+    });
+    await expect(createAutopilotDiscoveryClient(verified, {
+      transport: scoped({
+        version: 2,
+        connect: vi.fn(async ({ endpoint }) => ({ version: 2, endpoint })),
+        fetch: vi.fn(),
+      }),
+      authHeader,
+    }).health()).rejects.toMatchObject({
+      code: 'fips_signing_scope_required',
+      message: 'Reconnect the exact FIPS service grant.',
+      correlationId: verified.correlationId,
+    });
+
+    authHeader.mockRejectedValueOnce(new Error('unsafe signer failure\nAuthorization: secret'));
+    await expect(createAutopilotDiscoveryClient(verified, {
+      transport: scoped({
+        version: 2,
+        connect: vi.fn(async ({ endpoint }) => ({ version: 2, endpoint })),
+        fetch: vi.fn(),
+      }),
+      authHeader,
+    }).health()).rejects.toMatchObject({
+      code: 'auth_signing_failed',
+      message: 'Could not sign the exact Autopilot health request.',
+      correlationId: verified.correlationId,
+    });
+  });
+
   it('does not expose malformed native error details', async () => {
     const bridge = {
       version: 2,
