@@ -608,6 +608,93 @@ describe('handleSSEStatus', () => {
     expect(store.towerConnectionIndicatorLabel).toBe('');
   });
 
+  it('clears reconnecting with a real workspace pull even when activity recovery fails', async () => {
+    isTowerPgBackendMode.mockReturnValue(true);
+    const store = createStore({
+      session: { npub: 'npub1viewer' },
+      backendUrl: 'https://tower.example.com',
+      workspaceDbKey: 'workspace-mobile',
+      currentWorkspace: { workspaceId: 'mobile-space' },
+      isLoggedIn: true,
+      requestTowerSyncFamily: vi.fn().mockResolvedValue({ applied: 0, pages: 1 }),
+      recoverVisibleAgentActivities: vi.fn().mockRejectedValue(new Error('activity endpoint failed')),
+      scheduleBackgroundSync: vi.fn(),
+      scheduleOfflineMessageResync: vi.fn(),
+    });
+    const connectionKey = store.buildSSEConnectionKey();
+    store.handleSSEStatus({ status: 'reconnecting', connectionKey });
+    await store.backgroundSyncTick();
+
+    expect(store.requestTowerSyncFamily).toHaveBeenCalledWith('workspace-bootstrap');
+    expect(store.towerConnectionIndicatorLabel).toBe('');
+    expect(store.towerFallbackReachable).toBe(true);
+    store.handleSSEStatus({ status: 'fallback-polling', connectionKey });
+    expect(store.towerConnectionIndicatorLabel).toBe('');
+    expect(flightDeckLog).toHaveBeenCalledWith('warn', 'sync', 'activity recovery failed during background sync', expect.any(Object));
+
+    store.requestTowerSyncFamily.mockRejectedValueOnce(new Error('Tower unavailable'));
+    await store.backgroundSyncTick();
+    expect(store.towerConnectionIndicatorLabel).toBe('Reconnecting');
+    expect(store.towerFallbackReachable).toBe(false);
+  });
+
+  it('recovers a stale badge when a workspace pull completes outside the polling tick', async () => {
+    isTowerPgBackendMode.mockReturnValue(true);
+    const store = createStore({
+      session: { npub: 'npub1viewer' },
+      backendUrl: 'https://tower.example.com',
+      workspaceDbKey: 'workspace-mobile',
+      currentWorkspace: { workspaceId: 'mobile-space' },
+      isLoggedIn: true,
+      sseStatus: 'reconnecting',
+      beginStartupSyncProgress: vi.fn(),
+      finishStartupSyncProgress: vi.fn(),
+      scheduleOfflineMessageResync: vi.fn(),
+    });
+    store.markTowerReachabilityDegraded('sse-reconnecting');
+    await store.runTowerPgWorkspaceSync();
+    expect(store.towerConnectionIndicatorLabel).toBe('');
+    expect(store.towerFallbackReachable).toBe(true);
+    store.disposeTowerSyncService();
+  });
+
+  it.each(['rejected', 'offline', 'switched'])('does not recover from a %s workspace pull', async (outcome) => {
+    isTowerPgBackendMode.mockReturnValue(true);
+    const store = createStore({
+      session: { npub: 'npub1viewer' },
+      backendUrl: 'https://tower.example.com',
+      workspaceDbKey: 'workspace-mobile',
+      currentWorkspace: { workspaceId: 'mobile-space' },
+      isLoggedIn: true,
+      sseStatus: 'reconnecting',
+      beginStartupSyncProgress: vi.fn(),
+      finishStartupSyncProgress: vi.fn(),
+      scheduleOfflineMessageResync: vi.fn(),
+    });
+    store.markTowerReachabilityDegraded('sse-reconnecting');
+    try {
+      if (outcome === 'rejected') {
+        syncTowerPgWorkspace.mockRejectedValueOnce(new Error('Tower unavailable'));
+        await expect(store.runTowerPgWorkspaceSync()).rejects.toThrow('Tower unavailable');
+        expect(store.towerConnectionIndicatorLabel).toBe('Reconnecting');
+      } else {
+        syncTowerPgWorkspace.mockImplementationOnce(async () => {
+          if (outcome === 'offline') vi.stubGlobal('navigator', { onLine: false });
+          else store.currentWorkspace = { workspaceId: 'second-space' };
+          return { applied: 0, pages: 1 };
+        });
+        await store.runTowerPgWorkspaceSync();
+        if (outcome === 'offline') expect(store.towerConnectionIndicatorLabel).toBe('Offline');
+        else expect(store.towerReachabilityState).toBe('reconnecting');
+      }
+      expect(store.towerFallbackReachable).toBe(false);
+      expect(store.scheduleOfflineMessageResync).not.toHaveBeenCalled();
+    } finally {
+      store.disposeTowerSyncService();
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('shows reconnecting again when Tower fallback fails after a usable mobile recovery', () => {
     isTowerPgBackendMode.mockReturnValue(true);
     const store = createStore({

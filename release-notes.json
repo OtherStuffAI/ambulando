@@ -2173,6 +2173,13 @@
       "notes": [
         "Keep cached scopes, channels, and messages visible while startup, refresh, and reconnect download replacement data. Reject incomplete responses and preserve access revocation and deletion."
       ]
+    },
+    {
+      "buildNumber": 2101,
+      "label": "Recover mobile connection status",
+      "notes": [
+        "Clear stale Reconnecting status after a successful workspace pull. Activity recovery errors no longer prevent fallback workspace updates; failed pulls and offline warnings remain visible."
+      ]
     }
   ]
 }

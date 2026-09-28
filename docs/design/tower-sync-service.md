@@ -175,3 +175,17 @@ reconnect and cursor acknowledgements. `prepareTransportReload` pauses the
 existing lifecycle and settles in-flight service work before the same-origin
 reload. Pairing identity probes are connection checks, not materialized workspace
 reads. See `../fips-transport.md` for the v2 contract and storage behavior.
+
+## Connectivity recovery during fallback polling
+
+A committed workspace sync for the active connection clears a stale Tower
+connection warning even when SSE is still probing or using fallback polling.
+This also covers startup and SSE catch-up reads outside the background tick.
+Failed pulls, offline browsers, and completions from a previous workspace do
+not establish recovery.
+
+Activity and session-health recovery run before the fallback workspace pull,
+but their errors must not skip that pull. Activity recovery keeps its own visible
+error and bounded retry state. The workspace pull establishes whether general
+Tower connectivity is usable; a failed pull keeps the connection warning.
+SSE lifecycle diagnostics continue to show stream reconnect/fallback details.

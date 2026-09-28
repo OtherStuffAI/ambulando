@@ -806,6 +806,7 @@ export const syncManagerMixin = {
   },
 
   async runTowerPgWorkspaceSync(options = {}) {
+    const connectionKey = this.buildSSEConnectionKey();
     this.beginStartupSyncProgress();
     try {
       const service = this.getTowerSyncService();
@@ -822,6 +823,14 @@ export const syncManagerMixin = {
         }),
       });
       this.finishStartupSyncProgress();
+      // Every committed workspace pull is connectivity evidence, including
+      // startup and SSE catch-up pulls outside the background polling tick.
+      if (connectionKey && connectionKey === this.buildSSEConnectionKey() && !service.disposed) {
+        this.markTowerReachabilityRecovered('workspace-sync-success', {
+          refresh: false,
+          fallbackUsable: this.sseStatus !== 'connected',
+        });
+      }
       return result;
     } catch (error) {
       this.finishStartupSyncProgress(error);
@@ -3307,7 +3316,16 @@ export const syncManagerMixin = {
     try {
       if (this.isEncryptedRecordSyncDisabled) {
         this.markEncryptedRecordSyncDisabled();
-        await this.recoverVisibleAgentActivities();
+        // Activity recovery has its own visible error and retry state. A
+        // failed activity endpoint must not prevent the workspace fallback
+        // pull from establishing whether Tower connectivity is usable.
+        try {
+          await this.recoverVisibleAgentActivities();
+        } catch (error) {
+          flightDeckLog('warn', 'sync', 'activity recovery failed during background sync', {
+            error: error?.message || String(error),
+          });
+        }
         await (this.requestTowerSyncFamily?.('workspace-bootstrap') ?? this.runTowerPgWorkspaceSync());
         this.markTowerReachabilityRecovered?.('background-sync-success', {
           refresh: false,
