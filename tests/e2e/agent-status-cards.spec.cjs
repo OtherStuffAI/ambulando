@@ -32,15 +32,15 @@ for (const width of [1120, 390]) {
       store.channels = [{ record_id: 'status-channel', title: 'implementation', record_state: 'active', metadata: {} }];
       store.selectedChannelId = 'status-channel';
       store.pgContextSelectedChannelId = 'status-channel';
-      store.pgWorkspaceMembers = [{ npub: 'npub1rick', display_name: 'Rick', kind: 'agent' }];
-      store.addressBookPeople = [{ npub: 'npub1rick', label: 'Rick', name: 'Rick' }];
+      store.pgWorkspaceMembers = [{ npub: 'npub1statusagent', display_name: 'Status Agent', kind: 'agent' }];
+      store.addressBookPeople = [{ npub: 'npub1statusagent', label: 'Status Agent', name: 'Status Agent' }];
       store.messages = [root];
       store.navSection = 'chat';
       store.openThread('status-thread', { preserveChannelContext: true, scrollToLatest: false, syncRoute: false });
       store.applyAgentActivities([1, 2, 3, 4].map(n => ({
         record_id: `status-row-${n}`, activity_id: `status-${n}`, turn_id: `status-turn-${n}`,
         session_id: `pending:status-turn-${n}`, channel_id: 'status-channel', thread_id: 'status-thread',
-        trigger_message_id: `status-trigger-${n}`, agent_npub: 'npub1rick',
+        trigger_message_id: `status-trigger-${n}`, agent_npub: 'npub1statusagent',
         visibility: 'user_visible', state: n === 4 ? 'queued' : n === 3 ? 'accepted' : 'working',
         sequence: 1, created_at: `2026-09-28T0${n}:00:00Z`,
         expires_at: n === 1 || n === 3 ? '2000-01-01T00:00:00Z' : '2999-01-01T00:00:00Z',
