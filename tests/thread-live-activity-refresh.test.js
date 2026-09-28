@@ -52,6 +52,19 @@ describe('thread live activity package reconciliation', () => {
     expect(subject.liveThreadActivityAvailability).toBe('available');
   });
 
+  it('replaces only the matching durable turn while preserving queued work and failures', () => {
+    const subject = store();
+    const base = { agent_npub: 'npub1rick', thread_id: 'thread-1', created_at: '2026-09-28T00:00:00Z' };
+    subject.getLiveThreadActivityRow = () => ({ ...base, turn_id: 'current', live_overlay: true });
+    const queue = { ...base, turn_id: 'next', state: 'queued' };
+    const failure = { ...base, turn_id: 'earlier', state: 'failed', body: 'Runtime failed' };
+    const rows = subject.mergeThreadLiveActivity([{ ...base, turn_id: 'current' }, queue, failure]);
+    expect(rows).toHaveLength(3);
+    expect(rows).toContain(queue);
+    expect(rows).toContain(failure);
+    expect(rows.filter(row => row.turn_id === 'current')).toEqual([expect.objectContaining({ live_overlay: true })]);
+  });
+
   it('keeps Tower fallback and shows actionable status for a verified unsupported Autopilot', async () => {
     refresh.mockResolvedValue({ verified: { capabilities: ['health'] } });
     const subject = store();

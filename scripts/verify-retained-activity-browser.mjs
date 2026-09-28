@@ -21,7 +21,7 @@ function template(marker) {
  return html.slice(start,end);
 }
 const entry = `import Alpine from 'alpinejs'; import { chatMessageManagerMixin } from './src/chat-message-manager.js';
-const rows = [0,1,2].map((n) => ({record_id:'row-'+n, activity_id:'run-'+n, turn_id:'turn-'+n, workspace_id:'workspace',backend_url:'http://localhost',channel_id:'channel',thread_id:'thread',trigger_message_id:'message',agent_npub:'agent',visibility:'user_visible',state:'working',sequence:1,label:'Agent started',created_at:'2026-09-08T0'+n+':00:00Z',expires_at:n<2?'2020-01-01T00:00:00Z':'2999-01-01T00:00:00Z',summary:n<2?'Older run commentary '+(n+1):'Updating the stage layout',body:n<2?'Retained update '+(n+1):'Updating the stage layout',commentary_history:[]}));
+const rows = [0,1,2].map((n) => ({record_id:'row-'+n, activity_id:'run-'+n, turn_id:'turn-'+n, workspace_id:'workspace',backend_url:'http://localhost',channel_id:'channel',thread_id:'thread',trigger_message_id:n===2?'message':'earlier-message-'+n,agent_npub:'agent',visibility:'user_visible',state:'working',sequence:1,label:'Agent started',created_at:'2026-09-08T0'+n+':00:00Z',expires_at:n<2?'2020-01-01T00:00:00Z':'2999-01-01T00:00:00Z',summary:n<2?'Older run commentary '+(n+1):'Updating the stage layout',body:n<2?'Retained update '+(n+1):'Updating the stage layout',commentary_history:[]}));
 rows[2].sequence=4; rows[2].commentary_next_before_sequence=null;
 rows[2].commentary_history=[1,2,3,4].map(n=>({history_key:'update-'+n,activity_id:'run-2',turn_id:'turn-2',sequence:n,body:'Working update '+n+': Full commentary for this answer, including the details that must remain readable when expanded.'}));
 rows[2].body=rows[2].commentary_history[3].body;

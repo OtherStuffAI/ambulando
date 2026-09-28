@@ -219,3 +219,21 @@ The synthetic production-template browser harness checks both widths and all
 three surfaces, keyboard/ARIA behavior, changing symbols, reduced motion, four
 full updates, a live fifth, 60-entry paging, and lifecycle replacement. It does
 not replace an authenticated recovery smoke test against local Tower.
+
+## Conversation status projection
+
+Retained activity snapshots belong to history, not separate current cards for
+every trigger message. The current projection groups by workspace, backend,
+channel, thread and agent (unthreaded messages retain their trigger identity).
+It uses immutable lifecycle creation order, never heartbeat/update time or
+producer sequence across turns. It selects the latest nonqueued lifecycle,
+including terminal snapshots so completion cannot revive old working cards.
+Unexpired queued turns remain separate, and failures stay visible. Expired
+queues and earlier runs remain available in Working history & diagnostics.
+An expired current turn still reports uncertainty; expiry does not prove it
+finished. Zero-update status controls omit the empty working-update count.
+
+The optional live overlay replaces only its matching durable turn, preserving
+other queued turns and failures before the same conversation projection runs.
+Regression coverage exercises different triggers with placeholder session IDs,
+late old commentary, queue promotion, terminal completion, and disconnects.

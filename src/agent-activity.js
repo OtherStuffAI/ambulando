@@ -138,19 +138,31 @@ export function reconcileAgentActivity(current, incoming) {
 
 // Project retained records without changing storage or allowing update/replay time
 // to promote an earlier lifecycle into the current conversation slot.
-export function selectCurrentAgentActivities(activities = []) {
+export function selectCurrentAgentActivities(activities = [], nowMs = Date.now()) {
   const groups = new Map();
   for (const activity of selectVisibleAgentActivities(activities)) {
     const key = JSON.stringify([
       activity.workspace_id || '', activity.backend_url || '',
-      activity.channel_id || '', activity.thread_id || '', activity.trigger_message_id || '', activity.agent_npub || '',
+      activity.channel_id || '', activity.thread_id || activity.trigger_message_id || '', activity.agent_npub || '',
     ]);
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(activity);
   }
-  return [...groups.values()].map((runs) => {
+  return [...groups.values()].flatMap((runs) => {
     runs.sort((a, b) => compareAgentActivityLifecycle(b, a));
-    return { ...runs[0], earlier_activities: runs.slice(1) };
+    // A queued request must not replace the turn ahead of it. A confirmed
+    // terminal current turn must not resurrect an older unconfirmed lifecycle.
+    const current = runs.find((run) => run.state !== 'queued');
+    const selected = runs.filter((run) => {
+      if (run === current || run.state === 'failed') return true;
+      if (run.state !== 'queued') return false;
+      const expiresAt = Date.parse(run.lease_expires_at || run.expires_at || '');
+      return run.lease_health !== 'stale' && (!Number.isFinite(expiresAt) || expiresAt > nowMs);
+    });
+    const earlier = runs.filter((run) => !selected.includes(run));
+    // Even a queue-only conversation retains its expired records in diagnostics.
+    if (!selected.length) return [{ ...runs[0], earlier_activities: runs.slice(1) }];
+    return selected.map((run, index) => ({ ...run, earlier_activities: index === 0 ? earlier : [] }));
   });
 }
 

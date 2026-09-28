@@ -155,12 +155,14 @@ export const threadLiveActivityManagerMixin = {
   },
 
   mergeThreadLiveActivity(towerActivities = []) {
-    const live = this.getLiveThreadActivityRow();
-    if (!live) return towerActivities;
+    const overlay = this.getLiveThreadActivityRow();
+    if (!overlay) return towerActivities;
+    const live = { ...overlay, backend_url: overlay.backend_url || this.backendUrl || '' };
     return [
       ...towerActivities.filter((row) => !(
         text(row.agent_npub) === text(live.agent_npub)
         && text(row.thread_id) === text(live.thread_id)
+        && text(row.turn_id) === text(live.turn_id)
       )),
       live,
     ].sort((left, right) => String(left.created_at || '').localeCompare(String(right.created_at || '')));

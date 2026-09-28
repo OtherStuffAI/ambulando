@@ -95,18 +95,20 @@ describe('retained run grouping', () => {
       workspace_id: 'workspace-a', backend_url: 'https://tower.example', thread_id: 'thread-a',
       trigger_message_id: id, created_at: `2026-09-08T0${id}:00:00Z`, ...overrides });
   }
-  it('keeps each turn attached to its trigger message while retaining expired runs', () => {
+  it('keeps only the current turn attached to its trigger while retaining expired runs in history', () => {
     const target = store();
     target.applyAgentActivities([run('1', { expires_at: '2000-01-01' }), run('2', { expires_at: '2000-01-01' }), run('3')]);
-    expect(target.activeThreadAgentActivities).toHaveLength(3);
-    expect(target.getAgentActivitiesForMessage('1')).toEqual([expect.objectContaining({ activity_id: '1' })]);
+    expect(target.activeThreadAgentActivities).toHaveLength(1);
+    expect(target.getAgentActivitiesForMessage('1')).toEqual([]);
+    target.openAgentActivityDetails();
+    expect(target.agentActivityDetailsRows.map(row => row.activity_id)).toEqual(['3', '2', '1']);
     expect(target.getAgentActivitiesForMessage('3')).toEqual([expect.objectContaining({ activity_id: '3' })]);
     expect(target.agentActivities).toHaveLength(3);
   });
   it('keeps a late old replay out of the current slot and retains terminal history', () => {
     const target = store();
     target.applyAgentActivities([run('1', { sequence: 999, updated_at: '2999-01-01', state: 'completed' }), run('2')]);
-    expect(target.activeThreadAgentActivities.map(row => row.activity_id)).toEqual(['1', '2']);
+    expect(target.activeThreadAgentActivities.map(row => row.activity_id)).toEqual(['2']);
   });
   it('keeps distinct agents, workspaces, backends and conversations separate', () => {
     const target = store();
@@ -126,7 +128,7 @@ describe('retained run grouping', () => {
     expect(target.getAgentActivityHealth(current).message).toBe('Reconnecting');
     target.agentActivityRecoveryStartedAt -= 2_000;
     expect(target.getAgentActivityHealth(current).message).toBe('Connection lost—status unknown');
-    expect(target.activeThreadAgentActivities).toHaveLength(2);
+    expect(target.activeThreadAgentActivities).toHaveLength(1);
   });
 
   it('shows a queued message beneath the prior working message and promotes it in place', () => {
@@ -139,6 +141,44 @@ describe('retained run grouping', () => {
     expect(target.getAgentActivityStatusLabel(queued)).toContain('Queued behind');
     target.applyAgentActivities([prior, { ...queued, state: 'working', sequence: 2, queue_position: null }]);
     expect(target.getAgentActivitiesForMessage('2')[0]).toEqual(expect.objectContaining({ state: 'working' }));
+  });
+
+  it('reduces the screenshot stack to one current status and genuine queued work without losing commentary', () => {
+    const target = store();
+    const rows = [
+      run('1', { session_id: 'pending:1', expires_at: '2000-01-01', commentary_history: [] }),
+      run('2', { session_id: 'pending:2', commentary_history: [], body: '' }),
+      run('3', { session_id: 'pending:3', state: 'accepted', expires_at: '2000-01-01', commentary_history: [] }),
+      run('4', { session_id: 'pending:4', state: 'queued', blocked_by_turn_id: '3', queue_position: 2 }),
+    ];
+    target.applyAgentActivities(rows);
+    const cards = () => target.activeThreadAgentActivities.filter(row => target.isCurrentAgentActivityWorking(row));
+    expect(cards().map(row => row.activity_id)).toEqual(['3', '4']);
+    // Commentary arriving late must remain available without promoting the old turn.
+    target.applyAgentActivities([{ ...rows[0], sequence: 999, updated_at: '2999-01-01',
+      commentary_history: [{ activity_id: '1', turn_id: '1', sequence: 998, body: 'Earlier useful commentary' }] }, ...rows.slice(1)]);
+    expect(cards().map(row => row.activity_id)).toEqual(['3', '4']);
+    target.openAgentActivityDetails();
+    expect(target.agentActivityDetailsRows).toHaveLength(4);
+    const earlier = target.agentActivityDetailsRows.find(row => row.activity_id === '1');
+    expect(target.getAgentActivityCommentaryHistory(earlier)[0].body).toBe('Earlier useful commentary');
+    // Promotion replaces the old current card even without session health.
+    target.applyAgentActivities([...rows.slice(0, 3), { ...rows[3], state: 'working', sequence: 3 }]);
+    expect(cards().map(row => row.activity_id)).toEqual(['4']);
+    target.applyAgentActivities([...rows.slice(0, 3), { ...rows[3], state: 'completed', sequence: 4 }]);
+    expect(cards()).toEqual([]);
+  });
+
+  it('keeps failure details visible beside newer work and never revives an expired queue on disconnect', () => {
+    const target = store();
+    target.applyAgentActivities([run('1', { state: 'failed', body: 'Validation failed' }), run('2'),
+      run('3', { state: 'queued', expires_at: '2000-01-01' })]);
+    target.sseStatus = 'disconnected';
+    const cards = target.activeThreadAgentActivities.filter(row => target.isCurrentAgentActivityWorking(row));
+    expect(cards.map(row => row.activity_id)).toEqual(['1', '2']);
+    expect(target.getAgentActivityStatusLabel(cards[0])).toBe('Validation failed');
+    target.openAgentActivityDetails();
+    expect(target.agentActivityDetailsRows).toHaveLength(3);
   });
 
   it('distinguishes a stale turn lease from a live session and exposes session errors', () => {
@@ -168,11 +208,11 @@ describe('retained run grouping', () => {
     expect(target.getAgentActivityStatusLabel(current)).toBe('Reconnecting');
   });
 
-  it.each(['completed', 'failed', 'cancelled'])('removes %s activity from the live card slot', (state) => {
+  it.each(['completed', 'failed', 'cancelled'])('preserves failures and hides other terminal %s activity from the live card slot', (state) => {
     const target = store();
     const row = run('1', { state });
     target.applyAgentActivities([row]);
-    expect(target.isCurrentAgentActivityWorking(row)).toBe(false);
+    expect(target.isCurrentAgentActivityWorking(row)).toBe(state === 'failed');
     expect(target.agentActivities).toEqual([expect.objectContaining({ state })]);
   });
 

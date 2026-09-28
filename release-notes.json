@@ -2159,6 +2159,13 @@
       "notes": [
         "Select any of the first ten visible scopes with 1–9 or 0; numbered scope shortcuts follow the current filtered order."
       ]
+    },
+    {
+      "buildNumber": 2099,
+      "label": "Compact agent status in chat",
+      "notes": [
+        "Keep one current agent status per conversation alongside queued work and failures. Older statuses and commentary remain available in Working history & diagnostics."
+      ]
     }
   ]
 }

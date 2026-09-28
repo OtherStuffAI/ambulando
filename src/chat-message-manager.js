@@ -81,7 +81,7 @@ import {
   canonicalAgentMentionsFromSelection,
   filterMentionsToCurrentWorkspaceActors,
 } from './agent-direct-chat.js';
-import { getAgentActivityHealth, isTerminalAgentActivity, selectCurrentAgentActivities } from './agent-activity.js';
+import { getAgentActivityHealth, isTerminalAgentActivity, selectCurrentAgentActivities, selectVisibleAgentActivities } from './agent-activity.js';
 import {
   buildHangCallInvitation,
   createHangRoomUrl,
@@ -1187,12 +1187,13 @@ export const chatMessageManagerMixin = {
   },
   getVisibleAgentActivities() {
     void this.responseActivityTick;
-    const towerActivities = selectCurrentAgentActivities((this.agentActivities || []).filter((activity) =>
+    const towerActivities = selectVisibleAgentActivities((this.agentActivities || []).filter((activity) =>
       (!activity.workspace_id || !this.currentWorkspace?.workspaceId || activity.workspace_id === this.currentWorkspace.workspaceId)
       && (!activity.backend_url || !this.backendUrl || activity.backend_url.replace(/\/$/, '') === this.backendUrl.replace(/\/$/, ''))))
       .sort((left, right) => String(left.created_at || '').localeCompare(String(right.created_at || ''))
         || String(left.activity_id || '').localeCompare(String(right.activity_id || '')));
-    return this.mergeThreadLiveActivity?.(towerActivities) || towerActivities;
+    return selectCurrentAgentActivities(this.mergeThreadLiveActivity?.(towerActivities) || towerActivities)
+      .sort((left, right) => String(left.created_at || '').localeCompare(String(right.created_at || '')));
   },
   getAgentActivityHealth(activity = {}) {
     void this.responseActivityTick;
@@ -1312,7 +1313,12 @@ export const chatMessageManagerMixin = {
   },
   isCurrentAgentActivityWorking(activity = {}) {
     void this.responseActivityTick;
+    if (activity.state === 'failed') return true;
     if (isTerminalAgentActivity(activity)) return false;
+    if (activity.state === 'queued') {
+      const expiresAt = Date.parse(activity.lease_expires_at || activity.expires_at || '');
+      if (activity.lease_health === 'stale' || (Number.isFinite(expiresAt) && expiresAt <= Date.now())) return false;
+    }
     const session = this.getAgentSessionHealth(activity);
     if (!session) return true;
     const activeTurnId = String(session.active_turn_id || '').trim();
