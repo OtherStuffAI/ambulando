@@ -7,6 +7,7 @@ import {
   mapPgAgentSessionHealth,
   reconcileAgentActivity,
   selectVisibleAgentActivities,
+  selectCurrentAgentActivities,
 } from '../src/agent-activity.js';
 
 function activity(overrides = {}) {
@@ -92,5 +93,61 @@ describe('agent activity lifecycle', () => {
       status: 'busy', generation: 2, sequence: 1, row_version: 9, lease_health: 'live' })).toEqual(expect.objectContaining({
       record_id: 'health-1', status: 'busy', generation: 2, sequence: 1, row_version: 9,
     }));
+  });
+});
+
+describe('current conversation failures', () => {
+  const run = (n, state, overrides = {}) => activity({
+    id: `row-${n}`, activity_id: `activity-${n}`, turn_id: `turn-${n}`,
+    trigger_message_id: `message-${n}`, state,
+    created_at: `2026-08-10T0${n}:00:00.000Z`, ...overrides,
+  });
+
+  it.each(['accepted', 'working', 'completed'])('retains a failure in history after a newer %s lifecycle', (state) => {
+    const failed = run(1, 'failed');
+    const current = run(2, state);
+    expect(selectCurrentAgentActivities([failed, current])).toEqual([
+      { ...current, earlier_activities: [failed] },
+    ]);
+  });
+
+  it('keeps only the latest of several failed attempts live, including retries of one trigger', () => {
+    const rows = [1, 2, 3].map(n => run(n, 'failed', { trigger_message_id: 'same-message' }));
+    expect(selectCurrentAgentActivities(rows)).toEqual([
+      { ...rows[2], earlier_activities: [rows[1], rows[0]] },
+    ]);
+  });
+
+  it('preserves an unsuperseded failure despite expiry and a newer queued request', () => {
+    const failed = run(1, 'failed', { expires_at: '2000-01-01' });
+    const queued = run(2, 'queued', { blocked_by_turn_id: failed.turn_id });
+    const rows = selectCurrentAgentActivities([failed, queued]);
+    expect(rows.map(row => row.state)).toEqual(['queued', 'failed']);
+    expect(rows.flatMap(row => row.earlier_activities)).toEqual([]);
+  });
+
+  it('retains earlier failures once while preserving current and queued turns', () => {
+    const failed = run(1, 'failed');
+    const current = run(2, 'working');
+    const queued = run(3, 'queued');
+    const expired = run(4, 'queued', { expires_at: '2000-01-01' });
+    const rows = selectCurrentAgentActivities([failed, queued, current, expired]);
+    expect(rows.map(row => row.activity_id)).toEqual([queued.activity_id, current.activity_id]);
+    expect(rows.flatMap(row => row.earlier_activities)).toEqual([expired, failed]);
+  });
+
+  it('does not promote old failed replay or duplicate delivery over success', () => {
+    const failed = run(1, 'failed', { sequence: 99, updated_at: '2999-01-01' });
+    const current = run(2, 'completed');
+    for (const rows of [[failed, current, failed], [current, failed, run(1, 'working')]]) {
+      expect(selectCurrentAgentActivities(rows)).toEqual([{ ...current, earlier_activities: [failed] }]);
+    }
+  });
+
+  it('does not suppress another agent or unthreaded request failure', () => {
+    const failed = run(1, 'failed');
+    const other = run(2, 'completed', { agent_npub: 'npub1other' });
+    expect(selectCurrentAgentActivities([failed, other])).toHaveLength(2);
+    expect(selectCurrentAgentActivities([run(1, 'failed', { thread_id: '' }), run(2, 'completed', { thread_id: '' })])).toHaveLength(2);
   });
 });

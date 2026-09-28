@@ -80,5 +80,35 @@ for (const width of [1120, 390]) {
     });
     await expect(cards).toHaveCount(1);
     await expect(cards).toContainText('Validation failed');
+    await page.evaluate(() => {
+      const store = window.Alpine.store('chat');
+      // Earlier failures from separate triggers must not stack beside the
+      // current failed request, and duplicate delivery must not add a card.
+      store.agentActivities[0].state = 'failed';
+      store.agentActivities[0].body = 'Earlier dispatch failed';
+      store.agentActivities[1].state = 'failed';
+      store.agentActivities[1].body = 'Second dispatch failed';
+      store.agentActivities.push({ ...store.agentActivities[0] });
+    });
+    await expect(cards).toHaveCount(1);
+    await expect(cards).toContainText('Validation failed');
+    await page.evaluate(() => {
+      const store = window.Alpine.store('chat');
+      store.agentActivities.push({ ...store.agentActivities[3],
+        record_id: 'status-success', activity_id: 'status-success', turn_id: 'status-success-turn',
+        created_at: '2026-09-28T05:00:00Z', state: 'completed', body: 'Retry succeeded', sequence: 1 });
+    });
+    await expect(cards).toHaveCount(0);
+    await page.evaluate(() => {
+      const store = window.Alpine.store('chat');
+      Object.assign(store.agentActivities[0], { sequence: 9999, updated_at: '2999-01-01' });
+      store.openAgentActivityDetails('thread');
+    });
+    await expect(dialog).toBeVisible();
+    await expect(dialog.locator('.agent-activity-retained')).toHaveCount(5);
+    await expect(dialog.getByText('Earlier dispatch failed', { exact: true })).toHaveCount(1);
+    await expect(dialog.getByText('Second dispatch failed', { exact: true })).toHaveCount(1);
+    await dialog.getByRole('button', { name: 'Close working history' }).click();
+    await expect(cards).toHaveCount(0);
   });
 }

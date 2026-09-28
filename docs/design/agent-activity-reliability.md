@@ -228,8 +228,13 @@ channel, thread and agent (unthreaded messages retain their trigger identity).
 It uses immutable lifecycle creation order, never heartbeat/update time or
 producer sequence across turns. It selects the latest nonqueued lifecycle,
 including terminal snapshots so completion cannot revive old working cards.
-Unexpired queued turns remain separate, and failures stay visible. Expired
-queues and earlier runs remain available in Working history & diagnostics.
+Unexpired queued turns remain separate, and the current failure stays visible.
+Earlier failures move into Working history & diagnostics alongside other retained
+runs; they do not accumulate as live cards after a later lifecycle starts.
+A newer queue alone cannot supersede a current failure. Replayed updates to an
+earlier failure cannot promote it over a newer lifecycle. This projection does
+not infer success from ordinary chat replies or rewrite terminal producer state.
+Expired queues and earlier runs remain available in Working history & diagnostics.
 An expired current turn still reports uncertainty; expiry does not prove it
 finished. Zero-update status controls omit the empty working-update count.
 

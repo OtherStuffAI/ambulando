@@ -169,14 +169,14 @@ describe('retained run grouping', () => {
     expect(cards()).toEqual([]);
   });
 
-  it('keeps failure details visible beside newer work and never revives an expired queue on disconnect', () => {
+  it('keeps earlier failure details in diagnostics and never revives an expired queue on disconnect', () => {
     const target = store();
     target.applyAgentActivities([run('1', { state: 'failed', body: 'Validation failed' }), run('2'),
       run('3', { state: 'queued', expires_at: '2000-01-01' })]);
     target.sseStatus = 'disconnected';
     const cards = target.activeThreadAgentActivities.filter(row => target.isCurrentAgentActivityWorking(row));
-    expect(cards.map(row => row.activity_id)).toEqual(['1', '2']);
-    expect(target.getAgentActivityStatusLabel(cards[0])).toBe('Validation failed');
+    expect(cards.map(row => row.activity_id)).toEqual(['2']);
+    expect(cards[0].earlier_activities.find(row => row.activity_id === '1')).toMatchObject({ state: 'failed', body: 'Validation failed' });
     target.openAgentActivityDetails();
     expect(target.agentActivityDetailsRows).toHaveLength(3);
   });

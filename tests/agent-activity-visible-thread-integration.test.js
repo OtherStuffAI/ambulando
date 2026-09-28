@@ -174,4 +174,38 @@ describe('agent activity hydration/SSE to visible thread', () => {
     expect(await getAgentActivityCommentaryForChannel(CHANNEL_ID)).toHaveLength(1);
     expect(target.messages.at(-1)).toMatchObject({ record_id: 'message-final', body: 'Final reply' });
   });
+
+  it('retains failed attempts in Dexie and diagnostics after success and old SSE replay', async () => {
+    const target = store();
+    const db = openWorkspaceDb(DB_KEY);
+    await db.open();
+    const failed = [1, 2, 3].map(n => rawActivity({
+      id: `failed-row-${n}`, activity_id: `failed-${n}`, turn_id: `failed-turn-${n}`,
+      trigger_message_id: `failed-trigger-${n}`, state: 'failed', body: `Dispatch attempt ${n} failed`,
+      created_at: `2026-08-09T0${n}:00:00.000Z`,
+    }));
+    await hydrateTowerPgChannelAgentActivities(target, CHANNEL_ID, {
+      getTowerPgAgentActivities: async () => ({ agent_activities: failed }),
+    });
+    target.applyAgentActivities(await getAgentActivitiesForChannel(CHANNEL_ID));
+    expect(target.activeThreadAgentActivities.filter(row => target.isCurrentAgentActivityWorking(row)))
+      .toEqual([expect.objectContaining({ activity_id: 'failed-3' })]);
+
+    await hydrateTowerPgEventUpdates(target, [event(rawActivity({ state: 'completed' }))], {});
+    // Duplicate and stale snapshots cannot create another card or promote failure.
+    await hydrateTowerPgEventUpdates(target, [event(failed[0]), event(failed[0]),
+      event({ ...failed[1], sequence: 999, updated_at: '2999-01-01T00:00:00Z' })], {});
+    target.applyAgentActivities(await getAgentActivitiesForChannel(CHANNEL_ID));
+    expect(target.activeThreadAgentActivities).toEqual([
+      expect.objectContaining({ state: 'completed', earlier_activities: expect.arrayContaining([
+        expect.objectContaining({ activity_id: 'failed-1', state: 'failed' }),
+        expect.objectContaining({ activity_id: 'failed-2', state: 'failed' }),
+        expect.objectContaining({ activity_id: 'failed-3', state: 'failed' }),
+      ]) }),
+    ]);
+    expect(target.activeThreadAgentActivities.filter(row => target.isCurrentAgentActivityWorking(row))).toEqual([]);
+    expect(await getAgentActivitiesForChannel(CHANNEL_ID)).toHaveLength(4);
+    target.openAgentActivityDetails();
+    expect(target.agentActivityDetailsRows).toHaveLength(4);
+  });
 });

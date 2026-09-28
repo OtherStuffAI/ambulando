@@ -2180,6 +2180,13 @@
       "notes": [
         "Clear stale Reconnecting status after a successful workspace pull. Activity recovery errors no longer prevent fallback workspace updates; failed pulls and offline warnings remain visible."
       ]
+    },
+    {
+      "buildNumber": 2102,
+      "label": "Keep earlier dispatch failures in history",
+      "notes": [
+        "Show the current agent status and queued work without stacking earlier failed dispatch cards. Earlier failures remain in Working history & diagnostics; the current failure stays visible."
+      ]
     }
   ]
 }

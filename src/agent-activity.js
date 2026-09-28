@@ -152,9 +152,11 @@ export function selectCurrentAgentActivities(activities = [], nowMs = Date.now()
     runs.sort((a, b) => compareAgentActivityLifecycle(b, a));
     // A queued request must not replace the turn ahead of it. A confirmed
     // terminal current turn must not resurrect an older unconfirmed lifecycle.
+    // Earlier failures remain diagnostic history, even when their producer
+    // state has not yet been reconciled after a successful dispatch.
     const current = runs.find((run) => run.state !== 'queued');
     const selected = runs.filter((run) => {
-      if (run === current || run.state === 'failed') return true;
+      if (run === current) return true;
       if (run.state !== 'queued') return false;
       const expiresAt = Date.parse(run.lease_expires_at || run.expires_at || '');
       return run.lease_health !== 'stale' && (!Number.isFinite(expiresAt) || expiresAt > nowMs);
