@@ -18,6 +18,8 @@ function attachThreadHistoryService(store) {
     expect(family).toBe('thread-history');
     return hydrateTowerPgThreadMessages(store, options.channelId, options.threadId, {
       ...options,
+      getSyncState: async () => null,
+      runWorkspaceSyncTransaction: async callback => callback(),
       getTowerPgChannelThreads: store.getTowerPgChannelThreads,
       getTowerPgChannelMessages: store.getTowerPgChannelMessages,
       upsertMessage: store.upsertMessage,

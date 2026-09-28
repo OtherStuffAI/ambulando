@@ -1563,7 +1563,7 @@ export async function hydrateTowerPgSyncBundle(store, bundle = {}, deps = {}) {
       });
       return { applied: (bundle.members?.length || 0) + (bundle.groups?.length || 0), cursor: null, hasMore: false };
     }
-    if (bundle.reset_authority === true) { const reset = await resetPgRecordAuthority(store); return { applied: 0, cursor: null, hasMore: false, ...reset }; }
+    if (bundle.reset_authority === true) { const reset = await resetPgRecordAuthority(store, bundle.local_apply_options); return { applied: 0, cursor: null, hasMore: false, ...reset }; }
     const context = resolveTowerPgWorkspaceContext(store);
     await (deps.migrateLegacyAutopilotLaunchers || migrateLegacyAutopilotLaunchers)(
       context.workspaceId,
@@ -1571,12 +1571,24 @@ export async function hydrateTowerPgSyncBundle(store, bundle = {}, deps = {}) {
     );
     const result = await applyPgRecordChanges(store, bundle, bundle.local_apply_options || {});
     // Also retire saved warnings when no new delta for that record arrives.
-    await reconcilePgRecordConflicts(store);
+    if (!result.staged) await reconcilePgRecordConflicts(store);
     return result;
   }
   const context = resolveTowerPgWorkspaceContext(store);
   if (!context.workspaceId || !context.workspaceOwnerNpub) return { applied: 0, cursor: null };
 
+  if (bundle?.full_snapshot === true || bundle?.mode === 'snapshot') {
+    const nonpaged = !Object.hasOwn(bundle, 'snapshot_complete');
+    if ((nonpaged || bundle.snapshot_complete === true) && bundle.identity?.workspace_id !== context.workspaceId) throw new Error('Unverified Tower PG snapshot authority');
+    validatePgRows(bundle, 'scopes', context, { complete: nonpaged, cap: Infinity });
+    validatePgRows(bundle, 'channels', context, { complete: nonpaged, cap: Infinity });
+    if (!Array.isArray(bundle.channel_bundles)) throw new Error('Incomplete Tower PG snapshot');
+    for (const channel of bundle.channel_bundles) {
+      if (!channel.channel_id) throw new Error('Invalid Tower PG snapshot channel');
+      validatePgRows(channel, 'threads', context, { channelId: channel.channel_id });
+      validatePgRows(channel, 'messages', context, { channelId: channel.channel_id });
+    }
+  }
   const memberRows = Array.isArray(bundle?.members) ? bundle.members : [];
   const groups = (Array.isArray(bundle?.groups) ? bundle.groups : [])
     .map((group) => mapPgSyncGroup(group, context.workspaceOwnerNpub))
@@ -1823,11 +1835,16 @@ async function syncTowerPgRecordWorkspace(store, options, deps) {
       if (!state?.resetting && resets === 0 && [404, 406, 501].includes(error.status)) {
         return { unsupported: true, fallbackAuthority: { expectedCursor: cursor, expectedGeneration: localGeneration } };
       }
-      if (error.status === 403 || (error.status === 409 && String(error.responseText || error.message).includes('reset_required'))) {
+      let payload = error.payload || {};
+      try { payload = JSON.parse(error.responseText || '{}'); } catch {}
+      const code = error.code || payload.code || payload.error;
+      const matchingWorkspace = !payload.identity?.workspace_id || payload.identity.workspace_id === context.workspaceId;
+      const revoked = matchingWorkspace && error.status === 403 && code === 'workspace_membership_required';
+      if (revoked || (error.status === 409 && String(error.responseText || error.message).includes('reset_required'))) {
         assertTowerPgWorkspaceCurrent(store, context);
-        const reset = await materialize(store, { protocol_version: 1, reset_authority: true }, deps);
+        const reset = await materialize(store, { protocol_version: 1, reset_authority: true, local_apply_options: { preserveViews: !revoked, expectedCursor: cursor, expectedGeneration: localGeneration } }, deps);
         localGeneration = reset.localGeneration;
-        if (error.status === 403 || ++resets > 2) throw error;
+        if (revoked || ++resets > 2) throw error;
         cursor = null;
         directoryReady = false;
         continue;
@@ -1866,9 +1883,9 @@ async function syncTowerPgRecordWorkspace(store, options, deps) {
     }
     options.onProgress?.({ stage: 'applying', page: pages, applied });
     assertTowerPgWorkspaceCurrent(store, context);
-    const result = await materialize(store, { ...page, local_apply_options: { expectedCursor: cursor, expectedGeneration: localGeneration, viewBaselineInitialized } }, deps);
-    applied += result.applied;
     if (page.has_more && page.next_cursor === cursor) throw new Error('Tower record sync repeated its cursor');
+    const result = await materialize(store, { ...page, local_apply_options: { expectedCursor: cursor, expectedGeneration: localGeneration, viewBaselineInitialized, stageSnapshot: true } }, deps);
+    applied += result.applied;
     cursor = result.cursor;
     if (!result.hasMore) {
       assertTowerPgWorkspaceCurrent(store, context);
@@ -1955,21 +1972,60 @@ export async function syncTowerPgWorkspace(store, options = {}, deps = {}) {
   throw new Error('Tower PG sync exceeded the maximum page count');
 }
 
+function validatePgRows(result, field, context, { complete = false, cap = 100, channelId, scopeId } = {}) {
+  const rows = result?.[field];
+  if (!Array.isArray(rows) || complete && (result.next_cursor || result.has_more || rows.length >= cap)) {
+    throw new Error(`Incomplete Tower PG ${field} response`);
+  }
+  if (result.identity?.workspace_id && result.identity.workspace_id !== context.workspaceId) throw new Error('Tower response belongs to another workspace');
+  if (complete && !rows.length && result.identity?.workspace_id !== context.workspaceId) throw new Error('Unverified empty Tower PG response');
+  const ids = new Set();
+  for (const row of rows) {
+    const id = trimText(row?.id || row?.record_id);
+    if (!id || ids.has(id) || row.workspace_id && row.workspace_id !== context.workspaceId
+      || channelId && row.channel_id !== channelId || scopeId && row.scope_id !== scopeId) {
+      throw new Error(`Invalid Tower PG ${field} row`);
+    }
+    ids.add(id);
+  }
+  return rows;
+}
+
+function pgAuthorityToken(state) {
+  return JSON.stringify([state?.cursor || null, state?.localGeneration || 0, Boolean(state?.resetting), state?.commandRevision || null]);
+}
+
+async function readPgAuthority(store, deps, allowReset = false) {
+  const state = await (deps.getSyncState || getSyncState)(`${towerPgSyncCursorKey(store)}:record-delta-v1`);
+  if (!allowReset && (state?.resetting || state?.staging)) throw new Error('Workspace authority is resetting');
+  const commands = store._towerSyncService?.instrumentation;
+  return { ...state, commandRevision: commands ? [commands.commandsStarted, commands.commandsAcknowledged, commands.commandsFailed] : null };
+}
+
+async function commitPgRead(store, context, authority, deps, callback) {
+  return (deps.runWorkspaceSyncTransaction || runWorkspaceSyncTransaction)(async () => {
+    assertTowerPgWorkspaceCurrent(store, context);
+    if (pgAuthorityToken(await readPgAuthority(store, deps, true)) !== pgAuthorityToken(authority)) throw new Error('Workspace authority changed while loading Tower data');
+    return callback();
+  });
+}
+
 export async function hydrateTowerPgScopes(store, deps = {}) {
   const context = resolveTowerPgWorkspaceContext(store);
   if (!context.workspaceId || !context.workspaceOwnerNpub || !context.baseUrl) return [];
   const readScopes = deps.getTowerPgWorkspaceScopes || getTowerPgWorkspaceScopes;
   const replaceScopes = deps.replaceScopesForOwner || replaceScopesForOwner;
+  const authority = await readPgAuthority(store, deps);
   const result = await readScopes(context.workspaceId, {
     baseUrl: context.baseUrl,
     appNpub: context.appNpub,
     path: context.links.scopes || null,
   });
-  const scopes = (Array.isArray(result?.scopes) ? result.scopes : [])
+  const scopes = validatePgRows(result, 'scopes', context, { complete: true })
     .map((scope) => mapPgScopeToLocal(scope, { workspaceOwnerNpub: context.workspaceOwnerNpub }))
     .filter((scope) => scope.record_id);
   assertTowerPgWorkspaceCurrent(store, context);
-  await replaceScopes(context.workspaceOwnerNpub, scopes);
+  await commitPgRead(store, context, authority, deps, () => replaceScopes(context.workspaceOwnerNpub, scopes));
   return scopes;
 }
 
@@ -1978,11 +2034,7 @@ export async function hydrateTowerPgChannels(store, deps = {}) {
   if (!context.workspaceId || !context.workspaceOwnerNpub || !context.baseUrl) return [];
   const readChannels = deps.getTowerPgScopeChannels || getTowerPgScopeChannels;
   const replaceChannels = deps.replaceChannelsForOwner || replaceChannelsForOwner;
-  const authorityKey = `${towerPgSyncCursorKey(store)}:record-delta-v1`;
-  const readAuthority = deps.getSyncState || getSyncState;
-  const authority = await readAuthority(authorityKey);
-  const authorityToken = (state) => JSON.stringify([state?.cursor || null, state?.localGeneration || 0, Boolean(state?.resetting)]);
-  if (authority?.resetting) throw new Error('Channel authority is resetting');
+  const authority = await readPgAuthority(store, deps);
 
   // Alpine may still hold an empty/partial scope list after the scope read
   // commits to Dexie. A coalesced refresh may also return only a freshness
@@ -1999,6 +2051,7 @@ export async function hydrateTowerPgChannels(store, deps = {}) {
   if (!Array.isArray(scopeResult?.scopes) || scopeResult.next_cursor || scopeResult.has_more || scopeResult.scopes.length >= 100) {
     throw new Error('Incomplete Tower PG scopes response; workspace sync must reconcile channels');
   }
+  validatePgRows(scopeResult, 'scopes', context, { complete: true });
   const scopes = scopeResult.scopes.map((scope) => mapPgScopeToLocal(scope, { workspaceOwnerNpub: context.workspaceOwnerNpub }));
 
   const channels = [];
@@ -2011,6 +2064,7 @@ export async function hydrateTowerPgChannels(store, deps = {}) {
     if (!Array.isArray(result?.channels) || result.next_cursor || result.has_more || result.channels.length >= 100) {
       throw new Error('Incomplete Tower PG channels response; workspace sync must reconcile channels');
     }
+    validatePgRows(result, 'channels', context, { complete: true, scopeId: scope.record_id });
     const mapped = result.channels
       .map((channel) => mapPgChannelToLocal(channel, { workspaceOwnerNpub: context.workspaceOwnerNpub }))
       .filter((channel) => channel.record_id);
@@ -2022,7 +2076,7 @@ export async function hydrateTowerPgChannels(store, deps = {}) {
     assertTowerPgWorkspaceCurrent(store, context);
     // A newer delta/tombstone or ACL reset outranks this older list request.
     // Check in the replacement transaction so a late response cannot revive it.
-    if (authorityToken(await readAuthority(authorityKey)) !== authorityToken(authority)) {
+    if (pgAuthorityToken(await readPgAuthority(store, deps, true)) !== pgAuthorityToken(authority)) {
       throw new Error('Channel authority changed while loading Tower data');
     }
     await replaceChannels(context.workspaceOwnerNpub, channels);
@@ -2040,6 +2094,7 @@ export async function hydrateTowerPgChannelMessages(store, channelId, deps = {})
   const startedAt = new Date().toISOString();
   trace?.('channel hydration request started', { channelId: targetChannelId, startedAt });
 
+  const authority = await readPgAuthority(store, deps);
   const readThreads = deps.getTowerPgChannelThreads || getTowerPgChannelThreads;
   const readMessages = deps.getTowerPgChannelMessages || getTowerPgChannelMessages;
   const readActivities = deps.getTowerPgResponseActivities || getTowerPgResponseActivities;
@@ -2054,7 +2109,7 @@ export async function hydrateTowerPgChannelMessages(store, channelId, deps = {})
     appNpub: context.appNpub,
     includeArchived: true,
   });
-  const rawThreads = Array.isArray(result?.threads) ? result.threads : [];
+  const rawThreads = validatePgRows(result, 'threads', context, { channelId: targetChannelId });
   const threadById = new Map(rawThreads.map((thread) => [trimText(thread?.id), thread]).filter(([id]) => id));
   // Selected-channel hydration is deliberately windowed. The workspace sync
   // owns complete local history; opening a channel only refreshes its newest
@@ -2064,7 +2119,7 @@ export async function hydrateTowerPgChannelMessages(store, channelId, deps = {})
     appNpub: context.appNpub,
     limit: Number(store?.MAIN_FEED_PAGE_SIZE || 21),
   });
-  const rawMessages = Array.isArray(messagePage?.messages) ? messagePage.messages : [];
+  const rawMessages = validatePgRows(messagePage, 'messages', context, { channelId: targetChannelId });
   const sourceMessageIds = new Set(rawThreads.map((thread) => trimText(thread?.source_message_id)).filter(Boolean));
   const messageRows = rawMessages
     .map((message) => mapPgMessageToLocal(message, {
@@ -2089,7 +2144,7 @@ export async function hydrateTowerPgChannelMessages(store, channelId, deps = {})
   ));
   const rows = mergePgMessageRowsWithFallbackThreads(normalizedMessageRows, fallbackThreads, sourceMessageIds);
   assertTowerPgWorkspaceCurrent(store, context);
-  await replaceMessages(targetChannelId, rows);
+  await commitPgRead(store, context, authority, deps, () => replaceMessages(targetChannelId, rows));
   const tracedMessageIds = rows
     .map((row) => row.record_id)
     .filter((recordId) => store?.flightDeckTimingMessageIds?.has?.(recordId));
@@ -2145,7 +2200,9 @@ export async function readTowerPgThreadHistoryPage(store, channelId, threadId, o
     limit: Math.min(100, Math.max(1, Number(options.limit) || 100)),
   });
   if (page?.next_cursor && page.next_cursor === options.cursor) throw new Error('Conversation history cursor did not advance');
-  return { thread_history_page: { channelId, thread, messages: page?.messages || [],
+  validatePgRows(page, 'messages', context, { channelId });
+  assertTowerPgWorkspaceCurrent(store, context);
+  return { thread_history_page: { channelId, thread, messages: page.messages,
     cursor: options.cursor || null, nextCursor: page?.next_cursor || null, expectedGeneration } };
 }
 
@@ -2211,6 +2268,7 @@ export async function hydrateTowerPgThreadMessages(store, channelId, threadId, d
   const targetChannelId = trimText(channelId);
   const targetThreadId = trimText(threadId);
   if (!context.workspaceId || !context.workspaceOwnerNpub || !context.baseUrl || !targetChannelId || !targetThreadId) return [];
+  const authority = await readPgAuthority(store, deps);
   const readThreads = deps.getTowerPgChannelThreads || getTowerPgChannelThreads;
   const readThread = deps.getTowerPgThread || (!deps.getTowerPgChannelThreads ? getTowerPgThread : null);
   const readMessages = deps.getTowerPgChannelMessages || getTowerPgChannelMessages;
@@ -2246,7 +2304,8 @@ export async function hydrateTowerPgThreadMessages(store, channelId, threadId, d
       cursor,
       limit: Number(deps.limit || 200),
     });
-    rawMessages.push(...(Array.isArray(result?.messages) ? result.messages : []));
+    rawMessages.push(...validatePgRows(result, 'messages', context, { channelId: targetChannelId }));
+    if (result.next_cursor && result.next_cursor === cursor) throw new Error('Conversation history cursor did not advance');
     cursor = trimText(result?.next_cursor) || null;
   } while (cursor);
   const rows = rawMessages
@@ -2257,18 +2316,20 @@ export async function hydrateTowerPgThreadMessages(store, channelId, threadId, d
     }))
     .filter((message) => message.record_id && message.channel_id);
   assertTowerPgWorkspaceCurrent(store, context);
-  await Promise.all(rows.map((row) => persistMessage(row)));
-  const rawThread = rawThreads.find((thread) => trimText(thread?.id) === targetThreadId);
-  if (rawThread) {
-    assertTowerPgWorkspaceCurrent(store, context);
-    await persistMessage({
-      ...mapPgThreadToLocal(rawThread, {
-        workspaceOwnerNpub: context.workspaceOwnerNpub,
-        senderNpub: '',
-      }),
-      pg_effective_message_ids: clampBranchEffectiveMessageIds(rows.map((row) => row.record_id), rows, rawThread),
-    });
-  }
+  await commitPgRead(store, context, authority, deps, async () => {
+    await Promise.all(rows.map((row) => persistMessage(row)));
+    const rawThread = rawThreads.find((thread) => trimText(thread?.id) === targetThreadId);
+    if (rawThread) {
+      assertTowerPgWorkspaceCurrent(store, context);
+      await persistMessage({
+        ...mapPgThreadToLocal(rawThread, {
+          workspaceOwnerNpub: context.workspaceOwnerNpub,
+          senderNpub: '',
+        }),
+        pg_effective_message_ids: clampBranchEffectiveMessageIds(rows.map((row) => row.record_id), rows, rawThread),
+      });
+    }
+  });
   return rows;
 }
 

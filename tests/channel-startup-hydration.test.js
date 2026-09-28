@@ -71,8 +71,8 @@ describe('channel startup hydration', () => {
   it.each(['scopes', 'channels'])('honors authoritative empty %s rather than retaining revoked channels', async family => {
     const store = await setup([scope]);
     await hydrateTowerPgChannels(store, deps(family === 'scopes'
-      ? { getTowerPgWorkspaceScopes: async () => ({ scopes: [] }) }
-      : { getTowerPgScopeChannels: async () => ({ channels: [] }) }));
+      ? { getTowerPgWorkspaceScopes: async () => ({ scopes: [], identity: { workspace_id: 'alpha' } }) }
+      : { getTowerPgScopeChannels: async () => ({ channels: [], identity: { workspace_id: 'alpha' } }) }));
     expect(await getChannelsByOwner(owner)).toEqual([]);
   });
 

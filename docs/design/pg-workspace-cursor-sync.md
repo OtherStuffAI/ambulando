@@ -26,6 +26,42 @@ channels, threads, messages, tasks, comments, documents, and media through
 separately signed requests. Those list endpoints remain available for explicit
 navigation and targeted reads.
 
+## Record-delta replacement continuity
+
+The negotiated record-delta v1 path stages snapshot pages and their delta
+handover under private, viewer-keyed `sync_state` rows. Download cursors advance
+with staging commits; existing view tables remain visible. The terminal delta
+page publishes all staged changes, omission retirement, and the active cursor
+in one workspace transaction in the materialization worker. An empty delta
+handover may reuse the terminal snapshot cursor; staging keys use page order
+rather than cursor tokens. Failed publication rolls back the entire replacement.
+Interrupted downloads resume from persisted staging without blanking the cache.
+
+A `409 reset_required` invalidates the download cursor and increments the local
+authority generation. It discards staging, preserves view rows, and starts a new
+snapshot. Generic 401/403, transport failures, malformed pages, and missing
+endpoints are not revocation evidence. A typed `workspace_membership_required`
+403 immediately hides authority while preserving recoverable commands outside
+view tables. Resource visibility loss is reconciled at the complete authorized
+snapshot/handover; explicit delta tombstones apply immediately. Omitted pending
+edits to previously authorized canonical records are retained as recovery
+conflicts, with their outbox intact, rather than shown without authority.
+
+Scope/channel collection reads require valid arrays and row identities, reject
+pagination and potentially capped lists, and verify workspace identity before
+accepting an empty response. Scope and message commits, like channel commits,
+reject changed workspace/actor activation or newer cursor/generation authority.
+Bounded message reads only merge rows; omission cannot clear cached history.
+Malformed transcript pages cannot replace conversation membership with an empty
+list. List hydration remains a TowerSyncService port, never a component fetch.
+
+The legacy bundled-sync rollback path retains its existing incremental snapshot
+upserts and terminal omission reconciliation. Complete nonpaged replacements
+already commit atomically; malformed scope/channel/message snapshot collections
+are rejected before reconciliation. No Tower epoch or wire contract changes are
+required: actor-bound cursors, snapshot partitions, and terminal delta handover
+provide the replacement authority boundary.
+
 ## Workspace isolation
 
 PG selection and Dexie keys include the verified Tower service, workspace

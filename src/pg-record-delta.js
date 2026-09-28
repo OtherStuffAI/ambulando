@@ -52,7 +52,8 @@ function validatePage(page, workspaceId) {
     if (!PG_RECORD_DELTA_FAMILIES.includes(c.family) || typeof c.id !== 'string' || !c.id
       || c.workspace_id !== workspaceId || !/^\d+$/.test(c.version)
       || !['upsert', 'delete'].includes(c.operation)
-      || (c.operation === 'upsert' ? !c.row || c.row.workspace_id !== workspaceId : c.row !== null)) {
+      || (c.operation === 'upsert' ? !c.row || c.row.workspace_id !== workspaceId
+        || !['task_assignment', 'resource_view_state'].includes(c.family) && c.row.id !== c.id : c.row !== null)) {
       throw new Error('Invalid Tower record-delta change');
     }
   }
@@ -138,6 +139,7 @@ export async function getPgAttentionProjection(store) {
 export async function applyPgRecordChanges(store, page, options = {}) {
   const context = resolveTowerPgWorkspaceContext(store);
   validatePage(page, context.workspaceId);
+  if (page.identity?.workspace_id && page.identity.workspace_id !== context.workspaceId) throw new Error('Record-delta workspace identity mismatch');
   const db = getWorkspaceDb();
   const cursorKey = recordDeltaCursorKey(store);
   return db.transaction('rw', db.tables, async () => {
@@ -149,6 +151,43 @@ export async function applyPgRecordChanges(store, page, options = {}) {
     }
     if (page.mode === 'snapshot' && state.snapshotId && page.snapshot_id !== state.snapshotId) {
       throw new Error('Record-delta snapshot generation changed without reset');
+    }
+    // Download replacement generations into a private, durable staging area.
+    // A transport failure may advance the download cursor, never the view tables.
+    if (!options.publishStaged && (state.staging || (options.stageSnapshot && page.mode === 'snapshot'))) {
+      const prefix = `${cursorKey}:staged:`;
+      if (page.mode === 'snapshot' && (!page.snapshot_id || typeof page.snapshot_complete !== 'boolean'
+        || !page.has_more || page.snapshot_complete && (!Array.isArray(page.partitions_complete)
+          || !PG_RECORD_DELTA_FAMILIES.every(f => page.partitions_complete.includes(f))))) throw new Error('Invalid snapshot completion boundary');
+      if (page.mode === 'delta' && !state.snapshotComplete) throw new Error('Incomplete snapshot handover');
+      await db.sync_state.put({ key: `${prefix}${Number(state.stagedPages || 0)}`, value: { page, order: Number(state.stagedPages || 0) } });
+      if (page.mode !== 'delta' || page.has_more) {
+        await db.sync_state.put({ key: cursorKey, value: { ...state, staging: true,
+          stagedPages: Number(state.stagedPages || 0) + 1, cursor: page.next_cursor,
+          snapshotId: page.snapshot_id || state.snapshotId,
+          snapshotComplete: page.snapshot_complete || state.snapshotComplete || false } });
+        return { applied: 0, cursor: page.next_cursor, hasMore: page.has_more, protocolVersion: 1, staged: true };
+      }
+      if (page.snapshot_id) throw new Error('Invalid delta handover identity');
+      const staged = await db.sync_state.where('key').between(prefix, `${prefix}\uffff`, true, true).toArray();
+      staged.sort((a, b) => a.value.order - b.value.order);
+      // Canonical versions from the previous epoch must not suppress the new
+      // snapshot. Keep local rows and pending intent until reconciliation.
+      await db.pg_record_rows.clear();
+      await db.pg_actors.clear();
+      await db.channel_summaries.clear();
+      await db.pg_resource_attention.clear();
+      await db.pg_attention_counts.clear();
+      await db.sync_state.put({ key: cursorKey, value: { cursor: null,
+        localGeneration: Number(state.localGeneration || 0), viewBaselineInitialized: options.viewBaselineInitialized } });
+      let applied = 0, result;
+      for (const item of staged) {
+        result = await applyPgRecordChanges(store, item.value.page, { publishStaged: true });
+        applied += result.applied;
+      }
+      await db.sync_state.where('key').between(prefix, `${prefix}\uffff`, true, true).delete();
+      if (options.beforeCommit) await options.beforeCommit();
+      return { ...result, applied };
     }
     const generation = state.generation || page.snapshot_id || 'delta';
     for (const actor of page.actors || []) {
@@ -236,7 +275,10 @@ export async function applyPgRecordChanges(store, page, options = {}) {
         && [prior.record_id, prior.pg_client_record_id].includes(acknowledgedClientId));
       if (commands || (pending(prior) && !acknowledgesOptimistic)) {
         await db.pg_record_conflicts.put({ key: raw.key, family: raw.family, record_id: localId, local: prior || null, remote: raw, reason: 'unresolved_local_command' });
-        if (prior) await table.update(localId, { pg_sync_conflict: true });
+        if (prior) {
+          if (raw.operation === 'delete' || raw.row?.deleted_at) await table.delete(localId);
+          else await table.update(localId, { pg_sync_conflict: true, pg_delta_generation: generation, pg_delta_family: raw.family });
+        }
         return;
       }
       if (raw.operation === 'delete' || raw.row?.deleted_at
@@ -248,7 +290,11 @@ export async function applyPgRecordChanges(store, page, options = {}) {
         if (prior) { await table.delete(localId); applied++; }
         return;
       }
-      if (Number(prior?.version || 0) > Number(raw.row?.row_version || raw.row?.version || 0)) return;
+      if (Number(prior?.version || 0) > Number(raw.row?.row_version || raw.row?.version || 0)) {
+        // A newer local version is still present in the authorized snapshot.
+        await table.update(localId, { pg_delta_generation: generation, pg_delta_family: raw.family });
+        return;
+      }
       // Canonical PG JSON uses +00:00 timestamps; all local chronology indexes
       // use normalized UTC ISO milliseconds, identical to legacy transport rows.
       let canonical = Object.fromEntries(Object.entries(raw.row).map(([key, value]) => [key,
@@ -341,8 +387,15 @@ export async function applyPgRecordChanges(store, page, options = {}) {
           const obsolete = [];
           for (const row of batch) {
             if (!(row.pg_backend || row.pg_delta_family || tableName === 'resource_view_states')
-              || row.pg_delta_generation === generation || pending(row)) continue;
-            if (await db.pending_writes.where('record_id').equals(row.record_id).count()) continue;
+              || row.pg_delta_generation === generation) continue;
+            const hasIntent = pending(row) || await db.pending_writes.where('record_id').equals(row.record_id).count();
+            if (hasIntent) {
+              // An omitted previously authorized record has lost authority.
+              // Preserve its draft/outbox outside the visible materialization.
+              if (!options.publishStaged || !row.pg_delta_family) continue;
+              await db.pg_record_conflicts.put({ key: `reset:${tableName}:${row.record_id}`, family: tableName,
+                record_id: row.record_id, local: row, reason: 'authority_reset' });
+            }
             obsolete.push(row.record_id);
             if (tableName === 'chat_messages') affectedChannels.add(row.channel_id);
           }
@@ -359,13 +412,22 @@ export async function applyPgRecordChanges(store, page, options = {}) {
   });
 }
 
-export async function resetPgRecordAuthority(store) {
+export async function resetPgRecordAuthority(store, { preserveViews = false, expectedCursor, expectedGeneration } = {}) {
   const db = getWorkspaceDb();
-  // Revocations must not leave old protocol or legacy authority visible while a
-  // fresh generation loads. Recoverable local intent remains outside view tables.
+  const cursorKey = recordDeltaCursorKey(store);
+  // Cursor expiry/epoch changes invalidate the download, not cached visibility.
+  // Definitive revocation hides authority and retains recoverable local intent.
   return db.transaction('rw', db.tables, async () => {
-    const priorState = (await db.sync_state.get(recordDeltaCursorKey(store)))?.value;
+    const priorState = (await db.sync_state.get(cursorKey))?.value;
+    if (expectedGeneration !== undefined && Number(priorState?.localGeneration || 0) !== expectedGeneration
+      || expectedCursor !== undefined && (priorState?.cursor || null) !== expectedCursor) throw new Error('Record-delta authority changed before reset');
     const localGeneration = Number(priorState?.localGeneration || 0) + 1;
+    const prefix = `${cursorKey}:staged:`;
+    await db.sync_state.where('key').between(prefix, `${prefix}\uffff`, true, true).delete();
+    if (preserveViews) {
+      await db.sync_state.put({ key: cursorKey, value: { cursor: null, resetting: true, localGeneration } });
+      return { localGeneration };
+    }
     for (const tableName of new Set(Object.values(FAMILY).map(([name]) => name))) {
       const table = db.table(tableName);
       let after = null;
@@ -385,8 +447,8 @@ export async function resetPgRecordAuthority(store) {
     await db.pg_record_rows.clear(); await db.channel_summaries.clear(); await db.pg_actors.clear();
     await db.pg_resource_attention.clear(); await db.pg_attention_counts.clear();
     await db.workspace_members.clear(); await db.groups.clear();
-    await db.sync_state.put({ key: recordDeltaCursorKey(store), value: { cursor: null, resetting: true, localGeneration } });
-    await db.sync_state.delete(`${recordDeltaCursorKey(store)}:summary-backfill`);
+    await db.sync_state.put({ key: cursorKey, value: { cursor: null, resetting: true, localGeneration } });
+    await db.sync_state.delete(`${cursorKey}:summary-backfill`);
     return { localGeneration };
   });
 }

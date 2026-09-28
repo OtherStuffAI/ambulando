@@ -2166,6 +2166,13 @@
       "notes": [
         "Keep one current agent status per conversation alongside queued work and failures. Older statuses and commentary remain available in Working history & diagnostics."
       ]
+    },
+    {
+      "buildNumber": 2100,
+      "label": "Keep workspace views visible during resync",
+      "notes": [
+        "Keep cached scopes, channels, and messages visible while startup, refresh, and reconnect download replacement data. Reject incomplete responses and preserve access revocation and deletion."
+      ]
     }
   ]
 }

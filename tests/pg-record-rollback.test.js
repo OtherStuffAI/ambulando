@@ -54,9 +54,9 @@ describe('record protocol rollback', () => {
       expect(deps.getTowerPgWorkspaceSync.mock.calls[0][1].cursor).toBe('legacy-old');
       expect(await retained()).toEqual(withLegacyFallbackActive(before));
       const resumePage = mode === 'partial snapshot'
-        ? { ...fixture.canonical_upserts, next_cursor: 'v1-restored', has_more: false }
+        ? { ...fixture.canonical_upserts, next_cursor: 'v1-snapshot-end', has_more: true }
         : delta('v1-restored');
-      read.mockResolvedValue(resumePage);
+      read.mockResolvedValueOnce(resumePage).mockResolvedValue(delta('v1-restored'));
       await syncTowerPgWorkspace(store, {}, deps);
       expect(read.mock.calls[1][1].cursor).toBe(before.state?.value.cursor || null);
       expect(deps.getTowerPgWorkspaceSync).toHaveBeenCalledTimes(1);
@@ -79,14 +79,14 @@ describe('record protocol rollback', () => {
     expect(await retained()).toEqual(withLegacyFallbackActive(before));
     expect(read.mock.calls.map(([, options]) => options.cursor)).toEqual([null, 'v1-partial']);
     expect(deps.getTowerPgWorkspaceSync.mock.calls[0][1].cursor).toBe('legacy-old');
-    read.mockResolvedValue({ ...fixture.canonical_upserts, next_cursor: 'snapshot-end', has_more: false });
+    read.mockResolvedValueOnce({ ...fixture.canonical_upserts, next_cursor: 'snapshot-end', has_more: true }).mockResolvedValue(delta());
     await syncTowerPgWorkspace(store, {}, deps);
     expect(read.mock.calls[2][1].cursor).toBe('v1-partial');
   });
 
   it('purges revoked authority on 403 and never requests legacy, including on the next run', async () => {
     await seed('delta');
-    const read = vi.fn().mockRejectedValue(unsupported(403));
+    const read = vi.fn().mockRejectedValue(Object.assign(unsupported(403), { responseText: JSON.stringify({ code: 'workspace_membership_required', error: 'Actor is not a member' }) }));
     const deps = ports(read);
     await expect(syncTowerPgWorkspace(store, { forceSnapshot: true }, deps)).rejects.toMatchObject({ status: 403 });
     expect(await db.pg_record_rows.count()).toBe(0);
@@ -101,10 +101,10 @@ describe('record protocol rollback', () => {
   it('recovers an expired restored cursor through explicit reset and snapshot without legacy', async () => {
     await seed('delta');
     const read = vi.fn().mockRejectedValueOnce(Object.assign(new Error('reset_required'), { status: 409 }))
-      .mockResolvedValueOnce({ ...fixture.canonical_upserts, next_cursor: 'reset-snapshot', has_more: false });
+      .mockResolvedValueOnce({ ...fixture.canonical_upserts, next_cursor: 'reset-snapshot', has_more: true }).mockResolvedValue(delta());
     const deps = ports(read);
     await syncTowerPgWorkspace(store, {}, deps);
-    expect(read.mock.calls.map(([, options]) => options.cursor)).toEqual(['v1-delta', null]);
+    expect(read.mock.calls.map(([, options]) => options.cursor)).toEqual(['v1-delta', null, 'reset-snapshot']);
     expect((await db.sync_state.get(recordDeltaCursorKey(store))).value.localGeneration).toBe(8);
     expect(await db.pending_writes.count()).toBe(1);
     expect(deps.getTowerPgWorkspaceSync).not.toHaveBeenCalled();

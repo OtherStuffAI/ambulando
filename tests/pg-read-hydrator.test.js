@@ -593,6 +593,8 @@ describe('PG read hydrator', () => {
           ? { messages: [{ id: 'm3', channel_id: 'channel-1', thread_id: 'child-thread', owning_thread_id: 'child-thread', effective_thread_id: 'child-thread', body: 'new', row_version: 1 }], next_cursor: null }
           : { messages: [{ id: 'm1', channel_id: 'channel-1', thread_id: 'parent-thread', owning_thread_id: 'parent-thread', effective_thread_id: 'child-thread', inherited: true, read_only: true, body: 'history', row_version: 1 }], next_cursor: 'page-2' };
       },
+      getSyncState: async () => null,
+      runWorkspaceSyncTransaction: async callback => callback(),
       upsertMessage: async (row) => persisted.push(row),
     });
 
@@ -625,6 +627,8 @@ describe('PG read hydrator', () => {
         ],
         next_cursor: null,
       }),
+      getSyncState: async () => null,
+      runWorkspaceSyncTransaction: async callback => callback(),
       upsertMessage: async (row) => persisted.push(row),
     });
 
@@ -1192,6 +1196,8 @@ describe('PG read hydrator', () => {
 
     const rows = await hydrateTowerPgScopes(target, {
       getTowerPgWorkspaceScopes,
+      getSyncState: async () => null,
+      runWorkspaceSyncTransaction: async callback => callback(),
       replaceScopesForOwner,
     });
 
@@ -1282,6 +1288,8 @@ describe('PG read hydrator', () => {
       getTowerPgResponseActivities,
       getTowerPgAgentActivities,
       replacePgAgentActivitiesForChannel,
+      getSyncState: async () => null,
+      runWorkspaceSyncTransaction: async callback => callback(),
       replacePgMessagesForChannel,
       replacePgResponseActivitiesForChannel,
     });
@@ -1314,6 +1322,8 @@ describe('PG read hydrator', () => {
       getTowerPgChannelThreads,
       getTowerPgChannelMessages,
       getTowerPgResponseActivities,
+      getSyncState: async () => null,
+      runWorkspaceSyncTransaction: async callback => callback(),
       replacePgMessagesForChannel,
       replacePgResponseActivitiesForChannel,
       getTowerPgAgentActivities,
@@ -1471,6 +1481,8 @@ describe('PG read hydrator', () => {
         throw new Error('NIP-98 signing timed out');
       }),
       getTowerPgAgentActivities: vi.fn(async () => ({ agent_activities: [] })),
+      getSyncState: async () => null,
+      runWorkspaceSyncTransaction: async callback => callback(),
       replacePgMessagesForChannel,
       replacePgResponseActivitiesForChannel: vi.fn(async () => 0),
       replacePgAgentActivitiesForChannel: vi.fn(async () => 0),
@@ -1510,6 +1522,8 @@ describe('PG read hydrator', () => {
       getTowerPgChannelThreads,
       getTowerPgChannelMessages,
       getTowerPgResponseActivities,
+      getSyncState: async () => null,
+      runWorkspaceSyncTransaction: async callback => callback(),
       replacePgMessagesForChannel,
       replacePgResponseActivitiesForChannel,
       getTowerPgAgentActivities,
@@ -1552,6 +1566,8 @@ describe('PG read hydrator', () => {
       getTowerPgChannelThreads,
       getTowerPgChannelMessages,
       getTowerPgResponseActivities,
+      getSyncState: async () => null,
+      runWorkspaceSyncTransaction: async callback => callback(),
       replacePgMessagesForChannel,
       replacePgResponseActivitiesForChannel,
       getTowerPgAgentActivities,
@@ -1590,6 +1606,8 @@ describe('PG read hydrator', () => {
       getTowerPgChannelMessages,
       getTowerPgChannelTasks,
       getTowerPgResponseActivities,
+      getSyncState: async () => null,
+      runWorkspaceSyncTransaction: async callback => callback(),
       replacePgMessagesForChannel,
       replacePgTasksForChannel,
       replacePgResponseActivitiesForChannel,
@@ -2023,6 +2041,8 @@ describe('PG read hydrator', () => {
       getTowerPgWorkspaceMembers,
       getTowerPgChannelThreads,
       getTowerPgChannelMessages,
+      getSyncState: async () => null,
+      runWorkspaceSyncTransaction: async callback => callback(),
       replacePgMessagesForChannel,
       replaceWorkspaceMembers: vi.fn(async () => []),
     });
@@ -3016,13 +3036,13 @@ describe('PG read hydrator', () => {
   it('applies a multi-page initial snapshot incrementally and reconciles only at completion', async () => {
     const pages = [
       {
-        mode: 'snapshot', full_snapshot: true, snapshot_complete: false, has_more: true,
+        identity: { workspace_id: 'workspace-1' }, mode: 'snapshot', full_snapshot: true, snapshot_complete: false, has_more: true,
         next_cursor: 'snapshot-page-2', scopes: [{ id: 'scope-1', name: 'Synthetic' }],
         channels: [{ id: 'channel-1', scope_id: 'scope-1', name: 'Generated' }],
         channel_bundles: [{ channel_id: 'channel-1', threads: [], messages: [{ id: 'message-1', channel_id: 'channel-1', body: 'One' }], tasks: [], docs: [], files: [], file_folders: [], audio_notes: [], task_comments: [], doc_comments: [] }],
       },
       {
-        mode: 'snapshot', full_snapshot: true, snapshot_complete: true, has_more: false,
+        identity: { workspace_id: 'workspace-1' }, mode: 'snapshot', full_snapshot: true, snapshot_complete: true, has_more: false,
         next_cursor: 'event-cursor-10', scopes: [{ id: 'scope-1', name: 'Synthetic' }],
         channels: [{ id: 'channel-1', scope_id: 'scope-1', name: 'Generated' }],
         channel_bundles: [{ channel_id: 'channel-1', threads: [], messages: [{ id: 'message-2', channel_id: 'channel-1', body: 'Two' }], tasks: [], docs: [], files: [], file_folders: [], audio_notes: [], task_comments: [], doc_comments: [] }],
@@ -3056,8 +3076,8 @@ describe('PG read hydrator', () => {
     const state = new Map();
     const rows = new Map();
     let failOnce = true;
-    const first = { mode: 'snapshot', full_snapshot: true, snapshot_complete: false, has_more: true, next_cursor: 'resume-page-2', scopes: [], channels: [], channel_bundles: [{ channel_id: 'channel-1', threads: [], messages: [{ id: 'message-1', channel_id: 'channel-1', body: 'Generated' }], tasks: [], docs: [], files: [], file_folders: [], audio_notes: [], task_comments: [], doc_comments: [] }] };
-    const last = { mode: 'snapshot', full_snapshot: true, snapshot_complete: true, has_more: false, next_cursor: 'event-cursor-20', scopes: [], channels: [], channel_bundles: [{ channel_id: 'channel-1', threads: [], messages: [{ id: 'message-1', channel_id: 'channel-1', body: 'Generated' }, { id: 'message-2', channel_id: 'channel-1', body: 'Generated' }], tasks: [], docs: [], files: [], file_folders: [], audio_notes: [], task_comments: [], doc_comments: [] }] };
+    const first = { identity: { workspace_id: 'workspace-1' }, mode: 'snapshot', full_snapshot: true, snapshot_complete: false, has_more: true, next_cursor: 'resume-page-2', scopes: [], channels: [], channel_bundles: [{ channel_id: 'channel-1', threads: [], messages: [{ id: 'message-1', channel_id: 'channel-1', body: 'Generated' }], tasks: [], docs: [], files: [], file_folders: [], audio_notes: [], task_comments: [], doc_comments: [] }] };
+    const last = { identity: { workspace_id: 'workspace-1' }, mode: 'snapshot', full_snapshot: true, snapshot_complete: true, has_more: false, next_cursor: 'event-cursor-20', scopes: [], channels: [], channel_bundles: [{ channel_id: 'channel-1', threads: [], messages: [{ id: 'message-1', channel_id: 'channel-1', body: 'Generated' }, { id: 'message-2', channel_id: 'channel-1', body: 'Generated' }], tasks: [], docs: [], files: [], file_folders: [], audio_notes: [], task_comments: [], doc_comments: [] }] };
     const getTowerPgWorkspaceSync = vi.fn(async (_id, options) => {
       if (!options.cursor) return first;
       if (failOnce) { failOnce = false; throw new Error('synthetic interruption'); }
@@ -3090,7 +3110,7 @@ describe('PG read hydrator', () => {
       const messages = generated.slice(offset, offset + pageSize);
       const complete = offset + pageSize >= generated.length;
       pages.push({
-        mode: 'snapshot', full_snapshot: true, snapshot_complete: complete, has_more: !complete,
+        identity: { workspace_id: 'workspace-1' }, mode: 'snapshot', full_snapshot: true, snapshot_complete: complete, has_more: !complete,
         next_cursor: complete ? 'event-cursor-large' : `opaque-page-${pages.length + 2}`,
         scopes: [], channels: [],
         channel_bundles: [{ channel_id: 'channel-1', threads: [], messages, tasks: [], docs: [], files: [], file_folders: [], audio_notes: [], task_comments: [], doc_comments: [] }],
