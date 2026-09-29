@@ -12,6 +12,14 @@ validator to excuse losses:
   including nonbreaking spaces from paste. Encode inline tabs and soft newlines
   as references so Markdown cannot interpret them as block syntax. Code stays
   literal, and explicit hard breaks keep their Markdown representation.
+- Emit explicit hard breaks as attribute-free `<br>` tags so leading,
+  trailing, consecutive and break-only paragraphs survive compatibility reopen.
+  Preserve underline with `<u>` tags, including pasted underlined links. The
+  importer and preview recognize these limited inline tags; other HTML stays
+  literal/escaped. Preserve spaces beside breaks as references.
+- Use a consistent inline wrapper order and keep shared outer marks open
+  across adjacent text runs. A bold/italic-to-italic transition must not emit
+  colliding delimiters that reopen as literal underscores.
 - Serialize every list-item child in order. Continuation paragraphs, nested
   lists, headings and quotes must not be omitted or moved. Indent continuation
   lines to the content column after the actual list marker; ordered markers can

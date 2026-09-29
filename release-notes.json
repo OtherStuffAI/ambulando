@@ -2187,6 +2187,13 @@
       "notes": [
         "Show the current agent status and queued work without stacking earlier failed dispatch cards. Earlier failures remain in Working history & diagnostics; the current failure stays visible."
       ]
+    },
+    {
+      "buildNumber": 2103,
+      "label": "Preserve rich pasted document drafts",
+      "notes": [
+        "Save rich pasted drafts with leading, repeated and trailing line breaks, underlined links and overlapping italic formatting. Preserve those details on reopen and keep rejecting genuine content loss."
+      ]
     }
   ]
 }

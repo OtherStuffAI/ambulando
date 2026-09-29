@@ -1,4 +1,4 @@
-import { Marked } from 'marked';
+import { Lexer, Marked } from 'marked';
 import hljs from 'highlight.js/lib/common';
 import { buildSectionUrl, parseRouteLocation } from './route-helpers.js';
 import { normalizeRecordLinkType } from './record-links.js';
@@ -313,7 +313,16 @@ function buildCodeBlockMarkup(code, rawLanguage) {
   ].join('');
 }
 
-renderer.html = ({ text }) => escapeHtml(text);
+renderer.html = function ({ text, block }) {
+  // Rich-document compatibility Markdown uses only these attribute-free tags.
+  // Other HTML remains escaped, including attributed variants of these tags.
+  if (/^<br\s*\/?\s*>$/i.test(text)) return '<br>';
+  if (/^<\/?u>$/i.test(text)) return text.toLowerCase();
+  if (block && /^(?:<br\s*\/?\s*>|<u>)/i.test(text)) {
+    return `<p>${this.parser.parseInline(Lexer.lexInline(text.trimEnd(), markdown.defaults))}</p>\n`;
+  }
+  return escapeHtml(text);
+};
 
 renderer.code = ({ text, lang }) => buildCodeBlockMarkup(String(text ?? ''), lang);
 

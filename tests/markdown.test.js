@@ -22,6 +22,20 @@ afterEach(() => {
 });
 
 describe('renderMarkdownToHtml', () => {
+  it('renders serialized rich breaks and underline while escaping other HTML', () => {
+    const html = renderMarkdownToHtml('<br><br>_**Note:** read_ <u>[guide](https://example.com)</u><br>');
+    expect(html.match(/<br>/g)).toHaveLength(3);
+    expect(html).toContain('<em><strong>Note:</strong> read</em>');
+    expect(html).toContain('<u><a ');
+    expect(html).toContain('>guide</a></u>');
+    const unsafe = renderMarkdownToHtml('<br><u>safe</u><img src=x onerror=alert(1)><u onclick=alert(1)>unsafe</u><script>alert(1)</script>');
+    expect(unsafe).toContain('&lt;img');
+    expect(unsafe).toContain('&lt;u onclick');
+    expect(unsafe).toContain('&lt;script');
+    expect(unsafe).not.toContain('<img');
+    expect(unsafe).not.toContain('<script');
+    expect(renderMarkdownToHtml('`<br><u>literal</u>`')).toContain('&lt;br&gt;');
+  });
   it('renders canonical actor mentions as one inline mention pill without a double at-sign', () => {
     const html = renderMarkdownToHtml('Hello @[Test Agent](mention:person:npub1testagent)');
 

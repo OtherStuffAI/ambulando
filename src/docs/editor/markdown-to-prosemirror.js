@@ -72,8 +72,18 @@ function consumeMentionMarker(out = []) {
 
 function inlineContent(tokens = [], inheritedMarks = []) {
   const out = [];
+  let underline = false;
   for (const token of tokens || []) {
     if (!token) continue;
+    if (token.type === 'html' && /^<br\s*\/?\s*>$/i.test(token.raw)) {
+      out.push({ type: 'hardBreak' });
+      continue;
+    }
+    if (token.type === 'html' && /^<\/?u>$/i.test(token.raw)) {
+      underline = !/^<\/u>$/i.test(token.raw);
+      continue;
+    }
+    const activeMarks = underline ? [...inheritedMarks, { type: 'underline' }] : inheritedMarks;
     if (token.type === 'text' || token.type === 'escape') {
       const mention = mentionMarkFromText(token.text);
       // Decode decimal character references in prose only, after lexing. Escaped
@@ -83,7 +93,7 @@ function inlineContent(tokens = [], inheritedMarks = []) {
         return code > 0 && code <= 0x10ffff && !(code >= 0xd800 && code <= 0xdfff)
           ? String.fromCodePoint(code) : raw;
       }) : token.text;
-      pushTextNode(out, text, mention ? [...inheritedMarks, mention] : inheritedMarks);
+      pushTextNode(out, text, mention ? [...activeMarks, mention] : activeMarks);
       continue;
     }
     if (token.type === 'br') {
@@ -107,7 +117,7 @@ function inlineContent(tokens = [], inheritedMarks = []) {
       if (mentionParts && consumeMentionMarker(out)) {
         const label = textFromInlineToken(token) || token.text || mentionParts.mentionId;
         pushTextNode(out, label, [
-          ...inheritedMarks,
+          ...activeMarks,
           {
             type: 'fdMention',
             attrs: {
@@ -120,7 +130,7 @@ function inlineContent(tokens = [], inheritedMarks = []) {
         continue;
       }
     }
-    const nextMarks = [...inheritedMarks, ...marksForToken(token)];
+    const nextMarks = [...activeMarks, ...marksForToken(token)];
     if (Array.isArray(token.tokens)) {
       out.push(...inlineContent(token.tokens, nextMarks));
     } else {
@@ -171,6 +181,12 @@ function tableFromToken(token = {}, attrs = {}) {
 }
 
 function nodeFromToken(token = {}, attrs = {}) {
+  // Marked treats a paragraph beginning with an inline HTML tag as an HTML
+  // block. Interpret only the tags emitted by our rich serializer, never HTML
+  // through a DOM or a general HTML importer.
+  if (token.type === 'html' && /^(?:<br\s*\/?\s*>|<u>)/i.test(token.raw)) {
+    return { type: 'paragraph', attrs, content: inlineContent(marked.Lexer.lexInline(token.raw.trimEnd())) };
+  }
   if (token.type === 'heading') {
     return { type: 'heading', attrs: { ...attrs, level: token.depth || 1 }, content: inlineContent(token.tokens || []) };
   }

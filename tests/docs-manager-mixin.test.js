@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Schema } from '@tiptap/pm/model';
 import { shortRichDocumentFixture } from './fixtures/short-rich-document.js';
+import { richBreakDocumentFixture } from './fixtures/rich-break-document.js';
 import { validateDocumentContentModelRoundTrip } from '../src/docs/editor/document-content-integrity.js';
 
 const {
@@ -2912,9 +2913,9 @@ describe('docsManagerMixin canonical row normalization', () => {
     expect(updateTowerPgDocMock).not.toHaveBeenCalled();
   });
 
-  it.each([false, true])('saves a complete short rich timeline and reopens it repeatedly (autosave=%s)', async (autosave) => {
+  it.each([false, true].flatMap(autosave => [shortRichDocumentFixture, richBreakDocumentFixture].map(fixture => [autosave, fixture])))('saves complete rich content and reopens it repeatedly (autosave=%s, fixture=%s)', async (autosave, fixture) => {
     isTowerPgBackendModeMock.mockReturnValue(true);
-    const original = shortRichDocumentFixture();
+    const original = fixture();
     let model = prosemirrorToFlightDeckContentModel(original);
     const markdown = model.content;
     for (let cycle = 0; cycle < 3; cycle++) {

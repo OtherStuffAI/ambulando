@@ -4,6 +4,7 @@ import { prosemirrorToFlightDeckContentModel } from '../src/docs/editor/prosemir
 import { documentEditorSemanticTokens, validateDocumentContentModelRoundTrip } from '../src/docs/editor/document-content-integrity.js';
 import { createDocumentEditorState } from '../src/docs/editor/document-editor-store.js';
 import { shortRichDocumentFixture } from './fixtures/short-rich-document.js';
+import { richBreakDocumentFixture } from './fixtures/rich-break-document.js';
 import {
   FLIGHTDECK_PROSEMIRROR_CONTENT_FORMAT,
   PROSEMIRROR_JSON_FORMAT,
@@ -302,6 +303,42 @@ describe('prose boundary integrity', () => {
 });
 
 describe('editable whitespace serialization', () => {
+  it('preserves italic flanking when a word is inserted directly beside marked punctuation', () => {
+    for (const marks of [[{ type: 'italic' }], [{ type: 'bold' }, { type: 'italic' }]]) {
+      const original = { type: 'doc', content: [{ type: 'paragraph', content: [
+        { type: 'text', text: 'edited' },
+        { type: 'text', text: '“Quotation”', marks },
+        { type: 'text', text: 'tail' },
+      ] }] };
+      let model = createDocumentEditorState({ editor_state: original }).contentModel;
+      for (let cycle = 0; cycle < 4; cycle++) {
+        expect(validateDocumentContentModelRoundTrip({ ...model, editor_state: original })).toEqual({ ok: true });
+        model = createDocumentEditorState({ ...model, editor_state: null }).contentModel;
+      }
+    }
+  });
+  it('preserves rich pasted breaks, underline and shared italic across saves and edits', () => {
+    const original = richBreakDocumentFixture();
+    const snapshot = structuredClone(original);
+    let model = createDocumentEditorState({ editor_state: original }).contentModel;
+    const markdown = model.content;
+    for (let cycle = 0; cycle < 5; cycle++) {
+      expect(validateDocumentContentModelRoundTrip({ ...model, editor_state: original })).toEqual({ ok: true });
+      expect(model.content).toBe(markdown);
+      expect(createDocumentEditorState(JSON.parse(JSON.stringify(model))).editorState).toEqual(model.editor_state);
+      model = createDocumentEditorState({ ...model, editor_state: null }).contentModel;
+    }
+    expect(original).toEqual(snapshot);
+    const edited = structuredClone(original);
+    edited.content.at(-1).content[0].text = 'Meaningfully revised conclusion';
+    const saved = createDocumentEditorState({ editor_state: edited }).contentModel;
+    expect(validateDocumentContentModelRoundTrip(saved)).toEqual({ ok: true });
+    expect(documentEditorSemanticTokens(createDocumentEditorState({ ...saved, editor_state: null }).editorState))
+      .toEqual(documentEditorSemanticTokens(edited));
+    for (const content of [saved.content.replace('<br>', ''), saved.content.replace(/<\/?u>/g, ''), saved.content.slice(0, 20)]) {
+      expect(validateDocumentContentModelRoundTrip({ ...saved, content }).ok).toBe(false);
+    }
+  });
   it.each(['\u00a0', '\t', '\u2003', '\u202f', '\n'])('retains rich boundary whitespace %j in headings, marked prose and lists', (space) => {
     const inline = [{ type: 'text', text: `${space}Label:${space}`, marks: [{ type: 'bold' }] }];
     const state = { type: 'doc', content: [

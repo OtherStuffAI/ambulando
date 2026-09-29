@@ -5,6 +5,7 @@ import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { build } from 'esbuild';
 import { chromium } from 'playwright';
+import { richBreakDocumentFixture } from '../tests/fixtures/rich-break-document.js';
 
 const bundle = await build({
   stdin: {
@@ -18,7 +19,7 @@ const bundle = await build({
 const inputs = [{
   label: 'synthetic',
   content_model: { content: '# Heading\n\n**Label:** ordinary prose.\n\n- **Item:** tail.\n\nLiteral \\&#32; and `&#32;`.\n\nFinal retained paragraph.' },
-}, ...process.argv.slice(2).filter((arg) => arg !== '--sweep').map((path) => {
+}, { label: 'synthetic-rich-breaks', content_model: { editor_state: richBreakDocumentFixture() } }, ...process.argv.slice(2).filter((arg) => arg !== '--sweep').map((path) => {
   const bytes = readFileSync(path);
   const envelope = JSON.parse(bytes);
   assert(envelope.content_model, 'Expected an envelope with content_model');
@@ -35,6 +36,9 @@ try {
       window.adapter?.destroy();
       window.adapter = documentReplay.createTiptapEditorAdapter({ element: document.querySelector('#editor'), document: model });
       window.baseline = adapter.getJSON();
+      if (!documentReplay.validateDocumentContentModelRoundTrip(adapter.getContentModel()).ok) {
+        throw new Error('Unedited browser save rejected');
+      }
       // The real input transaction inherits bold at the right edge of a label.
       let end = null;
       adapter.editor.state.doc.descendants((node, pos) => {
@@ -88,7 +92,7 @@ try {
           editChecks++;
         }
       }
-      return { keyboardEdit: true, browserReopens: cycles, intentionalDeletion: true, rejectedLosses: 2, boundaryEditChecks: editChecks };
+      return { uneditedSave: true, keyboardEdit: true, browserReopens: cycles, intentionalDeletion: true, rejectedLosses: 2, boundaryEditChecks: editChecks };
     }, { sweep: process.argv.includes('--sweep') });
     console.log(JSON.stringify({ fixture: input.label, ...result }));
   }

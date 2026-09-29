@@ -4,6 +4,38 @@ import { createTiptapEditorAdapter } from '../src/docs/editor/tiptap-editor-adap
 import { markdownToProseMirrorDoc } from '../src/docs/editor/markdown-to-prosemirror.js';
 import { validateDocumentContentModelRoundTrip } from '../src/docs/editor/document-content-integrity.js';
 import { shortRichDocumentFixture } from './fixtures/short-rich-document.js';
+import { richBreakDocumentFixture } from './fixtures/rich-break-document.js';
+import { documentEditorSemanticTokens } from '../src/docs/editor/document-content-integrity.js';
+
+it('keeps native pasted breaks, underline, shared marks and meaningful edits on repeated reopen', () => {
+  const element = document.createElement('div');
+  document.body.append(element);
+  const adapter = createTiptapEditorAdapter({ element, editorState: richBreakDocumentFixture() });
+  try {
+    const expected = documentEditorSemanticTokens(adapter.getJSON());
+    for (let cycle = 0; cycle < 4; cycle++) {
+      const saved = adapter.getContentModel();
+      expect(validateDocumentContentModelRoundTrip(saved)).toEqual({ ok: true });
+      adapter.setContent(JSON.parse(JSON.stringify(saved.editor_state)));
+      expect(documentEditorSemanticTokens(adapter.getJSON())).toEqual(expected);
+      adapter.setContent(markdownToProseMirrorDoc(saved.content));
+      expect(documentEditorSemanticTokens(adapter.getJSON())).toEqual(expected);
+      expect(element.querySelector('u a, a u')).not.toBeNull();
+      expect(element.querySelectorAll('br').length).toBeGreaterThan(10);
+    }
+    adapter.editor.commands.setTextSelection(2);
+    adapter.editor.commands.insertContent('revised ');
+    const saved = adapter.getContentModel();
+    expect(validateDocumentContentModelRoundTrip(saved)).toEqual({ ok: true });
+    const edited = documentEditorSemanticTokens(saved.editor_state);
+    expect(edited).not.toEqual(expected);
+    adapter.setContent(markdownToProseMirrorDoc(saved.content));
+    expect(documentEditorSemanticTokens(adapter.getJSON())).toEqual(edited);
+  } finally {
+    adapter.destroy();
+    element.remove();
+  }
+});
 
 it('keeps native Tiptap heading/list formatting and exact text after rich and Markdown reopens', () => {
   const element = document.createElement('div');

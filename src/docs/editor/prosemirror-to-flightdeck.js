@@ -27,6 +27,7 @@ function markText(text, marks = [], { atStart = false, atEnd = false, encodeFirs
     if (mark.type === 'bold') return `**${out}**`;
     if (mark.type === 'italic') return `_${out}_`;
     if (mark.type === 'strike') return `~~${out}~~`;
+    if (mark.type === 'underline') return `<u>${out}</u>`;
     if (mark.type === 'code') return `\`${String(text || '').replace(/`/g, '\\`')}\``;
     if (mark.type === 'link') return `[${out}](${mark.attrs?.href || ''})`;
     if (mark.type === 'fdMention') {
@@ -42,7 +43,12 @@ function inlineMarkdown(nodes = []) {
   // marks. Serialize each contiguous run once so bold/italic delimiters do
   // not collide on reopen (for example **word****\-****word**).
   const runs = [];
-  for (const node of nodes || []) {
+  const markOrder = ['code', 'bold', 'italic', 'strike', 'link', 'fdMention', 'underline'];
+  for (const source of nodes || []) {
+    // Parser nesting and native schema rank can order identical mark sets
+    // differently. Choose one wrapper order without mutating the editor JSON.
+    const node = source.type === 'text' ? { ...source, marks: [...(source.marks || [])]
+      .sort((a, b) => markOrder.indexOf(a.type) - markOrder.indexOf(b.type)) } : source;
     const previous = runs[runs.length - 1];
     if (node.type === 'text' && previous?.type === 'text'
       && JSON.stringify(previous.marks || []) === JSON.stringify(node.marks || [])) {
@@ -51,14 +57,16 @@ function inlineMarkdown(nodes = []) {
       runs.push({ ...node });
     }
   }
-  return runs.map((node, index) => {
+  const rendered = runs.map((node, index) => {
     if (node.type === 'text') return markText(node.text || '', node.marks || [], {
-      atStart: index === 0,
-      atEnd: index === runs.length - 1,
-      encodeFirst: runs[index - 1]?.marks?.length > 0 && /\s$/.test(runs[index - 1]?.text || ''),
-      encodeLast: runs[index + 1]?.marks?.length > 0 && /^\s/.test(runs[index + 1]?.text || ''),
+      atStart: index === 0 || runs[index - 1]?.type === 'hardBreak',
+      atEnd: index === runs.length - 1 || runs[index + 1]?.type === 'hardBreak',
+      encodeFirst: runs[index - 1]?.marks?.length > 0,
+      encodeLast: runs[index + 1]?.marks?.length > 0,
     });
-    if (node.type === 'hardBreak') return '  \n';
+    // Literal Markdown breaks disappear at paragraph boundaries and consecutive
+    // breaks become block separators. An inline tag preserves every break.
+    if (node.type === 'hardBreak') return '<br>';
     if (node.type === 'fdStorageImage' || node.type === 'image') {
       const src = node.type === 'fdStorageImage' && node.attrs?.objectId
         ? `storage://${node.attrs.objectId}`
@@ -71,7 +79,27 @@ function inlineMarkdown(nodes = []) {
       return `[${escapeText(label)}](${src})`;
     }
     return inlineMarkdown(node.content || []);
-  }).join('');
+  });
+  // Keep shared outer marks open across adjacent runs. Closing and reopening
+  // italic around a bold-to-plain transition otherwise creates literal '__'.
+  const delimiters = { bold: ['**', '**'], italic: ['_', '_'], strike: ['~~', '~~'], underline: ['<u>', '</u>'] };
+  for (let index = 1; index < runs.length; index++) {
+    if (runs[index - 1].type !== 'text' || runs[index].type !== 'text') continue;
+    const left = [...(runs[index - 1].marks || [])].reverse();
+    const right = [...(runs[index].marks || [])].reverse();
+    let opening = '', closing = '';
+    for (let mark = 0; mark < Math.min(left.length, right.length); mark++) {
+      const pair = delimiters[left[mark].type];
+      if (!pair || JSON.stringify(left[mark]) !== JSON.stringify(right[mark])) break;
+      opening += pair[0];
+      closing = pair[1] + closing;
+    }
+    if (opening) {
+      rendered[index - 1] = rendered[index - 1].slice(0, -closing.length);
+      rendered[index] = rendered[index].slice(opening.length);
+    }
+  }
+  return rendered.join('');
 }
 
 function indent(value = '', spaces = 2) {
