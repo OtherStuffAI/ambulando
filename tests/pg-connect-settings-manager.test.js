@@ -6,6 +6,11 @@ const DEFAULT_BUILD_PG_APP_NPUB = FLIGHT_DECK_PG_APP_NPUB;
 vi.mock('../src/backend-mode.js', () => ({
   isTowerPgBackendMode: vi.fn(() => true),
 }));
+vi.mock('../src/hosted-workspace-signup.js', () => ({
+  hostedSignupConfig: vi.fn(),
+  hostedSignupIntent: vi.fn((name) => ({ workspaceName: name, body: `body:${name}` })),
+  submitHostedSignup: vi.fn(),
+}));
 
 vi.mock('../src/api.js', () => ({
   setBaseUrl: vi.fn(),
@@ -71,6 +76,43 @@ describe('PG connect settings manager', () => {
   beforeEach(() => {
     vi.resetModules();
     vi.clearAllMocks();
+  });
+
+  it('creates a hosted workspace without owner nomination or admin calls, then verifies list and opens', async () => {
+    const api = await import('../src/api.js');
+    const hosted = await import('../src/hosted-workspace-signup.js');
+    hosted.submitHostedSignup.mockResolvedValue({ workspace_id: 'workspace-1', descriptor });
+    api.getTowerPgWorkspaceDescriptor.mockResolvedValue(descriptor);
+    api.getTowerPgWorkspaceMe.mockResolvedValue({ actor: { npub: 'npub1user' }, membership: { role: 'owner' } });
+    api.listTowerPgWorkspaces.mockResolvedValue({ workspaces: [{ ...descriptor, label: 'Example Workspace' }] });
+    const { connectSettingsManagerMixin } = await import('../src/connect-settings-manager.js');
+    const store = createStore({ connectHostedConfig: { tower_public_base_url: 'https://tower.example/' }, connectNewWorkspaceName: 'Example Workspace', connectHostUrl: 'https://tower.example', backendUrl: 'https://tower.example', connectCreatingWorkspace: false });
+    Object.defineProperties(store, Object.getOwnPropertyDescriptors(connectSettingsManagerMixin));
+    await store.connectCreateWorkspace();
+    expect(hosted.submitHostedSignup).toHaveBeenCalledWith({ workspaceName: 'Example Workspace', body: 'body:Example Workspace' }, store.connectHostedConfig, expect.any(Object));
+    expect(api.createTowerPgAdminWorkspace).not.toHaveBeenCalled();
+    expect(api.listTowerPgWorkspaces).toHaveBeenCalled();
+    expect(api.getTowerPgWorkspaceDescriptor).toHaveBeenCalled();
+    expect(store.selectWorkspace).toHaveBeenCalled();
+    expect(store.connectWorkspacesError).toBeNull();
+  });
+
+  it('keeps a hosted create intent for retry after an uncertain failure', async () => {
+    const hosted = await import('../src/hosted-workspace-signup.js');
+    hosted.submitHostedSignup.mockRejectedValue(new Error('Tower is unavailable'));
+    const { connectSettingsManagerMixin } = await import('../src/connect-settings-manager.js');
+    const store = createStore({ connectHostedConfig: { tower_public_base_url: 'https://tower.example/' }, connectNewWorkspaceName: 'One', connectCreatingWorkspace: false });
+    Object.defineProperties(store, Object.getOwnPropertyDescriptors(connectSettingsManagerMixin));
+    await store.connectCreateWorkspace();
+    const intent = store.connectHostedIntent;
+    expect(store.connectWorkspacesError).toMatch(/unavailable/);
+    await store.connectCreateWorkspace();
+    expect(store.connectHostedIntent).toBe(intent);
+    expect(hosted.hostedSignupIntent).toHaveBeenCalledTimes(1);
+    expect(hosted.submitHostedSignup).toHaveBeenNthCalledWith(2, intent, store.connectHostedConfig, expect.any(Object));
+    store.connectNewWorkspaceName = 'Two';
+    await store.connectCreateWorkspace();
+    expect(hosted.hostedSignupIntent).toHaveBeenCalledTimes(2);
   });
 
   it('verifies a pasted descriptor with signed descriptor and me calls before storing it', async () => {

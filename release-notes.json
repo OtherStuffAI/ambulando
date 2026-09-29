@@ -2228,6 +2228,13 @@
       "label": "Hosted signup site preparation",
       "notes": [],
       "noUserVisibleChanges": true
+    },
+    {
+      "buildNumber": 2110,
+      "label": "Create Hosted Free workspaces",
+      "notes": [
+        "Create a Hosted Free workspace from setup with your Nostr signer, see the 1 GB free allowance, and open it after signed verification. Retry interrupted signup without creating a duplicate workspace."
+      ]
     }
   ]
 }

@@ -393,6 +393,7 @@ export async function createNip98AuthHeader(url, method, body = null, options = 
   }
 
   const eventTemplate = buildHttpAuthEvent(url, method, payloadHash);
+  if (options.freshContent) eventTemplate.content = crypto.randomUUID();
 
   if (authMethod === 'ephemeral' || authMethod === 'secret') {
     let secret = getMemorySecret();

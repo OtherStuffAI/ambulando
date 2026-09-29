@@ -43,6 +43,7 @@ import {
   createGroupIdentity,
 } from './crypto/group-keys.js';
 import { normalizedAutopilotLaunchUrl } from './autopilot-agents.js';
+import { hostedSignupConfig, hostedSignupIntent, submitHostedSignup } from './hosted-workspace-signup.js';
 
 function trimUrl(value) {
   return String(value || '').trim().replace(/\/+$/, '');
@@ -765,6 +766,9 @@ export const connectSettingsManagerMixin = {
     this.connectNewWorkspaceName = '';
     this.connectNewWorkspaceDescription = '';
     this.connectCreatingWorkspace = false;
+    this.connectHostedConfig = null;
+    this.connectHostedIntent = null;
+    this.connectHostedPhase = 'idle';
     this.resetConnectPgBootstrapState();
     this.connectTokenInput = '';
     this.connectShowTokenFallback = false;
@@ -862,6 +866,7 @@ export const connectSettingsManagerMixin = {
   },
 
   connectPgWizardTitle() {
+    if (this.connectHostedConfig) return this.connectCreatingWorkspace ? 'Creating hosted workspace' : 'Choose or create a workspace';
     if (this.connectCreatingWorkspace) return 'Building workspace';
     const titles = {
       1: 'Connect to a Tower',
@@ -874,6 +879,7 @@ export const connectSettingsManagerMixin = {
   },
 
   connectPgWizardSummary() {
+    if (this.connectHostedConfig) return 'Hosted Free includes 1 GB (1,000,000,000 bytes). Payment required: no. Terms version: hosted-free-v1.';
     if (this.connectCreatingWorkspace) {
       return 'Flight Deck is creating the workspace, spaces, channel grants, and local materialized view.';
     }
@@ -900,6 +906,7 @@ export const connectSettingsManagerMixin = {
   },
 
   connectPgNext() {
+    if (this.connectHostedConfig) return this.connectCreateWorkspace();
     if (this.connectPgOnboardingStep < 5) {
       this.connectPgOnboardingStep += 1;
       return;
@@ -1040,6 +1047,11 @@ export const connectSettingsManagerMixin = {
       const towerName = trimText(service.name);
       const towerDescription = trimText(service.description);
       this.connectHostUrl = this.backendUrl;
+      this.connectHostedConfig = null;
+      try {
+        const config = await hostedSignupConfig();
+        if (config && normalizeBackendUrl(config.tower_public_base_url) === this.backendUrl) this.connectHostedConfig = config;
+      } catch { /* A self-hosted Tower can still use its existing admin setup path. */ }
       this.connectHostLabel = towerName || trimText(hostLabel) || this.backendUrl;
       this.connectHostServiceNpub = trimText(service.service_npub);
       this.connectHostTowerName = towerName;
@@ -1301,6 +1313,7 @@ export const connectSettingsManagerMixin = {
       const workspace = await this.rememberVerifiedPgWorkspace(verified, me, { clearLocalForget: true });
       this.showConnectModal = false;
       await this.selectWorkspace(workspace.workspaceKey || workspace.workspaceOwnerNpub, { pgVerified: true });
+      return workspace;
     } catch (error) {
       this.connectWorkspacesError = `Failed to connect to ${pgWorkspaceLabel(workspaceEntry)}: ${pgErrorMessage(error)}`;
     } finally {
@@ -1310,6 +1323,7 @@ export const connectSettingsManagerMixin = {
 
   async connectCreateWorkspace() {
     if (isTowerPgBackendMode()) {
+      if (this.connectHostedConfig) return this.connectCreateHostedWorkspace();
       // The personal login is the creator; workspace/service signing keys are not.
       const creatorNpub = trimText(this.session?.npub);
       if (!creatorNpub) { this.connectWorkspacesError = 'Sign in first'; return; }
@@ -1427,6 +1441,55 @@ export const connectSettingsManagerMixin = {
       await this.selectWorkspace(workspace.workspaceKey || workspace.workspaceOwnerNpub);
     } catch (error) {
       this.connectWorkspacesError = error?.message || 'Failed to create workspace';
+    } finally {
+      this.connectCreatingWorkspace = false;
+    }
+  },
+
+  async connectCreateHostedWorkspace() {
+    if (this.connectCreatingWorkspace) return;
+    if (!this.session?.npub) { this.connectWorkspacesError = 'Sign in first'; return; }
+    let intent;
+    try {
+      const name = trimText(this.connectNewWorkspaceName);
+      intent = this.connectHostedIntent?.workspaceName === name
+        ? this.connectHostedIntent : hostedSignupIntent(name);
+    } catch (error) { this.connectWorkspacesError = error.message; return; }
+    this.connectHostedIntent = intent;
+    this.connectCreatingWorkspace = true;
+    this.connectWorkspacesError = null;
+    this.connectHostedPhase = 'signing';
+    try {
+      const result = await submitHostedSignup(intent, this.connectHostedConfig, {
+        onSigning: () => { this.connectHostedPhase = 'signing'; },
+        onPending: () => { this.connectHostedPhase = 'pending'; },
+      });
+      const candidate = parsePgWorkspaceDescriptor({
+        ...result.descriptor,
+        tower_base_url: result.descriptor.tower_base_url || this.connectHostedConfig.tower_public_base_url,
+      });
+      if (candidate.workspaceId !== result.workspace_id || candidate.towerBaseUrl !== normalizeBackendUrl(this.connectHostedConfig.tower_public_base_url)) {
+        throw new Error('Tower returned a workspace descriptor with a different identity or host. Retry to verify it.');
+      }
+      this.connectHostedPhase = 'verifying';
+      const { descriptor: verified } = await this.verifyPgDescriptor(result.descriptor, { baseUrl: this.connectHostedConfig.tower_public_base_url });
+      if (verified.workspaceId !== candidate.workspaceId || verified.workspaceServiceNpub !== candidate.workspaceServiceNpub || verified.workspaceOwnerNpub !== candidate.workspaceOwnerNpub) {
+        throw new Error('Tower descriptor identity did not match the signup result. Retry to verify it.');
+      }
+      await this.loadConnectWorkspaces();
+      if (this.connectWorkspacesError) throw new Error(this.connectWorkspacesError);
+      const listed = this.connectWorkspaces.find((entry) => pgWorkspaceIdFromEntry(entry) === result.workspace_id);
+      if (!listed) throw new Error('Workspace was created but is not in the signed list yet. Retry to refresh and open it.');
+      const workspace = await this.connectSelectPgWorkspace(listed);
+      if (this.connectWorkspacesError) throw new Error(this.connectWorkspacesError);
+      this.connectHostedPhase = 'success';
+      this.connectHostedIntent = null;
+      this.connectNewWorkspaceName = '';
+      return workspace;
+    } catch (error) {
+      this.connectHostedPhase = 'error';
+      this.connectWorkspacesError = /denied|reject|cancel/i.test(error?.message || '')
+        ? 'Signing was denied. Retry when ready.' : pgErrorMessage(error, 'Hosted workspace creation failed');
     } finally {
       this.connectCreatingWorkspace = false;
     }

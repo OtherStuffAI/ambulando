@@ -634,6 +634,9 @@ export function initApp() {
     connectNewWorkspaceName: '',
     connectNewWorkspaceDescription: '',
     connectCreatingWorkspace: false,
+    connectHostedConfig: null,
+    connectHostedIntent: null,
+    connectHostedPhase: 'idle',
     connectPgBootstrapTemplateId: 'company',
     connectPgBootstrapTemplates: [],
     connectPgBootstrapProgress: {

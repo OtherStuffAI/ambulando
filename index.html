@@ -628,7 +628,7 @@
             <div class="connect-wizard-top">
               <p class="connect-modal-eyebrow" x-text="$store.chat.isTowerPgMode ? 'New workspace' : 'Workspace connection'"></p>
               <h2 x-text="$store.chat.isTowerPgMode ? 'Connect to a Tower' : 'Connect to SuperBased'"></h2>
-              <div class="connect-wizard-steps" x-show="$store.chat.isTowerPgMode" aria-label="Onboarding progress">
+              <div class="connect-wizard-steps" x-show="$store.chat.isTowerPgMode && !$store.chat.connectHostedConfig" aria-label="Onboarding progress">
                 <span class="active">1</span>
                 <span>2</span>
                 <span>3</span>
@@ -686,17 +686,17 @@
               <p class="connect-host-description" x-show="$store.chat.connectHostTowerDescription" x-text="$store.chat.connectHostTowerDescription"></p>
             </div>
 
-            <section class="connect-build-screen" x-show="$store.chat.connectCreatingWorkspace && $store.chat.connectPgBootstrapProgress.active" x-cloak>
+            <section class="connect-build-screen" x-show="$store.chat.connectCreatingWorkspace && ($store.chat.connectHostedConfig || $store.chat.connectPgBootstrapProgress.active)" x-cloak>
               <div class="connect-build-icon" aria-hidden="true">W</div>
               <div class="connect-build-progress">
                 <div class="connect-build-progress-head">
-                  <strong x-text="$store.chat.connectPgBootstrapProgress.label || 'Preparing workspace...'"></strong>
-                  <span x-text="`${$store.chat.connectPgBootstrapProgress.completed || 0} / ${$store.chat.connectPgBootstrapProgress.total || 0}`"></span>
+                  <strong role="status" aria-live="polite" x-text="$store.chat.connectHostedConfig ? ({ signing: 'Approve the signup signature in your Nostr signer…', pending: 'Creating workspace with Tower…', verifying: 'Verifying and opening your workspace…' }[$store.chat.connectHostedPhase] || 'Preparing workspace…') : ($store.chat.connectPgBootstrapProgress.label || 'Preparing workspace...')"></strong>
+                  <span x-show="!$store.chat.connectHostedConfig" x-text="`${$store.chat.connectPgBootstrapProgress.completed || 0} / ${$store.chat.connectPgBootstrapProgress.total || 0}`"></span>
                 </div>
-                <div class="connect-build-progress-bar" aria-hidden="true">
+                <div class="connect-build-progress-bar" aria-hidden="true" x-show="!$store.chat.connectHostedConfig">
                   <span :style="`width: ${$store.chat.connectPgBootstrapProgress.total ? Math.max(8, Math.round((($store.chat.connectPgBootstrapProgress.completed || 0) / $store.chat.connectPgBootstrapProgress.total) * 100)) : 8}%`"></span>
                 </div>
-                <p>Tower is creating the workspace, scopes, and channels before Flight Deck opens the space.</p>
+                <p x-text="$store.chat.connectHostedConfig ? 'Keep this page open while Flight Deck completes signup.' : 'Tower is creating the workspace, scopes, and channels before Flight Deck opens the space.'"></p>
               </div>
             </section>
 
@@ -707,12 +707,8 @@
                     <p>Select an existing workspace or create a new one.</p>
                   </div>
                   <div class="connect-workspace-list" data-testid="connect-pg-workspace-list">
-                    <button type="button" class="connect-workspace-row active">
-                      <span class="connect-workspace-name">Create new workspace</span>
-                      <span class="connect-workspace-meta">Name it, then bootstrap scopes and channels.</span>
-                    </button>
                     <template x-for="ws in $store.chat.connectWorkspaces" :key="ws.workspaceId || ws.workspace_id || ws.identity?.workspace_id || ws.workspace_owner_npub || ws.workspaceOwnerNpub">
-                      <button type="button" class="connect-workspace-row" data-testid="connect-pg-workspace-row" @click="$store.chat.connectSelectWorkspace(ws)" x-show="!$store.chat.connectWorkspacesBusy">
+                      <button type="button" class="connect-workspace-row" data-testid="connect-pg-workspace-row" @click="$store.chat.connectSelectWorkspace(ws)" x-show="!$store.chat.connectWorkspacesBusy" :disabled="$store.chat.connectCreatingWorkspace" :aria-label="`Open ${ws.name || 'Untitled workspace'}`">
                         <span class="connect-workspace-name" x-text="ws.name || 'Untitled workspace'"></span>
                         <span class="connect-workspace-meta" x-text="ws.description || $store.chat.getShortNpub(ws.workspace_owner_npub || ws.workspaceOwnerNpub || '')"></span>
                       </button>
@@ -723,20 +719,21 @@
                     class="connect-workspace-empty"
                     x-show="$store.chat.connectWorkspaces.length === 0 && !$store.chat.connectWorkspacesBusy && !$store.chat.connectWorkspacesError"
                   >
-                    No PG workspaces found on this Tower. Create a new one below.
+                    No workspaces found on this Tower. Create one below.
                   </p>
                   <p
                     class="connect-workspace-diagnostics"
                     x-show="$store.chat.connectWorkspaceRequestDiagnostics && !$store.chat.connectWorkspacesBusy"
                     x-text="$store.chat.connectWorkspaceRequestSummary()"
                   ></p>
-                  <div class="connect-create-fields connect-v8-create-fields">
-                    <label><span>Name</span><input type="text" x-model="$store.chat.connectNewWorkspaceName" placeholder="My workspace" /></label>
-                    <label><span>Description</span><input type="text" x-model="$store.chat.connectNewWorkspaceDescription" placeholder="Optional" /></label>
+                  <div class="connect-create-fields connect-v8-create-fields" :class="{ 'connect-hosted-fields': $store.chat.connectHostedConfig }">
+                    <label><span>New workspace name</span><input type="text" x-model="$store.chat.connectNewWorkspaceName" placeholder="My workspace" maxlength="80" autocomplete="off" /></label>
+                    <label x-show="!$store.chat.connectHostedConfig"><span>Description</span><input type="text" x-model="$store.chat.connectNewWorkspaceDescription" placeholder="Optional" /></label>
                   </div>
+                  <p class="connect-hosted-policy" x-show="$store.chat.connectHostedConfig">Hosted Free: 1 GB allowance (1,000,000,000 bytes). Payment required: no. Terms version: hosted-free-v1. Creating a workspace records acceptance of this version.</p>
                 </div>
 
-                <div class="connect-choice-grid" x-show="$store.chat.connectPgOnboardingStep === 3">
+                <div class="connect-choice-grid" x-show="!$store.chat.connectHostedConfig && $store.chat.connectPgOnboardingStep === 3">
                   <template x-for="template in $store.chat.connectPgBootstrapTemplates" :key="template.id">
                     <button
                       type="button"
@@ -751,7 +748,7 @@
                   </template>
                 </div>
 
-                <div class="connect-choice-grid" x-show="$store.chat.connectPgOnboardingStep === 4">
+                <div class="connect-choice-grid" x-show="!$store.chat.connectHostedConfig && $store.chat.connectPgOnboardingStep === 4">
                   <template x-for="goal in $store.chat.connectPgBootstrapGoals()" :key="goal.title">
                     <button
                       type="button"
@@ -766,7 +763,7 @@
                   </template>
                 </div>
 
-                <div class="connect-scope-picker" x-show="$store.chat.connectPgOnboardingStep === 5">
+                <div class="connect-scope-picker" x-show="!$store.chat.connectHostedConfig && $store.chat.connectPgOnboardingStep === 5">
                   <section class="connect-scope-panel">
                     <span class="connect-panel-label">Suggested scopes</span>
                     <form class="connect-space-add-form" @submit.prevent="$store.chat.connectPgAddBootstrapScope()">
@@ -821,7 +818,7 @@
                   </section>
                 </div>
 
-                <p class="auth-error" x-show="$store.chat.connectWorkspacesError" x-text="$store.chat.connectWorkspacesError"></p>
+                <p class="auth-error" role="alert" x-show="$store.chat.connectWorkspacesError" x-text="$store.chat.connectWorkspacesError"></p>
               </section>
 
               <footer class="connect-modal-actions">
@@ -831,7 +828,7 @@
                     <span x-text="$store.chat.connectPgOnboardingStep === 2 ? 'Back' : 'Back'"></span>
                   </button>
                   <button class="auth-option connect-primary-action" type="button" @click="$store.chat.connectPgNext()" :disabled="!$store.chat.connectPgCanContinue()">
-                    <span x-text="$store.chat.connectPgPrimaryLabel()"></span>
+                    <span x-text="$store.chat.connectHostedConfig && $store.chat.connectHostedIntent ? 'Retry signup' : $store.chat.connectPgPrimaryLabel()"></span>
                   </button>
                 </div>
               </footer>

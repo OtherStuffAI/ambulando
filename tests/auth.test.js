@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { createHash } from 'node:crypto';
 
 let storedCreds = null;
 const { refreshCredentialExpiryMock } = vi.hoisted(() => ({
@@ -138,6 +139,23 @@ describe('auth/nostr helpers', () => {
     await expect(
       createNip98AuthHeader('https://example.test/api/v4/storage/obj-1/complete', 'POST', { ok: true }),
     ).rejects.toThrow('NIP-07 signer pubkey changed since login. Sign in again.');
+  });
+
+  it('gives hosted signup retries distinct direct user events for the exact body hash', async () => {
+    window.nostr = {
+      getPublicKey: vi.fn(async () => 'c'.repeat(64)),
+      signEvent: vi.fn(async (event) => ({ ...event, id: 'ext-id', sig: 'ext-sig' })),
+    };
+    await signLoginEvent('extension');
+    const body = '{"workspace_name":"Café","idempotency_key":"6c5e818f-bf8a-4df8-9ffc-ed5753ce5891","terms_version":"hosted-free-v1"}';
+    const url = 'https://tower.example/api/v4/flightdeck-pg/hosted/workspaces';
+    const first = JSON.parse(atob((await createNip98AuthHeader(url, 'POST', body, { freshContent: true })).slice(6)));
+    const second = JSON.parse(atob((await createNip98AuthHeader(url, 'POST', body, { freshContent: true })).slice(6)));
+    const hash = createHash('sha256').update(new TextEncoder().encode(body)).digest('hex');
+    expect(first.tags).toEqual([['u', url], ['method', 'POST'], ['payload', hash]]);
+    expect(second.tags).toEqual(first.tags);
+    expect(first.content).not.toBe(second.content);
+    expect(first.kind).toBe(27235);
   });
 
   it('waits briefly for a late-injected extension signer', async () => {
