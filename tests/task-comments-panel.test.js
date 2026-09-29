@@ -77,7 +77,9 @@ describe('task comments panel fullscreen affordance', () => {
     expect(html).toContain('aria-modal="true"');
     expect(html).toContain('@keydown.escape.window="$store.chat.closeTaskCommentsFullscreen()"');
     expect(html).toContain('task-comment-fullscreen-body');
-    expect(html).toContain('x-html="$store.chat.renderMarkdown(comment.body)"');
+    expect(html.match(/x-html="\$store\.chat\.renderMarkdown\(\$store\.chat\.taskCommentDisplayBody\(comment\.body\)\)"/g)).toHaveLength(2);
+    expect(html).toContain('aria-describedby="task-comment-markdown-help"');
+    expect(html).toContain('Markdown supported: headings, lists, links');
   });
 
   it('keys task comments by durable record identity so insertions do not remount the list', () => {

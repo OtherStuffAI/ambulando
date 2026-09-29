@@ -18,6 +18,7 @@ import {
   isTaskCommentExpanded as hasExpandedTaskComment,
   isTaskCommentTruncated as hasTruncatedTaskComment,
   normalizeTaskComments,
+  taskCommentDisplayBody,
   syncTaskCommentPreviewState as deriveTaskCommentPreviewState,
   toggleTaskCommentExpandedId,
 } from './task-comments.js';
@@ -26,6 +27,7 @@ import { sameListBySignature, toRaw } from './utils/state-helpers.js';
 import { resolveTaskForDetail } from './task-link-navigation.js';
 
 export const taskDetailManagerMixin = {
+  taskCommentDisplayBody,
   async openTaskDetailFromRoute(taskId, options = {}) {
     const task = await resolveTaskForDetail(this, taskId, options.deps || {});
     if (!task) return false;

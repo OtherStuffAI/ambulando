@@ -3758,6 +3758,7 @@
                       contenteditable="true"
                       role="textbox"
                       aria-multiline="true"
+                      aria-describedby="task-comment-markdown-help"
                       data-placeholder="Add a comment..."
                       x-init="$store.chat.initMentionComposer($el, 'task-comment')"
                       x-effect="$store.chat.syncMentionComposerFromModel($el, 'task-comment', $store.chat.newTaskCommentBody)"
@@ -3765,6 +3766,7 @@
                       @keydown="$store.chat.handleComposerKeydown($event, () => { if ($store.chat.editingTask?.record_id) $store.chat.addTaskComment($store.chat.editingTask.record_id); })"
                       @paste="$store.chat.handleMentionComposerPaste($event, 'task-comment')"
                     ></div>
+                    <p id="task-comment-markdown-help" class="task-comment-markdown-help">Markdown supported: headings, lists, links, and ``` fenced code boxes. Shift+Enter adds a line.</p>
                     <div class="task-comment-actions">
                       <button type="button" class="audio-trigger-btn" @click="$store.chat.openAudioRecorder('task-comment')" title="Record voice note">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
@@ -3809,7 +3811,7 @@
                           :class="{ 'task-comment-body-collapsed': !$store.chat.isTaskCommentExpanded(comment.record_id) }"
                           :data-task-comment-preview-id="comment.record_id"
                           :data-task-comment-preview-max-lines="$store.chat.TASK_COMMENT_PREVIEW_MAX_LINES"
-                          x-html="$store.chat.renderMarkdown(comment.body)"
+                          x-html="$store.chat.renderMarkdown($store.chat.taskCommentDisplayBody(comment.body))"
                         ></div>
                         <template x-if="$store.chat.isTaskCommentTruncated(comment.record_id)">
                           <button
@@ -3886,7 +3888,7 @@
                             <span class="task-comment-sender" x-text="$store.chat.getSenderName(comment.sender_npub)"></span>
                             <span class="task-comment-time" x-text="$store.chat.formatRelativeTime(comment.updated_at)"></span>
                           </div>
-                          <div class="task-comment-body task-comment-fullscreen-body" x-html="$store.chat.renderMarkdown(comment.body)"></div>
+                          <div class="task-comment-body task-comment-fullscreen-body" x-html="$store.chat.renderMarkdown($store.chat.taskCommentDisplayBody(comment.body))"></div>
                           <div class="audio-attachment-list" x-show="$store.chat.getAudioAttachmentsForRecord(comment).length > 0">
                             <template x-for="attachment in $store.chat.getAudioAttachmentsForRecord(comment)" :key="attachment.audio_note_record_id">
                               <button type="button" class="audio-card" @click="$store.chat.playAudioAttachment(attachment)">

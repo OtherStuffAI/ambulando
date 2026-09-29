@@ -2215,6 +2215,13 @@
       "label": "Rebuild workspace picker",
       "notes": [],
       "noUserVisibleChanges": true
+    },
+    {
+      "buildNumber": 2108,
+      "label": "Readable task comments",
+      "notes": [
+        "Show paragraph breaks in task updates that arrived with escaped newlines, in both activity views. The comment composer now explains Markdown and fenced code boxes."
+      ]
     }
   ]
 }

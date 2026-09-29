@@ -19052,6 +19052,13 @@ html.wingman-iphone-webview .chat-channel-tab-scroll * {
   align-items: center;
 }
 
+.task-comment-markdown-help {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.76rem;
+  line-height: 1.4;
+}
+
 .task-comment-add textarea,
 .task-comment-composer {
   width: 100%;
@@ -19140,6 +19147,12 @@ html.wingman-iphone-webview .chat-channel-tab-scroll * {
   line-height: 1.45;
   word-break: break-word;
   overflow-wrap: anywhere;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.task-comment-body .md-code-block,
+.task-comment-body .md-code-scroll {
   min-width: 0;
   max-width: 100%;
 }
