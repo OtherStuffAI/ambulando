@@ -209,3 +209,23 @@ describe('authorized cache continuity', () => {
     expect(await counts()).toEqual(before);
   });
 });
+
+it('marks staging cancellation for recovery before making a startup list request', async () => {
+  const before = await counts();
+  await db.sync_state.put({ key: recordDeltaCursorKey(store), value: { cursor: 'partial', staging: true } });
+  const read = vi.fn();
+  await expect(hydrateTowerPgScopes(store, { getTowerPgWorkspaceScopes: read }))
+    .rejects.toMatchObject({ code: 'pg_read_authority_resetting' });
+  expect(read).not.toHaveBeenCalled();
+  expect(await counts()).toEqual(before);
+});
+
+it('rejects an old scope commit when staging begins without changing the cursor', async () => {
+  const before = await counts();
+  await expect(hydrateTowerPgScopes(store, { getTowerPgWorkspaceScopes: async () => {
+    const state = await db.sync_state.get(recordDeltaCursorKey(store));
+    await db.sync_state.put({ ...state, value: { ...state.value, staging: true } });
+    return { scopes: [], identity: { workspace_id: workspaceId } };
+  } })).rejects.toMatchObject({ code: 'pg_read_authority_changed' });
+  expect(await counts()).toEqual(before);
+});

@@ -104,6 +104,8 @@ import { recordFamilyHash } from './translators/chat.js';
 import { recordFamilyHash as taskFamilyHash } from './translators/tasks.js';
 
 const DOC_COMMENT_HYDRATION_GENERATIONS = new WeakMap();
+const MISSING_REACTION_TARGETS = new WeakMap();
+const MISSING_REACTION_TARGET_RETRY_MS = 30_000;
 
 function beginDocCommentHydration(store, workspaceId, docId) {
   let generations = DOC_COMMENT_HYDRATION_GENERATIONS.get(store);
@@ -159,10 +161,14 @@ async function readAllTowerPgWappActivityItems(readItems, workspaceId, options =
 }
 
 function isMissingPgReactionTargetError(error) {
-  if (!error || error.status !== 404) return false;
-  const responseText = String(error.responseText || error.message || '');
-  return responseText.includes('reaction_target_not_found')
-    || responseText.includes('Flight Deck PG reaction target was not found');
+  if (!error) return false;
+  let payload = error.payload;
+  try { payload = JSON.parse(error.responseText); } catch {}
+  return (error.status === 404 && (payload?.code || payload?.error) === 'reaction_target_not_found')
+    // Tower validates channel existence before checking its permission grants.
+    // A 403 permission_denied is deliberately not a stale-target result.
+    || (error.status === 400 && payload?.code === 'resource-not-found'
+      && payload?.required_permission === 'channel.read');
 }
 
 function normalizeTextArray(value) {
@@ -1992,12 +1998,16 @@ function validatePgRows(result, field, context, { complete = false, cap = 100, c
 }
 
 function pgAuthorityToken(state) {
-  return JSON.stringify([state?.cursor || null, state?.localGeneration || 0, Boolean(state?.resetting), state?.commandRevision || null]);
+  return JSON.stringify([state?.cursor || null, state?.localGeneration || 0, Boolean(state?.resetting), Boolean(state?.staging), state?.commandRevision || null]);
+}
+
+function pgReadAuthorityCancellation(message, code = 'pg_read_authority_changed') {
+  return Object.assign(new Error(message), { code });
 }
 
 async function readPgAuthority(store, deps, allowReset = false) {
   const state = await (deps.getSyncState || getSyncState)(`${towerPgSyncCursorKey(store)}:record-delta-v1`);
-  if (!allowReset && (state?.resetting || state?.staging)) throw new Error('Workspace authority is resetting');
+  if (!allowReset && (state?.resetting || state?.staging)) throw pgReadAuthorityCancellation('Workspace authority is resetting', 'pg_read_authority_resetting');
   const commands = store._towerSyncService?.instrumentation;
   return { ...state, commandRevision: commands ? [commands.commandsStarted, commands.commandsAcknowledged, commands.commandsFailed] : null };
 }
@@ -2005,7 +2015,7 @@ async function readPgAuthority(store, deps, allowReset = false) {
 async function commitPgRead(store, context, authority, deps, callback) {
   return (deps.runWorkspaceSyncTransaction || runWorkspaceSyncTransaction)(async () => {
     assertTowerPgWorkspaceCurrent(store, context);
-    if (pgAuthorityToken(await readPgAuthority(store, deps, true)) !== pgAuthorityToken(authority)) throw new Error('Workspace authority changed while loading Tower data');
+    if (pgAuthorityToken(await readPgAuthority(store, deps, true)) !== pgAuthorityToken(authority)) throw pgReadAuthorityCancellation('Workspace authority changed while loading Tower data');
     return callback();
   });
 }
@@ -2077,7 +2087,7 @@ export async function hydrateTowerPgChannels(store, deps = {}) {
     // A newer delta/tombstone or ACL reset outranks this older list request.
     // Check in the replacement transaction so a late response cannot revive it.
     if (pgAuthorityToken(await readPgAuthority(store, deps, true)) !== pgAuthorityToken(authority)) {
-      throw new Error('Channel authority changed while loading Tower data');
+      throw pgReadAuthorityCancellation('Channel authority changed while loading Tower data');
     }
     await replaceChannels(context.workspaceOwnerNpub, channels);
   });
@@ -2427,6 +2437,11 @@ export async function hydrateTowerPgAgentSessionHealth(store, channelId, deps = 
   const context = resolveTowerPgWorkspaceContext(store);
   const targetChannelId = trimText(channelId);
   if (!context.workspaceId || !context.workspaceOwnerNpub || !context.baseUrl || !targetChannelId) return [];
+  // Session health is optional and absent on current Tower. Re-evaluate the
+  // live descriptor each time so a later capability refresh enables recovery.
+  const workspace = store.currentWorkspace || {};
+  if (!workspace.capabilities?.includes('pg_agent_session_health')
+    && !workspace.pgDescriptor?.capabilities?.includes('pg_agent_session_health')) return [];
   const readHealth = deps.getTowerPgAgentSessionHealth || getTowerPgAgentSessionHealth;
   const replaceHealth = deps.replacePgAgentSessionHealthForChannel || replacePgAgentSessionHealthForChannel;
   const result = await readHealth(context.workspaceId, {
@@ -2721,6 +2736,18 @@ export async function hydrateTowerPgReactionTarget(store, targetType, targetId, 
   const targetFamilyHash = pgAudioTargetFamily(resolvedTargetType);
   if (!context.workspaceId || !context.workspaceOwnerNpub || !context.baseUrl || !resolvedTargetType || !resolvedTargetId || !targetFamilyHash) return [];
 
+  let missingTargets = MISSING_REACTION_TARGETS.get(store);
+  if (!missingTargets) {
+    missingTargets = new Map();
+    MISSING_REACTION_TARGETS.set(store, missingTargets);
+  }
+  const missingKey = JSON.stringify([context.workspaceId, context.baseUrl, context.appNpub,
+    store.session?.npub, store._workspaceSelectionGeneration, resolvedTargetType, resolvedTargetId]);
+  // Duplicate/replayed SSE hints cannot revive an absent target immediately.
+  // This short negative cache expires so restored targets remain recoverable.
+  for (const [key, retryAt] of missingTargets) if (Date.now() >= retryAt) missingTargets.delete(key);
+  if (missingTargets.has(missingKey)) return [];
+
   const readReactions = deps.getTowerPgReactions || getTowerPgReactions;
   const replaceReactions = deps.replacePgReactionsForTarget || replacePgReactionsForTarget;
   let result;
@@ -2735,6 +2762,7 @@ export async function hydrateTowerPgReactionTarget(store, targetType, targetId, 
     if (isMissingPgReactionTargetError(error)) {
       assertTowerPgWorkspaceCurrent(store, context);
       await replaceReactions(targetFamilyHash, resolvedTargetId, []);
+      missingTargets.set(missingKey, Date.now() + MISSING_REACTION_TARGET_RETRY_MS);
       return [];
     }
     throw error;
@@ -3083,7 +3111,15 @@ export async function hydrateTowerPgEventUpdates(store, events = [], deps = {}) 
         ? [store.refreshChannelGrants()]
         : []),
     ]),
-    ...[...messageChannels].map((channelId) => hydrateTowerPgChannelMessages(store, channelId, deps)),
+    ...[...messageChannels].map(async (channelId) => {
+      // Use the same coalesced read recovery as navigation during startup
+      // staging. A deferred read has no commit and cannot acknowledge SSE.
+      const result = await (store.requestTowerSyncFamily
+        ? store.requestTowerSyncFamily('channel-messages', channelId, { ...deps, force: true })
+        : hydrateTowerPgChannelMessages(store, channelId, deps));
+      if (result?.deferred) throw pgReadAuthorityCancellation('SSE message read deferred until authority settles');
+      return result;
+    }),
     ...[...taskIds].map((taskId) => hydrateTowerPgTask(store, taskId, deps)),
     ...[...taskChannels].map((channelId) => hydrateTowerPgChannelTasks(store, channelId, deps)),
     ...[...documentChannels].map((channelId) => hydrateTowerPgChannelDocumentsAndFiles(store, channelId, deps)),

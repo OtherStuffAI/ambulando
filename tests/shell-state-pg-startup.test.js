@@ -263,3 +263,34 @@ describe('shell PG startup restore', () => {
     }
   });
 });
+
+it('keeps PG actor auth and never registers through the legacy workspace directory', async () => {
+  const { createShellState } = await import('../src/shell-state.js');
+  const { bootstrapWorkspaceSessionKey, clearActiveWorkspaceKey } = await import('../src/crypto/workspace-keys.js');
+  const { registerWorkspaceKey } = await import('../src/api.js');
+  const shell = createShellState();
+  shell.currentWorkspace = { workspaceServiceNpub: 'npub1pgservice', workspaceId: 'pg-workspace' };
+  shell.session = { npub: 'npub1actor' };
+  shell.backendUrl = 'https://tower.example';
+  await shell.ensureWorkspaceSessionKey();
+  await shell.ensureWorkspaceSessionKey();
+  expect(clearActiveWorkspaceKey).toHaveBeenCalledTimes(2);
+  expect(bootstrapWorkspaceSessionKey).not.toHaveBeenCalled();
+  expect(registerWorkspaceKey).not.toHaveBeenCalled();
+});
+
+it('retains registered legacy delegation bootstrap', async () => {
+  const { createShellState } = await import('../src/shell-state.js');
+  const { bootstrapWorkspaceSessionKey } = await import('../src/crypto/workspace-keys.js');
+  const { registerWorkspaceKey } = await import('../src/api.js');
+  isTowerPgBackendMode.mockReturnValue(false);
+  try {
+    const shell = createShellState();
+    shell.workspaceOwnerNpub = 'npub1legacy';
+    shell.session = { npub: 'npub1actor' };
+    shell.backendUrl = 'https://tower.example';
+    bootstrapWorkspaceSessionKey.mockImplementationOnce(async ({ onRegister }) => onRegister({}, { npub: 'npub1delegated' }));
+    await shell.ensureWorkspaceSessionKey();
+    expect(registerWorkspaceKey).toHaveBeenCalledWith({ workspace_owner_npub: 'npub1legacy', ws_key_npub: 'npub1delegated' });
+  } finally { isTowerPgBackendMode.mockReturnValue(true); }
+});

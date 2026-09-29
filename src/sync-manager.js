@@ -60,7 +60,7 @@ import {
 import { createNip98AuthHeader, createNip98AuthHeaderForSecret } from './auth/nostr.js';
 import { validateSSESigningUrl } from './sse-stream-protocol.js';
 import { getActiveWorkspaceKeySecretForAuth } from './crypto/workspace-keys.js';
-import { flightDeckLog, flightDeckTrace } from './logging.js';
+import { flightDeckLog, flightDeckTrace, flightDeckSyncFailure } from './logging.js';
 import { SYNC_FAMILY_OPTIONS, getSyncFamily, getSyncFamilyHashes } from './sync-families.js';
 import { outboundTask } from './translators/tasks.js';
 import { outboundWorkspaceSettings } from './translators/settings.js';
@@ -625,10 +625,26 @@ export const syncManagerMixin = {
   requestTowerSyncFamily(family, id = '', options = {}) {
     // Network reads and worker round-trips must never inherit a live Dexie
     // transaction zone from the UI write that requested the refresh.
-    return Dexie.ignoreTransaction(() => {
+    return Dexie.ignoreTransaction(async () => {
       const service = this._towerSyncService || null;
-      return service?.ensureLoaded(family, id, options)
-        ?? this.loadTowerSyncTarget(family === 'workspace-bootstrap' ? 'workspace' : family, id, options);
+      for (let attempt = 0; ; attempt++) {
+        try {
+          return await (service?.ensureLoaded(family, id, options)
+            ?? this.loadTowerSyncTarget(family === 'workspace-bootstrap' ? 'workspace' : family, id, options));
+        } catch (error) {
+          if (!['pg_read_authority_changed', 'pg_read_authority_resetting'].includes(error?.code)) throw error;
+          // Staging owns replacement authority. Join its coalesced pull before
+          // re-reading; never commit the cancelled list or mark it fresh.
+          if (attempt >= 2) {
+            this.scheduleBackgroundSync?.(1000);
+            return { deferred: true, family, id };
+          }
+          if (error.code === 'pg_read_authority_resetting') {
+            await (service?.ensureLoaded('workspace-bootstrap', '', { force: true })
+              ?? this.loadTowerSyncTarget('workspace', '', { force: true }));
+          }
+        }
+      }
     });
   },
 
@@ -781,7 +797,7 @@ export const syncManagerMixin = {
         elapsedMs,
         error: error?.message || String(error),
       });
-      flightDeckLog('warn', 'startup-sync', 'workspace sync failed', {
+      flightDeckSyncFailure(this, 'warn', 'startup-sync', 'workspace sync failed', error, {
         elapsedMs,
         page: this.startupSyncProgress.page,
         cursorPresent: this.startupSyncProgress.cursorPresent,
@@ -3171,7 +3187,7 @@ export const syncManagerMixin = {
       } catch (error) {
         const attempt = Number(item.attempt || 0) + 1;
         const delayMs = Math.min(500 * (2 ** Math.min(attempt - 1, 6)), 30_000);
-        flightDeckLog('warn', 'sse', 'failed to refresh PG records after SSE event', {
+        flightDeckSyncFailure(this, 'warn', 'sse', 'failed to refresh PG records after SSE event', error, {
           error: error?.message || String(error),
           materialisationBatchIds: batches.map((entry) => entry.batchId),
           attempt,
@@ -3191,12 +3207,18 @@ export const syncManagerMixin = {
           }, delayMs);
           this.towerPgSSEHydrationRetryTimers.set(retryKey, { timerId, connectionKey });
         } else {
-          flightDeckLog('error', 'sse', 'isolated PG SSE materialisation batch after bounded retries', {
+          const isolation = {
             materialisationBatchIds: batches.map((entry) => entry.batchId),
             attempt,
             connectionKey,
             cursorAcknowledged: false,
-          });
+          };
+          if (['pg_read_authority_changed', 'pg_read_authority_resetting'].includes(error?.code)) {
+            flightDeckTrace('sse', 'deferred superseded PG SSE batch after bounded retries', isolation);
+            this.scheduleBackgroundSync?.(1000);
+          } else {
+            flightDeckLog('error', 'sse', 'isolated PG SSE materialisation batch after bounded retries', isolation);
+          }
         }
       }
     }
@@ -3338,7 +3360,7 @@ export const syncManagerMixin = {
       this.syncBackoffMs = 0;
     } catch (error) {
       this.syncBackoffMs = Math.min(Math.max((this.syncBackoffMs || 0) * 2, 1000), 30000);
-      flightDeckLog('error', 'sync', 'background sync failed', {
+      flightDeckSyncFailure(this, 'error', 'sync', 'background sync failed', error, {
         backendUrl: this.backendUrl || null,
         ownerNpub: this.workspaceOwnerNpub || null,
         error: error?.message || String(error),

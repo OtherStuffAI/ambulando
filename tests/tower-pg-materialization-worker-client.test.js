@@ -136,3 +136,16 @@ describe('Tower PG materialisation worker client', () => {
     expect(factory).toHaveBeenCalledTimes(2);
   });
 });
+
+it('retains the original transaction name, stack and safe worker context', async () => {
+  const worker = new MockWorker();
+  const client = new TowerPgMaterializationWorkerClient({ workspaceKey: 'context', workerFactory: () => worker });
+  const pending = client.materialize({ workspaceDbKey: 'db', store: {}, bundle: {} });
+  const context = { operation: 'bundle-apply', protocolVersion: 1, mode: 'delta', changeCount: 0, hasMore: false };
+  worker.emit('message', { data: { type: TOWER_PG_MATERIALIZATION_WORKER_PROTOCOL.response,
+    id: worker.messages[0].id, workspaceKey: 'context', ok: false,
+    error: { name: 'TransactionInactiveError', message: 'Transaction has already completed or failed', stack: 'original worker stack', materializationContext: context } } });
+  try {
+    await expect(pending).rejects.toMatchObject({ name: 'TransactionInactiveError', stack: 'original worker stack', materializationContext: context });
+  } finally { client.dispose(); }
+});

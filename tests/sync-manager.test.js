@@ -3487,3 +3487,39 @@ describe('SSE complete-URL NIP-98 handshake', () => {
     expect(connectSSE).not.toHaveBeenCalled();
   });
 });
+
+describe('PG read cancellation recovery', () => {
+  it('joins snapshot publication before retrying a startup control-plane read', async () => {
+    const cancelled = Object.assign(new Error('Workspace authority is resetting'), { code: 'pg_read_authority_resetting' });
+    const ensureLoaded = vi.fn().mockRejectedValueOnce(cancelled)
+      .mockResolvedValueOnce({ applied: 3 }).mockResolvedValueOnce(['current-scope']);
+    const store = createStore({ _towerSyncService: { ensureLoaded } });
+    await expect(store.requestTowerSyncFamily('scopes')).resolves.toEqual(['current-scope']);
+    expect(ensureLoaded.mock.calls.map(call => call[0])).toEqual(['scopes', 'workspace-bootstrap', 'scopes']);
+  });
+
+  it('retries a changed read without forcing a workspace replacement', async () => {
+    const cancelled = Object.assign(new Error('changed'), { code: 'pg_read_authority_changed' });
+    const ensureLoaded = vi.fn().mockRejectedValueOnce(cancelled).mockResolvedValueOnce(['latest']);
+    const store = createStore({ _towerSyncService: { ensureLoaded } });
+    await expect(store.requestTowerSyncFamily('channels')).resolves.toEqual(['latest']);
+    expect(ensureLoaded.mock.calls.map(call => call[0])).toEqual(['channels', 'channels']);
+  });
+
+  it('defers continuously superseded reads without marking the cancelled load fresh', async () => {
+    const cancelled = Object.assign(new Error('changed'), { code: 'pg_read_authority_changed' });
+    const ensureLoaded = vi.fn().mockRejectedValue(cancelled);
+    const store = createStore({ _towerSyncService: { ensureLoaded }, scheduleBackgroundSync: vi.fn() });
+    await expect(store.requestTowerSyncFamily('channels')).resolves.toEqual({ deferred: true, family: 'channels', id: '' });
+    expect(ensureLoaded).toHaveBeenCalledTimes(3);
+    expect(store.scheduleBackgroundSync).toHaveBeenCalledWith(1000);
+  });
+
+  it('propagates a real snapshot or read failure', async () => {
+    const failure = new Error('Transaction has already completed or failed');
+    const ensureLoaded = vi.fn().mockRejectedValue(failure);
+    const store = createStore({ _towerSyncService: { ensureLoaded } });
+    await expect(store.requestTowerSyncFamily('scopes')).rejects.toBe(failure);
+    expect(ensureLoaded).toHaveBeenCalledOnce();
+  });
+});

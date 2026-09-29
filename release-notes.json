@@ -2194,6 +2194,14 @@
       "notes": [
         "Save rich pasted drafts with leading, repeated and trailing line breaks, underlined links and overlapping italic formatting. Preserve those details on reopen and keep rejecting genuine content loss."
       ]
+    },
+    {
+      "buildNumber": 2104,
+      "label": "Reduce avoidable sync errors",
+      "notes": [
+        "Use actor signing in PG workspaces, retry superseded startup reads, and skip unadvertised session-health requests. Handle stale reaction targets without masking permission errors and remove duplicate editor links.",
+        "Keep transaction failures visible with worker diagnostics while bounding repeated console errors."
+      ]
     }
   ]
 }

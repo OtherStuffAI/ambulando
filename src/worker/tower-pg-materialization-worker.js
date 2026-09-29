@@ -7,11 +7,20 @@ const RESPONSE_TYPE = 'tower-pg-materializer:response';
 let boundWorkspaceKey = null;
 let materializationQueue = Promise.resolve();
 
-function serializeError(error) {
+function serializeError(error, message) {
   return {
     name: error?.name || 'Error',
     message: error?.message || String(error || 'Tower PG materialisation failed'),
     stack: error?.stack || '',
+    materializationContext: {
+      operation: message?.bundle?.reset_authority ? 'authority-reset'
+        : message?.bundle?.reconcile_commands ? 'command-reconciliation'
+        : message?.bundle?.rebuild_summaries ? 'summary-rebuild' : 'bundle-apply',
+      protocolVersion: message?.bundle?.protocol_version || null,
+      mode: message?.bundle?.mode || null,
+      changeCount: message?.bundle?.changes?.length || 0,
+      hasMore: message?.bundle?.has_more === true,
+    },
   };
 }
 
@@ -46,7 +55,7 @@ self.addEventListener('message', (event) => {
         id: message.id,
         workspaceKey: message.workspaceKey,
         ok: false,
-        error: serializeError(error),
+        error: serializeError(error, message),
       });
     }
   });

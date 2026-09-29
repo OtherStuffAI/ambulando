@@ -644,12 +644,16 @@ export function createShellState(options = {}) {
     },
 
     async ensureWorkspaceSessionKey() {
-      const workspaceOwnerNpub = isTowerPgBackendMode()
-        ? (this.currentWorkspace?.workspaceServiceNpub || '')
-        : (this.workspaceOwnerNpub
-          || this.currentWorkspaceOwnerNpub
-          || this.ownerNpub
-          || '');
+      // PG uses actor signing; legacy delegation registration cannot verify
+      // PG membership. Clear a key left by a previous legacy activation.
+      if (isTowerPgBackendMode()) {
+        clearActiveWorkspaceKey();
+        return null;
+      }
+      const workspaceOwnerNpub = this.workspaceOwnerNpub
+        || this.currentWorkspaceOwnerNpub
+        || this.ownerNpub
+        || '';
       const userNpub = this.session?.npub || '';
       if (!workspaceOwnerNpub || !userNpub || !this.backendUrl) return null;
 

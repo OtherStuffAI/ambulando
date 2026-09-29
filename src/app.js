@@ -305,6 +305,7 @@ import {
 } from './preferred-write-group.js';
 import {
   bootstrapWorkspaceSessionKey,
+  clearActiveWorkspaceKey,
   getActiveWorkspaceKeyNpub,
   markCachedWorkspaceKeyRegistered,
   markWorkspaceKeyRegistered,
@@ -2388,12 +2389,16 @@ export function initApp() {
     },
 
     async ensureWorkspaceSessionKey() {
-      const workspaceOwnerNpub = isTowerPgBackendMode()
-        ? (this.currentWorkspace?.workspaceServiceNpub || '')
-        : (this.workspaceOwnerNpub
-          || this.currentWorkspaceOwnerNpub
-          || this.ownerNpub
-          || '');
+      // PG authorizes the real actor. Its membership is not the legacy v4
+      // workspace directory used by /user/workspace-keys registration.
+      if (isTowerPgBackendMode()) {
+        clearActiveWorkspaceKey();
+        return null;
+      }
+      const workspaceOwnerNpub = this.workspaceOwnerNpub
+        || this.currentWorkspaceOwnerNpub
+        || this.ownerNpub
+        || '';
       const userNpub = this.session?.npub || '';
       if (!workspaceOwnerNpub || !userNpub || !this.backendUrl) return null;
 

@@ -62,3 +62,16 @@ it('keeps native Tiptap heading/list formatting and exact text after rich and Ma
     element.remove();
   }
 });
+
+it('registers one link extension with Flight Deck link behavior', async () => {
+  const { Editor } = await import('@tiptap/core');
+  const { createFlightDeckTiptapExtensions } = await import('../src/docs/editor/prosemirror-flightdeck-schema.js');
+  const editor = new Editor({ element: document.createElement('div'), extensions: createFlightDeckTiptapExtensions() });
+  try {
+    const links = editor.extensionManager.extensions.filter(extension => extension.name === 'link');
+    expect(links).toHaveLength(1);
+    expect(links[0].options).toMatchObject({ openOnClick: false, autolink: true, linkOnPaste: true });
+    editor.commands.setContent('<p><a href="https://example.com">linked</a></p>');
+    expect(editor.getJSON().content[0].content[0].marks).toContainEqual(expect.objectContaining({ type: 'link', attrs: expect.objectContaining({ href: 'https://example.com' }) }));
+  } finally { editor.destroy(); }
+});

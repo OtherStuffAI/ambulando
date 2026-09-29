@@ -158,6 +158,7 @@ export const FlightDeckUploadPlaceholder = Node.create({
 export function createFlightDeckTiptapExtensions(options = {}) {
   return [
     StarterKit.configure({
+      link: false,
       heading: { levels: [1, 2, 3, 4] },
     }),
     Link.configure({

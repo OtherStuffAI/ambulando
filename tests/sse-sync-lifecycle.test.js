@@ -91,6 +91,7 @@ vi.mock('../src/backend-mode.js', () => ({
 vi.mock('../src/logging.js', () => ({
   flightDeckLog: vi.fn(),
   flightDeckTrace: vi.fn(),
+  flightDeckSyncFailure: vi.fn(),
 }));
 
 vi.mock('../src/crypto/workspace-keys.js', () => ({

@@ -15,6 +15,7 @@ import {
   hydrateTowerPgDocumentsAndFiles,
   hydrateTowerPgResponseActivitiesForTarget,
   hydrateTowerPgScopes,
+  hydrateTowerPgReactionTarget,
   hydrateTowerPgTask,
   hydrateTowerPgTasks,
   hydrateTowerPgTaskComments,
@@ -2795,7 +2796,9 @@ describe('PG read hydrator', () => {
       generation: 4, sequence: 1, row_version: 12, lease_health: 'live', lease_expires_at: '2999-01-01T00:00:00Z',
     }] }));
     const replacePgAgentSessionHealthForChannel = vi.fn(async () => 1);
-    const sessions = await hydrateTowerPgAgentSessionHealth(store(), 'channel-1', {
+    const supportedStore = store();
+    supportedStore.currentWorkspace.capabilities = ['pg_agent_session_health'];
+    const sessions = await hydrateTowerPgAgentSessionHealth(supportedStore, 'channel-1', {
       threadId: 'thread-1', getTowerPgAgentSessionHealth, replacePgAgentSessionHealthForChannel,
     });
     expect(sessions).toEqual([expect.objectContaining({ session_id: 'session-1', status: 'online', row_version: 12 })]);
@@ -3224,4 +3227,58 @@ describe('PG read hydrator', () => {
     expect(target.applyScopes).not.toHaveBeenCalled();
     expect(target.applyChannels).not.toHaveBeenCalled();
   });
+});
+
+it('skips unadvertised session health and enables it after a descriptor refresh', async () => {
+  const target = store();
+  target.currentWorkspace.capabilities = ['pg_chat'];
+  const read = vi.fn(async () => ({ agent_sessions: [] }));
+  const replace = vi.fn(async () => 0);
+  const deps = { getTowerPgAgentSessionHealth: read, replacePgAgentSessionHealthForChannel: replace };
+  await hydrateTowerPgAgentSessionHealth(target, 'channel-1', deps);
+  await hydrateTowerPgAgentSessionHealth(target, 'channel-2', deps);
+  expect(read).not.toHaveBeenCalled();
+  expect(replace).not.toHaveBeenCalled();
+  target.currentWorkspace.capabilities.push('pg_agent_session_health');
+  await hydrateTowerPgAgentSessionHealth(target, 'channel-1', deps);
+  expect(read).toHaveBeenCalledOnce();
+});
+
+it('bounds stale reaction SSE reads and recovers a restored target after expiry', async () => {
+  const target = store();
+  const missing = Object.assign(new Error('missing channel'), { status: 400,
+    responseText: JSON.stringify({ code: 'resource-not-found', required_permission: 'channel.read' }) });
+  const read = vi.fn().mockRejectedValueOnce(missing).mockResolvedValue({ reactions: [] });
+  const replace = vi.fn(async () => 0);
+  const deps = { getTowerPgReactions: read, replacePgReactionsForTarget: replace };
+  const now = vi.spyOn(Date, 'now').mockReturnValue(1000);
+  try {
+    await hydrateTowerPgReactionTarget(target, 'message', 'stale', deps);
+    await hydrateTowerPgReactionTarget(target, 'message', 'stale', deps);
+    expect(read).toHaveBeenCalledOnce();
+    expect(replace).toHaveBeenCalledOnce();
+    now.mockReturnValue(31_001);
+    await hydrateTowerPgReactionTarget(target, 'message', 'stale', deps);
+    expect(read).toHaveBeenCalledTimes(2);
+  } finally { now.mockRestore(); }
+});
+
+it.each([
+  [403, { code: 'permission_denied', reason: 'resource-not-found', required_permission: 'channel.read' }],
+  [400, { code: 'resource-not-found', required_permission: 'task.read' }],
+  [400, { code: 'invalid_request', required_permission: 'channel.read' }],
+])('preserves a genuine reaction error %s %j', async (status, payload) => {
+  const error = Object.assign(new Error('reaction read failed'), { status, responseText: JSON.stringify(payload) });
+  const replace = vi.fn();
+  await expect(hydrateTowerPgReactionTarget(store(), 'message', 'target', {
+    getTowerPgReactions: async () => { throw error; }, replacePgReactionsForTarget: replace,
+  })).rejects.toBe(error);
+  expect(replace).not.toHaveBeenCalled();
+});
+
+it('uses the sync request owner for SSE message reads and never acknowledges deferred hydration', async () => {
+  const target = store({ requestTowerSyncFamily: vi.fn(async () => ({ deferred: true })) });
+  await expect(hydrateTowerPgEventUpdates(target, [{ entity_type: 'message', entity_id: 'message-1', channel_id: 'channel-1', payload: {} }]))
+    .rejects.toMatchObject({ code: 'pg_read_authority_changed' });
+  expect(target.requestTowerSyncFamily).toHaveBeenCalledWith('channel-messages', 'channel-1', { force: true });
 });

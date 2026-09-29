@@ -11,6 +11,7 @@ function deserializeWorkerError(value) {
   const error = new Error(value?.message || 'Tower PG materialisation worker failed');
   if (value?.name) error.name = value.name;
   if (value?.stack) error.stack = value.stack;
+  if (value?.materializationContext) error.materializationContext = value.materializationContext;
   return error;
 }
 

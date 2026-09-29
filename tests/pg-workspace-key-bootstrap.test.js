@@ -56,7 +56,7 @@ describe('PG workspace signer bootstrap', () => {
     expect(registerWorkspaceKeyMock).not.toHaveBeenCalled();
   });
 
-  it('registers the workspace service key before PG storage reads can render', async () => {
+  it('uses actor signing without registering PG identity in the legacy workspace directory', async () => {
     const workspaceKey = {
       npub: 'npub1delegatedworkspacekey',
       workspaceServiceNpub: 'npub1workspaceservice',
@@ -81,17 +81,12 @@ describe('PG workspace signer bootstrap', () => {
     shell.backendUrl = 'https://workspace-tower.example';
     shell.session = { npub: 'npub1operator-a', method: 'extension' };
 
-    await expect(shell.ensureWorkspaceSessionKey()).resolves.toBe(workspaceKey);
-
-    expect(bootstrapWorkspaceSessionKeyMock).toHaveBeenCalledWith(expect.objectContaining({
-      workspaceOwnerNpub: 'npub1workspaceservice',
-      userNpub: 'npub1operator-a',
-    }));
-    expect(registerWorkspaceKeyMock).toHaveBeenCalledWith({
-      workspace_owner_npub: 'npub1workspaceservice',
-      ws_key_npub: 'npub1delegatedworkspacekey',
-    });
-    expect(markWorkspaceKeyRegisteredMock).toHaveBeenCalled();
-    expect(markCachedWorkspaceKeyRegisteredMock).toHaveBeenCalledWith('npub1workspaceservice');
+    await expect(shell.ensureWorkspaceSessionKey()).resolves.toBeNull();
+    const { clearActiveWorkspaceKey } = await import('../src/crypto/workspace-keys.js');
+    expect(clearActiveWorkspaceKey).toHaveBeenCalledOnce();
+    expect(bootstrapWorkspaceSessionKeyMock).not.toHaveBeenCalled();
+    expect(registerWorkspaceKeyMock).not.toHaveBeenCalled();
+    expect(markWorkspaceKeyRegisteredMock).not.toHaveBeenCalled();
+    expect(markCachedWorkspaceKeyRegisteredMock).not.toHaveBeenCalled();
   });
 });
