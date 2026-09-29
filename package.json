@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "start": "sh -c 'bunx vite preview --host 0.0.0.0 --port ${PORT:-8093} --strictPort'",
+    "start": "bun run server/start.js",
     "schemas:bundle": "node scripts/generate-flightdeck-schema-bundle.mjs",
     "build": "node scripts/generate-flightdeck-schema-bundle.mjs && node scripts/build-flightdeck.mjs",
     "preview": "vite preview",

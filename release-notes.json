@@ -2222,6 +2222,12 @@
       "notes": [
         "Show paragraph breaks in task updates that arrived with escaped newlines, in both activity views. The comment composer now explains Markdown and fenced code boxes."
       ]
+    },
+    {
+      "buildNumber": 2109,
+      "label": "Hosted signup site preparation",
+      "notes": [],
+      "noUserVisibleChanges": true
     }
   ]
 }
