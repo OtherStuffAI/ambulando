@@ -67,6 +67,18 @@ describe('hosted signup attestation', () => {
     expect(() => createHostedSignupHandler({ towerUrl: 'https://tower.example/other', siteOrigin: origin, sign: () => null })).toThrow();
   });
 
+  it('accepts the public host when TLS terminates before the Bun server', async () => {
+    const { handler, calls } = fixture();
+    const user = proof();
+    const proxied = new Request('http://flightdeck.example/api/hosted/workspaces', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', origin, authorization: user.header },
+      body,
+    });
+    expect((await handler(proxied)).status).toBe(201);
+    expect(calls).toHaveLength(1);
+  });
+
   it('fails closed for absent or mismatched site identity', () => {
     expect(() => createSiteSigner('', SITE_NPUB)).toThrow();
     expect(() => createSiteSigner(nip19.nsecEncode(siteKey), SITE_NPUB)).toThrow();
