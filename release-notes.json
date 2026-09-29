@@ -2202,6 +2202,19 @@
         "Use actor signing in PG workspaces, retry superseded startup reads, and skip unadvertised session-health requests. Handle stale reaction targets without masking permission errors and remove duplicate editor links.",
         "Keep transaction failures visible with worker diagnostics while bounding repeated console errors."
       ]
+    },
+    {
+      "buildNumber": 2105,
+      "label": "Show existing Tower workspaces",
+      "notes": [
+        "Show every returned workspace as a separate selectable row when several share an owner. Report fetched, mapped, and visible row counts in the connection diagnostic."
+      ]
+    },
+    {
+      "buildNumber": 2106,
+      "label": "Rebuild workspace picker",
+      "notes": [],
+      "noUserVisibleChanges": true
     }
   ]
 }

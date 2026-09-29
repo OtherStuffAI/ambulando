@@ -706,13 +706,13 @@
                   <div class="connect-copy">
                     <p>Select an existing workspace or create a new one.</p>
                   </div>
-                  <div class="connect-workspace-list">
+                  <div class="connect-workspace-list" data-testid="connect-pg-workspace-list">
                     <button type="button" class="connect-workspace-row active">
                       <span class="connect-workspace-name">Create new workspace</span>
                       <span class="connect-workspace-meta">Name it, then bootstrap scopes and channels.</span>
                     </button>
-                    <template x-for="ws in $store.chat.connectWorkspaces" :key="ws.workspace_owner_npub || ws.workspaceOwnerNpub">
-                      <button type="button" class="connect-workspace-row" @click="$store.chat.connectSelectWorkspace(ws)" x-show="!$store.chat.connectWorkspacesBusy">
+                    <template x-for="ws in $store.chat.connectWorkspaces" :key="ws.workspaceId || ws.workspace_id || ws.identity?.workspace_id || ws.workspace_owner_npub || ws.workspaceOwnerNpub">
+                      <button type="button" class="connect-workspace-row" data-testid="connect-pg-workspace-row" @click="$store.chat.connectSelectWorkspace(ws)" x-show="!$store.chat.connectWorkspacesBusy">
                         <span class="connect-workspace-name" x-text="ws.name || 'Untitled workspace'"></span>
                         <span class="connect-workspace-meta" x-text="ws.description || $store.chat.getShortNpub(ws.workspace_owner_npub || ws.workspaceOwnerNpub || '')"></span>
                       </button>
@@ -845,7 +845,7 @@
                 </div>
                 <p class="connect-workspace-loading" x-show="$store.chat.connectWorkspacesBusy">Loading workspaces...</p>
                 <div class="connect-workspace-list" x-show="$store.chat.connectWorkspaces.length > 0 && !$store.chat.connectWorkspacesBusy">
-                  <template x-for="ws in $store.chat.connectWorkspaces" :key="ws.workspace_owner_npub || ws.workspaceOwnerNpub">
+                  <template x-for="ws in $store.chat.connectWorkspaces" :key="ws.workspaceId || ws.workspace_id || ws.identity?.workspace_id || ws.workspace_owner_npub || ws.workspaceOwnerNpub">
                     <button type="button" class="connect-workspace-row" @click="$store.chat.connectSelectWorkspace(ws)">
                       <span class="connect-workspace-name" x-text="ws.name || 'Untitled workspace'"></span>
                       <span class="connect-workspace-meta" x-text="ws.description || $store.chat.getShortNpub(ws.workspace_owner_npub || ws.workspaceOwnerNpub || '')"></span>

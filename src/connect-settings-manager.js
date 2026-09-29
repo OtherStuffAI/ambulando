@@ -120,7 +120,7 @@ function shortDiagnosticNpub(value) {
   return `${text.slice(0, 10)}...${text.slice(-6)}`;
 }
 
-function buildConnectWorkspaceDiagnostics(store, result, renderedWorkspaces = []) {
+function buildConnectWorkspaceDiagnostics(store, result, mappedWorkspaces = []) {
   const attempts = Array.isArray(result?.towerPgWorkspaceList?.attempts)
     ? result.towerPgWorkspaceList.attempts
     : (result?.towerPgRequest ? [result.towerPgRequest] : []);
@@ -130,7 +130,8 @@ function buildConnectWorkspaceDiagnostics(store, result, renderedWorkspaces = []
     towerServiceNpub: trimText(store?.connectHostServiceNpub),
     attempts,
     responseWorkspaceCount: resultWorkspaces(result).length,
-    renderedWorkspaceCount: Array.isArray(renderedWorkspaces) ? renderedWorkspaces.length : 0,
+    mappedWorkspaceCount: Array.isArray(mappedWorkspaces) ? mappedWorkspaces.length : 0,
+    visibleWorkspaceCount: null,
   };
 }
 
@@ -144,7 +145,8 @@ function buildConnectWorkspaceErrorDiagnostics(store, error) {
     towerServiceNpub: trimText(store?.connectHostServiceNpub),
     attempts,
     responseWorkspaceCount: null,
-    renderedWorkspaceCount: 0,
+    mappedWorkspaceCount: 0,
+    visibleWorkspaceCount: null,
     error: error?.message || String(error || ''),
   };
 }
@@ -1099,7 +1101,8 @@ export const connectSettingsManagerMixin = {
         towerServiceNpub: trimText(this.connectHostServiceNpub),
         attempts: [],
         responseWorkspaceCount: null,
-        renderedWorkspaceCount: 0,
+        mappedWorkspaceCount: 0,
+        visibleWorkspaceCount: null,
         error: 'Sign in first',
       };
       return;
@@ -1113,7 +1116,7 @@ export const connectSettingsManagerMixin = {
           baseUrl: this.connectHostUrl || this.backendUrl,
           appNpub: FLIGHT_DECK_PG_APP_NPUB,
         });
-        const renderedWorkspaces = (result.workspaces || []).map((entry) => ({
+        const mappedWorkspaces = (result.workspaces || []).map((entry) => ({
           ...entry,
           directHttpsUrl: normalizeBackendUrl(entry.tower_base_url || this.connectHostUrl || this.backendUrl),
           serviceNpub: entry.identity?.tower_service_npub || this.connectHostServiceNpub,
@@ -1125,8 +1128,8 @@ export const connectSettingsManagerMixin = {
           description: entry.description,
           pgBackendMode: true,
         }));
-        this.connectWorkspaces = renderedWorkspaces;
-        this.connectWorkspaceRequestDiagnostics = buildConnectWorkspaceDiagnostics(this, result, renderedWorkspaces);
+        this.connectWorkspaces = mappedWorkspaces;
+        this.connectWorkspaceRequestDiagnostics = buildConnectWorkspaceDiagnostics(this, result, mappedWorkspaces);
         return;
       }
       const result = await getWorkspaces(this.session.npub);
@@ -1142,7 +1145,20 @@ export const connectSettingsManagerMixin = {
       this.connectWorkspaces = [];
     } finally {
       this.connectWorkspacesBusy = false;
+      if (typeof window !== 'undefined' && window.Alpine?.nextTick) {
+        window.Alpine.nextTick(() => this.updateConnectWorkspaceVisibleRowCount());
+      }
     }
+  },
+
+  updateConnectWorkspaceVisibleRowCount() {
+    if (!this.connectWorkspaceRequestDiagnostics || typeof document === 'undefined') return;
+    const rows = document.querySelectorAll('[data-testid="connect-pg-workspace-row"]');
+    const count = [...rows].filter((row) => row.getClientRects().length > 0).length;
+    this.connectWorkspaceRequestDiagnostics = {
+      ...this.connectWorkspaceRequestDiagnostics,
+      visibleWorkspaceCount: count,
+    };
   },
 
   async connectSelectWorkspace(workspaceEntry) {
@@ -1460,11 +1476,17 @@ export const connectSettingsManagerMixin = {
       const countText = Number.isFinite(count) ? `, ${count} returned` : '';
       return `${label} ${attempt.method} ${attempt.url} (${filter}, signer ${shortDiagnosticNpub(attempt.signerNpub)}, ${attempt.transportMode || 'https'}, ${status}${countText})`;
     });
-    const rendered = Number.isFinite(diagnostics.renderedWorkspaceCount)
-      ? `; rendered ${diagnostics.renderedWorkspaceCount}`
+    const fetched = Number.isFinite(diagnostics.responseWorkspaceCount)
+      ? `; fetched ${diagnostics.responseWorkspaceCount}`
       : '';
+    const mapped = Number.isFinite(diagnostics.mappedWorkspaceCount)
+      ? `; mapped ${diagnostics.mappedWorkspaceCount}`
+      : '';
+    const visible = Number.isFinite(diagnostics.visibleWorkspaceCount)
+      ? `; visible rows ${diagnostics.visibleWorkspaceCount}`
+      : '; visible rows pending';
     const error = diagnostics.error ? `; ${diagnostics.error}` : '';
-    return `${segments.join('; ')}${rendered}${error}`;
+    return `${segments.join('; ')}${fetched}${mapped}${visible}${error}`;
   },
 
   // --- known hosts ---
