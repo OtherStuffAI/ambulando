@@ -24,7 +24,7 @@ function request(header, bytes = body, requestOrigin = origin) {
 function fixture() {
   const calls = [];
   const sign = (url, hash, id, time) => finalizeEvent({ kind: 27235, created_at: time, content: randomUUID(), tags: [['u', url], ['method', 'POST'], ['payload', hash], ['user_event_id', id]] }, siteKey);
-  const handler = createHostedSignupHandler({ towerUrl: 'https://tower.example/', siteOrigin: origin, sign, siteNpub, now: () => now, fetchImpl: async (...args) => { calls.push(args); return Response.json({ workspace_id: 'ok' }, { status: 201 }); } });
+  const handler = createHostedSignupHandler({ towerUrl: 'https://tower.example/', sign, siteNpub, now: () => now, fetchImpl: async (...args) => { calls.push(args); return Response.json({ workspace_id: 'ok' }, { status: 201 }); } });
   return { calls, handler };
 }
 
@@ -56,15 +56,14 @@ describe('hosted signup attestation', () => {
     expect(calls).toHaveLength(0);
   });
 
-  it('rejects replay, origin mismatch, bad schema, and arbitrary targets', async () => {
+  it('rejects replay, bad schema, and arbitrary targets', async () => {
     const { handler } = fixture();
     const user = proof();
     expect((await handler(request(user.header))).status).toBe(201);
     expect((await handler(request(user.header))).status).toBe(409);
-    expect((await handler(request(proof().header, body, 'https://evil.example'))).status).toBe(403);
     expect((await handler(request(proof().header, Buffer.from('{"extra":1}')))).status).toBe(400);
-    expect(() => createHostedSignupHandler({ towerUrl: 'http://169.254.169.254/', siteOrigin: origin, sign: () => null })).toThrow();
-    expect(() => createHostedSignupHandler({ towerUrl: 'https://tower.example/other', siteOrigin: origin, sign: () => null })).toThrow();
+    expect(() => createHostedSignupHandler({ towerUrl: 'http://169.254.169.254/', sign: () => null })).toThrow();
+    expect(() => createHostedSignupHandler({ towerUrl: 'https://tower.example/other', sign: () => null })).toThrow();
   });
 
   it('accepts the public host when TLS terminates before the Bun server', async () => {
@@ -79,11 +78,11 @@ describe('hosted signup attestation', () => {
     expect(calls).toHaveLength(1);
   });
 
-  it('allows a local HTTP site for a browser smoke test without allowing arbitrary HTTP origins', async () => {
+  it('allows a local HTTP site without site origin configuration', async () => {
     const localOrigin = 'http://127.0.0.1:8093';
     const { calls } = fixture();
     const localHandler = createHostedSignupHandler({
-      towerUrl: 'https://tower.example/', siteOrigin: localOrigin, siteNpub,
+      towerUrl: 'https://tower.example/', siteNpub,
       sign: (url, hash, id, time) => finalizeEvent({ kind: 27235, created_at: time, content: randomUUID(), tags: [['u', url], ['method', 'POST'], ['payload', hash], ['user_event_id', id]] }, siteKey),
       now: () => now,
       fetchImpl: async (...args) => { calls.push(args); return Response.json({ workspace_id: 'ok' }, { status: 201 }); },
@@ -94,7 +93,13 @@ describe('hosted signup attestation', () => {
     });
     expect((await localHandler(localRequest)).status).toBe(201);
     expect(calls).toHaveLength(1);
-    expect(() => createHostedSignupHandler({ towerUrl: 'https://tower.example/', siteOrigin: 'http://flightdeck.example', sign: () => null })).toThrow();
+  });
+
+  it('does not use the browser Origin header as signing authority', async () => {
+    const { handler, calls } = fixture();
+    expect((await handler(request(proof().header, body, 'https://elsewhere.example'))).status).toBe(201);
+    expect((await handler(request(null, body, origin))).status).toBe(401);
+    expect(calls).toHaveLength(1);
   });
 
   it('fails closed for absent or mismatched site identity', () => {

@@ -70,18 +70,13 @@ function validBody(bytes) {
   } catch { return false; }
 }
 
-export function createHostedSignupHandler({ towerUrl, siteOrigin, sign, siteNpub = SITE_NPUB, fetchImpl = fetch, now = () => Math.floor(Date.now() / 1000) }) {
+export function createHostedSignupHandler({ towerUrl, sign, siteNpub = SITE_NPUB, fetchImpl = fetch, now = () => Math.floor(Date.now() / 1000) }) {
   const target = towerSignupUrl(towerUrl);
-  const siteUrl = new URL(siteOrigin);
-  const origin = siteUrl.origin;
-  const loopback = siteUrl.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(siteUrl.hostname);
-  if (siteUrl.protocol !== 'https:' && !loopback) throw new Error('Site origin must use HTTPS or loopback HTTP');
   const recent = new Map();
   return async function hostedSignup(request) {
     const incoming = new URL(request.url);
     if (incoming.pathname !== SIGNUP_PATH || incoming.search) return fail(404, 'not_found');
     if (request.method !== 'POST') return fail(405, 'method_not_allowed');
-    if (incoming.host !== new URL(origin).host || (request.headers.get('origin') && request.headers.get('origin') !== origin)) return fail(403, 'origin_forbidden');
     if (!/^application\/json(?:\s*;\s*charset=utf-8)?$/i.test(request.headers.get('content-type') || '')) return fail(415, 'unsupported_media_type');
     const length = Number(request.headers.get('content-length'));
     if (Number.isFinite(length) && length > MAX_BODY) return fail(413, 'body_too_large');

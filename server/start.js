@@ -5,10 +5,10 @@ import { createHostedSignupHandler, createSiteSigner, SIGNUP_PATH, SITE_NPUB, to
 const dist = resolve(import.meta.dir, '../dist');
 const types = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json; charset=utf-8', '.txt': 'text/plain; charset=utf-8', '.md': 'text/markdown; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.webp': 'image/webp', '.ico': 'image/x-icon', '.woff2': 'font/woff2' };
 let signup = null;
-if (process.env.FLIGHT_DECK_SITE_NSEC && process.env.FLIGHT_DECK_TOWER_PUBLIC_BASE_URL && process.env.FLIGHT_DECK_SITE_ORIGIN) {
+if (process.env.FLIGHT_DECK_SITE_NSEC && process.env.FLIGHT_DECK_TOWER_PUBLIC_BASE_URL) {
   try {
     const sign = createSiteSigner(process.env.FLIGHT_DECK_SITE_NSEC, SITE_NPUB);
-    signup = createHostedSignupHandler({ towerUrl: process.env.FLIGHT_DECK_TOWER_PUBLIC_BASE_URL, siteOrigin: process.env.FLIGHT_DECK_SITE_ORIGIN, sign });
+    signup = createHostedSignupHandler({ towerUrl: process.env.FLIGHT_DECK_TOWER_PUBLIC_BASE_URL, sign });
   } catch {
     // Keep the site online, but never expose or use an invalid signer.
   }
