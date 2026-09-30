@@ -1188,18 +1188,18 @@ describe('PG read hydrator', () => {
     });
   });
 
-  it('hydrates PG scopes through Tower API and overwrites local scope rows', async () => {
+  it('hydrates PG scopes through Tower API without replacing cached scope rows', async () => {
     const target = store();
     const getTowerPgWorkspaceScopes = vi.fn(async () => ({
       scopes: [{ id: 'scope-1', name: 'Wingman Suite', row_version: 1 }],
     }));
-    const replaceScopesForOwner = vi.fn(async () => 1);
+    const upsertPgListedScope = vi.fn(async () => 1);
 
     const rows = await hydrateTowerPgScopes(target, {
       getTowerPgWorkspaceScopes,
       getSyncState: async () => null,
       runWorkspaceSyncTransaction: async callback => callback(),
-      replaceScopesForOwner,
+      upsertPgListedScope,
     });
 
     expect(getTowerPgWorkspaceScopes).toHaveBeenCalledWith('workspace-1', {
@@ -1207,7 +1207,7 @@ describe('PG read hydrator', () => {
       appNpub: 'flightdeck_pg',
       path: '/api/v4/flightdeck-pg/workspaces/workspace-1/scopes',
     });
-    expect(replaceScopesForOwner).toHaveBeenCalledWith('npub1owner', rows);
+    expect(upsertPgListedScope).toHaveBeenCalledWith(rows[0]);
     expect(target.applyScopes).not.toHaveBeenCalled();
     expect(rows[0]).toMatchObject({ record_id: 'scope-1', title: 'Wingman Suite' });
   });
@@ -1236,7 +1236,7 @@ describe('PG read hydrator', () => {
         { id: 'message-2', channel_id: 'channel-1', thread_id: 'thread-1', body: 'Reply one' },
       ],
     }));
-    const replaceChannelsForOwner = vi.fn(async () => 1);
+    const upsertPgListedChannel = vi.fn(async () => 1);
     const replacePgMessagesForChannel = vi.fn(async () => 2);
 
     const rows = await hydrateTowerPgChannels(target, {
@@ -1246,7 +1246,7 @@ describe('PG read hydrator', () => {
       getTowerPgScopeChannels,
       getTowerPgChannelThreads,
       getTowerPgChannelMessages,
-      replaceChannelsForOwner,
+      upsertPgListedChannel,
       replacePgMessagesForChannel,
     });
 
@@ -1254,7 +1254,7 @@ describe('PG read hydrator', () => {
       baseUrl: 'https://tower.example',
       appNpub: 'flightdeck_pg',
     });
-    expect(replaceChannelsForOwner).toHaveBeenCalledWith('npub1owner', rows);
+    expect(upsertPgListedChannel).toHaveBeenCalledWith(rows[0]);
     expect(target.applyChannels).not.toHaveBeenCalled();
     expect(getTowerPgChannelThreads).not.toHaveBeenCalled();
     expect(getTowerPgChannelMessages).not.toHaveBeenCalled();

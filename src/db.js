@@ -643,6 +643,16 @@ export async function upsertChannel(channel) {
   return wsDb().channels.put(sanitizeForStorage(channel));
 }
 
+export async function upsertPgListedChannel(channel) {
+  const db = wsDb();
+  return db.transaction('rw', db.channels, db.pending_writes, async () => {
+    const existing = await db.channels.get(channel.record_id);
+    if (['pending', 'failed'].includes(existing?.sync_status) || existing?.pg_reconciliation_pending
+      || await db.pending_writes.where('record_id').equals(channel.record_id).count()) return existing;
+    return db.channels.put(sanitizeForStorage(channel));
+  });
+}
+
 export async function replaceChannelsForOwner(ownerNpub, channels = []) {
   if (!ownerNpub) return 0;
   const rows = (Array.isArray(channels) ? channels : [])
@@ -2711,6 +2721,16 @@ export async function getRecentScopeChangesSince(sinceIso, options = {}) {
 
 export async function upsertScope(scope) {
   return wsDb().scopes.put(scope);
+}
+
+export async function upsertPgListedScope(scope) {
+  const db = wsDb();
+  return db.transaction('rw', db.scopes, db.pending_writes, async () => {
+    const existing = await db.scopes.get(scope.record_id);
+    if (['pending', 'failed'].includes(existing?.sync_status) || existing?.pg_reconciliation_pending
+      || await db.pending_writes.where('record_id').equals(scope.record_id).count()) return existing;
+    return db.scopes.put(sanitizeForStorage(scope));
+  });
 }
 
 export async function replaceScopesForOwner(ownerNpub, scopes = []) {

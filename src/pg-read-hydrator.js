@@ -78,8 +78,10 @@ import {
   replaceTasksForOwner,
   replaceScopesForOwner,
   upsertChannel,
+  upsertPgListedChannel,
   migrateLegacyAutopilotLaunchers,
   upsertScope,
+  upsertPgListedScope,
   clearResponseActivity,
   upsertAgentActivity,
   upsertAgentSessionHealth,
@@ -2024,7 +2026,7 @@ export async function hydrateTowerPgScopes(store, deps = {}) {
   const context = resolveTowerPgWorkspaceContext(store);
   if (!context.workspaceId || !context.workspaceOwnerNpub || !context.baseUrl) return [];
   const readScopes = deps.getTowerPgWorkspaceScopes || getTowerPgWorkspaceScopes;
-  const replaceScopes = deps.replaceScopesForOwner || replaceScopesForOwner;
+  const putScope = deps.upsertPgListedScope || upsertPgListedScope;
   const authority = await readPgAuthority(store, deps);
   const result = await readScopes(context.workspaceId, {
     baseUrl: context.baseUrl,
@@ -2035,7 +2037,12 @@ export async function hydrateTowerPgScopes(store, deps = {}) {
     .map((scope) => mapPgScopeToLocal(scope, { workspaceOwnerNpub: context.workspaceOwnerNpub }))
     .filter((scope) => scope.record_id);
   assertTowerPgWorkspaceCurrent(store, context);
-  await commitPgRead(store, context, authority, deps, () => replaceScopes(context.workspaceOwnerNpub, scopes));
+  // Typed list reads describe what is visible at request time. Record-delta
+  // owns authoritative retirement; replacing here can erase pending local
+  // creates and race a newer materialized snapshot.
+  await commitPgRead(store, context, authority, deps, async () => {
+    for (const scope of scopes) await putScope(scope);
+  });
   return scopes;
 }
 
@@ -2043,15 +2050,15 @@ export async function hydrateTowerPgChannels(store, deps = {}) {
   const context = resolveTowerPgWorkspaceContext(store);
   if (!context.workspaceId || !context.workspaceOwnerNpub || !context.baseUrl) return [];
   const readChannels = deps.getTowerPgScopeChannels || getTowerPgScopeChannels;
-  const replaceChannels = deps.replaceChannelsForOwner || replaceChannelsForOwner;
+  const putChannel = deps.upsertPgListedChannel || upsertPgListedChannel;
   const authority = await readPgAuthority(store, deps);
 
   // Alpine may still hold an empty/partial scope list after the scope read
   // commits to Dexie. A coalesced refresh may also return only a freshness
   // marker. Neither is an authority boundary for replacing workspace channels.
   // Read the complete authorized scope list and retain the current partition's
-  // channels until every channel read succeeds. An explicit empty list still
-  // reconciles removals; a failed or malformed response does not.
+  // channels until every channel read succeeds. Record-delta reconciles
+  // removals; a typed list can only update rows it actually returned.
   const scopeResult = await (deps.getTowerPgWorkspaceScopes || getTowerPgWorkspaceScopes)(context.workspaceId, {
     baseUrl: context.baseUrl,
     appNpub: context.appNpub,
@@ -2089,7 +2096,7 @@ export async function hydrateTowerPgChannels(store, deps = {}) {
     if (pgAuthorityToken(await readPgAuthority(store, deps, true)) !== pgAuthorityToken(authority)) {
       throw pgReadAuthorityCancellation('Channel authority changed while loading Tower data');
     }
-    await replaceChannels(context.workspaceOwnerNpub, channels);
+    for (const channel of channels) await putChannel(channel);
   });
   return channels;
 }

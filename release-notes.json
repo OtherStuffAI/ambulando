@@ -2157,7 +2157,7 @@
       "buildNumber": 2098,
       "label": "Numbered scope selection",
       "notes": [
-        "Select any of the first ten visible scopes with 1–9 or 0; numbered scope shortcuts follow the current filtered order."
+        "Select any of the first ten visible scopes with 1\u20139 or 0; numbered scope shortcuts follow the current filtered order."
       ]
     },
     {
@@ -2253,6 +2253,13 @@
       "label": "Roomier Deck on phone and laptop",
       "notes": [
         "Keep Inbox, Feed, and Recent channels controls visible while their cards scroll. On phones, the Deck fills the available screen and uses narrower gutters for Hello, WApps, and agents."
+      ]
+    },
+    {
+      "buildNumber": 2115,
+      "label": "Keep local navigation during sync",
+      "notes": [
+        "Scope and channel refreshes keep local pending changes and cached navigation while workspace sync catches up."
       ]
     }
   ]

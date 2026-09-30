@@ -36,6 +36,32 @@ async function observe(run) {
 }
 
 describe('authorized cache continuity', () => {
+  it('keeps cached and pending navigation rows when typed lists omit them', async () => {
+    const before = await counts();
+    await db.scopes.put({ record_id: 'local-scope', owner_npub: 'npub1owner', title: 'Local', sync_status: 'pending' });
+    await db.channels.put({ record_id: 'local-channel', owner_npub: 'npub1owner', scope_id: 'local-scope', title: 'Local', sync_status: 'pending' });
+    await db.pending_writes.add({ record_id: 'local-scope', envelope: {} });
+    await db.pending_writes.add({ record_id: 'local-channel', envelope: {} });
+    const response = { scopes: [], identity: { workspace_id: workspaceId }, next_cursor: null };
+    await hydrateTowerPgScopes(store, { getTowerPgWorkspaceScopes: async () => response });
+    await hydrateTowerPgChannels(store, { getTowerPgWorkspaceScopes: async () => response,
+      getTowerPgScopeChannels: async () => { throw new Error('no scope reads expected'); } });
+    expect(await counts()).toEqual(before.map((count, index) => count + (index < 2 ? 1 : 0)));
+    expect(await db.pending_writes.count()).toBe(2);
+    expect((await db.scopes.get('local-scope')).sync_status).toBe('pending');
+    expect((await db.channels.get('local-channel')).sync_status).toBe('pending');
+    await hydrateTowerPgScopes(store, { getTowerPgWorkspaceScopes: async () => ({
+      scopes: [{ id: 'local-scope', name: 'Stale server title' }], identity: { workspace_id: workspaceId },
+    }) });
+    await hydrateTowerPgChannels(store, { getTowerPgWorkspaceScopes: async () => ({
+      scopes: [{ id: 'local-scope', name: 'Stale server title' }], identity: { workspace_id: workspaceId },
+    }), getTowerPgScopeChannels: async () => ({ channels: [
+      { id: 'local-channel', scope_id: 'local-scope', name: 'Stale server title' },
+    ] }) });
+    expect((await db.scopes.get('local-scope')).title).toBe('Local');
+    expect((await db.channels.get('local-channel')).title).toBe('Local');
+  });
+
   it.each(['startup', 'SSE reconnect', 'poll recovery', 'refresh'])('keeps all three live projections populated during %s snapshot replacement', async transition => {
     if (transition === 'startup') await db.sync_state.delete(recordDeltaCursorKey(store));
     const read = vi.fn();
