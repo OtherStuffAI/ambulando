@@ -100,7 +100,7 @@ describe('Inbox source pagination and complete navigation', () => {
     const find = (root, selector) => root.querySelector(selector)
       || [...root.querySelectorAll('template')].map(t => find(t.content, selector)).find(Boolean);
     const inbox = find(document, '[data-deck-column="inbox"]');
-    expect(inbox.lastElementChild.textContent).toBe('Load older activity');
+    expect(inbox.querySelector('.deck-card-scroll').lastElementChild.textContent).toBe('Load older activity');
     expect(inbox.querySelectorAll('.inbox-load-more')).toHaveLength(1);
     expect(inbox.hasAttribute('@scroll.passive')).toBe(false);
     expect(html).not.toContain('Load older cached activity');

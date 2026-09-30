@@ -1285,6 +1285,10 @@ export const autopilotOverviewManagerMixin = {
     this.deckMobileResizeObserver?.disconnect?.();
     this.deckMobileTrack = track;
     const helloCard = document.querySelector('[data-deck-hello-card]');
+    const helloExtras = [
+      document.querySelector('.flightdeck-summary-daily'),
+      document.querySelector('.workroom-browser'),
+    ].filter(Boolean);
     const markerBelongsToCurrentDeck = Boolean(
       helloCard
       && this.deckMobileHelloMarker?.isConnected
@@ -1295,12 +1299,23 @@ export const autopilotOverviewManagerMixin = {
       this.deckMobileHelloMarker = document.createComment('deck-hello-card');
       helloCard.parentNode?.insertBefore(this.deckMobileHelloMarker, helloCard);
     }
+    const extraMarkers = helloExtras.map((element) => {
+      const marker = document.createComment('deck-hello-extra');
+      element.parentNode?.insertBefore(marker, element);
+      return { element, marker };
+    });
     const applyLayout = () => {
       const mobile = this.deckMobileMediaQuery?.matches === true;
       const marker = this.deckMobileHelloMarker;
       if (mobile && helloCard && helloCard.parentNode !== track) track.insertBefore(helloCard, track.firstElementChild);
       if (!mobile && helloCard && marker?.parentNode && helloCard.parentNode !== marker.parentNode) {
         marker.parentNode.insertBefore(helloCard, marker.nextSibling);
+      }
+      for (const { element, marker: extraMarker } of extraMarkers) {
+        if (mobile && helloCard && element.parentNode !== helloCard) helloCard.appendChild(element);
+        if (!mobile && extraMarker.parentNode && element.parentNode !== extraMarker.parentNode) {
+          extraMarker.parentNode.insertBefore(element, extraMarker.nextSibling);
+        }
       }
       if (mobile) {
         const selectedCard = this.deckMobileEntryResetPending

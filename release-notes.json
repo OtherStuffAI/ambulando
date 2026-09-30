@@ -2247,6 +2247,13 @@
       "label": "Local hosted signup test support",
       "notes": [],
       "noUserVisibleChanges": true
+    },
+    {
+      "buildNumber": 2114,
+      "label": "Roomier Deck on phone and laptop",
+      "notes": [
+        "Keep Inbox, Feed, and Recent channels controls visible while their cards scroll. On phones, the Deck fills the available screen and uses narrower gutters for Hello, WApps, and agents."
+      ]
     }
   ]
 }

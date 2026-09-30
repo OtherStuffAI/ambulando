@@ -65,7 +65,7 @@ describe('WApp publishing UI contract', () => {
     expect(styles).toMatch(/\.deck-right-stack\s*\{[^}]*overflow:\s*visible;/s);
     expect(styles).toMatch(/\.flightdeck-summary-panel-wapp-updates\s*\{[^}]*align-self:\s*start;[^}]*max-height:\s*min\(42dvh, 35rem, calc\(var\(--deck-right-stack-height\) - 12\.9rem\)\);[^}]*overflow:\s*visible;/s);
     expect(styles).toMatch(/\.deck-right-stack > \.flightdeck-summary-panel-wapp-updates\s*\{[^}]*min-height:\s*7\.5rem;/s);
-    expect(styles).toMatch(/\.wapp-updates-body\s*\{[^}]*display:\s*flex;[^}]*flex:\s*0 1 auto;[^}]*flex-direction:\s*column;[^}]*gap:\s*0\.75rem;[^}]*min-height:\s*0;[^}]*padding-top:\s*0\.9rem;[^}]*overflow-y:\s*auto;[^}]*overscroll-behavior-y:\s*contain;/s);
+    expect(styles).toMatch(/\.wapp-updates-body\s*\{[^}]*display:\s*flex;[^}]*flex:\s*1 1 auto;[^}]*flex-direction:\s*column;[^}]*gap:\s*0\.75rem;[^}]*min-height:\s*0;[^}]*padding-top:\s*0\.9rem;[^}]*overflow-y:\s*auto;[^}]*overscroll-behavior-y:\s*contain;/s);
     expect(styles).toMatch(/\.wapp-update-list\s*\{[^}]*gap:\s*0\.6rem;[^}]*margin-top:\s*0;/s);
   });
 

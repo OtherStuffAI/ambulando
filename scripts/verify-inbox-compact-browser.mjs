@@ -35,6 +35,7 @@ Alpine.store('chat', {
  runInboxReadAction(kinds,label) { window.calls.push(['bulk',kinds,label]); },
  visibleAutopilotOverviewInbox: ${JSON.stringify(fixture)},
  renderDeckCardText: text => String(text || '').replaceAll('<', '&lt;'),
+ isLongTaskTitle: () => false, getTaskTitleLengthClass: () => '',
  getAttentionIconSvg: () => '<svg viewBox="0 0 24 24"><path d="M5 12l4 4L19 6"/></svg>',
  formatRelativeTime: () => '2m ago', resolveTaskBoardColumnColor: () => '#28785e',
  shouldOpenDeckCard(event) {${guard}},
@@ -55,7 +56,7 @@ try {
   const url=new URL(route.request().url());
   if(url.pathname==='/probe.js') return route.fulfill({contentType:'text/javascript',body:await readFile(path.join(temporary,'probe.js'))});
   if(url.pathname!=='/') return route.abort();
-  return route.fulfill({contentType:'text/html',body:`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>${css}</style><style>body{display:block}main{width:100%;margin:auto}[x-cloak]{display:none!important}</style></head><body x-data><main><div class="flightdeck-summary-overview"><div class="deck-columns-track" data-deck-ready><section class="flightdeck-summary-panel flightdeck-summary-panel-inbox deck-column" data-deck-column="inbox">${header}${inbox}<div style="height:1200px;flex-shrink:0" aria-hidden="true"></div></section><div class="deck-right-stack"></div></div></div></main><script type="module" src="/probe.js"></script></body></html>`});
+  return route.fulfill({contentType:'text/html',body:`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>${css}</style><style>body{display:block}main{width:100%;margin:auto}[x-cloak]{display:none!important}</style></head><body x-data><main><div class="flightdeck-summary-overview"><div class="deck-columns-track" data-deck-ready><section class="flightdeck-summary-panel flightdeck-summary-panel-inbox deck-column" data-deck-column="inbox" style="height:700px;min-height:0">${header}<div class="deck-card-scroll" aria-label="Inbox cards" tabindex="0">${inbox}<div style="height:1200px;flex-shrink:0" aria-hidden="true"></div></div></section><div class="deck-right-stack"></div></div></div></main><script type="module" src="/probe.js"></script></body></html>`});
  });
  const page=await context.newPage(); const errors=[]; page.on('pageerror',e=>errors.push(e.message));
  for(const width of [320,375,390,430,1440]) {
@@ -93,13 +94,13 @@ try {
   let sticky;
   if(width<768) {
     const heading=page.locator('.inbox-panel-heading');
-    await page.locator('[data-deck-column="inbox"]').evaluate(n=>n.scrollTop=250);
+    await page.locator('[data-deck-column="inbox"] .deck-card-scroll').evaluate(n=>n.scrollTop=250);
     const first=await heading.boundingBox();
-    await page.locator('[data-deck-column="inbox"]').evaluate(n=>n.scrollTop=350);
+    await page.locator('[data-deck-column="inbox"] .deck-card-scroll').evaluate(n=>n.scrollTop=350);
     const second=await heading.boundingBox();
     assert(Math.abs(first.y-second.y)<1,'Header stays sticky while cards scroll');
     sticky={firstY:first.y,secondY:second.y};
-    await page.locator('[data-deck-column="inbox"]').evaluate(n=>n.scrollTop=0);
+    await page.locator('[data-deck-column="inbox"] .deck-card-scroll').evaluate(n=>n.scrollTop=0);
   }
   results.push({width,geometry,toolbar,popover,sticky,screenshot});
   if(source) continue;

@@ -5159,8 +5159,43 @@ button:disabled {
 
 .deck-columns-track > .deck-column,
 .flightdeck-summary-panel-recent {
+  overflow: visible;
+}
+
+.deck-columns-track > .deck-column {
+  overflow: hidden;
+}
+
+.deck-card-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
   overscroll-behavior-y: contain;
+  scrollbar-gutter: stable;
+}
+
+.deck-card-scroll:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.deck-columns-track > .deck-column {
+  padding: 0;
+  border: 0;
+  box-shadow: none;
+}
+
+.deck-columns-track > .deck-column > .autopilot-panel-heading {
+  flex: 0 0 auto;
+  position: relative;
+  z-index: 2;
+  padding: 0.65rem 0.5rem 0.75rem;
+  background: var(--surface);
+}
+
+.deck-columns-track > .deck-column > .deck-card-scroll,
+.deck-columns-track > .deck-column > .wapp-updates-body {
+  padding: 0 0.5rem 0.5rem;
 }
 
 .deck-right-stack {
@@ -5211,7 +5246,7 @@ button:disabled {
 
 .wapp-updates-body {
   display: flex;
-  flex: 0 1 auto;
+  flex: 1 1 auto;
   flex-direction: column;
   gap: 0.75rem;
   min-height: 0;
@@ -24075,6 +24110,65 @@ html.wingman-iphone-webview .chat-channel-tab-scroll * {
   .flightdeck-summary-panel-inbox .flightdeck-summary-card-task.task-title-long .attention-card-meta {
     grid-column: 2;
     justify-content: flex-start;
+  }
+}
+
+/* The Deck owns the remaining phone viewport; only each card body scrolls. */
+@media (max-width: 720px) {
+  .content-scroll-area-deck {
+    overflow: hidden;
+    overscroll-behavior: none;
+    padding-bottom: calc(var(--mobile-section-switcher-height) + env(safe-area-inset-bottom));
+  }
+  .status-section-deck {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+    padding: 0;
+    overflow: hidden;
+  }
+  .flightdeck-summary-overview-deck {
+    flex: 1 1 auto;
+    min-height: 0;
+    width: 100%;
+    max-width: none;
+    gap: 0;
+    padding: 0;
+    overflow: hidden;
+  }
+  .flightdeck-summary-overview-deck > .deck-columns-track {
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+  .flightdeck-summary-overview-deck .deck-columns-track > .deck-column,
+  .flightdeck-summary-overview-deck .deck-columns-track > .deck-hello-card,
+  .flightdeck-summary-overview-deck .deck-right-stack > .deck-column {
+    height: 100%;
+    min-height: 0;
+  }
+  .flightdeck-summary-overview-deck .deck-columns-track > .deck-hello-card {
+    padding: 0.75rem;
+  }
+  .flightdeck-summary-overview-deck .deck-hello-card .home-launcher-cluster {
+    width: 100%;
+  }
+  .flightdeck-summary-overview-deck .deck-right-stack > .flightdeck-summary-panel-wapp-updates {
+    align-self: stretch;
+    max-height: none;
+  }
+  .flightdeck-summary-overview-deck .deck-mobile-pagination {
+    flex: 0 0 auto;
+    min-height: 1.5rem;
+    padding-bottom: 0;
+  }
+  .flightdeck-summary-overview-deck .deck-columns-track > .deck-column > .autopilot-panel-heading {
+    margin: 0;
+    padding: 0.5rem;
+  }
+  .flightdeck-summary-overview-deck .deck-columns-track > .deck-column > .deck-card-scroll,
+  .flightdeck-summary-overview-deck .deck-columns-track > .deck-column > .wapp-updates-body {
+    padding: 0 0.5rem 0.5rem;
   }
 }
 

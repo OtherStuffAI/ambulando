@@ -1748,10 +1748,10 @@
             </nav>
           </div>
 
-        <div class="content-scroll-area">
+        <div class="content-scroll-area" :class="{ 'content-scroll-area-deck': $store.chat.navSection === 'status' && $store.chat.deckInboxEnabled }">
         <p class="auth-error" role="alert" x-show="$store.chat.workspaceSelectionError" x-text="$store.chat.workspaceSelectionError" x-cloak></p>
         <template x-if="$store.chat.navSection === 'status'">
-          <div class="status-section">
+          <div class="status-section" :class="{ 'status-section-deck': $store.chat.deckInboxEnabled }">
           <div class="pg-work-context-bar" x-show="false" x-cloak>
             <div class="chat-channel-header">
               <div class="chat-channel-tab-scroll" role="tablist" aria-label="Workspace channels">
@@ -1928,7 +1928,7 @@
             </div>
           </section>
 
-          <section class="flightdeck-summary-overview" data-testid="flightdeck-summary-overview">
+          <section class="flightdeck-summary-overview" :class="{ 'flightdeck-summary-overview-deck': $store.chat.deckInboxEnabled }" data-testid="flightdeck-summary-overview">
             <div class="flightdeck-summary-header deck-hello-card" data-deck-column="hello-links" data-deck-hello-card role="region" aria-label="Hello and Links">
               <div>
                 <h2 x-text="$store.chat.dashboardGreetingText"></h2>
@@ -2146,6 +2146,7 @@
                     </div>
                 </div>
               </div>
+              <div class="deck-card-scroll" aria-label="Inbox cards" tabindex="0">
               <p class="inbox-read-notice" x-show="$store.chat.inboxReadNotice" x-cloak x-text="$store.chat.inboxReadNotice" role="status" aria-live="polite"></p>
               <div class="attention-card-list flightdeck-summary-card-list" x-show="$store.chat.visibleAutopilotOverviewInbox.length > 0">
                 <template x-for="item in $store.chat.visibleAutopilotOverviewInbox" :key="`${item.inboxKind}:${item.id || item.recordId || item.object_id}`">
@@ -2177,6 +2178,7 @@
               </div>
               <p class="settings-field-help inbox-no-results" x-show="$store.chat.filteredAutopilotOverviewInbox.length === 0" role="status" x-text="$store.chat.inboxActivityLoading ? 'Loading activity…' : ($store.chat.hasMoreAutopilotOverviewInbox ? 'No matches in this page. Load older activity to keep looking.' : ($store.chat.deckInboxSearchQuery.trim() ? 'No Inbox cards match your search.' : 'No matching activity.'))"></p>
               <button type="button" class="inbox-load-more" :disabled="$store.chat.inboxActivityLoading" x-show="$store.chat.hasMoreAutopilotOverviewInbox" x-cloak @click="$store.chat.revealMoreDeckInbox()" aria-label="Load 50 more Inbox cards or older activity">Load older activity</button>
+              </div>
             </section>
 
             <div class="deck-right-stack" data-testid="deck-right-stack">
@@ -2274,6 +2276,7 @@
                 <div><h3>Recent channels</h3></div>
                 <span class="attention-card-kicker">Latest activity</span>
               </div>
+              <div class="deck-card-scroll" aria-label="Recent channels" tabindex="0">
               <div class="deck-recent-channel-list" x-show="$store.chat.deckRecentChannels.length > 0">
                 <template x-for="thread in $store.chat.deckRecentChannels" :key="thread.channelId">
                   <button type="button" class="deck-recent-channel-row" @click="$store.chat.openDeckRecentChannel(thread)" :aria-label="`Open ${thread.channelLabel} in Chat at ${thread.title}`">
@@ -2287,6 +2290,7 @@
                 </template>
               </div>
               <p class="settings-field-help" x-show="$store.chat.deckRecentChannels.length === 0">No recent channel activity.</p>
+              </div>
             </section>
             </div>
             </div>
