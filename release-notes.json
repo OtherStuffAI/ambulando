@@ -2274,6 +2274,13 @@
       "label": "Validated sync recovery bundle",
       "notes": [],
       "noUserVisibleChanges": true
+    },
+    {
+      "buildNumber": 2120,
+      "label": "Tidy Deck Feed and Recent Channels",
+      "notes": [
+        "Feed and Recent Channels use more of the available width, with fixed opaque headings and independently scrolling lists on phone and desktop."
+      ]
     }
   ]
 }

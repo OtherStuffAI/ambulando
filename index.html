@@ -2220,7 +2220,7 @@
                   </div>
                 </div>
               </div>
-              <div class="wapp-updates-body">
+              <div class="wapp-updates-body deck-card-scroll" aria-label="Feed" tabindex="0">
                 <p class="error-text" x-show="$store.chat.wappActivityError" x-text="$store.chat.wappActivityError"></p>
                 <div class="wapp-update-list" x-show="$store.chat.filteredWappActivityItems.length > 0">
                   <template x-for="item in $store.chat.filteredWappActivityItems" :key="item.record_id">

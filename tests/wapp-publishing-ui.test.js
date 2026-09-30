@@ -50,20 +50,20 @@ describe('WApp publishing UI contract', () => {
     expect(styles).toMatch(/@media \(max-width: 720px\)[\s\S]*?\.doc-actions-popover\.wapp-updates-filter-popover\s*\{[^}]*width:\s*min\(22rem, calc\(100vw - 6rem\)\);[^}]*max-width:\s*calc\(100vw - 6rem\);/s);
   });
 
-  it('content-sizes empty and short feeds, then scrolls only the capped feed body', () => {
+  it('bounds the stacked feed track and scrolls only the feed body', () => {
     const updates = html.slice(html.indexOf('data-testid="deck-wapp-updates"'), html.indexOf('data-testid="deck-recent-channels"'));
-    const body = updates.slice(updates.indexOf('class="wapp-updates-body"'));
+    const body = updates.slice(updates.indexOf('class="wapp-updates-body deck-card-scroll"'));
 
-    expect(updates.indexOf('class="autopilot-panel-heading wapp-updates-heading"')).toBeLessThan(updates.indexOf('class="wapp-updates-body"'));
+    expect(updates.indexOf('class="autopilot-panel-heading wapp-updates-heading"')).toBeLessThan(updates.indexOf('class="wapp-updates-body deck-card-scroll"'));
     expect(body).toContain('x-show="$store.chat.wappActivityError"');
     expect(body).toContain('x-show="$store.chat.filteredWappActivityItems.length > 0"');
     expect(body).toContain('x-show="!$store.chat.wappActivityBootstrapping && $store.chat.filteredWappActivityItems.length === 0"');
     expect(body).toContain('x-show="$store.chat.wappActivityBootstrapping && $store.chat.filteredWappActivityItems.length === 0"');
     expect(body).toContain('x-show="$store.chat.wappActivityMutes.length > 0"');
-    expect(styles).toMatch(/\.deck-right-stack\s*\{[^}]*grid-template-rows:\s*auto minmax\(12rem, 1fr\);/s);
+    expect(styles).toMatch(/\.deck-right-stack\s*\{[^}]*grid-template-rows:\s*minmax\(7\.5rem, min\(42dvh, 35rem, calc\(var\(--deck-right-stack-height\) - 12\.9rem\)\)\) minmax\(12rem, 1fr\);/s);
     expect(styles).toMatch(/\.deck-right-stack\s*\{[^}]*--deck-right-stack-height:\s*max\(min\(70dvh, 58rem\), 30rem\);/s);
     expect(styles).toMatch(/\.deck-right-stack\s*\{[^}]*overflow:\s*visible;/s);
-    expect(styles).toMatch(/\.flightdeck-summary-panel-wapp-updates\s*\{[^}]*align-self:\s*start;[^}]*max-height:\s*min\(42dvh, 35rem, calc\(var\(--deck-right-stack-height\) - 12\.9rem\)\);[^}]*overflow:\s*visible;/s);
+    expect(styles).toMatch(/\.flightdeck-summary-panel-wapp-updates\s*\{[^}]*align-self:\s*stretch;[^}]*max-height:\s*min\(42dvh, 35rem, calc\(var\(--deck-right-stack-height\) - 12\.9rem\)\);[^}]*overflow:\s*visible;/s);
     expect(styles).toMatch(/\.deck-right-stack > \.flightdeck-summary-panel-wapp-updates\s*\{[^}]*min-height:\s*7\.5rem;/s);
     expect(styles).toMatch(/\.wapp-updates-body\s*\{[^}]*display:\s*flex;[^}]*flex:\s*1 1 auto;[^}]*flex-direction:\s*column;[^}]*gap:\s*0\.75rem;[^}]*min-height:\s*0;[^}]*padding-top:\s*0\.9rem;[^}]*overflow-y:\s*auto;[^}]*overscroll-behavior-y:\s*contain;/s);
     expect(styles).toMatch(/\.wapp-update-list\s*\{[^}]*gap:\s*0\.6rem;[^}]*margin-top:\s*0;/s);

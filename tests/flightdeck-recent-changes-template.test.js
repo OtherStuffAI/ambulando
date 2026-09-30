@@ -114,7 +114,7 @@ describe('flight deck summary template', () => {
     expect(track).toContain('data-deck-column="inbox" data-testid="flightdeck-summary-inbox"');
     expect(rightStack.indexOf('data-deck-column="wapp-updates"')).toBeLessThan(rightStack.indexOf('data-deck-column="recent"'));
     expect(styles).toMatch(/\.deck-columns-track\s*\{[^}]*display:\s*grid;[^}]*grid-template-columns:\s*minmax\(0, 1\.7fr\) minmax\(20rem, 1fr\);/s);
-    expect(styles).toMatch(/\.deck-right-stack\s*\{[^}]*display:\s*grid;[^}]*grid-template-rows:\s*auto minmax\(12rem, 1fr\);[^}]*overflow:\s*visible;/s);
+    expect(styles).toMatch(/\.deck-right-stack\s*\{[^}]*display:\s*grid;[^}]*grid-template-rows:\s*minmax\(7\.5rem, min\(42dvh, 35rem, calc\(var\(--deck-right-stack-height\) - 12\.9rem\)\)\) minmax\(12rem, 1fr\);[^}]*overflow:\s*visible;/s);
     expect(styles).toMatch(/\.deck-right-stack > \.deck-column\s*\{[^}]*min-height:\s*0;/s);
   });
 
