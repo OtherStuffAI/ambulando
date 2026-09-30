@@ -1820,7 +1820,7 @@ export async function hydrateTowerPgSyncBundle(store, bundle = {}, deps = {}) {
 
 async function syncTowerPgRecordWorkspace(store, options, deps) {
   const context = resolveTowerPgWorkspaceContext(store);
-  const { recordDeltaCursorKey } = await import('./pg-record-delta.js');
+  const { recordDeltaCursorKey, PG_RECORD_DELTA_FAMILIES } = await import('./pg-record-delta.js');
   assertTowerPgWorkspaceCurrent(store, context);
   const read = deps.getTowerPgRecordSync || getTowerPgRecordSync;
   const state = await (deps.getSyncState || getSyncState)(recordDeltaCursorKey(store));
@@ -1836,7 +1836,7 @@ async function syncTowerPgRecordWorkspace(store, options, deps) {
   // while retaining canonical versions. A delta replay cannot restore those
   // missing views (equal canonical versions are skipped). Recover once through
   // a fresh authorized snapshot, preserving all current views until handover.
-  if (state?.snapshotComplete && !Object.hasOwn(state, 'snapshotReconciliationPending')) {
+  if (state?.staging || state?.snapshotComplete && !Object.hasOwn(state, 'snapshotReconciliationPending')) {
     assertTowerPgWorkspaceCurrent(store, context);
     const reset = await materialize(store, { protocol_version: 1, reset_authority: true,
       local_apply_options: { preserveViews: true, expectedCursor: cursor, expectedGeneration: localGeneration } }, deps);
@@ -1844,6 +1844,17 @@ async function syncTowerPgRecordWorkspace(store, options, deps) {
     authorityResetting = true;
     cursor = null;
     directoryReady = false;
+  }
+  // Finish an already-authorized handover before asking Tower for another
+  // page. Its committed prefix may otherwise see a different live delta after
+  // reconnect. Retirement checkpoints contain no unapplied wire changes.
+  if (state?.snapshotRetirement) {
+    const result = await materialize(store, { protocol_version: 1, mode: 'delta',
+      families: PG_RECORD_DELTA_FAMILIES, changes: [], has_more: false,
+      next_cursor: state.snapshotRetirement.nextCursor, snapshot_id: null,
+      local_apply_options: { expectedCursor: cursor, expectedGeneration: localGeneration } }, deps);
+    cursor = result.cursor;
+    applied += result.applied;
   }
   // forceSnapshot is a legacy refresh hint. V1 resumes its server-owned cursor;
   // authority/reset responses and the one-time upgrade repair discard download state.
@@ -1906,7 +1917,7 @@ async function syncTowerPgRecordWorkspace(store, options, deps) {
     options.onProgress?.({ stage: 'applying', page: pages, applied });
     assertTowerPgWorkspaceCurrent(store, context);
     if (page.has_more && page.next_cursor === cursor) throw new Error('Tower record sync repeated its cursor');
-    const result = await materialize(store, { ...page, local_apply_options: { expectedCursor: cursor, expectedGeneration: localGeneration, viewBaselineInitialized, stageSnapshot: true } }, deps);
+    const result = await materialize(store, { ...page, local_apply_options: { expectedCursor: cursor, expectedGeneration: localGeneration, viewBaselineInitialized, incrementalSnapshot: true } }, deps);
     applied += result.applied;
     cursor = result.cursor;
     if (!result.hasMore) {
@@ -2013,8 +2024,13 @@ function validatePgRows(result, field, context, { complete = false, cap = 100, c
   return rows;
 }
 
+function tagPgSnapshotRead(row, authority) {
+  return authority?.snapshotReconciliationPending && authority?.generation
+    ? { ...row, pg_delta_generation: authority.generation } : row;
+}
+
 function pgAuthorityToken(state) {
-  return JSON.stringify([state?.cursor || null, state?.localGeneration || 0, Boolean(state?.resetting), Boolean(state?.staging), state?.commandRevision || null]);
+  return JSON.stringify([state?.incrementalSnapshot && state?.snapshotReconciliationPending ? state.generation : state?.cursor || null, state?.localGeneration || 0, Boolean(state?.resetting), Boolean(state?.staging), Boolean(state?.snapshotRetirement), state?.commandRevision || null]);
 }
 
 function pgReadAuthorityCancellation(message, code = 'pg_read_authority_changed') {
@@ -2023,7 +2039,7 @@ function pgReadAuthorityCancellation(message, code = 'pg_read_authority_changed'
 
 async function readPgAuthority(store, deps, allowReset = false) {
   const state = await (deps.getSyncState || getSyncState)(`${towerPgSyncCursorKey(store)}:record-delta-v1`);
-  if (!allowReset && (state?.resetting || state?.staging)) throw pgReadAuthorityCancellation('Workspace authority is resetting', 'pg_read_authority_resetting');
+  if (!allowReset && state?.resetting) throw pgReadAuthorityCancellation('Workspace authority is resetting', 'pg_read_authority_resetting');
   const commands = store._towerSyncService?.instrumentation;
   return { ...state, commandRevision: commands ? [commands.commandsStarted, commands.commandsAcknowledged, commands.commandsFailed] : null };
 }
@@ -2055,7 +2071,7 @@ export async function hydrateTowerPgScopes(store, deps = {}) {
   // owns authoritative retirement; replacing here can erase pending local
   // creates and race a newer materialized snapshot.
   await commitPgRead(store, context, authority, deps, async () => {
-    for (const scope of scopes) await putScope(scope);
+    for (const scope of scopes) await putScope(tagPgSnapshotRead(scope, authority));
   });
   return scopes;
 }
@@ -2110,7 +2126,7 @@ export async function hydrateTowerPgChannels(store, deps = {}) {
     if (pgAuthorityToken(await readPgAuthority(store, deps, true)) !== pgAuthorityToken(authority)) {
       throw pgReadAuthorityCancellation('Channel authority changed while loading Tower data');
     }
-    for (const channel of channels) await putChannel(channel);
+    for (const channel of channels) await putChannel(tagPgSnapshotRead(channel, authority));
   });
   return channels;
 }
@@ -2175,7 +2191,7 @@ export async function hydrateTowerPgChannelMessages(store, channelId, deps = {})
   ));
   const rows = mergePgMessageRowsWithFallbackThreads(normalizedMessageRows, fallbackThreads, sourceMessageIds);
   assertTowerPgWorkspaceCurrent(store, context);
-  await commitPgRead(store, context, authority, deps, () => replaceMessages(targetChannelId, rows));
+  await commitPgRead(store, context, authority, deps, () => replaceMessages(targetChannelId, rows.map(row => tagPgSnapshotRead(row, authority))));
   const tracedMessageIds = rows
     .map((row) => row.record_id)
     .filter((recordId) => store?.flightDeckTimingMessageIds?.has?.(recordId));
@@ -2234,7 +2250,7 @@ export async function readTowerPgThreadHistoryPage(store, channelId, threadId, o
   validatePgRows(page, 'messages', context, { channelId });
   assertTowerPgWorkspaceCurrent(store, context);
   return { thread_history_page: { channelId, thread, messages: page.messages,
-    cursor: options.cursor || null, nextCursor: page?.next_cursor || null, expectedGeneration } };
+    cursor: options.cursor || null, nextCursor: page?.next_cursor || null, expectedGeneration, expectedAuthority: pgAuthorityToken(authorityState) } };
 }
 
 async function materializeThreadHistoryPage(store, page) {
@@ -2246,6 +2262,8 @@ async function materializeThreadHistoryPage(store, page) {
   const key = `thread-history-page:${threadId}`;
   return db.transaction('rw', db.chat_messages, db.pending_writes, db.sync_state, db.pg_record_rows, async () => {
     const authorityState = (await db.sync_state.get(`${towerPgSyncCursorKey(store)}:record-delta-v1`))?.value;
+    if (page.expectedAuthority !== undefined && page.expectedAuthority !== pgAuthorityToken(authorityState))
+      throw new Error('Conversation history authority changed; reopen to retry');
     if (authorityState?.resetting || (page.expectedGeneration !== undefined
       && page.expectedGeneration !== Number(authorityState?.localGeneration || 0))) {
       throw new Error('Conversation history authority changed; reopen to retry');
@@ -2288,7 +2306,7 @@ async function materializeThreadHistoryPage(store, page) {
     const advances = !priorCoverage || (page.cursor && page.cursor === priorCoverage.nextCursor);
     const nextCursor = advances ? page.nextCursor : priorCoverage.nextCursor;
     assertTowerPgWorkspaceCurrent(store, context);
-    await replacePgMessagesForChannel(page.channelId, [...current, { ...thread, pg_effective_message_ids: ids }]);
+    await replacePgMessagesForChannel(page.channelId, [...current, { ...thread, pg_effective_message_ids: ids }].map(row => tagPgSnapshotRead(row, authorityState)));
     await db.sync_state.put({ key, value: { lineage, version: thread.version, nextCursor, messageIds: ids } });
     return { nextCursor, count: rows.length };
   });
@@ -2303,7 +2321,7 @@ export async function hydrateTowerPgThreadMessages(store, channelId, threadId, d
   const readThreads = deps.getTowerPgChannelThreads || getTowerPgChannelThreads;
   const readThread = deps.getTowerPgThread || (!deps.getTowerPgChannelThreads ? getTowerPgThread : null);
   const readMessages = deps.getTowerPgChannelMessages || getTowerPgChannelMessages;
-  const persistMessage = deps.upsertMessage || upsertMessage;
+  const persistMessage = deps.upsertMessage || (row => replacePgMessagesForChannel(targetChannelId, [tagPgSnapshotRead(row, authority)]));
   const messageId = trimText(deps.messageId);
   const threadResult = messageId
     ? null

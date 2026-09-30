@@ -31,10 +31,12 @@ function defaultWorkerFactory() {
  * publish a late completion or continue an old transaction.
  */
 export class TowerPgMaterializationWorkerClient {
-  constructor({ workspaceKey, workerFactory = defaultWorkerFactory } = {}) {
+  constructor({ workspaceKey, workerFactory = defaultWorkerFactory, onDiagnostic = detail => console.warn('[Tower materializer] Slow operation', detail), diagnosticDelayMs = 10000 } = {}) {
     this.workspaceKey = String(workspaceKey || '').trim();
     if (!this.workspaceKey) throw new Error('Tower PG materialisation worker requires a workspace key');
     this.workerFactory = workerFactory;
+    this.onDiagnostic = onDiagnostic;
+    this.diagnosticDelayMs = diagnosticDelayMs;
     this.worker = null;
     this.nextRequestId = 1;
     this.pending = new Map();
@@ -49,7 +51,15 @@ export class TowerPgMaterializationWorkerClient {
     const worker = this.ensureWorker();
     const id = this.nextRequestId++;
     const pending = new Promise((resolve, reject) => {
-      this.pending.set(id, { resolve, reject });
+      const diagnosticTimer = setTimeout(() => {
+        if (!this.pending.has(id)) return;
+        // Observe only. Never resolve/retry alongside an old transaction.
+        this.onDiagnostic?.({ operation: bundle?.thread_history_page ? 'thread-history'
+          : bundle?.reset_authority ? 'authority-reset' : bundle?.mode || 'materialize',
+          changeCount: bundle?.changes?.length || 0, pendingCount: this.pending.size,
+          elapsedMs: this.diagnosticDelayMs });
+      }, this.diagnosticDelayMs);
+      this.pending.set(id, { resolve, reject, diagnosticTimer });
     });
     try {
       worker.postMessage({
@@ -61,6 +71,7 @@ export class TowerPgMaterializationWorkerClient {
         bundle,
       });
     } catch (error) {
+      clearTimeout(this.pending.get(id)?.diagnosticTimer);
       this.pending.delete(id);
       throw error;
     }
@@ -72,7 +83,7 @@ export class TowerPgMaterializationWorkerClient {
     this.disposed = true;
     this.disposeReason = String(reason || 'dispose');
     const error = createAbortError(this.disposeReason);
-    for (const request of this.pending.values()) request.reject(error);
+    for (const request of this.pending.values()) { clearTimeout(request.diagnosticTimer); request.reject(error); }
     this.pending.clear();
     this.destroyWorker();
   }
@@ -108,6 +119,7 @@ export class TowerPgMaterializationWorkerClient {
     if (message?.type !== RESPONSE_TYPE || message?.workspaceKey !== this.workspaceKey) return;
     const request = this.pending.get(message.id);
     if (!request) return;
+    clearTimeout(request.diagnosticTimer);
     this.pending.delete(message.id);
     if (message.ok) request.resolve(message.value);
     else request.reject(deserializeWorkerError(message.error));
@@ -117,7 +129,7 @@ export class TowerPgMaterializationWorkerClient {
     const error = event?.error instanceof Error
       ? event.error
       : new Error(event?.message || 'Tower PG materialisation worker crashed');
-    for (const request of this.pending.values()) request.reject(error);
+    for (const request of this.pending.values()) { clearTimeout(request.diagnosticTimer); request.reject(error); }
     this.pending.clear();
     this.destroyWorker();
   };

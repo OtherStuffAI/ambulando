@@ -39,7 +39,8 @@ async function applyBundle(message) {
 self.addEventListener('message', (event) => {
   const message = event?.data;
   if (message?.type !== REQUEST_TYPE) return;
-  materializationQueue = materializationQueue.then(async () => {
+  const run = async () => {
+    const startedAt = performance.now();
     try {
       const value = await applyBundle(message);
       self.postMessage({
@@ -48,6 +49,7 @@ self.addEventListener('message', (event) => {
         workspaceKey: message.workspaceKey,
         ok: true,
         value,
+        durationMs: Math.round(performance.now() - startedAt),
       });
     } catch (error) {
       self.postMessage({
@@ -58,5 +60,9 @@ self.addEventListener('message', (event) => {
         error: serializeError(error, message),
       });
     }
-  });
+  };
+  // Bounded targeted transcript transactions can take the next IDB turn while
+  // the snapshot retirement walk yields. Reset/version guards run at commit.
+  if (message.bundle?.thread_history_page) void run();
+  else materializationQueue = materializationQueue.then(run);
 });

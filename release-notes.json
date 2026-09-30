@@ -2281,6 +2281,28 @@
       "notes": [
         "Feed and Recent Channels use more of the available width, with fixed opaque headings and independently scrolling lists on phone and desktop."
       ]
+    },
+    {
+      "buildNumber": 2121,
+      "label": "Responsive snapshot sync and conversation loading",
+      "notes": [
+        "Apply authorized sync pages progressively while keeping cached navigation and messages readable. Bound database transactions and resume interrupted snapshots without replaying the whole workspace at once.",
+        "Conversation history becomes ready independently of activity and session-health recovery. Preserve local edits, deletion handling and one-time snapshot reconciliation."
+      ]
+    },
+    {
+      "buildNumber": 2122,
+      "label": "Validate bounded sync replay",
+      "notes": [
+        "Validate complete sync pages before applying their first batch, and keep interrupted delta retries usable as new remote updates arrive."
+      ]
+    },
+    {
+      "buildNumber": 2123,
+      "label": "Keep omitted edit recovery",
+      "notes": [
+        "Keep a recovery copy and queued writes when a completed snapshot retires a previously authorized record whose view was refreshed through a targeted read."
+      ]
     }
   ]
 }

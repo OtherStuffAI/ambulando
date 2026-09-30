@@ -87,9 +87,9 @@ it('uses one predecessor when deleting the latest message',async()=>{
 it('keeps reply association when messages precede their thread across snapshot pages',async()=>{
   const c=fixture.one_message_delta.changes[0];
   const make=(id,version)=>({...c,id,version,row:{...c.row,id,thread_id:'thread'}});
-  await applyPgRecordChanges(store,{...page([make('source','1'),make('reply','2')],'p1'),mode:'snapshot',snapshot_id:'generation',snapshot_complete:false},{expectedCursor:null});
+  await applyPgRecordChanges(store,{...page([make('source','1'),make('reply','2')],'p1'),mode:'snapshot',snapshot_id:'generation',snapshot_complete:false,has_more:true},{expectedCursor:null});
   const t=fixture.canonical_upserts.changes.find(c=>c.family==='thread');
-  await applyPgRecordChanges(store,{...page([{...t,id:'thread',version:'3',row:{...t.row,id:'thread',source_message_id:'source'}}],'p2'),mode:'snapshot',snapshot_id:'generation',snapshot_complete:true},{expectedCursor:'p1'});
+  await applyPgRecordChanges(store,{...page([{...t,id:'thread',version:'3',row:{...t.row,id:'thread',source_message_id:'source'}}],'p2'),mode:'snapshot',snapshot_id:'generation',snapshot_complete:true,has_more:true,partitions_complete:fixture.canonical_upserts.families},{expectedCursor:'p1'});
   const {getMessagePresentationWindowByChannel}=await import('../src/db.js');
   const visible=await getMessagePresentationWindowByChannel(c.channel_id,{rootLimit:10,replyLimit:6,activeThreadId:'source'});
   expect(visible.find(r=>r.record_id==='reply')?.parent_message_id).toBe('source');

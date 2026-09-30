@@ -62,6 +62,7 @@ describe('Tower PG materialisation worker runner', () => {
       workspaceKey: 'workspace-context-1',
       ok: true,
       value: { applied: 2, cursor: 'cursor-2' },
+      durationMs: expect.any(Number),
     });
   });
 
@@ -91,6 +92,20 @@ describe('Tower PG materialisation worker runner', () => {
       ok: false,
       error: { message: expect.stringContaining('cannot switch workspace ownership') },
     });
+  });
+
+  it('allows guarded transcript work between snapshot transaction turns without reordering sync pages', async () => {
+    let release;
+    hydrateTowerPgSyncBundle.mockImplementationOnce(() => new Promise(resolve => { release = resolve; }))
+      .mockResolvedValueOnce({ count: 3 }).mockResolvedValueOnce({ cursor: 'next' });
+    dispatch({ type: 'tower-pg-materializer:request', id: 1, workspaceKey: 'workspace-a', workspaceDbKey: 'db-a', store: {}, bundle: { mode: 'snapshot' } });
+    await flush();
+    dispatch({ type: 'tower-pg-materializer:request', id: 2, workspaceKey: 'workspace-a', workspaceDbKey: 'db-a', store: {}, bundle: { thread_history_page: {} } });
+    dispatch({ type: 'tower-pg-materializer:request', id: 3, workspaceKey: 'workspace-a', workspaceDbKey: 'db-a', store: {}, bundle: { mode: 'delta' } });
+    await waitForPosted(1);
+    expect(posted[0].id).toBe(2); expect(hydrateTowerPgSyncBundle).toHaveBeenCalledTimes(2);
+    release({ cursor: 'snapshot-end' });
+    await waitForPosted(3); expect(posted.map(row => row.id)).toEqual([2, 1, 3]);
   });
 
   it('serializes bundle transactions so concurrent requests cannot reorder cursor commits', async () => {

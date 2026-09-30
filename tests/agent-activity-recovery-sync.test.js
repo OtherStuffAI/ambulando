@@ -160,8 +160,18 @@ describe('authoritative agent activity recovery through the sync owner', () => {
     const result = await target.loadThreadMessagesWithActivity({ channelId: 'inbox-channel', threadId: 'inbox-thread' });
     expect(result).toEqual(['materialized-message']);
     expect(hydrateTowerPgThreadMessages).toHaveBeenCalledTimes(1);
-    expect(target.agentActivityRecoveryError).toContain('Retrying');
+    await vi.waitFor(() => expect(target.agentActivityRecoveryError).toContain('Retrying'));
     expect(hydrateTowerPgChannelAgentActivities).toHaveBeenCalledWith(expect.anything(), 'inbox-channel', expect.objectContaining({ threadId: 'inbox-thread', recover: true }));
+  });
+
+  it('publishes thread readiness while unrelated activity and health remain pending', async () => {
+    const target = store();
+    let release;
+    hydrateTowerPgChannelAgentActivities.mockImplementationOnce(() => new Promise(resolve => { release = resolve; }));
+    const result = await target.loadThreadMessagesWithActivity({ channelId: 'inbox-channel', threadId: 'inbox-thread' });
+    expect(result).toEqual(['materialized-message']);
+    expect(hydrateTowerPgChannelAgentActivities).toHaveBeenCalledTimes(1);
+    release([]);
   });
 
   it('coalesces simultaneous recovery requests within the same service', async () => {

@@ -6,7 +6,7 @@ const fixture = require('../fixtures/flightdeck-record-delta-v1.json');
 // Execute the real materialization worker and IndexedDB at a loopback origin.
 // All probe URLs are fulfilled in memory; this never contacts a Tower or
 // starts a second app runtime.
-test('publishes eight staged PG pages in the real worker without losing transaction authority', async ({ page, baseURL }) => {
+test('progressively publishes eight bounded PG pages in the real worker without losing transaction authority', async ({ page, baseURL }) => {
   const workerBundle = await build({
     entryPoints: [path.resolve(__dirname, '../../src/worker/tower-pg-materialization-worker.js')],
     bundle: true, write: false, format: 'esm', logLevel: 'silent',
@@ -39,12 +39,12 @@ test('publishes eight staged PG pages in the real worker without losing transact
         });
         const page = await send({ ...fixture.canonical_upserts, actors: [], changes,
           next_cursor: `snapshot-${index}`, has_more: true, snapshot_complete: index === 7,
-          local_apply_options: { stageSnapshot: true, expectedCursor: cursor, expectedGeneration: 0 } });
-        if (!page.staged || page.applied !== 0) throw new Error('Snapshot published before handover');
+          local_apply_options: { incrementalSnapshot: true, expectedCursor: cursor, expectedGeneration: 0 } });
+        if (page.applied !== 200) throw new Error('Snapshot page did not publish progressively');
         cursor = page.cursor;
       }
       const published = await send({ ...fixture.one_message_delta, changes: [], next_cursor: 'handover', has_more: false,
-        local_apply_options: { stageSnapshot: true, expectedCursor: cursor, expectedGeneration: 0 } });
+        local_apply_options: { incrementalSnapshot: true, expectedCursor: cursor, expectedGeneration: 0 } });
       const replay = await send({ ...fixture.one_message_delta, changes: [], next_cursor: 'handover', has_more: false,
         local_apply_options: { expectedCursor: 'handover', expectedGeneration: 0 } });
       return { published, replay };
@@ -53,7 +53,7 @@ test('publishes eight staged PG pages in the real worker without losing transact
       indexedDB.deleteDatabase(`wingman-fd-ws-${workspaceKey}`);
     }
   }, { fixture, origin });
-  expect(result.published).toMatchObject({ applied: 1600, cursor: 'handover', hasMore: false });
+  expect(result.published).toMatchObject({ applied: 0, cursor: 'handover', hasMore: false });
   expect(result.replay).toMatchObject({ applied: 0, cursor: 'handover' });
 });
 
@@ -88,7 +88,7 @@ test('retains a seeded cache through paged delta, interrupted 85-page replacemen
     const delta = (cursor, hasMore = false, changes = []) => ({ ...fixture.one_message_delta, next_cursor: cursor, has_more: hasMore, changes });
     start();
     try {
-      await send({ ...fixture.canonical_upserts, has_more: true, local_apply_options: { stageSnapshot: true } });
+      await send({ ...fixture.canonical_upserts, has_more: true, local_apply_options: { incrementalSnapshot: true } });
       await send(delta('seeded'));
       db = await request(indexedDB.open(`wingman-fd-ws-${workspaceKey}`));
       const seeded = await visible();
@@ -120,7 +120,7 @@ test('retains a seeded cache through paged delta, interrupted 85-page replacemen
           return { ...change, id: messageId, row: { ...change.row, id: messageId } };
         });
         await send({ ...fixture.canonical_upserts, snapshot_id: 'replacement-generation', actors: [], changes, next_cursor: `replacement-${index}`, has_more: true,
-          snapshot_complete: index === 84, local_apply_options: { stageSnapshot: true } });
+          snapshot_complete: index === 84, local_apply_options: { incrementalSnapshot: true } });
         await visible();
         if (index === 40 || index === 84) { worker.terminate(); start(); }
       }
@@ -131,7 +131,7 @@ test('retains a seeded cache through paged delta, interrupted 85-page replacemen
       // Confirmed authorized empty replacement retires omissions at handover only.
       await send({ protocol_version: 1, reset_authority: true, local_apply_options: { preserveViews: true } });
       await send({ ...fixture.canonical_upserts, snapshot_id: 'empty-generation', changes: [], next_cursor: 'empty-snapshot', has_more: true,
-        local_apply_options: { stageSnapshot: true } });
+        local_apply_options: { incrementalSnapshot: true } });
       await visible();
       await send(delta('empty-handover'));
       return { seeded, replaced, deleted, retired: await counts(), applied: published.applied };

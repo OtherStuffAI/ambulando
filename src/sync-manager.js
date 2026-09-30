@@ -425,7 +425,7 @@ export const syncManagerMixin = {
           load: (_key, options) => readTowerPgThreadHistoryPage(this, options.channelId, options.threadId, options),
           materialize: async (bundle, { options }) => {
             const result = bundle ? await this.materializeTowerPgWorkspaceBundle(bundle) : null;
-            if (!options.cursor) await this.ensureThreadAgentActivityCoverage(options.channelId, options.threadId);
+            if (!options.cursor) void this.ensureThreadAgentActivityCoverage(options.channelId, options.threadId);
             return result;
           },
         },
@@ -598,7 +598,7 @@ export const syncManagerMixin = {
       case 'thread-history-page': return readTowerPgThreadHistoryPage(this, options.channelId, options.threadId, options)
         .then(async (bundle) => {
           const result = bundle ? await this.materializeTowerPgWorkspaceBundle(bundle) : null;
-          if (!options.cursor) await this.ensureThreadAgentActivityCoverage(options.channelId, options.threadId);
+          if (!options.cursor) void this.ensureThreadAgentActivityCoverage(options.channelId, options.threadId);
           return result;
         });
       case 'thread-history': return this.loadThreadMessagesWithActivity(options);
@@ -726,12 +726,14 @@ export const syncManagerMixin = {
   async ensureThreadAgentActivityCoverage(channelId, threadId) {
     if (!channelId || !threadId) return;
     try {
-      await this.requestTowerSyncFamily('channel-agent-activities', `${channelId}:${threadId}`, {
-        channelId, threadId, recover: true,
-      });
-      await this.requestTowerSyncFamily('channel-agent-session-health', `${channelId}:${threadId}`, {
-        channelId, threadId,
-      });
+      await Promise.allSettled([
+        this.requestTowerSyncFamily('channel-agent-activities', `${channelId}:${threadId}`, {
+          channelId, threadId, recover: true,
+        }),
+        this.requestTowerSyncFamily('channel-agent-session-health', `${channelId}:${threadId}`, {
+          channelId, threadId,
+        }),
+      ]);
     } catch {
       // The activity loader exposes retry state without discarding messages.
     }
@@ -739,7 +741,7 @@ export const syncManagerMixin = {
 
   async loadThreadMessagesWithActivity(options) {
     const result = await hydrateTowerPgThreadMessages(this, options.channelId, options.threadId, options);
-    await this.ensureThreadAgentActivityCoverage(options.channelId, options.threadId);
+    void this.ensureThreadAgentActivityCoverage(options.channelId, options.threadId);
     return result;
   },
 

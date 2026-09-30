@@ -72,16 +72,16 @@ export async function refreshChannelSummaries(db, channelIds) {
   }
 }
 
-async function updateResourceAttention(db, resourceType, id, store, members) {
+async function updateResourceAttention(db, resourceType, id, store, members, cache = null) {
   const family = resourceType === 'document' ? 'doc' : resourceType;
-  const raw = await db.pg_record_rows.get(rawKey(family, id));
+  const raw = cache ? cache.raw.get(rawKey(family, id)) : await db.pg_record_rows.get(rawKey(family, id));
   const recordId = `${resourceType}:${id}`;
-  const view = await db.resource_view_states.get(recordId);
+  const view = cache ? cache.views.get(recordId) : await db.resource_view_states.get(recordId);
   const activity = Number(raw?.row?.activity_version || 0);
   let unread = Boolean(raw?.operation === 'upsert' && !raw.row.deleted_at && !raw.row.archived_at
     && activity > Number(view?.viewed_activity_version || 0));
   if (unread && resourceType === 'task') {
-    const task = await db.tasks.get(id);
+    const task = cache ? cache.tasks.get(id) : await db.tasks.get(id);
     const comments = await db.comments.where('[target_record_id+cache_active+cache_time+record_id]')
       .between([id, 1, Dexie.minKey, Dexie.minKey], [id, 1, '\uffff', Dexie.maxKey])
       .reverse().limit(1).toArray();
@@ -94,7 +94,7 @@ async function updateResourceAttention(db, resourceType, id, store, members) {
   const next = { record_id: recordId, resource_type: resourceType, resource_id: id,
     channel_id: raw?.channel_id || view?.channel_id || null, unread: unread ? 1 : 0,
     activity_version: activity, viewed_activity_version: Number(view?.viewed_activity_version || 0) };
-  const prior = await db.pg_resource_attention.get(recordId);
+  const prior = cache ? cache.attention.get(recordId) : await db.pg_resource_attention.get(recordId);
   if (sameLogicalValue(prior, next)) return;
   const section = resourceType === 'thread' ? 'chat' : resourceType === 'task' ? 'tasks' : 'docs';
   const adjustments = new Map();
@@ -106,11 +106,33 @@ async function updateResourceAttention(db, resourceType, id, store, members) {
   }
   for (const [key, delta] of adjustments) {
     if (!delta) continue;
-    const current = await db.pg_attention_counts.get(key);
-    await db.pg_attention_counts.put({ key, count: Math.max(0, Number(current?.count || 0) + delta) });
+    const current = cache ? cache.counts.get(key) : await db.pg_attention_counts.get(key);
+    const nextCount = { key, count: Math.max(0, Number(current?.count || 0) + delta) };
+    if (cache) cache.counts.set(key, nextCount);
+    await db.pg_attention_counts.put(nextCount);
   }
   await db.pg_resource_attention.put(next);
   if (view && view.activity_version !== activity) await db.resource_view_states.update(recordId, { activity_version: activity });
+}
+
+// Batch the shared projection reads within the bounded transaction. Counts
+// still update sequentially so two resources cannot lose a shared increment.
+async function updateResourceAttentions(db, resources, store, members) {
+  if (!resources.length) return;
+  const ids = resources.map(([type, id]) => `${type}:${id}`);
+  const rawIds = resources.map(([type, id]) => rawKey(type === 'document' ? 'doc' : type, id));
+  const [raw, views, attention, tasks] = await Promise.all([
+    db.pg_record_rows.bulkGet(rawIds), db.resource_view_states.bulkGet(ids),
+    db.pg_resource_attention.bulkGet(ids), db.tasks.bulkGet(resources.filter(([type]) => type === 'task').map(([,id]) => id)),
+  ]);
+  const countKeys = [...new Set([...raw, ...views, ...attention].filter(Boolean).flatMap(row =>
+    row.channel_id ? [`channel:${row.channel_id}`] : []))];
+  countKeys.push('section:chat', 'section:tasks', 'section:docs');
+  const counts = await db.pg_attention_counts.bulkGet(countKeys);
+  const byKey = (rows, key) => new Map(rows.filter(Boolean).map(row => [row[key], row]));
+  const cache = { raw: byKey(raw, 'key'), views: byKey(views, 'record_id'), attention: byKey(attention, 'record_id'),
+    tasks: byKey(tasks, 'record_id'), counts: byKey(counts, 'key') };
+  for (const [type, id] of resources) await updateResourceAttention(db, type, id, store, members, cache);
 }
 
 export async function getPgAttentionProjection(store) {
@@ -140,6 +162,37 @@ export async function applyPgRecordChanges(store, page, options = {}) {
   const context = resolveTowerPgWorkspaceContext(store);
   validatePage(page, context.workspaceId);
   if (page.identity?.workspace_id && page.identity.workspace_id !== context.workspaceId) throw new Error('Record-delta workspace identity mismatch');
+  // Validate the complete wire boundary before any prefix becomes visible.
+  if (page.mode === 'snapshot' && (!page.snapshot_id || typeof page.snapshot_complete !== 'boolean'
+    || !page.has_more || page.snapshot_complete && (!Array.isArray(page.partitions_complete)
+      || !PG_RECORD_DELTA_FAMILIES.every(f => page.partitions_complete.includes(f))))) throw new Error('Invalid snapshot completion boundary');
+  if (page.mode === 'delta' && page.snapshot_id) throw new Error('Invalid delta handover identity');
+  // Subpage checkpoints retain the server cursor until the entire page commits.
+  // A crash replays that opaque page; canonical versions make the committed
+  // prefix idempotent. No cursor can skip unapplied changes.
+  let result, applied = 0;
+  const size = options.reconcileOnly ? 200 : 32;
+  for (let offset = 0; offset < Math.max(1, page.changes.length); offset += size) {
+    const partial = offset + size < page.changes.length;
+    result = await applyRecordPage(store, { ...page, changes: page.changes.slice(offset, offset + size),
+      actors: offset === 0 ? page.actors : [],
+      snapshot_complete: partial ? false : page.snapshot_complete,
+      has_more: partial ? true : page.has_more },
+    { ...options, partialPage: partial, pageOffset: offset + size,
+      beforeCommit: partial ? undefined : options.beforeCommit });
+    applied += result.applied;
+    if (result.replay) break;
+    if (partial) await new Promise(resolve => setTimeout(resolve, 0));
+  }
+  if (!result.retirementPending) return { ...result, applied };
+  await retireSnapshotOmissions(store, { ...options, expectedGeneration: result.localGeneration, terminalCursor: page.next_cursor });
+  return { ...result, applied, cursor: page.next_cursor, retirementPending: false };
+}
+
+async function applyRecordPage(store, page, options = {}) {
+  const context = resolveTowerPgWorkspaceContext(store);
+  validatePage(page, context.workspaceId);
+  if (page.identity?.workspace_id && page.identity.workspace_id !== context.workspaceId) throw new Error('Record-delta workspace identity mismatch');
   const db = getWorkspaceDb();
   const cursorKey = recordDeltaCursorKey(store);
   return db.transaction('rw', db.tables, async () => {
@@ -152,55 +205,34 @@ export async function applyPgRecordChanges(store, page, options = {}) {
     if (page.mode === 'snapshot' && state.snapshotId && page.snapshot_id !== state.snapshotId) {
       throw new Error('Record-delta snapshot generation changed without reset');
     }
-    // Download replacement generations into a private, durable staging area.
-    // A transport failure may advance the download cursor, never the view tables.
-    if (!options.publishStaged && (state.staging || (options.stageSnapshot && page.mode === 'snapshot'))) {
-      const prefix = `${cursorKey}:staged:`;
-      if (page.mode === 'snapshot' && (!page.snapshot_id || typeof page.snapshot_complete !== 'boolean'
-        || !page.has_more || page.snapshot_complete && (!Array.isArray(page.partitions_complete)
-          || !PG_RECORD_DELTA_FAMILIES.every(f => page.partitions_complete.includes(f))))) throw new Error('Invalid snapshot completion boundary');
-      if (page.mode === 'delta' && !state.snapshotComplete) throw new Error('Incomplete snapshot handover');
-      await db.sync_state.put({ key: `${prefix}${Number(state.stagedPages || 0)}`, value: { page, order: Number(state.stagedPages || 0) } });
-      if (page.mode !== 'delta' || page.has_more) {
-        await db.sync_state.put({ key: cursorKey, value: { ...state, staging: true,
-          stagedPages: Number(state.stagedPages || 0) + 1, cursor: page.next_cursor,
-          snapshotReconciliationPending: true,
-          snapshotId: page.snapshot_id || state.snapshotId,
-          snapshotComplete: page.snapshot_complete || state.snapshotComplete || false } });
-        return { applied: 0, cursor: page.next_cursor, hasMore: page.has_more, protocolVersion: 1, staged: true };
-      }
-      if (page.snapshot_id) throw new Error('Invalid delta handover identity');
-      const staged = await db.sync_state.where('key').between(prefix, `${prefix}\uffff`, true, true).toArray();
-      staged.sort((a, b) => a.value.order - b.value.order);
-      // Canonical versions from the previous epoch must not suppress the new
-      // snapshot. Keep local rows and pending intent until reconciliation.
-      await db.pg_record_rows.clear();
-      await db.pg_actors.clear();
-      await db.channel_summaries.clear();
-      await db.pg_resource_attention.clear();
-      await db.pg_attention_counts.clear();
-      await db.sync_state.put({ key: cursorKey, value: { cursor: null,
-        localGeneration: Number(state.localGeneration || 0), viewBaselineInitialized: options.viewBaselineInitialized } });
-      let applied = 0, result;
-      for (const item of staged) {
-        result = await applyPgRecordChanges(store, item.value.page, { publishStaged: true });
-        applied += result.applied;
-      }
-      await db.sync_state.where('key').between(prefix, `${prefix}\uffff`, true, true).delete();
-      if (options.beforeCommit) await options.beforeCommit();
-      return { ...result, applied };
-    }
-    const generation = state.generation || page.snapshot_id || 'delta';
-    for (const actor of page.actors || []) {
-      const next = { ...actor, generation };
-      if (!sameLogicalValue(await db.pg_actors.get(actor.actor_id), next)) await db.pg_actors.put(next);
-    }
+    // Every bounded page is already authorized by Tower. Publish its upserts
+    // and download cursor together; retain unseen cached rows until handover.
+    // Older private staging is reset by the service before negotiation resumes.
+    if (state.staging) throw new Error('Legacy snapshot staging requires preserved-view recovery');
+    if (page.mode === 'snapshot' && (!page.snapshot_id || typeof page.snapshot_complete !== 'boolean'
+      || !page.has_more || page.snapshot_complete && (!Array.isArray(page.partitions_complete)
+        || !PG_RECORD_DELTA_FAMILIES.every(f => page.partitions_complete.includes(f))))) throw new Error('Invalid snapshot completion boundary');
+    if (page.mode === 'delta' && state.snapshotReconciliationPending && !state.snapshotComplete) throw new Error('Incomplete snapshot handover');
+    if (page.mode === 'delta' && page.snapshot_id) throw new Error('Invalid delta handover identity');
+    const generation = page.mode === 'snapshot' ? `${page.snapshot_id}:${Number(state.localGeneration || 0)}` : state.generation || 'delta';
+    if (page.actors?.length) await db.pg_actors.bulkPut(page.actors.map(actor => ({ ...actor, generation })));
     const referencedActors = [...new Set(page.changes.flatMap(c => c.operation === 'upsert'
       ? ['created_by_actor_id','updated_by_actor_id','deleted_by_actor_id','owner_actor_id','actor_id','viewer_actor_id'].map(key => c.row?.[key]).filter(Boolean) : []))];
     const sidecarActors = (await db.pg_actors.bulkGet(referencedActors)).filter(Boolean);
     const members = [...(await db.workspace_members.bulkGet(referencedActors)).filter(Boolean), ...sidecarActors];
     const actorNpubByActorId = new Map(members.map(m => [m.actor_id || m.id, m.npub]));
     const mapOptions = { workspaceOwnerNpub: context.workspaceOwnerNpub, actorNpubByActorId };
+    const intentIds = [...new Set(page.changes.flatMap(c => [c.id, c.row?.metadata?.client_record_id, c.row?.source_message_id, c.row?.task_id]).filter(Boolean))];
+    const commandRows = intentIds.length ? await db.pending_writes.where('record_id').anyOf(intentIds).toArray() : [];
+    const commandIds = new Set(commandRows.map(row => row.record_id));
+    const checkedIntentIds = new Set(intentIds);
+    const hasCommands = async id => {
+      if (!checkedIntentIds.has(id)) {
+        if (await db.pending_writes.where('record_id').equals(id).count()) commandIds.add(id);
+        checkedIntentIds.add(id);
+      }
+      return commandIds.has(id);
+    };
     const changedKeys = new Set();
     const affectedTasks = new Set();
     const affectedChannels = new Set();
@@ -213,9 +245,10 @@ export async function applyPgRecordChanges(store, page, options = {}) {
     for (const c of page.changes) {
       const key = rawKey(c.family, c.id);
       const prior = versions.get(key);
-      if (prior && BigInt(prior.version) >= BigInt(c.version) && !(options.reconcileKeys || []).includes(key)) continue;
+      if (prior && prior.generation === generation && BigInt(prior.version) >= BigInt(c.version) && !(options.reconcileKeys || []).includes(key)) continue;
+      if (page.mode !== 'snapshot' && prior && BigInt(prior.version) > BigInt(c.version)) continue;
       const raw = { ...c, key, generation, parent_id: c.row?.task_id || c.row?.thread_id || prior?.parent_id || null, source_message_id: c.row?.source_message_id || prior?.source_message_id || prior?.row?.source_message_id || null };
-      await db.pg_record_rows.put(raw); versions.set(key, raw); changedKeys.add(key);
+      versions.set(key, raw); changedKeys.add(key);
       if (c.family === 'task_assignment') affectedTasks.add(raw.parent_id || c.id.split(':')[0]);
       if (c.family === 'task') affectedTasks.add(c.id);
       if (['task', 'thread', 'doc'].includes(c.family)) affectedResources.set(`${c.family}:${c.id}`, [c.family === 'doc' ? 'document' : c.family, c.id]);
@@ -230,6 +263,7 @@ export async function applyPgRecordChanges(store, page, options = {}) {
         affectedChannels.add(c.channel_id); affectedChannels.add(prior?.channel_id);
       }
     }
+    if (changedKeys.size) await db.pg_record_rows.bulkPut([...changedKeys].map(key => versions.get(key)));
     const materialize = async (raw) => {
       if (!FAMILY[raw.family]) return;
       const [tableName, mapRow] = FAMILY[raw.family];
@@ -263,14 +297,14 @@ export async function applyPgRecordChanges(store, page, options = {}) {
       const clientRecordId = raw.row?.metadata?.client_record_id;
       if (clientRecordId && clientRecordId !== localId) {
         const optimistic = await table.get(clientRecordId);
-        if (optimistic && ((await db.pending_writes.where('record_id').equals(clientRecordId).count())
+        if (optimistic && ((await hasCommands(clientRecordId))
           || Number(optimistic.version || 0) > Number(raw.row?.row_version || 0))) {
           await db.pg_record_conflicts.put({ key: raw.key, family: raw.family, record_id: clientRecordId, local: optimistic, remote: raw, reason: 'unresolved_local_command' });
           await table.update(clientRecordId, { pg_sync_conflict: true });
           return;
         }
       }
-      const commands = await db.pending_writes.where('record_id').equals(localId).count();
+      const commands = await hasCommands(localId);
       const acknowledgedClientId = raw.row?.metadata?.client_record_id;
       const acknowledgesOptimistic = Boolean(acknowledgedClientId && prior?.pg_reconciliation_pending
         && [prior.record_id, prior.pg_client_record_id].includes(acknowledgedClientId));
@@ -286,7 +320,7 @@ export async function applyPgRecordChanges(store, page, options = {}) {
         || (['autopilot_connection', 'workspace_agent'].includes(raw.family) && raw.row?.archived_at)) {
         if (raw.family === 'thread' && (raw.source_message_id || prior?.pg_source_message_id)) {
           const source = await db.chat_messages.get(raw.source_message_id || prior.pg_source_message_id);
-          if (source && !pending(source) && !(await db.pending_writes.where('record_id').equals(source.record_id).count())) await db.chat_messages.delete(source.record_id);
+          if (source && !pending(source) && !(await hasCommands(source.record_id))) await db.chat_messages.delete(source.record_id);
         }
         if (prior) { await table.delete(localId); applied++; }
         return;
@@ -313,8 +347,12 @@ export async function applyPgRecordChanges(store, page, options = {}) {
       // earlier page (for example another task assignee or a thread source).
       const actorIds = [...new Set([canonical, ...(canonical.assignments || [])].flatMap(row =>
         ['created_by_actor_id','updated_by_actor_id','owner_actor_id','actor_id','viewer_actor_id'].map(key => row[key]).filter(Boolean)))];
-      const identities = [...(await db.workspace_members.bulkGet(actorIds)).filter(Boolean), ...(await db.pg_actors.bulkGet(actorIds)).filter(Boolean)];
-      const rowActors = new Map([...actorNpubByActorId, ...identities.map(actor => [actor.actor_id, actor.npub])]);
+      const missingActors = actorIds.filter(id => !actorNpubByActorId.has(id));
+      if (missingActors.length) {
+        const identities = [...(await db.workspace_members.bulkGet(missingActors)).filter(Boolean), ...(await db.pg_actors.bulkGet(missingActors)).filter(Boolean)];
+        for (const actor of identities) actorNpubByActorId.set(actor.actor_id, actor.npub);
+      }
+      const rowActors = actorNpubByActorId;
       let mapped = mapRow(canonical, { ...extra, actorNpubByActorId: rowActors });
       if (raw.family === 'thread' && prior?.pg_effective_message_ids
         && threadHistoryLineage(prior) === threadHistoryLineage(mapped)) {
@@ -345,7 +383,7 @@ export async function applyPgRecordChanges(store, page, options = {}) {
       const clientId = mapped.pg_client_record_id || canonical.metadata?.client_record_id;
       if (clientId && clientId !== localId) {
         const optimistic = await table.get(clientId);
-        const pendingCommands = await db.pending_writes.where('record_id').equals(clientId).count();
+        const pendingCommands = await hasCommands(clientId);
         if (optimistic && !pendingCommands) await table.delete(clientId);
       }
       if (!sameLogicalValue(prior, { ...prior, ...mapped })) { await table.put(mapped); applied++; }
@@ -374,49 +412,101 @@ export async function applyPgRecordChanges(store, page, options = {}) {
       }
     }
     await refreshChannelSummaries(db, [...affectedChannels]);
-    for (const [type, id] of affectedResources.values()) await updateResourceAttention(db, type, id, store, members);
-    // Omission retirement is allowed only after both snapshot completion and
-    // the delta handover, exactly once for that replacement. `converged` also
-    // becomes false during ordinary paged deltas; it is not replacement authority.
-    // Older persisted states without this marker must not repeat retirement.
-    // The one-time walk is in bounded batches in the worker.
-    if (!options.reconcileOnly && state.snapshotComplete && state.snapshotReconciliationPending === true && page.mode === 'delta' && !page.has_more) {
-      for (const tableName of new Set(Object.values(FAMILY).map(([name]) => name))) {
-        const table = db.table(tableName);
-        let after = null;
-        while (true) {
-          const batch = await (after ? table.where(':id').above(after) : table.toCollection()).limit(200).toArray();
-          if (!batch.length) break;
-          after = batch.at(-1).record_id;
-          const obsolete = [];
-          for (const row of batch) {
-            if (!(row.pg_backend || row.pg_delta_family || tableName === 'resource_view_states')
-              || row.pg_delta_generation === generation) continue;
-            const hasIntent = pending(row) || await db.pending_writes.where('record_id').equals(row.record_id).count();
-            if (hasIntent) {
-              // An omitted previously authorized record has lost authority.
-              // Preserve its draft/outbox outside the visible materialization.
-              if (!options.publishStaged || !row.pg_delta_family) continue;
-              await db.pg_record_conflicts.put({ key: `reset:${tableName}:${row.record_id}`, family: tableName,
-                record_id: row.record_id, local: row, reason: 'authority_reset' });
-            }
-            obsolete.push(row.record_id);
-            if (tableName === 'chat_messages') affectedChannels.add(row.channel_id);
-          }
-          if (obsolete.length) await table.bulkDelete(obsolete);
-        }
-      }
-      await refreshChannelSummaries(db, [...affectedChannels]);
-    }
+    await updateResourceAttentions(db, [...affectedResources.values()], store, members);
+    // Retirement checkpoints commit in separate bounded transactions. The
+    // terminal cursor remains at the preceding page until all omissions commit.
+    const retirementPending = !options.reconcileOnly && state.snapshotComplete
+      && state.snapshotReconciliationPending === true && page.mode === 'delta' && !page.has_more;
     if (options.beforeCommit) await options.beforeCommit();
-    const nextState = { ...state, viewBaselineInitialized: options.viewBaselineInitialized || state.viewBaselineInitialized || false, legacyFallbackActive: false, resetting: false, cursor: page.next_cursor, generation, snapshotId: page.mode === 'snapshot' ? page.snapshot_id : state.snapshotId,
+    const nextState = { ...state, viewBaselineInitialized: options.viewBaselineInitialized || state.viewBaselineInitialized || false, legacyFallbackActive: false, resetting: false, cursor: retirementPending || options.partialPage ? state.cursor : page.next_cursor, applyingPage: options.partialPage ? { nextCursor: page.next_cursor, through: options.pageOffset } : null, generation, incrementalSnapshot: true, snapshotRetirement: retirementPending ? state.snapshotRetirement || { tableIndex: 0, after: null, nextCursor: page.next_cursor } : null, snapshotId: page.mode === 'snapshot' ? page.snapshot_id : state.snapshotId,
       snapshotComplete: page.snapshot_complete || state.snapshotComplete || false,
       snapshotReconciliationPending: page.mode === 'snapshot' ? true
-        : page.has_more ? state.snapshotReconciliationPending === true : false,
-      converged: page.mode === 'delta' && !page.has_more };
+        : (page.has_more || retirementPending) ? state.snapshotReconciliationPending === true : false,
+      converged: page.mode === 'delta' && !page.has_more && !retirementPending };
     if (!options.reconcileOnly) await db.sync_state.put({ key: cursorKey, value: nextState });
-    return { applied, cursor: page.next_cursor, hasMore: page.has_more, fullSnapshot: page.mode === 'snapshot', protocolVersion: 1, needsSummaryBackfill: Boolean(state.snapshotComplete && !state.summariesRebuilt && page.mode === 'delta' && !page.has_more) };
+    return { applied, localGeneration: Number(state.localGeneration || 0), cursor: page.next_cursor, retirementPending, hasMore: page.has_more, fullSnapshot: page.mode === 'snapshot', protocolVersion: 1, needsSummaryBackfill: Boolean(state.snapshotComplete && !state.summariesRebuilt && page.mode === 'delta' && !page.has_more) };
   });
+}
+
+// A resumable omission walk. Only a completed snapshot plus terminal handover
+// authorizes it; ordinary deltas never enter this path. A reset invalidates each
+// checkpoint through the same authority generation compare-and-swap as pages.
+async function retireSnapshotOmissions(store, options) {
+  const db = getWorkspaceDb(), cursorKey = recordDeltaCursorKey(store);
+  const tables = [...new Set(Object.values(FAMILY).map(([name]) => name)), 'pg_record_rows', 'pg_actors', 'pg_resource_attention', 'pg_attention_counts'];
+  while (true) {
+    const done = await db.transaction('rw', db.tables, async () => {
+      const state = (await db.sync_state.get(cursorKey))?.value;
+      if (Object.hasOwn(options, 'expectedGeneration') && Number(state?.localGeneration || 0) !== options.expectedGeneration)
+        throw new Error('Record-delta authority generation changed during retirement');
+      const checkpoint = state?.snapshotRetirement;
+      if (!checkpoint || checkpoint.nextCursor !== options.terminalCursor) throw new Error('Record-delta retirement authority changed');
+      const tableName = tables[checkpoint.tableIndex];
+      if (!tableName) {
+        await db.sync_state.put({ key: cursorKey, value: { ...state, cursor: checkpoint.nextCursor,
+          snapshotRetirement: null, snapshotReconciliationPending: false, converged: true } });
+        return true;
+      }
+      const table = db.table(tableName);
+      const rows = await (checkpoint.after ? table.where(':id').above(checkpoint.after) : table.toCollection()).limit(32).toArray();
+      const channels = new Set();
+      const obsolete = [];
+      for (const row of rows) {
+        if (tableName === 'pg_resource_attention') {
+          const family = row.resource_type === 'document' ? 'doc' : row.resource_type;
+          const canonical = await db.pg_record_rows.get(rawKey(family, row.resource_id));
+          if (!canonical || canonical.generation !== state.generation) {
+            await updateResourceAttention(db, row.resource_type, row.resource_id, store, []);
+            obsolete.push(row.record_id);
+          }
+          continue;
+        }
+        if (tableName === 'pg_attention_counts') {
+          if (!row.count) obsolete.push(row.key);
+          continue;
+        }
+        const canonicalTable = ['pg_record_rows', 'pg_actors'].includes(tableName);
+        if (canonicalTable) {
+          if (row.generation !== state.generation) obsolete.push(row.key || row.actor_id);
+          continue;
+        }
+        if (!(row.pg_backend || row.pg_delta_family || tableName === 'resource_view_states')
+          || row.pg_delta_generation === state.generation) continue;
+        const family = row.pg_delta_family || row.pg_record_type || Object.keys(FAMILY).find(f => FAMILY[f][0] === tableName);
+        const canonical = await db.pg_record_rows.get(rawKey(family, row.record_id));
+        // Typed reads may replace presentation metadata. Canonical membership
+        // remains authoritative, as does a newer targeted read in this snapshot.
+        if (canonical?.generation === state.generation && canonical.operation === 'upsert' && !canonical.row?.deleted_at) continue;
+        const hasIntent = pending(row) || await db.pending_writes.where('record_id').equals(row.record_id).count();
+        if (hasIntent) {
+          if (!row.pg_delta_family && !canonical) continue; // unacknowledged local creation
+          await db.pg_record_conflicts.put({ key: `reset:${tableName}:${row.record_id}`, family: tableName,
+            record_id: row.record_id, local: row, reason: 'authority_reset' });
+        }
+        obsolete.push(row.record_id);
+        if (tableName === 'chat_messages') channels.add(row.channel_id);
+      }
+      if (obsolete.length) await table.bulkDelete(obsolete);
+      if (tableName === 'pg_record_rows') {
+        for (const row of rows.filter(r => obsolete.includes(r.key))) {
+          if (['task', 'thread', 'doc'].includes(row.family)) {
+            const type = row.family === 'doc' ? 'document' : row.family;
+            await updateResourceAttention(db, type, row.id, store, []);
+            await db.pg_resource_attention.delete(`${type}:${row.id}`);
+          }
+        }
+      }
+      await refreshChannelSummaries(db, [...channels]);
+      await db.sync_state.put({ key: cursorKey, value: { ...state, snapshotRetirement: {
+        ...checkpoint, tableIndex: rows.length ? checkpoint.tableIndex : checkpoint.tableIndex + 1,
+        after: rows.length ? (rows.at(-1).key || rows.at(-1).actor_id || rows.at(-1).record_id) : null,
+      } } });
+      return false;
+    });
+    if (done) return;
+    options.onRetirementProgress?.();
+    await new Promise(resolve => setTimeout(resolve, 0));
+  }
 }
 
 export async function resetPgRecordAuthority(store, { preserveViews = false, expectedCursor, expectedGeneration } = {}) {
@@ -432,6 +522,7 @@ export async function resetPgRecordAuthority(store, { preserveViews = false, exp
     const prefix = `${cursorKey}:staged:`;
     await db.sync_state.where('key').between(prefix, `${prefix}\uffff`, true, true).delete();
     if (preserveViews) {
+      await db.sync_state.delete(`${cursorKey}:summary-backfill`);
       await db.sync_state.put({ key: cursorKey, value: { cursor: null, resetting: true, localGeneration } });
       return { localGeneration };
     }
@@ -516,19 +607,18 @@ async function reconcileConflictBatch(store, { acceptRemoteKey = null, after = n
   });
 }
 
-export async function rebuildPgRecordSummaries(store, { batchSize = 200 } = {}) {
+export async function rebuildPgRecordSummaries(store, { batchSize = 32 } = {}) {
   const db = getWorkspaceDb(), key = `${recordDeltaCursorKey(store)}:summary-backfill`;
   let after = (await db.sync_state.get(key))?.value?.after || null;
   let processed = 0;
   while (true) {
     let count = 0;
     await db.transaction('rw', db.tables, async () => {
-      const rows = await (after ? db.pg_record_rows.where(':id').above(after) : db.pg_record_rows.toCollection()).limit(Math.min(200,batchSize)).toArray();
+      const rows = await (after ? db.pg_record_rows.where(':id').above(after) : db.pg_record_rows.toCollection()).limit(Math.min(32,batchSize)).toArray();
       count = rows.length;
       const members = await db.workspace_members.toArray();
-      for (const raw of rows) {
-        if (['task','thread','doc'].includes(raw.family)) await updateResourceAttention(db,raw.family==='doc'?'document':raw.family,raw.id,store,members);
-      }
+      await updateResourceAttentions(db, rows.filter(raw => ['task','thread','doc'].includes(raw.family))
+        .map(raw => [raw.family === 'doc' ? 'document' : raw.family, raw.id]), store, members);
       await refreshChannelSummaries(db,rows.filter(r=>['thread','message'].includes(r.family)).map(r=>r.channel_id));
       if (rows.length) after=rows.at(-1).key;
       await db.sync_state.put({key,value:{after,complete:!rows.length}});

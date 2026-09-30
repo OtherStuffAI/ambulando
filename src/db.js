@@ -645,8 +645,12 @@ export async function upsertChannel(channel) {
 
 export async function upsertPgListedChannel(channel) {
   const db = wsDb();
-  return db.transaction('rw', db.channels, db.pending_writes, async () => {
+  return db.transaction('rw', db.channels, db.pending_writes, db.pg_record_rows, async () => {
     const existing = await db.channels.get(channel.record_id);
+    const canonical = await db.pg_record_rows.get(`channel:${channel.record_id}`);
+    if (canonical?.operation === 'delete' || canonical?.row?.deleted_at
+      || Number(canonical?.row?.row_version || 0) > Number(channel.version || 0)
+      || Number(existing?.version || 0) > Number(channel.version || 0)) return existing;
     if (['pending', 'failed'].includes(existing?.sync_status) || existing?.pg_reconciliation_pending
       || await db.pending_writes.where('record_id').equals(channel.record_id).count()) return existing;
     return db.channels.put(sanitizeForStorage(channel));
@@ -1113,7 +1117,7 @@ export async function replacePgMessagesForChannel(channelId, messages = [], opti
     .map((message) => sanitizeForStorage(message))
     .filter((message) => message?.record_id);
   const db = wsDb();
-  return db.transaction('rw', db.chat_messages, db.pending_writes, async () => {
+  return db.transaction('rw', db.chat_messages, db.pending_writes, db.pg_record_rows, async () => {
     const incomingIds = [...new Set(rows.flatMap((row) => [row.record_id, row.pg_client_record_id]).filter(Boolean))];
     const clientIds = [...new Set(rows.map((row) => row.pg_client_record_id).filter(Boolean))];
     const existing = options.authoritative === true
@@ -1172,7 +1176,11 @@ export async function replacePgMessagesForChannel(channelId, messages = [], opti
       : [];
     const deleteIds = [...new Set([...supersededOptimisticIds, ...omittedIds])];
     const existingById = new Map(existing.map((message) => [message.record_id, message]));
-    const changedRows = reconciledRows.filter((message) => (
+    const canonical = await db.pg_record_rows.bulkGet(reconciledRows.map(row => `${row.pg_record_type === 'thread' ? 'thread' : 'message'}:${row.record_id}`));
+    const changedRows = reconciledRows.filter((message, index) => (
+      canonical[index]?.operation !== 'delete' && !canonical[index]?.row?.deleted_at
+      && Number(canonical[index]?.row?.row_version || 0) <= Number(message.version || 0)
+      &&
       Number(existingById.get(message.record_id)?.version || 0) <= Number(message.version || 0)
       && !protectedIds.has(message.record_id)
       && !sameLogicalValue(existingById.get(message.record_id), { ...message, ...messageIndexFields(message) })
@@ -1657,6 +1665,7 @@ export async function setSyncState(key, value) {
 export async function runWorkspaceSyncTransaction(callback) {
   const db = wsDb();
   return db.transaction('rw', [
+    db.pg_record_rows,
     db.scopes,
     db.channels,
     db.groups,
@@ -2725,8 +2734,12 @@ export async function upsertScope(scope) {
 
 export async function upsertPgListedScope(scope) {
   const db = wsDb();
-  return db.transaction('rw', db.scopes, db.pending_writes, async () => {
+  return db.transaction('rw', db.scopes, db.pending_writes, db.pg_record_rows, async () => {
     const existing = await db.scopes.get(scope.record_id);
+    const canonical = await db.pg_record_rows.get(`scope:${scope.record_id}`);
+    if (canonical?.operation === 'delete' || canonical?.row?.deleted_at
+      || Number(canonical?.row?.row_version || 0) > Number(scope.version || 0)
+      || Number(existing?.version || 0) > Number(scope.version || 0)) return existing;
     if (['pending', 'failed'].includes(existing?.sync_status) || existing?.pg_reconciliation_pending
       || await db.pending_writes.where('record_id').equals(scope.record_id).count()) return existing;
     return db.scopes.put(sanitizeForStorage(scope));

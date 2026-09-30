@@ -28,14 +28,21 @@ navigation and targeted reads.
 
 ## Record-delta replacement continuity
 
-The negotiated record-delta v1 path stages snapshot pages and their delta
-handover under private, viewer-keyed `sync_state` rows. Download cursors advance
-with staging commits; existing view tables remain visible. The terminal delta
-page publishes all staged changes, omission retirement, and the active cursor
-in one workspace transaction in the materialization worker. An empty delta
-handover may reuse the terminal snapshot cursor; staging keys use page order
-rather than cursor tokens. Failed publication rolls back the entire replacement.
-Interrupted downloads resume from persisted staging without blanking the cache.
+The negotiated record-delta v1 path publishes authorized snapshot upserts
+progressively in the materialization worker. Each transaction applies at most
+32 changes with canonical rows, projections, and a durable subpage checkpoint.
+The opaque download cursor advances only with the last subpage. An interruption
+replays the same server page; committed canonical versions make its prefix
+idempotent. Unseen cached rows remain visible during download and retry.
+
+The terminal delta handover authorizes one omission walk in 32-row transactions.
+Each transaction stores its continuation with the retired rows and recovery
+conflicts. The terminal cursor advances and the reconciliation marker is consumed
+only after all checkpoints complete. Reload finishes a persisted retirement
+before making another network request. Typed tombstones apply in their subpage;
+only omission waits for the completed snapshot/handover. This replaces the
+build-2100 private staging/all-table replay; interrupted old staging triggers
+one preserved-view snapshot recovery rather than replaying it wholesale.
 
 A `409 reset_required` invalidates the download cursor and increments the local
 authority generation. It discards staging, preserves view rows, and starts a new
@@ -198,3 +205,75 @@ caches remain a fallback. The notice is retired only after a successful Tower
 refresh and preference write; failed refreshes remain retryable. Stale inspection
 results and completions from an earlier workspace activation cannot override the
 choice or affect a newly selected workspace.
+
+## Bounded snapshot application and targeted reads
+
+Snapshot generation includes the local reset generation, so equal-version rows
+restore after a reset even if a server reuses its snapshot identifier. Old
+canonical rows and actor sidecars are retained during download, then retired at
+the completed handover. Pending edits and commands keep their conflict recovery
+semantics. A pending unacknowledged local create remains visible; an omitted
+previously authorized edit moves to recovery with its outbox intact.
+
+Navigation and transcript reads remain usable while a snapshot downloads.
+Navigation tokens bind reset generation, snapshot identity, command revision,
+and retirement phase rather than every advancing download cursor. Materializers
+check canonical tombstones and newer entity versions before merging. Authorized
+reads during a snapshot retain its generation tag; omission also consults
+canonical membership so a typed view replacement cannot erase a seen row.
+Changed workspace/actor activation, reset or handover phase rejects a stale
+completion. Ordinary incremental deltas retain their cursor guards.
+
+Targeted transcript work can take an IndexedDB turn between bounded snapshot
+transactions instead of waiting behind the full retirement queue. Its commit
+checks generation, authority token, lineage, canonical versions and tombstones.
+History readiness no longer waits for optional activity/session-health recovery;
+those families retain their own coalescing, recovery errors and background retry.
+The worker client reports a still-pending operation after ten seconds without
+acknowledging, cancelling or starting a second transaction. Worker responses
+include operation duration for diagnostics. Summary backfill also uses 32-row
+transactions and resets its continuation when authority resets.
+
+Regression coverage includes page/subpage interruption and replay, resumed
+retirement before network continuation, legacy staging recovery, reset and
+same-version restoration, one-time omissions, tombstones, membership revocation,
+pending writes, targeted navigation during advancing snapshots, and independent
+history readiness. The native browser worker fixture exercises an interrupted
+85-page replacement. Device/runtime acceptance still requires a managed-browser
+smoke pass; engine replay alone does not establish WM App acceptance.
+
+### Browser validation of bounded application
+
+The real built worker was replayed offline against native Chromium and WebKit
+IndexedDB with a saved 86-page authorized sample: 14,292 canonical changes and
+183 actor identities. Fresh and populated caches both ended with 8 scopes,
+34 channels, 6,451 chat rows, 751 tasks and 253 documents. The sample represents
+one viewer's authorization. Network download time and native-shell behavior are
+outside this replay.
+
+| Engine/cache | Apply across pages | Terminal handover | Longest concurrent read | History during download / handover |
+| --- | ---: | ---: | ---: | ---: |
+| Chromium, fresh | 14.23 s | 572 ms | 209 ms | 8 / 5 ms |
+| Chromium, populated | 13.54 s | 548 ms | 261 ms | 8 / 5 ms |
+| WebKit, fresh | 28.15 s | 658 ms | 586 ms | 56 / 13 ms |
+| WebKit, populated | 46.82 s | 609 ms | 738 ms | 55 / 13 ms |
+
+The earlier published Chromium worker blocked reads for 16.43 s and queued
+history for 16.61 s at handover. A same-sample WebKit replay of that old source
+measured 30.40 s terminal publication, 30.23 s concurrent read blockage and
+30.44 s queued history. Bounded publication substantially shortens read/queue
+blockage; total populated WebKit application remains a performance limitation.
+The total replay including summary backfill was 14.92/14.17 s in Chromium and
+28.79/47.46 s in WebKit. Whole-page duration can exceed a second while readers
+run between its committed subpages. No WM App acceptance is inferred from the
+engine results.
+
+The native worker fixture also passes an interrupted 85-page replacement with
+16,802 presentation rows, subsequent explicit deletion, and authorized empty
+retirement. Required isolated composer/navigation baseline: exact 74/74
+characters, zero typing long tasks, normal/heavy key-to-input p95 0.3/0.7 ms,
+key-to-render p95 217.3/136.5 ms, composer readiness 478/766 ms, thread-open
+p95 99.9 ms and task-detail-open p95 291.4 ms. The documented September baseline
+was 215.6/231.2 ms render p95, 1,022/1,588 ms readiness, 145.8 ms thread open
+and 499.8 ms task detail. The normal render difference is small; exact typing,
+long-task, heavy rendering, readiness and navigation signals remain healthy.

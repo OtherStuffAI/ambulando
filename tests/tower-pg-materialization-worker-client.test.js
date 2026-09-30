@@ -149,3 +149,19 @@ it('retains the original transaction name, stack and safe worker context', async
     await expect(pending).rejects.toMatchObject({ name: 'TransactionInactiveError', stack: 'original worker stack', materializationContext: context });
   } finally { client.dispose(); }
 });
+
+
+it('reports a slow operation without acknowledging, retrying or terminating an active transaction', async () => {
+  vi.useFakeTimers();
+  const worker = new MockWorker(), onDiagnostic = vi.fn();
+  const client = new TowerPgMaterializationWorkerClient({ workspaceKey: 'diagnostic', workerFactory: () => worker, onDiagnostic });
+  try {
+    const pending = client.materialize({ workspaceDbKey: 'db', bundle: { mode: 'snapshot', changes: [{}] } });
+    await vi.advanceTimersByTimeAsync(10000);
+    expect(onDiagnostic).toHaveBeenCalledWith({ operation: 'snapshot', changeCount: 1, pendingCount: 1, elapsedMs: 10000 });
+    expect(client.pending.size).toBe(1); expect(worker.messages).toHaveLength(1); expect(worker.terminated).toBe(false);
+    worker.emit('message', { data: { type: TOWER_PG_MATERIALIZATION_WORKER_PROTOCOL.response, workspaceKey: 'diagnostic', id: 1, ok: true, value: { applied: 1 } } });
+    await expect(pending).resolves.toEqual({ applied: 1 });
+    await vi.advanceTimersByTimeAsync(10000); expect(onDiagnostic).toHaveBeenCalledTimes(1);
+  } finally { client.dispose(); vi.useRealTimers(); }
+});

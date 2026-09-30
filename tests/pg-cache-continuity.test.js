@@ -154,13 +154,13 @@ describe('authorized cache continuity', () => {
     expect(await db.pg_record_rows.count()).toBe(17);
   });
 
-  it('rolls back the whole replacement if the final publication fails', async () => {
+  it('rolls back terminal changes and retains applied pages if the handover commit fails', async () => {
     await resetPgRecordAuthority(store, { preserveViews: true });
     await applyPgRecordChanges(store, snapshot(), { stageSnapshot: true });
     const before = await counts();
     await expect(applyPgRecordChanges(store, delta(), { beforeCommit: () => { throw new Error('commit failed'); } })).rejects.toThrow('commit failed');
     expect(await counts()).toEqual(before);
-    expect((await db.sync_state.get(recordDeltaCursorKey(store))).value).toMatchObject({ staging: true, cursor: 'snapshot-end' });
+    expect((await db.sync_state.get(recordDeltaCursorKey(store))).value).toMatchObject({ snapshotReconciliationPending: true, incrementalSnapshot: true, cursor: 'snapshot-end' });
     await observe(() => applyPgRecordChanges(store, delta()));
   });
 
@@ -298,13 +298,12 @@ describe('authorized cache continuity', () => {
   });
 });
 
-it('marks staging cancellation for recovery before making a startup list request', async () => {
+it('allows a targeted authorized scope read during private staging without discarding cache', async () => {
   const before = await counts();
   await db.sync_state.put({ key: recordDeltaCursorKey(store), value: { cursor: 'partial', staging: true } });
-  const read = vi.fn();
-  await expect(hydrateTowerPgScopes(store, { getTowerPgWorkspaceScopes: read }))
-    .rejects.toMatchObject({ code: 'pg_read_authority_resetting' });
-  expect(read).not.toHaveBeenCalled();
+  const read = vi.fn(async () => ({ scopes: [], identity: { workspace_id: workspaceId } }));
+  await hydrateTowerPgScopes(store, { getTowerPgWorkspaceScopes: read });
+  expect(read).toHaveBeenCalled();
   expect(await counts()).toEqual(before);
 });
 
@@ -316,4 +315,129 @@ it('rejects an old scope commit when staging begins without changing the cursor'
     return { scopes: [], identity: { workspace_id: workspaceId } };
   } })).rejects.toMatchObject({ code: 'pg_read_authority_changed' });
   expect(await counts()).toEqual(before);
+});
+
+it('makes a fresh snapshot progressively visible and rolls back only a failed page, then replays safely', async () => {
+  await Promise.all(db.tables.map(t => t.clear()));
+  const message = fixture.one_message_delta.changes[0];
+  const first = { ...snapshot([message], 'first'), snapshot_complete: false };
+  await applyPgRecordChanges(store, first, { expectedCursor: null, expectedGeneration: 0 });
+  expect(await db.chat_messages.get(message.id)).toBeTruthy();
+  const next = snapshot(fixture.canonical_upserts.changes, 'last');
+  await expect(applyPgRecordChanges(store, next, { expectedCursor: 'first', beforeCommit: () => { throw Error('interrupted'); } })).rejects.toThrow('interrupted');
+  expect((await db.sync_state.get(recordDeltaCursorKey(store))).value.cursor).toBe('first');
+  expect(await db.scopes.count()).toBe(0);
+  expect(await db.chat_messages.get(message.id)).toBeTruthy();
+  await applyPgRecordChanges(store, next, { expectedCursor: 'first' });
+  expect((await applyPgRecordChanges(store, next, { expectedCursor: 'first' })).replay).toBe(true);
+  await applyPgRecordChanges(store, delta(), { expectedCursor: 'last' });
+  expect((await counts()).every(n => n > 0)).toBe(true);
+});
+
+it('resumes interrupted bounded omission retirement without advancing the terminal cursor early', async () => {
+  for (let n = 0; n < 240; n++) await db.scopes.put({ record_id: `obsolete-${n}`, pg_backend: true, pg_delta_family: 'scope', sync_status: 'synced' });
+  await resetPgRecordAuthority(store, { preserveViews: true });
+  await applyPgRecordChanges(store, snapshot([]));
+  let batches = 0;
+  await expect(applyPgRecordChanges(store, delta(), { onRetirementProgress: () => { if (++batches === 2) throw Error('interrupted retirement'); } })).rejects.toThrow('interrupted retirement');
+  const state = (await db.sync_state.get(recordDeltaCursorKey(store))).value;
+  expect(state.cursor).toBe('snapshot-end');
+  expect(state.snapshotReconciliationPending).toBe(true);
+  expect(state.snapshotRetirement.after).toBeTruthy();
+  expect(await db.scopes.count()).toBeLessThan(241);
+  await applyPgRecordChanges(store, delta(), { expectedCursor: 'snapshot-end' });
+  expect(await counts()).toEqual([0, 0, 0]);
+  expect((await db.sync_state.get(recordDeltaCursorKey(store))).value).toMatchObject({ cursor: 'handover', snapshotReconciliationPending: false, snapshotRetirement: null });
+});
+
+it('discards old private staging once while retaining views and restoring equal-version records', async () => {
+  const key = recordDeltaCursorKey(store), before = await counts();
+  await db.sync_state.put({ key, value: { cursor: 'old-staged', staging: true, stagedPages: 1, localGeneration: 3 } });
+  await db.sync_state.put({ key: `${key}:staged:0`, value: { page: snapshot(), order: 0 } });
+  const read = vi.fn().mockImplementationOnce(async (_id, options) => {
+    expect(options.cursor).toBeNull(); expect(await counts()).toEqual(before);
+    return snapshot();
+  }).mockResolvedValueOnce(delta());
+  await syncTowerPgWorkspace(store, {}, ports(read));
+  expect(await counts()).toEqual(before);
+  expect(await db.sync_state.where('key').startsWith(`${key}:staged:`).count()).toBe(0);
+  expect((await db.sync_state.get(key)).value.localGeneration).toBe(4);
+});
+
+it('allows targeted navigation across snapshot page commits but rejects tombstones and changed generation', async () => {
+  await resetPgRecordAuthority(store, { preserveViews: true });
+  const scope = fixture.canonical_upserts.changes.find(c => c.family === 'scope');
+  await applyPgRecordChanges(store, { ...snapshot([scope], 'one'), snapshot_complete: false });
+  await hydrateTowerPgScopes(store, { getTowerPgWorkspaceScopes: async () => {
+    await applyPgRecordChanges(store, { ...snapshot([], 'two'), snapshot_complete: false });
+    return { scopes: [scope.row] };
+  } });
+  expect(await db.scopes.get(scope.id)).toBeTruthy();
+  await hydrateTowerPgScopes(store, { getTowerPgWorkspaceScopes: async () => {
+    await applyPgRecordChanges(store, { ...snapshot([{ ...scope, operation: 'delete', row: null, version: '999' }], 'three'), snapshot_complete: false });
+    return { scopes: [scope.row] };
+  } });
+  expect(await db.scopes.get(scope.id)).toBeUndefined();
+  await expect(hydrateTowerPgScopes(store, { getTowerPgWorkspaceScopes: async () => {
+    await resetPgRecordAuthority(store, { preserveViews: true });
+    return { scopes: [scope.row] };
+  } })).rejects.toMatchObject({ code: 'pg_read_authority_changed' });
+});
+
+it('finishes a persisted retirement before requesting a newer live delta', async () => {
+  await resetPgRecordAuthority(store, { preserveViews: true });
+  await applyPgRecordChanges(store, snapshot([]));
+  await expect(applyPgRecordChanges(store, delta(), { onRetirementProgress: () => { throw Error('reload'); } })).rejects.toThrow('reload');
+  const read = vi.fn(async (_id, options) => {
+    expect(options.cursor).toBe('handover');
+    expect((await db.sync_state.get(recordDeltaCursorKey(store))).value.snapshotReconciliationPending).toBe(false);
+    return delta([], 'new-live-delta');
+  });
+  await syncTowerPgWorkspace(store, {}, ports(read));
+  expect((await db.sync_state.get(recordDeltaCursorKey(store))).value.cursor).toBe('new-live-delta');
+});
+
+it('replays a partially committed subpage after interruption and never skips the unfinished suffix', async () => {
+  await Promise.all(db.tables.map(t => t.clear()));
+  const base = fixture.one_message_delta.changes[0];
+  const changes = Array.from({ length: 70 }, (_, n) => ({ ...base, id: `bounded-${n}`, row: { ...base.row, id: `bounded-${n}` } }));
+  const input = snapshot(changes, 'bounded-end');
+  await expect(applyPgRecordChanges(store, input, { expectedCursor: null, beforeCommit: () => { throw Error('last chunk failed'); } })).rejects.toThrow('last chunk failed');
+  expect(await db.pg_record_rows.count()).toBe(64);
+  expect((await db.sync_state.get(recordDeltaCursorKey(store))).value).toMatchObject({ cursor: null, applyingPage: { nextCursor: 'bounded-end', through: 64 } });
+  await applyPgRecordChanges(store, input, { expectedCursor: null });
+  expect(await db.pg_record_rows.count()).toBe(70);
+  expect((await db.sync_state.get(recordDeltaCursorKey(store))).value).toMatchObject({ cursor: 'bounded-end', applyingPage: null });
+});
+
+it('rejects a malformed completion boundary before publishing any subpage', async () => {
+  const base = fixture.one_message_delta.changes[0], before = await db.pg_record_rows.count();
+  const changes = Array.from({ length: 70 }, (_, n) => ({ ...base, id: `malformed-${n}`, row: { ...base.row, id: `malformed-${n}` } }));
+  await expect(applyPgRecordChanges(store, { ...snapshot(changes), partitions_complete: [] })).rejects.toThrow('completion boundary');
+  expect(await db.pg_record_rows.count()).toBe(before);
+});
+
+it('replays an interrupted delta when the live terminal cursor moves forward', async () => {
+  await Promise.all(db.tables.map(t => t.clear()));
+  const base = fixture.one_message_delta.changes[0];
+  const changes = Array.from({ length: 70 }, (_, n) => ({ ...base, id: `delta-${n}`, row: { ...base.row, id: `delta-${n}` } }));
+  await expect(applyPgRecordChanges(store, delta(changes, 'old-edge'), { expectedCursor: null, beforeCommit: () => { throw Error('interrupted'); } })).rejects.toThrow('interrupted');
+  expect((await db.sync_state.get(recordDeltaCursorKey(store))).value.cursor).toBeNull();
+  await applyPgRecordChanges(store, delta(changes, 'new-edge'), { expectedCursor: null });
+  expect(await db.pg_record_rows.count()).toBe(70);
+  expect((await db.sync_state.get(recordDeltaCursorKey(store))).value.cursor).toBe('new-edge');
+});
+
+it('recovers an omitted pending typed view even when its journal tags were replaced', async () => {
+  const change = fixture.one_message_delta.changes[0];
+  const row = await db.chat_messages.get(change.id);
+  const { pg_delta_family, pg_delta_generation, ...typed } = row;
+  await db.chat_messages.put({ ...typed, body: 'typed local draft', sync_status: 'pending' });
+  await db.pending_writes.add({ record_id: change.id, envelope: { body: 'typed local draft' } });
+  await resetPgRecordAuthority(store, { preserveViews: true });
+  await applyPgRecordChanges(store, snapshot([]));
+  await applyPgRecordChanges(store, delta());
+  expect(await db.chat_messages.get(change.id)).toBeUndefined();
+  expect((await db.pg_record_conflicts.get(`reset:chat_messages:${change.id}`)).local.body).toBe('typed local draft');
+  expect(await db.pending_writes.where('record_id').equals(change.id).count()).toBe(1);
 });
