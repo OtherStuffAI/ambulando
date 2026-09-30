@@ -72,8 +72,10 @@ function validBody(bytes) {
 
 export function createHostedSignupHandler({ towerUrl, siteOrigin, sign, siteNpub = SITE_NPUB, fetchImpl = fetch, now = () => Math.floor(Date.now() / 1000) }) {
   const target = towerSignupUrl(towerUrl);
-  const origin = new URL(siteOrigin).origin;
-  if (new URL(siteOrigin).protocol !== 'https:') throw new Error('Site origin must use HTTPS');
+  const siteUrl = new URL(siteOrigin);
+  const origin = siteUrl.origin;
+  const loopback = siteUrl.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(siteUrl.hostname);
+  if (siteUrl.protocol !== 'https:' && !loopback) throw new Error('Site origin must use HTTPS or loopback HTTP');
   const recent = new Map();
   return async function hostedSignup(request) {
     const incoming = new URL(request.url);

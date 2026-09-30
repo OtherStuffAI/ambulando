@@ -2241,6 +2241,12 @@
       "label": "Hosted signup deployment packaging",
       "notes": [],
       "noUserVisibleChanges": true
+    },
+    {
+      "buildNumber": 2113,
+      "label": "Local hosted signup test support",
+      "notes": [],
+      "noUserVisibleChanges": true
     }
   ]
 }

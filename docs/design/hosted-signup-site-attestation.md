@@ -10,14 +10,14 @@ The browser must sign `POST <FLIGHT_DECK_TOWER_PUBLIC_BASE_URL>/api/v4/flightdec
 
 ## Managed configuration and activation
 
-The local Autopilot app registry's Flight Deck entry invokes `bun run start` on port 41045. The public Flight Deck origin uses a separate CapRover image from `captain-definition`; its container listens on port 80. The public CapRover app needs these runtime names (values are private operational configuration):
+The local Autopilot app registry's Flight Deck entry invokes `bun run start` on port 41045. Local HTTP is accepted only for `localhost`, `127.0.0.1`, or `::1` as the site origin; Tower still uses an HTTPS URL and verifies both signatures. The public Flight Deck origin uses a separate CapRover image from `captain-definition`; its container listens on port 80. The public CapRover app needs these runtime names (values are private operational configuration):
 
 The repository does not expose the public CapRover app's runtime variable names, so provisioning of these exact names remains an activation check. A site identity configured for a different app or under a different name does not make this image signup-ready.
 
 | Name | Meaning |
 | --- | --- |
 | `FLIGHT_DECK_SITE_NSEC` | Runtime-only site signing identity. Never use a `VITE_` prefix or inject it at build time. |
-| `FLIGHT_DECK_SITE_ORIGIN` | Exact public HTTPS browser origin, such as `https://flightdeck.example.com`. |
+| `FLIGHT_DECK_SITE_ORIGIN` | Exact browser origin: HTTPS for published sites, or loopback HTTP for local testing. |
 | `FLIGHT_DECK_TOWER_PUBLIC_BASE_URL` | Tower's exact public HTTPS origin with trailing `/`; the same origin Tower sees through trusted proxy headers. |
 | `PORT` | CapRover container listener is 80. The local Autopilot app supplies its own port. |
 

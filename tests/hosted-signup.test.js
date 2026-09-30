@@ -79,6 +79,24 @@ describe('hosted signup attestation', () => {
     expect(calls).toHaveLength(1);
   });
 
+  it('allows a local HTTP site for a browser smoke test without allowing arbitrary HTTP origins', async () => {
+    const localOrigin = 'http://127.0.0.1:8093';
+    const { calls } = fixture();
+    const localHandler = createHostedSignupHandler({
+      towerUrl: 'https://tower.example/', siteOrigin: localOrigin, siteNpub,
+      sign: (url, hash, id, time) => finalizeEvent({ kind: 27235, created_at: time, content: randomUUID(), tags: [['u', url], ['method', 'POST'], ['payload', hash], ['user_event_id', id]] }, siteKey),
+      now: () => now,
+      fetchImpl: async (...args) => { calls.push(args); return Response.json({ workspace_id: 'ok' }, { status: 201 }); },
+    });
+    const user = proof();
+    const localRequest = new Request(`${localOrigin}/api/hosted/workspaces`, {
+      method: 'POST', headers: { 'content-type': 'application/json', origin: localOrigin, authorization: user.header }, body,
+    });
+    expect((await localHandler(localRequest)).status).toBe(201);
+    expect(calls).toHaveLength(1);
+    expect(() => createHostedSignupHandler({ towerUrl: 'https://tower.example/', siteOrigin: 'http://flightdeck.example', sign: () => null })).toThrow();
+  });
+
   it('fails closed for absent or mismatched site identity', () => {
     expect(() => createSiteSigner('', SITE_NPUB)).toThrow();
     expect(() => createSiteSigner(nip19.nsecEncode(siteKey), SITE_NPUB)).toThrow();
