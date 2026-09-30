@@ -86,6 +86,68 @@ describe('authorized cache continuity', () => {
     expect((await db.sync_state.get(recordDeltaCursorKey(store))).value).toMatchObject({ converged: true, resetting: false });
   });
 
+  it('does not retire typed-hydrated canonical views after an ordinary multi-page delta', async () => {
+    await resetPgRecordAuthority(store, { preserveViews: true });
+    await applyPgRecordChanges(store, snapshot(), { stageSnapshot: true });
+    await applyPgRecordChanges(store, delta());
+    const before = await counts();
+    const scope = fixture.canonical_upserts.changes.find(c => c.family === 'scope').row;
+    const channel = fixture.canonical_upserts.changes.find(c => c.family === 'channel').row;
+    await hydrateTowerPgScopes(store, { getTowerPgWorkspaceScopes: async () => ({ scopes: [scope] }) });
+    await hydrateTowerPgChannels(store, { getTowerPgWorkspaceScopes: async () => ({ scopes: [scope] }),
+      getTowerPgScopeChannels: async () => ({ channels: [channel] }) });
+    // Targeted message reads replace presentation rows without journal generation metadata.
+    const { replacePgMessagesForChannel } = await import('../src/db.js');
+    const messages = await db.chat_messages.toArray();
+    await replacePgMessagesForChannel(channel.id, messages.map(({ pg_delta_generation, pg_delta_family, ...row }) => row));
+    const read = vi.fn().mockResolvedValueOnce({ ...delta([], 'catchup'), has_more: true })
+      .mockImplementationOnce(async () => {
+        expect(await counts()).toEqual(before);
+        return delta([], 'caught-up');
+      });
+    await observe(() => syncTowerPgWorkspace(store, {}, ports(read)));
+    expect(await counts()).toEqual(before);
+    expect(await db.pg_record_rows.count()).toBe(17);
+  });
+
+  it.each([false, true])('recovers pre-fix authority once, including erased views=%s, without clearing surviving cache', async erased => {
+    await resetPgRecordAuthority(store, { preserveViews: true });
+    await applyPgRecordChanges(store, snapshot(), { stageSnapshot: true });
+    await applyPgRecordChanges(store, delta());
+    const key = recordDeltaCursorKey(store);
+    const authority = (await db.sync_state.get(key)).value;
+    delete authority.snapshotReconciliationPending;
+    authority.converged = false; // interrupted ordinary catch-up in build 2116
+    await db.sync_state.put({ key, value: authority });
+    if (erased) await Promise.all([db.scopes.clear(), db.channels.clear(), db.chat_messages.clear()]);
+    const before = await counts();
+    const interrupted = vi.fn().mockImplementationOnce(async (_id, options) => {
+      expect(options.cursor).toBeNull();
+      expect(await counts()).toEqual(before);
+      return { ...snapshot([], 'repair-partial'), snapshot_complete: false };
+    }).mockRejectedValueOnce(failure(503));
+    await expect(syncTowerPgWorkspace(store, {}, ports(interrupted))).rejects.toMatchObject({ status: 503 });
+    expect(await counts()).toEqual(before);
+    db.close(); db = openWorkspaceDb('cache-continuity'); await db.open();
+    const resume = vi.fn().mockResolvedValueOnce(snapshot()).mockResolvedValueOnce(delta());
+    await syncTowerPgWorkspace(store, {}, ports(resume));
+    expect(resume.mock.calls[0][1].cursor).toBe('repair-partial');
+    expect((await counts()).every(n => n > 0)).toBe(true);
+    const ordinary = vi.fn().mockResolvedValueOnce(delta([], 'next-delta'));
+    await syncTowerPgWorkspace(store, {}, ports(ordinary));
+    expect(ordinary.mock.calls[0][1].cursor).toBe('handover');
+    expect((await db.sync_state.get(key)).value.snapshotReconciliationPending).toBe(false);
+  });
+
+  it('does not downgrade upgrade recovery to legacy replacement when v1 disappears', async () => {
+    const key = recordDeltaCursorKey(store);
+    await db.sync_state.put({ key, value: { cursor: 'pre-fix', snapshotComplete: true, converged: true } });
+    const before = await counts();
+    await expect(syncTowerPgWorkspace(store, {}, ports(async () => { throw failure(404); }))).rejects.toMatchObject({ status: 404 });
+    expect(await counts()).toEqual(before);
+    expect((await db.sync_state.get(key)).value.resetting).toBe(true);
+  });
+
   it('publishes a snapshot when the empty handover reuses the terminal snapshot cursor', async () => {
     const read = vi.fn().mockRejectedValueOnce(reset()).mockResolvedValueOnce(snapshot()).mockResolvedValueOnce(delta([], 'snapshot-end'));
     await observe(() => syncTowerPgWorkspace(store, {}, ports(read)));

@@ -164,6 +164,7 @@ export async function applyPgRecordChanges(store, page, options = {}) {
       if (page.mode !== 'delta' || page.has_more) {
         await db.sync_state.put({ key: cursorKey, value: { ...state, staging: true,
           stagedPages: Number(state.stagedPages || 0) + 1, cursor: page.next_cursor,
+          snapshotReconciliationPending: true,
           snapshotId: page.snapshot_id || state.snapshotId,
           snapshotComplete: page.snapshot_complete || state.snapshotComplete || false } });
         return { applied: 0, cursor: page.next_cursor, hasMore: page.has_more, protocolVersion: 1, staged: true };
@@ -375,8 +376,11 @@ export async function applyPgRecordChanges(store, page, options = {}) {
     await refreshChannelSummaries(db, [...affectedChannels]);
     for (const [type, id] of affectedResources.values()) await updateResourceAttention(db, type, id, store, members);
     // Omission retirement is allowed only after both snapshot completion and
-    // the delta handover. The one-time walk is in bounded batches in the worker.
-    if (!options.reconcileOnly && state.snapshotComplete && !state.converged && page.mode === 'delta' && !page.has_more) {
+    // the delta handover, exactly once for that replacement. `converged` also
+    // becomes false during ordinary paged deltas; it is not replacement authority.
+    // Older persisted states without this marker must not repeat retirement.
+    // The one-time walk is in bounded batches in the worker.
+    if (!options.reconcileOnly && state.snapshotComplete && state.snapshotReconciliationPending === true && page.mode === 'delta' && !page.has_more) {
       for (const tableName of new Set(Object.values(FAMILY).map(([name]) => name))) {
         const table = db.table(tableName);
         let after = null;
@@ -406,7 +410,10 @@ export async function applyPgRecordChanges(store, page, options = {}) {
     }
     if (options.beforeCommit) await options.beforeCommit();
     const nextState = { ...state, viewBaselineInitialized: options.viewBaselineInitialized || state.viewBaselineInitialized || false, legacyFallbackActive: false, resetting: false, cursor: page.next_cursor, generation, snapshotId: page.mode === 'snapshot' ? page.snapshot_id : state.snapshotId,
-      snapshotComplete: page.snapshot_complete || state.snapshotComplete || false, converged: page.mode === 'delta' && !page.has_more };
+      snapshotComplete: page.snapshot_complete || state.snapshotComplete || false,
+      snapshotReconciliationPending: page.mode === 'snapshot' ? true
+        : page.has_more ? state.snapshotReconciliationPending === true : false,
+      converged: page.mode === 'delta' && !page.has_more };
     if (!options.reconcileOnly) await db.sync_state.put({ key: cursorKey, value: nextState });
     return { applied, cursor: page.next_cursor, hasMore: page.has_more, fullSnapshot: page.mode === 'snapshot', protocolVersion: 1, needsSummaryBackfill: Boolean(state.snapshotComplete && !state.summariesRebuilt && page.mode === 'delta' && !page.has_more) };
   });

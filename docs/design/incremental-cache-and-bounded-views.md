@@ -30,7 +30,8 @@ path; unsupported responses during that recovery, including a persisted
 `resetting` state on the next run, fail closed without a legacy request.
 
 `forceSnapshot` remains a legacy-only refresh hint: v1 always resumes its saved
-cursor and only Tower's explicit authority/reset response triggers a purge.
+cursor. Tower authority/reset responses and the build 2117 one-time recovery
+for pre-fix snapshot state can reset download authority while preserving views.
 This prevents a refresh from clearing valid cached data before negotiation or
 invalidating an in-flight generation merely to probe protocol availability.
 Normal legacy-only callers retain their existing explicit snapshot behaviour.

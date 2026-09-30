@@ -62,6 +62,26 @@ are rejected before reconciliation. No Tower epoch or wire contract changes are
 required: actor-bound cursors, snapshot partitions, and terminal delta handover
 provide the replacement authority boundary.
 
+### One-time snapshot retirement and upgrade recovery (build 2117)
+
+Snapshot omission retirement is authorized by `snapshotReconciliationPending`,
+set during snapshot staging/application and consumed at the terminal delta
+handover. `snapshotComplete` is historical information; `converged` describes
+current pagination. Neither their combination nor an ordinary delta's terminal
+page authorizes a second omission walk. Typed reads can replace presentation
+rows without journal generation tags, so repeating that walk erased authorized
+navigation and chat even while their canonical rows remained cached.
+
+Pre-fix completed snapshot states lack the new marker. Their first sync resets
+only the download cursor/staging with a generation compare-and-swap, preserves
+visible rows and local intent, and downloads one fresh authorized replacement.
+This restores already-erased views whose retained canonical versions would
+otherwise suppress equal-version replay. Persisted new staging carries the
+marker, so interruption after snapshot completion resumes its delta handover.
+Subsequent ordinary deltas keep the cursor and do not repeat upgrade recovery.
+Tombstones still apply immediately; confirmed replacement omission and typed
+membership revocation retain their existing reconciliation behavior.
+
 ## Workspace isolation
 
 PG selection and Dexie keys include the verified Tower service, workspace

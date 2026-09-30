@@ -1828,11 +1828,25 @@ async function syncTowerPgRecordWorkspace(store, options, deps) {
   let applied = 0;
   let localGeneration = Number(state?.localGeneration || 0);
   let resets = 0;
+  let authorityResetting = Boolean(state?.resetting);
   let directoryReady = Boolean(cursor);
   let viewBaselineInitialized = Boolean(state?.viewBaselineInitialized);
   const materialize = deps.hydrateTowerPgSyncBundle || hydrateTowerPgSyncBundle;
+  // Older clients could retire typed-hydrated views on ordinary delta catch-up
+  // while retaining canonical versions. A delta replay cannot restore those
+  // missing views (equal canonical versions are skipped). Recover once through
+  // a fresh authorized snapshot, preserving all current views until handover.
+  if (state?.snapshotComplete && !Object.hasOwn(state, 'snapshotReconciliationPending')) {
+    assertTowerPgWorkspaceCurrent(store, context);
+    const reset = await materialize(store, { protocol_version: 1, reset_authority: true,
+      local_apply_options: { preserveViews: true, expectedCursor: cursor, expectedGeneration: localGeneration } }, deps);
+    localGeneration = reset.localGeneration;
+    authorityResetting = true;
+    cursor = null;
+    directoryReady = false;
+  }
   // forceSnapshot is a legacy refresh hint. V1 resumes its server-owned cursor;
-  // only an explicit authority/reset response may discard its cached generation.
+  // authority/reset responses and the one-time upgrade repair discard download state.
   // In particular, probing a rolled-back server must never purge the cache.
   for (let pages = 1; pages <= (options.maxPages || 1000); pages++) {
     options.onProgress?.({ stage: 'receiving', page: pages, applied, cursorPresent: Boolean(cursor) });
@@ -1840,7 +1854,7 @@ async function syncTowerPgRecordWorkspace(store, options, deps) {
     try {
       page = await read(context.workspaceId, { baseUrl: context.baseUrl, appNpub: context.appNpub, cursor, limit: options.limit || 200, timeoutMs: options.timeoutMs || 30000 });
     } catch (error) {
-      if (!state?.resetting && resets === 0 && [404, 406, 501].includes(error.status)) {
+      if (!authorityResetting && resets === 0 && [404, 406, 501].includes(error.status)) {
         return { unsupported: true, fallbackAuthority: { expectedCursor: cursor, expectedGeneration: localGeneration } };
       }
       let payload = error.payload || {};

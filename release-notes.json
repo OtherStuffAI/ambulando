@@ -2261,6 +2261,19 @@
       "notes": [
         "Scope and channel refreshes keep local pending changes and cached navigation while workspace sync catches up."
       ]
+    },
+    {
+      "buildNumber": 2117,
+      "label": "Preserve chat and navigation during catch-up",
+      "notes": [
+        "Prevent ordinary multi-page sync from retiring cached scopes, channels and chats. Recover caches affected by earlier builds through one authorized snapshot while keeping current data visible until completion."
+      ]
+    },
+    {
+      "buildNumber": 2118,
+      "label": "Validated sync recovery bundle",
+      "notes": [],
+      "noUserVisibleChanges": true
     }
   ]
 }
