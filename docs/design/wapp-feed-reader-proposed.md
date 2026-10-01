@@ -1,6 +1,6 @@
 # Flight Deck subscribed feed reader
 
-Status: **implemented in source; activation excluded**. Companion to canonical
+Status: **implemented in source; integrated human acceptance remains pending**. Companion to canonical
 [`wapp-feed-v1-proposed`, revision `1`](../../../tower/docs/contract/wapp-feed-v1-proposed.md).
 The proposed baseline remains unchanged. Tower owns the selected
 [actual T1 wire profile](../../../tower/docs/contract/wapp-feed-t1-api.md), including
@@ -16,14 +16,45 @@ legacy/source card list. Feed + discovers authorised installations across shared
 Tower PG Autopilot connections using the existing `/api/wapps` registry, signs
 `/feed/list` as the actual reader, and subscribes to a permitted feed through Tower.
 
-Registered HTTPS discovery is an explicit device preference, partitioned with the
-reader/workspace/backend. A selected FIPS connection never silently falls back to
-HTTPS. FIPS feed discovery/signing is currently unsupported, as are unregistered
-or path-mounted feed bases. Installation identity comes from the authorised registry;
-connection identity is the shared PG UUID, never a device-local legacy identifier.
-Each private refresh re-resolves the registry before fetching. Observed connection
-changes/removal invalidate the source; remote WApp removal is detected on registry
-revalidation or source denial, not by a new registry SSE owner.
+The reader uses the canonical `currentWorkspace.pgMe.actor` from Tower’s
+actual-reader `/me` response. Its npub must match the active session and cached
+workspace signer; mismatched workspace responses are rejected. A missing actor
+triggers a coalesced actual-reader `/me` request before feed hydration or UI work,
+with generation/backend/workspace/session guards and retry after failure. The
+record worker receives the same actor metadata, so cache partitions, SSE and
+record deltas agree. Workspace-owner and workspace-key identities are never used
+as reader substitutes.
+
+The picker uses shared `autopilot_connections` rows from Agents. If the local
+connection cache is empty, it requests the existing service-owned workspace
+bootstrap before discovery. Device transport preferences are per connection and
+reader/workspace/backend. On first use ordinary browsers select registered HTTPS;
+a supported native FIPS client selects FIPS. A saved FIPS selection never falls
+back to HTTPS. The visible connection selector lets the reader explicitly change
+that choice. FIPS registry discovery uses the existing endpoint/peer-pinned
+Autopilot adapter and exact reader signing of `/api/wapps`.
+
+The registry currently exposes a WApp `launchUrl` but no authoritative WApp mesh
+endpoint and peer binding. FIPS feed loading therefore reports a recoverable
+prerequisite instead of guessing a mesh port or using HTTPS. Platform work must
+advertise and bind the WApp feed mesh destination and support exact intended-URL
+reader and graph signatures before this can be implemented safely. Path-mounted
+feed bases remain unsupported. Each private refresh re-resolves the registry;
+observed connection changes/removal invalidate the source.
+
+HTTPS discovery requires the Autopilot registry to permit unsigned browser
+OPTIONS preflight and return CORS headers on signed GET/error responses for the
+Flight Deck origin. Book of Sand independently needs the exact origin in
+`BOOK_OF_SAND_FEED_CORS_ORIGINS`. Runtime CORS/ACL failures cannot be repaired by
+reader actor initialization or restarting Flight Deck.
+
+The registry publisher `appNpub` must not be assumed to identify a separate
+existing graph corpus. A source with a distinct graph identity needs an
+explicit authoritative feed graph binding published by the platform; clients
+must validate that binding before signing. Do not rotate a publisher or accept
+arbitrary bootstrap identities to work around a mismatch. Graph targets must
+use the reader’s selected logical Tower origin. A server-local Tower URL needs
+a dedicated feed public signing origin, preserving unrelated publisher paths.
 
 Public URLs accept JSON Feed 1.1 or RSS/podcast feeds through direct browser CORS,
 with no reader credentials, cookies or public proxy. The user selects the format.
@@ -104,7 +135,7 @@ verifies and forwards the graph signatures; Tower RLS remains authoritative.
 
 W1 currently projects a bounded recent window of 200 Story + 200 Reference rows.
 Full historical coverage, actual human browser CORS/ACL proof and FIPS/WMapp feed
-signing remain integration dependencies. Allowed browser origins need separate
+signing remain platform dependencies. Allowed browser origins need separate
 runtime configuration during an authorised activation. Missing endpoint, app
 identity or graph-group binding fails closed rather than inventing metadata.
 

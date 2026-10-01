@@ -2318,6 +2318,35 @@
       "notes": [
         "Reject reused feed mutation IDs without retrying. Reconcile personal feed flags only when Tower reports an authoritative state conflict. Source fix only; coordinated runtime activation remains separate."
       ]
+    },
+    {
+      "buildNumber": 2126,
+      "label": "Recover Feed identity and app discovery",
+      "notes": [
+        "Use your verified Tower reader identity when opening Feed, recover missing startup identity, and keep subscriptions isolated when switching accounts or workspaces.",
+        "Discover apps from existing Agents connections with per-connection HTTPS/FIPS choices and a styled feed picker with loading, retry and readable access or connection errors."
+      ]
+    },
+    {
+      "buildNumber": 2127,
+      "label": "Complete Feed startup recovery",
+      "notes": [
+        "Recover the reader actor through the canonical saved-workspace store when startup metadata is missing, without changing the selected signer or workspace."
+      ]
+    },
+    {
+      "buildNumber": 2128,
+      "label": "Explain Feed source prerequisites",
+      "notes": [
+        "Explain source graph-binding, reader access and unsupported transport failures in subscribed Feed, with actionable recovery steps."
+      ]
+    },
+    {
+      "buildNumber": 2129,
+      "label": "Finish Feed picker presentation",
+      "notes": [
+        "Use consistent form borders, section dividers and loading feedback in the Add feed dialog on phone and desktop."
+      ]
     }
   ]
 }

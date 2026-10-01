@@ -548,13 +548,14 @@ export const syncManagerMixin = {
     return {
       backendUrl: this.backendUrl,
       workspaceOwnerNpub: this.workspaceOwnerNpub || workspace.workspaceOwnerNpub || identity.workspace_owner_npub || '',
-      currentWorkspaceActorId: this.currentWorkspaceActorId || this.pgActorId || this.currentActorId || '',
       session: { npub: this.session?.npub || '' },
       workspaceHarnessAgents: (this.workspaceHarnessAgents || []).map(entry => ({
         agent_npub: String(entry?.agent_npub || '').trim(),
         url: String(entry?.url || '').trim(),
       })),
       currentWorkspace: {
+        pgMe: (workspace.pgMe || workspace.pg_me) ? { actor: (workspace.pgMe || workspace.pg_me).actor, identity: (workspace.pgMe || workspace.pg_me).identity } : null,
+        pgSessionNpub: workspace.pgSessionNpub || '',
         workspaceId: workspace.workspaceId || workspace.workspace_id || identity.workspace_id || '',
         workspaceOwnerNpub: workspace.workspaceOwnerNpub || identity.workspace_owner_npub || this.workspaceOwnerNpub || '',
       },

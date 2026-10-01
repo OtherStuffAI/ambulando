@@ -387,6 +387,9 @@ export function createAutopilotDiscoveryClient(verifiedPackage, {
       }
       return request(path, 'control API', options);
     },
+    readFeedAppRegistry(signal) {
+      return request('/api/wapps', 'feed app discovery', { signal });
+    },
     async health() {
       const payload = await request(verifiedPackage.healthPath, 'health');
       if (payload?.installation_id !== verifiedPackage.installationId

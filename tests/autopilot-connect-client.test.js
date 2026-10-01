@@ -212,6 +212,17 @@ describe('Autopilot NIP-98/FIPS discovery client', () => {
     expect(disconnect).toHaveBeenCalledOnce();
   });
 
+  it('discovers feed apps through its independently pinned handle and signs the exact registry URL', async () => {
+    const bridge = { version: 2, connect: vi.fn(async ({ endpoint }) => ({ version: 2, endpoint })), fetch: vi.fn(async () => response({ wapps: [] })), disconnect: vi.fn() };
+    const authHeader = vi.fn(async () => 'Nostr reader'), publicFetch = vi.fn(); vi.stubGlobal('fetch', publicFetch);
+    const client = createAutopilotDiscoveryClient(verified, { transport: scoped(bridge), authHeader });
+    await expect(client.readFeedAppRegistry()).resolves.toEqual({ wapps: [] });
+    expect(bridge.connect).toHaveBeenCalledWith({ endpoint: verified.fipsEndpoint, peerNpub: verified.transportNpub, purpose: 'autopilot' });
+    expect(authHeader).toHaveBeenCalledWith(`${verified.fipsEndpoint}/api/wapps`, 'GET', null);
+    expect(bridge.fetch).toHaveBeenCalledWith(`${verified.fipsEndpoint}/api/wapps`, expect.objectContaining({ credentials: 'omit', redirect: 'error', headers: expect.objectContaining({ Authorization: 'Nostr reader' }) }));
+    expect(publicFetch).not.toHaveBeenCalled(); await client.disconnect(); expect(bridge.disconnect).toHaveBeenCalledOnce();
+  });
+
   it('signs and sends the exact URL, method, and serialized body', async () => {
     const signingSecret = generateSecretKey();
     const authHeader = vi.fn((url, method, body) => createNip98AuthHeaderForSecret(url, method, body, signingSecret));

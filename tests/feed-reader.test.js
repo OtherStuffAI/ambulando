@@ -11,7 +11,7 @@ import { materializeFeedReaderEvent } from '../src/feed/materialize.js';
 import { applyPgRecordChanges } from '../src/pg-record-delta.js';
 import fixture from './fixtures/flightdeck-record-delta-v1.json';
 const workspaceId = fixture.one_message_delta.changes[0].workspace_id;
-const store = () => ({ backendUrl: 'https://tower.example', currentWorkspaceActorId: 'reader', session: { npub: 'npub-reader' }, currentWorkspace: { workspaceId, workspaceOwnerNpub: 'owner' } });
+const store = () => ({ backendUrl: 'https://tower.example', session: { npub: 'npub-reader' }, currentWorkspace: { workspaceId, workspaceOwnerNpub: 'owner', pgSessionNpub: 'npub-reader', pgMe: { actor: { actor_id: 'reader', npub: 'npub-reader' } } } });
 const context = feedContextKey({ baseUrl: 'https://tower.example', workspaceId, readerActorId: 'reader' });
 const sub = (id = 'sub', kind = 'public') => ({ schema_version: 1, id, workspace_id: workspaceId, reader_actor_id: 'reader', source: kind === 'public' ? { kind, url: `https://feeds.example/${id}`, format: 'jsonfeed-1.1' } : { kind, autopilot_connection_id: 'connection', installation_id: 'installation', feed_id: 'editions', endpoint: '/feed/editions', format: 'jsonfeed-1.1' }, status: 'active', row_version: 1, created_at: '2026-10-01T00:00:00Z', updated_at: '2026-10-01T00:00:00Z' });
 const item = (id = 'item') => ({ id, title: 'Headline', url: 'https://book.example/?story=exact%20headline', content_html: '<script>danger()</script><b>Hello</b><img src="https://tracking.example/pixel">', date_published: '2026-10-01T00:00:00Z' });
@@ -107,7 +107,7 @@ describe('T1 adapters, reader convergence and CAS', () => {
     const d = prepareFeedCommand(c, 'feed-state.patch', input, { db, request: async () => { throw new TypeError('offline'); } }); await d.optimistic(); await expect(d.execute()).rejects.toThrow('offline'); expect((await db.feed_commands.get('offline')).context).toBe(context);
     const commandTowerWorkspace = vi.fn(); await hydrateFeedReader({ ...c, commandTowerWorkspace }, { db, request: async (_w, suffix) => suffix ? { item_states: [], next_cursor: null } : { subscriptions: [{ ...sub(), status: 'unsubscribed' }], next_cursor: null } }); expect(commandTowerWorkspace).not.toHaveBeenCalled(); expect(await db.feed_commands.count()).toBe(0);
   });
-  it('rejects late hydration after account switch before writes', async () => { const c = store(), gate = deferred(); const running = hydrateFeedReader(c, { db, request: () => gate.promise }); c.currentWorkspaceActorId = 'other'; gate.resolve({ subscriptions: [sub()], next_cursor: null }); await expect(running).rejects.toThrow('feed_disposed'); expect(await db.feed_subscriptions.count()).toBe(0); });
+  it('rejects late hydration after account switch before writes', async () => { const c = store(), gate = deferred(); const running = hydrateFeedReader(c, { db, request: () => gate.promise }); c.session = { npub: 'other' }; gate.resolve({ subscriptions: [sub()], next_cursor: null }); await expect(running).rejects.toThrow('feed_disposed'); expect(await db.feed_subscriptions.count()).toBe(0); });
   it('materializes T1 feed families through the existing record-delta worker path', async () => {
     const rows = [sub(), { schema_version: 1, id: 'state', workspace_id: workspaceId, reader_actor_id: 'reader', subscription_id: 'sub', item_id: 'item', row_version: 1, read: true, saved: true, dismissed: false }];
     const page = { ...fixture.one_message_delta, families: [...fixture.one_message_delta.families, 'feed_subscription', 'feed_item_state'], changes: rows.map((r, i) => ({ family: i ? 'feed_item_state' : 'feed_subscription', id: r.id, workspace_id: workspaceId, version: '1', operation: 'upsert', row: r })), next_cursor: 'feed-delta' };
@@ -116,11 +116,14 @@ describe('T1 adapters, reader convergence and CAS', () => {
   });
 });
 describe('existing registry and exact reader signing', () => {
-  it('requires explicit HTTPS discovery on a connection with a selected FIPS endpoint', async () => {
-    const connections = [{ id: 'dual', pg_backend: true, fips_endpoint: 'http://instance.fips:8000', https_endpoint: 'https://registered.example' }];
+  it('uses the selected pinned FIPS service without HTTPS fallback and permits explicit HTTPS', async () => {
+    const connections = [{ id: 'dual', pg_backend: true, fips_transport_npub: 'npub-node', fips_endpoint: 'http://npub-node.fips:8000', https_endpoint: 'https://registered.example' }];
     const fetchImpl = vi.fn(async () => response({ wapps: [] })), sign = vi.fn(async () => 'reader');
-    expect((await discoverFeedApps(connections, undefined, { sign, fetchImpl })).errors[0].error).toBe('unsupported_source_transport'); expect(fetchImpl).not.toHaveBeenCalled();
-    expect((await discoverFeedApps(connections, undefined, { sign, fetchImpl, discoveryTransport: 'https' })).errors).toEqual([]); expect(fetchImpl).toHaveBeenCalledTimes(1);
+    const disconnect = vi.fn(), readFeedAppRegistry = vi.fn(async () => { throw new Error('FIPS connection unavailable'); });
+    const createClient = vi.fn(() => ({ readFeedAppRegistry, disconnect }));
+    expect((await discoverFeedApps(connections, undefined, { sign, fetchImpl, createClient })).errors[0].error).toBe('FIPS connection unavailable');
+    expect(fetchImpl).not.toHaveBeenCalled(); expect(disconnect).toHaveBeenCalledTimes(1);
+    expect((await discoverFeedApps(connections, undefined, { sign, fetchImpl, connectionTransports: { dual: 'https' } })).errors).toEqual([]); expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
 
   it('discovers authorised installations across shared PG connections, isolates failures', async () => {

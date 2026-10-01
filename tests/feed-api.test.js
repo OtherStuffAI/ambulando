@@ -16,7 +16,7 @@ const conflict = code => Response.json({ error: { code, message: code, retryable
 const workspaceId = '00000000-0000-4000-8000-000000000001';
 const subscriptionId = '00000000-0000-4000-8000-000000000002';
 const mutationId = '00000000-0000-4000-8000-000000000003';
-const store = () => ({ backendUrl: 'https://tower.example', currentWorkspaceActorId: 'reader', session: { npub: 'npub-reader' }, currentWorkspace: { workspaceId, workspaceOwnerNpub: 'owner' } });
+const store = () => ({ backendUrl: 'https://tower.example', session: { npub: 'npub-reader' }, currentWorkspace: { workspaceId, workspaceOwnerNpub: 'owner', pgSessionNpub: 'npub-reader', pgMe: { actor: { actor_id: 'reader', npub: 'npub-reader' } } } });
 const subscription = { schema_version: 1, id: subscriptionId, workspace_id: workspaceId, reader_actor_id: 'reader', source: { kind: 'public', url: 'https://feeds.example/feed', format: 'jsonfeed-1.1' }, status: 'active', row_version: 1 };
 const state = version => ({ schema_version: 1, id: '00000000-0000-4000-8000-000000000004', workspace_id: workspaceId, reader_actor_id: 'reader', subscription_id: subscriptionId, item_id: 'edition:example', row_version: version, read: true, saved: true, dismissed: true });
 const input = () => ({ subscriptionId, body: { mutation_id: mutationId, expected_row_version: 1, item_id: 'edition:example', patch: { read: false } } });

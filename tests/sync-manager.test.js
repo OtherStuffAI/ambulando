@@ -1743,10 +1743,11 @@ describe('PG workspace startup progress', () => {
     const { fn, store } = bindMethod('runTowerPgWorkspaceSync', {
       backendUrl: 'https://tower.example',
       currentWorkspaceKey: 'workspace-db',
-      currentWorkspaceActorId: 'actor-1',
       currentWorkspace: {
         workspaceId: 'workspace-1',
         workspaceOwnerNpub: 'npub1owner',
+        pgSessionNpub: 'npub1viewer',
+        pgMe: { actor: { actor_id: 'actor-1', npub: 'npub1viewer' } },
       },
       session: { npub: 'npub1viewer' },
       materializeTowerPgWorkspaceBundle,
@@ -1758,9 +1759,8 @@ describe('PG workspace startup progress', () => {
       workspaceDbKey: 'workspace-db',
       store: expect.objectContaining({
         workspaceOwnerNpub: 'npub1owner',
-        currentWorkspaceActorId: 'actor-1',
         session: { npub: 'npub1viewer' },
-        currentWorkspace: expect.objectContaining({ workspaceId: 'workspace-1' }),
+        currentWorkspace: expect.objectContaining({ workspaceId: 'workspace-1', pgMe: { actor: { actor_id: 'actor-1', npub: 'npub1viewer' }, identity: undefined } }),
       }),
     }));
     expect(store.towerSyncInstrumentation).toMatchObject({ materialisationsCommitted: 1 });

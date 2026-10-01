@@ -1,16 +1,37 @@
 import { inboundFeedReaderRow } from '../translators/feed-reader.js';
-import { towerPgFeedRequest } from '../api.js';
+import { resolvePgReaderActorId } from '../pg-reader-identity.js';
+import { towerPgFeedRequest, getTowerPgWorkspaceMe } from '../api.js';
 import { getWorkspaceDb } from '../db.js';
 import { resolveTowerPgWorkspaceContext } from '../pg-read-hydrator.js';
 import { feedContextKey, feedRowKey, putFeedRows } from './store.js';
 export function readerContext(store) {
   const c = resolveTowerPgWorkspaceContext(store);
-  return { ...c, readerActorId: store.currentWorkspaceActorId || store.pgActorId || store.currentActorId || '' };
+  return { ...c, readerActorId: resolvePgReaderActorId(store) };
+}
+const IDENTITIES = new WeakMap();
+export async function ensureFeedReaderIdentity(store, { readMe = getTowerPgWorkspaceMe } = {}) {
+  const c = readerContext(store);
+  if (c.readerActorId) return c;
+  if (!c.workspaceId || !c.sessionNpub || (c.workspace.pgSessionNpub && c.workspace.pgSessionNpub !== c.sessionNpub)) throw new Error('reader_identity_pending');
+  const key = JSON.stringify([c.baseUrl, c.workspaceId, c.sessionNpub, c.generation]);
+  if (IDENTITIES.get(store)?.key === key) return IDENTITIES.get(store).promise;
+  const promise = (async () => {
+    const me = await readMe(c.workspaceId, { ...c });
+    const n = readerContext(store);
+    if (JSON.stringify([n.baseUrl, n.workspaceId, n.sessionNpub, n.generation]) !== key) throw new Error('feed_disposed');
+    const workspace = { ...store.currentWorkspace, pgMe: me, pgSessionNpub: c.sessionNpub };
+    if (!resolvePgReaderActorId({ session: store.session, currentWorkspace: workspace })) throw new Error('reader_identity_pending');
+    // currentWorkspace is a computed getter over knownWorkspaces in Alpine.
+    Object.assign(store.currentWorkspace, { pgMe: me, pgSessionNpub: c.sessionNpub });
+    return readerContext(store);
+  })();
+  IDENTITIES.set(store, { key, promise });
+  try { return await promise; } finally { if (IDENTITIES.get(store)?.promise === promise) IDENTITIES.delete(store); }
 }
 const validateReaderRow = inboundFeedReaderRow;
 export async function hydrateFeedReader(store, { request = towerPgFeedRequest, db = getWorkspaceDb(), replay = true } = {}) {
-  const c = readerContext(store), context = feedContextKey(c), generation = c.generation;
-  if (!c.readerActorId) throw new Error('reader_identity_required');
+  const c = await ensureFeedReaderIdentity(store), context = feedContextKey(c), generation = c.generation;
+  if (!c.readerActorId) throw new Error('reader_identity_pending');
   const current = () => { if (feedContextKey(readerContext(store)) !== context || readerContext(store).generation !== generation) throw new Error('feed_disposed'); };
   const readPages = async (suffix, field, state = false) => {
     const seen = new Set(), rows = []; let cursor;
@@ -39,6 +60,7 @@ export async function hydrateFeedReader(store, { request = towerPgFeedRequest, d
 export function prepareFeedCommand(store, name, input, { request = towerPgFeedRequest, db = getWorkspaceDb() } = {}) {
   const c = readerContext(store), context = feedContextKey(c), generation = c.generation;
   const current = () => { if (feedContextKey(readerContext(store)) !== context || readerContext(store).generation !== generation) throw new Error('feed_disposed'); };
+  if (!c.readerActorId) throw new Error('reader_identity_pending');
   const queueId = input.queueId || input.body.mutation_id;
   let body = structuredClone(input.body), suffix = input.subscriptionId ? `/${encodeURIComponent(input.subscriptionId)}` : '';
   const state = name === 'feed-state.patch';

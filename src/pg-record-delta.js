@@ -1,3 +1,4 @@
+import { resolvePgReaderActorId } from './pg-reader-identity.js';
 import { inboundFeedReaderRow } from './translators/feed-reader.js';
 import { feedContextKey } from './feed/store.js';
 import { threadHistoryLineage } from './thread-history-coverage.js';
@@ -276,7 +277,7 @@ async function applyRecordPage(store, page, options = {}) {
       if (raw.family === 'resource_view_state') localId = raw.row
         ? `${raw.row.resource_type}:${raw.row.resource_id}` : raw.id.split(':').slice(1).join(':');
       if (raw.family === 'feed_subscription' || raw.family === 'feed_item_state') {
-        const reader = { ...context, readerActorId: store.currentWorkspaceActorId || store.pgActorId || store.currentActorId || '' };
+        const reader = { ...context, readerActorId: resolvePgReaderActorId(store) };
         if (!reader.readerActorId) throw new Error('reader_identity_required');
         if (raw.operation === 'delete') {
           await table.where('context').equals(feedContextKey(reader)).filter(r => r.id === raw.id).delete();

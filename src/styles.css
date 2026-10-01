@@ -24557,3 +24557,31 @@ html.wingman-iphone-webview .chat-channel-tab-scroll * {
 .feed-attachment { display: block; overflow-wrap: anywhere; }
 .feed-add-dialog { width: min(560px, calc(100vw - 24px)); max-height: calc(100dvh - 24px); overflow: auto; }
 @media (max-width: 600px) { .feed-reader-toolbar .btn-compact { min-height: 36px; } .subscribed-feed { min-width: 0; } }
+
+.feed-add-dialog .feed-choice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.feed-add-dialog .feed-choice > div { min-width: 0; }
+.feed-add-dialog .feed-choice .settings-field-help { margin: 4px 0 0; }
+.feed-add-dialog .error-text { overflow-wrap: anywhere; }
+.feed-add-dialog input, .feed-add-dialog select {
+  width: 100%;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: inherit;
+  font: inherit;
+}
+.feed-add-dialog header h3 { margin: 0; }
+.feed-add-dialog .wapp-management-editor-body { min-height: 0; }
+
+.feed-add-dialog header, .feed-add-dialog footer { border-color: var(--border); }
+.feed-add-dialog hr { width: 100%; margin: 0; border: 0; border-top: 1px solid var(--border); }

@@ -1,27 +1,60 @@
+import { createAutopilotDiscoveryClient } from '../autopilot-connect-client.js';
+import { storedPackage } from '../autopilot-connection-refresh.js';
 import { createNip98AuthHeader } from '../auth/nostr.js';
 import { getWorkspaceDb } from '../db.js';
 import { feedEndpoint, safeFeedUrl, FEED_LIMITS } from './normalize.js';
 import { boundedFeedText } from './source-service.js';
+async function sourceHttpError(response, signal) {
+  let payload;
+  try { payload = JSON.parse(await boundedFeedText(response, signal)); } catch { /* Status remains authoritative. */ }
+  const code = payload?.error?.code || payload?.code;
+  const message = payload?.error?.message || (typeof payload?.error === 'string' ? payload.error : '');
+  const error = new Error(message || `Feed source returned HTTP ${response.status}.`);
+  error.status = response.status; error.code = code; error.feedSource = true;
+  return error;
+}
+export function defaultFeedConnectionTransport(connection) {
+  const native = globalThis.window?.fipsTransport;
+  return native?.available !== false && native?.version >= 2 ? 'fips' : connection.https_endpoint ? 'https' : 'fips';
+}
 export async function signedReaderJson(url, signal, { sign = createNip98AuthHeader, fetchImpl = fetch } = {}) {
   const timer = new AbortController(); const timeout = setTimeout(() => timer.abort(), FEED_LIMITS.timeout);
   const joined = signal ? AbortSignal.any([signal, timer.signal]) : timer.signal;
   try {
     const authorization = await sign(url, 'GET'); joined.throwIfAborted();
     const r = await fetchImpl(url, { headers: { Authorization: authorization }, signal: joined, method: 'GET', credentials: 'omit', redirect: 'error', cache: 'no-store', mode: 'cors' });
-    if (!r.ok) { const e = new Error(`feed_http_${r.status}`); e.status = r.status; throw e; }
+    if (!r.ok) throw await sourceHttpError(r, joined);
     if (!/json/i.test(r.headers.get('content-type') || '')) throw new Error('unsupported_content_type');
     return JSON.parse(await boundedFeedText(r, joined));
   } finally { clearTimeout(timeout); }
 }
 export async function discoverFeedApps(connections, signal, options = {}) {
-  const results = await Promise.allSettled(connections.filter(c => c.pg_backend && !c.archived_at).map(async c => {
-    if (c.fips_endpoint && options.discoveryTransport !== 'https') throw new Error('unsupported_source_transport');
-    const base = safeFeedUrl(c.https_endpoint);
-    const payload = await signedReaderJson(new URL('/api/wapps', base).href, signal, options);
+  const eligible = connections.filter(c => c.pg_backend && !c.archived_at);
+  const results = await Promise.allSettled(eligible.map(async c => {
+    const transport = options.connectionTransports?.[c.id] || options.discoveryTransport || (c.fips_endpoint ? 'fips' : 'https');
+    let payload;
+    if (transport === 'fips') {
+      const client = (options.createClient || createAutopilotDiscoveryClient)(storedPackage(c));
+      try { payload = await client.readFeedAppRegistry(signal); } finally { await client.disconnect(); }
+    } else {
+      const base = safeFeedUrl(c.https_endpoint);
+      payload = await signedReaderJson(new URL('/api/wapps', base).href, signal, options);
+    }
     if (!Array.isArray(payload.wapps)) throw new Error('invalid_registry');
-    return payload.wapps.map(w => ({ connection: c, installation_id: w.wappInstallationId, title: w.title, launch_url: w.launchUrl, scope_id: w.scopeId, app_npub: w.appNpub, app_id: w.appId })).filter(w => /^[\da-f-]{36}$/i.test(w.installation_id) && w.launch_url);
+    return payload.wapps.filter(w => w.recordState !== 'deleted' && w.recordState !== 'archived')
+      .map(w => ({ connection: c, transport, installation_id: w.wappInstallationId, title: w.title, launch_url: w.launchUrl, scope_id: w.scopeId, app_npub: w.appNpub, app_id: w.appId }))
+      .filter(w => /^[\da-f-]{36}$/i.test(w.installation_id) && w.launch_url);
   }));
-  return { apps: results.flatMap(r => r.status === 'fulfilled' ? r.value : []), errors: results.flatMap((r, i) => r.status === 'rejected' ? [{ connection_id: connections.filter(c => c.pg_backend && !c.archived_at)[i].id, error: r.reason?.message || 'registry_unavailable', status: r.reason?.status }] : []) };
+  return { apps: results.flatMap(r => r.status === 'fulfilled' ? r.value : []), errors: results.flatMap((r, i) => r.status === 'rejected' ? [{ connection_id: eligible[i].id, connection_name: eligible[i].display_name || eligible[i].https_endpoint || 'Autopilot', error: feedDiscoveryError(r.reason), status: r.reason?.status }] : []) };
+}
+export function feedDiscoveryError(error) {
+  if ([401, 403].includes(error?.status)) return 'App discovery access denied. Check this Autopilot’s access for your signed-in identity.';
+  if (error?.message === 'invalid_registry') return 'This Autopilot returned an unsupported app registry response. Retry or update the Autopilot.';
+  if (error?.status === 404) return 'This Autopilot does not expose its app registry.';
+  if (error?.code === 'fips_unavailable') return 'FIPS requires a supported, unlocked Wingman app. Choose registered HTTPS to connect in this browser.';
+  if (error?.name === 'AbortError' || error?.name === 'TimeoutError') return 'App discovery timed out. Retry this connection.';
+  if (error instanceof TypeError) return 'Cannot reach this Autopilot. Check the connection and its browser CORS settings, then retry.';
+  return error?.message || 'App discovery unavailable. Retry this connection.';
 }
 export function validateGraphTargets(targets, app, towerContext) {
   const result = {};
@@ -37,6 +70,8 @@ export function validateGraphTargets(targets, app, towerContext) {
   return result;
 }
 async function resolveWappBinding(app, signal, towerContext, options = {}) {
+  // Registry currently has no independently pinned WApp mesh endpoint.
+  if (app.transport === 'fips') throw new Error('unsupported_source_transport');
   const base = new URL(safeFeedUrl(app.launch_url));
   // Never guess a feed base for a path-mounted installation.
   if (base.pathname !== '/') throw new Error('unsupported_source_transport');
@@ -65,7 +100,7 @@ export async function listWappFeeds(app, signal, towerContext, options = {}) {
   do {
     const u = new URL(initial); u.searchParams.set('limit', '100'); if (cursor) u.searchParams.set('cursor', cursor);
     const r = await (options.fetchImpl || fetch)(u.href, { headers: await binding.headers(u.href), method: 'GET', signal, credentials: 'omit', redirect: 'error', cache: 'no-store', mode: 'cors' });
-    if (!r.ok) { const e = new Error(`feed_http_${r.status}`); e.status = r.status; throw e; }
+    if (!r.ok) throw await sourceHttpError(r, signal);
     const p = JSON.parse(await boundedFeedText(r, signal));
     if (p.contract_version !== 1 || !Array.isArray(p.feeds) || p.feeds.length > 100 || !(p.next_cursor === null || typeof p.next_cursor === 'string')) throw new Error('unsupported_contract');
     for (const f of p.feeds) { if (f.format !== 'jsonfeed-1.1' || typeof f.title !== 'string' || !f.title.trim() || typeof f.description !== 'string' || feeds.some(x => x.id === f.id)) throw new Error('invalid_feed_list'); feedEndpoint(binding.origin, f.endpoint, f.id); feeds.push(f); }
@@ -80,7 +115,7 @@ export async function resolveSubscriptionSource(sub, signal, towerContext, optio
   if (!c || !c.pg_backend || c.workspace_id !== towerContext.workspaceId || c.archived_at) throw new Error('registry_revoked');
   const partition = JSON.stringify([towerContext.baseUrl, towerContext.workspaceId, towerContext.readerActorId]);
   const preference = await db.feed_connection_transports.get(JSON.stringify([partition, c.id]));
-  const result = await discoverFeedApps([c], signal, { ...options, discoveryTransport: preference?.transport }); if (result.errors.length) { const e = new Error(result.errors[0].error); e.status = result.errors[0].status; throw e; }
+  const result = await discoverFeedApps([c], signal, { ...options, discoveryTransport: preference?.transport || defaultFeedConnectionTransport(c) }); if (result.errors.length) { const e = new Error(result.errors[0].error); e.status = result.errors[0].status; throw e; }
   const app = result.apps.find(a => a.installation_id === sub.source.installation_id); if (!app) throw new Error('registry_revoked');
   const binding = await resolveWappBinding(app, signal, towerContext, options);
   return { url: feedEndpoint(binding.origin, sub.source.endpoint, sub.source.feed_id), headers: binding.headers };
