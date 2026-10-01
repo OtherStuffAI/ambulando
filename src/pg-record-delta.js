@@ -436,6 +436,7 @@ async function applyRecordPage(store, page, options = {}) {
       && state.snapshotReconciliationPending === true && page.mode === 'delta' && !page.has_more;
     if (options.beforeCommit) await options.beforeCommit();
     const nextState = { ...state, viewBaselineInitialized: options.viewBaselineInitialized || state.viewBaselineInitialized || false, legacyFallbackActive: false, resetting: false, cursor: retirementPending || options.partialPage ? state.cursor : page.next_cursor, applyingPage: options.partialPage ? { nextCursor: page.next_cursor, through: options.pageOffset } : null, generation, incrementalSnapshot: true, snapshotRetirement: retirementPending ? state.snapshotRetirement || { tableIndex: 0, after: null, nextCursor: page.next_cursor } : null, snapshotId: page.mode === 'snapshot' ? page.snapshot_id : state.snapshotId,
+      snapshotFamilies: page.mode === 'snapshot' ? page.families.filter(f => PG_RECORD_DELTA_FAMILIES.includes(f)) : state.snapshotFamilies,
       snapshotComplete: page.snapshot_complete || state.snapshotComplete || false,
       snapshotReconciliationPending: page.mode === 'snapshot' ? true
         : (page.has_more || retirementPending) ? state.snapshotReconciliationPending === true : false,
@@ -484,12 +485,14 @@ async function retireSnapshotOmissions(store, options) {
         }
         const canonicalTable = ['pg_record_rows', 'pg_actors'].includes(tableName);
         if (canonicalTable) {
+          if (row.family?.startsWith('feed_') && !state.snapshotFamilies?.includes(row.family)) continue;
           if (row.generation !== state.generation) obsolete.push(row.key || row.actor_id);
           continue;
         }
         if (!(row.pg_backend || row.pg_delta_family || tableName === 'resource_view_states')
           || row.pg_delta_generation === state.generation) continue;
         const family = row.pg_delta_family || row.pg_record_type || Object.keys(FAMILY).find(f => FAMILY[f][0] === tableName);
+        if (family?.startsWith('feed_') && !state.snapshotFamilies?.includes(family)) continue;
         const canonical = await db.pg_record_rows.get(rawKey(family, row.record_id));
         // Typed reads may replace presentation metadata. Canonical membership
         // remains authoritative, as does a newer targeted read in this snapshot.
@@ -549,7 +552,7 @@ export async function resetPgRecordAuthority(store, { preserveViews = false, exp
       while (true) {
         const rows = await (after ? table.where(':id').above(after) : table.toCollection()).limit(200).toArray();
         if (!rows.length) break;
-        after = rows.at(-1).record_id;
+        after = rows.at(-1).key || rows.at(-1).record_id;
         for (const row of rows) {
           if (pending(row) || await db.pending_writes.where('record_id').equals(row.record_id).count()) {
             await db.pg_record_conflicts.put({ key: `reset:${tableName}:${row.record_id}`, family: tableName, record_id: row.record_id, local: row, reason: 'authority_reset' });

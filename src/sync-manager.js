@@ -542,6 +542,11 @@ export const syncManagerMixin = {
   },
 
   buildTowerPgMaterializationStoreSnapshot() {
+    const scalar = value => {
+      if (value == null) return '';
+      if (typeof value !== 'string') throw new TypeError('Invalid Tower worker identity field');
+      return value;
+    };
     const workspace = this.currentWorkspace || {};
     const descriptor = workspace.pgDescriptor || {};
     const identity = descriptor.identity || {};
@@ -549,22 +554,29 @@ export const syncManagerMixin = {
     // Alpine wraps nested objects in Proxy instances. Worker postMessage
     // requires plain data, including on the expired-cursor reset path.
     const reader = me ? {
-      actor: { actor_id: String(me.actor?.actor_id || me.actor?.id || ''), npub: String(me.actor?.npub || '') },
-      identity: { workspace_id: String(me.identity?.workspace_id || '') },
+      actor: { actor_id: scalar(me.actor?.actor_id || me.actor?.id || ''), npub: scalar(me.actor?.npub || '') },
+      identity: { workspace_id: scalar(me.identity?.workspace_id || '') },
+      permissions: Array.from(Array.isArray(me.permissions) ? me.permissions : [], permission => {
+        if (typeof permission !== 'string') throw new TypeError('Invalid Tower reader permission');
+        return permission;
+      }),
     } : null;
     return {
-      backendUrl: this.backendUrl,
-      workspaceOwnerNpub: this.workspaceOwnerNpub || workspace.workspaceOwnerNpub || identity.workspace_owner_npub || '',
-      session: { npub: this.session?.npub || '' },
-      workspaceHarnessAgents: (this.workspaceHarnessAgents || []).map(entry => ({
-        agent_npub: String(entry?.agent_npub || '').trim(),
-        url: String(entry?.url || '').trim(),
+      backendUrl: scalar(this.backendUrl || ''),
+      _workspaceSelectionGeneration: Number(this._workspaceSelectionGeneration || 0),
+      workspaceOwnerNpub: scalar(this.workspaceOwnerNpub || workspace.workspaceOwnerNpub || identity.workspace_owner_npub || ''),
+      session: { npub: scalar(this.session?.npub || '') },
+      workspaceHarnessAgents: Array.from(this.workspaceHarnessAgents || [], entry => ({
+        agent_npub: scalar(entry?.agent_npub || '').trim(),
+        url: scalar(entry?.url || '').trim(),
       })),
       currentWorkspace: {
         pgMe: reader,
-        pgSessionNpub: workspace.pgSessionNpub || '',
-        workspaceId: workspace.workspaceId || workspace.workspace_id || identity.workspace_id || '',
-        workspaceOwnerNpub: workspace.workspaceOwnerNpub || identity.workspace_owner_npub || this.workspaceOwnerNpub || '',
+        pgSessionNpub: scalar(workspace.pgSessionNpub || ''),
+        directHttpsUrl: scalar(workspace.directHttpsUrl || descriptor.tower_base_url || descriptor.towerBaseUrl || ''),
+        appNpub: scalar(workspace.appNpub || identity.app_npub || identity.appNpub || ''),
+        workspaceId: scalar(workspace.workspaceId || workspace.workspace_id || identity.workspace_id || identity.workspaceId || ''),
+        workspaceOwnerNpub: scalar(workspace.workspaceOwnerNpub || identity.workspace_owner_npub || identity.workspaceOwnerNpub || this.workspaceOwnerNpub || ''),
       },
     };
   },
@@ -3115,6 +3127,8 @@ export const syncManagerMixin = {
         fallbackRefreshRequested: events.length === 0,
         connectionKey: batch?.connectionKey || this.sseConnectionKey || null,
         attempt: Number(options.attempt || 0),
+        activationGeneration: this._workspaceSelectionGeneration,
+        activationService: this._towerSyncService,
       });
     }
     if (this.towerPgSSEHydrationPromise) return this.towerPgSSEHydrationPromise;
@@ -3136,6 +3150,10 @@ export const syncManagerMixin = {
       const batches = item.batches || [];
       const fallbackRefreshRequested = item.fallbackRefreshRequested === true;
       const connectionKey = item.connectionKey || null;
+      const isCurrent = () => (!connectionKey || connectionKey === this.sseConnectionKey)
+        && item.activationGeneration === this._workspaceSelectionGeneration
+        && item.activationService === this._towerSyncService && !item.activationService?.disposed;
+      if (!isCurrent()) continue;
       if (connectionKey && connectionKey !== this.sseConnectionKey) {
         flightDeckLog('warn', 'sse', 'discarded stale PG SSE materialisation work after context switch', {
           materialisationBatchIds: batches.map((entry) => entry.batchId),
@@ -3155,16 +3173,25 @@ export const syncManagerMixin = {
         const eventResult = targetedOnlyEvents.length > 0
           ? await hydrateTowerPgEventUpdates(this, targetedOnlyEvents)
           : { fallbackEvents: 0 };
-        const deltaRequested = fallbackRefreshRequested
+        if (!isCurrent()) continue;
+        const targetRecoveryRequired = Boolean(eventResult?.absentTargets?.length || eventResult?.optionalFailures?.length);
+        if (targetRecoveryRequired) flightDeckLog('warn', 'sse', 'reconciling failed optional targets through workspace sync', {
+          absentTargets: eventResult.absentTargets?.map(({ family, id }) => ({ family, id })),
+          failures: eventResult.optionalFailures?.map(({ family, id, error }) => ({ family, id, error: error?.message, code: error?.code, status: error?.status })),
+        });
+        const deltaRequested = targetRecoveryRequired || fallbackRefreshRequested
           || replayBurst
           || Number(eventResult?.fallbackEvents || 0) > 0;
-        const recentEventDelta = deltaRequested
+        const recentEventDelta = !targetRecoveryRequired && deltaRequested
           && Date.now() - Number(this.towerPgLastReplayDeltaAt || 0) < 30_000;
         const ranWorkspaceDelta = deltaRequested && !recentEventDelta;
         if (ranWorkspaceDelta) {
-          await (this.requestTowerSyncFamily?.('workspace-bootstrap') ?? this.runTowerPgWorkspaceSync());
+          const recovery = await (this.requestTowerSyncFamily?.('workspace-bootstrap', '', { force: targetRecoveryRequired }) ?? this.runTowerPgWorkspaceSync());
+          if (recovery?.deferred) throw Object.assign(new Error('Workspace recovery deferred'), { code: 'pg_read_authority_changed' });
           this.towerPgLastReplayDeltaAt = Date.now();
         }
+        if (!isCurrent()) continue;
+        if (eventResult?.optionalFailures?.length) throw eventResult.optionalFailures[0].error;
         // Activity recovery must run even when the workspace delta is fresh:
         // snapshots/commentary are a separately scoped authority read.
         const activityChannelIds = new Set(events
@@ -3200,7 +3227,7 @@ export const syncManagerMixin = {
             visibleAgentActivities: Array.isArray(this.activeThreadAgentActivities) ? this.activeThreadAgentActivities.length : null,
           },
         });
-        if (!connectionKey || connectionKey === this.sseConnectionKey) {
+        if (isCurrent()) {
           for (const batch of batches) {
             acknowledgeSSEBatch({
               ...batch,
@@ -3209,6 +3236,7 @@ export const syncManagerMixin = {
           }
         }
       } catch (error) {
+        if (!isCurrent()) continue;
         const attempt = Number(item.attempt || 0) + 1;
         const delayMs = Math.min(500 * (2 ** Math.min(attempt - 1, 6)), 30_000);
         flightDeckSyncFailure(this, 'warn', 'sse', 'failed to refresh PG records after SSE event', error, {
@@ -3224,13 +3252,22 @@ export const syncManagerMixin = {
           if (this.towerPgSSEHydrationRetryTimers.has(retryKey)) continue;
           const timerId = setTimeout(() => {
             this.towerPgSSEHydrationRetryTimers?.delete(retryKey);
-            if (connectionKey && connectionKey !== this.sseConnectionKey) return;
+            if (!isCurrent()) return;
             if (!Array.isArray(this.pendingTowerPgSSEHydrations)) this.pendingTowerPgSSEHydrations = [];
             this.pendingTowerPgSSEHydrations.push({ ...item, attempt });
             this.queueTowerPgSSEHydration([], null, { drainOnly: true });
           }, delayMs);
           this.towerPgSSEHydrationRetryTimers.set(retryKey, { timerId, connectionKey });
         } else {
+          // Retain failed work without holding up later events. Successful
+          // background/manual catchup retries it after a cooldown. Reload also
+          // replays from the worker's unacknowledged durable cursor.
+          if (!connectionKey || connectionKey === this.sseConnectionKey) {
+            if (!(this.deferredTowerPgSSEHydrations instanceof Map)) this.deferredTowerPgSSEHydrations = new Map();
+            const key = batches.map(entry => entry.batchId).join(',') || `${connectionKey || 'unscoped'}:${Date.now()}`;
+            this.deferredTowerPgSSEHydrations.set(key, { ...item, attempt: 0, retryAfter: Date.now() + 30_000 });
+            this.scheduleBackgroundSync?.(30_000);
+          }
           const isolation = {
             materialisationBatchIds: batches.map((entry) => entry.batchId),
             attempt,
@@ -3241,11 +3278,28 @@ export const syncManagerMixin = {
             flightDeckTrace('sse', 'deferred superseded PG SSE batch after bounded retries', isolation);
             this.scheduleBackgroundSync?.(1000);
           } else {
-            flightDeckLog('error', 'sse', 'isolated PG SSE materialisation batch after bounded retries', isolation);
+            flightDeckLog('error', 'sse', 'deferred PG SSE materialisation batch after bounded retries', isolation);
           }
         }
       }
     }
+  },
+
+  retryDeferredTowerPgSSEHydrations() {
+    if (!(this.deferredTowerPgSSEHydrations instanceof Map)) return;
+    for (const [key, item] of this.deferredTowerPgSSEHydrations) {
+      if (item.connectionKey && item.connectionKey !== this.sseConnectionKey
+        || item.activationGeneration !== this._workspaceSelectionGeneration
+        || item.activationService !== this._towerSyncService || item.activationService?.disposed) {
+        this.deferredTowerPgSSEHydrations.delete(key);
+        continue;
+      }
+      if (Date.now() < item.retryAfter) continue;
+      this.deferredTowerPgSSEHydrations.delete(key);
+      if (!Array.isArray(this.pendingTowerPgSSEHydrations)) this.pendingTowerPgSSEHydrations = [];
+      this.pendingTowerPgSSEHydrations.push(item);
+    }
+    if (this.pendingTowerPgSSEHydrations?.length) this.queueTowerPgSSEHydration([], null, { drainOnly: true });
   },
 
   discardStaleTowerPgSSEHydrationWork(connectionKey) {
@@ -3254,6 +3308,11 @@ export const syncManagerMixin = {
       this.pendingTowerPgSSEHydrations = this.pendingTowerPgSSEHydrations.filter((item) => (
         !item?.connectionKey || item.connectionKey === connectionKey
       ));
+    }
+    if (this.deferredTowerPgSSEHydrations instanceof Map) {
+      for (const [key, item] of this.deferredTowerPgSSEHydrations) {
+        if (item.connectionKey && item.connectionKey !== connectionKey) this.deferredTowerPgSSEHydrations.delete(key);
+      }
     }
     if (!(this.towerPgSSEHydrationRetryTimers instanceof Map)) return;
     for (const [key, retry] of this.towerPgSSEHydrationRetryTimers) {
@@ -3382,6 +3441,7 @@ export const syncManagerMixin = {
       }
       // checkForStaleness removed — heartbeat in runSync replaces it
       this.syncBackoffMs = 0;
+      this.retryDeferredTowerPgSSEHydrations();
     } catch (error) {
       this.syncBackoffMs = Math.min(Math.max((this.syncBackoffMs || 0) * 2, 1000), 30000);
       flightDeckSyncFailure(this, 'error', 'sync', 'background sync failed', error, {
@@ -3740,6 +3800,7 @@ export const syncManagerMixin = {
       if (this.canAdminWorkspace && typeof this.refreshWappPublishingGrants === 'function') {
         await this.refreshWappPublishingGrants();
       }
+      this.retryDeferredTowerPgSSEHydrations();
       this.markTowerReachabilityRecovered?.('full-sync-success', {
         refresh: false,
         fallbackUsable: this.sseStatus !== 'connected',

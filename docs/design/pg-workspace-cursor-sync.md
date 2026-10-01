@@ -311,3 +311,37 @@ retained pending intent, typed list/message refreshes, three repeated four-page
 delta catchups and workspace partition switching. Browser-engine fixtures do
 not establish acceptance on a particular human signer, browser profile or
 native WM App device.
+
+## Optional target failures and additive Feed coverage
+
+SSE hydration waits for all submitted core jobs to settle. Response-activity and
+workroom reads and Feed event materialization report optional failures separately,
+so a failed hint cannot skip valid message commits or workspace catchup. Only a
+400 `resource-not-found` with `required_permission: channel.read`, matching
+workspace identity and a response-activity/workroom read is a terminal absent
+hint. It does not supply a tombstone or authorize empty target replacement.
+The service forces workspace reconciliation before acknowledging that batch,
+including when a recent delta would otherwise suppress catchup. Deferred or
+failed core reconciliation never acknowledges the batch.
+
+Other validation, authorization and transport failures remain actionable errors
+and leave the batch unacknowledged. Three quick retries are followed by retained
+work and a 30-second cooldown. A successful background/manual workspace catchup
+retries that retained work; context replacement discards it and reload replays
+from the worker's durable unacknowledged cursor. Later live work can materialize,
+while worker acknowledgement order prevents it skipping a failed earlier batch.
+
+Snapshot omission stores the advertised family coverage. Older Tower snapshots
+without additive Feed families cannot retire those subscriptions/item states or
+canonical Feed rows. Snapshots advertising those families still authorize their
+omissions; explicit Feed tombstones and typed membership revocation still apply.
+Cached source bodies are not snapshot families. Their independent source expiry,
+denial and reader-disposal policy remains in the Feed lifecycle.
+
+The worker store is a scoped schema projection: actual-reader actor ID/npub,
+workspace identity, reader permissions, session npub, cached workspace signer,
+logical backend/app, activation generation and harness agent npub/URL arrays.
+Nested Alpine Proxies are never forwarded. Malformed scalar identity/permission
+fields fail validation, rather than becoming authority through lossy conversion.
+Bundle rows originate from transport or explicit plain local reconciliation
+payloads; this boundary does not stringify arbitrary application state.

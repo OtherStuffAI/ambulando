@@ -1760,7 +1760,7 @@ describe('PG workspace startup progress', () => {
       store: expect.objectContaining({
         workspaceOwnerNpub: 'npub1owner',
         session: { npub: 'npub1viewer' },
-        currentWorkspace: expect.objectContaining({ workspaceId: 'workspace-1', pgMe: { actor: { actor_id: 'actor-1', npub: 'npub1viewer' }, identity: { workspace_id: '' } } }),
+        currentWorkspace: expect.objectContaining({ workspaceId: 'workspace-1', pgMe: { actor: { actor_id: 'actor-1', npub: 'npub1viewer' }, identity: { workspace_id: '' }, permissions: [] } }),
       }),
     }));
     expect(store.towerSyncInstrumentation).toMatchObject({ materialisationsCommitted: 1 });
@@ -3551,7 +3551,7 @@ it('projects reactive reader identity into cloneable scalar data for cursor reco
   });
   const snapshot = fn();
   expect(structuredClone(snapshot)).toEqual(snapshot);
-  expect(snapshot.currentWorkspace.pgMe).toEqual({ actor: { actor_id: 'actor-1', npub: 'npub1viewer' }, identity: { workspace_id: 'workspace-1' } });
+  expect(snapshot.currentWorkspace.pgMe).toEqual({ actor: { actor_id: 'actor-1', npub: 'npub1viewer' }, identity: { workspace_id: 'workspace-1' }, permissions: [] });
 });
 
 it('does not carry retry errors or late completion across workspace switches', async () => {
@@ -3571,4 +3571,88 @@ it('does not carry retry errors or late completion across workspace switches', a
   rejectOld(new Error('late workspace A failure'));
   await expect(oldRetry).rejects.toThrow('late workspace A failure');
   expect(store.startupSyncProgress).toMatchObject({ connectionKey: 'workspace-a', active: false, visible: false, error: null });
+});
+
+it('forces workspace reconciliation before acknowledging stale optional SSE targets even with a recent delta', async () => {
+  hydrateTowerPgEventUpdates.mockResolvedValueOnce({ absentTargets: [{ family: 'workroom', id: 'gone' }], fallbackEvents: 0 });
+  let finish;
+  const requestTowerSyncFamily = vi.fn(() => new Promise(resolve => { finish = resolve; }));
+  const { fn } = bindMethod('handleSSEStatus', { sseConnectionKey: 'current', towerPgLastReplayDeltaAt: Date.now(), requestTowerSyncFamily });
+  isTowerPgBackendMode.mockReturnValue(true);
+  const run = fn({ status: 'pull-complete', families: ['flightdeck_pg'], connectionKey: 'current', batchId: 'missing-target', pgEvents: [{ entity_type: 'workroom', entity_id: 'gone' }] });
+  await Promise.resolve(); await Promise.resolve();
+  expect(acknowledgeSSEBatch).not.toHaveBeenCalled();
+  expect(requestTowerSyncFamily).toHaveBeenCalledWith('workspace-bootstrap', '', { force: true });
+  finish({ applied: 1 }); await run;
+  expect(acknowledgeSSEBatch).toHaveBeenCalledWith(expect.objectContaining({ batchId: 'missing-target' }));
+});
+
+it('recovers core deltas during transient optional failure and only acknowledges after the optional retry succeeds', async () => {
+  vi.useFakeTimers(); isTowerPgBackendMode.mockReturnValue(true);
+  hydrateTowerPgEventUpdates.mockResolvedValueOnce({ optionalFailures: [{ family: 'workroom', id: 'room', error: new Error('timeout') }], fallbackEvents: 0 })
+    .mockResolvedValueOnce({ fallbackEvents: 0 });
+  const requestTowerSyncFamily = vi.fn(async () => ({ applied: 1 }));
+  const { fn } = bindMethod('handleSSEStatus', { sseConnectionKey: 'current', requestTowerSyncFamily });
+  await fn({ status: 'pull-complete', families: ['flightdeck_pg'], connectionKey: 'current', batchId: 'transient-target', pgEvents: [{ entity_type: 'workroom', entity_id: 'room' }] });
+  expect(requestTowerSyncFamily).toHaveBeenCalledWith('workspace-bootstrap', '', { force: true });
+  expect(acknowledgeSSEBatch).not.toHaveBeenCalled();
+  await vi.advanceTimersByTimeAsync(500);
+  expect(acknowledgeSSEBatch).toHaveBeenCalledWith(expect.objectContaining({ batchId: 'transient-target' }));
+  vi.useRealTimers();
+});
+
+
+it('preserves nested worker identity, logical backend, app and permissions and rejects mismatches after projection', async () => {
+  const { resolvePgReaderActorId } = await import('../src/pg-reader-identity.js');
+  const proxy = value => new Proxy(value, {});
+  const { fn, store } = bindMethod('buildTowerPgMaterializationStoreSnapshot', {
+    backendUrl: 'https://physical.example', session: proxy({ npub: 'reader' }),
+    workspaceHarnessAgents: proxy([proxy({ agent_npub: 'agent', url: 'https://agent.example', ignored: proxy({}) })]),
+    currentWorkspace: proxy({ pgSessionNpub: 'reader', pgDescriptor: proxy({ tower_base_url: 'https://logical.example',
+      identity: proxy({ workspace_id: 'workspace-1', app_npub: 'app', workspace_owner_npub: 'owner' }) }),
+      pgMe: proxy({ actor: proxy({ id: 'actor', npub: 'reader' }), identity: proxy({ workspace_id: 'workspace-1' }), permissions: proxy(['workspace.read', 'channel.read']) }) }),
+  });
+  const snapshot = structuredClone(fn());
+  expect(snapshot.currentWorkspace).toMatchObject({ workspaceId: 'workspace-1', appNpub: 'app', directHttpsUrl: 'https://logical.example', pgMe: { permissions: ['workspace.read', 'channel.read'] } });
+  expect(snapshot.workspaceHarnessAgents).toEqual([{ agent_npub: 'agent', url: 'https://agent.example' }]);
+  expect(resolvePgReaderActorId(snapshot)).toBe('actor');
+  store.session.npub = 'other-reader'; expect(resolvePgReaderActorId(fn())).toBe('');
+  store.session.npub = 'reader'; store.currentWorkspace.pgMe.identity.workspace_id = 'other-workspace';
+  expect(resolvePgReaderActorId(fn())).toBe('');
+  store.currentWorkspace.pgMe.permissions.push(proxy({ permission: 'workspace.read' }));
+  expect(fn).toThrow('Invalid Tower reader permission');
+});
+
+it('recovers exhausted SSE work after a successful background catchup cooldown without skipping its ack', async () => {
+  vi.useFakeTimers(); isTowerPgBackendMode.mockReturnValue(true);
+  const error = new Error('temporary optional outage');
+  hydrateTowerPgEventUpdates.mockResolvedValue({ optionalFailures: [{ family: 'workroom', id: 'room', error }] });
+  const { fn, store } = bindMethod('handleSSEStatus', { sseConnectionKey: 'current', requestTowerSyncFamily: vi.fn(async () => ({ applied: 1 })) });
+  await fn({ status: 'pull-complete', families: ['flightdeck_pg'], connectionKey: 'current', batchId: 'outage', pgEvents: [{ entity_type: 'workroom', entity_id: 'room' }] });
+  await vi.advanceTimersByTimeAsync(1500);
+  expect(hydrateTowerPgEventUpdates).toHaveBeenCalledTimes(3);
+  expect(acknowledgeSSEBatch).not.toHaveBeenCalled();
+  expect(store.deferredTowerPgSSEHydrations.size).toBe(1);
+  store.retryDeferredTowerPgSSEHydrations();
+  expect(store.deferredTowerPgSSEHydrations.size).toBe(1);
+  await vi.advanceTimersByTimeAsync(30_000);
+  hydrateTowerPgEventUpdates.mockResolvedValue({ fallbackEvents: 0 });
+  store.retryDeferredTowerPgSSEHydrations(); await store.towerPgSSEHydrationPromise;
+  expect(store.deferredTowerPgSSEHydrations.size).toBe(0);
+  expect(acknowledgeSSEBatch).toHaveBeenCalledWith(expect.objectContaining({ batchId: 'outage' }));
+  vi.useRealTimers();
+});
+
+it('does not acknowledge or retain late optional work after switching away and back to the same SSE key', async () => {
+  isTowerPgBackendMode.mockReturnValue(true);
+  let finish;
+  hydrateTowerPgEventUpdates.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+  const requestTowerSyncFamily = vi.fn(async () => ({ applied: 1 }));
+  const { fn, store } = bindMethod('handleSSEStatus', { sseConnectionKey: 'same-key', _workspaceSelectionGeneration: 1, requestTowerSyncFamily });
+  const run = fn({ status: 'pull-complete', families: ['flightdeck_pg'], connectionKey: 'same-key', batchId: 'old-activation', pgEvents: [{ entity_type: 'workroom', entity_id: 'room' }] });
+  await Promise.resolve(); store._workspaceSelectionGeneration = 3;
+  finish({ absentTargets: [{ family: 'workroom', id: 'room' }] }); await run;
+  expect(requestTowerSyncFamily).not.toHaveBeenCalled();
+  expect(acknowledgeSSEBatch).not.toHaveBeenCalled();
+  expect(store.deferredTowerPgSSEHydrations?.size || 0).toBe(0);
 });

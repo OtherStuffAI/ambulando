@@ -21,7 +21,8 @@
     "test": "vitest run",
     "test:e2e": "playwright test",
     "test:e2e:perf": "PLAYWRIGHT_DISABLE_VIDEO=1 playwright test tests/e2e/performance-baseline.spec.cjs",
-    "test:feed:wire": "bun scripts/check-feed-wapp-wire.mjs"
+    "test:feed:wire": "bun scripts/check-feed-wapp-wire.mjs",
+    "test:feed:sync": "vitest run tests/feed-reader.test.js tests/feed-api.test.js tests/pg-read-hydrator.test.js tests/pg-record-delta.test.js tests/sync-manager.test.js tests/sse-sync-lifecycle.test.js tests/tower-pg-materialization-worker-client.test.js tests/tower-pg-materialization-worker-runner.test.js && playwright test tests/e2e/pg-console-transactions.spec.cjs tests/e2e/subscribed-feed.spec.cjs"
   },
   "dependencies": {
     "@nostr-superbased/browser": "0.1.0",

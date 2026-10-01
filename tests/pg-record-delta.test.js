@@ -428,3 +428,26 @@ it('reconciles a seen acknowledgement during snapshot without advancing its curs
   expect((await db.sync_state.get(recordDeltaCursorKey(store))).value).toMatchObject({ cursor: 'partial', snapshotComplete: false, snapshotReconciliationPending: true });
   await expect(applyPgRecordChanges(store, page([], 'premature'))).rejects.toThrow('Incomplete snapshot handover');
 });
+
+it('limits Feed omission authority to advertised snapshot families and still honors supported deletion and revocation', async () => {
+  const reader = { ...store, currentWorkspace: { ...store.currentWorkspace, pgMe: { actor: { actor_id: 'reader', npub: 'npub1viewer' } } } };
+  const row = { schema_version: 1, id: 'subscription', workspace_id: workspaceId, reader_actor_id: 'reader', row_version: 1, status: 'active', source: { kind: 'public', url: 'https://feed.example/feed.json' } };
+  const families = [...fixture.canonical_upserts.families, 'feed_subscription', 'feed_item_state'];
+  const change = { family: 'feed_subscription', id: row.id, workspace_id: workspaceId, version: '1', operation: 'upsert', row };
+  await applyPgRecordChanges(reader, { ...page([change], 'feed-seeded'), families });
+  await resetPgRecordAuthority(reader, { preserveViews: true });
+  await applyPgRecordChanges(reader, fixture.canonical_upserts);
+  await applyPgRecordChanges(reader, page([], 'older-tower-handover'));
+  expect(await db.feed_subscriptions.count()).toBe(1);
+  expect(await db.pg_record_rows.get('feed_subscription:subscription')).toBeTruthy();
+  await resetPgRecordAuthority(reader, { preserveViews: true });
+  await applyPgRecordChanges(reader, { ...fixture.canonical_upserts, families, partitions_complete: families });
+  await applyPgRecordChanges(reader, { ...page([], 'supported-empty-handover'), families });
+  expect(await db.feed_subscriptions.count()).toBe(0);
+  await applyPgRecordChanges(reader, { ...page([change], 'feed-returned'), families });
+  await applyPgRecordChanges(reader, { ...page([{ ...change, version: '2', operation: 'delete', row: null }], 'feed-deleted'), families });
+  expect(await db.feed_subscriptions.count()).toBe(0);
+  await applyPgRecordChanges(reader, { ...page([{ ...change, version: '3' }], 'feed-returned-again'), families });
+  await resetPgRecordAuthority(reader);
+  expect(await db.feed_subscriptions.count()).toBe(0);
+});

@@ -168,3 +168,37 @@ proof still belong to integration validation; mocked tests do not claim them.
 A1 (public proxy), M1 (historical migration/publisher removal) and R1 (integrated
 release/activation) remain excluded. See the [service contract](tower-sync-service.md)
 and [FIPS transport](../fips-transport.md).
+
+## Joint Feed/workspace release check
+
+After changes to Feed, reader identity, worker payloads, SSE hydration or snapshot
+retirement, run the existing suites together against the configured managed
+Flight Deck runtime:
+
+```bash
+PLAYWRIGHT_BASE_URL=http://127.0.0.1:<managed-flight-deck-port> \
+PLAYWRIGHT_BROWSER_CHANNEL=chrome PLAYWRIGHT_DISABLE_VIDEO=1 bun run test:feed:sync
+```
+
+Set the managed runtime URL explicitly; omitting it starts Playwright's Vite
+server. The native transaction fixtures intercept loopback probe URLs and use
+real IndexedDB/materialization workers, without contacting a Tower. Keep the
+Playwright Tower default local; external backend tests require the explicit
+URL and exact acknowledgement enforced by `playwright.config.cjs`.
+
+The check combines source parsing/CAS/isolation and API tests with SSE commit
+ordering, worker lifecycle, existing populated-cache/pending-write recovery,
+expired cursor, actual Alpine reactive nested identity/permissions/harness
+inputs, interrupted replacement, repeated multipage catchup, stale optional
+400 targets beside valid messages, malformed Feed events, preserved Feed
+history, and reader/workspace replacement. Desktop/mobile reader fixtures
+exercise deliberate navigation and flag controls. These are deterministic
+regressions, not authenticated human acceptance.
+
+For release, also run the repository's full source/release/build/dist checks.
+Use the final compiled managed app and its served worker for a browser check,
+verify served version/assets/health, and validate reproduced stale targets
+read-only with the current capability broker. If UI behavior changed, run the
+performance baseline and compare actual measurements. Report browser, cache
+starting state, signing identity and any untested human Firefox/service-worker
+adoption explicitly. A fresh-cache success does not prove existing-cache repair.

@@ -2362,6 +2362,14 @@
       "notes": [
         "Keep update retry feedback scoped to the selected workspace and signer. Ignore late progress and errors from a previous workspace after switching."
       ]
+    },
+    {
+      "buildNumber": 2132,
+      "label": "Keep Feed failures from blocking workspace updates",
+      "notes": [
+        "Reconcile missing activity and workroom targets without blocking valid messages. Retain real errors and retry failed updates after connectivity recovers.",
+        "Preserve Feed subscriptions during recovery from snapshots that do not include Feed families, and keep reader identity and permissions intact across the worker boundary."
+      ]
     }
   ]
 }

@@ -154,9 +154,11 @@ test('recovers an existing canonical cache through typed reads, interrupted repl
   const main = await build({ ...options, stdin: { resolveDir: root, contents: `
     export { openWorkspaceDb, replacePgMessagesForChannel } from './src/db.js';
     export { recordDeltaCursorKey } from './src/pg-record-delta.js';
-    export { syncTowerPgWorkspace, hydrateTowerPgScopes, hydrateTowerPgChannels } from './src/pg-read-hydrator.js';
+    export { syncTowerPgWorkspace, hydrateTowerPgScopes, hydrateTowerPgChannels, hydrateTowerPgEventUpdates, hydrateTowerPgChannelMessages } from './src/pg-read-hydrator.js';
     export { TowerPgMaterializationWorkerClient } from './src/tower-pg-materialization-worker-client.js';
-    export { syncManagerMixin } from './src/sync-manager.js';` } });
+    export { syncManagerMixin } from './src/sync-manager.js';
+    export { default as Alpine } from 'alpinejs';
+    export { resolvePgReaderActorId } from './src/pg-reader-identity.js';` } });
   const origin = new URL(baseURL).origin;
   await page.route(`${origin}/__canonical/**`, route => {
     const url = route.request().url();
@@ -169,10 +171,11 @@ test('recovers an existing canonical cache through typed reads, interrupted repl
     const key = `canonical-lifecycle-${crypto.randomUUID()}`; let db = m.openWorkspaceDb(key);
     await db.open();
     const workspaceId = fixture.one_message_delta.changes[0].workspace_id;
-    const proxy = value => new Proxy(value, {});
-    const store = { backendUrl: 'http://127.0.0.1:3100', session: { npub: 'npub1viewer' },
+    const proxy = value => m.Alpine.reactive(value);
+    const store = proxy({ backendUrl: 'http://127.0.0.1:3100', session: { npub: 'npub1viewer' },
       currentWorkspace: proxy({ workspaceId, workspaceOwnerNpub: 'npub1owner', appNpub: 'npub1test', pgBackendMode: true,
-        pgMe: proxy({ actor: proxy({ actor_id: 'viewer-actor', npub: 'npub1viewer' }), identity: proxy({ workspace_id: workspaceId }) }) }) };
+        pgMe: proxy({ actor: proxy({ actor_id: 'viewer-actor', npub: 'npub1viewer' }), identity: proxy({ workspace_id: workspaceId }), permissions: proxy(['workspace.read', 'channel.read']) }) }),
+      workspaceHarnessAgents: proxy([proxy({ agent_npub: 'npub1agent', url: 'https://agent.example' })]) });
     const snapshotStore = () => m.syncManagerMixin.buildTowerPgMaterializationStoreSnapshot.call(store);
     let client;
     const start = () => { client = new m.TowerPgMaterializationWorkerClient({ workspaceKey: key,
@@ -186,6 +189,10 @@ test('recovers an existing canonical cache through typed reads, interrupted repl
       await apply(fixture.canonical_upserts); await apply(delta('seeded'));
       await db.chat_messages.put({ record_id: 'unsent-draft', channel_id: fixture.one_message_delta.changes[0].channel_id, body: 'keep local intent', sync_status: 'pending' });
       await db.pending_writes.add({ record_id: 'unsent-draft', envelope: { body: 'keep local intent' } });
+      const feed = { schema_version: 1, id: 'subscription-1', workspace_id: workspaceId, reader_actor_id: 'viewer-actor', row_version: 1,
+        status: 'active', source: { kind: 'public', url: 'https://feed.example/feed.json', format: 'json' } };
+      await m.hydrateTowerPgEventUpdates(store, [{ entity_type: 'feed_subscription', payload: feed }]);
+      await db.feed_items.put({ key: 'cached-feed-body', context: 'fixture', subscription_id: feed.id, title: 'Retained source history' });
       const before = await counts(), cached = await state();
       // A real old cache with erased projections and retained canonical versions.
       delete cached.snapshotReconciliationPending;
@@ -201,6 +208,7 @@ test('recovers an existing canonical cache through typed reads, interrupted repl
       let interrupt = true, expired = false;
       const deps = { hydrateTowerPgSyncBundle: (_store, bundle) => apply(bundle),
         getTowerPgResourceViewStates: async () => ({ states: [] }),
+        getTowerPgWorkspaceMembers: async () => ({ members: [] }), getTowerPgWorkspaceGroups: async () => ({ groups: [] }),
         getTowerPgRecordSync: async (_id, options) => {
           requests.push(options.cursor);
           if (expired && options.cursor === 'repaired') {
@@ -238,11 +246,41 @@ test('recovers an existing canonical cache through typed reads, interrupted repl
         if ((await counts()).join() !== before.join() || !(await state()).converged) throw new Error('typed catchup lost navigation/history');
         if ((await db.chat_messages.get(c.id)).body !== `caught up ${pass}/4`) throw new Error('catchup did not converge to latest content');
       }
+      // Real SSE target hydrator + real native Dexie/worker, alongside a valid
+      // core event. Missing targets require journal reconciliation, not an empty
+      // target replacement. A malformed Feed event keeps its error/history.
+      const missing = Object.assign(new Error('missing channel'), { status: 400, payload: { code: 'resource-not-found', required_permission: 'channel.read', identity: { workspace_id: workspaceId } } });
+      let coreWrites = 0;
+      store.requestTowerSyncFamily = async (family) => {
+        if (family !== 'channel-messages') throw new Error('unexpected targeted family');
+        await m.hydrateTowerPgChannelMessages({ ...store, requestTowerSyncFamily: undefined }, channel.id, {
+          getTowerPgChannelThreads: async () => ({ threads: fixture.canonical_upserts.changes.filter(row => row.family === 'thread').map(row => row.row) }),
+          getTowerPgChannelMessages: async () => ({ messages: [{ ...c.row, row_version: 2000, body: 'valid SSE message' }] }),
+          getTowerPgResponseActivities: async () => { throw missing; },
+          getTowerPgAgentActivities: async () => ({ agent_activities: [] }),
+        }); coreWrites++;
+      };
+      const eventResult = await m.hydrateTowerPgEventUpdates(store, [
+        { entity_type: 'workroom', entity_id: 'missing-room' },
+        { entity_type: 'response_activity', payload: { response_activity: { id: 'activity', target_type: 'chat_thread', target_id: 'missing-thread', channel_id: channel.id, status: 'working' } } },
+        { entity_type: 'feed_subscription', payload: { ...feed, reader_actor_id: 'wrong-reader' } },
+        { entity_type: 'message', entity_id: c.id, channel_id: channel.id },
+      ], { getTowerPgWorkroom: async () => { throw missing; }, getTowerPgResponseActivities: async () => { throw missing; } });
+      if (eventResult.absentTargets.length !== 2 || eventResult.optionalFailures.length !== 1 || coreWrites !== 1 || (await db.chat_messages.get(c.id)).body !== 'valid SSE message') throw new Error('optional target poisoned core writes');
+      await m.syncTowerPgWorkspace(store, {}, { ...deps, getTowerPgRecordSync: async () => delta('stale-target-reconciled') });
+      if (!(await state()).converged || await db.feed_subscriptions.count() !== 1 || await db.feed_items.count() !== 1) throw new Error('lost Feed history during sync recovery');
+      const snapshot = snapshotStore(); structuredClone(snapshot);
+      if (!snapshot.currentWorkspace.pgMe.permissions.includes('workspace.read') || m.resolvePgReaderActorId(snapshot) !== 'viewer-actor') throw new Error('worker identity/permission lost');
+      store.session.npub = 'another-reader';
+      if (m.resolvePgReaderActorId(snapshotStore())) throw new Error('reader switch admitted stale identity');
+      store.session.npub = 'npub1viewer'; store.currentWorkspace.pgMe.identity.workspace_id = 'another-workspace';
+      if (m.resolvePgReaderActorId(snapshotStore())) throw new Error('workspace switch admitted stale identity');
+      store.currentWorkspace.pgMe.identity.workspace_id = workspaceId;
       // A different partition must not inherit this canonical cursor or views.
       const other = m.openWorkspaceDb(`${key}-other`); await other.open();
       if (await other.pg_record_rows.count() || await other.sync_state.count()) throw new Error('workspace leak');
       other.close(); await other.delete(); db = m.openWorkspaceDb(key); await db.open();
-      return { before, after: await counts(), requests, timings, elapsedMs: Math.round(performance.now() - started), progress };
+      return { before, after: await counts(), requests, timings, optionalTargets: eventResult.absentTargets.length, optionalErrors: eventResult.optionalFailures.length, coreWrites, elapsedMs: Math.round(performance.now() - started), progress };
     } catch (error) { throw new Error(`${error.name}: ${error.message}\n${error.stack}`); } finally { client.dispose(); db.close(); await db.delete(); }
   }, fixture);
   expect(result.after).toEqual(result.before);

@@ -3282,3 +3282,51 @@ it('uses the sync request owner for SSE message reads and never acknowledges def
     .rejects.toMatchObject({ code: 'pg_read_authority_changed' });
   expect(target.requestTowerSyncFamily).toHaveBeenCalledWith('channel-messages', 'channel-1', { force: true });
 });
+
+it('settles missing optional targets alongside valid core events without inventing deletion authority', async () => {
+  const target = store({ requestTowerSyncFamily: vi.fn(async () => ['committed']) });
+  const missing = Object.assign(new Error('missing channel'), { status: 400, payload: {
+    code: 'resource-not-found', required_permission: 'channel.read', identity: { workspace_id: 'workspace-1' },
+  } });
+  const replacePgResponseActivitiesForTarget = vi.fn();
+  const upsertWorkroom = vi.fn();
+  const result = await hydrateTowerPgEventUpdates(target, [
+    { entity_type: 'message', entity_id: 'valid', channel_id: 'channel-1' },
+    { entity_type: 'response_activity', payload: { response_activity: { id: 'activity-1', target_type: 'chat_thread', target_id: 'gone', channel_id: 'channel-1', status: 'working' } } },
+    { entity_type: 'workroom', entity_id: 'gone-room' },
+  ], { getTowerPgResponseActivities: async () => { throw missing; }, getTowerPgWorkroom: async () => { throw missing; }, replacePgResponseActivitiesForTarget, upsertWorkroom });
+  expect(target.requestTowerSyncFamily).toHaveBeenCalledWith('channel-messages', 'channel-1', expect.anything());
+  expect(result.absentTargets).toHaveLength(2);
+  expect(result.optionalFailures).toBeUndefined();
+  expect(replacePgResponseActivitiesForTarget).not.toHaveBeenCalled();
+  expect(upsertWorkroom).not.toHaveBeenCalled();
+});
+
+it.each([
+  [400, { code: 'bad_request', required_permission: 'channel.read', identity: { workspace_id: 'workspace-1' } }],
+  [403, { code: 'permission_denied', required_permission: 'channel.read', identity: { workspace_id: 'workspace-1' } }],
+  [400, { code: 'resource-not-found', required_permission: 'task.read', identity: { workspace_id: 'workspace-1' } }],
+  [400, { code: 'resource-not-found', required_permission: 'channel.read', identity: { workspace_id: 'other-workspace' } }],
+  [503, {}],
+])('retains optional target error %s while core events commit', async (status, payload) => {
+  const error = Object.assign(new Error('source failure'), { status, payload });
+  const target = store({ requestTowerSyncFamily: vi.fn(async () => ['committed']) });
+  const result = await hydrateTowerPgEventUpdates(target, [
+    { entity_type: 'message', channel_id: 'channel-1' }, { entity_type: 'workroom', entity_id: 'room-1' },
+  ], { getTowerPgWorkroom: async () => { throw error; } });
+  expect(result.absentTargets).toBeUndefined();
+  expect(result.optionalFailures[0].error).toBe(error);
+  expect(target.requestTowerSyncFamily).toHaveBeenCalledTimes(1);
+});
+
+it('waits for unfinished core writes before returning a failed SSE batch', async () => {
+  let finish;
+  let committed = false;
+  const target = store({ requestTowerSyncFamily: async (_family, id) => {
+    if (id === 'bad') throw new Error('core failed');
+    await new Promise(resolve => { finish = resolve; }); committed = true;
+  } });
+  const run = hydrateTowerPgEventUpdates(target, [{ entity_type: 'message', channel_id: 'bad' }, { entity_type: 'message', channel_id: 'good' }]);
+  await Promise.resolve(); expect(committed).toBe(false); finish();
+  await expect(run).rejects.toThrow('core failed'); expect(committed).toBe(true);
+});

@@ -2965,6 +2965,22 @@ export async function hydrateTowerPgEventUpdates(store, events = [], deps = {}) 
   const writeAgentSessionHealth = deps.upsertAgentSessionHealth || upsertAgentSessionHealth;
   const mergeCommentary = deps.mergeAgentActivityCommentary || mergeAgentActivityCommentary;
   const activityContext = resolveTowerPgWorkspaceContext(store);
+  const optionalFailures = [];
+  const absentTargets = [];
+  // These reads are hints, not deletion authority. Reconcile missing resources
+  // through the workspace journal before acknowledging their SSE batch.
+  const optionalTarget = async (family, id, load) => {
+    try { return await load(); }
+    catch (error) {
+      let payload = error?.payload;
+      try { payload = JSON.parse(error.responseText); } catch {}
+      const absent = ['workroom', 'response-activity'].includes(family) && error?.status === 400 && payload?.code === 'resource-not-found'
+        && payload?.required_permission === 'channel.read'
+        && payload?.identity?.workspace_id === activityContext.workspaceId;
+      (absent ? absentTargets : optionalFailures).push({ family, id, error });
+    }
+  };
+  const feedEvents = [];
   const commentaryUpdates = [];
   const messageChannels = new Set();
   const taskChannels = new Set();
@@ -3040,7 +3056,7 @@ export async function hydrateTowerPgEventUpdates(store, events = [], deps = {}) 
       const ownerActorId = trimText(payload.owner_actor_id) || channelId;
       dailyTargets.set(`${ownerActorId}:${noteDate}`, { ownerActorId, noteDate, legacyChannelId: trimText(payload.owner_actor_id) ? null : channelId });
     } else if (['feed_subscription', 'feed_item_state'].includes(entityType)) {
-      await materializeFeedReaderEvent(store, event);
+      feedEvents.push(event);
     } else if (entityType === 'personal_wapp') {
       const ownerActorId = trimText(payload.owner_actor_id) || currentPgActorId(store);
       if (ownerActorId) personalWappOwnerIds.add(ownerActorId);
@@ -3171,26 +3187,32 @@ export async function hydrateTowerPgEventUpdates(store, events = [], deps = {}) 
     ...[...dailyTargets.values()].map(({ ownerActorId, noteDate, legacyChannelId }) => hydrateTowerPgDailyNoteTarget(store, ownerActorId, noteDate, { ...deps, legacyChannelId })),
     ...[...personalWappOwnerIds].map(() => hydrateTowerPgPersonalWapps(store, deps)),
     ...[...reactionTargets.values()].map(({ targetType, targetId }) => hydrateTowerPgReactionTarget(store, targetType, targetId, deps)),
-    ...responseActivityWrites.map((activity) => (
+    ...feedEvents.map(event => optionalTarget('feed-reader', event.entity_id, () => materializeFeedReaderEvent(store, event))),
+    ...responseActivityWrites.map((activity) => optionalTarget('response-activity', activity.target_id || activity.channel_id, () => (
       activity.target_type && activity.target_id
         ? hydrateTowerPgResponseActivitiesForTarget(store, activity.target_type, activity.target_id, deps)
         : hydrateTowerPgChannelResponseActivities(store, activity.channel_id, deps)
-    )),
+    ))),
     ...responseActivityDeletes.map((recordId) => clearResponseActivity(recordId)),
     ...latestAgentActivityUpdates.map((update) => writeAgentActivity(update.activity)),
     ...agentSessionHealthUpdates.map((health) => writeAgentSessionHealth(health)),
-    ...[...workroomIds].map((workroomId) => hydrateTowerPgWorkroom(store, workroomId, deps)),
+    ...[...workroomIds].map((workroomId) => optionalTarget('workroom', workroomId, () => hydrateTowerPgWorkroom(store, workroomId, deps))),
     ...[...workroomChannels].map((channelId) => hydrateTowerPgWorkrooms(store, { ...deps, channelId })),
-    ...[...workroomEventIds].map((workroomId) => hydrateTowerPgWorkroomEvents(store, workroomId, deps)),
-    ...[...workroomEventIds].map((workroomId) => hydrateTowerPgWorkroomApprovals(store, workroomId, deps)),
-    ...[...workroomLinkIds].map((workroomId) => hydrateTowerPgWorkroomLinks(store, workroomId, deps)),
-    ...[...workroomParticipantIds].map((workroomId) => hydrateTowerPgWorkroomParticipants(store, workroomId, deps)),
+    ...[...workroomEventIds].map((workroomId) => optionalTarget('workroom', workroomId, () => hydrateTowerPgWorkroomEvents(store, workroomId, deps))),
+    ...[...workroomEventIds].map((workroomId) => optionalTarget('workroom', workroomId, () => hydrateTowerPgWorkroomApprovals(store, workroomId, deps))),
+    ...[...workroomLinkIds].map((workroomId) => optionalTarget('workroom', workroomId, () => hydrateTowerPgWorkroomLinks(store, workroomId, deps))),
+    ...[...workroomParticipantIds].map((workroomId) => optionalTarget('workroom', workroomId, () => hydrateTowerPgWorkroomParticipants(store, workroomId, deps))),
     ...resourceViewStateUpdates.map((state) => upsertResourceViewState(state)),
   ];
 
-  await Promise.all(jobs);
+  const results = await Promise.allSettled(jobs);
+  assertTowerPgWorkspaceCurrent(store, activityContext);
+  const failedCore = results.find(result => result.status === 'rejected');
+  if (failedCore) throw failedCore.reason;
   if (attentionStateChanged) await store?.refreshUnreadFlags?.();
   return {
+    ...(absentTargets.length ? { absentTargets } : {}),
+    ...(optionalFailures.length ? { optionalFailures } : {}),
     channels: messageChannels.size,
     appliedTargets: jobs.length,
     fallbackEvents,
