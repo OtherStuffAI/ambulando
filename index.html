@@ -167,7 +167,7 @@
   </template>
   <aside
     class="startup-sync-status"
-    x-show="$store.chat.startupSyncProgress.visible && $store.chat.startupSyncProgress.stage === 'error'"
+    x-show="$store.chat.startupSyncProgress.visible && $store.chat.startupSyncProgress.error"
     x-cloak
     role="status"
     aria-live="polite"
@@ -177,7 +177,7 @@
     <div>
       <strong x-text="$store.chat.startupSyncProgressLabel()"></strong>
       <span x-show="$store.chat.startupSyncProgress.active">Cached workspace remains available while Flight Deck updates.</span>
-      <span x-show="$store.chat.startupSyncProgress.stage === 'error'" x-text="$store.chat.startupSyncProgress.error"></span>
+      <span x-show="$store.chat.startupSyncProgress.error" x-text="$store.chat.startupSyncProgress.error"></span>
     </div>
     <button type="button" x-show="$store.chat.startupSyncProgress.stage === 'error'" @click="$store.chat.retryStartupSync()">Retry</button>
   </aside>
@@ -392,7 +392,7 @@
             </div>
             <span class="startup-sync-progress-meta" x-show="$store.chat.startupSyncProgressMeta()" x-text="$store.chat.startupSyncProgressMeta()"></span>
             <span class="startup-sync-progress-copy" x-show="$store.chat.startupSyncProgress.active">Cached workspace remains available while Flight Deck updates.</span>
-            <span class="sync-error-text" x-show="$store.chat.startupSyncProgress.stage === 'error'" x-text="$store.chat.startupSyncProgress.error"></span>
+            <span class="sync-error-text" x-show="$store.chat.startupSyncProgress.error" x-text="$store.chat.startupSyncProgress.error"></span>
             <button class="startup-sync-retry" type="button" x-show="$store.chat.startupSyncProgress.stage === 'error'" @click="$store.chat.retryStartupSync()">Retry updates</button>
           </div>
           <div class="avatar-menu-section sync-status-panel">

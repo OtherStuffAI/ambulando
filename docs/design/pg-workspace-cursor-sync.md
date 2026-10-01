@@ -277,3 +277,37 @@ p95 99.9 ms and task-detail-open p95 291.4 ms. The documented September baseline
 was 215.6/231.2 ms render p95, 1,022/1,588 ms readiness, 145.8 ms thread open
 and 499.8 ms task detail. The normal render difference is small; exact typing,
 long-task, heavy rendering, readiness and navigation signals remain healthy.
+
+## Reactive identity and replacement conflict recovery
+
+The worker store snapshot projects reader actor ID, actor npub and workspace ID
+into plain scalar objects. It must not retain references to Alpine's nested
+reactive `pgMe.actor` or `pgMe.identity`: structured cloning rejects those
+Proxies before the worker can run either a normal apply or the preserved-view
+reset following `409 reset_required`. A reset failure leaves the saved cursor
+unchanged, so every retry can repeat the same 409 and clone error despite
+independent typed reads continuing to update the UI. Reader identity validation
+still binds the actor to the selected signer and workspace.
+
+Cached-conflict reconciliation is local replay, not a Tower delta handover.
+During an incomplete replacement it can reapply acknowledged records already
+seen in that generation without changing the cursor or authorizing omission.
+Older unseen conflicts wait until Tower sees the record or completes handover;
+replaying them early must not promote old membership into the new generation.
+Genuine network deltas before snapshot completion remain rejected. Existing
+partial caches resume their committed cursor and recovery conflicts without
+clearing site data, queued writes or surviving navigation/history.
+
+A real failure remains visible during automatic retries and clears after a
+successful workspace pull. Progress changes no longer hide and redisplay the
+failure banner on every fast attempt. An explicit Retry starts a new attempt. Failure persistence is scoped to the
+workspace/viewer connection; progress or completion from a previous activation
+cannot overwrite the selected workspace’s status.
+
+Native IndexedDB regression coverage uses nested JavaScript Proxies at the
+actual store projection/worker boundary, old damaged projections with retained
+canonical rows, interrupted replacement/reconnect, expired-cursor reset,
+retained pending intent, typed list/message refreshes, three repeated four-page
+delta catchups and workspace partition switching. Browser-engine fixtures do
+not establish acceptance on a particular human signer, browser profile or
+native WM App device.

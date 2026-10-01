@@ -441,3 +441,24 @@ it('recovers an omitted pending typed view even when its journal tags were repla
   expect((await db.pg_record_conflicts.get(`reset:chat_messages:${change.id}`)).local.body).toBe('typed local draft');
   expect(await db.pending_writes.where('record_id').equals(change.id).count()).toBe(1);
 });
+
+it('reconciles acknowledged cached conflicts during an incomplete replacement without declaring handover', async () => {
+  const change = fixture.one_message_delta.changes[0];
+  const local = await db.chat_messages.get(change.id);
+  await db.pg_record_conflicts.put({ key: `message:${change.id}`, family: 'message', record_id: change.id,
+    local, reason: 'unresolved_local_command' });
+  await resetPgRecordAuthority(store, { preserveViews: true });
+  const partial = { ...snapshot([], 'partial'), snapshot_complete: false };
+  await hydrateTowerPgSyncBundle(store, partial);
+  const state = (await db.sync_state.get(recordDeltaCursorKey(store))).value;
+  expect(state).toMatchObject({ cursor: 'partial', snapshotComplete: false, snapshotReconciliationPending: true });
+  expect(await db.pg_record_conflicts.count()).toBe(1);
+  expect(await counts()).toEqual([1, 1, 2]);
+  // Reopen the canonical cache at the committed cursor as an earlier failed
+  // post-page reconciliation did; no clearing storage or restarting snapshot.
+  db.close(); db = openWorkspaceDb('cache-continuity'); await db.open();
+  const read = vi.fn().mockResolvedValueOnce(snapshot()).mockResolvedValueOnce(delta());
+  await syncTowerPgWorkspace(store, {}, ports(read));
+  expect(read.mock.calls[0][1].cursor).toBe('partial');
+  expect((await db.sync_state.get(recordDeltaCursorKey(store))).value).toMatchObject({ cursor: 'handover', converged: true, snapshotReconciliationPending: false });
+});

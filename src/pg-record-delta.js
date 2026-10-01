@@ -217,7 +217,7 @@ async function applyRecordPage(store, page, options = {}) {
     if (page.mode === 'snapshot' && (!page.snapshot_id || typeof page.snapshot_complete !== 'boolean'
       || !page.has_more || page.snapshot_complete && (!Array.isArray(page.partitions_complete)
         || !page.families.every(f => page.partitions_complete.includes(f))))) throw new Error('Invalid snapshot completion boundary');
-    if (page.mode === 'delta' && state.snapshotReconciliationPending && !state.snapshotComplete) throw new Error('Incomplete snapshot handover');
+    if (!options.reconcileOnly && page.mode === 'delta' && state.snapshotReconciliationPending && !state.snapshotComplete) throw new Error('Incomplete snapshot handover');
     if (page.mode === 'delta' && page.snapshot_id) throw new Error('Invalid delta handover identity');
     const generation = page.mode === 'snapshot' ? `${page.snapshot_id}:${Number(state.localGeneration || 0)}` : state.generation || 'delta';
     if (page.actors?.length) await db.pg_actors.bulkPut(page.actors.map(actor => ({ ...actor, generation })));
@@ -592,6 +592,9 @@ async function reconcileConflictBatch(store, { acceptRemoteKey = null, after = n
     for (const conflict of conflicts) {
       const raw = await db.pg_record_rows.get(conflict.key);
       if (!raw || !FAMILY[raw.family]) continue;
+      // An old cached conflict is not membership in the replacement. Wait
+      // until Tower has seen this record or the authorized handover completes.
+      if (state.snapshotReconciliationPending && raw.generation !== state.generation) continue;
       const table = db.table(FAMILY[raw.family][0]);
       if (raw.family === 'resource_view_state') {
         changes.push(raw);

@@ -6,7 +6,7 @@ const css = readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8');
 
 describe('avatar startup receive progress presentation', () => {
   it('keeps active startup receive progress off the fixed content overlay', () => {
-    expect(html).toContain('x-show="$store.chat.startupSyncProgress.visible && $store.chat.startupSyncProgress.stage === \'error\'"');
+    expect(html).toContain('x-show="$store.chat.startupSyncProgress.visible && $store.chat.startupSyncProgress.error"');
     expect(html).not.toContain('class="startup-sync-status"\n    x-show="$store.chat.startupSyncProgress.visible"');
     expect(html).toContain('x-if="$store.chat.catchUpSyncActive"');
     expect(html).toContain('x-show="$store.chat.showSyncProgressModal"');

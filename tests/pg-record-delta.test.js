@@ -411,3 +411,20 @@ it('hydrates the permitted member directory even when a fresh snapshot has an ac
   expect(calls).toBe(2);
   expect((await db.workspace_members.get('unreferenced-agent'))?.npub).toBe('npub1unreferenced-agent');
 });
+
+it('reconciles a seen acknowledgement during snapshot without advancing its cursor or retiring unseen rows', async () => {
+  const c = fixture.one_message_delta.changes[0];
+  await db.chat_messages.put({ record_id: c.id, channel_id: c.channel_id, sync_status: 'pending', body: 'draft' });
+  const command = await db.pending_writes.add({ record_id: c.id });
+  await db.chat_messages.put({ record_id: 'unseen', channel_id: c.channel_id, sync_status: 'synced', body: 'cached' });
+  await applyPgRecordChanges(store, { ...fixture.canonical_upserts, changes: [c], snapshot_complete: false, next_cursor: 'partial' });
+  await db.pending_writes.delete(command);
+  await db.chat_messages.update(c.id, { sync_status: 'synced' });
+  const { reconcilePgRecordConflicts } = await import('../src/pg-record-delta.js');
+  await reconcilePgRecordConflicts(store);
+  expect(await db.pg_record_conflicts.count()).toBe(0);
+  expect((await db.chat_messages.get(c.id)).body).toBe(c.row.body);
+  expect(await db.chat_messages.get('unseen')).toBeTruthy();
+  expect((await db.sync_state.get(recordDeltaCursorKey(store))).value).toMatchObject({ cursor: 'partial', snapshotComplete: false, snapshotReconciliationPending: true });
+  await expect(applyPgRecordChanges(store, page([], 'premature'))).rejects.toThrow('Incomplete snapshot handover');
+});

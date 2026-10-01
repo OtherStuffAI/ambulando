@@ -145,3 +145,109 @@ test('retains a seeded cache through paged delta, interrupted 85-page replacemen
   expect(result.retired).toEqual([0, 0, 0]);
   console.log('Seeded canonical cache lifecycle:', JSON.stringify(result));
 });
+
+test('recovers an existing canonical cache through typed reads, interrupted replacement and repeated multi-page catchup', async ({ page, baseURL }) => {
+  const root = path.resolve(__dirname, '../..');
+  const options = { bundle: true, write: false, format: 'esm', logLevel: 'silent',
+    define: { __FLIGHT_DECK_PG_APP_NPUB__: JSON.stringify('npub1test') } };
+  const worker = await build({ ...options, entryPoints: [path.join(root, 'src/worker/tower-pg-materialization-worker.js')] });
+  const main = await build({ ...options, stdin: { resolveDir: root, contents: `
+    export { openWorkspaceDb, replacePgMessagesForChannel } from './src/db.js';
+    export { recordDeltaCursorKey } from './src/pg-record-delta.js';
+    export { syncTowerPgWorkspace, hydrateTowerPgScopes, hydrateTowerPgChannels } from './src/pg-read-hydrator.js';
+    export { TowerPgMaterializationWorkerClient } from './src/tower-pg-materialization-worker-client.js';
+    export { syncManagerMixin } from './src/sync-manager.js';` } });
+  const origin = new URL(baseURL).origin;
+  await page.route(`${origin}/__canonical/**`, route => {
+    const url = route.request().url();
+    return route.fulfill({ contentType: url.endsWith('.js') ? 'text/javascript' : 'text/html',
+      body: url.endsWith('worker.js') ? worker.outputFiles[0].text : url.endsWith('main.js') ? main.outputFiles[0].text : '<title>Canonical lifecycle</title>' });
+  });
+  await page.goto(`${origin}/__canonical/index`);
+  const result = await page.evaluate(async fixture => {
+    const m = await import('/__canonical/main.js');
+    const key = `canonical-lifecycle-${crypto.randomUUID()}`; let db = m.openWorkspaceDb(key);
+    await db.open();
+    const workspaceId = fixture.one_message_delta.changes[0].workspace_id;
+    const proxy = value => new Proxy(value, {});
+    const store = { backendUrl: 'http://127.0.0.1:3100', session: { npub: 'npub1viewer' },
+      currentWorkspace: proxy({ workspaceId, workspaceOwnerNpub: 'npub1owner', appNpub: 'npub1test', pgBackendMode: true,
+        pgMe: proxy({ actor: proxy({ actor_id: 'viewer-actor', npub: 'npub1viewer' }), identity: proxy({ workspace_id: workspaceId }) }) }) };
+    const snapshotStore = () => m.syncManagerMixin.buildTowerPgMaterializationStoreSnapshot.call(store);
+    let client;
+    const start = () => { client = new m.TowerPgMaterializationWorkerClient({ workspaceKey: key,
+      workerFactory: () => new Worker('/__canonical/worker.js', { type: 'module' }) }); };
+    const apply = bundle => client.materialize({ workspaceDbKey: key, store: snapshotStore(), bundle });
+    const state = () => db.sync_state.get(m.recordDeltaCursorKey(store)).then(row => row?.value);
+    const counts = () => Promise.all(['scopes', 'channels', 'chat_messages'].map(name => db.table(name).count()));
+    const delta = (cursor, more = false) => ({ ...fixture.one_message_delta, changes: [], next_cursor: cursor, has_more: more });
+    start(); const started = performance.now();
+    try {
+      await apply(fixture.canonical_upserts); await apply(delta('seeded'));
+      await db.chat_messages.put({ record_id: 'unsent-draft', channel_id: fixture.one_message_delta.changes[0].channel_id, body: 'keep local intent', sync_status: 'pending' });
+      await db.pending_writes.add({ record_id: 'unsent-draft', envelope: { body: 'keep local intent' } });
+      const before = await counts(), cached = await state();
+      // A real old cache with erased projections and retained canonical versions.
+      delete cached.snapshotReconciliationPending;
+      await db.sync_state.put({ key: m.recordDeltaCursorKey(store), value: cached });
+      await db.scopes.clear();
+      const c = fixture.one_message_delta.changes[0], local = await db.chat_messages.get(c.id);
+      await db.pg_record_conflicts.put({ key: `message:${c.id}`, family: 'message', record_id: c.id, local, reason: 'unresolved_local_command' });
+      const replacement = [
+        { ...fixture.canonical_upserts, changes: [], snapshot_complete: false, next_cursor: 'repair-1' },
+        { ...fixture.canonical_upserts, changes: [], snapshot_complete: false, next_cursor: 'repair-2' },
+        { ...fixture.canonical_upserts, next_cursor: 'repair-3' }, delta('repaired') ];
+      const requests = [], timings = [], progress = [];
+      let interrupt = true, expired = false;
+      const deps = { hydrateTowerPgSyncBundle: (_store, bundle) => apply(bundle),
+        getTowerPgResourceViewStates: async () => ({ states: [] }),
+        getTowerPgRecordSync: async (_id, options) => {
+          requests.push(options.cursor);
+          if (expired && options.cursor === 'repaired') {
+            expired = false; throw Object.assign(new Error('reset_required'), { status: 409, responseText: JSON.stringify({ code: 'reset_required' }) });
+          }
+          if (interrupt && options.cursor === 'repair-2') throw Object.assign(new Error('interrupted'), { status: 503 });
+          const index = options.cursor ? replacement.findIndex(p => p.next_cursor === options.cursor) + 1 : 0;
+          return replacement[index];
+        } };
+      try { await m.syncTowerPgWorkspace(store, { onProgress: p => progress.push(p.stage) }, deps); throw new Error('missing interruption'); }
+      catch (error) { if (error.message !== 'interrupted') throw error; }
+      if ((await state()).cursor !== 'repair-2') throw new Error('lost interrupted cursor');
+      client.dispose(); start(); interrupt = false;
+      await m.syncTowerPgWorkspace(store, {}, deps);
+      if ((await counts()).join() !== before.join() || await db.pg_record_conflicts.count()) throw new Error('damaged cache failed to recover');
+      // Exercise the exact Firefox failure boundary: saved cursor -> 409 ->
+      // worker reset with genuine nested reactive identity -> fresh snapshot.
+      expired = true;
+      await m.syncTowerPgWorkspace(store, {}, deps);
+      if ((await state()).localGeneration !== 2 || (await counts()).join() !== before.join()) throw new Error('expired cursor failed to recover');
+      if (await db.pending_writes.count() !== 1 || (await db.chat_messages.get('unsent-draft')).body !== 'keep local intent') throw new Error('lost local pending intent');
+      const scope = fixture.canonical_upserts.changes.find(c => c.family === 'scope').row;
+      const channel = fixture.canonical_upserts.changes.find(c => c.family === 'channel').row;
+      for (let pass = 0; pass < 3; pass++) {
+        await m.hydrateTowerPgScopes(store, { getTowerPgWorkspaceScopes: async () => ({ scopes: [scope] }) });
+        await m.hydrateTowerPgChannels(store, { getTowerPgWorkspaceScopes: async () => ({ scopes: [scope] }), getTowerPgScopeChannels: async () => ({ channels: [channel] }) });
+        await m.replacePgMessagesForChannel(channel.id, (await db.chat_messages.toArray()).map(({ pg_delta_generation, pg_delta_family, ...row }) => row));
+        let index = 0; const t = performance.now();
+        await m.syncTowerPgWorkspace(store, {}, { ...deps, getTowerPgRecordSync: async () => {
+          index++;
+          return { ...delta(`catchup-${pass}-${index}`, index < 4), changes: [{ ...c, version: String(1000 + pass * 4 + index),
+            row: { ...c.row, row_version: 1000 + pass * 4 + index, body: `caught up ${pass}/${index}` } }] };
+        } });
+        timings.push(Math.round(performance.now() - t));
+        if ((await counts()).join() !== before.join() || !(await state()).converged) throw new Error('typed catchup lost navigation/history');
+        if ((await db.chat_messages.get(c.id)).body !== `caught up ${pass}/4`) throw new Error('catchup did not converge to latest content');
+      }
+      // A different partition must not inherit this canonical cursor or views.
+      const other = m.openWorkspaceDb(`${key}-other`); await other.open();
+      if (await other.pg_record_rows.count() || await other.sync_state.count()) throw new Error('workspace leak');
+      other.close(); await other.delete(); db = m.openWorkspaceDb(key); await db.open();
+      return { before, after: await counts(), requests, timings, elapsedMs: Math.round(performance.now() - started), progress };
+    } catch (error) { throw new Error(`${error.name}: ${error.message}\n${error.stack}`); } finally { client.dispose(); db.close(); await db.delete(); }
+  }, fixture);
+  expect(result.after).toEqual(result.before);
+  expect(result.requests).toEqual([null, 'repair-1', 'repair-2', 'repair-2', 'repair-3', 'repaired', null, 'repair-1', 'repair-2', 'repair-3']);
+  expect(result.timings).toHaveLength(3);
+  expect(Math.max(...result.timings)).toBeLessThan(5000);
+  console.log('canonical lifecycle evidence', JSON.stringify(result));
+});

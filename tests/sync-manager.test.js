@@ -1760,7 +1760,7 @@ describe('PG workspace startup progress', () => {
       store: expect.objectContaining({
         workspaceOwnerNpub: 'npub1owner',
         session: { npub: 'npub1viewer' },
-        currentWorkspace: expect.objectContaining({ workspaceId: 'workspace-1', pgMe: { actor: { actor_id: 'actor-1', npub: 'npub1viewer' }, identity: undefined } }),
+        currentWorkspace: expect.objectContaining({ workspaceId: 'workspace-1', pgMe: { actor: { actor_id: 'actor-1', npub: 'npub1viewer' }, identity: { workspace_id: '' } } }),
       }),
     }));
     expect(store.towerSyncInstrumentation).toMatchObject({ materialisationsCommitted: 1 });
@@ -3522,4 +3522,53 @@ describe('PG read cancellation recovery', () => {
     await expect(store.requestTowerSyncFamily('scopes')).rejects.toBe(failure);
     expect(ensureLoaded).toHaveBeenCalledOnce();
   });
+});
+
+it('keeps a real workspace failure stable through fast automatic retries and clears it on success', async () => {
+  const { fn, store } = bindMethod('runTowerPgWorkspaceSync');
+  syncTowerPgWorkspace.mockRejectedValueOnce(new Error('Tower unavailable'));
+  await expect(fn()).rejects.toThrow('Tower unavailable');
+  let resolve;
+  syncTowerPgWorkspace.mockImplementationOnce((_store, options) => {
+    options.onProgress({ stage: 'receiving', page: 1 });
+    return new Promise(done => { resolve = done; });
+  });
+  const retry = fn();
+  expect(store.startupSyncProgress).toMatchObject({ visible: true, active: true, error: 'Tower unavailable' });
+  expect(syncManagerMixin.startupSyncProgressLabel.call(store)).toBe('Retrying updates…');
+  resolve({ applied: 0, pages: 1 });
+  await retry;
+  expect(store.startupSyncProgress).toMatchObject({ visible: false, active: false, error: null });
+});
+
+it('projects reactive reader identity into cloneable scalar data for cursor recovery', () => {
+  const proxy = value => new Proxy(value, {});
+  const { fn } = bindMethod('buildTowerPgMaterializationStoreSnapshot', {
+    backendUrl: 'https://tower.example', session: proxy({ npub: 'npub1viewer' }),
+    currentWorkspace: proxy({ workspaceId: 'workspace-1', pgSessionNpub: 'npub1viewer',
+      pgMe: proxy({ actor: proxy({ actor_id: 'actor-1', npub: 'npub1viewer', permissions: proxy(['read']) }),
+        identity: proxy({ workspace_id: 'workspace-1', unused: proxy({ nested: true }) }) }) }),
+  });
+  const snapshot = fn();
+  expect(structuredClone(snapshot)).toEqual(snapshot);
+  expect(snapshot.currentWorkspace.pgMe).toEqual({ actor: { actor_id: 'actor-1', npub: 'npub1viewer' }, identity: { workspace_id: 'workspace-1' } });
+});
+
+it('does not carry retry errors or late completion across workspace switches', async () => {
+  let key = 'workspace-a', rejectOld;
+  const { fn, store } = bindMethod('runTowerPgWorkspaceSync', { buildSSEConnectionKey: () => key, getTowerSyncService: () => ({ disposed: false }), markTowerReachabilityRecovered: vi.fn() });
+  syncTowerPgWorkspace.mockRejectedValueOnce(new Error('workspace A failed'));
+  await expect(fn()).rejects.toThrow('workspace A failed');
+  syncTowerPgWorkspace.mockImplementationOnce(() => new Promise((_resolve, reject) => { rejectOld = reject; }));
+  const oldRetry = fn();
+  key = 'workspace-b';
+  syncTowerPgWorkspace.mockResolvedValueOnce({ applied: 0, pages: 1 });
+  await fn();
+  expect(store.startupSyncProgress).toMatchObject({ connectionKey: 'workspace-b', active: false, visible: false, error: null });
+  key = 'workspace-a';
+  syncTowerPgWorkspace.mockResolvedValueOnce({ applied: 0, pages: 1 });
+  await fn();
+  rejectOld(new Error('late workspace A failure'));
+  await expect(oldRetry).rejects.toThrow('late workspace A failure');
+  expect(store.startupSyncProgress).toMatchObject({ connectionKey: 'workspace-a', active: false, visible: false, error: null });
 });

@@ -545,6 +545,13 @@ export const syncManagerMixin = {
     const workspace = this.currentWorkspace || {};
     const descriptor = workspace.pgDescriptor || {};
     const identity = descriptor.identity || {};
+    const me = workspace.pgMe || workspace.pg_me;
+    // Alpine wraps nested objects in Proxy instances. Worker postMessage
+    // requires plain data, including on the expired-cursor reset path.
+    const reader = me ? {
+      actor: { actor_id: String(me.actor?.actor_id || me.actor?.id || ''), npub: String(me.actor?.npub || '') },
+      identity: { workspace_id: String(me.identity?.workspace_id || '') },
+    } : null;
     return {
       backendUrl: this.backendUrl,
       workspaceOwnerNpub: this.workspaceOwnerNpub || workspace.workspaceOwnerNpub || identity.workspace_owner_npub || '',
@@ -554,7 +561,7 @@ export const syncManagerMixin = {
         url: String(entry?.url || '').trim(),
       })),
       currentWorkspace: {
-        pgMe: (workspace.pgMe || workspace.pg_me) ? { actor: (workspace.pgMe || workspace.pg_me).actor, identity: (workspace.pgMe || workspace.pg_me).identity } : null,
+        pgMe: reader,
         pgSessionNpub: workspace.pgSessionNpub || '',
         workspaceId: workspace.workspaceId || workspace.workspace_id || identity.workspace_id || '',
         workspaceOwnerNpub: workspace.workspaceOwnerNpub || identity.workspace_owner_npub || this.workspaceOwnerNpub || '',
@@ -751,12 +758,16 @@ export const syncManagerMixin = {
   },
 
   beginStartupSyncProgress() {
-    if (this.startupSyncProgress?.active) return;
+    const connectionKey = this.buildSSEConnectionKey?.() || '';
+    if (this.startupSyncProgress?.active && this.startupSyncProgress.connectionKey === connectionKey) return;
     if (this.startupSyncProgressTimer) clearTimeout(this.startupSyncProgressTimer);
     const startedAt = Date.now();
+    const previousError = this.startupSyncProgress?.connectionKey === connectionKey
+      ? this.startupSyncProgress.error || null : null;
     this.startupSyncProgress = {
+      connectionKey,
       active: true,
-      visible: false,
+      visible: Boolean(previousError),
       stage: 'opening',
       startedAt,
       elapsedMs: 0,
@@ -764,7 +775,9 @@ export const syncManagerMixin = {
       applied: 0,
       cursorPresent: false,
       fullSnapshot: false,
-      error: null,
+      // Keep a real failure stable while automatic retries run. Only a
+      // successful pull clears it, avoiding a blinking error on every retry.
+      error: previousError,
     };
     this.startupSyncProgressTimer = setTimeout(() => {
       if (!this.startupSyncProgress?.active) return;
@@ -831,11 +844,14 @@ export const syncManagerMixin = {
   async runTowerPgWorkspaceSync(options = {}) {
     const connectionKey = this.buildSSEConnectionKey();
     this.beginStartupSyncProgress();
+    const progress = this.startupSyncProgress;
+    const isCurrent = () => connectionKey === this.buildSSEConnectionKey() && this.startupSyncProgress === progress;
     try {
       const service = this.getTowerSyncService();
       const result = await syncTowerPgWorkspace(this, {
         ...options,
         onProgress: (update) => {
+          if (!isCurrent()) return;
           this.updateStartupSyncProgress(update);
           options.onProgress?.(update);
         },
@@ -845,7 +861,7 @@ export const syncManagerMixin = {
           store: this.buildTowerPgMaterializationStoreSnapshot(),
         }),
       });
-      this.finishStartupSyncProgress();
+      if (isCurrent()) this.finishStartupSyncProgress();
       // Every committed workspace pull is connectivity evidence, including
       // startup and SSE catch-up pulls outside the background polling tick.
       if (connectionKey && connectionKey === this.buildSSEConnectionKey() && !service.disposed) {
@@ -856,7 +872,7 @@ export const syncManagerMixin = {
       }
       return result;
     } catch (error) {
-      this.finishStartupSyncProgress(error);
+      if (isCurrent()) this.finishStartupSyncProgress(error);
       throw error;
     }
   },
@@ -869,6 +885,7 @@ export const syncManagerMixin = {
 
   startupSyncProgressLabel() {
     const progress = this.startupSyncProgress || {};
+    if (progress.error && progress.active) return 'Retrying updates…';
     if (progress.stage === 'opening') return 'Opening workspace…';
     if (progress.stage === 'receiving') return progress.page > 1 ? `Receiving changes (page ${progress.page})…` : 'Receiving changes…';
     if (progress.stage === 'applying') return 'Applying updates…';

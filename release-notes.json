@@ -2347,6 +2347,21 @@
       "notes": [
         "Use consistent form borders, section dividers and loading feedback in the Add feed dialog on phone and desktop."
       ]
+    },
+    {
+      "buildNumber": 2130,
+      "label": "Recover stalled workspace updates",
+      "notes": [
+        "Recover expired sync cursors when reactive reader identity is passed to the background worker. Preserve cached navigation, history and local pending changes through interrupted recovery.",
+        "Reconcile acknowledged changes safely during snapshot catch-up and keep genuine update errors steady while automatic retries run."
+      ]
+    },
+    {
+      "buildNumber": 2131,
+      "label": "Isolate workspace retry status",
+      "notes": [
+        "Keep update retry feedback scoped to the selected workspace and signer. Ignore late progress and errors from a previous workspace after switching."
+      ]
     }
   ]
 }
