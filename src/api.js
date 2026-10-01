@@ -166,7 +166,10 @@ async function buildApiError(resp, { requestUrl = '', method = 'GET', prefix = '
     const parsed = JSON.parse(text);
     if (parsed && typeof parsed === 'object') {
       error.payload = parsed;
-      error.code = typeof parsed.code === 'string' ? parsed.code : null;
+      const nestedError = parsed.error && typeof parsed.error === 'object' ? parsed.error : null;
+      error.code = typeof nestedError?.code === 'string' ? nestedError.code : (typeof parsed.code === 'string' ? parsed.code : null);
+      if (typeof nestedError?.message === 'string') error.message = nestedError.message;
+      if (typeof nestedError?.retryable === 'boolean') error.retryable = nestedError.retryable;
       error.reason = typeof parsed.reason === 'string'
         ? parsed.reason
         : (typeof parsed.error === 'string' ? parsed.error : (typeof parsed.details?.reason === 'string' ? parsed.details.reason : null));

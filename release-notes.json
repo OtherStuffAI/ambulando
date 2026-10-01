@@ -2311,6 +2311,13 @@
         "Add an explicit Subscribed Feed view with authorised WApp discovery, direct-CORS public RSS/JSON sources and personal read, dismiss and save flags. Legacy Feed remains available.",
         "Bound source fetching and parsing, isolate reader caches and purge private content on observed access loss. Source implementation requires coordinated Tower/WApp activation; no automatic migration."
       ]
+    },
+    {
+      "buildNumber": 2125,
+      "label": "Preserve feed mutation conflict errors",
+      "notes": [
+        "Reject reused feed mutation IDs without retrying. Reconcile personal feed flags only when Tower reports an authoritative state conflict. Source fix only; coordinated runtime activation remains separate."
+      ]
     }
   ]
 }

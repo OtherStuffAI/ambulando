@@ -51,7 +51,7 @@ export function prepareFeedCommand(store, name, input, { request = towerPgFeedRe
         current();
         try { return await request(c.workspaceId, suffix, { ...c, method, body }); }
         catch (e) {
-          if (!state || e.status !== 409 || e.code === 'mutation_id_reused') throw e;
+          if (!state || e.status !== 409 || e.code !== 'state_conflict' || attempt === 2) throw e;
           await hydrateFeedReader(store, { request, db, replay: false }); current();
           const sub = await db.feed_subscriptions.get(feedRowKey(context, input.subscriptionId));
           if (sub?.status !== 'active') throw new Error('subscription_unsubscribed');

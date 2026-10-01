@@ -54,9 +54,12 @@ rendered projections remain separate. Partitions include logical Tower backend,
 workspace, actual reader actor, subscription and structured source tuple.
 
 State commands send explicit field patches, expected row version and mutation UUID.
-On CAS conflict the descriptor reloads and reapplies only intentional fields with
-a fresh UUID, bounded to three attempts; mark-unread remains explicit false. Changed
-mutation-ID reuse is rejected. Newer materialized versions win over old acknowledgements.
+Only on an authoritative HTTP 409 `state_conflict` the descriptor reloads and
+reapplies only intentional fields with a fresh UUID, bounded to three attempts;
+mark-unread remains explicit false. Changed mutation-ID reuse and other 409 errors fail without hydration or a new UUID.
+The API adapter preserves T1 nested error code/message/retryable fields and legacy
+top-level errors. Exhausting three writes fails without an unused fourth mutation.
+Newer materialized versions win over old acknowledgements.
 Offline intents stay in their original partition and are replayed only by the
 service-owned recovery/hydration path after authentication. Unsubscribe blocks
 replay, cancels source fetch and purges private bodies. Tower retains subscription

@@ -89,7 +89,7 @@ describe('T1 adapters, reader convergence and CAS', () => {
     let row = { schema_version: 1, id: 'state', workspace_id: workspaceId, reader_actor_id: 'reader', subscription_id: 'sub', item_id: 'item', row_version: 1, read: false, saved: false, dismissed: false };
     const mutations = new Map(); const request = vi.fn(async (_w, suffix, options) => {
       if (!options.method || options.method === 'GET') return suffix.endsWith('item-states') ? { item_states: [row], next_cursor: null } : { subscriptions: [sub()], next_cursor: null };
-      const body = options.body; if (mutations.has(body.mutation_id)) return mutations.get(body.mutation_id); if (body.expected_row_version !== row.row_version) throw Object.assign(new Error('state_conflict'), { status: 409 });
+      const body = options.body; if (mutations.has(body.mutation_id)) return mutations.get(body.mutation_id); if (body.expected_row_version !== row.row_version) throw Object.assign(new Error('state_conflict'), { status: 409, code: 'state_conflict' });
       row = { ...row, ...body.patch, row_version: row.row_version + 1 }; const result = { item_state: row }; mutations.set(body.mutation_id, result); return result;
     });
     const one = new TowerSyncService({ workspaceKey: 'one', ports: { prepareCommand: (n, i) => prepareFeedCommand(store(), n, i, { request, db }) } });
