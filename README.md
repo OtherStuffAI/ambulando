@@ -91,8 +91,9 @@ Generated `dist/` output is ignored and rebuilt for deployment. Before
 publishing the source or creating a replacement repository, follow the
 sanitization and clean-history procedure in `docs/public-source-policy.md`.
 
-## Proposed WApp feed contract
+## Subscribed feed reader
 
-[WApp feed contract — proposed/unimplemented](docs/design/wapp-feed-reader-proposed.md) documents the shared
-reader/source boundaries and future acceptance gates; it does not describe shipped
-feed endpoints.
+[Subscribed feed reader](docs/design/wapp-feed-reader-proposed.md) documents the
+source implementation, selected Tower/WApp adapters and remaining integration
+boundaries. Legacy Feed publishing remains available. Source builds and tests
+are not a claim of integrated release or live activation.

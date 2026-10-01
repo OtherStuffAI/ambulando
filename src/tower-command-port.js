@@ -1,3 +1,4 @@
+import { prepareFeedCommand } from './feed/tower.js';
 import {
   addPendingWrite,
   replaceCommentRecord,
@@ -45,6 +46,7 @@ import { inboundAutopilotConnection, inboundWorkspaceAgent } from './translators
 
 export const TOWER_WORKSPACE_COMMAND_CONTRACT = Object.freeze({
   descriptorReconciled: Object.freeze([
+    'feed-subscription.create', 'feed-subscription.patch', 'feed-state.patch',
     'record-conflict.accept-remote',
     'task.create', 'task.update', 'task.delete', 'task.move', 'task-comment.create',
     'document.create', 'document.update', 'document.delete', 'document.move',
@@ -145,6 +147,7 @@ async function reconcileTypedCommand(name, result, { owner = '', args = [] } = {
 }
 
 export function prepareTowerWorkspaceCommand(store, name, input = {}) {
+  if (name.startsWith('feed-subscription.') || name === 'feed-state.patch') return prepareFeedCommand(store, name, input);
   if (name === 'thread.branch') {
     return {
       entityKey: `thread.branch:${input.clientRequestId || input.message?.record_id || ''}`,

@@ -1,3 +1,4 @@
+import { subscribedReaderMixin } from './feed/reader-manager.js';
 import { driveManagerMixin } from './drive.js';
 import { registerChatComposer, resolveChatUploadToken } from './chat-composer-draft.js';
 /**
@@ -9881,6 +9882,7 @@ export function initApp() {
     agentSpaceManagerMixin,
     threadLiveActivityManagerMixin,
     notificationsManagerMixin,
+    subscribedReaderMixin,
     wappPublishingManagerMixin,
     wappImageManagerMixin,
     wappManagementManagerMixin,

@@ -1,3 +1,5 @@
+import { inboundFeedReaderRow } from './translators/feed-reader.js';
+import { feedContextKey } from './feed/store.js';
 import { threadHistoryLineage } from './thread-history-coverage.js';
 import Dexie from 'dexie';
 import { preserveHydratedDocumentContent } from './document-selection.js';
@@ -24,6 +26,8 @@ const FAMILY = {
   autopilot_connection: ['autopilot_connections', inboundAutopilotConnection],
   workspace_agent: ['workspace_agents', inboundWorkspaceAgent],
   resource_view_state: ['resource_view_states', (row) => ({ ...row, record_id: `${row.resource_type}:${row.resource_id}`, sync_status: 'synced' })],
+  feed_subscription: ['feed_subscriptions', row => row],
+  feed_item_state: ['feed_item_states', row => row],
 };
 export const PG_RECORD_DELTA_FAMILIES = [...Object.keys(FAMILY), 'task_assignment'];
 const TOWER_WINS_LOCAL_ASSET_CONFLICT_FAMILIES = new Set(['file', 'file_folder']);
@@ -35,7 +39,7 @@ export function isTowerWinsLocalAssetConflict(conflict = {}) {
 }
 function validatePage(page, workspaceId) {
   if (page?.protocol_version !== 1 || !['snapshot', 'delta'].includes(page.mode)
-    || !Array.isArray(page.families) || !PG_RECORD_DELTA_FAMILIES.every(f => page.families.includes(f))
+    || !Array.isArray(page.families) || !PG_RECORD_DELTA_FAMILIES.filter(f => !f.startsWith('feed_')).every(f => page.families.includes(f))
     || !Array.isArray(page.changes) || page.changes.length > 200
     || typeof page.next_cursor !== 'string' || !page.next_cursor || typeof page.has_more !== 'boolean') {
     throw new Error('Invalid Tower record-delta v1 page');
@@ -165,7 +169,7 @@ export async function applyPgRecordChanges(store, page, options = {}) {
   // Validate the complete wire boundary before any prefix becomes visible.
   if (page.mode === 'snapshot' && (!page.snapshot_id || typeof page.snapshot_complete !== 'boolean'
     || !page.has_more || page.snapshot_complete && (!Array.isArray(page.partitions_complete)
-      || !PG_RECORD_DELTA_FAMILIES.every(f => page.partitions_complete.includes(f))))) throw new Error('Invalid snapshot completion boundary');
+      || !page.families.every(f => page.partitions_complete.includes(f))))) throw new Error('Invalid snapshot completion boundary');
   if (page.mode === 'delta' && page.snapshot_id) throw new Error('Invalid delta handover identity');
   // Subpage checkpoints retain the server cursor until the entire page commits.
   // A crash replays that opaque page; canonical versions make the committed
@@ -211,7 +215,7 @@ async function applyRecordPage(store, page, options = {}) {
     if (state.staging) throw new Error('Legacy snapshot staging requires preserved-view recovery');
     if (page.mode === 'snapshot' && (!page.snapshot_id || typeof page.snapshot_complete !== 'boolean'
       || !page.has_more || page.snapshot_complete && (!Array.isArray(page.partitions_complete)
-        || !PG_RECORD_DELTA_FAMILIES.every(f => page.partitions_complete.includes(f))))) throw new Error('Invalid snapshot completion boundary');
+        || !page.families.every(f => page.partitions_complete.includes(f))))) throw new Error('Invalid snapshot completion boundary');
     if (page.mode === 'delta' && state.snapshotReconciliationPending && !state.snapshotComplete) throw new Error('Incomplete snapshot handover');
     if (page.mode === 'delta' && page.snapshot_id) throw new Error('Invalid delta handover identity');
     const generation = page.mode === 'snapshot' ? `${page.snapshot_id}:${Number(state.localGeneration || 0)}` : state.generation || 'delta';
@@ -271,6 +275,18 @@ async function applyRecordPage(store, page, options = {}) {
       let localId = raw.id;
       if (raw.family === 'resource_view_state') localId = raw.row
         ? `${raw.row.resource_type}:${raw.row.resource_id}` : raw.id.split(':').slice(1).join(':');
+      if (raw.family === 'feed_subscription' || raw.family === 'feed_item_state') {
+        const reader = { ...context, readerActorId: store.currentWorkspaceActorId || store.pgActorId || store.currentActorId || '' };
+        if (!reader.readerActorId) throw new Error('reader_identity_required');
+        if (raw.operation === 'delete') {
+          await table.where('context').equals(feedContextKey(reader)).filter(r => r.id === raw.id).delete();
+        } else {
+          const mapped = inboundFeedReaderRow(raw.row, reader, raw.family === 'feed_item_state');
+          const prior = await table.get(mapped.key);
+          if (!prior || prior.row_version <= mapped.row_version) await table.put({ ...mapped, pg_delta_generation: generation, pg_delta_family: raw.family });
+        }
+        applied++; return;
+      }
       const prior = await table.get(localId);
       // Read receipts are monotonic watermarks, not competing content edits.
       // Keep an ahead local receipt pending so reconnect can still send it.
@@ -483,7 +499,7 @@ async function retireSnapshotOmissions(store, options) {
           await db.pg_record_conflicts.put({ key: `reset:${tableName}:${row.record_id}`, family: tableName,
             record_id: row.record_id, local: row, reason: 'authority_reset' });
         }
-        obsolete.push(row.record_id);
+        obsolete.push(tableName.startsWith('feed_') ? row.key : row.record_id);
         if (tableName === 'chat_messages') channels.add(row.channel_id);
       }
       if (obsolete.length) await table.bulkDelete(obsolete);

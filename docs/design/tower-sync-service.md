@@ -189,3 +189,15 @@ but their errors must not skip that pull. Activity recovery keeps its own visibl
 error and bounded retry state. The workspace pull establishes whether general
 Tower connectivity is usable; a failed pull keeps the connection warning.
 SSE lifecycle diagnostics continue to show stream reconnect/fallback details.
+
+## Subscribed feed families
+
+The additive `feed_subscription` and `feed_item_state` PG families materialize
+through the existing record-delta worker and actor-guarded SSE path. The
+`feed-reader` family owns typed hydration; `feed-subscription.create`,
+`feed-subscription.patch` and `feed-state.patch` command descriptors own CAS,
+mutation acknowledgement and original-partition offline intent recovery. UI
+collections remain Dexie liveQuery projections. Source fetching is a separate
+bounded WApp/public service and never adds Tower polling or another SSE owner.
+See [reader implementation](wapp-feed-reader-proposed.md) for source-only support
+and remaining integration limits.

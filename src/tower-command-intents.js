@@ -120,3 +120,7 @@ export const createTowerPgFileFolderFromLocal = (store, folder) => issue(store, 
 export const createTowerPgAudioNoteFromLocal = (store, audioNote) => issue(store, 'audio-note.create', { audioNote }, audioNote?.record_id);
 
 export const acceptTowerPgRemoteConflict = (store, key) => issue(store, 'record-conflict.accept-remote', { key }, key);
+
+export const createFeedSubscription = (store, input) => issue(store, 'feed-subscription.create', input, input.body.mutation_id);
+export const patchFeedSubscription = (store, input) => issue(store, 'feed-subscription.patch', input, input.body.mutation_id);
+export const patchFeedItemState = (store, input) => issue(store, 'feed-state.patch', input, input.body.mutation_id);

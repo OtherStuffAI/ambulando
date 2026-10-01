@@ -2303,6 +2303,14 @@
       "notes": [
         "Keep a recovery copy and queued writes when a completed snapshot retires a previously authorized record whose view was refreshed through a targeted read."
       ]
+    },
+    {
+      "buildNumber": 2124,
+      "label": "Subscribed feed reader",
+      "notes": [
+        "Add an explicit Subscribed Feed view with authorised WApp discovery, direct-CORS public RSS/JSON sources and personal read, dismiss and save flags. Legacy Feed remains available.",
+        "Bound source fetching and parsing, isolate reader caches and purge private content on observed access loss. Source implementation requires coordinated Tower/WApp activation; no automatic migration."
+      ]
     }
   ]
 }

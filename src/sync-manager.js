@@ -1,3 +1,4 @@
+import { hydrateFeedReader } from './feed/tower.js';
 import { hydrateDriveShares } from './drive.js';
 import { resolveTowerSigningUrl } from './tower-transport.js';
 import Dexie from 'dexie';
@@ -352,6 +353,7 @@ export const syncManagerMixin = {
     this._towerSyncService = replaceTowerSyncService(this._towerSyncService, {
       workspaceKey,
       families: {
+        'feed-reader': { freshMs: 30000, load: () => hydrateFeedReader(this), materialize: r => r },
         'drive-shares': { freshMs: 30000, load: () => hydrateDriveShares(this), materialize: result => result },
         'workspace-bootstrap': {
           load: (_id, options) => this.runTowerPgWorkspaceSync(options),
@@ -544,6 +546,7 @@ export const syncManagerMixin = {
     const descriptor = workspace.pgDescriptor || {};
     const identity = descriptor.identity || {};
     return {
+      backendUrl: this.backendUrl,
       workspaceOwnerNpub: this.workspaceOwnerNpub || workspace.workspaceOwnerNpub || identity.workspace_owner_npub || '',
       currentWorkspaceActorId: this.currentWorkspaceActorId || this.pgActorId || this.currentActorId || '',
       session: { npub: this.session?.npub || '' },
@@ -576,6 +579,7 @@ export const syncManagerMixin = {
     const service = this._towerSyncService;
     this._towerSyncService = null;
     service?.dispose(reason);
+    this.disposeSubscribedReader?.();
     this.backgroundSyncTimer = null;
     this.agentActivityRecoveryStartedAt = 0;
     this.agentActivityRecoveryError = '';

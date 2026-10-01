@@ -296,6 +296,14 @@ function createWorkspaceDb(workspaceDbKey) {
   db.version(27).stores({ ...WORKSPACE_STORES_V26, drive_shares: '&key, context, id', drive_listings: '&key, context, share_key, fetched_at' });
   db.version(28).stores({ ...WORKSPACE_STORES_V28, drive_shares: '&key, context, id', drive_listings: '&key, context, share_key, fetched_at' });
   db.version(29).stores({ ...WORKSPACE_STORES_V29, drive_shares: '&key, context, id', drive_listings: '&key, context, share_key, fetched_at' });
+  db.version(30).stores({
+    feed_subscriptions: '&key, context, id, status',
+    feed_item_states: '&key, context, subscription_id, item_id',
+    feed_items: '&key, context, subscription_id, source_key, fetched_at',
+    feed_source_status: '&key, context, subscription_id',
+    feed_commands: '&mutation_id, context, subscription_id',
+    feed_connection_transports: '&key, context, connection_id',
+  });
   const commentFields = activityIndexFields;
   db.documents.hook('creating', (_key, row) => { Object.assign(row, commentFields(row)); });
   db.documents.hook('updating', (changes, _key, row) => commentFields({ ...row, ...changes }));

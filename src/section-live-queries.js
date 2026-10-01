@@ -1050,6 +1050,7 @@ export const sectionLiveQueryMixin = {
   },
 
   startWorkspaceLiveQueries() {
+    this.startSubscribedReader?.();
     const state = getSectionState(this);
     if (typeof this.startSharedLiveQueries === 'function') {
       this.startSharedLiveQueries();
@@ -1098,12 +1099,14 @@ export const sectionLiveQueryMixin = {
   },
 
   stopWorkspaceLiveQueries() {
+    this.disposeSubscribedReader?.();
     const state = getSectionState(this);
     stopBucket(this, state.workspace);
     stopBucket(this, state.detail);
   },
 
   stopAllLiveQueries() {
+    this.disposeSubscribedReader?.();
     const state = getSectionState(this);
     stopBucket(this, state.shared);
     stopBucket(this, state.workspace);

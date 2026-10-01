@@ -20,7 +20,8 @@
     "validate": "bun run lint && bun run check:public-source && bun run test && bun run build && bun run verify:dist && git diff --check",
     "test": "vitest run",
     "test:e2e": "playwright test",
-    "test:e2e:perf": "PLAYWRIGHT_DISABLE_VIDEO=1 playwright test tests/e2e/performance-baseline.spec.cjs"
+    "test:e2e:perf": "PLAYWRIGHT_DISABLE_VIDEO=1 playwright test tests/e2e/performance-baseline.spec.cjs",
+    "test:feed:wire": "bun scripts/check-feed-wapp-wire.mjs"
   },
   "dependencies": {
     "@nostr-superbased/browser": "0.1.0",

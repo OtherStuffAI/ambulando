@@ -24546,3 +24546,14 @@ html.wingman-iphone-webview .chat-channel-tab-scroll * {
   .files-shared-browser { min-height: 0; overflow: hidden; }
   .files-shared-list { min-height: 0; overflow: auto; }
 }
+
+/* Subscribed reader uses inert text and metadata: no remote media loads. */
+.feed-view-select { max-width: 110px; min-width: 0; }
+.feed-reader-toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 8px 0; }
+.feed-source-row { display: flex; flex-wrap: wrap; gap: 8px; padding: 8px 0; overflow-wrap: anywhere; }
+.feed-source-row small { flex-basis: 100%; }
+.feed-headline { border: 0; padding: 0; background: transparent; color: inherit; font: inherit; font-weight: 600; text-align: left; cursor: pointer; overflow-wrap: anywhere; }
+.feed-item-text { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 160px; overflow: auto; }
+.feed-attachment { display: block; overflow-wrap: anywhere; }
+.feed-add-dialog { width: min(560px, calc(100vw - 24px)); max-height: calc(100dvh - 24px); overflow: auto; }
+@media (max-width: 600px) { .feed-reader-toolbar .btn-compact { min-height: 36px; } .subscribed-feed { min-width: 0; } }

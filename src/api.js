@@ -2653,3 +2653,13 @@ export async function fetchTowerPgDriveShares(workspaceId, {baseUrl=_baseUrl,app
   const response=await signedTowerPgFetch(path,{method:'GET',baseUrl,appNpub});
   return json(response,{requestUrl:resolveTowerPgUrl(path,baseUrl),method:'GET',prefix:'Drive'});
 }
+
+// T1-selected typed feed routes. Reader authority comes from Tower's signer
+// resolution; request bodies never accept an actor override.
+export async function towerPgFeedRequest(workspaceId, suffix, { baseUrl = _baseUrl, appNpub = FLIGHT_DECK_PG_APP_NPUB, method = 'GET', body, cursor } = {}) {
+  const path = towerPgWappPublishingPath(workspaceId, `/feed-subscriptions${suffix}`);
+  const query = method === 'GET' ? `?${new URLSearchParams({ limit: '200', ...(cursor ? { cursor } : {}) })}` : '';
+  const requestUrl = resolveTowerPgUrl(path + query, baseUrl);
+  const response = await signedTowerPgFetch(requestUrl, { baseUrl, appNpub, method, body, useWorkspaceKey: false });
+  return json(response, { requestUrl, method, prefix: 'Tower feed reader' });
+}

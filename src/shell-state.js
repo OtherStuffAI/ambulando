@@ -1135,6 +1135,7 @@ export function createShellState(options = {}) {
       if (!this.extensionSignerAvailable) {
         this.extensionSignerAvailable = await waitForExtensionSigner(900, 120);
       }
+      if (!this.extensionSignerAvailable && this.session?.method === 'extension') this.lockSubscribedReader?.();
       return this.extensionSignerAvailable;
     },
 

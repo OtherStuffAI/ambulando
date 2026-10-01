@@ -1,3 +1,4 @@
+import { materializeFeedReaderEvent } from './feed/materialize.js';
 import { clampBranchEffectiveMessageIds, threadHistoryLineage, mergeThreadHistoryIds } from './thread-history-coverage.js';
 import { FLIGHT_DECK_PG_APP_NPUB } from './app-identity.js';
 import { normalizeBackendUrl } from './utils/state-helpers.js';
@@ -3038,6 +3039,8 @@ export async function hydrateTowerPgEventUpdates(store, events = [], deps = {}) 
       const noteDate = trimText(payload.note_date);
       const ownerActorId = trimText(payload.owner_actor_id) || channelId;
       dailyTargets.set(`${ownerActorId}:${noteDate}`, { ownerActorId, noteDate, legacyChannelId: trimText(payload.owner_actor_id) ? null : channelId });
+    } else if (['feed_subscription', 'feed_item_state'].includes(entityType)) {
+      await materializeFeedReaderEvent(store, event);
     } else if (entityType === 'personal_wapp') {
       const ownerActorId = trimText(payload.owner_actor_id) || currentPgActorId(store);
       if (ownerActorId) personalWappOwnerIds.add(ownerActorId);

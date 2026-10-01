@@ -20,6 +20,7 @@ export class TowerSyncService {
     this.inFlight = new Map();
     this.commandGenerations = new Map();
     this.completedCommands = new Map();
+    this.feedCommandRequests = new Map();
     this.instrumentation = {
       workspaceKey: key,
       sseOwners: 0,
@@ -139,6 +140,12 @@ export class TowerSyncService {
       || '',
     ).trim();
     const commandKey = mutationId ? `${commandName}:${mutationId}` : '';
+    if (commandKey && commandName.startsWith('feed')) {
+      const fingerprint = JSON.stringify(input.body);
+      const previous = this.feedCommandRequests.get(commandKey);
+      if (previous && previous !== fingerprint) throw new Error('mutation_id_reused');
+      this.feedCommandRequests.set(commandKey, fingerprint);
+    }
     if (commandKey && this.completedCommands.has(commandKey)) {
       return this.completedCommands.get(commandKey);
     }
@@ -233,6 +240,7 @@ export class TowerSyncService {
     this.familyFreshAt.clear();
     this.commandGenerations.clear();
     this.completedCommands.clear();
+    this.feedCommandRequests.clear();
     this.instrumentation.sseOwners = 0;
     this.instrumentation.disposed = true;
     this.instrumentation.disposeReason = reason;
