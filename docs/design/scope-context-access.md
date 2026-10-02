@@ -1,6 +1,6 @@
 # Scope Access editor
 
-In a Tower PG workspace, open **Setup → Scopes → the scope’s ⋮ menu → Access**. A scope manager can choose People, Agents or Groups, select the named principal, choose Context editor or Scope manager, and Save access. For Rick, choose Agents, Rick, Context editor, Save access. This release does not assign him.
+In a Tower PG workspace, open **Setup → Scopes → the scope’s ⋮ menu → Access**. A scope manager can choose People, Agents or Groups, select the named principal, choose Context editor or Scope manager, and Save access. Choose Agents, the desired agent, Context editor, Save access. This release does not assign production grants.
 
 Context editor edits the component hierarchy and direct references, including confirmed subtree deletion. Scope manager also administers the scope and its grants. Access applies to the exact scope; child scopes, channels and linked content retain their separate access checks. Group membership is resolved by Tower, including established nested groups. Effective access identifies direct grants and the granting group; revoke group authority on that group’s grant row.
 
@@ -10,4 +10,4 @@ Reads use TowerSyncService; commands use the shared Tower command registry. Gran
 
 Tower exposes additive context capabilities `edit` and `scope_manage`; legacy `manage` remains a compatibility alias for context editing. The context editor uses `edit` when available and the alias with older Tower responses. It never derives scope administration from that alias.
 
-Validation separates disposable server signers and labelled browser fixtures from the real reader session. Live reader screenshots/probes cannot prove Pete’s manager save flow without Pete using his signer; tests do not impersonate him or modify production grants. Autopilot CLI/MCP source descriptions can be updated without restarting Autopilot; loaded MCP descriptions/handlers remain a separate activation boundary.
+Validation separates disposable server signers and labelled browser fixtures from the real reader session. Live reader screenshots/probes cannot prove the owner’s manager save flow without the owner using their signer; tests do not impersonate the owner or modify production grants. Autopilot CLI/MCP source descriptions can be updated without restarting Autopilot; loaded MCP descriptions/handlers remain a separate activation boundary.
