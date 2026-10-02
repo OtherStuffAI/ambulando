@@ -2390,6 +2390,12 @@
       "notes": [
         "Show or hide chats, tasks, documents and files independently using the icons before Search. Any combination is supported, including hiding every type."
       ]
+    },
+    {
+      "buildNumber": 2136,
+      "label": "Inbox toggle browser regression coverage",
+      "notes": [],
+      "noUserVisibleChanges": true
     }
   ]
 }

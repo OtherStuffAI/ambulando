@@ -11,8 +11,12 @@ const html = await readFile(source ? path.join(source, 'index.html') : 'index.ht
 const css = await readFile(source ? path.join(source, 'styles.css') : 'src/styles.css', 'utf8');
 const document = new JSDOM(html).window.document;
 const find = (node, selector) => node.querySelector(selector) || [...node.querySelectorAll('template')].map(t => find(t.content, selector)).find(Boolean);
-const inbox = find(document, '[data-deck-column="inbox"] .attention-card-list').outerHTML;
+const inbox = find(document, '[data-deck-column="inbox"] .attention-card-list').outerHTML
+  + find(document, '.inbox-no-results').outerHTML;
 const header = find(document, '.inbox-panel-heading').outerHTML;
+const evidenceDir = path.resolve('tmp/docs/handoffs');
+execFileSync('git', ['check-ignore', evidenceDir]);
+assert.equal(execFileSync('git', ['ls-files', evidenceDir], { encoding: 'utf8' }).trim(), '', 'Evidence must be untracked');
 const app = await readFile('src/app.js', 'utf8');
 const iconMethod = app.match(/getAttentionIconSvg\(icon\) \{([\s\S]*?)\n    \},/)[1];
 const guard = app.match(/shouldOpenDeckCard\(event\) \{([\s\S]*?)\n    \},/)[1];
@@ -29,17 +33,19 @@ const entry = `import Alpine from '${process.cwd()}/node_modules/alpinejs/dist/m
 import { autopilotOverviewManagerMixin as inboxMethods, filterAutopilotOverviewInbox } from '${process.cwd()}/src/autopilot-overview-manager.js';
 window.calls=[];
 Alpine.store('chat', {
- deckInboxType: 'all', deckInboxSearchDraft: '', unreadTasks: 1, unreadDocs: 1, unreadChat: 1, unreadDeck: 3,
+ deckInboxType: 'all', deckInboxSearchDraft: '', deckInboxSearchQuery: '', unreadTasks: 1, unreadDocs: 1, unreadChat: 1, unreadDeck: 3,
  deckInboxTypes: inboxMethods.deckInboxTypes,
  isDeckInboxTypeVisible: inboxMethods.isDeckInboxTypeVisible,
  toggleDeckInboxType: inboxMethods.toggleDeckInboxType,
  startWorkspaceLiveQueries() {},
  setDeckInboxSearchDraft(value) { this.deckInboxSearchDraft=value; },
- applyDeckInboxSearch() { window.calls.push(['search',this.deckInboxSearchDraft]); },
+ applyDeckInboxSearch() { inboxMethods.applyDeckInboxSearch.call(this); window.calls.push(['search',this.deckInboxSearchDraft]); },
  openDeckThreadComposer() { window.calls.push(['new']); },
  runInboxReadAction(kinds,label) { window.calls.push(['bulk',kinds,label]); },
  rows: ${JSON.stringify(fixture)},
- get visibleAutopilotOverviewInbox() { return filterAutopilotOverviewInbox(this.rows, '', this.deckInboxType); },
+ get filteredAutopilotOverviewInbox() { return filterAutopilotOverviewInbox(this.rows, this.deckInboxSearchQuery, this.deckInboxType); },
+ get visibleAutopilotOverviewInbox() { return this.filteredAutopilotOverviewInbox; },
+ hasMoreAutopilotOverviewInbox: false,
  renderDeckCardText: text => String(text || '').replaceAll('<', '&lt;'),
  isLongTaskTitle: () => false, getTaskTitleLengthClass: () => '',
  getAttentionIconSvg(icon) {${iconMethod}},
@@ -71,7 +77,7 @@ try {
   const geometry=await cards.evaluateAll(cards=>cards.map(c=>({height:c.getBoundingClientRect().height,width:c.getBoundingClientRect().width,overflow:c.scrollWidth>c.clientWidth+1})));
   assert(geometry.every(c=>!c.overflow));
   assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
-  const screenshot=`/tmp/flightdeck-inbox-${source?'before':'after'}-${process.env.FLIGHTDECK_VERIFY_BROWSER || 'chrome'}-${width}.png`;
+  const screenshot=path.join(evidenceDir, `flightdeck-inbox-${source?'before':'after'}-${process.env.FLIGHTDECK_VERIFY_BROWSER || 'chrome'}-${width}.png`);
   await page.screenshot({path:screenshot,fullPage:true});
   const controls = page.locator('.inbox-panel-heading').locator('h3, .inbox-type-toggle, input, .inbox-search-submit, .deck-new-thread-button, .doc-actions-toggle');
   const toolbar = await controls.evaluateAll(nodes => nodes.map(n => { const r=n.getBoundingClientRect(); return {tag:n.tagName, x:r.x,y:r.y,width:r.width,height:r.height,center:r.y+r.height/2}; }));
@@ -87,7 +93,15 @@ try {
   assert.equal(await cards.count(),5);
   for (const name of types.slice(0,3)) await page.getByRole('button',{name:`Show ${name}`,exact:true}).click();
   assert.equal(await cards.count(),0);
+  await page.getByRole('status').filter({hasText:'All record types are hidden.'}).waitFor();
   for (const name of types) { const button=page.getByRole('button',{name:`Show ${name}`,exact:true}); await button.focus(); await page.keyboard.press('Enter'); }
+  assert.equal(await cards.count(),6);
+  await page.evaluate(() => { window.probeStore.deckInboxSearchDraft='production'; window.probeStore.applyDeckInboxSearch(); window.calls=[]; });
+  assert.equal(await cards.count(),3);
+  await fileToggle.click(); assert.equal(await cards.count(),2);
+  assert.equal(await page.evaluate(()=>window.probeStore.deckInboxSearchQuery),'production');
+  await fileToggle.click(); assert.equal(await cards.count(),3);
+  await page.evaluate(() => { window.probeStore.deckInboxSearchDraft=''; window.probeStore.applyDeckInboxSearch(); window.calls=[]; });
   assert.equal(await cards.count(),6);
   const search=page.getByRole('searchbox',{name:'Search Inbox'});
   await search.fill('release'); await search.press('Enter');
@@ -104,7 +118,10 @@ try {
   assert.equal(await menu.getAttribute('aria-expanded'),'false');
   await menu.click(); await page.getByRole('menuitem',{name:'Mark all tasks as read'}).click();
   assert.deepEqual(await page.evaluate(()=>window.calls),[['search','release'],['search','release'],['new'],['bulk',['task'],'tasks']]);
-  await page.evaluate(()=>window.calls=[]);
+  await page.evaluate(()=>{ window.probeStore.deckInboxSearchDraft=''; window.probeStore.applyDeckInboxSearch(); window.calls=[]; });
+  await cards.nth(5).waitFor();
+  await page.waitForFunction(() => document.querySelectorAll('.attention-card').length === 6);
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
   let sticky;
   if(width<768) {
     const heading=page.locator('.inbox-panel-heading');
