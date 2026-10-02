@@ -30,6 +30,7 @@ export const scopeAccessManagerMixin = {
     const named=entries.filter(p=>p.id && !seen.has(p.type+':'+p.id) && seen.add(p.type+':'+p.id)).map(p=>({...p,label:this.scopeAccessPrincipalLabel(p)}));
     return named.map(p=>{const same=named.filter(n=>n.kind===p.kind && n.label===p.label);const kind=p.kind==='group'?'Group':p.kind==='agent'?'Agent':'Person';return {...p,subtitle:kind+(same.length>1?' · Same name '+(same.findIndex(n=>n.id===p.id)+1)+' of '+same.length:'')};});
   },
+  scopeAccessPrincipalSubtitle(principal) { const id=principal.id || principal.actor_id || principal.principal_id; const type=principal.type || principal.principal_type || 'actor';return this.scopeAccessCandidates.find(p=>p.id===id && p.type===type)?.subtitle || (principal.kind==='group'?'Group':principal.kind==='agent'?'Agent':'Person'); },
   get scopeAccessSearchResults() {
     const query=this.scopeAccessQuery.trim().toLowerCase();
     return this.scopeAccessCandidates.filter(p=>!query || (p.label+' '+p.subtitle).toLowerCase().includes(query)).slice(0,30);
