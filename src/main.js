@@ -1,4 +1,5 @@
 import Alpine from 'alpinejs';
+import { createContextTreeView } from './context-tree-view.js';
 import { installStableHtml } from './stable-html.js';
 import { initializeTowerTransports } from './tower-transport.js';
 import './styles.css';
@@ -17,6 +18,7 @@ async function boot() {
   if (await maybePerformHardReset()) return;
   await initializeTowerTransports();
   installStableHtml(Alpine);
+  Alpine.data('contextTreeView', () => createContextTreeView());
   initApp();
   installNotificationClickRouteHandler();
   initChatThreadFlowDispatchDomBridge();

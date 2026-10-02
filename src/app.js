@@ -2657,6 +2657,7 @@ export function initApp() {
       const page = (() => {
         switch (enabledSection) {
           case 'status': return 'flight-deck';
+          case 'context': return 'context';
           case 'tasks': return 'tasks';
           case 'chat': return 'chat';
           case 'docs': return 'docs';

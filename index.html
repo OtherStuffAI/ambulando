@@ -1133,6 +1133,7 @@
       <div class="mobile-sidebar-backdrop" x-show="$store.chat.mobileNavOpen" @click="$store.chat.mobileNavOpen = false"></div>
       <nav class="sidebar" :class="{ 'sidebar-collapsed': $store.chat.navCollapsed, 'sidebar-mobile-open': $store.chat.mobileNavOpen }">
         <ul class="sidebar-nav" x-show="$store.chat.navCollapsed && !$store.chat.mobileNavOpen">
+          <li :class="{ active: $store.chat.navSection === 'context' }"><button type="button" class="context-nav-button" title="Context Tree" aria-label="Context Tree" @click="$store.chat.navigateTo('context')"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="9" y="2" width="6" height="5" rx="1"/><path d="M12 7v5M4 17v-5h16v5"/><rect x="1" y="17" width="6" height="5" rx="1"/><rect x="17" y="17" width="6" height="5" rx="1"/></svg><span class="sidebar-label">Context Tree</span></button></li>
           <li :class="{ active: $store.chat.navSection === 'status' }" @click="$store.chat.navigateTo('status')">
             <span class="sidebar-icon" aria-hidden="true">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
@@ -1432,6 +1433,7 @@
                 x-cloak
                 aria-label="Flight Deck sections"
               >
+                <button type="button" class="expanded-sidebar-section-switcher-btn" :class="{ 'expanded-sidebar-section-switcher-btn-active': $store.chat.navSection === 'context' }" :aria-current="$store.chat.navSection === 'context' ? 'page' : null" @click="$store.chat.navigateTo('context')"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="9" y="2" width="6" height="5" rx="1"/><path d="M12 7v5M4 17v-5h16v5"/><rect x="1" y="17" width="6" height="5" rx="1"/><rect x="17" y="17" width="6" height="5" rx="1"/></svg><span>Context Tree</span></button>
                 <button type="button" class="expanded-sidebar-section-switcher-btn" :class="{ 'expanded-sidebar-section-switcher-btn-active': $store.chat.navSection === 'status' }" :aria-current="$store.chat.navSection === 'status' ? 'page' : null" @click="$store.chat.navigateTo('status')">
                   <span class="expanded-sidebar-section-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M15 17h5l-1.4-1.4A2 2 0 0 1 18 14.2V11a6 6 0 1 0-12 0v3.2a2 2 0 0 1-.6 1.4L4 17h5"></path><path d="M10 17a2 2 0 0 0 4 0"></path></svg></span>
                   <span>Deck</span>
@@ -1634,6 +1636,7 @@
             </div>
             <nav class="mobile-section-switcher" x-show="!$store.chat.mobileNavOpen"
               @resize.window="$store.chat.updateNavigationViewport()" aria-label="Scope section navigation">
+              <div class="mobile-section-switcher-item"><button type="button" class="mobile-section-switcher-btn" aria-label="Context Tree" title="Context Tree" :class="{ 'mobile-section-switcher-btn-active': $store.chat.navSection === 'context' }" @click="$store.chat.navigateTo('context')"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="9" y="2" width="6" height="5" rx="1"/><path d="M12 7v5M4 17v-5h16v5"/><rect x="1" y="17" width="6" height="5" rx="1"/><rect x="17" y="17" width="6" height="5" rx="1"/></svg></button></div>
               <div class="mobile-section-switcher-item">
                 <button type="button" class="mobile-section-switcher-btn"
                   :class="{ 'mobile-section-switcher-btn-active': $store.chat.navSection === 'status' }"
@@ -1750,6 +1753,56 @@
 
         <div class="content-scroll-area" :class="{ 'content-scroll-area-deck': $store.chat.navSection === 'status' && $store.chat.deckInboxEnabled }">
         <p class="auth-error" role="alert" x-show="$store.chat.workspaceSelectionError" x-text="$store.chat.workspaceSelectionError" x-cloak></p>
+        <template x-if="$store.chat.navSection === 'context'">
+          <section class="context-tree-view" x-data="contextTreeView" x-effect="queueSync($store.chat.currentWorkspace?.workspaceId || $store.chat.currentWorkspace?.workspace_id, $store.chat.pgContextScope?.record_id || $store.chat.selectedBoardScope?.record_id, $store.chat.workspaceDbKey, $store.chat.pgContextScope?.title || $store.chat.selectedBoardScope?.title || '', $store.chat.isLoggedIn && $store.chat.isTowerPgMode)" aria-label="Scope Context Tree">
+            <header class="context-tree-header">
+              <div><h1>Context Tree<span x-show="scopeTitle" x-text="': ' + scopeTitle"></span></h1><p>Explore components and their direct references.</p></div>
+              <div class="context-tree-tools" role="group" aria-label="Tree view controls">
+                <button type="button" @click="zoom(1 / 1.25)" aria-label="Zoom out">−</button>
+                <output aria-label="Zoom level" x-text="Math.round(scale * 100) + '%'"></output>
+                <button type="button" @click="zoom(1.25)" aria-label="Zoom in">+</button>
+                <button type="button" @click="fit()">Fit</button>
+                <button type="button" @click="loadTree()" :disabled="status === 'loading'">Reload</button>
+              </div>
+            </header>
+            <p class="context-tree-notice" role="status" x-show="notice" x-text="notice"></p>
+            <div class="context-tree-panes">
+              <div class="context-tree-canvas" x-ref="canvas" role="tree" aria-label="Scope components" :aria-busy="status === 'loading'" tabindex="0"
+                @wheel="wheel($event)" @pointerdown="pointerDown($event)" @pointermove="pointerMove($event)" @pointerup="pointerUp()" @pointercancel="pointerUp()" @lostpointercapture="pointerUp()"
+                @keydown.self="if (['Home', 'Enter', 'ArrowDown'].includes($event.key) && layout.nodes.length) { $event.preventDefault(); focusNode(focusedId || layout.nodes[0].id); }">
+                <div class="context-tree-state" x-show="stateMessage" role="status" x-text="stateMessage"></div>
+                <div class="context-tree-world" :style="{ transform, width: layout.width + 'px', height: layout.height + 'px' }" x-show="components.length">
+                  <svg class="context-tree-edges" :width="layout.width" :height="layout.height" aria-hidden="true" x-html="edgeMarkup"></svg>
+                  <template x-for="node in visibleNodes" :key="node.id">
+                    <div class="context-tree-node" :class="{ 'context-tree-node-selected': selectedId === node.id }" :style="{ left: node.x + 'px', top: node.y + 'px', width: node.width + 'px', height: node.height + 'px' }">
+                      <button type="button" class="context-tree-node-title" role="treeitem" :data-context-node="node.id" :tabindex="focusedId === node.id ? 0 : -1" :aria-level="node.depth + 1" :aria-selected="selectedId === node.id" :aria-expanded="node.childCount ? node.expanded : null" :title="node.title" @focus="focusedId = node.id" @click="select(node.id)" @keydown="keydown($event, node.id)" x-text="node.title"></button>
+                      <button type="button" class="context-tree-node-toggle" x-show="node.childCount" tabindex="-1" :aria-label="(node.expanded ? 'Collapse ' : 'Expand ') + node.title" @click.stop="toggle(node.id)" x-text="node.expanded ? '−' : '+'"></button>
+                    </div>
+                  </template>
+                </div>
+                <p class="context-tree-hint">Pan the canvas or scroll. Ctrl/⌘ + scroll to zoom. Arrow keys navigate; Enter selects.</p>
+              </div>
+              <aside class="context-tree-panel" aria-label="Component references" :aria-busy="refsLoading">
+                <template x-if="!selected"><p class="context-tree-placeholder">Select a component to see its direct references.</p></template>
+                <template x-if="selected">
+                  <div>
+                    <nav class="context-tree-path" aria-label="Component path"><template x-for="part in path" :key="part.id"><button type="button" @click="select(part.id); reveal(part.id)" x-text="part.title"></button></template></nav>
+                    <h2 x-text="selected.title"></h2>
+                    <h3>Direct references</h3>
+                    <p role="status" x-show="refsLoading">Checking references…</p>
+                    <div role="status" x-show="refsError"><p x-text="refsError"></p><button type="button" @click="loadReferences()">Retry references</button></div>
+                    <p x-show="!refsLoading && !refsError && !directReferences.length">No direct references.</p>
+                    <ul class="context-tree-references"><template x-for="reference in directReferences" :key="reference.id"><li>
+                      <span class="context-tree-reference-type" x-text="reference.target_type === 'doc' ? 'Document' : reference.target_type"></span>
+                      <button type="button" :disabled="!canOpen(reference)" @click="openReference(reference)" x-text="referenceTitle(reference)"></button>
+                      <small x-show="reference.target_type === 'artifact'">External artifact · choose its latest version on the site</small>
+                    </li></template></ul>
+                  </div>
+                </template>
+              </aside>
+            </div>
+          </section>
+        </template>
         <template x-if="$store.chat.navSection === 'status'">
           <div class="status-section" :class="{ 'status-section-deck': $store.chat.deckInboxEnabled }">
           <div class="pg-work-context-bar" x-show="false" x-cloak>

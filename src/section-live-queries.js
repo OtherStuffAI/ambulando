@@ -1,3 +1,4 @@
+import { disposeContextTreeView } from './context-tree-view.js';
 import {
   getAddressBookPeople,
   getChannelsByOwner,
@@ -1100,6 +1101,7 @@ export const sectionLiveQueryMixin = {
   },
 
   stopWorkspaceLiveQueries() {
+    disposeContextTreeView(this);
     this.disposeSubscribedReader?.();
     const state = getSectionState(this);
     stopBucket(this, state.workspace);
@@ -1107,6 +1109,7 @@ export const sectionLiveQueryMixin = {
   },
 
   stopAllLiveQueries() {
+    disposeContextTreeView(this);
     this.disposeSubscribedReader?.();
     const state = getSectionState(this);
     stopBucket(this, state.shared);
