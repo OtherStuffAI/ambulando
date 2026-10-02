@@ -2,7 +2,7 @@ import { createContextTreeEditor } from './context-tree-editor.js';
 import { isContextAccessDenied } from './context-tree-errors.js';
 import { observeContextScope } from './context-cache.js';
 import { getWorkspaceDb, isWorkspaceDbOpenForKey } from './db.js';
-import { layoutContextTree, contextPath, fitContextTree } from './context-tree-layout.js';
+import { layoutContextTree, contextPath, contextSearchChoices, fitContextTree } from './context-tree-layout.js';
 import { normalizeRecordLinkType } from './record-links.js';
 
 const views = new WeakMap();
@@ -21,6 +21,10 @@ export function createContextTreeView(deps = {}) {
   const view = {
     hasContext: false, status: 'unloaded', components: [], references: [], selectedId: '', focusedId: '', collapsed: [],
     layout: layoutContextTree([]), scale: 1, panX: 0, panY: 0, viewportWidth: 800, viewportHeight: 500,
+    nodeSearch: '', nodeSearchOpen: false, nodeSearchIndex: 0,
+    get nodeResults() { return contextSearchChoices(this.components,this.nodeSearch).map(row=>({...row,subtitle:row.path})); },
+    chooseNode(row) { if(!this.nodeResults.some(r=>r.id===row.id))return; this.collapsed=this.collapsed.filter(id=>!contextPath(this.components,row.id).some(p=>p.id===id)); this.relayout(); this.select(row.id); this.reveal(row.id); this.nodeSearch=''; this.nodeSearchOpen=false; this.focusNode(row.id); },
+    nodeSearchKey(event) { if(event.key==='Escape'){event.preventDefault();this.nodeSearchOpen=false;} else if(['ArrowDown','ArrowUp'].includes(event.key)){event.preventDefault();this.nodeSearchOpen=true;this.nodeSearchIndex=Math.max(0,Math.min(this.nodeResults.length-1,this.nodeSearchIndex+(event.key==='ArrowDown'?1:-1)));} else if(event.key==='Enter'){event.preventDefault();if(this.nodeResults[this.nodeSearchIndex])this.chooseNode(this.nodeResults[this.nodeSearchIndex]);} this.$nextTick?.(()=>this.$refs?.nodeResults?.querySelector('[aria-selected="true"]')?.scrollIntoView({block:'nearest'})); },
     refsLoading: false, refsError: '', notice: '', scopeTitle: '', workspaceId: '', scopeId: '',
     init() {
       store = deps.store || this.$store.chat;
@@ -80,7 +84,7 @@ export function createContextTreeView(deps = {}) {
       void this.loadTree();
     },
     reset() {
-      this.clearEditor(); this.capabilities = {read:false,manage:false};
+      this.nodeSearch=''; this.nodeSearchOpen=false; this.clearEditor(); this.capabilities = {read:false,manage:false};
       generation++; request++; subscription?.unsubscribe(); subscription = null;
       this.hasContext = false; this.status = 'unloaded'; this.components = []; this.references = []; this.selectedId = ''; this.focusedId = '';
       this.collapsed = []; this.refsLoading = false; this.refsError = ''; this.notice = '';

@@ -2539,6 +2539,21 @@
       "notes": [
         "Keep the pipeline viewer pending activation until its compatible Autopilot backend is ready."
       ]
+    },
+    {
+      "buildNumber": 2159,
+      "label": "Polished Context Tree",
+      "notes": [
+        "Find components and choose parents with path-aware typeahead. Create children from the sidebar and edit in compact keyboard-accessible dialogs.",
+        "Link accessible documents, files and tasks with a searchable reference picker and a clearer, quieter sidebar."
+      ]
+    },
+    {
+      "buildNumber": 2160,
+      "label": "Context Tree reference results",
+      "notes": [
+        "Keep reference-search empty states accurate while showing matching accessible records."
+      ]
     }
   ]
 }

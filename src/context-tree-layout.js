@@ -50,6 +50,20 @@ export function contextPath(components, id) {
   return path.reverse();
 }
 
+// Bounded search rows share one index; collapsed nodes remain searchable.
+export function contextSearchChoices(components, query = '', allowedIds = null, limit = 40) {
+  const rows=new Map(components.map(row=>[row.id,row])), needle=query.trim().toLowerCase(), matches=[];
+  for(const row of components) {
+    if(allowedIds && !allowedIds.has(row.id))continue;
+    const titles=[],seen=new Set();let part=row;
+    while(part && !seen.has(part.id)){seen.add(part.id);titles.push(part.title);part=rows.get(part.parent_id);}
+    const path=titles.reverse();
+    if(path.join(' / ').toLowerCase().includes(needle))matches.push({...row,subtitle:path.slice(0,-1).join(' / ') || 'Top level',path:path.join(' / ')});
+    if(matches.length>=limit)break;
+  }
+  return matches;
+}
+
 export function fitContextTree(layout, width, height) {
   const scale = Math.min(1, Math.max(Number.EPSILON, Math.min((width - 32) / layout.width, (height - 32) / layout.height)));
   return { scale, x: (width - layout.width * scale) / 2, y: (height - layout.height * scale) / 2 };

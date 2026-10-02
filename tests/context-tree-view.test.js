@@ -26,6 +26,10 @@ describe('read-only Context Tree controller', () => {
     expect(h.view.stateMessage).toContain('unavailable for your access');
     expect(h.view.canManage).toBe(false);
   });
+  it('search reveals a collapsed match by path and selects it without changing persisted layout',async()=>{
+    const h=harness();h.emit();h.view.toggle('root');h.view.nodeSearch='root / child';expect(h.view.nodeResults.map(r=>r.id)).toEqual(['child']);
+    h.view.chooseNode(h.view.nodeResults[0]);expect(h.view.selectedId).toBe('child');expect(h.view.collapsed).toEqual([]);expect(h.view.nodeSearchOpen).toBe(false);
+  });
   it('loads only through TowerSyncService; expansion and view transforms never fetch or persist', async () => {
     const h = harness(); h.emit(); await tick();
     expect(h.service.ensureLoaded).toHaveBeenCalledWith('context-tree', 'scope', { force: true });

@@ -1744,6 +1744,13 @@
           <section class="context-tree-view" x-data="contextTreeView" x-effect="queueSync($store.chat.currentWorkspace?.workspaceId || $store.chat.currentWorkspace?.workspace_id, $store.chat.pgContextScope?.record_id || $store.chat.selectedBoardScope?.record_id, $store.chat.workspaceDbKey, $store.chat.pgContextScope?.title || $store.chat.selectedBoardScope?.title || '', $store.chat.isLoggedIn && $store.chat.isTowerPgMode)" aria-label="Scope Context Tree">
             <header class="context-tree-header">
               <div><h1>Context Tree<span x-show="scopeTitle" x-text="': ' + scopeTitle"></span></h1><p>Explore components and their direct references.</p></div>
+              <div class="context-tree-search" @click.outside="nodeSearchOpen=false">
+                <input type="search" role="combobox" aria-label="Find component" aria-autocomplete="list" aria-controls="context-node-results" :aria-expanded="nodeSearchOpen" :aria-activedescendant="nodeSearchOpen && nodeResults.length ? 'context-node-option-' + nodeSearchIndex : null" placeholder="Find a component…" x-model="nodeSearch" @input="nodeSearchOpen=true; nodeSearchIndex=0" @focus="nodeSearchOpen=true" @keydown="nodeSearchKey($event)" :disabled="status !== 'complete'">
+                <ul class="context-tree-options" id="context-node-results" x-ref="nodeResults" role="listbox" x-show="nodeSearchOpen" x-cloak>
+                  <template x-for="(result,i) in nodeResults" :key="result.id"><li role="option" :id="'context-node-option-' + i" :aria-selected="nodeSearchIndex===i"><button type="button" @click="chooseNode(result)"><strong x-text="result.title"></strong><small x-text="result.subtitle"></small></button></li></template>
+                  <li x-show="!nodeResults.length" role="status">No matching components.</li>
+                </ul>
+              </div>
               <div class="context-tree-tools" role="group" aria-label="Tree view controls">
                 <button type="button" x-show="canManage" :disabled="busy" @click="startCreate()">Add top-level component</button>
                 <button type="button" @click="zoom(1 / 1.25)" aria-label="Zoom out">−</button>
@@ -1754,16 +1761,7 @@
               </div>
             </header>
             <p class="context-tree-notice" role="status" x-show="notice" x-text="notice"></p>
-            <p class="context-tree-notice" role="alert" x-show="editError" x-text="editError"></p>
-            <template x-if="editing && canManage"><form class="context-tree-editor" @submit.prevent="saveComponent()" aria-label="Component editor">
-              <label>Name<input aria-label="Component name" type="text" maxlength="256" x-model="draftTitle" :disabled="busy" required></label>
-              <label>Parent<select aria-label="Component parent" x-model="draftParent" :disabled="busy"><option value="">Top level</option><template x-for="parent in parentChoices" :key="parent.id"><option :value="parent.id" x-text="parent.title"></option></template></select></label>
-              <button type="submit" :disabled="busy" x-text="busy ? 'Saving…' : 'Save component'"></button><button type="button" :disabled="busy" @click="cancelEdit()">Cancel edit</button>
-            </form></template>
-            <div class="context-tree-editor" x-show="deletePreview && canManage" role="group" aria-label="Confirm component deletion">
-              <p x-text="deletePreview ? 'Delete this component and ' + deletePreview.descendant_count + ' descendants? ' + deletePreview.reference_count + ' reference links will be removed. Linked content will remain.' : ''"></p>
-              <button type="button" :disabled="busy" @click="confirmDelete()" x-text="busy ? 'Deleting…' : 'Confirm deletion'"></button><button type="button" :disabled="busy" @click="cancelEdit()">Cancel deletion</button>
-            </div>
+            <p class="context-tree-notice" role="alert" x-show="editError && !dialogOpen" x-text="editError"></p>
             <div class="context-tree-panes">
               <div class="context-tree-canvas" x-ref="canvas" role="tree" aria-label="Scope components" :aria-busy="status === 'loading'" tabindex="0"
                 @wheel="wheel($event)" @pointerdown="pointerDown($event)" @pointermove="pointerMove($event)" @pointerup="pointerUp()" @pointercancel="pointerUp()" @lostpointercapture="pointerUp()"
@@ -1787,26 +1785,7 @@
                   <div>
                     <nav class="context-tree-path" aria-label="Component path"><template x-for="part in path" :key="part.id"><button type="button" @click="select(part.id); reveal(part.id)" x-text="part.title"></button></template></nav>
                     <h2 x-text="selected.title"></h2>
-                    <div class="context-tree-tools" x-show="canManage"><button type="button" :disabled="busy" @click="startEdit()">Rename or move</button><button type="button" :disabled="busy" @click="startPicker()">Link reference</button><button type="button" :disabled="busy" @click="previewDelete()">Delete component</button></div>
-                    <form class="context-tree-editor" x-show="picker && canManage" @submit.prevent="attachArtifact()" aria-label="Reference picker">
-                      <label>Type<select aria-label="Reference type" x-model="pickerType" @change="loadPicker()" :disabled="busy"><option value="doc">Document</option><option value="file">File</option><option value="task">Task</option><option value="artifact">Artifact</option></select></label>
-                      <div x-show="pickerType !== 'artifact'">
-                        <label>Channel or scope<select aria-label="Reference channel" x-model="pickerChannel" @change="loadPicker()" :disabled="busy"><option value="">Choose a channel</option><template x-for="channel in pickerChannels" :key="channel.record_id"><option :value="channel.record_id" x-text="channel.title"></option></template><template x-for="scope in pickerScopes" :key="'scope:' + scope.record_id"><option :value="'scope:' + scope.record_id" x-text="'Scope: ' + scope.title"></option></template></select></label>
-                        <label>Find<input aria-label="Find reference" type="search" x-model="pickerSearch" :disabled="busy"></label>
-                        <p role="status" x-show="pickerLoading">Checking accessible records…</p>
-                        <p x-show="!pickerLoading && !filteredPickerRows.length">No available records. Choose another channel or retry.</p>
-                        <button type="button" :disabled="busy || pickerLoading" @click="loadPicker()">Refresh records</button>
-                        <ul><template x-for="candidate in filteredPickerRows" :key="candidate.id"><li><button type="button" :disabled="busy || pickerLoading" @click="attachRecord(candidate)" x-text="candidate.title"></button></li></template></ul>
-                      </div>
-                      <div x-show="pickerType === 'artifact'">
-                        <label>Origin<input aria-label="Artifact origin" type="url" x-model="artifactOrigin" :disabled="busy" placeholder="https://artifacts.example"></label>
-                        <label>Project<input aria-label="Artifact project" x-model="artifactProject" :disabled="busy"></label>
-                        <label>Artifact<input aria-label="Artifact name" x-model="artifactName" :disabled="busy"></label>
-                        <p>Opens the latest version available through the artifact site's normal sign-in.</p>
-                        <button type="submit" :disabled="busy">Link artifact</button>
-                      </div>
-                      <button type="button" :disabled="busy" @click="cancelEdit()">Close picker</button>
-                    </form>
+                    <div class="context-tree-tools context-tree-actions" x-show="canManage"><button type="button" class="context-tree-primary" :disabled="busy" @click="startCreate(selectedId)">+ New child</button><button type="button" :disabled="busy" @click="startEdit()">Rename or move</button><button type="button" :disabled="busy" @click="startPicker()">Link reference</button><button type="button" class="context-tree-delete" :disabled="busy" @click="previewDelete()">Delete component</button></div>
                     <h3>Direct references</h3>
                     <p role="status" x-show="refsLoading">Checking references…</p>
                     <div role="status" x-show="refsError"><p x-text="refsError"></p><button type="button" @click="loadReferences()">Retry references</button></div>
@@ -1821,6 +1800,45 @@
                 </template>
               </aside>
             </div>
+            <dialog class="context-tree-dialog" x-ref="editorDialog" x-effect="syncDialog($el)" @keydown="dialogKey($event)" @cancel.prevent="cancelEdit()" aria-labelledby="context-dialog-title">
+              <header><div><small x-text="selected?.title || scopeTitle"></small><h2 id="context-dialog-title" x-text="editing ? (editing.id ? 'Edit component' : 'New component') : picker ? 'Link a reference' : 'Delete component'"></h2></div><button type="button" aria-label="Close dialog" :disabled="busy" @click="cancelEdit()">×</button></header>
+              <p class="context-tree-notice" role="alert" x-show="editError" x-text="editError"></p>
+              <template x-if="editing"><form class="context-tree-editor" @submit.prevent="saveComponent()" aria-label="Component editor">
+                <label>Name<input autofocus aria-label="Component name" type="text" maxlength="256" x-model="draftTitle" :disabled="busy" required placeholder="Component name"></label>
+                <div class="context-tree-combo">
+                  <label>Parent<input role="combobox" aria-label="Component parent" aria-autocomplete="list" aria-controls="context-parent-results" :aria-expanded="parentOpen" :aria-activedescendant="parentOpen && parentResults.length ? 'context-parent-option-' + parentIndex : null" :value="parentSearch" @input="searchParent($event.target.value)" @focus="parentOpen=true; parentIndex=0" @keydown="comboKey($event,'parent')" :disabled="busy"></label>
+                  <ul class="context-tree-options" id="context-parent-results" x-ref="parentResults" role="listbox" x-show="parentOpen">
+                    <template x-for="(parent,i) in parentResults" :key="parent.id"><li role="option" :id="'context-parent-option-' + i" :aria-selected="parentIndex===i"><button type="button" @click="chooseParent(parent)"><strong x-text="parent.title"></strong><small x-text="parent.subtitle"></small></button></li></template>
+                    <li x-show="!parentResults.length" role="status">No available parents.</li>
+                  </ul>
+                </div>
+                <footer><button type="button" :disabled="busy" @click="cancelEdit()">Cancel edit</button><button class="context-tree-primary" type="submit" :disabled="busy" x-text="busy ? 'Saving…' : 'Save component'"></button></footer>
+              </form></template>
+              <form class="context-tree-editor" x-show.immediate="picker" @submit.prevent="attachArtifact()" aria-label="Reference picker">
+                <label>Reference type<select aria-label="Reference type" x-model="pickerType" @change="loadPicker()" :disabled="busy"><option value="all">All records</option><option value="doc">Documents</option><option value="file">Files</option><option value="task">Tasks</option><option value="artifact">Artifact</option></select></label>
+                <div x-show="pickerType !== 'artifact'">
+                  <label>Find a reference<input type="search" role="combobox" aria-label="Find reference" aria-autocomplete="list" aria-controls="context-reference-results" :aria-expanded="picker && pickerType !== 'artifact'" :aria-activedescendant="filteredPickerRows.length ? 'context-reference-option-' + pickerIndex : null" x-model="pickerSearch" @input="pickerIndex=0" @keydown="comboKey($event,'reference')" :disabled="busy" placeholder="Search documents, files and tasks…"></label>
+                  <p role="status" x-show="pickerLoading">Checking accessible records…</p>
+                  <ul class="context-tree-options context-tree-reference-options" id="context-reference-results" x-ref="referenceResults" role="listbox">
+                    <template x-for="(candidate,i) in filteredPickerRows" :key="candidate.id"><li role="option" :id="'context-reference-option-' + i" :aria-selected="pickerIndex===i"><button type="button" :disabled="busy || pickerLoading" @click="attachRecord(candidate)"><span class="context-tree-type-icon" aria-hidden="true" x-text="candidate.type === 'task' ? '☑' : candidate.type === 'file' ? '▧' : '▤'"></span><span><strong x-text="candidate.title"></strong><small x-text="(candidate.type === 'doc' ? 'Document' : candidate.type === 'task' ? 'Task' : 'File') + ' · ' + candidate.subtitle"></small></span></button></li></template>
+                  </ul>
+                  <template x-if="!pickerLoading && filteredPickerRows.length === 0"><p class="context-tree-placeholder" role="status">No matching accessible records.</p></template>
+                  <button type="button" :disabled="busy || pickerLoading" @click="loadPicker()">Refresh records</button>
+                </div>
+                <div x-show="pickerType === 'artifact'" class="context-tree-artifact-fields">
+                  <label>Origin<input aria-label="Artifact origin" type="url" x-model="artifactOrigin" :disabled="busy" placeholder="https://artifacts.example"></label>
+                  <label>Project<input aria-label="Artifact project" x-model="artifactProject" :disabled="busy"></label>
+                  <label>Artifact<input aria-label="Artifact name" x-model="artifactName" :disabled="busy"></label>
+                  <p>Opens the latest version through the artifact site's normal sign-in.</p>
+                </div>
+                <footer><button type="button" :disabled="busy" @click="cancelEdit()">Close picker</button><button type="submit" class="context-tree-primary" x-show="pickerType === 'artifact'" :disabled="busy">Link artifact</button></footer>
+              </form>
+              <div x-show="dialogMode === 'delete'" class="context-tree-editor" aria-label="Confirm component deletion">
+                <p role="status" x-show="!deletePreview && busy">Checking deletion…</p>
+                <p x-text="deletePreview ? 'Delete this component and ' + deletePreview.descendant_count + ' descendants? ' + deletePreview.reference_count + ' reference links will be removed. Linked content will remain.' : ''"></p>
+                <footer><button type="button" autofocus :disabled="busy" @click="cancelEdit()">Cancel deletion</button><button type="button" class="context-tree-danger" :disabled="busy || !deletePreview" @click="confirmDelete()" x-text="busy ? 'Deleting…' : 'Confirm deletion'"></button></footer>
+              </div>
+            </dialog>
           </section>
         </template>
         <template x-if="$store.chat.navSection === 'status'">

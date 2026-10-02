@@ -19,6 +19,12 @@ describe('Context editing service workflow',()=>{
     view.startCreate('child');view.editing.title='New child';await view.saveComponent();
     expect(service.command.mock.calls[1][1].body.parent_id).toBe('child');expect(view.components).toEqual(rows);
   });
+  it('parent typeahead uses paths, commits only choices, and keeps selection on cancel',async()=>{
+    const {view,service}=setup();view.startCreate('child');expect(view.draftParent).toBe('child');expect(view.parentSearch).toBe('Child');
+    view.searchParent('Other');expect(view.draftParent).toBe('child');view.draftTitle='New';await view.saveComponent();expect(service.command).not.toHaveBeenCalled();
+    view.chooseParent(view.parentResults[0]);expect(view.draftParent).toBe('other');await view.saveComponent();expect(service.command.mock.calls[0][1].body.parent_id).toBe('other');
+    view.startEdit();view.searchParent('Deep');expect(view.parentResults).toEqual([]);view.cancelEdit();expect(view.selectedId).toBe('root');
+  });
   it('rename/reparent sends only the moved root and original row version',async()=>{
     const {view,service}=setup();view.startEdit();view.editing.title='Renamed';view.editing.parentId='other';await view.saveComponent();
     expect(service.command).toHaveBeenCalledWith('context.update',{scopeId:'scope',componentId:'root',body:{title:'Renamed',parent_id:'other',expected_row_version:1}});
@@ -67,7 +73,7 @@ describe('Context editing service workflow',()=>{
   });
   it('picker renders current liveQuery titles only for fresh accessible same-workspace browsing IDs',async()=>{
     const h=setup();h.service.ensureLoaded.mockResolvedValue([{record_id:'doc',pg_workspace_id:'workspace',pg_record_type:'doc',record_state:'active'},{record_id:'foreign',pg_workspace_id:'other',pg_record_type:'doc',record_state:'active'}]);
-    await h.view.startPicker();await h.emitPicker();expect(h.db.documents.bulkGet).toHaveBeenCalledWith(['doc']);expect(h.view.pickerRows).toEqual([{id:'doc',title:'Current'}]);
+    await h.view.startPicker();await h.emitPicker();expect(h.db.documents.bulkGet).toHaveBeenCalledWith(['doc']);expect(h.view.pickerRows).toEqual([{id:'doc',title:'Current',type:'doc',subtitle:'Channel'}]);
     h.db.documents.bulkGet.mockResolvedValue([{record_id:'doc',title:'Updated',pg_record_type:'doc',pg_workspace_id:'workspace',record_state:'active'}]);await h.emitPicker();expect(h.view.pickerRows[0].title).toBe('Updated');
     await h.view.attachRecord(h.view.pickerRows[0]);expect(h.service.command.mock.calls[0][1].body).toEqual({target_type:'doc',target:{record_id:'doc'}});
   });

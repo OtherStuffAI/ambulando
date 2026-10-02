@@ -3,7 +3,7 @@ const { build } = require('esbuild');
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const { JSDOM } = require('jsdom');
-const evidence = path.resolve(__dirname, '../../tmp/docs/handoffs/context-wp4');
+const evidence = path.resolve(__dirname, '../../tmp/docs/handoffs/context-ui-polish');
 let bundle, markup, css;
 test.beforeAll(async () => {
   const html = new JSDOM(await fs.readFile(path.resolve(__dirname, '../../index.html'), 'utf8'));
@@ -67,7 +67,7 @@ async function start(page, baseURL, viewport) {
   await page.goto(`${origin}/__context-ui`);  await page.waitForFunction(() => window.fixture?.view.status === 'complete');
   await expect(page.getByRole('treeitem', { name: 'Flight Deck', exact: true })).toBeVisible();
 }
-test.afterEach(async ({ page }) => { await page.evaluate(() => window.fixture?.cleanup()).catch(() => {}); expect(page.wp4Errors || []).toEqual([]); });
+test.afterEach(async ({ page }) => { await page.evaluate(() => { window.fixture?.view.cancelEdit(); return window.fixture?.cleanup(); }).catch(() => {}); expect(page.wp4Errors || []).toEqual([]); });
 
 for(const [name,viewport] of [['desktop',{width:1440,height:900}],['mobile',{width:390,height:844}]]) {
  test(`${name} manager creates root/child, renames, moves subtree, links current records and preserves content on deletion`,async({page,baseURL})=>{
@@ -77,14 +77,14 @@ for(const [name,viewport] of [['desktop',{width:1440,height:900}],['mobile',{wid
   await expect(page.getByRole('treeitem',{name:'New root',exact:true})).toBeVisible();
   await page.getByRole('button',{name:'Add child to New root',exact:true}).click();await page.getByRole('textbox',{name:'Component name',exact:true}).fill('New child');await page.getByRole('button',{name:'Save component',exact:true}).click();
   await page.getByRole('treeitem',{name:'New root',exact:true}).click();await page.getByRole('button',{name:'Rename or move',exact:true}).click();
-  const parent=page.getByRole('combobox',{name:'Component parent',exact:true});await expect(parent.locator('option')).not.toContainText(['New root','New child']);
-  await parent.selectOption({label:'Operations'});await page.getByRole('textbox',{name:'Component name',exact:true}).fill('Moved root');await page.getByRole('button',{name:'Save component',exact:true}).click();
+  const parent=page.getByRole('combobox',{name:'Component parent',exact:true});await parent.fill('New');await expect(page.locator('#context-parent-results')).not.toContainText('New root');await expect(page.locator('#context-parent-results')).not.toContainText('New child');
+  await parent.fill('Operations');await page.getByRole('option',{name:'Operations Top level'}).click();await page.getByRole('textbox',{name:'Component name',exact:true}).fill('Moved root');await page.getByRole('button',{name:'Save component',exact:true}).click();
   await expect.poll(()=>page.evaluate(async()=>{const rows=await window.fixture.db.context_components.toArray(),root=rows.find(r=>r.title==='Moved root'),child=rows.find(r=>r.title==='New child');return root.parent_id==='ops'&&child.parent_id===root.id})).toBe(true);
-  await page.getByRole('button',{name:'Link reference',exact:true}).click();await expect(page.getByRole('button',{name:'Picked document',exact:true})).toBeVisible();await page.getByRole('button',{name:'Picked document',exact:true}).click();
+  await page.getByRole('button',{name:'Link reference',exact:true}).click();await expect(page.getByRole('button',{name:'Picked document Document · Other scope channel',exact:true})).toBeVisible();await page.getByRole('button',{name:'Picked document Document · Other scope channel',exact:true}).click();
   await expect(page.getByRole('button',{name:'Current doc title',exact:true})).toBeEnabled();await page.getByRole('button',{name:'Current doc title',exact:true}).click();await expect.poll(()=>page.evaluate(()=>window.fixture.opened)).toContainEqual({type:'doc',id:'doc'});
-  await page.getByRole('button',{name:'Link reference',exact:true}).click();await page.getByRole('combobox',{name:'Reference type',exact:true}).selectOption('task');await page.getByRole('button',{name:'Picked task',exact:true}).click();
+  await page.getByRole('button',{name:'Link reference',exact:true}).click();await page.getByRole('combobox',{name:'Reference type',exact:true}).selectOption('task');await page.getByRole('button',{name:'Picked task Task · Other scope channel',exact:true}).click();
   await page.getByRole('button',{name:'Current task title',exact:true}).click();await expect.poll(()=>page.evaluate(()=>window.fixture.opened)).toContainEqual({type:'task',id:'task'});
-  await page.getByRole('button',{name:'Link reference',exact:true}).click();await page.getByRole('combobox',{name:'Reference type',exact:true}).selectOption('file');await page.getByRole('button',{name:'Picked file',exact:true}).click();
+  await page.getByRole('button',{name:'Link reference',exact:true}).click();await page.getByRole('combobox',{name:'Reference type',exact:true}).selectOption('file');await page.getByRole('button',{name:'Picked file File · Other scope channel',exact:true}).click();
   await page.getByRole('button',{name:'Current file title',exact:true}).click();await expect.poll(()=>page.evaluate(()=>window.fixture.opened)).toContainEqual({object_id:'authorized-storage',name:'Authorized file',kind:'file'});
   await page.getByRole('button',{name:'Unlink Current task title',exact:true}).click();await expect(page.getByRole('button',{name:'Current task title',exact:true})).toHaveCount(0);
   await fs.mkdir(evidence,{recursive:true});await page.screenshot({path:path.join(evidence,`${name}-references.png`),fullPage:true});
@@ -116,3 +116,37 @@ test('neutral inaccessible targets, current title changes and typed artifact lin
  await page.getByRole('button',{name:'Link reference',exact:true}).click();await page.getByRole('combobox',{name:'Reference type',exact:true}).selectOption('artifact');await page.getByRole('textbox',{name:'Artifact origin',exact:true}).fill('https://artifacts.example');await page.getByRole('textbox',{name:'Artifact project',exact:true}).fill('Suite');await page.getByRole('textbox',{name:'Artifact name',exact:true}).fill('Architecture');await page.getByRole('button',{name:'Link artifact',exact:true}).click();
  await page.getByRole('button',{name:'Open latest artifact: Suite / Architecture (latest)',exact:true}).click();await expect.poll(()=>page.evaluate(()=>window.fixture.opened)).toContainEqual({url:'https://artifacts.example/artifacts/Suite/Architecture/'});
 });
+
+for (const [name,viewport] of [['desktop',{width:1440,height:900}],['mobile',{width:390,height:844}]]) {
+ test(`${name} path typeahead, sidebar child, modal focus/keyboard and cancellation keep canvas stable`,async({page,baseURL})=>{
+  await start(page,baseURL,viewport);
+  await page.getByRole('button',{name:'Collapse Wingman Suite',exact:true}).click();
+  const search=page.getByRole('combobox',{name:'Find component',exact:true});await search.fill('Flight Deck');
+  await expect(page.getByRole('option',{name:'Tree browser Wingman Suite / Flight Deck / Tree browser'})).toBeVisible();await search.press('ArrowDown');await search.press('Enter');
+  await expect(page.getByRole('treeitem',{name:'Tree browser',exact:true})).toBeFocused();
+  const canvas=await page.locator('.context-tree-canvas').boundingBox();const transform=await page.evaluate(()=>window.fixture.view.transform);
+  const child=page.getByRole('button',{name:'+ New child',exact:true});await child.click();
+  const dialog=page.getByRole('dialog');await expect(dialog).toBeVisible();await expect(page.getByRole('textbox',{name:'Component name',exact:true})).toBeFocused();
+  await expect(page.getByRole('combobox',{name:'Component parent',exact:true})).toHaveValue('Tree browser');
+  expect(await page.locator('.context-tree-canvas').boundingBox()).toEqual(canvas);expect(await page.evaluate(()=>window.fixture.view.transform)).toBe(transform);
+  await page.getByRole('textbox',{name:'Component name',exact:true}).fill('Cancelled child');
+  await page.keyboard.press('Escape');await expect(dialog).not.toBeVisible();await expect(child).toBeFocused();
+  expect(await page.evaluate(()=>window.fixture.commands)).toEqual([]);expect(await page.evaluate(()=>window.fixture.view.selectedId)).toBe('tree');
+  await child.click();await page.getByRole('textbox',{name:'Component name',exact:true}).fill('Keyboard child');
+  const parent=page.getByRole('combobox',{name:'Component parent',exact:true});await parent.fill('Operations');await parent.press('ArrowDown');await parent.press('Enter');
+  await expect(parent).toHaveValue('Operations');
+  await page.keyboard.press('Tab');await page.keyboard.press('Tab');await page.keyboard.press('Tab');
+  expect(await page.evaluate(()=>document.querySelector('.context-tree-dialog').contains(document.activeElement))).toBe(true);
+  await fs.mkdir(evidence,{recursive:true});await page.screenshot({path:path.join(evidence,`${name}-component-modal.png`),fullPage:true});
+  await page.getByRole('button',{name:'Save component',exact:true}).click();
+  await page.getByRole('button',{name:'Link reference',exact:true}).click();
+  const refs=page.getByRole('combobox',{name:'Find reference',exact:true});await expect(refs).toBeFocused();await refs.fill('Picked');await refs.press('ArrowDown');await refs.press('ArrowDown');
+  await expect(page.getByRole('option',{name:'Picked task Task · Other scope channel'})).toHaveAttribute('aria-selected','true');
+  await expect(page.getByText('No matching accessible records.',{exact:true})).toBeHidden();await page.screenshot({path:path.join(evidence,`${name}-reference-typeahead.png`),fullPage:true});await refs.press('Enter');
+  await expect(dialog).not.toBeVisible();await expect(page.getByRole('button',{name:'Current task title',exact:true})).toBeVisible();
+  expect(await page.evaluate(()=>window.fixture.commands.find(c=>c.name==='context.attach').input.body.target_type)).toBe('task');
+  await page.getByRole('button',{name:'Rename or move',exact:true}).click();await parent.fill('Keyboard child');await expect(page.locator('#context-parent-results')).not.toContainText('Keyboard child');await parent.press('Escape');await expect(parent).toHaveValue('Operations');await page.keyboard.press('Escape');
+  await page.screenshot({path:path.join(evidence,`${name}-polished-tree.png`),fullPage:true});
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+ });
+}

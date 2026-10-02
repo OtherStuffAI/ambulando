@@ -31,11 +31,11 @@ No offline preview or deletion is queued. Unlink is independent and submits the
 reference's expected row version, with no referenced-content mutation.
 
 The reference picker reuses current `channels`, `channel-documents`,
-`channel-tasks` and additive `scope-tasks` service reads. Users can choose another
-channel or a scope-owned task in the same workspace. Fresh ACL-checked browsing
+`channel-tasks` and additive `scope-tasks` service reads. The typeahead combines available channel records and scope-owned tasks in the
+same workspace, with type icons and source subtitles. Fresh ACL-checked browsing
 IDs bound the picker; titles render through liveQuery over the normal documents
-and tasks tables, filtered by workspace, type and active state. Denied/failed
-browsing clears candidates. Existing bounded list browsing limits apply; the
+and tasks tables, filtered by workspace, type and active state. Denied or failed
+sources contribute no candidates. Existing bounded list browsing limits apply; the
 picker is not a new exhaustive search API. Attachment rechecks target ACLs on
 Tower and never grants access. `doc` is the canonical Tower/record-link name;
 the existing mention dispatcher opens the normal document viewer. Tasks use the
@@ -59,3 +59,25 @@ WP5 can use the unchanged Tower typed targets/commands and concurrency tokens.
 WP6 owns migration/runtime activation, served assets, live ACL/catalog checks and
 two-client convergence. Unit/browser fixtures and disposable Tower/WApp round
 trips establish source behavior, not activation. Jobs/apps remain deferred.
+
+## Context Tree polish
+
+Find component uses path-aware typeahead and reveals a selected match through
+collapsed ancestors at a readable scale. Parent typeahead shows ancestor paths,
+excludes the edited node and descendants, and changes the parent ID only when a
+result is chosen. Typing without choosing blocks save; Escape restores the
+current parent. Sidebar New child starts a draft under the selected component.
+
+Create/edit, reference linking and confirmed deletion use a small native modal
+dialog, preserving selection and canvas transforms. Native modality plus explicit
+Tab/Shift-Tab wrapping keeps focus inside; Escape cancels without a mutation and
+closing returns focus to the opener. Delete waits for the existing service preview
+and never deletes target content. Pending commands continue to block duplicate
+submissions and cancellation; stale previews require another confirmation.
+
+Reference typeahead combines the existing bounded, freshly authorized channel
+and scope lists. Candidate IDs/types come from those lists; current titles come
+from Dexie liveQuery. Failed sources contribute no candidates and are reported.
+Filtering by record type or title/source stays local; refresh and mutation remain
+owned by TowerSyncService. This is bounded browsing, not a new exhaustive search
+API. Ordinary record openers and artifact sign-in boundaries remain unchanged.

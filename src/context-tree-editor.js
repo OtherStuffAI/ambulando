@@ -1,5 +1,6 @@
 import { canonicalContextArtifact } from './context-artifact-link.js';
 import { isContextAccessDenied } from './context-tree-errors.js';
+import { contextSearchChoices } from './context-tree-layout.js';
 import { liveQuery } from 'dexie';
 
 export function contextParentChoices(components, id) {
@@ -28,30 +29,51 @@ export function createContextTreeEditor({ getService, getDb, getStore, online = 
   const unsubscribe = () => { subscription?.unsubscribe(); subscription = null; };
   return {
     capabilities: {read:false,manage:false}, editing: null, busy: false, editError: '', deletePreview: null,
-    picker: false, pickerType: 'doc', pickerChannel: '', pickerSearch: '', pickerRows: [], pickerLoading: false,
+    dialogMode: '', parentSearch: '', parentOpen: false, parentUncommitted: false, parentIndex: 0, pickerIndex: 0,
+    picker: false, pickerType: 'all', pickerSearch: '', pickerRows: [], pickerLoading: false,
     artifactOrigin: '', artifactProject: '', artifactName: '',
     get draftTitle() { return this.editing?.title || ''; },
     set draftTitle(value) { if (this.editing) this.editing.title = value; },
     get draftParent() { return this.editing?.parentId || ''; },
     set draftParent(value) { if (this.editing) this.editing.parentId = value; },
     get canManage() { return this.status === 'complete' && this.capabilities?.manage === true; },
+    get dialogOpen() { return this.canManage && !!(this.editing || this.picker || this.dialogMode === 'delete'); },
+    get parentResults() { const q=this.parentSearch.trim().toLowerCase(), top={id:'',title:'Top level',subtitle:'No parent'}; return [...(('Top level No parent'.toLowerCase().includes(q)) ? [top] : []), ...contextSearchChoices(this.components,q,new Set(this.parentChoices.map(row=>row.id)))].slice(0,40); },
+    chooseParent(row) { if (!this.parentResults.some(p=>p.id===row.id)) return; this.draftParent=row.id; this.parentSearch=row.title; this.parentUncommitted=false; this.parentOpen=false; },
+    searchParent(value) { this.parentUncommitted=true; this.parentSearch=value; this.parentOpen=true; this.parentIndex=0; },
+    comboKey(event, kind) {
+      const parent=kind==='parent', rows=parent ? this.parentResults : this.filteredPickerRows, prop=parent ? 'parentIndex' : 'pickerIndex';
+      if (event.key==='Escape') { if (parent && this.parentOpen) { event.preventDefault(); event.stopPropagation(); this.parentOpen=false; this.parentUncommitted=false; this.parentSearch=this.components.find(r=>r.id===this.draftParent)?.title || 'Top level'; } return; }
+      if (['ArrowDown','ArrowUp'].includes(event.key)) { event.preventDefault(); if(parent)this.parentOpen=true; this[prop]=Math.max(0,Math.min(rows.length-1,this[prop]+(event.key==='ArrowDown'?1:-1))); }
+      else if(event.key==='Enter' && (!parent || this.parentOpen)) { event.preventDefault(); if(rows[this[prop]]) parent ? this.chooseParent(rows[this[prop]]) : void this.attachRecord(rows[this[prop]]); }
+      this.$nextTick?.(()=>this.$refs?.[parent?'parentResults':'referenceResults']?.querySelector('[aria-selected="true"]')?.scrollIntoView({block:'nearest'}));
+    },
+    dialogKey(event) {
+      if(event.key!=='Tab')return;
+      const el=event.currentTarget, items=[...el.querySelectorAll('button,input,select,[tabindex="0"]')].filter(item=>!item.disabled && item.getClientRects().length);
+      const index=items.indexOf(el.ownerDocument.activeElement);
+      if(items.length && (event.shiftKey && index<=0 || !event.shiftKey && (index===items.length-1 || index<0))) { event.preventDefault(); items[event.shiftKey?items.length-1:0].focus(); }
+    },
+    syncDialog(el) {
+      if(this.dialogOpen && !el.open) { el.showModal(); this.$nextTick?.(()=>{ const target=el.querySelector(this.editing ? '[aria-label="Component name"]' : this.picker ? '[aria-label="Find reference"]' : '[aria-label="Confirm component deletion"] button'); target?.focus(); }); }
+      else if(!this.dialogOpen && el.open) el.close();
+    },
     get parentChoices() { return contextParentChoices(this.components, this.editing?.id); },
     get pickerChannels() { return (getStore()?.channels || []).filter(row => row.pg_workspace_id === this.workspaceId && row.record_state === 'active'); },
-    get pickerScopes() { return this.pickerType === 'task' ? (getStore()?.scopes || []).filter(row => row.pg_workspace_id === this.workspaceId && row.record_state === 'active') : []; },
-    get filteredPickerRows() { const query = this.pickerSearch.trim().toLowerCase(); return this.pickerRows.filter(row => row.title.toLowerCase().includes(query)); },
+    get filteredPickerRows() { const query = this.pickerSearch.trim().toLowerCase(); return this.pickerRows.filter(row => (row.title + ' ' + (row.subtitle || '')).toLowerCase().includes(query)); },
     clearEditor() {
-      epoch++; pickerRequest++; unsubscribe(); this.editing = null; this.deletePreview = null; this.picker = false;
+      epoch++; pickerRequest++; unsubscribe(); this.dialogMode = ''; this.parentOpen=false; this.parentUncommitted=false; this.editing = null; this.deletePreview = null; this.picker = false;
       this.busy = pending; this.editError = ''; this.pickerRows = []; this.pickerLoading = false;
     },
     cancelEdit() { if (!this.busy) this.clearEditor(); },
     startCreate(parentId = '') {
       if (!this.canManage || this.busy || parentId && !this.components.some(row => row.id === parentId)) return;
-      this.clearEditor(); this.editing = {id:'',title:'',parentId};
+      this.clearEditor(); this.editing = {id:'',title:'',parentId}; this.parentSearch=this.components.find(r=>r.id===parentId)?.title || 'Top level';
     },
     startEdit() {
       if (!this.canManage || this.busy || !this.selected) return;
       const row = this.selected; this.clearEditor();
-      this.editing = {id:row.id,title:row.title,parentId:row.parent_id || '',version:row.row_version};
+      this.editing = {id:row.id,title:row.title,parentId:row.parent_id || '',version:row.row_version}; this.parentSearch=this.components.find(r=>r.id===row.parent_id)?.title || 'Top level';
     },
     async runEdit(operation, input, onSuccess = () => this.clearEditor()) {
       if (!this.canManage || this.busy || pending) return false;
@@ -78,6 +100,7 @@ export function createContextTreeEditor({ getService, getDb, getStore, online = 
     async saveComponent() {
       const draft = this.editing;
       if (!draft || this.busy || !this.canManage) return;
+      if(this.parentUncommitted) { this.editError='Choose a parent from the results, or press Escape to keep the current parent.'; return; }
       const title = draft.title.trim();
       if (!title || title.length > 256) { this.editError = 'Enter a name of 1–256 characters.'; return; }
       if (draft.parentId && !this.parentChoices.some(row => row.id === draft.parentId)) { this.editError = 'Choose an available parent.'; return; }
@@ -90,7 +113,7 @@ export function createContextTreeEditor({ getService, getDb, getStore, online = 
     },
     async previewDelete() {
       if (!this.canManage || this.busy || !this.selected) return;
-      const id = this.selectedId; this.clearEditor(); this.busy = true;
+      const id = this.selectedId; this.clearEditor(); this.dialogMode='delete'; this.busy = true;
       try { await this.refreshDeletePreview(id); }
       finally { this.busy = false; }
     },
@@ -119,33 +142,51 @@ export function createContextTreeEditor({ getService, getDb, getStore, online = 
     },
     async startPicker() {
       if (!this.canManage || this.busy || !this.selected) return;
-      this.clearEditor(); this.picker = true; this.pickerType = 'doc'; this.pickerSearch = '';
-      this.pickerChannel = this.pickerChannels[0]?.record_id || '';
+      this.clearEditor(); this.picker = true; this.pickerType = 'all'; this.pickerIndex=0; this.pickerSearch = '';
       const ticket = epoch;
       try { await getService().ensureLoaded('channels', '', {force:true}); } catch { if (ticket === epoch) this.editError = 'Channels could not be checked. Retry the picker.'; return; }
       if (ticket !== epoch) return;
-      this.pickerChannel = this.pickerChannels[0]?.record_id || '';
       await this.loadPicker();
     },
     async loadPicker() {
-      const ticket = ++pickerRequest, generation = epoch, db = getDb(), type = this.pickerType, channel = this.pickerChannel;
-      unsubscribe(); this.pickerRows = []; this.editError = '';
-      if (type === 'artifact' || !channel || !this.picker) { this.pickerLoading = false; return; }
+      const ticket = ++pickerRequest, generation = epoch, db = getDb(), type = this.pickerType;
+      unsubscribe(); this.pickerRows = []; this.editError = ''; this.pickerIndex=0;
+      if (type === 'artifact' || !this.picker) { this.pickerLoading = false; return; }
       this.pickerLoading = true;
       try {
-        const scope = type === 'task' && channel.startsWith('scope:');
-        const rows = await getService().ensureLoaded(scope ? 'scope-tasks' : type === 'task' ? 'channel-tasks' : 'channel-documents', scope ? channel.slice(6) : channel, {force:true});
+        const sources = this.pickerChannels.map(row=>({id:row.record_id,title:row.title || 'Channel',scope:false}));
+        for(const row of (getStore()?.scopes || []).filter(row=>row.pg_workspace_id===this.workspaceId && row.record_state==='active')) sources.push({id:row.record_id,title:row.title || 'Scope',scope:true});
+        const candidates = new Map(); let failed=0;
+        // Reuse bounded ACL-checked service lists, never enumerate cached titles alone.
+        for (const source of sources) {
+          const families = source.scope ? ['scope-tasks'] : ['channel-documents','channel-tasks'];
+          for(const family of families) {
+            if(type==='task' && family==='channel-documents' || ['doc','file'].includes(type) && family!=='channel-documents') continue;
+            if(ticket!==pickerRequest || generation!==epoch) return;
+            try {
+              const rows=await getService().ensureLoaded(family,source.id,{force:true});
+              for(const row of Array.isArray(rows)?rows:[]) {
+                const rowType=row.pg_record_type;
+                if(row.pg_workspace_id!==this.workspaceId || row.record_state!=='active' || !['doc','file','task'].includes(rowType) || type!=='all' && rowType!==type) continue;
+                candidates.set(row.record_id,{type:rowType,subtitle:source.title});
+              }
+            } catch { failed++; }
+          }
+        }
         if (ticket !== pickerRequest || generation !== epoch || !this.canManage || getDb() !== db) return;
-        const ids = new Set((Array.isArray(rows) ? rows : []).filter(row => row.pg_workspace_id === this.workspaceId && row.record_state === 'active'
-          && row.pg_record_type === (type === 'doc' ? 'doc' : type)).map(row => row.record_id));
-        const table = type === 'task' ? db.tasks : db.documents;
-        subscription = observe(async () => (await table.bulkGet([...ids])).filter(row => row && row.pg_workspace_id === this.workspaceId
-          && row.record_state === 'active' && row.pg_record_type === type).map(row => ({id:row.record_id,title:row.title || 'Untitled record'}))).subscribe({
-          next: candidates => { if (ticket === pickerRequest && generation === epoch && this.canManage) this.pickerRows = candidates; },
-          error: () => { if (ticket === pickerRequest) { this.pickerRows = []; this.editError = 'References are unavailable. Reload the picker.'; } },
+        if(failed) this.editError='Some sources could not be checked. Results include only available records.';
+        subscription = observe(async () => {
+          const ids=[...candidates.keys()];
+          const docs=await db.documents.bulkGet(ids.filter(id=>candidates.get(id).type!=='task'));
+          const tasks=ids.some(id=>candidates.get(id).type==='task') ? await db.tasks.bulkGet(ids.filter(id=>candidates.get(id).type==='task')) : [];
+          return [...docs,...tasks].filter(row=>row && row.pg_workspace_id===this.workspaceId && row.record_state==='active' && candidates.get(row.record_id)?.type===row.pg_record_type)
+            .map(row=>({id:row.record_id,title:row.title || 'Untitled record',...candidates.get(row.record_id)}));
+        }).subscribe({
+          next: rows => { if(ticket===pickerRequest && generation===epoch && this.canManage) this.pickerRows=rows; },
+          error: () => { if(ticket===pickerRequest) { this.pickerRows=[]; this.editError='References are unavailable. Reload the picker.'; } },
         });
-      } catch { if (ticket === pickerRequest && generation === epoch) this.editError = 'References are unavailable for this channel. Choose another or retry.'; }
-      finally { if (ticket === pickerRequest && generation === epoch) this.pickerLoading = false; }
+      } catch { if(ticket===pickerRequest && generation===epoch) this.editError='References could not be checked. Retry the picker.'; }
+      finally { if(ticket===pickerRequest && generation===epoch) this.pickerLoading=false; }
     },
     async attachArtifact() {
       if (!this.picker || this.pickerType !== 'artifact' || !this.selected) return;
@@ -154,8 +195,9 @@ export function createContextTreeEditor({ getService, getDb, getStore, online = 
       await this.runEdit('attach', {componentId:this.selectedId,body:{target_type:'artifact',target}});
     },
     async attachRecord(row) {
-      if (!this.picker || !this.filteredPickerRows.some(candidate => candidate.id === row.id) || !this.selected) return;
-      await this.runEdit('attach', {componentId:this.selectedId,body:{target_type:this.pickerType,target:{record_id:row.id}}});
+      const candidate=this.filteredPickerRows.find(candidate=>candidate.id===row.id);
+      if (!this.picker || !candidate || !this.selected || this.pickerLoading) return;
+      await this.runEdit('attach', {componentId:this.selectedId,body:{target_type:candidate.type,target:{record_id:row.id}}});
     },
   };
 }
