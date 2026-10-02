@@ -345,3 +345,36 @@ Nested Alpine Proxies are never forwarded. Malformed scalar identity/permission
 fields fail validation, rather than becoming authority through lossy conversion.
 Bundle rows originate from transport or explicit plain local reconciliation
 payloads; this boundary does not stringify arbitrary application state.
+
+## Non-disruptive reconnect and file recovery (build 2179)
+
+Transient reconnect/catch-up remains a coalesced incremental cursor pull. It
+never opens a catch-up overlay or clears cached collections, editor models,
+selection or route state. Typed revocations, tombstones, authorized replacement
+omission and outbox acknowledgements retain their existing authority semantics.
+A required replacement snapshot still resumes its persisted checkpoints; retry
+does not force a new snapshot or clear the cursor.
+
+Workspace failure backoff bounds activity retries and SSE catch-up scheduling
+hints. Focus/visibility startup hints do not request the 50 ms fast path during
+failure backoff. A successful pull resets backoff. The last genuine sync error
+persists through automatic and explicit retries until a successful pull; the
+avatar exposes the error, progress and a disabled-while-active Retry action.
+There is no fixed failure toast intercepting composer or navigation interaction.
+
+Bootstrap file recovery still permits one guarded cache-busting navigation when
+no Alpine chat store is available. After the store exists, stylesheet/lazy-module
+failures retain the running document and report an application-file error in the
+avatar menu. Reload is an explicit action after saving drafts. This error stays
+until reload because a successful workspace pull does not prove a failed JS/CSS
+asset has recovered. Service-worker registration/controller changes do not
+reload the document automatically; the explicit application upgrade path probes
+coherent metadata, shell and assets before activation and reload.
+
+Executable bootstrap tests reproduce repeated runtime file failures without
+navigation. Sync tests verify cached draft/selection preservation, retained
+failure status, backoff and successful recovery. The representative browser
+composer fixture checks document identity, focus, caret, scroll, selected thread,
+continued typing and discoverable recovery through repeated reconnect failures.
+It is synthetic browser evidence, not acceptance for a particular human profile
+or native WM App device.

@@ -699,6 +699,7 @@ export function initApp() {
     agentActivityRunsLoads: {},
     agentActivityDetailsContext: null,
     catchUpSyncActive: false,
+    applicationAssetError: null,
     startupSyncProgress: {
       active: false, visible: false, stage: 'idle', startedAt: null, elapsedMs: 0,
       page: 0, applied: 0, cursorPresent: false, fullSnapshot: false, error: null,

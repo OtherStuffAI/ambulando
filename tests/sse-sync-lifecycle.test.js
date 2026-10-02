@@ -515,13 +515,15 @@ describe('handleSSEStatus', () => {
     expect(store.sseStatus).toBe('connected');
   });
 
-  it('sets catchUpSyncActive on catch-up-required', () => {
+  it('schedules cursor recovery without blocking interaction on catch-up-required', () => {
     const { fn, store } = bindMethod('handleSSEStatus', {
+      scheduleBackgroundSync: vi.fn(),
       sseStatus: 'connected',
       catchUpSyncActive: false,
     });
     fn({ status: 'catch-up-required' });
-    expect(store.catchUpSyncActive).toBe(true);
+    expect(store.catchUpSyncActive).toBe(false);
+    expect(store.scheduleBackgroundSync).toHaveBeenCalledWith(50);
   });
 
   it('triggers group refresh on group-changed', () => {

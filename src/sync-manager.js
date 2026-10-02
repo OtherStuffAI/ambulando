@@ -915,9 +915,15 @@ export const syncManagerMixin = {
   },
 
   async retryStartupSync() {
-    this.startupSyncProgress.visible = false;
-    this.startupSyncProgress.error = null;
-    return this.requestTowerSyncFamily?.('workspace-bootstrap', '', { force: true });
+    // Preserve the last real failure until a pull commits successfully.
+    if (this.startupSyncProgress.active) return;
+    try {
+      return await this.requestTowerSyncFamily?.('workspace-bootstrap', '', { force: true });
+    } catch (error) {
+      // The pull owns failure status. Handle the UI action's rejection so it
+      // cannot be mistaken for a bootstrap asset failure.
+      return { failed: true, error: error?.message || String(error) };
+    }
   },
 
   startupSyncProgressLabel() {
@@ -3068,7 +3074,9 @@ export const syncManagerMixin = {
     }
 
     if (status === 'catch-up-required') {
-      this.catchUpSyncActive = true;
+      // Recover through the existing cursor path without replacing the usable
+      // workspace with an interaction-blocking reconnect screen.
+      this.catchUpSyncActive = false;
       this.markTowerReachabilityDegraded?.('sse-catch-up-required', 'reconnecting');
       this.scheduleBackgroundSync(50);
       return;
@@ -3394,7 +3402,7 @@ export const syncManagerMixin = {
       this.backgroundSyncTimer = null;
       return false;
     }
-    return service.scheduleFallback(delayMs);
+    return service.scheduleFallback(Math.max(delayMs ?? this.getSyncCadenceMs() ?? 0, this.syncBackoffMs || 0) || null);
   },
 
   ensureBackgroundSync(runSoon = false) {
@@ -3414,11 +3422,10 @@ export const syncManagerMixin = {
     }
     if (this.isEncryptedRecordSyncDisabled) this.markEncryptedRecordSyncDisabled();
     // Data age alone must not replace usable local state with a blocking
-    // catch-up screen. Explicit replay/cursor failures set catchUpSyncActive via
-    // the SSE catch-up-required status, while manual/full reconciliation paths
-    // opt into the overlay themselves.
+    // catch-up screen. Replay/cursor recovery uses background pulls; only
+    // explicit manual/full reconciliation opens its own progress dialog.
     if (this.session?.npub && this.backendUrl && this.workspaceOwnerNpub) {
-      this.getTowerSyncService()?.start({ runSoon });
+      this.getTowerSyncService()?.start({ runSoon: runSoon && !this.syncBackoffMs });
     }
   },
 
@@ -3488,7 +3495,7 @@ export const syncManagerMixin = {
       const activityRetryDelay = this.agentActivityRecoveryError
         ? (this.agentActivityRecoveryAttempts < 3 ? 1000 * (2 ** (this.agentActivityRecoveryAttempts - 1)) : null)
         : this.agentActivityRecoveryPending ? 1000 : this.syncBackoffMs || null;
-      this.scheduleBackgroundSync(activityRetryDelay);
+      this.scheduleBackgroundSync(Math.max(this.syncBackoffMs || 0, activityRetryDelay || 0) || null);
     }
   },
 

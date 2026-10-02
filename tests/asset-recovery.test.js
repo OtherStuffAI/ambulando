@@ -65,6 +65,7 @@ function makeHarness(sharedStorage = new Map(), options = {}) {
       getElementById(id) { return elements.get(id) || null; },
     },
     window: {
+      Alpine: options.store ? { store: () => options.store } : undefined,
       addEventListener(type, listener) { listeners.set(type, listener); },
     },
   };
@@ -132,4 +133,19 @@ describe('bootstrap stale-asset recovery', () => {
     expect(harness.replacements).toHaveLength(0);
     expect(harness.appended[0].id).toBe('flightdeck-asset-recovery-failed');
   });
+});
+
+it('keeps a usable app intact through repeated lazy-module and stylesheet failures', () => {
+  const store = { threadInput: 'unsent draft', selectedChannelId: 'ch1' };
+  const harness = makeHarness(new Map(), { store });
+  harness.listeners.get('load')();
+  for (let attempt = 0; attempt < 4; attempt++) {
+    harness.listeners.get('unhandledrejection')({ reason: new Error('Failed to fetch dynamically imported module: /assets/editor.js') });
+    harness.listeners.get('error')({ target: { tagName: 'LINK', rel: 'stylesheet', href: '/assets/editor.css' } });
+  }
+  expect(harness.replacements).toEqual([]);
+  expect(harness.appended).toEqual([]);
+  expect(store.threadInput).toBe('unsent draft');
+  expect(store.selectedChannelId).toBe('ch1');
+  expect(store.applicationAssetError).toContain('save your drafts');
 });

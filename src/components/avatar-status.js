@@ -42,7 +42,7 @@ export function resolveAvatarConnectionStatus(store = {}, env = globalThis) {
   ) {
     return AVATAR_STATUS_SYNCING;
   }
-  if (store.syncStatus === 'error' || store.syncSession?.state === 'error') return AVATAR_STATUS_ERROR;
+  if (store.applicationAssetError || store.startupSyncProgress?.error || store.syncStatus === 'error' || store.syncSession?.state === 'error') return AVATAR_STATUS_ERROR;
   const offline = typeof env?.navigator !== 'undefined' && env.navigator?.onLine === false;
   const connected = Boolean(store.currentWorkspace?.pgBackendMode && store.backendUrl && store.session?.npub);
   if (offline || !connected) return AVATAR_STATUS_LOCAL_ONLY;
@@ -61,8 +61,9 @@ export function avatarConnectionTitle(store = {}) {
 }
 
 export function avatarControlTitle(store = {}) {
+  if (store.applicationAssetError) return 'Application file unavailable — open recovery options';
   const startupProgress = store.startupSyncProgress || {};
-  if (startupProgress.visible && startupProgress.stage === 'error') {
+  if (startupProgress.visible && (startupProgress.error || startupProgress.stage === 'error')) {
     return 'Update stalled — open progress and retry';
   }
   if (startupProgress.visible && startupProgress.active) {

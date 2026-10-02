@@ -380,3 +380,78 @@ test('captures app shell and seeded navigation timing baseline', async ({ page }
   expect(metrics.threadOpenMs.count).toBe(7);
   expect(metrics.taskDetailOpenMs.count).toBe(7);
 });
+
+// Reuses the representative composer fixture; no Tower authority is simulated.
+test('preserves editing and navigation during reconnect, retries and lazy asset failures', async ({ page }) => {
+  test.setTimeout(30000);
+  await blockExternalRequests(page);
+  await page.setViewportSize({ width: 1280, height: 820 });
+  await page.goto('/');
+  await waitForStore(page);
+  await seedWorkspace(page, { documentCount: 20, historySize: 120, taskCount: 20 });
+  const composer = page.locator('.thread-input-bar [data-chat-composer="thread"]');
+  await composer.fill('draft survives retry');
+  await composer.focus();
+  const before = await page.evaluate(() => {
+    const composer = document.querySelector('.thread-input-bar [data-chat-composer="thread"]');
+    const range = document.createRange();
+    range.setStart(composer.firstChild, 6);
+    range.collapse(true);
+    window.getSelection().removeAllRanges();
+    window.getSelection().addRange(range);
+    const scroller = document.querySelector('[data-thread-replies]');
+    if (!scroller) throw new Error('Thread scroller is missing');
+    scroller.scrollTop = 120;
+    window.__retryDocumentIdentity = 'preserved';
+    return { scroll: scroller?.scrollTop, channel: window.Alpine.store('chat').selectedChannelId };
+  });
+  expect(before.scroll).toBeGreaterThan(0);
+  await page.context().setOffline(true);
+  const result = await page.evaluate(async () => {
+    const store = window.Alpine.store('chat');
+    store.scheduleBackgroundSync = () => {}; // fixture has no live Tower
+    store.startupSyncProgress.connectionKey = store.buildSSEConnectionKey();
+    for (let attempt = 0; attempt < 3; attempt++) {
+      store.handleSSEStatus({ status: 'reconnecting' });
+      store.handleSSEStatus({ status: 'catch-up-required' });
+      store.beginStartupSyncProgress();
+      store.updateStartupSyncProgress({ stage: 'receiving', page: 1 });
+      store.finishStartupSyncProgress(new Error('Transient network failure'));
+      window.dispatchEvent(new PromiseRejectionEvent('unhandledrejection', {
+        promise: Promise.resolve(),
+        reason: new Error('Failed to fetch dynamically imported module: /assets/unavailable-editor.js'),
+      }));
+      await new Promise(resolve => requestAnimationFrame(resolve));
+    }
+    return {
+      identity: window.__retryDocumentIdentity,
+      focused: document.activeElement?.matches('[data-chat-composer="thread"]'),
+      offset: window.getSelection().anchorOffset,
+      scroll: document.querySelector('[data-thread-replies]')?.scrollTop,
+      channel: store.selectedChannelId,
+      thread: store.activeThreadId,
+      error: store.startupSyncProgress.error,
+    };
+  });
+  expect(result).toMatchObject({ identity: 'preserved', focused: true, offset: 6, channel: before.channel, thread: THREAD_ID, error: 'Transient network failure' });
+  expect(result.scroll).toBe(before.scroll);
+  await page.context().setOffline(false);
+  await expect(composer).toHaveText('draft survives retry');
+  await expect(page.locator('.catchup-overlay, .startup-sync-status, #flightdeck-asset-recovery-failed')).toHaveCount(0);
+  await composer.press('End');
+  await composer.pressSequentially(' and keeps typing');
+  await expect(composer).toHaveText('draft survives retry and keeps typing');
+  await page.locator('.thread-close-btn').click();
+  await page.locator('.avatar-chip').click();
+  await expect(page.getByRole('button', { name: 'Retry updates', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Reload after saving drafts' })).toBeVisible();
+  await page.evaluate(() => {
+    const store = window.Alpine.store('chat');
+    store.beginStartupSyncProgress();
+    store.finishStartupSyncProgress();
+    store.showAvatarMenu = false;
+    store.openThread('perf-thread', { preserveChannelContext: true, scrollToLatest: false, syncRoute: false });
+  });
+  await expect(composer).toHaveText('draft survives retry and keeps typing');
+  expect(await page.evaluate(() => window.Alpine.store('chat').startupSyncProgress.error)).toBeNull();
+});

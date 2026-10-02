@@ -2629,6 +2629,20 @@
       "label": "Inbox filter validation checkpoint",
       "notes": [],
       "noUserVisibleChanges": true
+    },
+    {
+      "buildNumber": 2179,
+      "label": "Keep working through reconnects",
+      "notes": [
+        "Reconnect and update retries preserve the usable workspace and editing controls. Status and recovery stay in the avatar menu.",
+        "A failed application file no longer reloads an already-running app; recovery is explicit after saving drafts."
+      ]
+    },
+    {
+      "buildNumber": 2180,
+      "label": "Reconnect validation checkpoint",
+      "notes": [],
+      "noUserVisibleChanges": true
     }
   ]
 }

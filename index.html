@@ -88,6 +88,12 @@
       const recoverOnce = (event) => {
         if (!isAssetFailure(event)) return;
         assetFailureSeen = true;
+        // A lazy asset failure after startup must never throw away live edits.
+        const store = window.Alpine?.store?.('chat');
+        if (store) {
+          store.applicationAssetError = 'An application file could not load. Keep working with available content; save your drafts before reloading to recover the unavailable feature.';
+          return;
+        }
         if (recoveryAttempted() || !markRecoveryAttempted()) {
           showRecoveryFailure();
           return;
@@ -153,34 +159,6 @@
       <img :src="$store.chat.chatImagePreviewModal.src" :alt="$store.chat.chatImagePreviewModal.alt" />
     </section>
   </div>
-  <!-- Catch-up sync overlay — shown during initial load or long-gap reconnect -->
-  <template x-if="$store.chat.catchUpSyncActive">
-    <div class="catchup-overlay">
-      <div class="catchup-modal">
-        <div class="catchup-title">Catching up...</div>
-        <div class="sync-progress-bar-track" style="width:220px;margin:12px auto;">
-          <div class="sync-progress-bar-fill" :style="'width:' + $store.chat.syncProgressPercent() + '%'"></div>
-        </div>
-        <div class="catchup-label" x-text="$store.chat.syncProgressLabel()"></div>
-      </div>
-    </div>
-  </template>
-  <aside
-    class="startup-sync-status"
-    x-show="$store.chat.startupSyncProgress.visible && $store.chat.startupSyncProgress.error"
-    x-cloak
-    role="status"
-    aria-live="polite"
-    :data-stage="$store.chat.startupSyncProgress.stage"
-  >
-    <span class="startup-sync-spinner" x-show="$store.chat.startupSyncProgress.active" aria-hidden="true"></span>
-    <div>
-      <strong x-text="$store.chat.startupSyncProgressLabel()"></strong>
-      <span x-show="$store.chat.startupSyncProgress.active">Cached workspace remains available while Flight Deck updates.</span>
-      <span x-show="$store.chat.startupSyncProgress.error" x-text="$store.chat.startupSyncProgress.error"></span>
-    </div>
-    <button type="button" x-show="$store.chat.startupSyncProgress.stage === 'error'" @click="$store.chat.retryStartupSync()">Retry</button>
-  </aside>
   <div
     class="sync-progress-modal-overlay"
     x-show="$store.chat.showSyncProgressModal"
@@ -384,7 +362,12 @@
           <div class="avatar-menu-header">
             <span class="avatar-menu-name" x-text="$store.chat.displayName"></span>
           </div>
-          <div class="avatar-menu-section startup-sync-progress-panel" x-show="$store.chat.startupSyncProgress.visible">
+          <div class="avatar-menu-section startup-sync-progress-panel" x-show="$store.chat.applicationAssetError">
+            <span class="avatar-menu-label">Application file unavailable</span>
+            <span class="sync-error-text" role="status" x-text="$store.chat.applicationAssetError"></span>
+            <button class="startup-sync-retry" type="button" @click="window.location.reload()">Reload after saving drafts</button>
+          </div>
+          <div class="avatar-menu-section startup-sync-progress-panel" x-show="$store.chat.startupSyncProgress.visible" role="status" aria-live="polite">
             <span class="avatar-menu-label">Workspace updates</span>
             <div class="startup-sync-progress-heading">
               <span class="startup-sync-progress-indicator" :class="{ 'is-active': $store.chat.startupSyncProgress.active }" aria-hidden="true"></span>
@@ -393,7 +376,7 @@
             <span class="startup-sync-progress-meta" x-show="$store.chat.startupSyncProgressMeta()" x-text="$store.chat.startupSyncProgressMeta()"></span>
             <span class="startup-sync-progress-copy" x-show="$store.chat.startupSyncProgress.active">Cached workspace remains available while Flight Deck updates.</span>
             <span class="sync-error-text" x-show="$store.chat.startupSyncProgress.error" x-text="$store.chat.startupSyncProgress.error"></span>
-            <button class="startup-sync-retry" type="button" x-show="$store.chat.startupSyncProgress.stage === 'error'" @click="$store.chat.retryStartupSync()">Retry updates</button>
+            <button class="startup-sync-retry" type="button" x-show="$store.chat.startupSyncProgress.error" :disabled="$store.chat.startupSyncProgress.active" @click="$store.chat.retryStartupSync()">Retry updates</button>
           </div>
           <div class="avatar-menu-section sync-status-panel">
             <span class="avatar-menu-label" x-text="$store.chat.isTowerPgMode ? 'Backend' : 'Sync Status'"></span>

@@ -82,3 +82,10 @@ describe('avatar status component state', () => {
     })).toBe('Update stalled — open progress and retry');
   });
 });
+
+it('advertises a retained failure during automatic retry and runtime asset recovery', () => {
+  const store = { isTowerPgMode: true, startupSyncProgress: { visible: true, active: true, stage: 'opening', error: 'offline' } };
+  expect(resolveAvatarConnectionStatus(store)).toBe('error');
+  expect(avatarControlTitle(store)).toBe('Update stalled — open progress and retry');
+  expect(avatarControlTitle({ applicationAssetError: 'module missing' })).toBe('Application file unavailable — open recovery options');
+});

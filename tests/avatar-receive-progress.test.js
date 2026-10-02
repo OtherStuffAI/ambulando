@@ -6,9 +6,9 @@ const css = readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8');
 
 describe('avatar startup receive progress presentation', () => {
   it('keeps active startup receive progress off the fixed content overlay', () => {
-    expect(html).toContain('x-show="$store.chat.startupSyncProgress.visible && $store.chat.startupSyncProgress.error"');
-    expect(html).not.toContain('class="startup-sync-status"\n    x-show="$store.chat.startupSyncProgress.visible"');
-    expect(html).toContain('x-if="$store.chat.catchUpSyncActive"');
+    expect(html).not.toContain('class="startup-sync-status"');
+    expect(html).not.toContain('class="catchup-overlay"');
+    expect(html).not.toContain('x-if="$store.chat.catchUpSyncActive"');
     expect(html).toContain('x-show="$store.chat.showSyncProgressModal"');
   });
 
@@ -17,7 +17,7 @@ describe('avatar startup receive progress presentation', () => {
     expect(html).toContain('@click="$store.chat.showAvatarMenu = !$store.chat.showAvatarMenu"');
     expect(html).toContain(':aria-label="$store.chat.avatarControlTitle"');
     expect(html).toContain(':aria-expanded="$store.chat.showAvatarMenu ? \'true\' : \'false\'"');
-    expect(html).toContain('class="avatar-menu-section startup-sync-progress-panel" x-show="$store.chat.startupSyncProgress.visible"');
+    expect(html).toContain('class="avatar-menu-section startup-sync-progress-panel" x-show="$store.chat.startupSyncProgress.visible" role="status" aria-live="polite"');
     expect(html).toContain('x-text="$store.chat.startupSyncProgressLabel()"');
     expect(html).toContain('x-text="$store.chat.startupSyncProgressMeta()"');
     expect(html).toContain('@click="$store.chat.retryStartupSync()">Retry updates</button>');

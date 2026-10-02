@@ -1861,7 +1861,7 @@ describe('PG workspace startup progress', () => {
     await expect(fn()).resolves.toMatchObject({ pages: 2, applied: 500 });
 
     expect(store.requestTowerSyncFamily).toHaveBeenCalledWith('workspace-bootstrap', '', { force: true });
-    expect(store.startupSyncProgress).toMatchObject({ visible: false, error: null });
+    expect(store.startupSyncProgress).toMatchObject({ visible: true, error: 'request timed out' });
   });
 });
 
@@ -3704,4 +3704,51 @@ it('context mutation hints force canonical recovery even after a recent SSE delt
     pgEvents: [{ entity_type: 'context_component', entity_id: 'root', payload: { mutation_id: 'delete', scope_id: 'scope', component_id: 'root' } }] });
   expect(requestTowerSyncFamily).toHaveBeenCalledWith('workspace-bootstrap', '', { force: false });
   expect(acknowledgeSSEBatch).toHaveBeenCalledWith(expect.objectContaining({ batchId: 'context-delete' }));
+});
+
+describe('non-disruptive reconnect recovery', () => {
+  it('backs off failed workspace pulls even when activity requests want a fast retry', async () => {
+    const store = createStore({
+      getSyncCadenceMs: () => 1000,
+      isEncryptedRecordSyncDisabled: true,
+      markEncryptedRecordSyncDisabled: vi.fn(),
+      recoverVisibleAgentActivities: vi.fn(async () => {}),
+      requestTowerSyncFamily: vi.fn(async () => { throw new Error('offline'); }),
+      scheduleBackgroundSync: vi.fn(),
+      syncBackoffMs: 8000,
+      agentActivityRecoveryPending: true,
+      threadInput: 'keep this draft',
+      selectedChannelId: 'channel-a',
+      messages: [{ record_id: 'cached' }],
+    });
+    await store.backgroundSyncTick();
+    expect(store.scheduleBackgroundSync).toHaveBeenLastCalledWith(16000);
+    expect(store.messages).toEqual([{ record_id: 'cached' }]);
+    expect(store.threadInput).toBe('keep this draft');
+    expect(store.selectedChannelId).toBe('channel-a');
+    expect(store.requestTowerSyncFamily).toHaveBeenCalledWith('workspace-bootstrap');
+    store.requestTowerSyncFamily.mockResolvedValue({ applied: 1 });
+    await store.backgroundSyncTick();
+    expect(store.syncBackoffMs).toBe(0);
+    expect(store.scheduleBackgroundSync).toHaveBeenLastCalledWith(1000);
+  });
+
+  it('retains retry errors and handles rejection without clearing cached state', async () => {
+    const store = createStore({
+      startupSyncProgress: { visible: true, active: false, error: 'offline' },
+      requestTowerSyncFamily: vi.fn(async () => { throw new Error('still offline'); }),
+    });
+    await expect(store.retryStartupSync()).resolves.toEqual({ failed: true, error: 'still offline' });
+    expect(store.startupSyncProgress.error).toBe('offline');
+    store.startupSyncProgress.active = true;
+    await store.retryStartupSync();
+    expect(store.requestTowerSyncFamily).toHaveBeenCalledTimes(1);
+  });
+});
+
+it('does not bypass workspace failure backoff for an SSE catchup scheduling hint', () => {
+  const service = { scheduleFallback: vi.fn() };
+  const store = createStore({ getTowerSyncService: () => service, syncBackoffMs: 16000 });
+  store.scheduleBackgroundSync(50);
+  expect(service.scheduleFallback).toHaveBeenCalledWith(16000);
 });
