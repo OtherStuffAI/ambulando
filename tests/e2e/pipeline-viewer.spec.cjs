@@ -7,7 +7,7 @@ const evidence=path.join(root,'tmp/docs/handoffs/pipeline-viewer/browser');
 let bundle,css;
 test.beforeAll(async()=>{
   css=await fs.readFile(path.join(root,'src/pipeline-viewer.css'),'utf8');
-  const result=await build({bundle:true,write:false,format:'esm',logLevel:'silent',define:{__FLIGHT_DECK_PG_APP_NPUB__:JSON.stringify('npub1fixture')},
+  const result=await build({bundle:true,write:false,format:'esm',logLevel:'silent',define:{__FLIGHT_DECK_PG_APP_NPUB__:JSON.stringify('npub1fixture'),__FLIGHTDECK_PIPELINE_VIEWER_ENABLED__:'true'},
     plugins:[{name:'raw-html',setup(api){api.onResolve({filter:/\.html\?raw$/},args=>({path:path.resolve(args.resolveDir,args.path.replace('?raw','')),namespace:'raw-html'}));api.onLoad({filter:/.*/,namespace:'raw-html'},async args=>({contents:await fs.readFile(args.path,'utf8'),loader:'text'}));}}],
     stdin:{resolveDir:root,contents:`
       import Alpine from 'alpinejs';import Dexie from 'dexie';
@@ -59,7 +59,7 @@ for(const [name,viewport] of [['desktop',{width:1440,height:900}],['mobile',{wid
   await expect(page.getByTestId('pipeline-copy-value')).toBeDisabled();
   await page.getByTestId('pipeline-more-evidence').click();await page.getByTestId('pipeline-more-evidence').click();
   await expect(page.getByTestId('pipeline-value-completeness')).toHaveText('Complete retained value');
-  await expect(page.locator('.pipeline-viewer-records li')).toHaveCount(237);
+  await expect(page.locator('.pipeline-viewer-records li')).toHaveCount(50);
   await page.getByTestId('pipeline-value-search').fill('tweet 237');await expect(page.locator('.pipeline-viewer-records li')).toHaveCount(1);
   await page.getByTestId('pipeline-copy-value').click();expect(await page.evaluate(()=>window.fixture.copied[0])).toBe(await page.evaluate(()=>JSON.stringify(window.fixture.tweetRecords,null,2)));
   expect(await page.locator('script').count()).toBe(1);

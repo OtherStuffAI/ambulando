@@ -1,0 +1,595 @@
+{
+  "runId": "e9f60818-9aa3-4457-a0dc-28373cd172df",
+  "values": {
+    "b7ab5c98-5157-4c9b-b82c-8b26920726aa": {
+      "workspaceId": "11111111-1111-4111-8111-111111111111",
+      "threadId": "22222222-2222-4222-8222-222222222222",
+      "frmNpub": "npub1requester",
+      "prompt": "Use bird to get the latest 20 tweets on my timeline"
+    },
+    "94044a6a-4f28-45dd-ac91-adf5a37eae9c": {
+      "workspaceId": "11111111-1111-4111-8111-111111111111",
+      "threadId": "22222222-2222-4222-8222-222222222222",
+      "frmNpub": "npub1requester",
+      "prompt": "Use bird to get the latest 20 tweets on my timeline",
+      "blocks": {
+        "thread": {
+          "input": {
+            "workspaceId": "11111111-1111-4111-8111-111111111111",
+            "threadId": "22222222-2222-4222-8222-222222222222",
+            "frmNpub": "npub1requester",
+            "prompt": "Use bird to get the latest 20 tweets on my timeline"
+          }
+        }
+      },
+      "invocation": {
+        "workspaceId": "11111111-1111-4111-8111-111111111111",
+        "threadId": "22222222-2222-4222-8222-222222222222",
+        "frmNpub": "npub1requester",
+        "prompt": "Use bird to get the latest 20 tweets on my timeline"
+      }
+    },
+    "7c48d452-1aae-4a97-b4b0-bfb5f1d5530e": {
+      "workspaceId": "11111111-1111-4111-8111-111111111111",
+      "threadId": "22222222-2222-4222-8222-222222222222",
+      "frmNpub": "npub1requester",
+      "prompt": "Use bird to get the latest 20 tweets on my timeline",
+      "blocks": {
+        "thread": {
+          "input": {
+            "workspaceId": "11111111-1111-4111-8111-111111111111",
+            "threadId": "22222222-2222-4222-8222-222222222222",
+            "frmNpub": "npub1requester",
+            "prompt": "Use bird to get the latest 20 tweets on my timeline"
+          }
+        }
+      },
+      "invocation": {
+        "workspaceId": "11111111-1111-4111-8111-111111111111",
+        "threadId": "22222222-2222-4222-8222-222222222222",
+        "frmNpub": "npub1requester",
+        "prompt": "Use bird to get the latest 20 tweets on my timeline"
+      }
+    },
+    "958f8cbc-db97-443f-bf05-60007f510296": {
+      "workspaceId": "11111111-1111-4111-8111-111111111111",
+      "threadId": "22222222-2222-4222-8222-222222222222",
+      "frmNpub": "npub1requester",
+      "prompt": "Use bird to get the latest 20 tweets on my timeline"
+    },
+    "809fc7ea-c230-4ed8-86ed-fac40442fd96": {
+      "function": "flightdeck.threadInvocation",
+      "arguments": {
+        "workspaceId": "11111111-1111-4111-8111-111111111111",
+        "threadId": "22222222-2222-4222-8222-222222222222",
+        "frmNpub": "npub1requester",
+        "prompt": "Use bird to get the latest 20 tweets on my timeline"
+      }
+    },
+    "670880c5-3aa3-4b64-a63e-e5a0425a9df8": {
+      "workspaceId": "11111111-1111-4111-8111-111111111111",
+      "threadId": "22222222-2222-4222-8222-222222222222",
+      "frmNpub": "npub1requester",
+      "prompt": "Use bird to get the latest 20 tweets on my timeline"
+    },
+    "2ea0c309-f57d-49e9-9928-798337ec5ef8": {
+      "workspaceId": "11111111-1111-4111-8111-111111111111",
+      "threadId": "22222222-2222-4222-8222-222222222222",
+      "frmNpub": "npub1requester",
+      "prompt": "Use bird to get the latest 20 tweets on my timeline",
+      "blocks": {
+        "thread": {
+          "input": {
+            "workspaceId": "11111111-1111-4111-8111-111111111111",
+            "threadId": "22222222-2222-4222-8222-222222222222",
+            "frmNpub": "npub1requester",
+            "prompt": "Use bird to get the latest 20 tweets on my timeline"
+          }
+        }
+      },
+      "invocation": {
+        "workspaceId": "11111111-1111-4111-8111-111111111111",
+        "threadId": "22222222-2222-4222-8222-222222222222",
+        "frmNpub": "npub1requester",
+        "prompt": "Use bird to get the latest 20 tweets on my timeline"
+      }
+    },
+    "166869ca-60df-49d3-8f9f-39fccc7ab869": {
+      "request": "Use bird to get the latest 20 tweets on my timeline"
+    },
+    "a14d57a0-3b2e-455a-b4b9-f4d5ad6e86cc": {
+      "request": "Use bird to get the latest 20 tweets on my timeline",
+      "retrieval": {
+        "request": "Use bird to get the latest 20 tweets on my timeline",
+        "count": 20,
+        "handles": [],
+        "queries": [],
+        "startedAt": 1790922258585,
+        "attempt": 0,
+        "modelCalls": 0,
+        "verdict": "needs_clarification",
+        "reason": "Would you like your Following feed or your For You feed?",
+        "active": false,
+        "semanticNeeded": false,
+        "source": null,
+        "handle": null,
+        "query": null,
+        "cursor": null,
+        "actions": [],
+        "tweets": [],
+        "evidence": [],
+        "usage": [],
+        "latencyMs": 0,
+        "resultCount": 0
+      },
+      "loop": {
+        "bounded_retrieval": {
+          "iteration": 3,
+          "index": 2,
+          "total": 3
+        }
+      }
+    },
+    "3bb39ad0-fddd-4ad1-9079-0a99ed72035e": {
+      "workspaceId": "11111111-1111-4111-8111-111111111111",
+      "threadId": "22222222-2222-4222-8222-222222222222",
+      "frmNpub": "npub1requester",
+      "prompt": "Use bird to get the latest 20 tweets on my timeline",
+      "blocks": {
+        "thread": {
+          "input": {
+            "workspaceId": "11111111-1111-4111-8111-111111111111",
+            "threadId": "22222222-2222-4222-8222-222222222222",
+            "frmNpub": "npub1requester",
+            "prompt": "Use bird to get the latest 20 tweets on my timeline"
+          }
+        }
+      },
+      "invocation": {
+        "workspaceId": "11111111-1111-4111-8111-111111111111",
+        "threadId": "22222222-2222-4222-8222-222222222222",
+        "frmNpub": "npub1requester",
+        "prompt": "Use bird to get the latest 20 tweets on my timeline"
+      },
+      "bird": {
+        "request": "Use bird to get the latest 20 tweets on my timeline",
+        "retrieval": {
+          "request": "Use bird to get the latest 20 tweets on my timeline",
+          "count": 20,
+          "handles": [],
+          "queries": [],
+          "startedAt": 1790922258585,
+          "attempt": 0,
+          "modelCalls": 0,
+          "verdict": "needs_clarification",
+          "reason": "Would you like your Following feed or your For You feed?",
+          "active": false,
+          "semanticNeeded": false,
+          "source": null,
+          "handle": null,
+          "query": null,
+          "cursor": null,
+          "actions": [],
+          "tweets": [],
+          "evidence": [],
+          "usage": [],
+          "latencyMs": 0,
+          "resultCount": 0
+        },
+        "loop": {
+          "bounded_retrieval": {
+            "iteration": 3,
+            "index": 2,
+            "total": 3
+          }
+        }
+      }
+    },
+    "1ea11d87-7139-4418-9fa6-b18dcf4af5dc": {
+      "state": {
+        "request": "Use bird to get the latest 20 tweets on my timeline",
+        "count": 20,
+        "handles": [],
+        "queries": [],
+        "startedAt": 1790922258585,
+        "attempt": 0,
+        "modelCalls": 0,
+        "verdict": "needs_clarification",
+        "reason": "Would you like your Following feed or your For You feed?",
+        "active": false,
+        "semanticNeeded": false,
+        "source": null,
+        "handle": null,
+        "query": null,
+        "cursor": null,
+        "actions": [],
+        "tweets": [],
+        "evidence": [],
+        "usage": [],
+        "latencyMs": 0,
+        "resultCount": 0
+      }
+    },
+    "ce5ee7b2-68c7-4d71-8f6c-23432596badc": {
+      "function": "bird.format",
+      "arguments": {
+        "state": {
+          "request": "Use bird to get the latest 20 tweets on my timeline",
+          "count": 20,
+          "handles": [],
+          "queries": [],
+          "startedAt": 1790922258585,
+          "attempt": 0,
+          "modelCalls": 0,
+          "verdict": "needs_clarification",
+          "reason": "Would you like your Following feed or your For You feed?",
+          "active": false,
+          "semanticNeeded": false,
+          "source": null,
+          "handle": null,
+          "query": null,
+          "cursor": null,
+          "actions": [],
+          "tweets": [],
+          "evidence": [],
+          "usage": [],
+          "latencyMs": 0,
+          "resultCount": 0
+        }
+      }
+    },
+    "dffb0db6-fa54-41f9-ad4a-96e8dda68213": {
+      "message": "Would you like your Following feed or your For You feed?",
+      "verdict": "needs_clarification",
+      "resultCount": 0
+    },
+    "ac8a40f4-6e07-4ede-929b-74d7cbe21202": {
+      "workspaceId": "11111111-1111-4111-8111-111111111111",
+      "threadId": "22222222-2222-4222-8222-222222222222",
+      "frmNpub": "npub1requester",
+      "prompt": "Use bird to get the latest 20 tweets on my timeline",
+      "blocks": {
+        "thread": {
+          "input": {
+            "workspaceId": "11111111-1111-4111-8111-111111111111",
+            "threadId": "22222222-2222-4222-8222-222222222222",
+            "frmNpub": "npub1requester",
+            "prompt": "Use bird to get the latest 20 tweets on my timeline"
+          }
+        }
+      },
+      "invocation": {
+        "workspaceId": "11111111-1111-4111-8111-111111111111",
+        "threadId": "22222222-2222-4222-8222-222222222222",
+        "frmNpub": "npub1requester",
+        "prompt": "Use bird to get the latest 20 tweets on my timeline"
+      },
+      "bird": {
+        "request": "Use bird to get the latest 20 tweets on my timeline",
+        "retrieval": {
+          "request": "Use bird to get the latest 20 tweets on my timeline",
+          "count": 20,
+          "handles": [],
+          "queries": [],
+          "startedAt": 1790922258585,
+          "attempt": 0,
+          "modelCalls": 0,
+          "verdict": "needs_clarification",
+          "reason": "Would you like your Following feed or your For You feed?",
+          "active": false,
+          "semanticNeeded": false,
+          "source": null,
+          "handle": null,
+          "query": null,
+          "cursor": null,
+          "actions": [],
+          "tweets": [],
+          "evidence": [],
+          "usage": [],
+          "latencyMs": 0,
+          "resultCount": 0
+        },
+        "loop": {
+          "bounded_retrieval": {
+            "iteration": 3,
+            "index": 2,
+            "total": 3
+          }
+        }
+      },
+      "response": {
+        "message": "Would you like your Following feed or your For You feed?",
+        "verdict": "needs_clarification",
+        "resultCount": 0
+      }
+    },
+    "6b058200-8ba2-490d-a1cb-4abea8d8ae31": {
+      "workspaceId": "11111111-1111-4111-8111-111111111111",
+      "threadId": "22222222-2222-4222-8222-222222222222",
+      "frmNpub": "npub1requester",
+      "prompt": "Use bird to get the latest 20 tweets on my timeline",
+      "message": "Would you like your Following feed or your For You feed?"
+    },
+    "b0143850-cfca-4ea2-a534-edab7c73a99b": {
+      "workspaceId": "11111111-1111-4111-8111-111111111111",
+      "threadId": "22222222-2222-4222-8222-222222222222",
+      "frmNpub": "npub1requester",
+      "prompt": "Use bird to get the latest 20 tweets on my timeline",
+      "blocks": {
+        "thread": {
+          "input": {
+            "workspaceId": "11111111-1111-4111-8111-111111111111",
+            "threadId": "22222222-2222-4222-8222-222222222222",
+            "frmNpub": "npub1requester",
+            "prompt": "Use bird to get the latest 20 tweets on my timeline"
+          }
+        },
+        "reply": {
+          "input": {
+            "workspaceId": "11111111-1111-4111-8111-111111111111",
+            "threadId": "22222222-2222-4222-8222-222222222222",
+            "frmNpub": "npub1requester",
+            "prompt": "Use bird to get the latest 20 tweets on my timeline",
+            "message": "Would you like your Following feed or your For You feed?"
+          }
+        }
+      },
+      "invocation": {
+        "workspaceId": "11111111-1111-4111-8111-111111111111",
+        "threadId": "22222222-2222-4222-8222-222222222222",
+        "frmNpub": "npub1requester",
+        "prompt": "Use bird to get the latest 20 tweets on my timeline"
+      },
+      "bird": {
+        "request": "Use bird to get the latest 20 tweets on my timeline",
+        "retrieval": {
+          "request": "Use bird to get the latest 20 tweets on my timeline",
+          "count": 20,
+          "handles": [],
+          "queries": [],
+          "startedAt": 1790922258585,
+          "attempt": 0,
+          "modelCalls": 0,
+          "verdict": "needs_clarification",
+          "reason": "Would you like your Following feed or your For You feed?",
+          "active": false,
+          "semanticNeeded": false,
+          "source": null,
+          "handle": null,
+          "query": null,
+          "cursor": null,
+          "actions": [],
+          "tweets": [],
+          "evidence": [],
+          "usage": [],
+          "latencyMs": 0,
+          "resultCount": 0
+        },
+        "loop": {
+          "bounded_retrieval": {
+            "iteration": 3,
+            "index": 2,
+            "total": 3
+          }
+        }
+      },
+      "response": {
+        "message": "Would you like your Following feed or your For You feed?",
+        "verdict": "needs_clarification",
+        "resultCount": 0
+      },
+      "delivery": {
+        "delivered": true,
+        "workspaceId": "11111111-1111-4111-8111-111111111111",
+        "threadId": "22222222-2222-4222-8222-222222222222",
+        "channelId": "channel",
+        "messageId": "fixture-delivery",
+        "senderNpub": "npub1piper",
+        "requesterNpub": "npub1requester",
+        "format": "markdown",
+        "signatureProtocol": "flightdeck_pg_message_instruction"
+      }
+    },
+    "29dbdcd8-ad59-4a6d-8410-09aaf7c5790a": {
+      "workspaceId": "11111111-1111-4111-8111-111111111111",
+      "threadId": "22222222-2222-4222-8222-222222222222",
+      "frmNpub": "npub1requester",
+      "prompt": "Use bird to get the latest 20 tweets on my timeline",
+      "blocks": {
+        "thread": {
+          "input": {
+            "workspaceId": "11111111-1111-4111-8111-111111111111",
+            "threadId": "22222222-2222-4222-8222-222222222222",
+            "frmNpub": "npub1requester",
+            "prompt": "Use bird to get the latest 20 tweets on my timeline"
+          }
+        },
+        "reply": {
+          "input": {
+            "workspaceId": "11111111-1111-4111-8111-111111111111",
+            "threadId": "22222222-2222-4222-8222-222222222222",
+            "frmNpub": "npub1requester",
+            "prompt": "Use bird to get the latest 20 tweets on my timeline",
+            "message": "Would you like your Following feed or your For You feed?"
+          }
+        }
+      },
+      "invocation": {
+        "workspaceId": "11111111-1111-4111-8111-111111111111",
+        "threadId": "22222222-2222-4222-8222-222222222222",
+        "frmNpub": "npub1requester",
+        "prompt": "Use bird to get the latest 20 tweets on my timeline"
+      },
+      "bird": {
+        "request": "Use bird to get the latest 20 tweets on my timeline",
+        "retrieval": {
+          "request": "Use bird to get the latest 20 tweets on my timeline",
+          "count": 20,
+          "handles": [],
+          "queries": [],
+          "startedAt": 1790922258585,
+          "attempt": 0,
+          "modelCalls": 0,
+          "verdict": "needs_clarification",
+          "reason": "Would you like your Following feed or your For You feed?",
+          "active": false,
+          "semanticNeeded": false,
+          "source": null,
+          "handle": null,
+          "query": null,
+          "cursor": null,
+          "actions": [],
+          "tweets": [],
+          "evidence": [],
+          "usage": [],
+          "latencyMs": 0,
+          "resultCount": 0
+        },
+        "loop": {
+          "bounded_retrieval": {
+            "iteration": 3,
+            "index": 2,
+            "total": 3
+          }
+        }
+      },
+      "response": {
+        "message": "Would you like your Following feed or your For You feed?",
+        "verdict": "needs_clarification",
+        "resultCount": 0
+      },
+      "delivery": {
+        "delivered": true,
+        "workspaceId": "11111111-1111-4111-8111-111111111111",
+        "threadId": "22222222-2222-4222-8222-222222222222",
+        "channelId": "channel",
+        "messageId": "fixture-delivery",
+        "senderNpub": "npub1piper",
+        "requesterNpub": "npub1requester",
+        "format": "markdown",
+        "signatureProtocol": "flightdeck_pg_message_instruction"
+      }
+    },
+    "34096636-f32d-47f5-9c68-a66f1bedc7bc": {
+      "workspaceId": "11111111-1111-4111-8111-111111111111",
+      "threadId": "22222222-2222-4222-8222-222222222222",
+      "frmNpub": "npub1requester",
+      "prompt": "Use bird to get the latest 20 tweets on my timeline",
+      "message": "Would you like your Following feed or your For You feed?"
+    },
+    "daca8e7e-a3ff-491d-8965-2013dee811b2": {
+      "function": "flightdeck.returnToThread",
+      "arguments": {
+        "workspaceId": "11111111-1111-4111-8111-111111111111",
+        "threadId": "22222222-2222-4222-8222-222222222222",
+        "frmNpub": "npub1requester",
+        "prompt": "Use bird to get the latest 20 tweets on my timeline",
+        "message": "Would you like your Following feed or your For You feed?",
+        "pipelineRunId": "e9f60818-9aa3-4457-a0dc-28373cd172df",
+        "idempotencyKey": "pipeline:e9f60818-9aa3-4457-a0dc-28373cd172df:thread-reply:reply / return-to-thread"
+      }
+    },
+    "74f76abe-58a1-45aa-becf-f622436b6297": {
+      "delivered": true,
+      "workspaceId": "11111111-1111-4111-8111-111111111111",
+      "threadId": "22222222-2222-4222-8222-222222222222",
+      "channelId": "channel",
+      "messageId": "fixture-delivery",
+      "senderNpub": "npub1piper",
+      "requesterNpub": "npub1requester",
+      "format": "markdown",
+      "signatureProtocol": "flightdeck_pg_message_instruction"
+    },
+    "07890c68-875e-4aa7-b0a1-b7b1be287555": {
+      "delivered": true,
+      "workspaceId": "11111111-1111-4111-8111-111111111111",
+      "threadId": "22222222-2222-4222-8222-222222222222",
+      "channelId": "channel",
+      "messageId": "fixture-delivery",
+      "senderNpub": "npub1piper",
+      "requesterNpub": "npub1requester",
+      "format": "markdown",
+      "signatureProtocol": "flightdeck_pg_message_instruction"
+    },
+    "b52dfacd-5f0f-4c29-a4e6-baceb71c6123": {
+      "workspaceId": "11111111-1111-4111-8111-111111111111",
+      "threadId": "22222222-2222-4222-8222-222222222222",
+      "frmNpub": "npub1requester",
+      "prompt": "Use bird to get the latest 20 tweets on my timeline",
+      "blocks": {
+        "thread": {
+          "input": {
+            "workspaceId": "11111111-1111-4111-8111-111111111111",
+            "threadId": "22222222-2222-4222-8222-222222222222",
+            "frmNpub": "npub1requester",
+            "prompt": "Use bird to get the latest 20 tweets on my timeline"
+          }
+        },
+        "reply": {
+          "input": {
+            "workspaceId": "11111111-1111-4111-8111-111111111111",
+            "threadId": "22222222-2222-4222-8222-222222222222",
+            "frmNpub": "npub1requester",
+            "prompt": "Use bird to get the latest 20 tweets on my timeline",
+            "message": "Would you like your Following feed or your For You feed?"
+          }
+        }
+      },
+      "invocation": {
+        "workspaceId": "11111111-1111-4111-8111-111111111111",
+        "threadId": "22222222-2222-4222-8222-222222222222",
+        "frmNpub": "npub1requester",
+        "prompt": "Use bird to get the latest 20 tweets on my timeline"
+      },
+      "bird": {
+        "request": "Use bird to get the latest 20 tweets on my timeline",
+        "retrieval": {
+          "request": "Use bird to get the latest 20 tweets on my timeline",
+          "count": 20,
+          "handles": [],
+          "queries": [],
+          "startedAt": 1790922258585,
+          "attempt": 0,
+          "modelCalls": 0,
+          "verdict": "needs_clarification",
+          "reason": "Would you like your Following feed or your For You feed?",
+          "active": false,
+          "semanticNeeded": false,
+          "source": null,
+          "handle": null,
+          "query": null,
+          "cursor": null,
+          "actions": [],
+          "tweets": [],
+          "evidence": [],
+          "usage": [],
+          "latencyMs": 0,
+          "resultCount": 0
+        },
+        "loop": {
+          "bounded_retrieval": {
+            "iteration": 3,
+            "index": 2,
+            "total": 3
+          }
+        }
+      },
+      "response": {
+        "message": "Would you like your Following feed or your For You feed?",
+        "verdict": "needs_clarification",
+        "resultCount": 0
+      },
+      "delivery": {
+        "delivered": true,
+        "workspaceId": "11111111-1111-4111-8111-111111111111",
+        "threadId": "22222222-2222-4222-8222-222222222222",
+        "channelId": "channel",
+        "messageId": "fixture-delivery",
+        "senderNpub": "npub1piper",
+        "requesterNpub": "npub1requester",
+        "format": "markdown",
+        "signatureProtocol": "flightdeck_pg_message_instruction"
+      }
+    }
+  }
+}

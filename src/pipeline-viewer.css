@@ -39,3 +39,7 @@
 
 .pipeline-viewer-inspector-header{position:sticky;top:-1rem;background:var(--pv-bg);z-index:3;display:flex;align-items:center;justify-content:space-between;padding:.5rem 0}
 .pipeline-viewer-inspector-header h3{margin:.3rem 0}
+
+.pipeline-viewer-record-pages{display:flex;flex-wrap:wrap;gap:.5rem;align-items:center}
+.pipeline-viewer-record-pages p{flex-basis:100%;margin:.5rem 0}
+.pipeline-viewer-record-pages input{width:5rem;max-width:100%;box-sizing:border-box}

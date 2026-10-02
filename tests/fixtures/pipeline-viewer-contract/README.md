@@ -30,6 +30,14 @@ relationships matter; run/evidence UUIDs and timestamps are synthetic and may
 change when regenerated. Measurements and operational logs are not committed.
 
 The copy step normalizes the hostile synthetic mention's four-character display
-label to `Test` in two Bird wrapper fixtures to satisfy public-source policy.
+label to `Test` in Bird wrapper/child snapshots and their full-value exports to satisfy public-source policy.
 Its width/escaping, IDs, timestamps, byte counts, execution graph and capture
-structure stay unchanged. All other runtime JSON is copied verbatim.
+structure stay unchanged. The label is replaced in raw tweet/sample text and its escaped response/delivery strings; both forms reference the synthetic `mention:agent:npub1attacker` tag. All other runtime JSON is copied verbatim.
+
+`runtime/evidence/` contains synthetic full retained values exported alongside
+actual Bird runner snapshots, keyed by the same evidence IDs and run ID. These
+are test evidence, never live data. The complete, partial, clarification, blocked
+and no-results wrapper/child pairs exercise declared safe fields, exact lazy
+inspection/copy, and unavailable skipped attempts. Copy the full-value exports
+with their matching snapshots; do not manually populate missing captures. Apply
+the same documented synthetic display-label normalization to both files.

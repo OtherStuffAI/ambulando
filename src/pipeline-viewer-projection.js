@@ -70,3 +70,16 @@ export function portSelection(value, path) {
   const selected = portValue(value, path);
   return { value: selected, status: selected === undefined ? 'missing' : selected === null ? 'null' : 'present' };
 }
+
+// Exact declared paths select capture-time safe fields. Missing map entries are
+// outside this preview, never aliases or substitutes from another field.
+export function portPreviewSelection(preview,path) {
+  if(preview.fields){
+    if(!Object.hasOwn(preview.fields,path))return {status:'outside',truncated:true,count:null};
+    const field=preview.fields[path];
+    return {...field,status:!field.present?'missing':field.value===null?(field.truncated?'outside':'null'):'present'};
+  }
+  const selected=portSelection(preview.value,path);
+  const countPath=path==='$'?'$':'$.'+path.replace(/^\$\.?/,'');
+  return {...selected,status:selected.status==='missing'&&preview.truncated?'outside':selected.status,truncated:preview.truncated,count:preview.counts?.[countPath]??(path==='$'?preview.count:null)};
+}

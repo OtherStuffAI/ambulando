@@ -805,7 +805,7 @@ export function createShellState(options = {}) {
       } else if (this.navSection === 'agents') {
         if (this.selectedWorkspaceAgentId) url.searchParams.set('agentid', this.selectedWorkspaceAgentId);
         if (this.agentSpaceView && this.agentSpaceView !== 'overview') url.searchParams.set('agentview', this.agentSpaceView);
-        if(this.pipelineViewerOpen){url.searchParams.set('viewer','1');for(const [key,value] of Object.entries(this.pipelineViewerRoute||{}))if(value)url.searchParams.set(key,value);}
+        if(this.pipelineViewerEnabled && this.pipelineViewerOpen){url.searchParams.set('viewer','1');for(const [key,value] of Object.entries(this.pipelineViewerRoute||{}))if(value)url.searchParams.set(key,value);}
       }
 
       return `${url.pathname}${url.search}${this.navSection === 'files' && url.hash.startsWith('#drive?') ? url.hash : ''}`;
@@ -972,7 +972,8 @@ export function createShellState(options = {}) {
           this.selectedWorkspaceAgentId = route.params.agentid || this.workspaceAgents?.[0]?.id || '';
           this.agentSpaceView = ['overview', 'pipelines', 'schedules', 'triggers'].includes(route.params.agentview)
             ? route.params.agentview : 'overview';
-          this.pipelineViewerOpen=route.params.viewer==='1';
+          this.pipelineViewerActivationPending=route.params.viewer==='1' && !this.pipelineViewerEnabled;
+          this.pipelineViewerOpen=route.params.viewer==='1' && this.pipelineViewerEnabled===true;
           this.pipelineViewerRoute=this.pipelineViewerOpen?{service:route.params.service,signer:route.params.signer,run:route.params.run,definition:route.params.definition}:{};
           if (this.selectedWorkspaceAgentId && !this.pipelineViewerOpen) await this.loadSelectedAgentSpaceView?.();
         }

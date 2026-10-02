@@ -41,7 +41,15 @@ function boundedEvidencePreview(row) {
   if (!row || typeof row !== 'object' || !Object.hasOwn(row,'value') || typeof row.truncated !== 'boolean') return null;
   if (new TextEncoder().encode(JSON.stringify(row)).length > 2048) invalid();
   const count=value=>Number.isSafeInteger(value)&&value>=0?value:null;
-  return {value:row.value,truncated:row.truncated,count:count(row.count),counts:Object.fromEntries(Object.entries(row.counts||{}).slice(0,20).map(([key,value])=>[key,count(value)]))};
+  const preview={value:row.value,truncated:row.truncated,count:count(row.count),counts:Object.fromEntries(Object.entries(row.counts||{}).slice(0,20).map(([key,value])=>[key,count(value)]))};
+  if(row.fields!=null){
+    if(typeof row.fields!=='object'||Array.isArray(row.fields))invalid();
+    preview.fields=Object.fromEntries(Object.entries(row.fields).map(([path,field])=>{
+      if(!path||!field||typeof field.present!=='boolean'||typeof field.truncated!=='boolean'||(field.present&&!Object.hasOwn(field,'value')))invalid();
+      return [path,{present:field.present,...(field.present?{value:field.value}:{}),truncated:field.truncated,count:count(field.count)}];
+    }));
+  }
+  return preview;
 }
 export function evidenceDto(row) {
   if (!string(row?.id) || !string(row.runId)) invalid();

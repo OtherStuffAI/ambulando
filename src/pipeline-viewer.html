@@ -50,11 +50,17 @@
         <p data-testid="pipeline-value-completeness" x-text="inspector.complete?'Complete retained value':inspector.nextOffset!=null?'Partial page · more retained records available':'Preview or unavailable · not a complete retained value'"></p>
         <p x-show="fieldStatus==='missing'" data-testid="pipeline-field-missing">Selected field is missing from retained evidence.</p><p x-show="fieldStatus==='null'" data-testid="pipeline-field-null">Selected field is explicitly null.</p><p x-show="!pinned" x-text="preview"></p>
         <div x-show="pinned && inspector.status==='ready'">
-          <label>Search loaded value <input type="search" aria-label="Search loaded value" data-testid="pipeline-value-search" x-model="search"></label>
+          <label>Search loaded value <input type="search" aria-label="Search loaded value" data-testid="pipeline-value-search" :value="search" @input="searchRecords($event.target.value)"></label>
           <p x-show="inspector.nextOffset!=null">Search covers loaded pages. Load more to search every retained record.</p>
+          <nav class="pipeline-viewer-record-pages" aria-label="Loaded record pages" x-show="Array.isArray(inspectedValue)">
+            <p role="status" aria-live="polite" data-testid="pipeline-record-count" x-text="recordPageSummary"></p>
+            <button type="button" aria-label="Previous record page" :disabled="currentRecordPage<=1" @click="changeRecordPage(currentRecordPage-1)">Previous</button>
+            <label>Page <input type="number" aria-label="Record page number" min="1" :max="recordPageCount" :value="currentRecordPage" @change="changeRecordPage($event.target.value)" @keydown.enter.prevent="changeRecordPage($event.target.value)"></label>
+            <button type="button" aria-label="Next record page" :disabled="currentRecordPage>=recordPageCount" @click="changeRecordPage(currentRecordPage+1)">Next</button>
+          </nav>
           <ol class="pipeline-viewer-records" x-show="Array.isArray(inspectedValue)"><template x-for="record in shownRecords" :key="record.index"><li :value="record.index+1"><pre x-text="record.text"></pre><button type="button" :aria-label="'Copy retained record '+(record.index+1)" @click="copyRecord(record)">Copy record</button></li></template></ol>
-          <pre data-testid="pipeline-exact-value" x-show="!Array.isArray(inspectedValue) && valueMatches" x-text="valueText"></pre>
-          <p x-show="search && (Array.isArray(inspectedValue)?!shownRecords.length:!valueMatches)">No matches in the loaded value.</p>
+          <template x-if="!Array.isArray(inspectedValue)"><pre data-testid="pipeline-exact-value" x-show="valueMatches" x-text="valueText"></pre></template>
+          <p x-show="search && (Array.isArray(inspectedValue)?!matchingRecords.length:!valueMatches)">No matches in the loaded value.</p>
           <button type="button" aria-label="Load more retained records" data-testid="pipeline-more-evidence" x-show="inspector.nextOffset!=null" @click="moreEvidence()">Load more retained records</button>
           <button type="button" aria-label="Copy complete retained value" data-testid="pipeline-copy-value" :disabled="!inspector.complete || fieldStatus==='missing'" @click="copy()">Copy complete retained value</button>
         </div>

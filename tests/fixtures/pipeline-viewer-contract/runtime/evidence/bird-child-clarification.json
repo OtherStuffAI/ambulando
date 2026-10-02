@@ -1,0 +1,950 @@
+{
+  "runId": "bf129018-54cc-4ea1-bd4c-39c5a656e01c",
+  "values": {
+    "a7b408ef-f9b4-4b25-a129-e5c24a588f6a": {
+      "request": "Use bird to get the latest 20 tweets on my timeline"
+    },
+    "73d0e176-06da-4752-8a7b-6b1f15806341": {
+      "function": "bird.prepare.v1",
+      "arguments": {
+        "request": "Use bird to get the latest 20 tweets on my timeline"
+      }
+    },
+    "d0becde0-9905-437c-934b-77f75715b08f": {
+      "request": "Use bird to get the latest 20 tweets on my timeline",
+      "count": 20,
+      "handles": [],
+      "queries": [],
+      "startedAt": 1790922258585,
+      "attempt": 0,
+      "modelCalls": 0,
+      "verdict": "needs_clarification",
+      "reason": "Would you like your Following feed or your For You feed?",
+      "active": false,
+      "semanticNeeded": false,
+      "source": null,
+      "handle": null,
+      "query": null,
+      "cursor": null,
+      "actions": [],
+      "tweets": [],
+      "evidence": [],
+      "usage": [],
+      "latencyMs": 0,
+      "resultCount": 0
+    },
+    "e7beb15f-74eb-4bb5-a6e7-8b3a630dfef9": {
+      "request": "Use bird to get the latest 20 tweets on my timeline",
+      "retrieval": {
+        "request": "Use bird to get the latest 20 tweets on my timeline",
+        "count": 20,
+        "handles": [],
+        "queries": [],
+        "startedAt": 1790922258585,
+        "attempt": 0,
+        "modelCalls": 0,
+        "verdict": "needs_clarification",
+        "reason": "Would you like your Following feed or your For You feed?",
+        "active": false,
+        "semanticNeeded": false,
+        "source": null,
+        "handle": null,
+        "query": null,
+        "cursor": null,
+        "actions": [],
+        "tweets": [],
+        "evidence": [],
+        "usage": [],
+        "latencyMs": 0,
+        "resultCount": 0
+      }
+    },
+    "2741fe22-b309-4dee-9354-499048411d28": {
+      "request": "Use bird to get the latest 20 tweets on my timeline",
+      "retrieval": {
+        "request": "Use bird to get the latest 20 tweets on my timeline",
+        "count": 20,
+        "handles": [],
+        "queries": [],
+        "startedAt": 1790922258585,
+        "attempt": 0,
+        "modelCalls": 0,
+        "verdict": "needs_clarification",
+        "reason": "Would you like your Following feed or your For You feed?",
+        "active": false,
+        "semanticNeeded": false,
+        "source": null,
+        "handle": null,
+        "query": null,
+        "cursor": null,
+        "actions": [],
+        "tweets": [],
+        "evidence": [],
+        "usage": [],
+        "latencyMs": 0,
+        "resultCount": 0
+      }
+    },
+    "d7cdedbf-ea2f-4b43-b518-da8cae4c5c46": {
+      "iterations": 3,
+      "current": {
+        "request": "Use bird to get the latest 20 tweets on my timeline",
+        "retrieval": {
+          "request": "Use bird to get the latest 20 tweets on my timeline",
+          "count": 20,
+          "handles": [],
+          "queries": [],
+          "startedAt": 1790922258585,
+          "attempt": 0,
+          "modelCalls": 0,
+          "verdict": "needs_clarification",
+          "reason": "Would you like your Following feed or your For You feed?",
+          "active": false,
+          "semanticNeeded": false,
+          "source": null,
+          "handle": null,
+          "query": null,
+          "cursor": null,
+          "actions": [],
+          "tweets": [],
+          "evidence": [],
+          "usage": [],
+          "latencyMs": 0,
+          "resultCount": 0
+        },
+        "loop": {
+          "bounded_retrieval": {
+            "iteration": 3,
+            "index": 2,
+            "total": 3
+          }
+        }
+      }
+    },
+    "1c3baedc-e601-437b-9138-59cf95b5e91c": {
+      "request": "Use bird to get the latest 20 tweets on my timeline",
+      "retrieval": {
+        "request": "Use bird to get the latest 20 tweets on my timeline",
+        "count": 20,
+        "handles": [],
+        "queries": [],
+        "startedAt": 1790922258585,
+        "attempt": 0,
+        "modelCalls": 0,
+        "verdict": "needs_clarification",
+        "reason": "Would you like your Following feed or your For You feed?",
+        "active": false,
+        "semanticNeeded": false,
+        "source": null,
+        "handle": null,
+        "query": null,
+        "cursor": null,
+        "actions": [],
+        "tweets": [],
+        "evidence": [],
+        "usage": [],
+        "latencyMs": 0,
+        "resultCount": 0
+      },
+      "loop": {
+        "bounded_retrieval": {
+          "iteration": 3,
+          "index": 2,
+          "total": 3
+        }
+      }
+    },
+    "c5e2fc6e-cf44-4c28-9b84-d460d3f5553c": {
+      "request": "Use bird to get the latest 20 tweets on my timeline",
+      "retrieval": {
+        "request": "Use bird to get the latest 20 tweets on my timeline",
+        "count": 20,
+        "handles": [],
+        "queries": [],
+        "startedAt": 1790922258585,
+        "attempt": 0,
+        "modelCalls": 0,
+        "verdict": "needs_clarification",
+        "reason": "Would you like your Following feed or your For You feed?",
+        "active": false,
+        "semanticNeeded": false,
+        "source": null,
+        "handle": null,
+        "query": null,
+        "cursor": null,
+        "actions": [],
+        "tweets": [],
+        "evidence": [],
+        "usage": [],
+        "latencyMs": 0,
+        "resultCount": 0
+      },
+      "loop": {
+        "bounded_retrieval": {
+          "iteration": 1,
+          "index": 0,
+          "total": 3
+        }
+      }
+    },
+    "1b5fcf10-41da-492f-82db-53ac5214b72c": {
+      "request": "Use bird to get the latest 20 tweets on my timeline",
+      "retrieval": {
+        "request": "Use bird to get the latest 20 tweets on my timeline",
+        "count": 20,
+        "handles": [],
+        "queries": [],
+        "startedAt": 1790922258585,
+        "attempt": 0,
+        "modelCalls": 0,
+        "verdict": "needs_clarification",
+        "reason": "Would you like your Following feed or your For You feed?",
+        "active": false,
+        "semanticNeeded": false,
+        "source": null,
+        "handle": null,
+        "query": null,
+        "cursor": null,
+        "actions": [],
+        "tweets": [],
+        "evidence": [],
+        "usage": [],
+        "latencyMs": 0,
+        "resultCount": 0
+      },
+      "loop": {
+        "bounded_retrieval": {
+          "iteration": 1,
+          "index": 0,
+          "total": 3
+        }
+      }
+    },
+    "44dbd5a7-cb62-4ba3-9455-b1d573c4f397": {
+      "request": "Use bird to get the latest 20 tweets on my timeline",
+      "retrieval": {
+        "request": "Use bird to get the latest 20 tweets on my timeline",
+        "count": 20,
+        "handles": [],
+        "queries": [],
+        "startedAt": 1790922258585,
+        "attempt": 0,
+        "modelCalls": 0,
+        "verdict": "needs_clarification",
+        "reason": "Would you like your Following feed or your For You feed?",
+        "active": false,
+        "semanticNeeded": false,
+        "source": null,
+        "handle": null,
+        "query": null,
+        "cursor": null,
+        "actions": [],
+        "tweets": [],
+        "evidence": [],
+        "usage": [],
+        "latencyMs": 0,
+        "resultCount": 0
+      },
+      "loop": {
+        "bounded_retrieval": {
+          "iteration": 1,
+          "index": 0,
+          "total": 3
+        }
+      }
+    },
+    "5e534a7a-f684-4797-bc71-f03d9094aca0": {
+      "request": "Use bird to get the latest 20 tweets on my timeline",
+      "retrieval": {
+        "request": "Use bird to get the latest 20 tweets on my timeline",
+        "count": 20,
+        "handles": [],
+        "queries": [],
+        "startedAt": 1790922258585,
+        "attempt": 0,
+        "modelCalls": 0,
+        "verdict": "needs_clarification",
+        "reason": "Would you like your Following feed or your For You feed?",
+        "active": false,
+        "semanticNeeded": false,
+        "source": null,
+        "handle": null,
+        "query": null,
+        "cursor": null,
+        "actions": [],
+        "tweets": [],
+        "evidence": [],
+        "usage": [],
+        "latencyMs": 0,
+        "resultCount": 0
+      },
+      "loop": {
+        "bounded_retrieval": {
+          "iteration": 1,
+          "index": 0,
+          "total": 3
+        }
+      }
+    },
+    "603b7efa-0e6a-4a85-8aa6-c4b5524b1948": {
+      "request": "Use bird to get the latest 20 tweets on my timeline",
+      "retrieval": {
+        "request": "Use bird to get the latest 20 tweets on my timeline",
+        "count": 20,
+        "handles": [],
+        "queries": [],
+        "startedAt": 1790922258585,
+        "attempt": 0,
+        "modelCalls": 0,
+        "verdict": "needs_clarification",
+        "reason": "Would you like your Following feed or your For You feed?",
+        "active": false,
+        "semanticNeeded": false,
+        "source": null,
+        "handle": null,
+        "query": null,
+        "cursor": null,
+        "actions": [],
+        "tweets": [],
+        "evidence": [],
+        "usage": [],
+        "latencyMs": 0,
+        "resultCount": 0
+      },
+      "loop": {
+        "bounded_retrieval": {
+          "iteration": 1,
+          "index": 0,
+          "total": 3
+        }
+      }
+    },
+    "c5b0623b-4b86-47ee-842a-8f92452fc1ce": {
+      "request": "Use bird to get the latest 20 tweets on my timeline",
+      "retrieval": {
+        "request": "Use bird to get the latest 20 tweets on my timeline",
+        "count": 20,
+        "handles": [],
+        "queries": [],
+        "startedAt": 1790922258585,
+        "attempt": 0,
+        "modelCalls": 0,
+        "verdict": "needs_clarification",
+        "reason": "Would you like your Following feed or your For You feed?",
+        "active": false,
+        "semanticNeeded": false,
+        "source": null,
+        "handle": null,
+        "query": null,
+        "cursor": null,
+        "actions": [],
+        "tweets": [],
+        "evidence": [],
+        "usage": [],
+        "latencyMs": 0,
+        "resultCount": 0
+      },
+      "loop": {
+        "bounded_retrieval": {
+          "iteration": 1,
+          "index": 0,
+          "total": 3
+        }
+      }
+    },
+    "c12b6f1c-5a2c-4188-bb87-e7f187028baa": {
+      "request": "Use bird to get the latest 20 tweets on my timeline",
+      "retrieval": {
+        "request": "Use bird to get the latest 20 tweets on my timeline",
+        "count": 20,
+        "handles": [],
+        "queries": [],
+        "startedAt": 1790922258585,
+        "attempt": 0,
+        "modelCalls": 0,
+        "verdict": "needs_clarification",
+        "reason": "Would you like your Following feed or your For You feed?",
+        "active": false,
+        "semanticNeeded": false,
+        "source": null,
+        "handle": null,
+        "query": null,
+        "cursor": null,
+        "actions": [],
+        "tweets": [],
+        "evidence": [],
+        "usage": [],
+        "latencyMs": 0,
+        "resultCount": 0
+      },
+      "loop": {
+        "bounded_retrieval": {
+          "iteration": 1,
+          "index": 0,
+          "total": 3
+        }
+      }
+    },
+    "0c0a744c-d730-4447-9548-cacc5337f5f4": {
+      "request": "Use bird to get the latest 20 tweets on my timeline",
+      "retrieval": {
+        "request": "Use bird to get the latest 20 tweets on my timeline",
+        "count": 20,
+        "handles": [],
+        "queries": [],
+        "startedAt": 1790922258585,
+        "attempt": 0,
+        "modelCalls": 0,
+        "verdict": "needs_clarification",
+        "reason": "Would you like your Following feed or your For You feed?",
+        "active": false,
+        "semanticNeeded": false,
+        "source": null,
+        "handle": null,
+        "query": null,
+        "cursor": null,
+        "actions": [],
+        "tweets": [],
+        "evidence": [],
+        "usage": [],
+        "latencyMs": 0,
+        "resultCount": 0
+      },
+      "loop": {
+        "bounded_retrieval": {
+          "iteration": 1,
+          "index": 0,
+          "total": 3
+        }
+      }
+    },
+    "79924fe8-f631-4618-9325-5d50b8f605c2": {
+      "request": "Use bird to get the latest 20 tweets on my timeline",
+      "retrieval": {
+        "request": "Use bird to get the latest 20 tweets on my timeline",
+        "count": 20,
+        "handles": [],
+        "queries": [],
+        "startedAt": 1790922258585,
+        "attempt": 0,
+        "modelCalls": 0,
+        "verdict": "needs_clarification",
+        "reason": "Would you like your Following feed or your For You feed?",
+        "active": false,
+        "semanticNeeded": false,
+        "source": null,
+        "handle": null,
+        "query": null,
+        "cursor": null,
+        "actions": [],
+        "tweets": [],
+        "evidence": [],
+        "usage": [],
+        "latencyMs": 0,
+        "resultCount": 0
+      },
+      "loop": {
+        "bounded_retrieval": {
+          "iteration": 2,
+          "index": 1,
+          "total": 3
+        }
+      }
+    },
+    "3b5134f2-2a98-42b5-81e3-c93472254173": {
+      "request": "Use bird to get the latest 20 tweets on my timeline",
+      "retrieval": {
+        "request": "Use bird to get the latest 20 tweets on my timeline",
+        "count": 20,
+        "handles": [],
+        "queries": [],
+        "startedAt": 1790922258585,
+        "attempt": 0,
+        "modelCalls": 0,
+        "verdict": "needs_clarification",
+        "reason": "Would you like your Following feed or your For You feed?",
+        "active": false,
+        "semanticNeeded": false,
+        "source": null,
+        "handle": null,
+        "query": null,
+        "cursor": null,
+        "actions": [],
+        "tweets": [],
+        "evidence": [],
+        "usage": [],
+        "latencyMs": 0,
+        "resultCount": 0
+      },
+      "loop": {
+        "bounded_retrieval": {
+          "iteration": 2,
+          "index": 1,
+          "total": 3
+        }
+      }
+    },
+    "ea01d3a0-19f4-4b4e-a052-dc32a66138b5": {
+      "request": "Use bird to get the latest 20 tweets on my timeline",
+      "retrieval": {
+        "request": "Use bird to get the latest 20 tweets on my timeline",
+        "count": 20,
+        "handles": [],
+        "queries": [],
+        "startedAt": 1790922258585,
+        "attempt": 0,
+        "modelCalls": 0,
+        "verdict": "needs_clarification",
+        "reason": "Would you like your Following feed or your For You feed?",
+        "active": false,
+        "semanticNeeded": false,
+        "source": null,
+        "handle": null,
+        "query": null,
+        "cursor": null,
+        "actions": [],
+        "tweets": [],
+        "evidence": [],
+        "usage": [],
+        "latencyMs": 0,
+        "resultCount": 0
+      },
+      "loop": {
+        "bounded_retrieval": {
+          "iteration": 2,
+          "index": 1,
+          "total": 3
+        }
+      }
+    },
+    "4c41ea7b-d4f2-47a1-b221-92581f9c37bc": {
+      "request": "Use bird to get the latest 20 tweets on my timeline",
+      "retrieval": {
+        "request": "Use bird to get the latest 20 tweets on my timeline",
+        "count": 20,
+        "handles": [],
+        "queries": [],
+        "startedAt": 1790922258585,
+        "attempt": 0,
+        "modelCalls": 0,
+        "verdict": "needs_clarification",
+        "reason": "Would you like your Following feed or your For You feed?",
+        "active": false,
+        "semanticNeeded": false,
+        "source": null,
+        "handle": null,
+        "query": null,
+        "cursor": null,
+        "actions": [],
+        "tweets": [],
+        "evidence": [],
+        "usage": [],
+        "latencyMs": 0,
+        "resultCount": 0
+      },
+      "loop": {
+        "bounded_retrieval": {
+          "iteration": 2,
+          "index": 1,
+          "total": 3
+        }
+      }
+    },
+    "39d487bb-fc6e-4d78-93a9-c55f3b3f8fa7": {
+      "request": "Use bird to get the latest 20 tweets on my timeline",
+      "retrieval": {
+        "request": "Use bird to get the latest 20 tweets on my timeline",
+        "count": 20,
+        "handles": [],
+        "queries": [],
+        "startedAt": 1790922258585,
+        "attempt": 0,
+        "modelCalls": 0,
+        "verdict": "needs_clarification",
+        "reason": "Would you like your Following feed or your For You feed?",
+        "active": false,
+        "semanticNeeded": false,
+        "source": null,
+        "handle": null,
+        "query": null,
+        "cursor": null,
+        "actions": [],
+        "tweets": [],
+        "evidence": [],
+        "usage": [],
+        "latencyMs": 0,
+        "resultCount": 0
+      },
+      "loop": {
+        "bounded_retrieval": {
+          "iteration": 2,
+          "index": 1,
+          "total": 3
+        }
+      }
+    },
+    "c043264c-7aa3-409b-bb4d-525630d7eb88": {
+      "request": "Use bird to get the latest 20 tweets on my timeline",
+      "retrieval": {
+        "request": "Use bird to get the latest 20 tweets on my timeline",
+        "count": 20,
+        "handles": [],
+        "queries": [],
+        "startedAt": 1790922258585,
+        "attempt": 0,
+        "modelCalls": 0,
+        "verdict": "needs_clarification",
+        "reason": "Would you like your Following feed or your For You feed?",
+        "active": false,
+        "semanticNeeded": false,
+        "source": null,
+        "handle": null,
+        "query": null,
+        "cursor": null,
+        "actions": [],
+        "tweets": [],
+        "evidence": [],
+        "usage": [],
+        "latencyMs": 0,
+        "resultCount": 0
+      },
+      "loop": {
+        "bounded_retrieval": {
+          "iteration": 2,
+          "index": 1,
+          "total": 3
+        }
+      }
+    },
+    "ba9530fc-8292-48cb-9f29-2aa309814f5f": {
+      "request": "Use bird to get the latest 20 tweets on my timeline",
+      "retrieval": {
+        "request": "Use bird to get the latest 20 tweets on my timeline",
+        "count": 20,
+        "handles": [],
+        "queries": [],
+        "startedAt": 1790922258585,
+        "attempt": 0,
+        "modelCalls": 0,
+        "verdict": "needs_clarification",
+        "reason": "Would you like your Following feed or your For You feed?",
+        "active": false,
+        "semanticNeeded": false,
+        "source": null,
+        "handle": null,
+        "query": null,
+        "cursor": null,
+        "actions": [],
+        "tweets": [],
+        "evidence": [],
+        "usage": [],
+        "latencyMs": 0,
+        "resultCount": 0
+      },
+      "loop": {
+        "bounded_retrieval": {
+          "iteration": 2,
+          "index": 1,
+          "total": 3
+        }
+      }
+    },
+    "b4060207-0ae8-4931-b2a4-752ce793fc34": {
+      "request": "Use bird to get the latest 20 tweets on my timeline",
+      "retrieval": {
+        "request": "Use bird to get the latest 20 tweets on my timeline",
+        "count": 20,
+        "handles": [],
+        "queries": [],
+        "startedAt": 1790922258585,
+        "attempt": 0,
+        "modelCalls": 0,
+        "verdict": "needs_clarification",
+        "reason": "Would you like your Following feed or your For You feed?",
+        "active": false,
+        "semanticNeeded": false,
+        "source": null,
+        "handle": null,
+        "query": null,
+        "cursor": null,
+        "actions": [],
+        "tweets": [],
+        "evidence": [],
+        "usage": [],
+        "latencyMs": 0,
+        "resultCount": 0
+      },
+      "loop": {
+        "bounded_retrieval": {
+          "iteration": 2,
+          "index": 1,
+          "total": 3
+        }
+      }
+    },
+    "cb8e0ae8-fef0-418d-9140-dcc16578ef59": {
+      "request": "Use bird to get the latest 20 tweets on my timeline",
+      "retrieval": {
+        "request": "Use bird to get the latest 20 tweets on my timeline",
+        "count": 20,
+        "handles": [],
+        "queries": [],
+        "startedAt": 1790922258585,
+        "attempt": 0,
+        "modelCalls": 0,
+        "verdict": "needs_clarification",
+        "reason": "Would you like your Following feed or your For You feed?",
+        "active": false,
+        "semanticNeeded": false,
+        "source": null,
+        "handle": null,
+        "query": null,
+        "cursor": null,
+        "actions": [],
+        "tweets": [],
+        "evidence": [],
+        "usage": [],
+        "latencyMs": 0,
+        "resultCount": 0
+      },
+      "loop": {
+        "bounded_retrieval": {
+          "iteration": 3,
+          "index": 2,
+          "total": 3
+        }
+      }
+    },
+    "9728e6f2-c177-48dd-8a98-a5ca7b8ddce8": {
+      "request": "Use bird to get the latest 20 tweets on my timeline",
+      "retrieval": {
+        "request": "Use bird to get the latest 20 tweets on my timeline",
+        "count": 20,
+        "handles": [],
+        "queries": [],
+        "startedAt": 1790922258585,
+        "attempt": 0,
+        "modelCalls": 0,
+        "verdict": "needs_clarification",
+        "reason": "Would you like your Following feed or your For You feed?",
+        "active": false,
+        "semanticNeeded": false,
+        "source": null,
+        "handle": null,
+        "query": null,
+        "cursor": null,
+        "actions": [],
+        "tweets": [],
+        "evidence": [],
+        "usage": [],
+        "latencyMs": 0,
+        "resultCount": 0
+      },
+      "loop": {
+        "bounded_retrieval": {
+          "iteration": 3,
+          "index": 2,
+          "total": 3
+        }
+      }
+    },
+    "d182bfb9-d8d7-424b-a4c2-b1387f0da2d3": {
+      "request": "Use bird to get the latest 20 tweets on my timeline",
+      "retrieval": {
+        "request": "Use bird to get the latest 20 tweets on my timeline",
+        "count": 20,
+        "handles": [],
+        "queries": [],
+        "startedAt": 1790922258585,
+        "attempt": 0,
+        "modelCalls": 0,
+        "verdict": "needs_clarification",
+        "reason": "Would you like your Following feed or your For You feed?",
+        "active": false,
+        "semanticNeeded": false,
+        "source": null,
+        "handle": null,
+        "query": null,
+        "cursor": null,
+        "actions": [],
+        "tweets": [],
+        "evidence": [],
+        "usage": [],
+        "latencyMs": 0,
+        "resultCount": 0
+      },
+      "loop": {
+        "bounded_retrieval": {
+          "iteration": 3,
+          "index": 2,
+          "total": 3
+        }
+      }
+    },
+    "cae30bd4-efc8-4d32-9856-c384d81065b9": {
+      "request": "Use bird to get the latest 20 tweets on my timeline",
+      "retrieval": {
+        "request": "Use bird to get the latest 20 tweets on my timeline",
+        "count": 20,
+        "handles": [],
+        "queries": [],
+        "startedAt": 1790922258585,
+        "attempt": 0,
+        "modelCalls": 0,
+        "verdict": "needs_clarification",
+        "reason": "Would you like your Following feed or your For You feed?",
+        "active": false,
+        "semanticNeeded": false,
+        "source": null,
+        "handle": null,
+        "query": null,
+        "cursor": null,
+        "actions": [],
+        "tweets": [],
+        "evidence": [],
+        "usage": [],
+        "latencyMs": 0,
+        "resultCount": 0
+      },
+      "loop": {
+        "bounded_retrieval": {
+          "iteration": 3,
+          "index": 2,
+          "total": 3
+        }
+      }
+    },
+    "efc2eb59-d191-4405-9269-d19670103ce6": {
+      "request": "Use bird to get the latest 20 tweets on my timeline",
+      "retrieval": {
+        "request": "Use bird to get the latest 20 tweets on my timeline",
+        "count": 20,
+        "handles": [],
+        "queries": [],
+        "startedAt": 1790922258585,
+        "attempt": 0,
+        "modelCalls": 0,
+        "verdict": "needs_clarification",
+        "reason": "Would you like your Following feed or your For You feed?",
+        "active": false,
+        "semanticNeeded": false,
+        "source": null,
+        "handle": null,
+        "query": null,
+        "cursor": null,
+        "actions": [],
+        "tweets": [],
+        "evidence": [],
+        "usage": [],
+        "latencyMs": 0,
+        "resultCount": 0
+      },
+      "loop": {
+        "bounded_retrieval": {
+          "iteration": 3,
+          "index": 2,
+          "total": 3
+        }
+      }
+    },
+    "9e7beaef-5112-4b88-ae65-72f4daebbd12": {
+      "request": "Use bird to get the latest 20 tweets on my timeline",
+      "retrieval": {
+        "request": "Use bird to get the latest 20 tweets on my timeline",
+        "count": 20,
+        "handles": [],
+        "queries": [],
+        "startedAt": 1790922258585,
+        "attempt": 0,
+        "modelCalls": 0,
+        "verdict": "needs_clarification",
+        "reason": "Would you like your Following feed or your For You feed?",
+        "active": false,
+        "semanticNeeded": false,
+        "source": null,
+        "handle": null,
+        "query": null,
+        "cursor": null,
+        "actions": [],
+        "tweets": [],
+        "evidence": [],
+        "usage": [],
+        "latencyMs": 0,
+        "resultCount": 0
+      },
+      "loop": {
+        "bounded_retrieval": {
+          "iteration": 3,
+          "index": 2,
+          "total": 3
+        }
+      }
+    },
+    "4c9554a2-9a2e-427b-8496-5f1205da6bbe": {
+      "request": "Use bird to get the latest 20 tweets on my timeline",
+      "retrieval": {
+        "request": "Use bird to get the latest 20 tweets on my timeline",
+        "count": 20,
+        "handles": [],
+        "queries": [],
+        "startedAt": 1790922258585,
+        "attempt": 0,
+        "modelCalls": 0,
+        "verdict": "needs_clarification",
+        "reason": "Would you like your Following feed or your For You feed?",
+        "active": false,
+        "semanticNeeded": false,
+        "source": null,
+        "handle": null,
+        "query": null,
+        "cursor": null,
+        "actions": [],
+        "tweets": [],
+        "evidence": [],
+        "usage": [],
+        "latencyMs": 0,
+        "resultCount": 0
+      },
+      "loop": {
+        "bounded_retrieval": {
+          "iteration": 3,
+          "index": 2,
+          "total": 3
+        }
+      }
+    },
+    "3bd20a8a-736a-46f5-ae5b-274aebfab452": {
+      "request": "Use bird to get the latest 20 tweets on my timeline",
+      "retrieval": {
+        "request": "Use bird to get the latest 20 tweets on my timeline",
+        "count": 20,
+        "handles": [],
+        "queries": [],
+        "startedAt": 1790922258585,
+        "attempt": 0,
+        "modelCalls": 0,
+        "verdict": "needs_clarification",
+        "reason": "Would you like your Following feed or your For You feed?",
+        "active": false,
+        "semanticNeeded": false,
+        "source": null,
+        "handle": null,
+        "query": null,
+        "cursor": null,
+        "actions": [],
+        "tweets": [],
+        "evidence": [],
+        "usage": [],
+        "latencyMs": 0,
+        "resultCount": 0
+      },
+      "loop": {
+        "bounded_retrieval": {
+          "iteration": 3,
+          "index": 2,
+          "total": 3
+        }
+      }
+    }
+  }
+}

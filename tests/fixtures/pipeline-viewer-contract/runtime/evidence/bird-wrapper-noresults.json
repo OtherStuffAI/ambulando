@@ -1,0 +1,1451 @@
+{
+  "runId": "55ee88c1-3fc8-40a3-b711-83d717fc1979",
+  "values": {
+    "162b2ffc-f5b3-48bf-9b93-7aeb42f73124": {
+      "workspaceId": "11111111-1111-4111-8111-111111111111",
+      "threadId": "22222222-2222-4222-8222-222222222222",
+      "frmNpub": "npub1requester",
+      "prompt": "Get 2 following tweets"
+    },
+    "daaa6d59-964e-4da0-98d1-4304fce2a7bc": {
+      "workspaceId": "11111111-1111-4111-8111-111111111111",
+      "threadId": "22222222-2222-4222-8222-222222222222",
+      "frmNpub": "npub1requester",
+      "prompt": "Get 2 following tweets",
+      "blocks": {
+        "thread": {
+          "input": {
+            "workspaceId": "11111111-1111-4111-8111-111111111111",
+            "threadId": "22222222-2222-4222-8222-222222222222",
+            "frmNpub": "npub1requester",
+            "prompt": "Get 2 following tweets"
+          }
+        }
+      },
+      "invocation": {
+        "workspaceId": "11111111-1111-4111-8111-111111111111",
+        "threadId": "22222222-2222-4222-8222-222222222222",
+        "frmNpub": "npub1requester",
+        "prompt": "Get 2 following tweets"
+      }
+    },
+    "c3db211f-0581-4515-b16f-ec1752fc9c34": {
+      "workspaceId": "11111111-1111-4111-8111-111111111111",
+      "threadId": "22222222-2222-4222-8222-222222222222",
+      "frmNpub": "npub1requester",
+      "prompt": "Get 2 following tweets",
+      "blocks": {
+        "thread": {
+          "input": {
+            "workspaceId": "11111111-1111-4111-8111-111111111111",
+            "threadId": "22222222-2222-4222-8222-222222222222",
+            "frmNpub": "npub1requester",
+            "prompt": "Get 2 following tweets"
+          }
+        }
+      },
+      "invocation": {
+        "workspaceId": "11111111-1111-4111-8111-111111111111",
+        "threadId": "22222222-2222-4222-8222-222222222222",
+        "frmNpub": "npub1requester",
+        "prompt": "Get 2 following tweets"
+      }
+    },
+    "58db818a-9b77-45ed-83eb-f5659c05f022": {
+      "workspaceId": "11111111-1111-4111-8111-111111111111",
+      "threadId": "22222222-2222-4222-8222-222222222222",
+      "frmNpub": "npub1requester",
+      "prompt": "Get 2 following tweets"
+    },
+    "855f6fef-dd31-4389-b613-cd868d0ed6d3": {
+      "function": "flightdeck.threadInvocation",
+      "arguments": {
+        "workspaceId": "11111111-1111-4111-8111-111111111111",
+        "threadId": "22222222-2222-4222-8222-222222222222",
+        "frmNpub": "npub1requester",
+        "prompt": "Get 2 following tweets"
+      }
+    },
+    "03eb86bb-faae-4fa6-9717-aac63cc1a3b4": {
+      "workspaceId": "11111111-1111-4111-8111-111111111111",
+      "threadId": "22222222-2222-4222-8222-222222222222",
+      "frmNpub": "npub1requester",
+      "prompt": "Get 2 following tweets"
+    },
+    "f356e7d4-974a-415a-9caa-74d8779d8010": {
+      "workspaceId": "11111111-1111-4111-8111-111111111111",
+      "threadId": "22222222-2222-4222-8222-222222222222",
+      "frmNpub": "npub1requester",
+      "prompt": "Get 2 following tweets",
+      "blocks": {
+        "thread": {
+          "input": {
+            "workspaceId": "11111111-1111-4111-8111-111111111111",
+            "threadId": "22222222-2222-4222-8222-222222222222",
+            "frmNpub": "npub1requester",
+            "prompt": "Get 2 following tweets"
+          }
+        }
+      },
+      "invocation": {
+        "workspaceId": "11111111-1111-4111-8111-111111111111",
+        "threadId": "22222222-2222-4222-8222-222222222222",
+        "frmNpub": "npub1requester",
+        "prompt": "Get 2 following tweets"
+      }
+    },
+    "1e7ece23-bf27-4278-b9b3-8e5a268cad23": {
+      "request": "Get 2 following tweets"
+    },
+    "c78d5616-91c9-4f2a-bbbb-4f6aa6ca3d78": {
+      "request": "Get 2 following tweets",
+      "retrieval": {
+        "request": "Get 2 following tweets",
+        "count": 2,
+        "handles": [],
+        "queries": [],
+        "startedAt": 1790922258859,
+        "attempt": 1,
+        "modelCalls": 1,
+        "verdict": "partial",
+        "reason": "no_progress",
+        "active": false,
+        "semanticNeeded": false,
+        "source": "following",
+        "handle": null,
+        "query": null,
+        "cursor": null,
+        "actions": [
+          "{\"operation\":\"following\",\"count\":2}"
+        ],
+        "tweets": [],
+        "evidence": [
+          {
+            "action": {
+              "operation": "following",
+              "count": 2
+            },
+            "tweets": [],
+            "cursor": null,
+            "latencyMs": 0,
+            "added": 0
+          }
+        ],
+        "usage": [
+          {
+            "usage": {
+              "input_tokens": 5,
+              "output_tokens": 3
+            },
+            "latencyMs": 0,
+            "model": "fixture-jev",
+            "error": null
+          }
+        ],
+        "latencyMs": 4,
+        "resultCount": 0
+      },
+      "loop": {
+        "bounded_retrieval": {
+          "iteration": 3,
+          "index": 2,
+          "total": 3
+        }
+      },
+      "actionDecision": {
+        "shadowStatus": "ok",
+        "authoritative": false,
+        "advisoryOnly": true,
+        "requestedModel": "~typesafe/jev-latest",
+        "model": "fixture-jev",
+        "provider": null,
+        "requestId": null,
+        "latencyMs": 0,
+        "usage": {
+          "input_tokens": 5,
+          "output_tokens": 3
+        },
+        "answers": {
+          "action": {
+            "type": "choice",
+            "choice": "following",
+            "confidence": 1,
+            "probabilities": {
+              "following": 1,
+              "for_you": 0,
+              "user_tweets": 0,
+              "search": 0,
+              "mentions": 0,
+              "continue": 0,
+              "partial": 0,
+              "clarify": 0
+            }
+          },
+          "handle": {
+            "type": "choice",
+            "choice": "none",
+            "confidence": 1,
+            "probabilities": {
+              "none": 1,
+              "c0": 0,
+              "c1": 0,
+              "c2": 0,
+              "c3": 0
+            }
+          },
+          "query": {
+            "type": "choice",
+            "choice": "none",
+            "confidence": 1,
+            "probabilities": {
+              "none": 1,
+              "c0": 0,
+              "c1": 0,
+              "c2": 0,
+              "c3": 0
+            }
+          },
+          "supported": {
+            "type": "noul",
+            "noul": 1
+          }
+        },
+        "raw": {
+          "answers": {
+            "action": {
+              "type": "choice",
+              "choice": "following",
+              "confidence": 1,
+              "probabilities": {
+                "following": 1,
+                "for_you": 0,
+                "user_tweets": 0,
+                "search": 0,
+                "mentions": 0,
+                "continue": 0,
+                "partial": 0,
+                "clarify": 0
+              }
+            },
+            "handle": {
+              "type": "choice",
+              "choice": "none",
+              "confidence": 1,
+              "probabilities": {
+                "none": 1,
+                "c0": 0,
+                "c1": 0,
+                "c2": 0,
+                "c3": 0
+              }
+            },
+            "query": {
+              "type": "choice",
+              "choice": "none",
+              "confidence": 1,
+              "probabilities": {
+                "none": 1,
+                "c0": 0,
+                "c1": 0,
+                "c2": 0,
+                "c3": 0
+              }
+            },
+            "supported": {
+              "type": "noul",
+              "noul": 1
+            }
+          },
+          "model": "fixture-jev",
+          "usage": {
+            "input_tokens": 5,
+            "output_tokens": 3
+          }
+        },
+        "error": null
+      }
+    },
+    "b3d199ea-d91f-4d9e-9dde-1046a091c9e9": {
+      "workspaceId": "11111111-1111-4111-8111-111111111111",
+      "threadId": "22222222-2222-4222-8222-222222222222",
+      "frmNpub": "npub1requester",
+      "prompt": "Get 2 following tweets",
+      "blocks": {
+        "thread": {
+          "input": {
+            "workspaceId": "11111111-1111-4111-8111-111111111111",
+            "threadId": "22222222-2222-4222-8222-222222222222",
+            "frmNpub": "npub1requester",
+            "prompt": "Get 2 following tweets"
+          }
+        }
+      },
+      "invocation": {
+        "workspaceId": "11111111-1111-4111-8111-111111111111",
+        "threadId": "22222222-2222-4222-8222-222222222222",
+        "frmNpub": "npub1requester",
+        "prompt": "Get 2 following tweets"
+      },
+      "bird": {
+        "request": "Get 2 following tweets",
+        "retrieval": {
+          "request": "Get 2 following tweets",
+          "count": 2,
+          "handles": [],
+          "queries": [],
+          "startedAt": 1790922258859,
+          "attempt": 1,
+          "modelCalls": 1,
+          "verdict": "partial",
+          "reason": "no_progress",
+          "active": false,
+          "semanticNeeded": false,
+          "source": "following",
+          "handle": null,
+          "query": null,
+          "cursor": null,
+          "actions": [
+            "{\"operation\":\"following\",\"count\":2}"
+          ],
+          "tweets": [],
+          "evidence": [
+            {
+              "action": {
+                "operation": "following",
+                "count": 2
+              },
+              "tweets": [],
+              "cursor": null,
+              "latencyMs": 0,
+              "added": 0
+            }
+          ],
+          "usage": [
+            {
+              "usage": {
+                "input_tokens": 5,
+                "output_tokens": 3
+              },
+              "latencyMs": 0,
+              "model": "fixture-jev",
+              "error": null
+            }
+          ],
+          "latencyMs": 4,
+          "resultCount": 0
+        },
+        "loop": {
+          "bounded_retrieval": {
+            "iteration": 3,
+            "index": 2,
+            "total": 3
+          }
+        },
+        "actionDecision": {
+          "shadowStatus": "ok",
+          "authoritative": false,
+          "advisoryOnly": true,
+          "requestedModel": "~typesafe/jev-latest",
+          "model": "fixture-jev",
+          "provider": null,
+          "requestId": null,
+          "latencyMs": 0,
+          "usage": {
+            "input_tokens": 5,
+            "output_tokens": 3
+          },
+          "answers": {
+            "action": {
+              "type": "choice",
+              "choice": "following",
+              "confidence": 1,
+              "probabilities": {
+                "following": 1,
+                "for_you": 0,
+                "user_tweets": 0,
+                "search": 0,
+                "mentions": 0,
+                "continue": 0,
+                "partial": 0,
+                "clarify": 0
+              }
+            },
+            "handle": {
+              "type": "choice",
+              "choice": "none",
+              "confidence": 1,
+              "probabilities": {
+                "none": 1,
+                "c0": 0,
+                "c1": 0,
+                "c2": 0,
+                "c3": 0
+              }
+            },
+            "query": {
+              "type": "choice",
+              "choice": "none",
+              "confidence": 1,
+              "probabilities": {
+                "none": 1,
+                "c0": 0,
+                "c1": 0,
+                "c2": 0,
+                "c3": 0
+              }
+            },
+            "supported": {
+              "type": "noul",
+              "noul": 1
+            }
+          },
+          "raw": {
+            "answers": {
+              "action": {
+                "type": "choice",
+                "choice": "following",
+                "confidence": 1,
+                "probabilities": {
+                  "following": 1,
+                  "for_you": 0,
+                  "user_tweets": 0,
+                  "search": 0,
+                  "mentions": 0,
+                  "continue": 0,
+                  "partial": 0,
+                  "clarify": 0
+                }
+              },
+              "handle": {
+                "type": "choice",
+                "choice": "none",
+                "confidence": 1,
+                "probabilities": {
+                  "none": 1,
+                  "c0": 0,
+                  "c1": 0,
+                  "c2": 0,
+                  "c3": 0
+                }
+              },
+              "query": {
+                "type": "choice",
+                "choice": "none",
+                "confidence": 1,
+                "probabilities": {
+                  "none": 1,
+                  "c0": 0,
+                  "c1": 0,
+                  "c2": 0,
+                  "c3": 0
+                }
+              },
+              "supported": {
+                "type": "noul",
+                "noul": 1
+              }
+            },
+            "model": "fixture-jev",
+            "usage": {
+              "input_tokens": 5,
+              "output_tokens": 3
+            }
+          },
+          "error": null
+        }
+      }
+    },
+    "00e8630e-ae99-48db-8a4b-a0b6ced24ab1": {
+      "state": {
+        "request": "Get 2 following tweets",
+        "count": 2,
+        "handles": [],
+        "queries": [],
+        "startedAt": 1790922258859,
+        "attempt": 1,
+        "modelCalls": 1,
+        "verdict": "partial",
+        "reason": "no_progress",
+        "active": false,
+        "semanticNeeded": false,
+        "source": "following",
+        "handle": null,
+        "query": null,
+        "cursor": null,
+        "actions": [
+          "{\"operation\":\"following\",\"count\":2}"
+        ],
+        "tweets": [],
+        "evidence": [
+          {
+            "action": {
+              "operation": "following",
+              "count": 2
+            },
+            "tweets": [],
+            "cursor": null,
+            "latencyMs": 0,
+            "added": 0
+          }
+        ],
+        "usage": [
+          {
+            "usage": {
+              "input_tokens": 5,
+              "output_tokens": 3
+            },
+            "latencyMs": 0,
+            "model": "fixture-jev",
+            "error": null
+          }
+        ],
+        "latencyMs": 4,
+        "resultCount": 0
+      }
+    },
+    "f76c4e2a-a300-46a4-87a3-5e39721bcb2e": {
+      "function": "bird.format",
+      "arguments": {
+        "state": {
+          "request": "Get 2 following tweets",
+          "count": 2,
+          "handles": [],
+          "queries": [],
+          "startedAt": 1790922258859,
+          "attempt": 1,
+          "modelCalls": 1,
+          "verdict": "partial",
+          "reason": "no_progress",
+          "active": false,
+          "semanticNeeded": false,
+          "source": "following",
+          "handle": null,
+          "query": null,
+          "cursor": null,
+          "actions": [
+            "{\"operation\":\"following\",\"count\":2}"
+          ],
+          "tweets": [],
+          "evidence": [
+            {
+              "action": {
+                "operation": "following",
+                "count": 2
+              },
+              "tweets": [],
+              "cursor": null,
+              "latencyMs": 0,
+              "added": 0
+            }
+          ],
+          "usage": [
+            {
+              "usage": {
+                "input_tokens": 5,
+                "output_tokens": 3
+              },
+              "latencyMs": 0,
+              "model": "fixture-jev",
+              "error": null
+            }
+          ],
+          "latencyMs": 4,
+          "resultCount": 0
+        }
+      }
+    },
+    "b27cbca9-61ab-4c4b-85de-d2baf2af048a": {
+      "message": "Retrieved 0 of 2 requested tweets from Following; Bird stopped before the full count.",
+      "verdict": "partial",
+      "resultCount": 0
+    },
+    "e6c4ccc7-2e30-43fa-a9b3-74756ad8c470": {
+      "workspaceId": "11111111-1111-4111-8111-111111111111",
+      "threadId": "22222222-2222-4222-8222-222222222222",
+      "frmNpub": "npub1requester",
+      "prompt": "Get 2 following tweets",
+      "blocks": {
+        "thread": {
+          "input": {
+            "workspaceId": "11111111-1111-4111-8111-111111111111",
+            "threadId": "22222222-2222-4222-8222-222222222222",
+            "frmNpub": "npub1requester",
+            "prompt": "Get 2 following tweets"
+          }
+        }
+      },
+      "invocation": {
+        "workspaceId": "11111111-1111-4111-8111-111111111111",
+        "threadId": "22222222-2222-4222-8222-222222222222",
+        "frmNpub": "npub1requester",
+        "prompt": "Get 2 following tweets"
+      },
+      "bird": {
+        "request": "Get 2 following tweets",
+        "retrieval": {
+          "request": "Get 2 following tweets",
+          "count": 2,
+          "handles": [],
+          "queries": [],
+          "startedAt": 1790922258859,
+          "attempt": 1,
+          "modelCalls": 1,
+          "verdict": "partial",
+          "reason": "no_progress",
+          "active": false,
+          "semanticNeeded": false,
+          "source": "following",
+          "handle": null,
+          "query": null,
+          "cursor": null,
+          "actions": [
+            "{\"operation\":\"following\",\"count\":2}"
+          ],
+          "tweets": [],
+          "evidence": [
+            {
+              "action": {
+                "operation": "following",
+                "count": 2
+              },
+              "tweets": [],
+              "cursor": null,
+              "latencyMs": 0,
+              "added": 0
+            }
+          ],
+          "usage": [
+            {
+              "usage": {
+                "input_tokens": 5,
+                "output_tokens": 3
+              },
+              "latencyMs": 0,
+              "model": "fixture-jev",
+              "error": null
+            }
+          ],
+          "latencyMs": 4,
+          "resultCount": 0
+        },
+        "loop": {
+          "bounded_retrieval": {
+            "iteration": 3,
+            "index": 2,
+            "total": 3
+          }
+        },
+        "actionDecision": {
+          "shadowStatus": "ok",
+          "authoritative": false,
+          "advisoryOnly": true,
+          "requestedModel": "~typesafe/jev-latest",
+          "model": "fixture-jev",
+          "provider": null,
+          "requestId": null,
+          "latencyMs": 0,
+          "usage": {
+            "input_tokens": 5,
+            "output_tokens": 3
+          },
+          "answers": {
+            "action": {
+              "type": "choice",
+              "choice": "following",
+              "confidence": 1,
+              "probabilities": {
+                "following": 1,
+                "for_you": 0,
+                "user_tweets": 0,
+                "search": 0,
+                "mentions": 0,
+                "continue": 0,
+                "partial": 0,
+                "clarify": 0
+              }
+            },
+            "handle": {
+              "type": "choice",
+              "choice": "none",
+              "confidence": 1,
+              "probabilities": {
+                "none": 1,
+                "c0": 0,
+                "c1": 0,
+                "c2": 0,
+                "c3": 0
+              }
+            },
+            "query": {
+              "type": "choice",
+              "choice": "none",
+              "confidence": 1,
+              "probabilities": {
+                "none": 1,
+                "c0": 0,
+                "c1": 0,
+                "c2": 0,
+                "c3": 0
+              }
+            },
+            "supported": {
+              "type": "noul",
+              "noul": 1
+            }
+          },
+          "raw": {
+            "answers": {
+              "action": {
+                "type": "choice",
+                "choice": "following",
+                "confidence": 1,
+                "probabilities": {
+                  "following": 1,
+                  "for_you": 0,
+                  "user_tweets": 0,
+                  "search": 0,
+                  "mentions": 0,
+                  "continue": 0,
+                  "partial": 0,
+                  "clarify": 0
+                }
+              },
+              "handle": {
+                "type": "choice",
+                "choice": "none",
+                "confidence": 1,
+                "probabilities": {
+                  "none": 1,
+                  "c0": 0,
+                  "c1": 0,
+                  "c2": 0,
+                  "c3": 0
+                }
+              },
+              "query": {
+                "type": "choice",
+                "choice": "none",
+                "confidence": 1,
+                "probabilities": {
+                  "none": 1,
+                  "c0": 0,
+                  "c1": 0,
+                  "c2": 0,
+                  "c3": 0
+                }
+              },
+              "supported": {
+                "type": "noul",
+                "noul": 1
+              }
+            },
+            "model": "fixture-jev",
+            "usage": {
+              "input_tokens": 5,
+              "output_tokens": 3
+            }
+          },
+          "error": null
+        }
+      },
+      "response": {
+        "message": "Retrieved 0 of 2 requested tweets from Following; Bird stopped before the full count.",
+        "verdict": "partial",
+        "resultCount": 0
+      }
+    },
+    "e893c5c0-8969-4a67-ab03-27c9efba04e6": {
+      "workspaceId": "11111111-1111-4111-8111-111111111111",
+      "threadId": "22222222-2222-4222-8222-222222222222",
+      "frmNpub": "npub1requester",
+      "prompt": "Get 2 following tweets",
+      "message": "Retrieved 0 of 2 requested tweets from Following; Bird stopped before the full count."
+    },
+    "e8dc7dda-dfff-4665-8585-c20d228a2589": {
+      "workspaceId": "11111111-1111-4111-8111-111111111111",
+      "threadId": "22222222-2222-4222-8222-222222222222",
+      "frmNpub": "npub1requester",
+      "prompt": "Get 2 following tweets",
+      "blocks": {
+        "thread": {
+          "input": {
+            "workspaceId": "11111111-1111-4111-8111-111111111111",
+            "threadId": "22222222-2222-4222-8222-222222222222",
+            "frmNpub": "npub1requester",
+            "prompt": "Get 2 following tweets"
+          }
+        },
+        "reply": {
+          "input": {
+            "workspaceId": "11111111-1111-4111-8111-111111111111",
+            "threadId": "22222222-2222-4222-8222-222222222222",
+            "frmNpub": "npub1requester",
+            "prompt": "Get 2 following tweets",
+            "message": "Retrieved 0 of 2 requested tweets from Following; Bird stopped before the full count."
+          }
+        }
+      },
+      "invocation": {
+        "workspaceId": "11111111-1111-4111-8111-111111111111",
+        "threadId": "22222222-2222-4222-8222-222222222222",
+        "frmNpub": "npub1requester",
+        "prompt": "Get 2 following tweets"
+      },
+      "bird": {
+        "request": "Get 2 following tweets",
+        "retrieval": {
+          "request": "Get 2 following tweets",
+          "count": 2,
+          "handles": [],
+          "queries": [],
+          "startedAt": 1790922258859,
+          "attempt": 1,
+          "modelCalls": 1,
+          "verdict": "partial",
+          "reason": "no_progress",
+          "active": false,
+          "semanticNeeded": false,
+          "source": "following",
+          "handle": null,
+          "query": null,
+          "cursor": null,
+          "actions": [
+            "{\"operation\":\"following\",\"count\":2}"
+          ],
+          "tweets": [],
+          "evidence": [
+            {
+              "action": {
+                "operation": "following",
+                "count": 2
+              },
+              "tweets": [],
+              "cursor": null,
+              "latencyMs": 0,
+              "added": 0
+            }
+          ],
+          "usage": [
+            {
+              "usage": {
+                "input_tokens": 5,
+                "output_tokens": 3
+              },
+              "latencyMs": 0,
+              "model": "fixture-jev",
+              "error": null
+            }
+          ],
+          "latencyMs": 4,
+          "resultCount": 0
+        },
+        "loop": {
+          "bounded_retrieval": {
+            "iteration": 3,
+            "index": 2,
+            "total": 3
+          }
+        },
+        "actionDecision": {
+          "shadowStatus": "ok",
+          "authoritative": false,
+          "advisoryOnly": true,
+          "requestedModel": "~typesafe/jev-latest",
+          "model": "fixture-jev",
+          "provider": null,
+          "requestId": null,
+          "latencyMs": 0,
+          "usage": {
+            "input_tokens": 5,
+            "output_tokens": 3
+          },
+          "answers": {
+            "action": {
+              "type": "choice",
+              "choice": "following",
+              "confidence": 1,
+              "probabilities": {
+                "following": 1,
+                "for_you": 0,
+                "user_tweets": 0,
+                "search": 0,
+                "mentions": 0,
+                "continue": 0,
+                "partial": 0,
+                "clarify": 0
+              }
+            },
+            "handle": {
+              "type": "choice",
+              "choice": "none",
+              "confidence": 1,
+              "probabilities": {
+                "none": 1,
+                "c0": 0,
+                "c1": 0,
+                "c2": 0,
+                "c3": 0
+              }
+            },
+            "query": {
+              "type": "choice",
+              "choice": "none",
+              "confidence": 1,
+              "probabilities": {
+                "none": 1,
+                "c0": 0,
+                "c1": 0,
+                "c2": 0,
+                "c3": 0
+              }
+            },
+            "supported": {
+              "type": "noul",
+              "noul": 1
+            }
+          },
+          "raw": {
+            "answers": {
+              "action": {
+                "type": "choice",
+                "choice": "following",
+                "confidence": 1,
+                "probabilities": {
+                  "following": 1,
+                  "for_you": 0,
+                  "user_tweets": 0,
+                  "search": 0,
+                  "mentions": 0,
+                  "continue": 0,
+                  "partial": 0,
+                  "clarify": 0
+                }
+              },
+              "handle": {
+                "type": "choice",
+                "choice": "none",
+                "confidence": 1,
+                "probabilities": {
+                  "none": 1,
+                  "c0": 0,
+                  "c1": 0,
+                  "c2": 0,
+                  "c3": 0
+                }
+              },
+              "query": {
+                "type": "choice",
+                "choice": "none",
+                "confidence": 1,
+                "probabilities": {
+                  "none": 1,
+                  "c0": 0,
+                  "c1": 0,
+                  "c2": 0,
+                  "c3": 0
+                }
+              },
+              "supported": {
+                "type": "noul",
+                "noul": 1
+              }
+            },
+            "model": "fixture-jev",
+            "usage": {
+              "input_tokens": 5,
+              "output_tokens": 3
+            }
+          },
+          "error": null
+        }
+      },
+      "response": {
+        "message": "Retrieved 0 of 2 requested tweets from Following; Bird stopped before the full count.",
+        "verdict": "partial",
+        "resultCount": 0
+      },
+      "delivery": {
+        "delivered": true,
+        "workspaceId": "11111111-1111-4111-8111-111111111111",
+        "threadId": "22222222-2222-4222-8222-222222222222",
+        "channelId": "channel",
+        "messageId": "fixture-delivery",
+        "senderNpub": "npub1piper",
+        "requesterNpub": "npub1requester",
+        "format": "markdown",
+        "signatureProtocol": "flightdeck_pg_message_instruction"
+      }
+    },
+    "54a247e8-2de0-4fe7-9a1c-73861e06f055": {
+      "workspaceId": "11111111-1111-4111-8111-111111111111",
+      "threadId": "22222222-2222-4222-8222-222222222222",
+      "frmNpub": "npub1requester",
+      "prompt": "Get 2 following tweets",
+      "blocks": {
+        "thread": {
+          "input": {
+            "workspaceId": "11111111-1111-4111-8111-111111111111",
+            "threadId": "22222222-2222-4222-8222-222222222222",
+            "frmNpub": "npub1requester",
+            "prompt": "Get 2 following tweets"
+          }
+        },
+        "reply": {
+          "input": {
+            "workspaceId": "11111111-1111-4111-8111-111111111111",
+            "threadId": "22222222-2222-4222-8222-222222222222",
+            "frmNpub": "npub1requester",
+            "prompt": "Get 2 following tweets",
+            "message": "Retrieved 0 of 2 requested tweets from Following; Bird stopped before the full count."
+          }
+        }
+      },
+      "invocation": {
+        "workspaceId": "11111111-1111-4111-8111-111111111111",
+        "threadId": "22222222-2222-4222-8222-222222222222",
+        "frmNpub": "npub1requester",
+        "prompt": "Get 2 following tweets"
+      },
+      "bird": {
+        "request": "Get 2 following tweets",
+        "retrieval": {
+          "request": "Get 2 following tweets",
+          "count": 2,
+          "handles": [],
+          "queries": [],
+          "startedAt": 1790922258859,
+          "attempt": 1,
+          "modelCalls": 1,
+          "verdict": "partial",
+          "reason": "no_progress",
+          "active": false,
+          "semanticNeeded": false,
+          "source": "following",
+          "handle": null,
+          "query": null,
+          "cursor": null,
+          "actions": [
+            "{\"operation\":\"following\",\"count\":2}"
+          ],
+          "tweets": [],
+          "evidence": [
+            {
+              "action": {
+                "operation": "following",
+                "count": 2
+              },
+              "tweets": [],
+              "cursor": null,
+              "latencyMs": 0,
+              "added": 0
+            }
+          ],
+          "usage": [
+            {
+              "usage": {
+                "input_tokens": 5,
+                "output_tokens": 3
+              },
+              "latencyMs": 0,
+              "model": "fixture-jev",
+              "error": null
+            }
+          ],
+          "latencyMs": 4,
+          "resultCount": 0
+        },
+        "loop": {
+          "bounded_retrieval": {
+            "iteration": 3,
+            "index": 2,
+            "total": 3
+          }
+        },
+        "actionDecision": {
+          "shadowStatus": "ok",
+          "authoritative": false,
+          "advisoryOnly": true,
+          "requestedModel": "~typesafe/jev-latest",
+          "model": "fixture-jev",
+          "provider": null,
+          "requestId": null,
+          "latencyMs": 0,
+          "usage": {
+            "input_tokens": 5,
+            "output_tokens": 3
+          },
+          "answers": {
+            "action": {
+              "type": "choice",
+              "choice": "following",
+              "confidence": 1,
+              "probabilities": {
+                "following": 1,
+                "for_you": 0,
+                "user_tweets": 0,
+                "search": 0,
+                "mentions": 0,
+                "continue": 0,
+                "partial": 0,
+                "clarify": 0
+              }
+            },
+            "handle": {
+              "type": "choice",
+              "choice": "none",
+              "confidence": 1,
+              "probabilities": {
+                "none": 1,
+                "c0": 0,
+                "c1": 0,
+                "c2": 0,
+                "c3": 0
+              }
+            },
+            "query": {
+              "type": "choice",
+              "choice": "none",
+              "confidence": 1,
+              "probabilities": {
+                "none": 1,
+                "c0": 0,
+                "c1": 0,
+                "c2": 0,
+                "c3": 0
+              }
+            },
+            "supported": {
+              "type": "noul",
+              "noul": 1
+            }
+          },
+          "raw": {
+            "answers": {
+              "action": {
+                "type": "choice",
+                "choice": "following",
+                "confidence": 1,
+                "probabilities": {
+                  "following": 1,
+                  "for_you": 0,
+                  "user_tweets": 0,
+                  "search": 0,
+                  "mentions": 0,
+                  "continue": 0,
+                  "partial": 0,
+                  "clarify": 0
+                }
+              },
+              "handle": {
+                "type": "choice",
+                "choice": "none",
+                "confidence": 1,
+                "probabilities": {
+                  "none": 1,
+                  "c0": 0,
+                  "c1": 0,
+                  "c2": 0,
+                  "c3": 0
+                }
+              },
+              "query": {
+                "type": "choice",
+                "choice": "none",
+                "confidence": 1,
+                "probabilities": {
+                  "none": 1,
+                  "c0": 0,
+                  "c1": 0,
+                  "c2": 0,
+                  "c3": 0
+                }
+              },
+              "supported": {
+                "type": "noul",
+                "noul": 1
+              }
+            },
+            "model": "fixture-jev",
+            "usage": {
+              "input_tokens": 5,
+              "output_tokens": 3
+            }
+          },
+          "error": null
+        }
+      },
+      "response": {
+        "message": "Retrieved 0 of 2 requested tweets from Following; Bird stopped before the full count.",
+        "verdict": "partial",
+        "resultCount": 0
+      },
+      "delivery": {
+        "delivered": true,
+        "workspaceId": "11111111-1111-4111-8111-111111111111",
+        "threadId": "22222222-2222-4222-8222-222222222222",
+        "channelId": "channel",
+        "messageId": "fixture-delivery",
+        "senderNpub": "npub1piper",
+        "requesterNpub": "npub1requester",
+        "format": "markdown",
+        "signatureProtocol": "flightdeck_pg_message_instruction"
+      }
+    },
+    "fb92b09b-964b-43ab-a72e-5028a7a931c5": {
+      "workspaceId": "11111111-1111-4111-8111-111111111111",
+      "threadId": "22222222-2222-4222-8222-222222222222",
+      "frmNpub": "npub1requester",
+      "prompt": "Get 2 following tweets",
+      "message": "Retrieved 0 of 2 requested tweets from Following; Bird stopped before the full count."
+    },
+    "601794e2-64a5-4f91-96de-1289246cf7fe": {
+      "function": "flightdeck.returnToThread",
+      "arguments": {
+        "workspaceId": "11111111-1111-4111-8111-111111111111",
+        "threadId": "22222222-2222-4222-8222-222222222222",
+        "frmNpub": "npub1requester",
+        "prompt": "Get 2 following tweets",
+        "message": "Retrieved 0 of 2 requested tweets from Following; Bird stopped before the full count.",
+        "pipelineRunId": "55ee88c1-3fc8-40a3-b711-83d717fc1979",
+        "idempotencyKey": "pipeline:55ee88c1-3fc8-40a3-b711-83d717fc1979:thread-reply:reply / return-to-thread"
+      }
+    },
+    "da74811c-52bf-4c8e-9281-f2a5b5a3f6b3": {
+      "delivered": true,
+      "workspaceId": "11111111-1111-4111-8111-111111111111",
+      "threadId": "22222222-2222-4222-8222-222222222222",
+      "channelId": "channel",
+      "messageId": "fixture-delivery",
+      "senderNpub": "npub1piper",
+      "requesterNpub": "npub1requester",
+      "format": "markdown",
+      "signatureProtocol": "flightdeck_pg_message_instruction"
+    },
+    "98df8f47-c387-4b99-955f-35e527a0be4a": {
+      "delivered": true,
+      "workspaceId": "11111111-1111-4111-8111-111111111111",
+      "threadId": "22222222-2222-4222-8222-222222222222",
+      "channelId": "channel",
+      "messageId": "fixture-delivery",
+      "senderNpub": "npub1piper",
+      "requesterNpub": "npub1requester",
+      "format": "markdown",
+      "signatureProtocol": "flightdeck_pg_message_instruction"
+    },
+    "77e3fc63-1a90-4eaa-bd00-f458358bd603": {
+      "workspaceId": "11111111-1111-4111-8111-111111111111",
+      "threadId": "22222222-2222-4222-8222-222222222222",
+      "frmNpub": "npub1requester",
+      "prompt": "Get 2 following tweets",
+      "blocks": {
+        "thread": {
+          "input": {
+            "workspaceId": "11111111-1111-4111-8111-111111111111",
+            "threadId": "22222222-2222-4222-8222-222222222222",
+            "frmNpub": "npub1requester",
+            "prompt": "Get 2 following tweets"
+          }
+        },
+        "reply": {
+          "input": {
+            "workspaceId": "11111111-1111-4111-8111-111111111111",
+            "threadId": "22222222-2222-4222-8222-222222222222",
+            "frmNpub": "npub1requester",
+            "prompt": "Get 2 following tweets",
+            "message": "Retrieved 0 of 2 requested tweets from Following; Bird stopped before the full count."
+          }
+        }
+      },
+      "invocation": {
+        "workspaceId": "11111111-1111-4111-8111-111111111111",
+        "threadId": "22222222-2222-4222-8222-222222222222",
+        "frmNpub": "npub1requester",
+        "prompt": "Get 2 following tweets"
+      },
+      "bird": {
+        "request": "Get 2 following tweets",
+        "retrieval": {
+          "request": "Get 2 following tweets",
+          "count": 2,
+          "handles": [],
+          "queries": [],
+          "startedAt": 1790922258859,
+          "attempt": 1,
+          "modelCalls": 1,
+          "verdict": "partial",
+          "reason": "no_progress",
+          "active": false,
+          "semanticNeeded": false,
+          "source": "following",
+          "handle": null,
+          "query": null,
+          "cursor": null,
+          "actions": [
+            "{\"operation\":\"following\",\"count\":2}"
+          ],
+          "tweets": [],
+          "evidence": [
+            {
+              "action": {
+                "operation": "following",
+                "count": 2
+              },
+              "tweets": [],
+              "cursor": null,
+              "latencyMs": 0,
+              "added": 0
+            }
+          ],
+          "usage": [
+            {
+              "usage": {
+                "input_tokens": 5,
+                "output_tokens": 3
+              },
+              "latencyMs": 0,
+              "model": "fixture-jev",
+              "error": null
+            }
+          ],
+          "latencyMs": 4,
+          "resultCount": 0
+        },
+        "loop": {
+          "bounded_retrieval": {
+            "iteration": 3,
+            "index": 2,
+            "total": 3
+          }
+        },
+        "actionDecision": {
+          "shadowStatus": "ok",
+          "authoritative": false,
+          "advisoryOnly": true,
+          "requestedModel": "~typesafe/jev-latest",
+          "model": "fixture-jev",
+          "provider": null,
+          "requestId": null,
+          "latencyMs": 0,
+          "usage": {
+            "input_tokens": 5,
+            "output_tokens": 3
+          },
+          "answers": {
+            "action": {
+              "type": "choice",
+              "choice": "following",
+              "confidence": 1,
+              "probabilities": {
+                "following": 1,
+                "for_you": 0,
+                "user_tweets": 0,
+                "search": 0,
+                "mentions": 0,
+                "continue": 0,
+                "partial": 0,
+                "clarify": 0
+              }
+            },
+            "handle": {
+              "type": "choice",
+              "choice": "none",
+              "confidence": 1,
+              "probabilities": {
+                "none": 1,
+                "c0": 0,
+                "c1": 0,
+                "c2": 0,
+                "c3": 0
+              }
+            },
+            "query": {
+              "type": "choice",
+              "choice": "none",
+              "confidence": 1,
+              "probabilities": {
+                "none": 1,
+                "c0": 0,
+                "c1": 0,
+                "c2": 0,
+                "c3": 0
+              }
+            },
+            "supported": {
+              "type": "noul",
+              "noul": 1
+            }
+          },
+          "raw": {
+            "answers": {
+              "action": {
+                "type": "choice",
+                "choice": "following",
+                "confidence": 1,
+                "probabilities": {
+                  "following": 1,
+                  "for_you": 0,
+                  "user_tweets": 0,
+                  "search": 0,
+                  "mentions": 0,
+                  "continue": 0,
+                  "partial": 0,
+                  "clarify": 0
+                }
+              },
+              "handle": {
+                "type": "choice",
+                "choice": "none",
+                "confidence": 1,
+                "probabilities": {
+                  "none": 1,
+                  "c0": 0,
+                  "c1": 0,
+                  "c2": 0,
+                  "c3": 0
+                }
+              },
+              "query": {
+                "type": "choice",
+                "choice": "none",
+                "confidence": 1,
+                "probabilities": {
+                  "none": 1,
+                  "c0": 0,
+                  "c1": 0,
+                  "c2": 0,
+                  "c3": 0
+                }
+              },
+              "supported": {
+                "type": "noul",
+                "noul": 1
+              }
+            },
+            "model": "fixture-jev",
+            "usage": {
+              "input_tokens": 5,
+              "output_tokens": 3
+            }
+          },
+          "error": null
+        }
+      },
+      "response": {
+        "message": "Retrieved 0 of 2 requested tweets from Following; Bird stopped before the full count.",
+        "verdict": "partial",
+        "resultCount": 0
+      },
+      "delivery": {
+        "delivered": true,
+        "workspaceId": "11111111-1111-4111-8111-111111111111",
+        "threadId": "22222222-2222-4222-8222-222222222222",
+        "channelId": "channel",
+        "messageId": "fixture-delivery",
+        "senderNpub": "npub1piper",
+        "requesterNpub": "npub1requester",
+        "format": "markdown",
+        "signatureProtocol": "flightdeck_pg_message_instruction"
+      }
+    }
+  }
+}

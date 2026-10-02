@@ -2,7 +2,7 @@ const {test,expect}=require('playwright/test');
 const fs=require('node:fs/promises');
 const path=require('node:path');
 const {serveBuiltFlightDeck}=require('./fixtures/serve-built-flightdeck.cjs');
-const evidence=path.resolve(__dirname,'../../tmp/docs/handoffs/pipeline-viewer/correction-browser');
+const evidence=path.resolve(__dirname,'../../tmp/docs/handoffs/pipeline-viewer/actual-port-browser');
 test.use({hasTouch:true,serviceWorkers:'block'});
 let data;
 test.beforeAll(async()=>{
@@ -30,16 +30,39 @@ async function setup(page,baseURL,viewport,fixtureData=data){
  await page.addInitScript(({data})=>{
   let failure=null;const delayed=new Set(),releases=new Map(),requests=[];
   const pubkey='44'.repeat(32);
+  const workspaces=[['workspace','viewer-shell','fixture'],['other','viewer-other','other']].map(([workspaceId,workspaceKey,slug])=>({workspaceId,workspaceKey,workspaceOwnerNpub:'owner',workspaceServiceNpub:'workspace-service',towerServiceNpub:'tower',appNpub:'app',sourceAppNpub:'app',directHttpsUrl:'http://127.0.0.1:3100',slug,name:slug,pgBackendMode:true}));
+  // Alpine.store invokes init when registering the store. Seed valid identity and
+  // isolate unrelated workspace startup before that invocation, not after render.
+  let alpine;
+  Object.defineProperty(window,'Alpine',{configurable:true,get:()=>alpine,set(value){
+   alpine=value;const register=value.store;
+   value.store=function(name,state){
+    if(name==='chat'&&state){const init=state.init;state.init=async function(){
+     for(const method of ['startSharedLiveQueries','stopWorkspaceLiveQueries','startWorkspaceLiveQueries','ensureWorkspaceSessionKey','loadLocalWorkspaceCoreData','persistWorkspaceSettings','refreshWorkspaceSettings','syncWorkspaceProfileDraft','refreshLegacyWorkspaceRecovery','stopDrive','validateSelectedBoardId','normalizeSettingsTab','registerCurrentWorkspaceApp','publishCurrentWorkspaceAppSchema','hydrateKnownWorkspaceProfiles','loadRemoteWorkspaces','bootstrapSelectedWorkspace','ensureBackgroundSync','maybeAutoLogin'])this[method]=async()=>{};
+     this.session={npub:'npub1fixtureactor'};this.backendUrl='http://127.0.0.1:3100';this.knownWorkspaces=workspaces;this.selectedWorkspaceKey='viewer-shell';this.currentWorkspaceOwnerNpub='owner';
+     await init.call(this);window.shellFixture.booted=true;
+    };}
+    return register.apply(this,arguments);
+   };
+  }});
   window.nostr={getPublicKey:async()=>pubkey,signEvent:async event=>({...event,pubkey,id:'55'.repeat(32),sig:'66'.repeat(64)})};
   window.fipsTransport={version:2,available:true,connect:async args=>({version:2,...args,disconnect:async()=>{},fetch:async(url,options)=>{
-   const u=new URL(url),serviceId=u.hostname==='peer-two.fips'?'installation-two':'installation';
+   const u=new URL(url),serviceId=u.hostname==='peer-two.fips'?'installation-two':data.runtime?data.snapshot.serviceId:'installation';
    requests.push({url,serviceId,workspace:u.searchParams.get('workspace_id')});
    const event=JSON.parse(atob(options.headers.Authorization.slice(6)));if(!event.tags.some(tag=>tag[0]==='u'&&tag[1]===url))throw Error('Unsigned exact URL');
    const id=decodeURIComponent(u.pathname.split('/runs/')[1]?.split('/')[0]||'');
    if(delayed.has(id)){delayed.delete(id);await new Promise(resolve=>releases.set(id,resolve));}
    if(failure)return new Response('{}',{status:failure});
    let payload;const base={version:1,serviceId};
-   if(u.pathname.endsWith('/health'))payload={ok:true,installation_id:serviceId,installation_npub:serviceId==='installation'?'signer':'signer-two',api_version:1};
+   if(u.pathname.endsWith('/health'))payload={ok:true,installation_id:serviceId,installation_npub:u.hostname==='peer-two.fips'?'signer-two':'signer',api_version:1};
+   else if(data.runtime){
+    const current=data.snapshots[id]||data.snapshot;
+    if(u.pathname.endsWith('/definitions'))payload={...base,definitions:[data.definition],nextCursor:null};
+    else if(u.pathname.includes('/definitions/'))payload={...base,definition:data.definition};
+    else if(u.pathname.endsWith('/runs'))payload={...base,runs:[data.snapshot.run],nextCursor:null};
+    else if(u.pathname.includes('/evidence/')){const evidenceId=decodeURIComponent(u.pathname.split('/evidence/')[1]),ref=current.steps.flatMap(s=>s.evidence).find(r=>r.id===evidenceId);if(!Object.hasOwn(data.values,evidenceId))throw Error('Unexpected unavailable evidence read');payload={...base,evidence:ref,value:data.values[evidenceId],nextOffset:null};}
+    else payload=current;
+   }
    else if(u.pathname.endsWith('/definitions'))payload={...base,definitions:[data.definition],nextCursor:null};
    else if(u.pathname.includes('/definitions/'))payload={...base,definition:data.definition};
    else if(u.pathname.endsWith('/runs'))payload={...base,runs:[{...data.snapshot.run,serviceId},{...data.snapshot.run,id:'slow',name:'Slow run',serviceId},{...data.snapshot.run,id:'fast',name:'Fast run',serviceId}],nextCursor:null};
@@ -47,31 +70,32 @@ async function setup(page,baseURL,viewport,fixtureData=data){
    else {payload=structuredClone(data.snapshot);payload.serviceId=serviceId;payload.run.serviceId=serviceId;payload.run.id=id||'run';payload.run.name=serviceId+' '+(id||'run');for(const child of payload.children||[]){child.serviceId=serviceId;child.parentRunId=payload.run.id;}for(const step of payload.steps)for(const ref of step.evidence)ref.runId=payload.run.id;if(id==='absent')payload.definition=null;if(id==='child'){payload.run.parentRunId='run';payload.run.parentStepId='retrieve-exec';}}
    return new Response(JSON.stringify(payload),{headers:{'Content-Type':'application/json'}});
   }})};
-  window.shellFixture={data,requests,setFailure(v){failure=v},delay(id){delayed.add(id)},hasPending(id){return releases.has(id)},release(id){const fn=releases.get(id);if(!fn)throw Error('Delay not outstanding');releases.delete(id);fn();}};
+  window.shellFixture={data,workspaces,requests,setFailure(v){failure=v},delay(id){delayed.add(id)},hasPending(id){return releases.has(id)},release(id){const fn=releases.get(id);if(!fn)throw Error('Delay not outstanding');releases.delete(id);fn();}};
  },{data:fixtureData});
  await page.route('**/*',route=>serveBuiltFlightDeck(route));
  await page.goto(new URL(baseURL).origin+'/fixture/agents',{waitUntil:'domcontentloaded'});
- await page.waitForFunction(()=>window.Alpine?.store('chat'));
+ await page.waitForFunction(()=>window.shellFixture.booted && window.Alpine?.store('chat'));
  await page.evaluate(async()=>{
   const s=window.Alpine.store('chat');
-  for(const name of ['startSharedLiveQueries','stopWorkspaceLiveQueries','startWorkspaceLiveQueries','ensureWorkspaceSessionKey','loadLocalWorkspaceCoreData','persistWorkspaceSettings','refreshWorkspaceSettings','syncWorkspaceProfileDraft','refreshLegacyWorkspaceRecovery','stopDrive','validateSelectedBoardId','normalizeSettingsTab','registerCurrentWorkspaceApp','publishCurrentWorkspaceAppSchema'])s[name]=async()=>{};
-  s.session={npub:'npub1fixtureactor'};s.backendUrl='http://127.0.0.1:3100';s.knownWorkspaces=[{workspaceId:'workspace',workspaceKey:'viewer-shell',workspaceOwnerNpub:'owner',towerServiceNpub:'tower',sourceAppNpub:'app',slug:'fixture',name:'Fixture',pgBackendMode:true},{workspaceId:'other',workspaceKey:'viewer-other',workspaceOwnerNpub:'owner',towerServiceNpub:'tower',sourceAppNpub:'app',slug:'other',name:'Other',pgBackendMode:true}];
+  s.knownWorkspaces=window.shellFixture.workspaces;
   s.wappDelegationDraft={};s.wappPublishingDraftInstallation={};
   await s.selectWorkspace('viewer-shell',{skipPgVerification:true});
   const connection=(id,installation,signer,peer)=>({id,installation_id:installation,installation_identity_verified:true,display_name:installation,fips_endpoint:'http://'+peer+'.fips:43101',fips_transport_npub:peer,capabilities:['pipelines.viewer.read.v1'],metadata:{installation_npub:signer,health_path:'/api/owners/owner/control-plane/v1/health',pipeline_viewer_path:'/api/owners/owner/control-plane/v1/pipeline-viewer'}});
-  s.agentConnections=[connection('one','installation','signer','peer'),connection('two','installation-two','signer-two','peer-two')];s.workspaceAgents=[{id:'agent',agent_npub:'fixture-agent',connection_id:'one'}];s.selectedWorkspaceAgentId='agent';s.navSection='agents';
+  s.agentConnections=[connection('one',window.shellFixture.data.runtime?window.shellFixture.data.snapshot.serviceId:'installation','signer','peer'),connection('two','installation-two','signer-two','peer-two')];s.workspaceAgents=[{id:'agent',agent_npub:'fixture-agent',connection_id:'one'}];s.selectedWorkspaceAgentId='agent';s.navSection='agents';
   localStorage.setItem('nostr_secure_auth_recovery_v1',JSON.stringify({method:'extension',pubkey:'44'.repeat(32),expiresAt:Date.now()+86400000}));
   // Use the real shell URL builder/navigation; seed only backend-independent state.
-  s.openPipelineViewer({connection:s.agentConnections[0],runId:'run'});
+  s.openPipelineViewer({connection:s.agentConnections[0],runId:window.shellFixture.data.runtime?window.shellFixture.data.snapshot.run.id:'run'});
  });
  await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
  // Hidden WApp editors have known null-draft startup errors before fixture seeding.
  expect(errors.every(message=>/^Cannot read properties of null/.test(message))).toBe(true);const initialPageErrors=[...errors];errors.length=0;
  const initialConsoleErrors=[...consoleErrors];consoleErrors.length=0;
  await fs.mkdir(evidence,{recursive:true});await fs.writeFile(path.join(evidence,'known-startup-errors.json'),JSON.stringify({knownNullDraftErrors:initialPageErrors,consoleErrors:initialConsoleErrors},null,2));
- await expect(page.getByTestId('pipeline-status')).toHaveText('Pipeline viewer ready.');
+ if(process.env.FLIGHTDECK_TEST_VIEWER_DISABLED==='1')await expect(page.getByTestId('pipeline-activation-pending')).toBeVisible();else await expect(page.getByTestId('pipeline-status')).toHaveText('Pipeline viewer ready.');
  return {errors,consoleErrors,initialConsoleErrors};
 }
+test.describe('enabled viewer',()=>{
+ test.skip(process.env.FLIGHTDECK_TEST_VIEWER_DISABLED==='1','This acceptance matrix requires the opted-in isolated build.');
 for(const [name,viewport] of [['desktop',{width:1440,height:900}],['mobile',{width:390,height:844}]])test('production shell '+name+' previews, ports, exact inspection and touch/keyboard',async({page,baseURL})=>{
  const observed=await setup(page,baseURL,viewport);
  await expect(page.getByTestId('pipeline-step-retrieve')).toBeVisible();
@@ -83,7 +107,7 @@ for(const [name,viewport] of [['desktop',{width:1440,height:900}],['mobile',{wid
  expect(await page.evaluate(()=>window.shellFixture.requests.filter(r=>r.url.includes('/evidence/')).length)).toBe(0);
  await expect(page.locator('.pipeline-viewer-edges g')).toHaveCount(3);
  await fs.mkdir(evidence,{recursive:true});await page.getByTestId('pipeline-step-retrieve').scrollIntoViewIfNeeded();await page.screenshot({path:path.join(evidence,name+'-diagram.png'),fullPage:false});
- if(name==='mobile')await tweets.tap();else{await tweets.focus();await page.keyboard.press('Enter');}await expect(page.locator('.pipeline-viewer-records li')).toHaveCount(237);
+ if(name==='mobile')await tweets.tap();else{await tweets.focus();await page.keyboard.press('Enter');}await expect(page.locator('.pipeline-viewer-records li')).toHaveCount(50);
  await page.getByTestId('pipeline-value-search').fill('tweet 237');await expect(page.locator('.pipeline-viewer-records li')).toHaveCount(1);
  await page.evaluate(()=>{window.copied=[];Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:async value=>window.copied.push(value)}})});
  await page.getByRole('button',{name:'Copy retained record 237',exact:true}).click();expect(await page.evaluate(()=>window.copied.at(-1))).toBe(JSON.stringify(data.tweetRecords[236],null,2));
@@ -148,5 +172,70 @@ test('production shell clears cached summaries when same-context remount health 
  await page.getByTestId('pipeline-viewer-close').click();await page.evaluate(()=>{window.shellFixture.setFailure(403);window.Alpine.store('chat').openPipelineViewer({runId:'run'})});
  await expect(page.getByTestId('pipeline-status')).toContainText('denied');await expect(page.locator('[data-testid^="pipeline-step-"]')).toHaveCount(0);
  await page.evaluate(()=>window.shellFixture.setFailure(null));await page.getByTestId('pipeline-retry').click();await expect(page.getByTestId('pipeline-status')).toHaveText('Pipeline viewer ready.');
+ expect(observed.errors).toEqual([]);expect(observed.consoleErrors).toEqual([]);
+});
+for(const [name,viewport] of [['desktop',{width:1440,height:900}],['mobile',{width:390,height:844}]])test('production shell '+name+' bounds 5000 records with searchable last record and exact copy',async({page,baseURL})=>{
+ const many=structuredClone(data);many.tweetRecords=Array.from({length:5000},(_,index)=>({id:String(index+1),text:`Exact record ${index+1}`}));
+ const step=many.snapshot.steps.find(s=>s.logicalKey==='retrieve');for(const ref of step.evidence)if(ref.kind==='returned_output'){many.values[ref.id]={tweets:many.tweetRecords,privateSibling:'EXCLUDE_PRIVATE_SIBLING'};ref.preview={value:{tweets:many.tweetRecords.slice(0,2)},truncated:true,count:null,counts:{'$.tweets':5000}};}
+ const observed=await setup(page,baseURL,viewport,many);const tweets=page.getByRole('button',{name:'Inspect Retrieve tweets outputs: Tweets',exact:true});await expect(tweets).toContainText('5000 records');await tweets.click();
+ await expect(page.locator('.pipeline-viewer-records li')).toHaveCount(50);expect(await page.locator('.pipeline-viewer-records').evaluate(el=>el.querySelectorAll('*').length)).toBeLessThan(160);
+ await expect(page.getByTestId('pipeline-record-count')).toHaveText('1–50 of 5000 loaded records · Page 1 of 100');
+ const next=page.getByRole('button',{name:'Next record page',exact:true});if(name==='mobile')await next.tap();else{await next.focus();await page.keyboard.press('Enter');}
+ await expect(page.getByTestId('pipeline-record-count')).toContainText('51–100');
+ const number=page.getByRole('spinbutton',{name:'Record page number',exact:true});await number.fill('100');await number.press('Enter');await expect(page.getByRole('button',{name:'Copy retained record 5000',exact:true})).toBeAttached();await expect(next).toBeDisabled();
+ await page.getByTestId('pipeline-value-search').fill('Exact record 5000');await expect(page.locator('.pipeline-viewer-records li')).toHaveCount(1);await expect(page.getByTestId('pipeline-record-count')).toHaveText('1–1 of 1 matching records · Page 1 of 1');
+ await page.evaluate(()=>{window.copied=[];Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:async value=>window.copied.push(value)}})});
+ await page.getByRole('button',{name:'Copy retained record 5000',exact:true}).click();expect(await page.evaluate(()=>window.copied.at(-1))).toBe(JSON.stringify(many.tweetRecords[4999],null,2));
+ await page.getByTestId('pipeline-copy-value').click();expect(await page.evaluate(()=>window.copied.at(-1))).toBe(JSON.stringify(many.tweetRecords,null,2));
+ await page.getByTestId('pipeline-value-search').fill('');await expect(page.locator('.pipeline-viewer-records li')).toHaveCount(50);await expect(page.getByTestId('pipeline-record-count')).toContainText('Page 1 of 100');
+ await page.screenshot({path:path.join(evidence,name+'-5000-records.png'),fullPage:false});await page.keyboard.press('Escape');await expect(tweets).toBeFocused();expect(observed.errors).toEqual([]);expect(observed.consoleErrors).toEqual([]);
+});
+for(const outcome of ['complete','partial','clarification','blocked','noresults'])for(const [name,viewport] of [['desktop',{width:1440,height:900}],['mobile',{width:390,height:844}]])test('production shell actual runner '+outcome+' '+name+' parent/child previews and exact retained ports',async({page,baseURL})=>{
+ const read=async file=>JSON.parse(await fs.readFile(path.resolve(__dirname,'../fixtures/pipeline-viewer-contract/runtime/'+file+'.json'),'utf8'));
+ const [parent,child,parentValues,childValues]=await Promise.all([read('bird-wrapper-'+outcome),read('bird-child-'+outcome),read('evidence/bird-wrapper-'+outcome),read('evidence/bird-child-'+outcome)]);
+ expect(parent.run.id).toBe(parentValues.runId);expect(child.run.id).toBe(childValues.runId);
+ const actual={runtime:true,snapshot:parent,definition:parent.definition,snapshots:{[parent.run.id]:parent,[child.run.id]:child},values:{...parentValues.values,...childValues.values}};
+ const observed=await setup(page,baseURL,viewport,actual);
+ const portButton=(key,side,field)=>page.locator(`[data-port-node="${key}"][data-port-side="${side}"][data-port-path="${field}"]`);
+ const select=(value,field)=>field.replace(/^\$\.?/,'').split('.').filter(Boolean).reduce((row,key)=>row?.[key],value);
+ const latest=(snapshot,key,side)=>snapshot.steps.find(s=>s.logicalKey===key).evidence.filter(r=>r.kind===(side==='inputs'?'resolved_input':'returned_output')).at(-1);
+ const tweetRef=latest(parent,'retrieve','outputs'),tweets=select(actual.values[tweetRef.id],'$.retrieval.tweets');
+ const parentTweets=portButton('retrieve','outputs','$.retrieval.tweets');await expect(parentTweets).toContainText(tweets.length+' records');
+ await expect(portButton('reply','outputs','$.delivery.delivered')).toContainText('true');await expect(portButton('format','outputs','$.message')).not.toContainText('Field outside bounded preview');
+ await expect(page.locator('.pipeline-viewer-edges g')).toHaveCount(parent.definition.wiring.filter(w=>!w.carriedForward).length);
+ await parentTweets.focus();expect(await page.evaluate(()=>window.shellFixture.requests.filter(r=>r.url.includes('/evidence/')).length)).toBe(0);
+ await page.evaluate(()=>{window.copied=[];Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:async value=>window.copied.push(value)}})});
+ const inspectCopy=async(snapshot,key,side,field)=>{
+  const ref=latest(snapshot,key,side),value=select(actual.values[ref.id],field),expected=typeof value==='string'?value:JSON.stringify(value,null,2),button=portButton(key,side,field);
+  if(name==='mobile')await button.tap();else{await button.focus();await page.keyboard.press('Enter');}
+  await expect(page.getByTestId('pipeline-value-completeness')).toHaveText('Complete retained value');
+  await page.getByTestId('pipeline-copy-value').click();expect(await page.evaluate(()=>window.copied.at(-1))).toBe(expected);
+  await page.keyboard.press('Escape');await expect(button).toBeFocused();return value;
+ };
+ await inspectCopy(parent,'thread','inputs','$.prompt');await inspectCopy(parent,'retrieve','outputs','$.retrieval.tweets');await inspectCopy(parent,'format','inputs','$.state.tweets');await inspectCopy(parent,'format','outputs','$.message');await inspectCopy(parent,'reply','outputs','$.delivery.delivered');await inspectCopy(parent,'reply/reply / return-to-thread','outputs','$.delivered');
+ await page.getByTestId('pipeline-step-retrieve').scrollIntoViewIfNeeded();await page.screenshot({path:path.join(evidence,name+'-runner-'+outcome+'.png'),fullPage:false});
+ const beforeChild=await page.evaluate(()=>window.shellFixture.requests.filter(r=>r.url.includes('/evidence/')).length);
+ await page.getByRole('button',{name:'Open child workflow: Retrieve tweets attempt 1',exact:true}).click();await expect(page).toHaveURL(new RegExp('run='+child.run.id));await expect(page.getByTestId('pipeline-run-status')).toHaveAttribute('data-status',child.run.status);
+ expect(await page.evaluate(()=>window.shellFixture.requests.filter(r=>r.url.includes('/evidence/')).length)).toBe(beforeChild);
+ const childResults=child.steps.find(s=>s.logicalKey==='bounded-retrieval');
+ if(childResults.status!=='skipped'){
+  const ref=latest(child,'bounded-retrieval','outputs'),results=select(actual.values[ref.id],'$.current.retrieval.tweets');await expect(portButton('bounded-retrieval','outputs','$.current.retrieval.tweets')).toContainText(results.length+' records');await inspectCopy(child,'bounded-retrieval','outputs','$.current.retrieval.tweets');await inspectCopy(child,'bounded-retrieval','outputs','$.current.retrieval.verdict');
+ }else{
+  const results=portButton('bounded-retrieval','outputs','$.current.retrieval.tweets');await expect(results).toContainText('Not captured');await results.click();await expect(page.getByTestId('pipeline-copy-value')).toHaveCount(1);await expect(page.getByTestId('pipeline-copy-value')).toBeDisabled();await expect(page.getByTestId('pipeline-value-completeness')).toContainText('unavailable');await page.keyboard.press('Escape');
+ }
+ const unavailable=child.steps.find(s=>s.status==='skipped'&&s.outputs.length);if(unavailable){const ref=unavailable.evidence.find(r=>r.kind==='returned_output');const before=await page.evaluate(()=>window.shellFixture.requests.filter(r=>r.url.includes('/evidence/')).length);const article=page.getByTestId('pipeline-attempt-'+unavailable.id);await article.locator('summary').click();
+  const input=unavailable.inputs[0];if(input){await article.getByRole('button',{name:'Inspect '+input.label+' inputs for execution '+unavailable.id,exact:true}).click();await expect(page.getByTestId('pipeline-field-missing')).toBeVisible();await expect(page.getByTestId('pipeline-copy-value')).toBeDisabled();await expect(page.getByTestId('pipeline-value-completeness')).toHaveText('Complete retained value');await page.keyboard.press('Escape');}
+  const afterInput=await page.evaluate(()=>window.shellFixture.requests.filter(r=>r.url.includes('/evidence/')).length);await article.getByRole('button',{name:'Inspect '+unavailable.outputs[0].label+' outputs for execution '+unavailable.id,exact:true}).click();await expect(page.getByTestId('pipeline-copy-value')).toBeDisabled();expect(await page.evaluate(()=>window.shellFixture.requests.filter(r=>r.url.includes('/evidence/')).length)).toBe(afterInput);expect(ref.availability).toBe('not_captured');await page.keyboard.press('Escape');}
+ await page.getByTestId('pipeline-parent').click();await expect(page).toHaveURL(new RegExp('run='+parent.run.id));expect(observed.errors).toEqual([]);expect(observed.consoleErrors).toEqual([]);
+});
+
+});
+test('default-OFF build blocks navigation and deep-linked viewer reads',async({page,baseURL})=>{
+ test.skip(process.env.FLIGHTDECK_TEST_VIEWER_DISABLED!=='1','Requires the default build without opt-in.');
+ const observed=await setup(page,baseURL,{width:1440,height:900});
+ await expect(page.getByTestId('pipeline-viewer-open')).toBeHidden();await expect(page.getByTestId('pipeline-viewer')).toHaveCount(0);
+ await page.evaluate(()=>{const s=window.Alpine.store('chat');s.navigateTo('agents');history.pushState(null,'','/fixture/agents?viewer=1&service=installation&signer=signer&run=run');dispatchEvent(new PopStateEvent('popstate'));});
+ await expect(page.getByTestId('pipeline-activation-pending')).toBeVisible();await expect(page.getByTestId('pipeline-viewer')).toHaveCount(0);await page.waitForTimeout(100);
+ expect(await page.evaluate(()=>window.shellFixture.requests)).toEqual([]);expect(await page.evaluate(()=>window.Alpine.store('chat').pipelineViewerRoute)).toEqual({});
  expect(observed.errors).toEqual([]);expect(observed.consoleErrors).toEqual([]);
 });

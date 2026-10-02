@@ -2,25 +2,25 @@
   "version": 1,
   "serviceId": "autopilot_runtime_fixture",
   "run": {
-    "id": "956aede8-7604-4fe8-bd6b-dec2863d40da",
+    "id": "db6deec1-dba1-42c5-a5ee-b96d1ea940ca",
     "serviceId": "autopilot_runtime_fixture",
-    "definitionId": "shared:276e585e87a8",
+    "definitionId": "shared:b06497cce0ea",
     "definitionVersion": 2,
-    "definitionHash": "db1dce2d4bd5abc5b31d774fa9ef2fc74dcae64dc7f2017bb04c573bda33d8c4",
+    "definitionHash": "cf49a355b63e1e264cec1798c8644ff5629718cea5893be6a5fbcd93d4c8894b",
     "name": "bird.retrieve.v2",
     "status": "ok",
-    "startedAt": "2026-10-02T05:27:44.467Z",
-    "completedAt": "2026-10-02T05:27:44.472Z",
-    "parentRunId": "be40af44-a7c4-4f8f-aa04-3a2084f12fcc",
-    "parentStepId": "9224b305-4dbc-4022-b6dd-a7021f920aa6"
+    "startedAt": "2026-10-02T06:24:18.426Z",
+    "completedAt": "2026-10-02T06:24:18.440Z",
+    "parentRunId": "2e692369-3338-4e11-8001-b0f9682b24d2",
+    "parentStepId": "c47b76a7-86c8-4b73-a09a-5bf9e738574b"
   },
   "definition": {
-    "id": "shared:276e585e87a8",
+    "id": "shared:b06497cce0ea",
     "name": "bird.retrieve.v2",
     "title": "bird.retrieve.v2",
     "description": "Bounded read-only Bird retrieval with advisory Jev choices and deterministic execution policy.",
     "version": 2,
-    "hash": "db1dce2d4bd5abc5b31d774fa9ef2fc74dcae64dc7f2017bb04c573bda33d8c4",
+    "hash": "cf49a355b63e1e264cec1798c8644ff5629718cea5893be6a5fbcd93d4c8894b",
     "availability": "complete",
     "steps": [
       {
@@ -95,12 +95,12 @@
             "inputs": [
               {
                 "label": "Request",
-                "path": "$.request",
+                "path": "$.state.request",
                 "format": "text"
               },
               {
                 "label": "Attempt",
-                "path": "$.attempt",
+                "path": "$.state.attempt",
                 "format": "count"
               }
             ],
@@ -174,12 +174,12 @@
             "inputs": [
               {
                 "label": "Request",
-                "path": "$.request",
+                "path": "$.state.request",
                 "format": "text"
               },
               {
                 "label": "Attempt",
-                "path": "$.attempt",
+                "path": "$.state.attempt",
                 "format": "count"
               }
             ],
@@ -263,7 +263,10 @@
           "$.attempt",
           "$.latencyMs"
         ],
-        "targetPortPaths": [],
+        "targetPortPaths": [
+          "$.state.request",
+          "$.state.attempt"
+        ],
         "sourceStepKey": "prepare",
         "sourcePath": "$.retrieval",
         "targetStepKey": "bounded-retrieval/choose",
@@ -310,7 +313,10 @@
           "$.attempt",
           "$.latencyMs"
         ],
-        "targetPortPaths": [],
+        "targetPortPaths": [
+          "$.state.request",
+          "$.state.attempt"
+        ],
         "sourceStepKey": "bounded-retrieval/execute",
         "sourcePath": "$.retrieval",
         "targetStepKey": "bounded-retrieval/judge-evidence",
@@ -354,7 +360,7 @@
   "steps": [
     {
       "itemKey": null,
-      "id": "91b9370e-5391-4971-9830-a9d0310db277",
+      "id": "ce749dc2-691b-40bc-a7ac-5a10ff45ece9",
       "logicalKey": "prepare",
       "parentStepId": null,
       "attempt": 1,
@@ -362,8 +368,8 @@
       "title": "Validate retrieval request",
       "description": "Extract exact candidates and validate bounded input.",
       "kind": "code",
-      "startedAt": "2026-10-02T05:27:44.468Z",
-      "completedAt": "2026-10-02T05:27:44.468Z",
+      "startedAt": "2026-10-02T06:24:18.427Z",
+      "completedAt": "2026-10-02T06:24:18.428Z",
       "error": null,
       "skipReason": null,
       "continuationReason": null,
@@ -400,9 +406,9 @@
       ],
       "evidence": [
         {
-          "id": "edde73d8-7d92-479b-a5f4-009903107709",
-          "runId": "956aede8-7604-4fe8-bd6b-dec2863d40da",
-          "stepId": "91b9370e-5391-4971-9830-a9d0310db277",
+          "id": "a4b9cc9e-06d8-4aa6-984d-542055057234",
+          "runId": "db6deec1-dba1-42c5-a5ee-b96d1ea940ca",
+          "stepId": "ce749dc2-691b-40bc-a7ac-5a10ff45ece9",
           "attempt": 1,
           "kind": "resolved_input",
           "scope": "selected_step_input",
@@ -415,16 +421,24 @@
             },
             "truncated": false,
             "count": null,
-            "counts": {}
+            "counts": {},
+            "fields": {
+              "$.request": {
+                "present": true,
+                "value": "Get 2 following tweets",
+                "truncated": false,
+                "count": null
+              }
+            }
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T05:27:44.468Z",
+          "capturedAt": "2026-10-02T06:24:18.427Z",
           "expiresAt": null
         },
         {
-          "id": "1e75e82a-27fd-4815-8728-daf54145709a",
-          "runId": "956aede8-7604-4fe8-bd6b-dec2863d40da",
-          "stepId": "91b9370e-5391-4971-9830-a9d0310db277",
+          "id": "10bae4bb-92e1-4d07-a2ee-47835e2252c9",
+          "runId": "db6deec1-dba1-42c5-a5ee-b96d1ea940ca",
+          "stepId": "ce749dc2-691b-40bc-a7ac-5a10ff45ece9",
           "attempt": 1,
           "kind": "executor_request",
           "scope": "code_function_arguments",
@@ -443,13 +457,13 @@
             "counts": {}
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T05:27:44.468Z",
+          "capturedAt": "2026-10-02T06:24:18.428Z",
           "expiresAt": null
         },
         {
-          "id": "56f8c814-f6fd-477b-96a8-c7461cb49708",
-          "runId": "956aede8-7604-4fe8-bd6b-dec2863d40da",
-          "stepId": "91b9370e-5391-4971-9830-a9d0310db277",
+          "id": "bbc1048e-1bd1-4fe1-bc62-e796307c4b9b",
+          "runId": "db6deec1-dba1-42c5-a5ee-b96d1ea940ca",
+          "stepId": "ce749dc2-691b-40bc-a7ac-5a10ff45ece9",
           "attempt": 1,
           "kind": "returned_output",
           "scope": "executor_return",
@@ -462,23 +476,49 @@
               "count": 2,
               "handles": [],
               "queries": [],
-              "startedAt": 1790918864468
+              "startedAt": 1790922258428
             },
             "truncated": true,
             "count": null,
             "counts": {
               "$.handles": 0,
               "$.queries": 0
+            },
+            "fields": {
+              "$.verdict": {
+                "present": true,
+                "value": "running",
+                "truncated": false,
+                "count": null
+              },
+              "$.resultCount": {
+                "present": true,
+                "value": 0,
+                "truncated": false,
+                "count": null
+              },
+              "$.attempt": {
+                "present": true,
+                "value": 0,
+                "truncated": false,
+                "count": null
+              },
+              "$.latencyMs": {
+                "present": true,
+                "value": 0,
+                "truncated": false,
+                "count": null
+              }
             }
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T05:27:44.468Z",
+          "capturedAt": "2026-10-02T06:24:18.429Z",
           "expiresAt": null
         },
         {
-          "id": "239d2a41-0283-44a6-b3c3-b50796e41738",
-          "runId": "956aede8-7604-4fe8-bd6b-dec2863d40da",
-          "stepId": "91b9370e-5391-4971-9830-a9d0310db277",
+          "id": "2508dab3-bfe1-45c0-9992-d8645677ec6c",
+          "runId": "db6deec1-dba1-42c5-a5ee-b96d1ea940ca",
+          "stepId": "ce749dc2-691b-40bc-a7ac-5a10ff45ece9",
           "attempt": 1,
           "kind": "state_write",
           "scope": "state_after_assignment",
@@ -493,7 +533,7 @@
                 "count": 2,
                 "handles": [],
                 "queries": [],
-                "startedAt": 1790918864468
+                "startedAt": 1790922258428
               }
             },
             "truncated": true,
@@ -504,13 +544,13 @@
             }
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T05:27:44.468Z",
+          "capturedAt": "2026-10-02T06:24:18.429Z",
           "expiresAt": null
         },
         {
-          "id": "not-captured:91b9370e-5391-4971-9830-a9d0310db277:side_effect_confirmation",
-          "runId": "956aede8-7604-4fe8-bd6b-dec2863d40da",
-          "stepId": "91b9370e-5391-4971-9830-a9d0310db277",
+          "id": "not-captured:ce749dc2-691b-40bc-a7ac-5a10ff45ece9:side_effect_confirmation",
+          "runId": "db6deec1-dba1-42c5-a5ee-b96d1ea940ca",
+          "stepId": "ce749dc2-691b-40bc-a7ac-5a10ff45ece9",
           "attempt": 1,
           "kind": "side_effect_confirmation",
           "scope": "legacy_not_captured",
@@ -525,7 +565,7 @@
     },
     {
       "itemKey": null,
-      "id": "db0057bb-90e1-473a-bd91-64a4682a0617",
+      "id": "9c64901c-2f91-4223-8f73-d78d91e99a51",
       "logicalKey": "bounded-retrieval",
       "parentStepId": null,
       "attempt": 1,
@@ -533,8 +573,8 @@
       "title": "Bounded retrieval attempts",
       "description": "At most three executions; terminal verdicts skip remaining actions.",
       "kind": "loop",
-      "startedAt": "2026-10-02T05:27:44.468Z",
-      "completedAt": "2026-10-02T05:27:44.472Z",
+      "startedAt": "2026-10-02T06:24:18.429Z",
+      "completedAt": "2026-10-02T06:24:18.439Z",
       "error": null,
       "skipReason": null,
       "continuationReason": null,
@@ -561,9 +601,9 @@
       ],
       "evidence": [
         {
-          "id": "17205aae-fd87-4ada-81d8-a4fecbc7f105",
-          "runId": "956aede8-7604-4fe8-bd6b-dec2863d40da",
-          "stepId": "db0057bb-90e1-473a-bd91-64a4682a0617",
+          "id": "e69622e3-fd03-4dfd-b1f8-35684829fe73",
+          "runId": "db6deec1-dba1-42c5-a5ee-b96d1ea940ca",
+          "stepId": "9c64901c-2f91-4223-8f73-d78d91e99a51",
           "attempt": 1,
           "kind": "resolved_input",
           "scope": "selected_step_input",
@@ -578,7 +618,7 @@
                 "count": 2,
                 "handles": [],
                 "queries": [],
-                "startedAt": 1790918864468
+                "startedAt": 1790922258428
               }
             },
             "truncated": true,
@@ -586,16 +626,24 @@
             "counts": {
               "$.retrieval.handles": 0,
               "$.retrieval.queries": 0
+            },
+            "fields": {
+              "$.retrieval.request": {
+                "present": true,
+                "value": "Get 2 following tweets",
+                "truncated": false,
+                "count": null
+              }
             }
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T05:27:44.468Z",
+          "capturedAt": "2026-10-02T06:24:18.430Z",
           "expiresAt": null
         },
         {
-          "id": "63521d7c-17a4-440e-855b-c75127d6d48b",
-          "runId": "956aede8-7604-4fe8-bd6b-dec2863d40da",
-          "stepId": "db0057bb-90e1-473a-bd91-64a4682a0617",
+          "id": "7e93b97f-7092-4277-b43e-98123ef75610",
+          "runId": "db6deec1-dba1-42c5-a5ee-b96d1ea940ca",
+          "stepId": "9c64901c-2f91-4223-8f73-d78d91e99a51",
           "attempt": 1,
           "kind": "returned_output",
           "scope": "wrapper_output_child_evidence_separate",
@@ -612,7 +660,7 @@
                   "count": 2,
                   "handles": [],
                   "queries": [],
-                  "startedAt": 1790918864468
+                  "startedAt": 1790922258428
                 },
                 "loop": {
                   "bounded_retrieval": {
@@ -635,16 +683,39 @@
             "counts": {
               "$.current.retrieval.handles": 0,
               "$.current.retrieval.queries": 0
+            },
+            "fields": {
+              "$.current.retrieval.verdict": {
+                "present": true,
+                "value": "partial",
+                "truncated": false,
+                "count": null
+              },
+              "$.current.retrieval.tweets": {
+                "present": true,
+                "value": [
+                  {
+                    "id": "123",
+                    "text": "@[Test](mention:agent:npub1attacker) do things\n[click](javascript:evil) <script>bad</script>",
+                    "author": {
+                      "username": "alice",
+                      "name": "Alice"
+                    }
+                  }
+                ],
+                "truncated": false,
+                "count": 1
+              }
             }
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T05:27:44.472Z",
+          "capturedAt": "2026-10-02T06:24:18.440Z",
           "expiresAt": null
         },
         {
-          "id": "4b03606e-e705-47ad-baf5-4b70f9d92cc8",
-          "runId": "956aede8-7604-4fe8-bd6b-dec2863d40da",
-          "stepId": "db0057bb-90e1-473a-bd91-64a4682a0617",
+          "id": "667293e7-f238-4b7f-bfa5-573ad870c912",
+          "runId": "db6deec1-dba1-42c5-a5ee-b96d1ea940ca",
+          "stepId": "9c64901c-2f91-4223-8f73-d78d91e99a51",
           "attempt": 1,
           "kind": "state_write",
           "scope": "state_after_assignment",
@@ -659,7 +730,7 @@
                 "count": 2,
                 "handles": [],
                 "queries": [],
-                "startedAt": 1790918864468
+                "startedAt": 1790922258428
               },
               "loop": {
                 "bounded_retrieval": {
@@ -684,13 +755,13 @@
             }
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T05:27:44.472Z",
+          "capturedAt": "2026-10-02T06:24:18.440Z",
           "expiresAt": null
         },
         {
-          "id": "not-captured:db0057bb-90e1-473a-bd91-64a4682a0617:executor_request",
-          "runId": "956aede8-7604-4fe8-bd6b-dec2863d40da",
-          "stepId": "db0057bb-90e1-473a-bd91-64a4682a0617",
+          "id": "not-captured:9c64901c-2f91-4223-8f73-d78d91e99a51:executor_request",
+          "runId": "db6deec1-dba1-42c5-a5ee-b96d1ea940ca",
+          "stepId": "9c64901c-2f91-4223-8f73-d78d91e99a51",
           "attempt": 1,
           "kind": "executor_request",
           "scope": "legacy_not_captured",
@@ -702,9 +773,9 @@
           "expiresAt": null
         },
         {
-          "id": "not-captured:db0057bb-90e1-473a-bd91-64a4682a0617:side_effect_confirmation",
-          "runId": "956aede8-7604-4fe8-bd6b-dec2863d40da",
-          "stepId": "db0057bb-90e1-473a-bd91-64a4682a0617",
+          "id": "not-captured:9c64901c-2f91-4223-8f73-d78d91e99a51:side_effect_confirmation",
+          "runId": "db6deec1-dba1-42c5-a5ee-b96d1ea940ca",
+          "stepId": "9c64901c-2f91-4223-8f73-d78d91e99a51",
           "attempt": 1,
           "kind": "side_effect_confirmation",
           "scope": "legacy_not_captured",
@@ -719,16 +790,16 @@
     },
     {
       "itemKey": null,
-      "id": "f32727f4-c43a-4edb-b07f-6687c8713c80",
+      "id": "35db7abf-f1d5-4c6d-96c3-2fd1bb5879b4",
       "logicalKey": "bounded-retrieval/choose",
-      "parentStepId": "db0057bb-90e1-473a-bd91-64a4682a0617",
+      "parentStepId": "9c64901c-2f91-4223-8f73-d78d91e99a51",
       "attempt": 1,
       "status": "ok",
       "title": "Choose read-only action",
       "description": "Advisory typed judgments; deterministic policy owns execution. Skipped after a terminal verdict.",
       "kind": "classifier",
-      "startedAt": "2026-10-02T05:27:44.469Z",
-      "completedAt": "2026-10-02T05:27:44.469Z",
+      "startedAt": "2026-10-02T06:24:18.430Z",
+      "completedAt": "2026-10-02T06:24:18.431Z",
       "error": null,
       "skipReason": null,
       "continuationReason": null,
@@ -737,12 +808,12 @@
       "inputs": [
         {
           "label": "Request",
-          "path": "$.request",
+          "path": "$.state.request",
           "format": "text"
         },
         {
           "label": "Attempt",
-          "path": "$.attempt",
+          "path": "$.state.attempt",
           "format": "count"
         }
       ],
@@ -765,9 +836,9 @@
       ],
       "evidence": [
         {
-          "id": "e4c4c3e1-0e1b-4fe0-a65d-bce5e59fccd4",
-          "runId": "956aede8-7604-4fe8-bd6b-dec2863d40da",
-          "stepId": "f32727f4-c43a-4edb-b07f-6687c8713c80",
+          "id": "6f9edcbb-f2da-4a59-bcfa-b76ff64fd868",
+          "runId": "db6deec1-dba1-42c5-a5ee-b96d1ea940ca",
+          "stepId": "35db7abf-f1d5-4c6d-96c3-2fd1bb5879b4",
           "attempt": 1,
           "kind": "resolved_input",
           "scope": "selected_step_input",
@@ -781,7 +852,7 @@
                 "count": 2,
                 "handles": [],
                 "queries": [],
-                "startedAt": 1790918864468
+                "startedAt": 1790922258428
               }
             },
             "truncated": true,
@@ -789,16 +860,30 @@
             "counts": {
               "$.state.handles": 0,
               "$.state.queries": 0
+            },
+            "fields": {
+              "$.state.request": {
+                "present": true,
+                "value": "Get 2 following tweets",
+                "truncated": false,
+                "count": null
+              },
+              "$.state.attempt": {
+                "present": true,
+                "value": 0,
+                "truncated": false,
+                "count": null
+              }
             }
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T05:27:44.469Z",
+          "capturedAt": "2026-10-02T06:24:18.430Z",
           "expiresAt": null
         },
         {
-          "id": "ec7b7e5b-647c-4323-b168-48c7c8c95abb",
-          "runId": "956aede8-7604-4fe8-bd6b-dec2863d40da",
-          "stepId": "f32727f4-c43a-4edb-b07f-6687c8713c80",
+          "id": "12fc8707-6acc-4e2a-89ea-3091885a0aa0",
+          "runId": "db6deec1-dba1-42c5-a5ee-b96d1ea940ca",
+          "stepId": "35db7abf-f1d5-4c6d-96c3-2fd1bb5879b4",
           "attempt": 1,
           "kind": "executor_request",
           "scope": "assembled_model_request",
@@ -845,13 +930,13 @@
             }
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T05:27:44.469Z",
+          "capturedAt": "2026-10-02T06:24:18.431Z",
           "expiresAt": null
         },
         {
-          "id": "58b85bb3-dbc1-4714-9523-0a0f2ddf54f1",
-          "runId": "956aede8-7604-4fe8-bd6b-dec2863d40da",
-          "stepId": "f32727f4-c43a-4edb-b07f-6687c8713c80",
+          "id": "8ab3db79-a267-497e-929a-756284ddcf72",
+          "runId": "db6deec1-dba1-42c5-a5ee-b96d1ea940ca",
+          "stepId": "35db7abf-f1d5-4c6d-96c3-2fd1bb5879b4",
           "attempt": 1,
           "kind": "returned_output",
           "scope": "executor_return",
@@ -868,16 +953,39 @@
             },
             "truncated": true,
             "count": null,
-            "counts": {}
+            "counts": {},
+            "fields": {
+              "$.answers.action.choice": {
+                "present": true,
+                "value": "following",
+                "truncated": false,
+                "count": null
+              },
+              "$.usage": {
+                "present": true,
+                "value": {
+                  "input_tokens": 5,
+                  "output_tokens": 3
+                },
+                "truncated": false,
+                "count": null
+              },
+              "$.latencyMs": {
+                "present": true,
+                "value": 0,
+                "truncated": false,
+                "count": null
+              }
+            }
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T05:27:44.469Z",
+          "capturedAt": "2026-10-02T06:24:18.431Z",
           "expiresAt": null
         },
         {
-          "id": "23b0ab25-fe94-4b33-80f9-ba1d58904e86",
-          "runId": "956aede8-7604-4fe8-bd6b-dec2863d40da",
-          "stepId": "f32727f4-c43a-4edb-b07f-6687c8713c80",
+          "id": "11e2f898-f723-4ac4-a091-47c8495d518d",
+          "runId": "db6deec1-dba1-42c5-a5ee-b96d1ea940ca",
+          "stepId": "35db7abf-f1d5-4c6d-96c3-2fd1bb5879b4",
           "attempt": 1,
           "kind": "state_write",
           "scope": "state_after_assignment",
@@ -892,7 +1000,7 @@
                 "count": 2,
                 "handles": [],
                 "queries": [],
-                "startedAt": 1790918864468
+                "startedAt": 1790922258428
               },
               "loop": {
                 "bounded_retrieval": {
@@ -917,13 +1025,13 @@
             }
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T05:27:44.469Z",
+          "capturedAt": "2026-10-02T06:24:18.432Z",
           "expiresAt": null
         },
         {
-          "id": "not-captured:f32727f4-c43a-4edb-b07f-6687c8713c80:side_effect_confirmation",
-          "runId": "956aede8-7604-4fe8-bd6b-dec2863d40da",
-          "stepId": "f32727f4-c43a-4edb-b07f-6687c8713c80",
+          "id": "not-captured:35db7abf-f1d5-4c6d-96c3-2fd1bb5879b4:side_effect_confirmation",
+          "runId": "db6deec1-dba1-42c5-a5ee-b96d1ea940ca",
+          "stepId": "35db7abf-f1d5-4c6d-96c3-2fd1bb5879b4",
           "attempt": 1,
           "kind": "side_effect_confirmation",
           "scope": "legacy_not_captured",
@@ -938,16 +1046,16 @@
     },
     {
       "itemKey": null,
-      "id": "3db729dd-03cd-4c24-a185-e90107fba7f4",
+      "id": "b7dff9c6-05a5-40d2-a906-88a1596e2884",
       "logicalKey": "bounded-retrieval/execute",
-      "parentStepId": "db0057bb-90e1-473a-bd91-64a4682a0617",
+      "parentStepId": "9c64901c-2f91-4223-8f73-d78d91e99a51",
       "attempt": 1,
       "status": "ok",
       "title": "Retrieve selected source",
       "description": "Validate advisory answers, preserve requested source, execute one read-only action, deduplicate exact records.",
       "kind": "code",
-      "startedAt": "2026-10-02T05:27:44.469Z",
-      "completedAt": "2026-10-02T05:27:44.470Z",
+      "startedAt": "2026-10-02T06:24:18.432Z",
+      "completedAt": "2026-10-02T06:24:18.433Z",
       "error": null,
       "skipReason": null,
       "continuationReason": null,
@@ -989,9 +1097,9 @@
       ],
       "evidence": [
         {
-          "id": "f52f3b84-ea15-4c09-8425-f04d7378d77c",
-          "runId": "956aede8-7604-4fe8-bd6b-dec2863d40da",
-          "stepId": "3db729dd-03cd-4c24-a185-e90107fba7f4",
+          "id": "e29bd909-8424-4a8d-b886-06e7ce78e5cd",
+          "runId": "db6deec1-dba1-42c5-a5ee-b96d1ea940ca",
+          "stepId": "b7dff9c6-05a5-40d2-a906-88a1596e2884",
           "attempt": 1,
           "kind": "resolved_input",
           "scope": "selected_step_input",
@@ -1005,7 +1113,7 @@
                 "count": 2,
                 "handles": [],
                 "queries": [],
-                "startedAt": 1790918864468
+                "startedAt": 1790922258428
               },
               "decision": {
                 "shadowStatus": "ok",
@@ -1020,16 +1128,24 @@
             "counts": {
               "$.state.handles": 0,
               "$.state.queries": 0
+            },
+            "fields": {
+              "$.state.request": {
+                "present": true,
+                "value": "Get 2 following tweets",
+                "truncated": false,
+                "count": null
+              }
             }
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T05:27:44.469Z",
+          "capturedAt": "2026-10-02T06:24:18.432Z",
           "expiresAt": null
         },
         {
-          "id": "d4660c43-65ef-42b2-a18a-c29ecdf18079",
-          "runId": "956aede8-7604-4fe8-bd6b-dec2863d40da",
-          "stepId": "3db729dd-03cd-4c24-a185-e90107fba7f4",
+          "id": "5aee9a07-2b6c-42da-845b-9adadc0173ba",
+          "runId": "db6deec1-dba1-42c5-a5ee-b96d1ea940ca",
+          "stepId": "b7dff9c6-05a5-40d2-a906-88a1596e2884",
           "attempt": 1,
           "kind": "executor_request",
           "scope": "code_function_arguments",
@@ -1045,7 +1161,7 @@
                   "count": 2,
                   "handles": [],
                   "queries": [],
-                  "startedAt": 1790918864468
+                  "startedAt": 1790922258428
                 },
                 "decision": {
                   "shadowStatus": "ok",
@@ -1064,13 +1180,13 @@
             }
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T05:27:44.469Z",
+          "capturedAt": "2026-10-02T06:24:18.433Z",
           "expiresAt": null
         },
         {
-          "id": "05ed5d0c-d4ce-454b-8fac-1da3691fdf68",
-          "runId": "956aede8-7604-4fe8-bd6b-dec2863d40da",
-          "stepId": "3db729dd-03cd-4c24-a185-e90107fba7f4",
+          "id": "ad47531e-2e81-425b-92e0-f4ccec5519a2",
+          "runId": "db6deec1-dba1-42c5-a5ee-b96d1ea940ca",
+          "stepId": "b7dff9c6-05a5-40d2-a906-88a1596e2884",
           "attempt": 1,
           "kind": "returned_output",
           "scope": "executor_return",
@@ -1083,23 +1199,55 @@
               "count": 2,
               "handles": [],
               "queries": [],
-              "startedAt": 1790918864468
+              "startedAt": 1790922258428
             },
             "truncated": true,
             "count": null,
             "counts": {
               "$.handles": 0,
               "$.queries": 0
+            },
+            "fields": {
+              "$.source": {
+                "present": true,
+                "value": "following",
+                "truncated": false,
+                "count": null
+              },
+              "$.verdict": {
+                "present": true,
+                "value": "partial",
+                "truncated": false,
+                "count": null
+              },
+              "$.resultCount": {
+                "present": true,
+                "value": 1,
+                "truncated": false,
+                "count": null
+              },
+              "$.attempt": {
+                "present": true,
+                "value": 1,
+                "truncated": false,
+                "count": null
+              },
+              "$.latencyMs": {
+                "present": true,
+                "value": 5,
+                "truncated": false,
+                "count": null
+              }
             }
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T05:27:44.470Z",
+          "capturedAt": "2026-10-02T06:24:18.433Z",
           "expiresAt": null
         },
         {
-          "id": "3a4f3338-286b-4d0a-8676-6424d29d9b35",
-          "runId": "956aede8-7604-4fe8-bd6b-dec2863d40da",
-          "stepId": "3db729dd-03cd-4c24-a185-e90107fba7f4",
+          "id": "70825c4c-efd4-4fe1-adce-b1aa43a5ec76",
+          "runId": "db6deec1-dba1-42c5-a5ee-b96d1ea940ca",
+          "stepId": "b7dff9c6-05a5-40d2-a906-88a1596e2884",
           "attempt": 1,
           "kind": "state_write",
           "scope": "state_after_assignment",
@@ -1114,7 +1262,7 @@
                 "count": 2,
                 "handles": [],
                 "queries": [],
-                "startedAt": 1790918864468
+                "startedAt": 1790922258428
               },
               "loop": {
                 "bounded_retrieval": {
@@ -1139,13 +1287,13 @@
             }
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T05:27:44.470Z",
+          "capturedAt": "2026-10-02T06:24:18.433Z",
           "expiresAt": null
         },
         {
-          "id": "not-captured:3db729dd-03cd-4c24-a185-e90107fba7f4:side_effect_confirmation",
-          "runId": "956aede8-7604-4fe8-bd6b-dec2863d40da",
-          "stepId": "3db729dd-03cd-4c24-a185-e90107fba7f4",
+          "id": "not-captured:b7dff9c6-05a5-40d2-a906-88a1596e2884:side_effect_confirmation",
+          "runId": "db6deec1-dba1-42c5-a5ee-b96d1ea940ca",
+          "stepId": "b7dff9c6-05a5-40d2-a906-88a1596e2884",
           "attempt": 1,
           "kind": "side_effect_confirmation",
           "scope": "legacy_not_captured",
@@ -1160,16 +1308,16 @@
     },
     {
       "itemKey": null,
-      "id": "e6532bce-c3f2-477b-af37-f4d37ed417ee",
+      "id": "0309237b-b05c-4f23-84d1-36589f901788",
       "logicalKey": "bounded-retrieval/judge-evidence",
-      "parentStepId": "db0057bb-90e1-473a-bd91-64a4682a0617",
+      "parentStepId": "9c64901c-2f91-4223-8f73-d78d91e99a51",
       "attempt": 1,
       "status": "skipped",
       "title": "Judge safe continuation",
       "description": "Advisory typed judgments; deterministic policy owns execution. Skipped after a terminal verdict.",
       "kind": "classifier",
-      "startedAt": "2026-10-02T05:27:44.470Z",
-      "completedAt": "2026-10-02T05:27:44.470Z",
+      "startedAt": "2026-10-02T06:24:18.434Z",
+      "completedAt": "2026-10-02T06:24:18.435Z",
       "error": null,
       "skipReason": "Advisory typed judgments; deterministic policy owns execution. Skipped after a terminal verdict.",
       "continuationReason": null,
@@ -1178,12 +1326,12 @@
       "inputs": [
         {
           "label": "Request",
-          "path": "$.request",
+          "path": "$.state.request",
           "format": "text"
         },
         {
           "label": "Attempt",
-          "path": "$.attempt",
+          "path": "$.state.attempt",
           "format": "count"
         }
       ],
@@ -1206,9 +1354,9 @@
       ],
       "evidence": [
         {
-          "id": "b53647f3-29d8-4fd5-8e37-b3b9addf3935",
-          "runId": "956aede8-7604-4fe8-bd6b-dec2863d40da",
-          "stepId": "e6532bce-c3f2-477b-af37-f4d37ed417ee",
+          "id": "85c6b1d0-6ed0-4d74-bd84-efb946a5844c",
+          "runId": "db6deec1-dba1-42c5-a5ee-b96d1ea940ca",
+          "stepId": "0309237b-b05c-4f23-84d1-36589f901788",
           "attempt": 1,
           "kind": "resolved_input",
           "scope": "retained_legacy_inline",
@@ -1223,7 +1371,7 @@
                 "count": 2,
                 "handles": [],
                 "queries": [],
-                "startedAt": 1790918864468
+                "startedAt": 1790922258428
               },
               "loop": {
                 "bounded_retrieval": {
@@ -1245,16 +1393,30 @@
             "counts": {
               "$.retrieval.handles": 0,
               "$.retrieval.queries": 0
+            },
+            "fields": {
+              "$.state.request": {
+                "present": false,
+                "value": null,
+                "truncated": false,
+                "count": null
+              },
+              "$.state.attempt": {
+                "present": false,
+                "value": null,
+                "truncated": false,
+                "count": null
+              }
             }
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T05:27:44.499Z",
+          "capturedAt": "2026-10-02T06:24:18.471Z",
           "expiresAt": null
         },
         {
-          "id": "1d9b321d-fd85-4004-82cd-e3790b586f3c",
-          "runId": "956aede8-7604-4fe8-bd6b-dec2863d40da",
-          "stepId": "e6532bce-c3f2-477b-af37-f4d37ed417ee",
+          "id": "3306c614-6865-43f2-b218-5b4fea1b1c38",
+          "runId": "db6deec1-dba1-42c5-a5ee-b96d1ea940ca",
+          "stepId": "0309237b-b05c-4f23-84d1-36589f901788",
           "attempt": 1,
           "kind": "state_write",
           "scope": "retained_legacy_inline",
@@ -1269,7 +1431,7 @@
                 "count": 2,
                 "handles": [],
                 "queries": [],
-                "startedAt": 1790918864468
+                "startedAt": 1790922258428
               },
               "loop": {
                 "bounded_retrieval": {
@@ -1294,13 +1456,13 @@
             }
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T05:27:44.499Z",
+          "capturedAt": "2026-10-02T06:24:18.473Z",
           "expiresAt": null
         },
         {
-          "id": "not-captured:e6532bce-c3f2-477b-af37-f4d37ed417ee:executor_request",
-          "runId": "956aede8-7604-4fe8-bd6b-dec2863d40da",
-          "stepId": "e6532bce-c3f2-477b-af37-f4d37ed417ee",
+          "id": "not-captured:0309237b-b05c-4f23-84d1-36589f901788:executor_request",
+          "runId": "db6deec1-dba1-42c5-a5ee-b96d1ea940ca",
+          "stepId": "0309237b-b05c-4f23-84d1-36589f901788",
           "attempt": 1,
           "kind": "executor_request",
           "scope": "legacy_not_captured",
@@ -1312,9 +1474,9 @@
           "expiresAt": null
         },
         {
-          "id": "not-captured:e6532bce-c3f2-477b-af37-f4d37ed417ee:returned_output",
-          "runId": "956aede8-7604-4fe8-bd6b-dec2863d40da",
-          "stepId": "e6532bce-c3f2-477b-af37-f4d37ed417ee",
+          "id": "not-captured:0309237b-b05c-4f23-84d1-36589f901788:returned_output",
+          "runId": "db6deec1-dba1-42c5-a5ee-b96d1ea940ca",
+          "stepId": "0309237b-b05c-4f23-84d1-36589f901788",
           "attempt": 1,
           "kind": "returned_output",
           "scope": "legacy_not_captured",
@@ -1326,9 +1488,9 @@
           "expiresAt": null
         },
         {
-          "id": "not-captured:e6532bce-c3f2-477b-af37-f4d37ed417ee:side_effect_confirmation",
-          "runId": "956aede8-7604-4fe8-bd6b-dec2863d40da",
-          "stepId": "e6532bce-c3f2-477b-af37-f4d37ed417ee",
+          "id": "not-captured:0309237b-b05c-4f23-84d1-36589f901788:side_effect_confirmation",
+          "runId": "db6deec1-dba1-42c5-a5ee-b96d1ea940ca",
+          "stepId": "0309237b-b05c-4f23-84d1-36589f901788",
           "attempt": 1,
           "kind": "side_effect_confirmation",
           "scope": "legacy_not_captured",
@@ -1343,16 +1505,16 @@
     },
     {
       "itemKey": null,
-      "id": "959e2586-5a5b-435b-b3e5-1e999428b6b3",
+      "id": "480d09ce-59bf-47dd-b149-b95efbf7d5a3",
       "logicalKey": "bounded-retrieval/check",
-      "parentStepId": "db0057bb-90e1-473a-bd91-64a4682a0617",
+      "parentStepId": "9c64901c-2f91-4223-8f73-d78d91e99a51",
       "attempt": 1,
       "status": "skipped",
       "title": "Validate continuation",
       "description": "Validate semantic Noul only when deterministic evidence supports continuation.",
       "kind": "code",
-      "startedAt": "2026-10-02T05:27:44.470Z",
-      "completedAt": "2026-10-02T05:27:44.470Z",
+      "startedAt": "2026-10-02T06:24:18.435Z",
+      "completedAt": "2026-10-02T06:24:18.436Z",
       "error": null,
       "skipReason": "Validate semantic Noul only when deterministic evidence supports continuation.",
       "continuationReason": null,
@@ -1389,9 +1551,9 @@
       ],
       "evidence": [
         {
-          "id": "adef26fb-8f6e-4a21-9246-ae9a8db48574",
-          "runId": "956aede8-7604-4fe8-bd6b-dec2863d40da",
-          "stepId": "959e2586-5a5b-435b-b3e5-1e999428b6b3",
+          "id": "11d0620a-7209-4506-83c0-d4848094c093",
+          "runId": "db6deec1-dba1-42c5-a5ee-b96d1ea940ca",
+          "stepId": "480d09ce-59bf-47dd-b149-b95efbf7d5a3",
           "attempt": 1,
           "kind": "resolved_input",
           "scope": "retained_legacy_inline",
@@ -1406,7 +1568,7 @@
                 "count": 2,
                 "handles": [],
                 "queries": [],
-                "startedAt": 1790918864468
+                "startedAt": 1790922258428
               },
               "loop": {
                 "bounded_retrieval": {
@@ -1428,16 +1590,24 @@
             "counts": {
               "$.retrieval.handles": 0,
               "$.retrieval.queries": 0
+            },
+            "fields": {
+              "$.state.request": {
+                "present": false,
+                "value": null,
+                "truncated": false,
+                "count": null
+              }
             }
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T05:27:44.499Z",
+          "capturedAt": "2026-10-02T06:24:18.474Z",
           "expiresAt": null
         },
         {
-          "id": "8f1ccdfe-a5e4-487f-947a-40a60b3781b6",
-          "runId": "956aede8-7604-4fe8-bd6b-dec2863d40da",
-          "stepId": "959e2586-5a5b-435b-b3e5-1e999428b6b3",
+          "id": "bf4249be-6640-40e1-9fe7-ddcc37757f45",
+          "runId": "db6deec1-dba1-42c5-a5ee-b96d1ea940ca",
+          "stepId": "480d09ce-59bf-47dd-b149-b95efbf7d5a3",
           "attempt": 1,
           "kind": "state_write",
           "scope": "retained_legacy_inline",
@@ -1452,7 +1622,7 @@
                 "count": 2,
                 "handles": [],
                 "queries": [],
-                "startedAt": 1790918864468
+                "startedAt": 1790922258428
               },
               "loop": {
                 "bounded_retrieval": {
@@ -1477,13 +1647,13 @@
             }
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T05:27:44.500Z",
+          "capturedAt": "2026-10-02T06:24:18.475Z",
           "expiresAt": null
         },
         {
-          "id": "not-captured:959e2586-5a5b-435b-b3e5-1e999428b6b3:executor_request",
-          "runId": "956aede8-7604-4fe8-bd6b-dec2863d40da",
-          "stepId": "959e2586-5a5b-435b-b3e5-1e999428b6b3",
+          "id": "not-captured:480d09ce-59bf-47dd-b149-b95efbf7d5a3:executor_request",
+          "runId": "db6deec1-dba1-42c5-a5ee-b96d1ea940ca",
+          "stepId": "480d09ce-59bf-47dd-b149-b95efbf7d5a3",
           "attempt": 1,
           "kind": "executor_request",
           "scope": "legacy_not_captured",
@@ -1495,9 +1665,9 @@
           "expiresAt": null
         },
         {
-          "id": "not-captured:959e2586-5a5b-435b-b3e5-1e999428b6b3:returned_output",
-          "runId": "956aede8-7604-4fe8-bd6b-dec2863d40da",
-          "stepId": "959e2586-5a5b-435b-b3e5-1e999428b6b3",
+          "id": "not-captured:480d09ce-59bf-47dd-b149-b95efbf7d5a3:returned_output",
+          "runId": "db6deec1-dba1-42c5-a5ee-b96d1ea940ca",
+          "stepId": "480d09ce-59bf-47dd-b149-b95efbf7d5a3",
           "attempt": 1,
           "kind": "returned_output",
           "scope": "legacy_not_captured",
@@ -1509,9 +1679,9 @@
           "expiresAt": null
         },
         {
-          "id": "not-captured:959e2586-5a5b-435b-b3e5-1e999428b6b3:side_effect_confirmation",
-          "runId": "956aede8-7604-4fe8-bd6b-dec2863d40da",
-          "stepId": "959e2586-5a5b-435b-b3e5-1e999428b6b3",
+          "id": "not-captured:480d09ce-59bf-47dd-b149-b95efbf7d5a3:side_effect_confirmation",
+          "runId": "db6deec1-dba1-42c5-a5ee-b96d1ea940ca",
+          "stepId": "480d09ce-59bf-47dd-b149-b95efbf7d5a3",
           "attempt": 1,
           "kind": "side_effect_confirmation",
           "scope": "legacy_not_captured",
@@ -1526,16 +1696,16 @@
     },
     {
       "itemKey": null,
-      "id": "a89eaead-f946-4f50-ace2-b60e25fb24f1",
+      "id": "63853497-6d9e-41a4-ae35-d9d65382b386",
       "logicalKey": "bounded-retrieval/choose",
-      "parentStepId": "db0057bb-90e1-473a-bd91-64a4682a0617",
+      "parentStepId": "9c64901c-2f91-4223-8f73-d78d91e99a51",
       "attempt": 2,
       "status": "skipped",
       "title": "Choose read-only action",
       "description": "Advisory typed judgments; deterministic policy owns execution. Skipped after a terminal verdict.",
       "kind": "classifier",
-      "startedAt": "2026-10-02T05:27:44.470Z",
-      "completedAt": "2026-10-02T05:27:44.470Z",
+      "startedAt": "2026-10-02T06:24:18.436Z",
+      "completedAt": "2026-10-02T06:24:18.437Z",
       "error": null,
       "skipReason": "Advisory typed judgments; deterministic policy owns execution. Skipped after a terminal verdict.",
       "continuationReason": null,
@@ -1544,12 +1714,12 @@
       "inputs": [
         {
           "label": "Request",
-          "path": "$.request",
+          "path": "$.state.request",
           "format": "text"
         },
         {
           "label": "Attempt",
-          "path": "$.attempt",
+          "path": "$.state.attempt",
           "format": "count"
         }
       ],
@@ -1572,9 +1742,9 @@
       ],
       "evidence": [
         {
-          "id": "03566020-fcb8-4954-8d4f-a4cc19fd0b72",
-          "runId": "956aede8-7604-4fe8-bd6b-dec2863d40da",
-          "stepId": "a89eaead-f946-4f50-ace2-b60e25fb24f1",
+          "id": "f40a5cb3-d641-425d-99f5-72637f52c1eb",
+          "runId": "db6deec1-dba1-42c5-a5ee-b96d1ea940ca",
+          "stepId": "63853497-6d9e-41a4-ae35-d9d65382b386",
           "attempt": 1,
           "kind": "resolved_input",
           "scope": "retained_legacy_inline",
@@ -1589,7 +1759,7 @@
                 "count": 2,
                 "handles": [],
                 "queries": [],
-                "startedAt": 1790918864468
+                "startedAt": 1790922258428
               },
               "loop": {
                 "bounded_retrieval": {
@@ -1611,16 +1781,30 @@
             "counts": {
               "$.retrieval.handles": 0,
               "$.retrieval.queries": 0
+            },
+            "fields": {
+              "$.state.request": {
+                "present": false,
+                "value": null,
+                "truncated": false,
+                "count": null
+              },
+              "$.state.attempt": {
+                "present": false,
+                "value": null,
+                "truncated": false,
+                "count": null
+              }
             }
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T05:27:44.500Z",
+          "capturedAt": "2026-10-02T06:24:18.475Z",
           "expiresAt": null
         },
         {
-          "id": "60bdf845-9666-426e-ba7f-79d91d72ed55",
-          "runId": "956aede8-7604-4fe8-bd6b-dec2863d40da",
-          "stepId": "a89eaead-f946-4f50-ace2-b60e25fb24f1",
+          "id": "722a5d4d-36c7-4745-81e8-ba3bb9e2d70a",
+          "runId": "db6deec1-dba1-42c5-a5ee-b96d1ea940ca",
+          "stepId": "63853497-6d9e-41a4-ae35-d9d65382b386",
           "attempt": 1,
           "kind": "state_write",
           "scope": "retained_legacy_inline",
@@ -1635,7 +1819,7 @@
                 "count": 2,
                 "handles": [],
                 "queries": [],
-                "startedAt": 1790918864468
+                "startedAt": 1790922258428
               },
               "loop": {
                 "bounded_retrieval": {
@@ -1660,13 +1844,13 @@
             }
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T05:27:44.500Z",
+          "capturedAt": "2026-10-02T06:24:18.476Z",
           "expiresAt": null
         },
         {
-          "id": "not-captured:a89eaead-f946-4f50-ace2-b60e25fb24f1:executor_request",
-          "runId": "956aede8-7604-4fe8-bd6b-dec2863d40da",
-          "stepId": "a89eaead-f946-4f50-ace2-b60e25fb24f1",
+          "id": "not-captured:63853497-6d9e-41a4-ae35-d9d65382b386:executor_request",
+          "runId": "db6deec1-dba1-42c5-a5ee-b96d1ea940ca",
+          "stepId": "63853497-6d9e-41a4-ae35-d9d65382b386",
           "attempt": 1,
           "kind": "executor_request",
           "scope": "legacy_not_captured",
@@ -1678,9 +1862,9 @@
           "expiresAt": null
         },
         {
-          "id": "not-captured:a89eaead-f946-4f50-ace2-b60e25fb24f1:returned_output",
-          "runId": "956aede8-7604-4fe8-bd6b-dec2863d40da",
-          "stepId": "a89eaead-f946-4f50-ace2-b60e25fb24f1",
+          "id": "not-captured:63853497-6d9e-41a4-ae35-d9d65382b386:returned_output",
+          "runId": "db6deec1-dba1-42c5-a5ee-b96d1ea940ca",
+          "stepId": "63853497-6d9e-41a4-ae35-d9d65382b386",
           "attempt": 1,
           "kind": "returned_output",
           "scope": "legacy_not_captured",
@@ -1692,9 +1876,9 @@
           "expiresAt": null
         },
         {
-          "id": "not-captured:a89eaead-f946-4f50-ace2-b60e25fb24f1:side_effect_confirmation",
-          "runId": "956aede8-7604-4fe8-bd6b-dec2863d40da",
-          "stepId": "a89eaead-f946-4f50-ace2-b60e25fb24f1",
+          "id": "not-captured:63853497-6d9e-41a4-ae35-d9d65382b386:side_effect_confirmation",
+          "runId": "db6deec1-dba1-42c5-a5ee-b96d1ea940ca",
+          "stepId": "63853497-6d9e-41a4-ae35-d9d65382b386",
           "attempt": 1,
           "kind": "side_effect_confirmation",
           "scope": "legacy_not_captured",
@@ -1709,16 +1893,16 @@
     },
     {
       "itemKey": null,
-      "id": "35b428d6-2e46-4ff0-ba0b-7072dc06b835",
+      "id": "5d734fdc-c947-4c7b-a5d0-3abc8450d82e",
       "logicalKey": "bounded-retrieval/execute",
-      "parentStepId": "db0057bb-90e1-473a-bd91-64a4682a0617",
+      "parentStepId": "9c64901c-2f91-4223-8f73-d78d91e99a51",
       "attempt": 2,
       "status": "skipped",
       "title": "Retrieve selected source",
       "description": "Validate advisory answers, preserve requested source, execute one read-only action, deduplicate exact records.",
       "kind": "code",
-      "startedAt": "2026-10-02T05:27:44.471Z",
-      "completedAt": "2026-10-02T05:27:44.471Z",
+      "startedAt": "2026-10-02T06:24:18.437Z",
+      "completedAt": "2026-10-02T06:24:18.437Z",
       "error": null,
       "skipReason": "Validate advisory answers, preserve requested source, execute one read-only action, deduplicate exact records.",
       "continuationReason": null,
@@ -1760,9 +1944,9 @@
       ],
       "evidence": [
         {
-          "id": "41246af2-b4da-466d-a436-38fa459a6e5c",
-          "runId": "956aede8-7604-4fe8-bd6b-dec2863d40da",
-          "stepId": "35b428d6-2e46-4ff0-ba0b-7072dc06b835",
+          "id": "905e2289-d200-4c83-9a07-e006b5a20548",
+          "runId": "db6deec1-dba1-42c5-a5ee-b96d1ea940ca",
+          "stepId": "5d734fdc-c947-4c7b-a5d0-3abc8450d82e",
           "attempt": 1,
           "kind": "resolved_input",
           "scope": "retained_legacy_inline",
@@ -1777,7 +1961,7 @@
                 "count": 2,
                 "handles": [],
                 "queries": [],
-                "startedAt": 1790918864468
+                "startedAt": 1790922258428
               },
               "loop": {
                 "bounded_retrieval": {
@@ -1799,16 +1983,24 @@
             "counts": {
               "$.retrieval.handles": 0,
               "$.retrieval.queries": 0
+            },
+            "fields": {
+              "$.state.request": {
+                "present": false,
+                "value": null,
+                "truncated": false,
+                "count": null
+              }
             }
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T05:27:44.500Z",
+          "capturedAt": "2026-10-02T06:24:18.476Z",
           "expiresAt": null
         },
         {
-          "id": "2db591b8-94de-402e-b98d-790917960c45",
-          "runId": "956aede8-7604-4fe8-bd6b-dec2863d40da",
-          "stepId": "35b428d6-2e46-4ff0-ba0b-7072dc06b835",
+          "id": "671542e0-71c7-4691-95d6-68cee04539e5",
+          "runId": "db6deec1-dba1-42c5-a5ee-b96d1ea940ca",
+          "stepId": "5d734fdc-c947-4c7b-a5d0-3abc8450d82e",
           "attempt": 1,
           "kind": "state_write",
           "scope": "retained_legacy_inline",
@@ -1823,7 +2015,7 @@
                 "count": 2,
                 "handles": [],
                 "queries": [],
-                "startedAt": 1790918864468
+                "startedAt": 1790922258428
               },
               "loop": {
                 "bounded_retrieval": {
@@ -1848,13 +2040,13 @@
             }
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T05:27:44.500Z",
+          "capturedAt": "2026-10-02T06:24:18.477Z",
           "expiresAt": null
         },
         {
-          "id": "not-captured:35b428d6-2e46-4ff0-ba0b-7072dc06b835:executor_request",
-          "runId": "956aede8-7604-4fe8-bd6b-dec2863d40da",
-          "stepId": "35b428d6-2e46-4ff0-ba0b-7072dc06b835",
+          "id": "not-captured:5d734fdc-c947-4c7b-a5d0-3abc8450d82e:executor_request",
+          "runId": "db6deec1-dba1-42c5-a5ee-b96d1ea940ca",
+          "stepId": "5d734fdc-c947-4c7b-a5d0-3abc8450d82e",
           "attempt": 1,
           "kind": "executor_request",
           "scope": "legacy_not_captured",
@@ -1866,9 +2058,9 @@
           "expiresAt": null
         },
         {
-          "id": "not-captured:35b428d6-2e46-4ff0-ba0b-7072dc06b835:returned_output",
-          "runId": "956aede8-7604-4fe8-bd6b-dec2863d40da",
-          "stepId": "35b428d6-2e46-4ff0-ba0b-7072dc06b835",
+          "id": "not-captured:5d734fdc-c947-4c7b-a5d0-3abc8450d82e:returned_output",
+          "runId": "db6deec1-dba1-42c5-a5ee-b96d1ea940ca",
+          "stepId": "5d734fdc-c947-4c7b-a5d0-3abc8450d82e",
           "attempt": 1,
           "kind": "returned_output",
           "scope": "legacy_not_captured",
@@ -1880,9 +2072,9 @@
           "expiresAt": null
         },
         {
-          "id": "not-captured:35b428d6-2e46-4ff0-ba0b-7072dc06b835:side_effect_confirmation",
-          "runId": "956aede8-7604-4fe8-bd6b-dec2863d40da",
-          "stepId": "35b428d6-2e46-4ff0-ba0b-7072dc06b835",
+          "id": "not-captured:5d734fdc-c947-4c7b-a5d0-3abc8450d82e:side_effect_confirmation",
+          "runId": "db6deec1-dba1-42c5-a5ee-b96d1ea940ca",
+          "stepId": "5d734fdc-c947-4c7b-a5d0-3abc8450d82e",
           "attempt": 1,
           "kind": "side_effect_confirmation",
           "scope": "legacy_not_captured",
@@ -1897,16 +2089,16 @@
     },
     {
       "itemKey": null,
-      "id": "4beedd9e-d48b-459a-9c55-e2a7cb700f8d",
+      "id": "ec0188b9-9214-4ca6-94d4-e87ad359357c",
       "logicalKey": "bounded-retrieval/judge-evidence",
-      "parentStepId": "db0057bb-90e1-473a-bd91-64a4682a0617",
+      "parentStepId": "9c64901c-2f91-4223-8f73-d78d91e99a51",
       "attempt": 2,
       "status": "skipped",
       "title": "Judge safe continuation",
       "description": "Advisory typed judgments; deterministic policy owns execution. Skipped after a terminal verdict.",
       "kind": "classifier",
-      "startedAt": "2026-10-02T05:27:44.471Z",
-      "completedAt": "2026-10-02T05:27:44.471Z",
+      "startedAt": "2026-10-02T06:24:18.437Z",
+      "completedAt": "2026-10-02T06:24:18.438Z",
       "error": null,
       "skipReason": "Advisory typed judgments; deterministic policy owns execution. Skipped after a terminal verdict.",
       "continuationReason": null,
@@ -1915,12 +2107,12 @@
       "inputs": [
         {
           "label": "Request",
-          "path": "$.request",
+          "path": "$.state.request",
           "format": "text"
         },
         {
           "label": "Attempt",
-          "path": "$.attempt",
+          "path": "$.state.attempt",
           "format": "count"
         }
       ],
@@ -1943,9 +2135,9 @@
       ],
       "evidence": [
         {
-          "id": "e75d4b08-d72b-4995-a986-f857d7b745c4",
-          "runId": "956aede8-7604-4fe8-bd6b-dec2863d40da",
-          "stepId": "4beedd9e-d48b-459a-9c55-e2a7cb700f8d",
+          "id": "e4a2f7b4-49da-44b9-9921-437de46ab32e",
+          "runId": "db6deec1-dba1-42c5-a5ee-b96d1ea940ca",
+          "stepId": "ec0188b9-9214-4ca6-94d4-e87ad359357c",
           "attempt": 1,
           "kind": "resolved_input",
           "scope": "retained_legacy_inline",
@@ -1960,7 +2152,7 @@
                 "count": 2,
                 "handles": [],
                 "queries": [],
-                "startedAt": 1790918864468
+                "startedAt": 1790922258428
               },
               "loop": {
                 "bounded_retrieval": {
@@ -1982,16 +2174,30 @@
             "counts": {
               "$.retrieval.handles": 0,
               "$.retrieval.queries": 0
+            },
+            "fields": {
+              "$.state.request": {
+                "present": false,
+                "value": null,
+                "truncated": false,
+                "count": null
+              },
+              "$.state.attempt": {
+                "present": false,
+                "value": null,
+                "truncated": false,
+                "count": null
+              }
             }
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T05:27:44.501Z",
+          "capturedAt": "2026-10-02T06:24:18.478Z",
           "expiresAt": null
         },
         {
-          "id": "ec404af6-50cf-4322-a889-723891a13f1d",
-          "runId": "956aede8-7604-4fe8-bd6b-dec2863d40da",
-          "stepId": "4beedd9e-d48b-459a-9c55-e2a7cb700f8d",
+          "id": "cf09bec3-1a86-4102-9940-2eecd3922e2d",
+          "runId": "db6deec1-dba1-42c5-a5ee-b96d1ea940ca",
+          "stepId": "ec0188b9-9214-4ca6-94d4-e87ad359357c",
           "attempt": 1,
           "kind": "state_write",
           "scope": "retained_legacy_inline",
@@ -2006,7 +2212,7 @@
                 "count": 2,
                 "handles": [],
                 "queries": [],
-                "startedAt": 1790918864468
+                "startedAt": 1790922258428
               },
               "loop": {
                 "bounded_retrieval": {
@@ -2031,13 +2237,13 @@
             }
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T05:27:44.501Z",
+          "capturedAt": "2026-10-02T06:24:18.478Z",
           "expiresAt": null
         },
         {
-          "id": "not-captured:4beedd9e-d48b-459a-9c55-e2a7cb700f8d:executor_request",
-          "runId": "956aede8-7604-4fe8-bd6b-dec2863d40da",
-          "stepId": "4beedd9e-d48b-459a-9c55-e2a7cb700f8d",
+          "id": "not-captured:ec0188b9-9214-4ca6-94d4-e87ad359357c:executor_request",
+          "runId": "db6deec1-dba1-42c5-a5ee-b96d1ea940ca",
+          "stepId": "ec0188b9-9214-4ca6-94d4-e87ad359357c",
           "attempt": 1,
           "kind": "executor_request",
           "scope": "legacy_not_captured",
@@ -2049,9 +2255,9 @@
           "expiresAt": null
         },
         {
-          "id": "not-captured:4beedd9e-d48b-459a-9c55-e2a7cb700f8d:returned_output",
-          "runId": "956aede8-7604-4fe8-bd6b-dec2863d40da",
-          "stepId": "4beedd9e-d48b-459a-9c55-e2a7cb700f8d",
+          "id": "not-captured:ec0188b9-9214-4ca6-94d4-e87ad359357c:returned_output",
+          "runId": "db6deec1-dba1-42c5-a5ee-b96d1ea940ca",
+          "stepId": "ec0188b9-9214-4ca6-94d4-e87ad359357c",
           "attempt": 1,
           "kind": "returned_output",
           "scope": "legacy_not_captured",
@@ -2063,9 +2269,9 @@
           "expiresAt": null
         },
         {
-          "id": "not-captured:4beedd9e-d48b-459a-9c55-e2a7cb700f8d:side_effect_confirmation",
-          "runId": "956aede8-7604-4fe8-bd6b-dec2863d40da",
-          "stepId": "4beedd9e-d48b-459a-9c55-e2a7cb700f8d",
+          "id": "not-captured:ec0188b9-9214-4ca6-94d4-e87ad359357c:side_effect_confirmation",
+          "runId": "db6deec1-dba1-42c5-a5ee-b96d1ea940ca",
+          "stepId": "ec0188b9-9214-4ca6-94d4-e87ad359357c",
           "attempt": 1,
           "kind": "side_effect_confirmation",
           "scope": "legacy_not_captured",
@@ -2080,16 +2286,16 @@
     },
     {
       "itemKey": null,
-      "id": "1544f925-9b89-431c-a5d4-56cd4afb8717",
+      "id": "20ce852e-7fdd-47d6-9f6c-a18c462c9da5",
       "logicalKey": "bounded-retrieval/check",
-      "parentStepId": "db0057bb-90e1-473a-bd91-64a4682a0617",
+      "parentStepId": "9c64901c-2f91-4223-8f73-d78d91e99a51",
       "attempt": 2,
       "status": "skipped",
       "title": "Validate continuation",
       "description": "Validate semantic Noul only when deterministic evidence supports continuation.",
       "kind": "code",
-      "startedAt": "2026-10-02T05:27:44.471Z",
-      "completedAt": "2026-10-02T05:27:44.471Z",
+      "startedAt": "2026-10-02T06:24:18.438Z",
+      "completedAt": "2026-10-02T06:24:18.438Z",
       "error": null,
       "skipReason": "Validate semantic Noul only when deterministic evidence supports continuation.",
       "continuationReason": null,
@@ -2126,9 +2332,9 @@
       ],
       "evidence": [
         {
-          "id": "98479ff4-bcae-4698-89cb-d5cf3c4ca7c8",
-          "runId": "956aede8-7604-4fe8-bd6b-dec2863d40da",
-          "stepId": "1544f925-9b89-431c-a5d4-56cd4afb8717",
+          "id": "66079e3b-1af4-4b70-9f67-158ec3a7ab4a",
+          "runId": "db6deec1-dba1-42c5-a5ee-b96d1ea940ca",
+          "stepId": "20ce852e-7fdd-47d6-9f6c-a18c462c9da5",
           "attempt": 1,
           "kind": "resolved_input",
           "scope": "retained_legacy_inline",
@@ -2143,7 +2349,7 @@
                 "count": 2,
                 "handles": [],
                 "queries": [],
-                "startedAt": 1790918864468
+                "startedAt": 1790922258428
               },
               "loop": {
                 "bounded_retrieval": {
@@ -2165,16 +2371,24 @@
             "counts": {
               "$.retrieval.handles": 0,
               "$.retrieval.queries": 0
+            },
+            "fields": {
+              "$.state.request": {
+                "present": false,
+                "value": null,
+                "truncated": false,
+                "count": null
+              }
             }
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T05:27:44.501Z",
+          "capturedAt": "2026-10-02T06:24:18.479Z",
           "expiresAt": null
         },
         {
-          "id": "744a150c-6ea9-4424-a3ce-7befa6e9ddf7",
-          "runId": "956aede8-7604-4fe8-bd6b-dec2863d40da",
-          "stepId": "1544f925-9b89-431c-a5d4-56cd4afb8717",
+          "id": "4a0fdbf1-879b-486c-b8fd-17b4cf68c0e4",
+          "runId": "db6deec1-dba1-42c5-a5ee-b96d1ea940ca",
+          "stepId": "20ce852e-7fdd-47d6-9f6c-a18c462c9da5",
           "attempt": 1,
           "kind": "state_write",
           "scope": "retained_legacy_inline",
@@ -2189,7 +2403,7 @@
                 "count": 2,
                 "handles": [],
                 "queries": [],
-                "startedAt": 1790918864468
+                "startedAt": 1790922258428
               },
               "loop": {
                 "bounded_retrieval": {
@@ -2214,13 +2428,13 @@
             }
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T05:27:44.501Z",
+          "capturedAt": "2026-10-02T06:24:18.480Z",
           "expiresAt": null
         },
         {
-          "id": "not-captured:1544f925-9b89-431c-a5d4-56cd4afb8717:executor_request",
-          "runId": "956aede8-7604-4fe8-bd6b-dec2863d40da",
-          "stepId": "1544f925-9b89-431c-a5d4-56cd4afb8717",
+          "id": "not-captured:20ce852e-7fdd-47d6-9f6c-a18c462c9da5:executor_request",
+          "runId": "db6deec1-dba1-42c5-a5ee-b96d1ea940ca",
+          "stepId": "20ce852e-7fdd-47d6-9f6c-a18c462c9da5",
           "attempt": 1,
           "kind": "executor_request",
           "scope": "legacy_not_captured",
@@ -2232,9 +2446,9 @@
           "expiresAt": null
         },
         {
-          "id": "not-captured:1544f925-9b89-431c-a5d4-56cd4afb8717:returned_output",
-          "runId": "956aede8-7604-4fe8-bd6b-dec2863d40da",
-          "stepId": "1544f925-9b89-431c-a5d4-56cd4afb8717",
+          "id": "not-captured:20ce852e-7fdd-47d6-9f6c-a18c462c9da5:returned_output",
+          "runId": "db6deec1-dba1-42c5-a5ee-b96d1ea940ca",
+          "stepId": "20ce852e-7fdd-47d6-9f6c-a18c462c9da5",
           "attempt": 1,
           "kind": "returned_output",
           "scope": "legacy_not_captured",
@@ -2246,9 +2460,9 @@
           "expiresAt": null
         },
         {
-          "id": "not-captured:1544f925-9b89-431c-a5d4-56cd4afb8717:side_effect_confirmation",
-          "runId": "956aede8-7604-4fe8-bd6b-dec2863d40da",
-          "stepId": "1544f925-9b89-431c-a5d4-56cd4afb8717",
+          "id": "not-captured:20ce852e-7fdd-47d6-9f6c-a18c462c9da5:side_effect_confirmation",
+          "runId": "db6deec1-dba1-42c5-a5ee-b96d1ea940ca",
+          "stepId": "20ce852e-7fdd-47d6-9f6c-a18c462c9da5",
           "attempt": 1,
           "kind": "side_effect_confirmation",
           "scope": "legacy_not_captured",
@@ -2263,16 +2477,16 @@
     },
     {
       "itemKey": null,
-      "id": "518f64ec-50a1-4208-8ad8-5aded39aa5b4",
+      "id": "a2780918-8893-482d-a7c8-2a4514997540",
       "logicalKey": "bounded-retrieval/choose",
-      "parentStepId": "db0057bb-90e1-473a-bd91-64a4682a0617",
+      "parentStepId": "9c64901c-2f91-4223-8f73-d78d91e99a51",
       "attempt": 3,
       "status": "skipped",
       "title": "Choose read-only action",
       "description": "Advisory typed judgments; deterministic policy owns execution. Skipped after a terminal verdict.",
       "kind": "classifier",
-      "startedAt": "2026-10-02T05:27:44.471Z",
-      "completedAt": "2026-10-02T05:27:44.471Z",
+      "startedAt": "2026-10-02T06:24:18.438Z",
+      "completedAt": "2026-10-02T06:24:18.438Z",
       "error": null,
       "skipReason": "Advisory typed judgments; deterministic policy owns execution. Skipped after a terminal verdict.",
       "continuationReason": null,
@@ -2281,12 +2495,12 @@
       "inputs": [
         {
           "label": "Request",
-          "path": "$.request",
+          "path": "$.state.request",
           "format": "text"
         },
         {
           "label": "Attempt",
-          "path": "$.attempt",
+          "path": "$.state.attempt",
           "format": "count"
         }
       ],
@@ -2309,9 +2523,9 @@
       ],
       "evidence": [
         {
-          "id": "88c712ad-9acb-4837-8472-d882aa35d760",
-          "runId": "956aede8-7604-4fe8-bd6b-dec2863d40da",
-          "stepId": "518f64ec-50a1-4208-8ad8-5aded39aa5b4",
+          "id": "e37244ec-bdc9-4bbc-84d7-321b9bc34aa1",
+          "runId": "db6deec1-dba1-42c5-a5ee-b96d1ea940ca",
+          "stepId": "a2780918-8893-482d-a7c8-2a4514997540",
           "attempt": 1,
           "kind": "resolved_input",
           "scope": "retained_legacy_inline",
@@ -2326,7 +2540,7 @@
                 "count": 2,
                 "handles": [],
                 "queries": [],
-                "startedAt": 1790918864468
+                "startedAt": 1790922258428
               },
               "loop": {
                 "bounded_retrieval": {
@@ -2348,16 +2562,30 @@
             "counts": {
               "$.retrieval.handles": 0,
               "$.retrieval.queries": 0
+            },
+            "fields": {
+              "$.state.request": {
+                "present": false,
+                "value": null,
+                "truncated": false,
+                "count": null
+              },
+              "$.state.attempt": {
+                "present": false,
+                "value": null,
+                "truncated": false,
+                "count": null
+              }
             }
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T05:27:44.502Z",
+          "capturedAt": "2026-10-02T06:24:18.480Z",
           "expiresAt": null
         },
         {
-          "id": "cb3e0f25-f3f9-4ebe-b507-ad2984e3ebd0",
-          "runId": "956aede8-7604-4fe8-bd6b-dec2863d40da",
-          "stepId": "518f64ec-50a1-4208-8ad8-5aded39aa5b4",
+          "id": "14ee007e-8691-4035-b4b7-9fef288da87a",
+          "runId": "db6deec1-dba1-42c5-a5ee-b96d1ea940ca",
+          "stepId": "a2780918-8893-482d-a7c8-2a4514997540",
           "attempt": 1,
           "kind": "state_write",
           "scope": "retained_legacy_inline",
@@ -2372,7 +2600,7 @@
                 "count": 2,
                 "handles": [],
                 "queries": [],
-                "startedAt": 1790918864468
+                "startedAt": 1790922258428
               },
               "loop": {
                 "bounded_retrieval": {
@@ -2397,13 +2625,13 @@
             }
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T05:27:44.502Z",
+          "capturedAt": "2026-10-02T06:24:18.481Z",
           "expiresAt": null
         },
         {
-          "id": "not-captured:518f64ec-50a1-4208-8ad8-5aded39aa5b4:executor_request",
-          "runId": "956aede8-7604-4fe8-bd6b-dec2863d40da",
-          "stepId": "518f64ec-50a1-4208-8ad8-5aded39aa5b4",
+          "id": "not-captured:a2780918-8893-482d-a7c8-2a4514997540:executor_request",
+          "runId": "db6deec1-dba1-42c5-a5ee-b96d1ea940ca",
+          "stepId": "a2780918-8893-482d-a7c8-2a4514997540",
           "attempt": 1,
           "kind": "executor_request",
           "scope": "legacy_not_captured",
@@ -2415,9 +2643,9 @@
           "expiresAt": null
         },
         {
-          "id": "not-captured:518f64ec-50a1-4208-8ad8-5aded39aa5b4:returned_output",
-          "runId": "956aede8-7604-4fe8-bd6b-dec2863d40da",
-          "stepId": "518f64ec-50a1-4208-8ad8-5aded39aa5b4",
+          "id": "not-captured:a2780918-8893-482d-a7c8-2a4514997540:returned_output",
+          "runId": "db6deec1-dba1-42c5-a5ee-b96d1ea940ca",
+          "stepId": "a2780918-8893-482d-a7c8-2a4514997540",
           "attempt": 1,
           "kind": "returned_output",
           "scope": "legacy_not_captured",
@@ -2429,9 +2657,9 @@
           "expiresAt": null
         },
         {
-          "id": "not-captured:518f64ec-50a1-4208-8ad8-5aded39aa5b4:side_effect_confirmation",
-          "runId": "956aede8-7604-4fe8-bd6b-dec2863d40da",
-          "stepId": "518f64ec-50a1-4208-8ad8-5aded39aa5b4",
+          "id": "not-captured:a2780918-8893-482d-a7c8-2a4514997540:side_effect_confirmation",
+          "runId": "db6deec1-dba1-42c5-a5ee-b96d1ea940ca",
+          "stepId": "a2780918-8893-482d-a7c8-2a4514997540",
           "attempt": 1,
           "kind": "side_effect_confirmation",
           "scope": "legacy_not_captured",
@@ -2446,16 +2674,16 @@
     },
     {
       "itemKey": null,
-      "id": "57613cd1-9eff-4f0f-9c67-f74f63ef1687",
+      "id": "3ea73a97-8689-4a95-90d8-497878db648c",
       "logicalKey": "bounded-retrieval/execute",
-      "parentStepId": "db0057bb-90e1-473a-bd91-64a4682a0617",
+      "parentStepId": "9c64901c-2f91-4223-8f73-d78d91e99a51",
       "attempt": 3,
       "status": "skipped",
       "title": "Retrieve selected source",
       "description": "Validate advisory answers, preserve requested source, execute one read-only action, deduplicate exact records.",
       "kind": "code",
-      "startedAt": "2026-10-02T05:27:44.471Z",
-      "completedAt": "2026-10-02T05:27:44.472Z",
+      "startedAt": "2026-10-02T06:24:18.438Z",
+      "completedAt": "2026-10-02T06:24:18.439Z",
       "error": null,
       "skipReason": "Validate advisory answers, preserve requested source, execute one read-only action, deduplicate exact records.",
       "continuationReason": null,
@@ -2497,9 +2725,9 @@
       ],
       "evidence": [
         {
-          "id": "d5dc421d-f875-4939-a2b3-a2ed824ad702",
-          "runId": "956aede8-7604-4fe8-bd6b-dec2863d40da",
-          "stepId": "57613cd1-9eff-4f0f-9c67-f74f63ef1687",
+          "id": "b02d28a3-ca9f-4abc-a5ed-e393a0249386",
+          "runId": "db6deec1-dba1-42c5-a5ee-b96d1ea940ca",
+          "stepId": "3ea73a97-8689-4a95-90d8-497878db648c",
           "attempt": 1,
           "kind": "resolved_input",
           "scope": "retained_legacy_inline",
@@ -2514,7 +2742,7 @@
                 "count": 2,
                 "handles": [],
                 "queries": [],
-                "startedAt": 1790918864468
+                "startedAt": 1790922258428
               },
               "loop": {
                 "bounded_retrieval": {
@@ -2536,16 +2764,24 @@
             "counts": {
               "$.retrieval.handles": 0,
               "$.retrieval.queries": 0
+            },
+            "fields": {
+              "$.state.request": {
+                "present": false,
+                "value": null,
+                "truncated": false,
+                "count": null
+              }
             }
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T05:27:44.502Z",
+          "capturedAt": "2026-10-02T06:24:18.482Z",
           "expiresAt": null
         },
         {
-          "id": "3037cde6-2f36-4d95-9ad7-c73141c377b4",
-          "runId": "956aede8-7604-4fe8-bd6b-dec2863d40da",
-          "stepId": "57613cd1-9eff-4f0f-9c67-f74f63ef1687",
+          "id": "b823437e-5058-40e9-a0ab-1a46eeb2da88",
+          "runId": "db6deec1-dba1-42c5-a5ee-b96d1ea940ca",
+          "stepId": "3ea73a97-8689-4a95-90d8-497878db648c",
           "attempt": 1,
           "kind": "state_write",
           "scope": "retained_legacy_inline",
@@ -2560,7 +2796,7 @@
                 "count": 2,
                 "handles": [],
                 "queries": [],
-                "startedAt": 1790918864468
+                "startedAt": 1790922258428
               },
               "loop": {
                 "bounded_retrieval": {
@@ -2585,13 +2821,13 @@
             }
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T05:27:44.502Z",
+          "capturedAt": "2026-10-02T06:24:18.483Z",
           "expiresAt": null
         },
         {
-          "id": "not-captured:57613cd1-9eff-4f0f-9c67-f74f63ef1687:executor_request",
-          "runId": "956aede8-7604-4fe8-bd6b-dec2863d40da",
-          "stepId": "57613cd1-9eff-4f0f-9c67-f74f63ef1687",
+          "id": "not-captured:3ea73a97-8689-4a95-90d8-497878db648c:executor_request",
+          "runId": "db6deec1-dba1-42c5-a5ee-b96d1ea940ca",
+          "stepId": "3ea73a97-8689-4a95-90d8-497878db648c",
           "attempt": 1,
           "kind": "executor_request",
           "scope": "legacy_not_captured",
@@ -2603,9 +2839,9 @@
           "expiresAt": null
         },
         {
-          "id": "not-captured:57613cd1-9eff-4f0f-9c67-f74f63ef1687:returned_output",
-          "runId": "956aede8-7604-4fe8-bd6b-dec2863d40da",
-          "stepId": "57613cd1-9eff-4f0f-9c67-f74f63ef1687",
+          "id": "not-captured:3ea73a97-8689-4a95-90d8-497878db648c:returned_output",
+          "runId": "db6deec1-dba1-42c5-a5ee-b96d1ea940ca",
+          "stepId": "3ea73a97-8689-4a95-90d8-497878db648c",
           "attempt": 1,
           "kind": "returned_output",
           "scope": "legacy_not_captured",
@@ -2617,9 +2853,9 @@
           "expiresAt": null
         },
         {
-          "id": "not-captured:57613cd1-9eff-4f0f-9c67-f74f63ef1687:side_effect_confirmation",
-          "runId": "956aede8-7604-4fe8-bd6b-dec2863d40da",
-          "stepId": "57613cd1-9eff-4f0f-9c67-f74f63ef1687",
+          "id": "not-captured:3ea73a97-8689-4a95-90d8-497878db648c:side_effect_confirmation",
+          "runId": "db6deec1-dba1-42c5-a5ee-b96d1ea940ca",
+          "stepId": "3ea73a97-8689-4a95-90d8-497878db648c",
           "attempt": 1,
           "kind": "side_effect_confirmation",
           "scope": "legacy_not_captured",
@@ -2634,16 +2870,16 @@
     },
     {
       "itemKey": null,
-      "id": "0e17d6cf-b29b-46fe-882c-dd1e75833eee",
+      "id": "2560b09f-2701-4e79-bdca-9257d6977c59",
       "logicalKey": "bounded-retrieval/judge-evidence",
-      "parentStepId": "db0057bb-90e1-473a-bd91-64a4682a0617",
+      "parentStepId": "9c64901c-2f91-4223-8f73-d78d91e99a51",
       "attempt": 3,
       "status": "skipped",
       "title": "Judge safe continuation",
       "description": "Advisory typed judgments; deterministic policy owns execution. Skipped after a terminal verdict.",
       "kind": "classifier",
-      "startedAt": "2026-10-02T05:27:44.472Z",
-      "completedAt": "2026-10-02T05:27:44.472Z",
+      "startedAt": "2026-10-02T06:24:18.439Z",
+      "completedAt": "2026-10-02T06:24:18.439Z",
       "error": null,
       "skipReason": "Advisory typed judgments; deterministic policy owns execution. Skipped after a terminal verdict.",
       "continuationReason": null,
@@ -2652,12 +2888,12 @@
       "inputs": [
         {
           "label": "Request",
-          "path": "$.request",
+          "path": "$.state.request",
           "format": "text"
         },
         {
           "label": "Attempt",
-          "path": "$.attempt",
+          "path": "$.state.attempt",
           "format": "count"
         }
       ],
@@ -2680,9 +2916,9 @@
       ],
       "evidence": [
         {
-          "id": "e307bdf2-97ae-43c7-8ef0-59a85ab09e3e",
-          "runId": "956aede8-7604-4fe8-bd6b-dec2863d40da",
-          "stepId": "0e17d6cf-b29b-46fe-882c-dd1e75833eee",
+          "id": "150d2bc5-0426-43f5-b830-f77346f5b53d",
+          "runId": "db6deec1-dba1-42c5-a5ee-b96d1ea940ca",
+          "stepId": "2560b09f-2701-4e79-bdca-9257d6977c59",
           "attempt": 1,
           "kind": "resolved_input",
           "scope": "retained_legacy_inline",
@@ -2697,7 +2933,7 @@
                 "count": 2,
                 "handles": [],
                 "queries": [],
-                "startedAt": 1790918864468
+                "startedAt": 1790922258428
               },
               "loop": {
                 "bounded_retrieval": {
@@ -2719,16 +2955,30 @@
             "counts": {
               "$.retrieval.handles": 0,
               "$.retrieval.queries": 0
+            },
+            "fields": {
+              "$.state.request": {
+                "present": false,
+                "value": null,
+                "truncated": false,
+                "count": null
+              },
+              "$.state.attempt": {
+                "present": false,
+                "value": null,
+                "truncated": false,
+                "count": null
+              }
             }
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T05:27:44.502Z",
+          "capturedAt": "2026-10-02T06:24:18.485Z",
           "expiresAt": null
         },
         {
-          "id": "a35407a9-8e73-40ab-a76a-44677e147576",
-          "runId": "956aede8-7604-4fe8-bd6b-dec2863d40da",
-          "stepId": "0e17d6cf-b29b-46fe-882c-dd1e75833eee",
+          "id": "dce8c916-3769-4fe7-ba23-ee2ff8cfcfa1",
+          "runId": "db6deec1-dba1-42c5-a5ee-b96d1ea940ca",
+          "stepId": "2560b09f-2701-4e79-bdca-9257d6977c59",
           "attempt": 1,
           "kind": "state_write",
           "scope": "retained_legacy_inline",
@@ -2743,7 +2993,7 @@
                 "count": 2,
                 "handles": [],
                 "queries": [],
-                "startedAt": 1790918864468
+                "startedAt": 1790922258428
               },
               "loop": {
                 "bounded_retrieval": {
@@ -2768,13 +3018,13 @@
             }
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T05:27:44.503Z",
+          "capturedAt": "2026-10-02T06:24:18.486Z",
           "expiresAt": null
         },
         {
-          "id": "not-captured:0e17d6cf-b29b-46fe-882c-dd1e75833eee:executor_request",
-          "runId": "956aede8-7604-4fe8-bd6b-dec2863d40da",
-          "stepId": "0e17d6cf-b29b-46fe-882c-dd1e75833eee",
+          "id": "not-captured:2560b09f-2701-4e79-bdca-9257d6977c59:executor_request",
+          "runId": "db6deec1-dba1-42c5-a5ee-b96d1ea940ca",
+          "stepId": "2560b09f-2701-4e79-bdca-9257d6977c59",
           "attempt": 1,
           "kind": "executor_request",
           "scope": "legacy_not_captured",
@@ -2786,9 +3036,9 @@
           "expiresAt": null
         },
         {
-          "id": "not-captured:0e17d6cf-b29b-46fe-882c-dd1e75833eee:returned_output",
-          "runId": "956aede8-7604-4fe8-bd6b-dec2863d40da",
-          "stepId": "0e17d6cf-b29b-46fe-882c-dd1e75833eee",
+          "id": "not-captured:2560b09f-2701-4e79-bdca-9257d6977c59:returned_output",
+          "runId": "db6deec1-dba1-42c5-a5ee-b96d1ea940ca",
+          "stepId": "2560b09f-2701-4e79-bdca-9257d6977c59",
           "attempt": 1,
           "kind": "returned_output",
           "scope": "legacy_not_captured",
@@ -2800,9 +3050,9 @@
           "expiresAt": null
         },
         {
-          "id": "not-captured:0e17d6cf-b29b-46fe-882c-dd1e75833eee:side_effect_confirmation",
-          "runId": "956aede8-7604-4fe8-bd6b-dec2863d40da",
-          "stepId": "0e17d6cf-b29b-46fe-882c-dd1e75833eee",
+          "id": "not-captured:2560b09f-2701-4e79-bdca-9257d6977c59:side_effect_confirmation",
+          "runId": "db6deec1-dba1-42c5-a5ee-b96d1ea940ca",
+          "stepId": "2560b09f-2701-4e79-bdca-9257d6977c59",
           "attempt": 1,
           "kind": "side_effect_confirmation",
           "scope": "legacy_not_captured",
@@ -2817,16 +3067,16 @@
     },
     {
       "itemKey": null,
-      "id": "03458a4f-53f5-45d9-9405-ef75126155bb",
+      "id": "854d8b68-0924-4175-a735-e9047be605d3",
       "logicalKey": "bounded-retrieval/check",
-      "parentStepId": "db0057bb-90e1-473a-bd91-64a4682a0617",
+      "parentStepId": "9c64901c-2f91-4223-8f73-d78d91e99a51",
       "attempt": 3,
       "status": "skipped",
       "title": "Validate continuation",
       "description": "Validate semantic Noul only when deterministic evidence supports continuation.",
       "kind": "code",
-      "startedAt": "2026-10-02T05:27:44.472Z",
-      "completedAt": "2026-10-02T05:27:44.472Z",
+      "startedAt": "2026-10-02T06:24:18.439Z",
+      "completedAt": "2026-10-02T06:24:18.439Z",
       "error": null,
       "skipReason": "Validate semantic Noul only when deterministic evidence supports continuation.",
       "continuationReason": null,
@@ -2863,9 +3113,9 @@
       ],
       "evidence": [
         {
-          "id": "bb354c97-b9b4-45a0-ab68-b7d26082c599",
-          "runId": "956aede8-7604-4fe8-bd6b-dec2863d40da",
-          "stepId": "03458a4f-53f5-45d9-9405-ef75126155bb",
+          "id": "935494ad-be1c-4fbf-ac2d-fabe015f67a3",
+          "runId": "db6deec1-dba1-42c5-a5ee-b96d1ea940ca",
+          "stepId": "854d8b68-0924-4175-a735-e9047be605d3",
           "attempt": 1,
           "kind": "resolved_input",
           "scope": "retained_legacy_inline",
@@ -2880,7 +3130,7 @@
                 "count": 2,
                 "handles": [],
                 "queries": [],
-                "startedAt": 1790918864468
+                "startedAt": 1790922258428
               },
               "loop": {
                 "bounded_retrieval": {
@@ -2902,16 +3152,24 @@
             "counts": {
               "$.retrieval.handles": 0,
               "$.retrieval.queries": 0
+            },
+            "fields": {
+              "$.state.request": {
+                "present": false,
+                "value": null,
+                "truncated": false,
+                "count": null
+              }
             }
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T05:27:44.504Z",
+          "capturedAt": "2026-10-02T06:24:18.487Z",
           "expiresAt": null
         },
         {
-          "id": "4e76e056-61ad-4f20-bbc8-41c85d71845f",
-          "runId": "956aede8-7604-4fe8-bd6b-dec2863d40da",
-          "stepId": "03458a4f-53f5-45d9-9405-ef75126155bb",
+          "id": "a8186812-43c2-4418-b1f7-9cb937c6b469",
+          "runId": "db6deec1-dba1-42c5-a5ee-b96d1ea940ca",
+          "stepId": "854d8b68-0924-4175-a735-e9047be605d3",
           "attempt": 1,
           "kind": "state_write",
           "scope": "retained_legacy_inline",
@@ -2926,7 +3184,7 @@
                 "count": 2,
                 "handles": [],
                 "queries": [],
-                "startedAt": 1790918864468
+                "startedAt": 1790922258428
               },
               "loop": {
                 "bounded_retrieval": {
@@ -2951,13 +3209,13 @@
             }
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T05:27:44.504Z",
+          "capturedAt": "2026-10-02T06:24:18.488Z",
           "expiresAt": null
         },
         {
-          "id": "not-captured:03458a4f-53f5-45d9-9405-ef75126155bb:executor_request",
-          "runId": "956aede8-7604-4fe8-bd6b-dec2863d40da",
-          "stepId": "03458a4f-53f5-45d9-9405-ef75126155bb",
+          "id": "not-captured:854d8b68-0924-4175-a735-e9047be605d3:executor_request",
+          "runId": "db6deec1-dba1-42c5-a5ee-b96d1ea940ca",
+          "stepId": "854d8b68-0924-4175-a735-e9047be605d3",
           "attempt": 1,
           "kind": "executor_request",
           "scope": "legacy_not_captured",
@@ -2969,9 +3227,9 @@
           "expiresAt": null
         },
         {
-          "id": "not-captured:03458a4f-53f5-45d9-9405-ef75126155bb:returned_output",
-          "runId": "956aede8-7604-4fe8-bd6b-dec2863d40da",
-          "stepId": "03458a4f-53f5-45d9-9405-ef75126155bb",
+          "id": "not-captured:854d8b68-0924-4175-a735-e9047be605d3:returned_output",
+          "runId": "db6deec1-dba1-42c5-a5ee-b96d1ea940ca",
+          "stepId": "854d8b68-0924-4175-a735-e9047be605d3",
           "attempt": 1,
           "kind": "returned_output",
           "scope": "legacy_not_captured",
@@ -2983,9 +3241,9 @@
           "expiresAt": null
         },
         {
-          "id": "not-captured:03458a4f-53f5-45d9-9405-ef75126155bb:side_effect_confirmation",
-          "runId": "956aede8-7604-4fe8-bd6b-dec2863d40da",
-          "stepId": "03458a4f-53f5-45d9-9405-ef75126155bb",
+          "id": "not-captured:854d8b68-0924-4175-a735-e9047be605d3:side_effect_confirmation",
+          "runId": "db6deec1-dba1-42c5-a5ee-b96d1ea940ca",
+          "stepId": "854d8b68-0924-4175-a735-e9047be605d3",
           "attempt": 1,
           "kind": "side_effect_confirmation",
           "scope": "legacy_not_captured",
@@ -3000,5 +3258,5 @@
     }
   ],
   "children": [],
-  "revision": "bb7497e10378f087d40a4332c6f3c0373c7aeaba57b212a081212e523f6f0757"
+  "revision": "112c4f1e9c919ace94a2744ed06892bdcb341c94eda7403f407f2db27b5f8bed"
 }

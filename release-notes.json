@@ -2532,6 +2532,13 @@
       "notes": [
         "Share workspace recovery when opening Context Tree during updates, and reload acknowledged edits after the current snapshot finishes."
       ]
+    },
+    {
+      "buildNumber": 2158,
+      "label": "Pipeline viewer activation control",
+      "notes": [
+        "Keep the pipeline viewer pending activation until its compatible Autopilot backend is ready."
+      ]
     }
   ]
 }

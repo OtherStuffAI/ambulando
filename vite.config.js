@@ -42,6 +42,7 @@ function flightDeckIdentityPlugin() {
       return {
         define: {
           __FLIGHT_DECK_PG_APP_NPUB__: JSON.stringify(pgAppNpub),
+          __FLIGHTDECK_PIPELINE_VIEWER_ENABLED__: loadedEnv.FLIGHTDECK_PIPELINE_VIEWER_ENABLED === '1',
         },
       };
     },

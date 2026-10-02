@@ -79,3 +79,32 @@ paths match (for example retrieval tweets to input state tweets). Otherwise it
 shows the explicit configured selector endpoint. Older DTO source state selectors
 use exact `state_write` evidence, keeping them separate from returned output.
 No prefix guessing or whole-object substitution supplies a missing named field.
+
+Loaded array inspection renders navigable pages of 50 records. Previous/Next and
+an editable page number expose every loaded record; search covers the entire
+loaded collection and returns to page one. Rendering pages do not change transport
+pagination, complete-value copy, or the exact original record numbering. The
+session's serialized search index clears with the inspector/context. A 5,000-record
+browser regression checks bounded DOM, last-page and search access, and exact copy
+on desktop and touch layouts.
+
+Optional preview `fields` maps exact declared display paths to
+`{present, value, truncated, count}` captured after backend redaction. The frontend
+validates the entire preview's 2 KiB UTF-8 budget and keeps the map session-only.
+Per-field counts and truncation describe that selected field; `present: false`
+distinguishes missing from explicit null. A missing map entry is outside the
+bounded preview. Older previews without a map retain generic path selection.
+Full inspection always selects the exact path from lazy retained evidence; no
+preview field or alias replaces a missing full value. New Bird root Delivered
+metadata selects `$.delivery.delivered`; historical captured definitions retain
+their original paths.
+
+The viewer release flag defaults OFF. Only the exact build environment opt-in
+`FLIGHTDECK_PIPELINE_VIEWER_ENABLED=1` enables its navigation, deep-link mount and
+service initialization. Disabled builds show pending activation for explicit
+viewer requests and issue no viewer health, catalogue, snapshot or evidence
+reads. Runtime capability checks still apply in enabled builds. Before enabling
+publication, activate and verify the compatible backend, signed capability,
+authorization, pinned transport and isolated live preflight. An isolated opted-in
+acceptance build is source validation, not deployment permission. Default builds
+therefore preserve this boundary when other features are published.

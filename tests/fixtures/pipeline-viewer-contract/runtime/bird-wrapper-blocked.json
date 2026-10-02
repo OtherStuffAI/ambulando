@@ -2,25 +2,25 @@
   "version": 1,
   "serviceId": "autopilot_runtime_fixture",
   "run": {
-    "id": "a86e49aa-ed36-4088-89cb-ada8fba8bc84",
+    "id": "01306fbd-50aa-4c0f-832c-9cf18d9fa31c",
     "serviceId": "autopilot_runtime_fixture",
-    "definitionId": "shared:b93503724b68",
+    "definitionId": "shared:63411d5cd9a6",
     "definitionVersion": 2,
-    "definitionHash": "6cbcff5301a8a15ce7938a09a87dcb5f14f03406000ad7eba7c777589af3e31d",
+    "definitionHash": "79885578f419c81d3e5167a3d22ba013aae200e1ac47a55600bf3388ff2fd486",
     "name": "bird.timeline.chat.v2",
     "status": "ok",
-    "startedAt": "2026-10-02T05:27:44.617Z",
-    "completedAt": "2026-10-02T05:27:44.650Z",
+    "startedAt": "2026-10-02T06:24:18.727Z",
+    "completedAt": "2026-10-02T06:24:18.771Z",
     "parentRunId": null,
     "parentStepId": null
   },
   "definition": {
-    "id": "shared:b93503724b68",
+    "id": "shared:63411d5cd9a6",
     "name": "bird.timeline.chat.v2",
     "title": "bird.timeline.chat.v2",
     "description": "Use Bird to return latest tweets from your Following or For You timeline, mentions, user tweets or quoted search. Bare latest/timeline requests ask Following versus For You. Read-only, deterministic exact records and links returned to this chat.",
     "version": 2,
-    "hash": "6cbcff5301a8a15ce7938a09a87dcb5f14f03406000ad7eba7c777589af3e31d",
+    "hash": "79885578f419c81d3e5167a3d22ba013aae200e1ac47a55600bf3388ff2fd486",
     "availability": "complete",
     "steps": [
       {
@@ -143,7 +143,7 @@
         "outputs": [
           {
             "label": "Delivered",
-            "path": "$.delivered",
+            "path": "$.delivery.delivered",
             "format": "auto"
           }
         ],
@@ -377,7 +377,7 @@
   "steps": [
     {
       "itemKey": null,
-      "id": "7aef293a-6cd8-4ff6-8653-825a4fd4a16d",
+      "id": "c3d615b2-e7e3-4858-9f51-8cec29aa006b",
       "logicalKey": "thread",
       "parentStepId": null,
       "attempt": 1,
@@ -385,8 +385,8 @@
       "title": "Validate chat request",
       "description": "Validate the source chat invocation.",
       "kind": "block",
-      "startedAt": "2026-10-02T05:27:44.618Z",
-      "completedAt": "2026-10-02T05:27:44.618Z",
+      "startedAt": "2026-10-02T06:24:18.728Z",
+      "completedAt": "2026-10-02T06:24:18.731Z",
       "error": null,
       "skipReason": null,
       "continuationReason": null,
@@ -408,9 +408,9 @@
       ],
       "evidence": [
         {
-          "id": "22ae3b58-e4f1-45ec-88e0-afa7310f135f",
-          "runId": "a86e49aa-ed36-4088-89cb-ada8fba8bc84",
-          "stepId": "7aef293a-6cd8-4ff6-8653-825a4fd4a16d",
+          "id": "0020e12a-6413-46e7-b9aa-e86cbc150db1",
+          "runId": "01306fbd-50aa-4c0f-832c-9cf18d9fa31c",
+          "stepId": "c3d615b2-e7e3-4858-9f51-8cec29aa006b",
           "attempt": 1,
           "kind": "resolved_input",
           "scope": "selected_step_input",
@@ -426,16 +426,24 @@
             },
             "truncated": false,
             "count": null,
-            "counts": {}
+            "counts": {},
+            "fields": {
+              "$.prompt": {
+                "present": true,
+                "value": "Get 2 following tweets",
+                "truncated": false,
+                "count": null
+              }
+            }
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T05:27:44.618Z",
+          "capturedAt": "2026-10-02T06:24:18.728Z",
           "expiresAt": null
         },
         {
-          "id": "ef038d0b-c10f-4464-bb34-d90a923a757d",
-          "runId": "a86e49aa-ed36-4088-89cb-ada8fba8bc84",
-          "stepId": "7aef293a-6cd8-4ff6-8653-825a4fd4a16d",
+          "id": "cfcda2f5-7efc-47c9-bd62-70c953f83ef4",
+          "runId": "01306fbd-50aa-4c0f-832c-9cf18d9fa31c",
+          "stepId": "c3d615b2-e7e3-4858-9f51-8cec29aa006b",
           "attempt": 1,
           "kind": "returned_output",
           "scope": "wrapper_output_child_evidence_separate",
@@ -461,16 +469,24 @@
             },
             "truncated": true,
             "count": null,
-            "counts": {}
+            "counts": {},
+            "fields": {
+              "$.prompt": {
+                "present": true,
+                "value": "Get 2 following tweets",
+                "truncated": false,
+                "count": null
+              }
+            }
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T05:27:44.618Z",
+          "capturedAt": "2026-10-02T06:24:18.731Z",
           "expiresAt": null
         },
         {
-          "id": "590916c9-007f-4a8a-b1c4-2c51ea77b645",
-          "runId": "a86e49aa-ed36-4088-89cb-ada8fba8bc84",
-          "stepId": "7aef293a-6cd8-4ff6-8653-825a4fd4a16d",
+          "id": "d6832b58-130c-40c0-b2e1-9df0ba61607a",
+          "runId": "01306fbd-50aa-4c0f-832c-9cf18d9fa31c",
+          "stepId": "c3d615b2-e7e3-4858-9f51-8cec29aa006b",
           "attempt": 1,
           "kind": "state_write",
           "scope": "state_after_assignment",
@@ -499,13 +515,13 @@
             "counts": {}
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T05:27:44.618Z",
+          "capturedAt": "2026-10-02T06:24:18.731Z",
           "expiresAt": null
         },
         {
-          "id": "not-captured:7aef293a-6cd8-4ff6-8653-825a4fd4a16d:executor_request",
-          "runId": "a86e49aa-ed36-4088-89cb-ada8fba8bc84",
-          "stepId": "7aef293a-6cd8-4ff6-8653-825a4fd4a16d",
+          "id": "not-captured:c3d615b2-e7e3-4858-9f51-8cec29aa006b:executor_request",
+          "runId": "01306fbd-50aa-4c0f-832c-9cf18d9fa31c",
+          "stepId": "c3d615b2-e7e3-4858-9f51-8cec29aa006b",
           "attempt": 1,
           "kind": "executor_request",
           "scope": "legacy_not_captured",
@@ -517,9 +533,9 @@
           "expiresAt": null
         },
         {
-          "id": "not-captured:7aef293a-6cd8-4ff6-8653-825a4fd4a16d:side_effect_confirmation",
-          "runId": "a86e49aa-ed36-4088-89cb-ada8fba8bc84",
-          "stepId": "7aef293a-6cd8-4ff6-8653-825a4fd4a16d",
+          "id": "not-captured:c3d615b2-e7e3-4858-9f51-8cec29aa006b:side_effect_confirmation",
+          "runId": "01306fbd-50aa-4c0f-832c-9cf18d9fa31c",
+          "stepId": "c3d615b2-e7e3-4858-9f51-8cec29aa006b",
           "attempt": 1,
           "kind": "side_effect_confirmation",
           "scope": "legacy_not_captured",
@@ -534,16 +550,16 @@
     },
     {
       "itemKey": null,
-      "id": "9741198d-0e1b-4ff9-b453-df84137a269c",
+      "id": "109eb22d-bd7a-4374-8a7f-98f7e57f7985",
       "logicalKey": "thread/thread / normalise-thread-invocation",
-      "parentStepId": "7aef293a-6cd8-4ff6-8653-825a4fd4a16d",
+      "parentStepId": "c3d615b2-e7e3-4858-9f51-8cec29aa006b",
       "attempt": 1,
       "status": "ok",
       "title": "thread / normalise-thread-invocation",
       "description": "Validate and normalise the reusable four-field Flight Deck thread invocation contract.",
       "kind": "code",
-      "startedAt": "2026-10-02T05:27:44.618Z",
-      "completedAt": "2026-10-02T05:27:44.618Z",
+      "startedAt": "2026-10-02T06:24:18.729Z",
+      "completedAt": "2026-10-02T06:24:18.730Z",
       "error": null,
       "skipReason": null,
       "continuationReason": null,
@@ -575,9 +591,9 @@
       ],
       "evidence": [
         {
-          "id": "42fabbda-dc42-454a-853c-bd916f3519e1",
-          "runId": "a86e49aa-ed36-4088-89cb-ada8fba8bc84",
-          "stepId": "9741198d-0e1b-4ff9-b453-df84137a269c",
+          "id": "da5695a9-a708-4dd2-b5e6-6e8835159395",
+          "runId": "01306fbd-50aa-4c0f-832c-9cf18d9fa31c",
+          "stepId": "109eb22d-bd7a-4374-8a7f-98f7e57f7985",
           "attempt": 1,
           "kind": "resolved_input",
           "scope": "selected_step_input",
@@ -593,16 +609,30 @@
             },
             "truncated": false,
             "count": null,
-            "counts": {}
+            "counts": {},
+            "fields": {
+              "$.threadId": {
+                "present": true,
+                "value": "22222222-2222-4222-8222-222222222222",
+                "truncated": false,
+                "count": null
+              },
+              "$.prompt": {
+                "present": true,
+                "value": "Get 2 following tweets",
+                "truncated": false,
+                "count": null
+              }
+            }
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T05:27:44.618Z",
+          "capturedAt": "2026-10-02T06:24:18.729Z",
           "expiresAt": null
         },
         {
-          "id": "09b71d35-2098-42d3-958a-ee00fe1805e7",
-          "runId": "a86e49aa-ed36-4088-89cb-ada8fba8bc84",
-          "stepId": "9741198d-0e1b-4ff9-b453-df84137a269c",
+          "id": "b7f89df2-6967-4427-bad7-f5537e326c9d",
+          "runId": "01306fbd-50aa-4c0f-832c-9cf18d9fa31c",
+          "stepId": "109eb22d-bd7a-4374-8a7f-98f7e57f7985",
           "attempt": 1,
           "kind": "executor_request",
           "scope": "code_function_arguments",
@@ -624,13 +654,13 @@
             "counts": {}
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T05:27:44.618Z",
+          "capturedAt": "2026-10-02T06:24:18.730Z",
           "expiresAt": null
         },
         {
-          "id": "29e51000-447d-486e-a060-8cbb4de52b65",
-          "runId": "a86e49aa-ed36-4088-89cb-ada8fba8bc84",
-          "stepId": "9741198d-0e1b-4ff9-b453-df84137a269c",
+          "id": "46de97d7-120d-441e-bce4-f05ec5339eda",
+          "runId": "01306fbd-50aa-4c0f-832c-9cf18d9fa31c",
+          "stepId": "109eb22d-bd7a-4374-8a7f-98f7e57f7985",
           "attempt": 1,
           "kind": "returned_output",
           "scope": "executor_return",
@@ -646,16 +676,30 @@
             },
             "truncated": false,
             "count": null,
-            "counts": {}
+            "counts": {},
+            "fields": {
+              "$.threadId": {
+                "present": true,
+                "value": "22222222-2222-4222-8222-222222222222",
+                "truncated": false,
+                "count": null
+              },
+              "$.prompt": {
+                "present": true,
+                "value": "Get 2 following tweets",
+                "truncated": false,
+                "count": null
+              }
+            }
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T05:27:44.618Z",
+          "capturedAt": "2026-10-02T06:24:18.730Z",
           "expiresAt": null
         },
         {
-          "id": "d8f0cccb-7e2a-4180-bfeb-9f1c86a3fdc6",
-          "runId": "a86e49aa-ed36-4088-89cb-ada8fba8bc84",
-          "stepId": "9741198d-0e1b-4ff9-b453-df84137a269c",
+          "id": "a4e184b0-0788-4f2a-beaf-0b965dddddf5",
+          "runId": "01306fbd-50aa-4c0f-832c-9cf18d9fa31c",
+          "stepId": "109eb22d-bd7a-4374-8a7f-98f7e57f7985",
           "attempt": 1,
           "kind": "state_write",
           "scope": "state_after_assignment",
@@ -684,13 +728,13 @@
             "counts": {}
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T05:27:44.618Z",
+          "capturedAt": "2026-10-02T06:24:18.731Z",
           "expiresAt": null
         },
         {
-          "id": "not-captured:9741198d-0e1b-4ff9-b453-df84137a269c:side_effect_confirmation",
-          "runId": "a86e49aa-ed36-4088-89cb-ada8fba8bc84",
-          "stepId": "9741198d-0e1b-4ff9-b453-df84137a269c",
+          "id": "not-captured:109eb22d-bd7a-4374-8a7f-98f7e57f7985:side_effect_confirmation",
+          "runId": "01306fbd-50aa-4c0f-832c-9cf18d9fa31c",
+          "stepId": "109eb22d-bd7a-4374-8a7f-98f7e57f7985",
           "attempt": 1,
           "kind": "side_effect_confirmation",
           "scope": "legacy_not_captured",
@@ -705,7 +749,7 @@
     },
     {
       "itemKey": null,
-      "id": "a262d844-fe05-4dee-b6b7-1e79f490617a",
+      "id": "c9ffed2e-647a-4252-8676-2154c9af5b2f",
       "logicalKey": "retrieve",
       "parentStepId": null,
       "attempt": 1,
@@ -713,13 +757,13 @@
       "title": "Retrieve tweets",
       "description": "Run reusable bounded Bird retrieval; ambiguous timelines clarify Following versus For You.",
       "kind": "pipeline",
-      "startedAt": "2026-10-02T05:27:44.618Z",
-      "completedAt": "2026-10-02T05:27:44.649Z",
+      "startedAt": "2026-10-02T06:24:18.732Z",
+      "completedAt": "2026-10-02T06:24:18.766Z",
       "error": null,
       "skipReason": null,
       "continuationReason": null,
       "exitReason": "cli_authentication",
-      "childRunId": "ab897472-1620-4942-8d2a-c918583bd2d3",
+      "childRunId": "8fd13d1c-f5ce-4e8d-be09-eefb50c9a0ce",
       "inputs": [
         {
           "label": "Request",
@@ -741,9 +785,9 @@
       ],
       "evidence": [
         {
-          "id": "b20a331a-1de5-414a-a903-a11aed51afb8",
-          "runId": "a86e49aa-ed36-4088-89cb-ada8fba8bc84",
-          "stepId": "a262d844-fe05-4dee-b6b7-1e79f490617a",
+          "id": "38a161be-fe9e-41ba-81aa-e75194836641",
+          "runId": "01306fbd-50aa-4c0f-832c-9cf18d9fa31c",
+          "stepId": "c9ffed2e-647a-4252-8676-2154c9af5b2f",
           "attempt": 1,
           "kind": "resolved_input",
           "scope": "selected_step_input",
@@ -756,16 +800,24 @@
             },
             "truncated": false,
             "count": null,
-            "counts": {}
+            "counts": {},
+            "fields": {
+              "$.request": {
+                "present": true,
+                "value": "Get 2 following tweets",
+                "truncated": false,
+                "count": null
+              }
+            }
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T05:27:44.618Z",
+          "capturedAt": "2026-10-02T06:24:18.732Z",
           "expiresAt": null
         },
         {
-          "id": "849406c2-56f9-491b-bcc2-5112021b312e",
-          "runId": "a86e49aa-ed36-4088-89cb-ada8fba8bc84",
-          "stepId": "a262d844-fe05-4dee-b6b7-1e79f490617a",
+          "id": "e7defe66-b57c-4012-9bf3-ba6607318ca2",
+          "runId": "01306fbd-50aa-4c0f-832c-9cf18d9fa31c",
+          "stepId": "c9ffed2e-647a-4252-8676-2154c9af5b2f",
           "attempt": 1,
           "kind": "returned_output",
           "scope": "wrapper_output_child_evidence_separate",
@@ -780,7 +832,7 @@
                 "count": 2,
                 "handles": [],
                 "queries": [],
-                "startedAt": 1790918864621
+                "startedAt": 1790922258738
               },
               "loop": {
                 "bounded_retrieval": {
@@ -802,16 +854,30 @@
             "counts": {
               "$.retrieval.handles": 0,
               "$.retrieval.queries": 0
+            },
+            "fields": {
+              "$.retrieval.verdict": {
+                "present": true,
+                "value": "blocked",
+                "truncated": false,
+                "count": null
+              },
+              "$.retrieval.tweets": {
+                "present": true,
+                "value": [],
+                "truncated": false,
+                "count": 0
+              }
             }
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T05:27:44.649Z",
+          "capturedAt": "2026-10-02T06:24:18.766Z",
           "expiresAt": null
         },
         {
-          "id": "9651095a-d5b6-4b8f-ad11-64971e38c126",
-          "runId": "a86e49aa-ed36-4088-89cb-ada8fba8bc84",
-          "stepId": "a262d844-fe05-4dee-b6b7-1e79f490617a",
+          "id": "f887b596-58da-482a-927d-303a0eaf35e9",
+          "runId": "01306fbd-50aa-4c0f-832c-9cf18d9fa31c",
+          "stepId": "c9ffed2e-647a-4252-8676-2154c9af5b2f",
           "attempt": 1,
           "kind": "state_write",
           "scope": "state_after_assignment",
@@ -840,13 +906,13 @@
             "counts": {}
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T05:27:44.649Z",
+          "capturedAt": "2026-10-02T06:24:18.766Z",
           "expiresAt": null
         },
         {
-          "id": "not-captured:a262d844-fe05-4dee-b6b7-1e79f490617a:executor_request",
-          "runId": "a86e49aa-ed36-4088-89cb-ada8fba8bc84",
-          "stepId": "a262d844-fe05-4dee-b6b7-1e79f490617a",
+          "id": "not-captured:c9ffed2e-647a-4252-8676-2154c9af5b2f:executor_request",
+          "runId": "01306fbd-50aa-4c0f-832c-9cf18d9fa31c",
+          "stepId": "c9ffed2e-647a-4252-8676-2154c9af5b2f",
           "attempt": 1,
           "kind": "executor_request",
           "scope": "legacy_not_captured",
@@ -858,9 +924,9 @@
           "expiresAt": null
         },
         {
-          "id": "not-captured:a262d844-fe05-4dee-b6b7-1e79f490617a:side_effect_confirmation",
-          "runId": "a86e49aa-ed36-4088-89cb-ada8fba8bc84",
-          "stepId": "a262d844-fe05-4dee-b6b7-1e79f490617a",
+          "id": "not-captured:c9ffed2e-647a-4252-8676-2154c9af5b2f:side_effect_confirmation",
+          "runId": "01306fbd-50aa-4c0f-832c-9cf18d9fa31c",
+          "stepId": "c9ffed2e-647a-4252-8676-2154c9af5b2f",
           "attempt": 1,
           "kind": "side_effect_confirmation",
           "scope": "legacy_not_captured",
@@ -875,7 +941,7 @@
     },
     {
       "itemKey": null,
-      "id": "de212e39-40ae-4167-a467-20936990e464",
+      "id": "88bd8001-89dd-49c7-9a68-c85eb1fa24be",
       "logicalKey": "format",
       "parentStepId": null,
       "attempt": 1,
@@ -883,8 +949,8 @@
       "title": "Format exact tweets",
       "description": "Format exact tweet records and safe links without model prose.",
       "kind": "code",
-      "startedAt": "2026-10-02T05:27:44.649Z",
-      "completedAt": "2026-10-02T05:27:44.649Z",
+      "startedAt": "2026-10-02T06:24:18.767Z",
+      "completedAt": "2026-10-02T06:24:18.767Z",
       "error": null,
       "skipReason": null,
       "continuationReason": null,
@@ -906,9 +972,9 @@
       ],
       "evidence": [
         {
-          "id": "d65a0572-719d-45df-b2c3-43ff7988bf67",
-          "runId": "a86e49aa-ed36-4088-89cb-ada8fba8bc84",
-          "stepId": "de212e39-40ae-4167-a467-20936990e464",
+          "id": "d802e219-9323-4e0d-acbb-33831290560f",
+          "runId": "01306fbd-50aa-4c0f-832c-9cf18d9fa31c",
+          "stepId": "88bd8001-89dd-49c7-9a68-c85eb1fa24be",
           "attempt": 1,
           "kind": "resolved_input",
           "scope": "selected_step_input",
@@ -922,7 +988,7 @@
                 "count": 2,
                 "handles": [],
                 "queries": [],
-                "startedAt": 1790918864621
+                "startedAt": 1790922258738
               }
             },
             "truncated": true,
@@ -930,16 +996,24 @@
             "counts": {
               "$.state.handles": 0,
               "$.state.queries": 0
+            },
+            "fields": {
+              "$.state.tweets": {
+                "present": true,
+                "value": [],
+                "truncated": false,
+                "count": 0
+              }
             }
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T05:27:44.649Z",
+          "capturedAt": "2026-10-02T06:24:18.767Z",
           "expiresAt": null
         },
         {
-          "id": "10e65879-3ee9-4968-9f0a-ef0b3497705b",
-          "runId": "a86e49aa-ed36-4088-89cb-ada8fba8bc84",
-          "stepId": "de212e39-40ae-4167-a467-20936990e464",
+          "id": "fdc7b53d-4cf9-451c-9593-1a19734038ac",
+          "runId": "01306fbd-50aa-4c0f-832c-9cf18d9fa31c",
+          "stepId": "88bd8001-89dd-49c7-9a68-c85eb1fa24be",
           "attempt": 1,
           "kind": "executor_request",
           "scope": "code_function_arguments",
@@ -955,7 +1029,7 @@
                   "count": 2,
                   "handles": [],
                   "queries": [],
-                  "startedAt": 1790918864621
+                  "startedAt": 1790922258738
                 }
               }
             },
@@ -967,13 +1041,13 @@
             }
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T05:27:44.649Z",
+          "capturedAt": "2026-10-02T06:24:18.767Z",
           "expiresAt": null
         },
         {
-          "id": "ecf5b6ee-8e87-4c43-a342-2de1a3fd2daf",
-          "runId": "a86e49aa-ed36-4088-89cb-ada8fba8bc84",
-          "stepId": "de212e39-40ae-4167-a467-20936990e464",
+          "id": "660faa30-c51c-4ae1-a8ab-17ad164faec4",
+          "runId": "01306fbd-50aa-4c0f-832c-9cf18d9fa31c",
+          "stepId": "88bd8001-89dd-49c7-9a68-c85eb1fa24be",
           "attempt": 1,
           "kind": "returned_output",
           "scope": "executor_return",
@@ -988,16 +1062,24 @@
             },
             "truncated": false,
             "count": null,
-            "counts": {}
+            "counts": {},
+            "fields": {
+              "$.message": {
+                "present": true,
+                "value": "Bird could not retrieve tweets because its account authentication needs attention.",
+                "truncated": false,
+                "count": null
+              }
+            }
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T05:27:44.649Z",
+          "capturedAt": "2026-10-02T06:24:18.768Z",
           "expiresAt": null
         },
         {
-          "id": "82b0b923-c717-44a3-b8ca-05c6d68c934e",
-          "runId": "a86e49aa-ed36-4088-89cb-ada8fba8bc84",
-          "stepId": "de212e39-40ae-4167-a467-20936990e464",
+          "id": "fdc8d30f-195b-4919-9b6e-e2359e19fa52",
+          "runId": "01306fbd-50aa-4c0f-832c-9cf18d9fa31c",
+          "stepId": "88bd8001-89dd-49c7-9a68-c85eb1fa24be",
           "attempt": 1,
           "kind": "state_write",
           "scope": "state_after_assignment",
@@ -1026,13 +1108,13 @@
             "counts": {}
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T05:27:44.649Z",
+          "capturedAt": "2026-10-02T06:24:18.768Z",
           "expiresAt": null
         },
         {
-          "id": "not-captured:de212e39-40ae-4167-a467-20936990e464:side_effect_confirmation",
-          "runId": "a86e49aa-ed36-4088-89cb-ada8fba8bc84",
-          "stepId": "de212e39-40ae-4167-a467-20936990e464",
+          "id": "not-captured:88bd8001-89dd-49c7-9a68-c85eb1fa24be:side_effect_confirmation",
+          "runId": "01306fbd-50aa-4c0f-832c-9cf18d9fa31c",
+          "stepId": "88bd8001-89dd-49c7-9a68-c85eb1fa24be",
           "attempt": 1,
           "kind": "side_effect_confirmation",
           "scope": "legacy_not_captured",
@@ -1047,7 +1129,7 @@
     },
     {
       "itemKey": null,
-      "id": "f8867cd7-5f54-47a7-b372-e72d39e793b2",
+      "id": "d45609b7-6450-488a-81b2-99ce17a6047a",
       "logicalKey": "reply",
       "parentStepId": null,
       "attempt": 1,
@@ -1055,8 +1137,8 @@
       "title": "Deliver to chat",
       "description": "Return to the validated source thread as the addressed managed agent.",
       "kind": "block",
-      "startedAt": "2026-10-02T05:27:44.649Z",
-      "completedAt": "2026-10-02T05:27:44.650Z",
+      "startedAt": "2026-10-02T06:24:18.768Z",
+      "completedAt": "2026-10-02T06:24:18.770Z",
       "error": null,
       "skipReason": null,
       "continuationReason": null,
@@ -1072,15 +1154,15 @@
       "outputs": [
         {
           "label": "Delivered",
-          "path": "$.delivered",
+          "path": "$.delivery.delivered",
           "format": "auto"
         }
       ],
       "evidence": [
         {
-          "id": "2c51c79f-5f03-43d4-8416-30ca3528101c",
-          "runId": "a86e49aa-ed36-4088-89cb-ada8fba8bc84",
-          "stepId": "f8867cd7-5f54-47a7-b372-e72d39e793b2",
+          "id": "0356b133-7a96-413d-86ef-a962adb67a95",
+          "runId": "01306fbd-50aa-4c0f-832c-9cf18d9fa31c",
+          "stepId": "d45609b7-6450-488a-81b2-99ce17a6047a",
           "attempt": 1,
           "kind": "resolved_input",
           "scope": "selected_step_input",
@@ -1097,16 +1179,24 @@
             },
             "truncated": false,
             "count": null,
-            "counts": {}
+            "counts": {},
+            "fields": {
+              "$.message": {
+                "present": true,
+                "value": "Bird could not retrieve tweets because its account authentication needs attention.",
+                "truncated": false,
+                "count": null
+              }
+            }
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T05:27:44.649Z",
+          "capturedAt": "2026-10-02T06:24:18.768Z",
           "expiresAt": null
         },
         {
-          "id": "2cc15d96-cade-4585-9e4a-2e7e08df3af4",
-          "runId": "a86e49aa-ed36-4088-89cb-ada8fba8bc84",
-          "stepId": "f8867cd7-5f54-47a7-b372-e72d39e793b2",
+          "id": "b4edceac-2301-4171-9a10-d9a9cd4a7d12",
+          "runId": "01306fbd-50aa-4c0f-832c-9cf18d9fa31c",
+          "stepId": "d45609b7-6450-488a-81b2-99ce17a6047a",
           "attempt": 1,
           "kind": "returned_output",
           "scope": "wrapper_output_child_evidence_separate",
@@ -1141,16 +1231,24 @@
             },
             "truncated": true,
             "count": null,
-            "counts": {}
+            "counts": {},
+            "fields": {
+              "$.delivery.delivered": {
+                "present": true,
+                "value": true,
+                "truncated": false,
+                "count": null
+              }
+            }
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T05:27:44.650Z",
+          "capturedAt": "2026-10-02T06:24:18.771Z",
           "expiresAt": null
         },
         {
-          "id": "810e172d-843a-4910-b73a-c24ee0aaa275",
-          "runId": "a86e49aa-ed36-4088-89cb-ada8fba8bc84",
-          "stepId": "f8867cd7-5f54-47a7-b372-e72d39e793b2",
+          "id": "5fa955a4-e5e8-4ded-bca8-9100ccf8c8b9",
+          "runId": "01306fbd-50aa-4c0f-832c-9cf18d9fa31c",
+          "stepId": "d45609b7-6450-488a-81b2-99ce17a6047a",
           "attempt": 1,
           "kind": "state_write",
           "scope": "state_after_assignment",
@@ -1188,13 +1286,13 @@
             "counts": {}
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T05:27:44.650Z",
+          "capturedAt": "2026-10-02T06:24:18.771Z",
           "expiresAt": null
         },
         {
-          "id": "not-captured:f8867cd7-5f54-47a7-b372-e72d39e793b2:executor_request",
-          "runId": "a86e49aa-ed36-4088-89cb-ada8fba8bc84",
-          "stepId": "f8867cd7-5f54-47a7-b372-e72d39e793b2",
+          "id": "not-captured:d45609b7-6450-488a-81b2-99ce17a6047a:executor_request",
+          "runId": "01306fbd-50aa-4c0f-832c-9cf18d9fa31c",
+          "stepId": "d45609b7-6450-488a-81b2-99ce17a6047a",
           "attempt": 1,
           "kind": "executor_request",
           "scope": "legacy_not_captured",
@@ -1206,9 +1304,9 @@
           "expiresAt": null
         },
         {
-          "id": "not-captured:f8867cd7-5f54-47a7-b372-e72d39e793b2:side_effect_confirmation",
-          "runId": "a86e49aa-ed36-4088-89cb-ada8fba8bc84",
-          "stepId": "f8867cd7-5f54-47a7-b372-e72d39e793b2",
+          "id": "not-captured:d45609b7-6450-488a-81b2-99ce17a6047a:side_effect_confirmation",
+          "runId": "01306fbd-50aa-4c0f-832c-9cf18d9fa31c",
+          "stepId": "d45609b7-6450-488a-81b2-99ce17a6047a",
           "attempt": 1,
           "kind": "side_effect_confirmation",
           "scope": "legacy_not_captured",
@@ -1223,16 +1321,16 @@
     },
     {
       "itemKey": null,
-      "id": "e5386a07-cde4-4789-80df-573c4aec1b91",
+      "id": "93d2f203-6c58-47e4-b738-84e476ff5559",
       "logicalKey": "reply/reply / return-to-thread",
-      "parentStepId": "f8867cd7-5f54-47a7-b372-e72d39e793b2",
+      "parentStepId": "d45609b7-6450-488a-81b2-99ce17a6047a",
       "attempt": 1,
       "status": "ok",
       "title": "reply / return-to-thread",
       "description": "Resolve the source Flight Deck thread and post the final Markdown as the configured managed agent.",
       "kind": "code",
-      "startedAt": "2026-10-02T05:27:44.650Z",
-      "completedAt": "2026-10-02T05:27:44.650Z",
+      "startedAt": "2026-10-02T06:24:18.769Z",
+      "completedAt": "2026-10-02T06:24:18.770Z",
       "error": null,
       "skipReason": null,
       "continuationReason": null,
@@ -1269,9 +1367,9 @@
       ],
       "evidence": [
         {
-          "id": "768906ac-51d1-4d34-acd6-d0c407a47466",
-          "runId": "a86e49aa-ed36-4088-89cb-ada8fba8bc84",
-          "stepId": "e5386a07-cde4-4789-80df-573c4aec1b91",
+          "id": "9c9c3b1f-a3bf-41aa-a7ad-6c7db9d771e8",
+          "runId": "01306fbd-50aa-4c0f-832c-9cf18d9fa31c",
+          "stepId": "93d2f203-6c58-47e4-b738-84e476ff5559",
           "attempt": 1,
           "kind": "resolved_input",
           "scope": "selected_step_input",
@@ -1288,16 +1386,30 @@
             },
             "truncated": false,
             "count": null,
-            "counts": {}
+            "counts": {},
+            "fields": {
+              "$.threadId": {
+                "present": true,
+                "value": "22222222-2222-4222-8222-222222222222",
+                "truncated": false,
+                "count": null
+              },
+              "$.message": {
+                "present": true,
+                "value": "Bird could not retrieve tweets because its account authentication needs attention.",
+                "truncated": false,
+                "count": null
+              }
+            }
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T05:27:44.650Z",
+          "capturedAt": "2026-10-02T06:24:18.769Z",
           "expiresAt": null
         },
         {
-          "id": "cad250e1-2bec-482c-b0e4-6c18cdb37c78",
-          "runId": "a86e49aa-ed36-4088-89cb-ada8fba8bc84",
-          "stepId": "e5386a07-cde4-4789-80df-573c4aec1b91",
+          "id": "c156a5aa-c8d0-4ded-9920-75ad3844bd10",
+          "runId": "01306fbd-50aa-4c0f-832c-9cf18d9fa31c",
+          "stepId": "93d2f203-6c58-47e4-b738-84e476ff5559",
           "attempt": 1,
           "kind": "executor_request",
           "scope": "code_function_arguments",
@@ -1320,13 +1432,13 @@
             "counts": {}
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T05:27:44.650Z",
+          "capturedAt": "2026-10-02T06:24:18.769Z",
           "expiresAt": null
         },
         {
-          "id": "6a181cd6-cbb9-4e87-865c-789c0e4b07a7",
-          "runId": "a86e49aa-ed36-4088-89cb-ada8fba8bc84",
-          "stepId": "e5386a07-cde4-4789-80df-573c4aec1b91",
+          "id": "8813eb53-f703-4cd7-9bad-008ed1a54b76",
+          "runId": "01306fbd-50aa-4c0f-832c-9cf18d9fa31c",
+          "stepId": "93d2f203-6c58-47e4-b738-84e476ff5559",
           "attempt": 1,
           "kind": "side_effect_confirmation",
           "scope": "delivery_adapter_confirmation",
@@ -1346,13 +1458,13 @@
             "counts": {}
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T05:27:44.650Z",
+          "capturedAt": "2026-10-02T06:24:18.770Z",
           "expiresAt": null
         },
         {
-          "id": "a6e5a5fe-0c80-4a56-9809-0a758c49d029",
-          "runId": "a86e49aa-ed36-4088-89cb-ada8fba8bc84",
-          "stepId": "e5386a07-cde4-4789-80df-573c4aec1b91",
+          "id": "869a41bf-4e52-4c35-ab24-0ebd4d4d48aa",
+          "runId": "01306fbd-50aa-4c0f-832c-9cf18d9fa31c",
+          "stepId": "93d2f203-6c58-47e4-b738-84e476ff5559",
           "attempt": 1,
           "kind": "returned_output",
           "scope": "executor_return",
@@ -1369,16 +1481,36 @@
             },
             "truncated": true,
             "count": null,
-            "counts": {}
+            "counts": {},
+            "fields": {
+              "$.delivered": {
+                "present": true,
+                "value": true,
+                "truncated": false,
+                "count": null
+              },
+              "$.threadId": {
+                "present": true,
+                "value": "22222222-2222-4222-8222-222222222222",
+                "truncated": false,
+                "count": null
+              },
+              "$.messageId": {
+                "present": true,
+                "value": "fixture-delivery",
+                "truncated": false,
+                "count": null
+              }
+            }
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T05:27:44.650Z",
+          "capturedAt": "2026-10-02T06:24:18.770Z",
           "expiresAt": null
         },
         {
-          "id": "2824b541-a2b3-43d6-9ce6-b07e035b92de",
-          "runId": "a86e49aa-ed36-4088-89cb-ada8fba8bc84",
-          "stepId": "e5386a07-cde4-4789-80df-573c4aec1b91",
+          "id": "3cabfc34-60ff-4c4e-908b-d82befe3fafc",
+          "runId": "01306fbd-50aa-4c0f-832c-9cf18d9fa31c",
+          "stepId": "93d2f203-6c58-47e4-b738-84e476ff5559",
           "attempt": 1,
           "kind": "state_write",
           "scope": "state_after_assignment",
@@ -1416,7 +1548,7 @@
             "counts": {}
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T05:27:44.650Z",
+          "capturedAt": "2026-10-02T06:24:18.770Z",
           "expiresAt": null
         }
       ]
@@ -1424,18 +1556,18 @@
   ],
   "children": [
     {
-      "id": "ab897472-1620-4942-8d2a-c918583bd2d3",
+      "id": "8fd13d1c-f5ce-4e8d-be09-eefb50c9a0ce",
       "serviceId": "autopilot_runtime_fixture",
-      "definitionId": "shared:a5e6d3961ea6",
+      "definitionId": "shared:6069512d3316",
       "definitionVersion": 2,
-      "definitionHash": "db1dce2d4bd5abc5b31d774fa9ef2fc74dcae64dc7f2017bb04c573bda33d8c4",
+      "definitionHash": "cf49a355b63e1e264cec1798c8644ff5629718cea5893be6a5fbcd93d4c8894b",
       "name": "bird.retrieve.v2",
       "status": "ok",
-      "startedAt": "2026-10-02T05:27:44.621Z",
-      "completedAt": "2026-10-02T05:27:44.625Z",
-      "parentRunId": "a86e49aa-ed36-4088-89cb-ada8fba8bc84",
-      "parentStepId": "a262d844-fe05-4dee-b6b7-1e79f490617a"
+      "startedAt": "2026-10-02T06:24:18.737Z",
+      "completedAt": "2026-10-02T06:24:18.747Z",
+      "parentRunId": "01306fbd-50aa-4c0f-832c-9cf18d9fa31c",
+      "parentStepId": "c9ffed2e-647a-4252-8676-2154c9af5b2f"
     }
   ],
-  "revision": "5c29d24369ea62c7dd0a451d14b56eb6fa052b04ea7d6390ca4bdc8a7d90683d"
+  "revision": "3f937cbdae059c345154dd782866aa1c80b7f37b293eb72072789718185e9d49"
 }

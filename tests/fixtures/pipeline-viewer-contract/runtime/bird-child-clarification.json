@@ -2,25 +2,25 @@
   "version": 1,
   "serviceId": "autopilot_runtime_fixture",
   "run": {
-    "id": "60651074-656f-4c09-97e4-a4d3e1a48dce",
+    "id": "bf129018-54cc-4ea1-bd4c-39c5a656e01c",
     "serviceId": "autopilot_runtime_fixture",
-    "definitionId": "shared:4b3510ae43b0",
+    "definitionId": "shared:d90969592da2",
     "definitionVersion": 2,
-    "definitionHash": "db1dce2d4bd5abc5b31d774fa9ef2fc74dcae64dc7f2017bb04c573bda33d8c4",
+    "definitionHash": "cf49a355b63e1e264cec1798c8644ff5629718cea5893be6a5fbcd93d4c8894b",
     "name": "bird.retrieve.v2",
     "status": "ok",
-    "startedAt": "2026-10-02T05:27:44.546Z",
-    "completedAt": "2026-10-02T05:27:44.549Z",
-    "parentRunId": "0c4c230c-7903-4f22-939e-b0450dc50793",
-    "parentStepId": "d465efe4-0a04-4eaf-9d61-552fd938f836"
+    "startedAt": "2026-10-02T06:24:18.583Z",
+    "completedAt": "2026-10-02T06:24:18.591Z",
+    "parentRunId": "e9f60818-9aa3-4457-a0dc-28373cd172df",
+    "parentStepId": "8184dd6d-9616-4f54-9ddc-27460536be9f"
   },
   "definition": {
-    "id": "shared:4b3510ae43b0",
+    "id": "shared:d90969592da2",
     "name": "bird.retrieve.v2",
     "title": "bird.retrieve.v2",
     "description": "Bounded read-only Bird retrieval with advisory Jev choices and deterministic execution policy.",
     "version": 2,
-    "hash": "db1dce2d4bd5abc5b31d774fa9ef2fc74dcae64dc7f2017bb04c573bda33d8c4",
+    "hash": "cf49a355b63e1e264cec1798c8644ff5629718cea5893be6a5fbcd93d4c8894b",
     "availability": "complete",
     "steps": [
       {
@@ -95,12 +95,12 @@
             "inputs": [
               {
                 "label": "Request",
-                "path": "$.request",
+                "path": "$.state.request",
                 "format": "text"
               },
               {
                 "label": "Attempt",
-                "path": "$.attempt",
+                "path": "$.state.attempt",
                 "format": "count"
               }
             ],
@@ -174,12 +174,12 @@
             "inputs": [
               {
                 "label": "Request",
-                "path": "$.request",
+                "path": "$.state.request",
                 "format": "text"
               },
               {
                 "label": "Attempt",
-                "path": "$.attempt",
+                "path": "$.state.attempt",
                 "format": "count"
               }
             ],
@@ -263,7 +263,10 @@
           "$.attempt",
           "$.latencyMs"
         ],
-        "targetPortPaths": [],
+        "targetPortPaths": [
+          "$.state.request",
+          "$.state.attempt"
+        ],
         "sourceStepKey": "prepare",
         "sourcePath": "$.retrieval",
         "targetStepKey": "bounded-retrieval/choose",
@@ -310,7 +313,10 @@
           "$.attempt",
           "$.latencyMs"
         ],
-        "targetPortPaths": [],
+        "targetPortPaths": [
+          "$.state.request",
+          "$.state.attempt"
+        ],
         "sourceStepKey": "bounded-retrieval/execute",
         "sourcePath": "$.retrieval",
         "targetStepKey": "bounded-retrieval/judge-evidence",
@@ -354,7 +360,7 @@
   "steps": [
     {
       "itemKey": null,
-      "id": "54a5479c-254b-4989-a112-95d7f47961be",
+      "id": "448ace05-35fe-45df-9b78-69b176eb498f",
       "logicalKey": "prepare",
       "parentStepId": null,
       "attempt": 1,
@@ -362,8 +368,8 @@
       "title": "Validate retrieval request",
       "description": "Extract exact candidates and validate bounded input.",
       "kind": "code",
-      "startedAt": "2026-10-02T05:27:44.546Z",
-      "completedAt": "2026-10-02T05:27:44.547Z",
+      "startedAt": "2026-10-02T06:24:18.584Z",
+      "completedAt": "2026-10-02T06:24:18.585Z",
       "error": null,
       "skipReason": null,
       "continuationReason": null,
@@ -400,9 +406,9 @@
       ],
       "evidence": [
         {
-          "id": "eb9ceb2d-e5ce-4bea-913f-1858a9b20666",
-          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
-          "stepId": "54a5479c-254b-4989-a112-95d7f47961be",
+          "id": "a7b408ef-f9b4-4b25-a129-e5c24a588f6a",
+          "runId": "bf129018-54cc-4ea1-bd4c-39c5a656e01c",
+          "stepId": "448ace05-35fe-45df-9b78-69b176eb498f",
           "attempt": 1,
           "kind": "resolved_input",
           "scope": "selected_step_input",
@@ -415,16 +421,24 @@
             },
             "truncated": false,
             "count": null,
-            "counts": {}
+            "counts": {},
+            "fields": {
+              "$.request": {
+                "present": true,
+                "value": "Use bird to get the latest 20 tweets on my timeline",
+                "truncated": false,
+                "count": null
+              }
+            }
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T05:27:44.546Z",
+          "capturedAt": "2026-10-02T06:24:18.585Z",
           "expiresAt": null
         },
         {
-          "id": "c41a2e67-d553-435d-b380-66a4511f3958",
-          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
-          "stepId": "54a5479c-254b-4989-a112-95d7f47961be",
+          "id": "73d0e176-06da-4752-8a7b-6b1f15806341",
+          "runId": "bf129018-54cc-4ea1-bd4c-39c5a656e01c",
+          "stepId": "448ace05-35fe-45df-9b78-69b176eb498f",
           "attempt": 1,
           "kind": "executor_request",
           "scope": "code_function_arguments",
@@ -443,13 +457,13 @@
             "counts": {}
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T05:27:44.547Z",
+          "capturedAt": "2026-10-02T06:24:18.585Z",
           "expiresAt": null
         },
         {
-          "id": "3968d711-fa42-4579-8674-7b4e166c335b",
-          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
-          "stepId": "54a5479c-254b-4989-a112-95d7f47961be",
+          "id": "d0becde0-9905-437c-934b-77f75715b08f",
+          "runId": "bf129018-54cc-4ea1-bd4c-39c5a656e01c",
+          "stepId": "448ace05-35fe-45df-9b78-69b176eb498f",
           "attempt": 1,
           "kind": "returned_output",
           "scope": "executor_return",
@@ -462,23 +476,49 @@
               "count": 20,
               "handles": [],
               "queries": [],
-              "startedAt": 1790918864547
+              "startedAt": 1790922258585
             },
             "truncated": true,
             "count": null,
             "counts": {
               "$.handles": 0,
               "$.queries": 0
+            },
+            "fields": {
+              "$.verdict": {
+                "present": true,
+                "value": "needs_clarification",
+                "truncated": false,
+                "count": null
+              },
+              "$.resultCount": {
+                "present": true,
+                "value": 0,
+                "truncated": false,
+                "count": null
+              },
+              "$.attempt": {
+                "present": true,
+                "value": 0,
+                "truncated": false,
+                "count": null
+              },
+              "$.latencyMs": {
+                "present": true,
+                "value": 0,
+                "truncated": false,
+                "count": null
+              }
             }
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T05:27:44.547Z",
+          "capturedAt": "2026-10-02T06:24:18.586Z",
           "expiresAt": null
         },
         {
-          "id": "368286ff-65dd-4472-8d3a-1c199102c119",
-          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
-          "stepId": "54a5479c-254b-4989-a112-95d7f47961be",
+          "id": "e7beb15f-74eb-4bb5-a6e7-8b3a630dfef9",
+          "runId": "bf129018-54cc-4ea1-bd4c-39c5a656e01c",
+          "stepId": "448ace05-35fe-45df-9b78-69b176eb498f",
           "attempt": 1,
           "kind": "state_write",
           "scope": "state_after_assignment",
@@ -493,7 +533,7 @@
                 "count": 20,
                 "handles": [],
                 "queries": [],
-                "startedAt": 1790918864547
+                "startedAt": 1790922258585
               }
             },
             "truncated": true,
@@ -504,13 +544,13 @@
             }
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T05:27:44.547Z",
+          "capturedAt": "2026-10-02T06:24:18.586Z",
           "expiresAt": null
         },
         {
-          "id": "not-captured:54a5479c-254b-4989-a112-95d7f47961be:side_effect_confirmation",
-          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
-          "stepId": "54a5479c-254b-4989-a112-95d7f47961be",
+          "id": "not-captured:448ace05-35fe-45df-9b78-69b176eb498f:side_effect_confirmation",
+          "runId": "bf129018-54cc-4ea1-bd4c-39c5a656e01c",
+          "stepId": "448ace05-35fe-45df-9b78-69b176eb498f",
           "attempt": 1,
           "kind": "side_effect_confirmation",
           "scope": "legacy_not_captured",
@@ -525,7 +565,7 @@
     },
     {
       "itemKey": null,
-      "id": "9c8bafba-f905-41e6-8945-58c5040802a7",
+      "id": "fbfc830e-6dc4-49c2-a387-ef21d136e7ea",
       "logicalKey": "bounded-retrieval",
       "parentStepId": null,
       "attempt": 1,
@@ -533,8 +573,8 @@
       "title": "Bounded retrieval attempts",
       "description": "At most three executions; terminal verdicts skip remaining actions.",
       "kind": "loop",
-      "startedAt": "2026-10-02T05:27:44.547Z",
-      "completedAt": "2026-10-02T05:27:44.549Z",
+      "startedAt": "2026-10-02T06:24:18.586Z",
+      "completedAt": "2026-10-02T06:24:18.590Z",
       "error": null,
       "skipReason": null,
       "continuationReason": null,
@@ -561,9 +601,9 @@
       ],
       "evidence": [
         {
-          "id": "c2f47e3e-b84a-491a-a6bd-edbd69f38a68",
-          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
-          "stepId": "9c8bafba-f905-41e6-8945-58c5040802a7",
+          "id": "2741fe22-b309-4dee-9354-499048411d28",
+          "runId": "bf129018-54cc-4ea1-bd4c-39c5a656e01c",
+          "stepId": "fbfc830e-6dc4-49c2-a387-ef21d136e7ea",
           "attempt": 1,
           "kind": "resolved_input",
           "scope": "selected_step_input",
@@ -578,7 +618,7 @@
                 "count": 20,
                 "handles": [],
                 "queries": [],
-                "startedAt": 1790918864547
+                "startedAt": 1790922258585
               }
             },
             "truncated": true,
@@ -586,16 +626,24 @@
             "counts": {
               "$.retrieval.handles": 0,
               "$.retrieval.queries": 0
+            },
+            "fields": {
+              "$.retrieval.request": {
+                "present": true,
+                "value": "Use bird to get the latest 20 tweets on my timeline",
+                "truncated": false,
+                "count": null
+              }
             }
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T05:27:44.547Z",
+          "capturedAt": "2026-10-02T06:24:18.586Z",
           "expiresAt": null
         },
         {
-          "id": "a73bcfa9-c6f9-46ae-ae8b-01660523de84",
-          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
-          "stepId": "9c8bafba-f905-41e6-8945-58c5040802a7",
+          "id": "d7cdedbf-ea2f-4b43-b518-da8cae4c5c46",
+          "runId": "bf129018-54cc-4ea1-bd4c-39c5a656e01c",
+          "stepId": "fbfc830e-6dc4-49c2-a387-ef21d136e7ea",
           "attempt": 1,
           "kind": "returned_output",
           "scope": "wrapper_output_child_evidence_separate",
@@ -612,7 +660,7 @@
                   "count": 20,
                   "handles": [],
                   "queries": [],
-                  "startedAt": 1790918864547
+                  "startedAt": 1790922258585
                 },
                 "loop": {
                   "bounded_retrieval": {
@@ -628,16 +676,30 @@
             "counts": {
               "$.current.retrieval.handles": 0,
               "$.current.retrieval.queries": 0
+            },
+            "fields": {
+              "$.current.retrieval.verdict": {
+                "present": true,
+                "value": "needs_clarification",
+                "truncated": false,
+                "count": null
+              },
+              "$.current.retrieval.tweets": {
+                "present": true,
+                "value": [],
+                "truncated": false,
+                "count": 0
+              }
             }
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T05:27:44.549Z",
+          "capturedAt": "2026-10-02T06:24:18.591Z",
           "expiresAt": null
         },
         {
-          "id": "710981ee-1e68-4db6-a868-cc8032938f75",
-          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
-          "stepId": "9c8bafba-f905-41e6-8945-58c5040802a7",
+          "id": "1c3baedc-e601-437b-9138-59cf95b5e91c",
+          "runId": "bf129018-54cc-4ea1-bd4c-39c5a656e01c",
+          "stepId": "fbfc830e-6dc4-49c2-a387-ef21d136e7ea",
           "attempt": 1,
           "kind": "state_write",
           "scope": "state_after_assignment",
@@ -652,7 +714,7 @@
                 "count": 20,
                 "handles": [],
                 "queries": [],
-                "startedAt": 1790918864547
+                "startedAt": 1790922258585
               },
               "loop": {
                 "bounded_retrieval": {
@@ -670,13 +732,13 @@
             }
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T05:27:44.549Z",
+          "capturedAt": "2026-10-02T06:24:18.591Z",
           "expiresAt": null
         },
         {
-          "id": "not-captured:9c8bafba-f905-41e6-8945-58c5040802a7:executor_request",
-          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
-          "stepId": "9c8bafba-f905-41e6-8945-58c5040802a7",
+          "id": "not-captured:fbfc830e-6dc4-49c2-a387-ef21d136e7ea:executor_request",
+          "runId": "bf129018-54cc-4ea1-bd4c-39c5a656e01c",
+          "stepId": "fbfc830e-6dc4-49c2-a387-ef21d136e7ea",
           "attempt": 1,
           "kind": "executor_request",
           "scope": "legacy_not_captured",
@@ -688,9 +750,9 @@
           "expiresAt": null
         },
         {
-          "id": "not-captured:9c8bafba-f905-41e6-8945-58c5040802a7:side_effect_confirmation",
-          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
-          "stepId": "9c8bafba-f905-41e6-8945-58c5040802a7",
+          "id": "not-captured:fbfc830e-6dc4-49c2-a387-ef21d136e7ea:side_effect_confirmation",
+          "runId": "bf129018-54cc-4ea1-bd4c-39c5a656e01c",
+          "stepId": "fbfc830e-6dc4-49c2-a387-ef21d136e7ea",
           "attempt": 1,
           "kind": "side_effect_confirmation",
           "scope": "legacy_not_captured",
@@ -705,16 +767,16 @@
     },
     {
       "itemKey": null,
-      "id": "2d2d0462-30f3-492d-a638-a7c1003b3cb2",
+      "id": "ede11d61-9121-425e-aa03-1d25c83fc09a",
       "logicalKey": "bounded-retrieval/choose",
-      "parentStepId": "9c8bafba-f905-41e6-8945-58c5040802a7",
+      "parentStepId": "fbfc830e-6dc4-49c2-a387-ef21d136e7ea",
       "attempt": 1,
       "status": "skipped",
       "title": "Choose read-only action",
       "description": "Advisory typed judgments; deterministic policy owns execution. Skipped after a terminal verdict.",
       "kind": "classifier",
-      "startedAt": "2026-10-02T05:27:44.547Z",
-      "completedAt": "2026-10-02T05:27:44.547Z",
+      "startedAt": "2026-10-02T06:24:18.587Z",
+      "completedAt": "2026-10-02T06:24:18.587Z",
       "error": null,
       "skipReason": "Advisory typed judgments; deterministic policy owns execution. Skipped after a terminal verdict.",
       "continuationReason": null,
@@ -723,12 +785,12 @@
       "inputs": [
         {
           "label": "Request",
-          "path": "$.request",
+          "path": "$.state.request",
           "format": "text"
         },
         {
           "label": "Attempt",
-          "path": "$.attempt",
+          "path": "$.state.attempt",
           "format": "count"
         }
       ],
@@ -751,9 +813,9 @@
       ],
       "evidence": [
         {
-          "id": "70a34a40-fed3-4029-9ac3-16fa8c1a6023",
-          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
-          "stepId": "2d2d0462-30f3-492d-a638-a7c1003b3cb2",
+          "id": "c5e2fc6e-cf44-4c28-9b84-d460d3f5553c",
+          "runId": "bf129018-54cc-4ea1-bd4c-39c5a656e01c",
+          "stepId": "ede11d61-9121-425e-aa03-1d25c83fc09a",
           "attempt": 1,
           "kind": "resolved_input",
           "scope": "retained_legacy_inline",
@@ -768,7 +830,7 @@
                 "count": 20,
                 "handles": [],
                 "queries": [],
-                "startedAt": 1790918864547
+                "startedAt": 1790922258585
               },
               "loop": {
                 "bounded_retrieval": {
@@ -783,16 +845,30 @@
             "counts": {
               "$.retrieval.handles": 0,
               "$.retrieval.queries": 0
+            },
+            "fields": {
+              "$.state.request": {
+                "present": false,
+                "value": null,
+                "truncated": false,
+                "count": null
+              },
+              "$.state.attempt": {
+                "present": false,
+                "value": null,
+                "truncated": false,
+                "count": null
+              }
             }
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T05:27:44.577Z",
+          "capturedAt": "2026-10-02T06:24:18.632Z",
           "expiresAt": null
         },
         {
-          "id": "70f84cc0-885a-4709-8ba9-79d34c8ef9bc",
-          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
-          "stepId": "2d2d0462-30f3-492d-a638-a7c1003b3cb2",
+          "id": "1b5fcf10-41da-492f-82db-53ac5214b72c",
+          "runId": "bf129018-54cc-4ea1-bd4c-39c5a656e01c",
+          "stepId": "ede11d61-9121-425e-aa03-1d25c83fc09a",
           "attempt": 1,
           "kind": "state_write",
           "scope": "retained_legacy_inline",
@@ -807,7 +883,7 @@
                 "count": 20,
                 "handles": [],
                 "queries": [],
-                "startedAt": 1790918864547
+                "startedAt": 1790922258585
               },
               "loop": {
                 "bounded_retrieval": {
@@ -825,13 +901,13 @@
             }
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T05:27:44.577Z",
+          "capturedAt": "2026-10-02T06:24:18.633Z",
           "expiresAt": null
         },
         {
-          "id": "not-captured:2d2d0462-30f3-492d-a638-a7c1003b3cb2:executor_request",
-          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
-          "stepId": "2d2d0462-30f3-492d-a638-a7c1003b3cb2",
+          "id": "not-captured:ede11d61-9121-425e-aa03-1d25c83fc09a:executor_request",
+          "runId": "bf129018-54cc-4ea1-bd4c-39c5a656e01c",
+          "stepId": "ede11d61-9121-425e-aa03-1d25c83fc09a",
           "attempt": 1,
           "kind": "executor_request",
           "scope": "legacy_not_captured",
@@ -843,9 +919,9 @@
           "expiresAt": null
         },
         {
-          "id": "not-captured:2d2d0462-30f3-492d-a638-a7c1003b3cb2:returned_output",
-          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
-          "stepId": "2d2d0462-30f3-492d-a638-a7c1003b3cb2",
+          "id": "not-captured:ede11d61-9121-425e-aa03-1d25c83fc09a:returned_output",
+          "runId": "bf129018-54cc-4ea1-bd4c-39c5a656e01c",
+          "stepId": "ede11d61-9121-425e-aa03-1d25c83fc09a",
           "attempt": 1,
           "kind": "returned_output",
           "scope": "legacy_not_captured",
@@ -857,9 +933,9 @@
           "expiresAt": null
         },
         {
-          "id": "not-captured:2d2d0462-30f3-492d-a638-a7c1003b3cb2:side_effect_confirmation",
-          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
-          "stepId": "2d2d0462-30f3-492d-a638-a7c1003b3cb2",
+          "id": "not-captured:ede11d61-9121-425e-aa03-1d25c83fc09a:side_effect_confirmation",
+          "runId": "bf129018-54cc-4ea1-bd4c-39c5a656e01c",
+          "stepId": "ede11d61-9121-425e-aa03-1d25c83fc09a",
           "attempt": 1,
           "kind": "side_effect_confirmation",
           "scope": "legacy_not_captured",
@@ -874,16 +950,16 @@
     },
     {
       "itemKey": null,
-      "id": "51cb5552-a656-4593-8806-a904edd2b5b8",
+      "id": "01a481ba-ac75-4432-9d8f-21f1f6ab0904",
       "logicalKey": "bounded-retrieval/execute",
-      "parentStepId": "9c8bafba-f905-41e6-8945-58c5040802a7",
+      "parentStepId": "fbfc830e-6dc4-49c2-a387-ef21d136e7ea",
       "attempt": 1,
       "status": "skipped",
       "title": "Retrieve selected source",
       "description": "Validate advisory answers, preserve requested source, execute one read-only action, deduplicate exact records.",
       "kind": "code",
-      "startedAt": "2026-10-02T05:27:44.547Z",
-      "completedAt": "2026-10-02T05:27:44.547Z",
+      "startedAt": "2026-10-02T06:24:18.587Z",
+      "completedAt": "2026-10-02T06:24:18.587Z",
       "error": null,
       "skipReason": "Validate advisory answers, preserve requested source, execute one read-only action, deduplicate exact records.",
       "continuationReason": null,
@@ -925,9 +1001,9 @@
       ],
       "evidence": [
         {
-          "id": "145a288f-f884-483c-88a0-ab401c2e6afc",
-          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
-          "stepId": "51cb5552-a656-4593-8806-a904edd2b5b8",
+          "id": "44dbd5a7-cb62-4ba3-9455-b1d573c4f397",
+          "runId": "bf129018-54cc-4ea1-bd4c-39c5a656e01c",
+          "stepId": "01a481ba-ac75-4432-9d8f-21f1f6ab0904",
           "attempt": 1,
           "kind": "resolved_input",
           "scope": "retained_legacy_inline",
@@ -942,7 +1018,7 @@
                 "count": 20,
                 "handles": [],
                 "queries": [],
-                "startedAt": 1790918864547
+                "startedAt": 1790922258585
               },
               "loop": {
                 "bounded_retrieval": {
@@ -957,16 +1033,24 @@
             "counts": {
               "$.retrieval.handles": 0,
               "$.retrieval.queries": 0
+            },
+            "fields": {
+              "$.state.request": {
+                "present": false,
+                "value": null,
+                "truncated": false,
+                "count": null
+              }
             }
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T05:27:44.577Z",
+          "capturedAt": "2026-10-02T06:24:18.633Z",
           "expiresAt": null
         },
         {
-          "id": "a553e381-1254-4dd9-9944-85068b19015e",
-          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
-          "stepId": "51cb5552-a656-4593-8806-a904edd2b5b8",
+          "id": "5e534a7a-f684-4797-bc71-f03d9094aca0",
+          "runId": "bf129018-54cc-4ea1-bd4c-39c5a656e01c",
+          "stepId": "01a481ba-ac75-4432-9d8f-21f1f6ab0904",
           "attempt": 1,
           "kind": "state_write",
           "scope": "retained_legacy_inline",
@@ -981,7 +1065,7 @@
                 "count": 20,
                 "handles": [],
                 "queries": [],
-                "startedAt": 1790918864547
+                "startedAt": 1790922258585
               },
               "loop": {
                 "bounded_retrieval": {
@@ -999,13 +1083,13 @@
             }
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T05:27:44.577Z",
+          "capturedAt": "2026-10-02T06:24:18.633Z",
           "expiresAt": null
         },
         {
-          "id": "not-captured:51cb5552-a656-4593-8806-a904edd2b5b8:executor_request",
-          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
-          "stepId": "51cb5552-a656-4593-8806-a904edd2b5b8",
+          "id": "not-captured:01a481ba-ac75-4432-9d8f-21f1f6ab0904:executor_request",
+          "runId": "bf129018-54cc-4ea1-bd4c-39c5a656e01c",
+          "stepId": "01a481ba-ac75-4432-9d8f-21f1f6ab0904",
           "attempt": 1,
           "kind": "executor_request",
           "scope": "legacy_not_captured",
@@ -1017,9 +1101,9 @@
           "expiresAt": null
         },
         {
-          "id": "not-captured:51cb5552-a656-4593-8806-a904edd2b5b8:returned_output",
-          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
-          "stepId": "51cb5552-a656-4593-8806-a904edd2b5b8",
+          "id": "not-captured:01a481ba-ac75-4432-9d8f-21f1f6ab0904:returned_output",
+          "runId": "bf129018-54cc-4ea1-bd4c-39c5a656e01c",
+          "stepId": "01a481ba-ac75-4432-9d8f-21f1f6ab0904",
           "attempt": 1,
           "kind": "returned_output",
           "scope": "legacy_not_captured",
@@ -1031,9 +1115,9 @@
           "expiresAt": null
         },
         {
-          "id": "not-captured:51cb5552-a656-4593-8806-a904edd2b5b8:side_effect_confirmation",
-          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
-          "stepId": "51cb5552-a656-4593-8806-a904edd2b5b8",
+          "id": "not-captured:01a481ba-ac75-4432-9d8f-21f1f6ab0904:side_effect_confirmation",
+          "runId": "bf129018-54cc-4ea1-bd4c-39c5a656e01c",
+          "stepId": "01a481ba-ac75-4432-9d8f-21f1f6ab0904",
           "attempt": 1,
           "kind": "side_effect_confirmation",
           "scope": "legacy_not_captured",
@@ -1048,16 +1132,16 @@
     },
     {
       "itemKey": null,
-      "id": "cb5000a0-b3b1-4f47-baf9-32ddb88f5bd1",
+      "id": "4d628def-5a2e-4842-9904-d8e4000ff907",
       "logicalKey": "bounded-retrieval/judge-evidence",
-      "parentStepId": "9c8bafba-f905-41e6-8945-58c5040802a7",
+      "parentStepId": "fbfc830e-6dc4-49c2-a387-ef21d136e7ea",
       "attempt": 1,
       "status": "skipped",
       "title": "Judge safe continuation",
       "description": "Advisory typed judgments; deterministic policy owns execution. Skipped after a terminal verdict.",
       "kind": "classifier",
-      "startedAt": "2026-10-02T05:27:44.547Z",
-      "completedAt": "2026-10-02T05:27:44.548Z",
+      "startedAt": "2026-10-02T06:24:18.587Z",
+      "completedAt": "2026-10-02T06:24:18.587Z",
       "error": null,
       "skipReason": "Advisory typed judgments; deterministic policy owns execution. Skipped after a terminal verdict.",
       "continuationReason": null,
@@ -1066,12 +1150,12 @@
       "inputs": [
         {
           "label": "Request",
-          "path": "$.request",
+          "path": "$.state.request",
           "format": "text"
         },
         {
           "label": "Attempt",
-          "path": "$.attempt",
+          "path": "$.state.attempt",
           "format": "count"
         }
       ],
@@ -1094,9 +1178,9 @@
       ],
       "evidence": [
         {
-          "id": "375694a2-0f2c-46f4-8bbe-6cf7d45d1588",
-          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
-          "stepId": "cb5000a0-b3b1-4f47-baf9-32ddb88f5bd1",
+          "id": "603b7efa-0e6a-4a85-8aa6-c4b5524b1948",
+          "runId": "bf129018-54cc-4ea1-bd4c-39c5a656e01c",
+          "stepId": "4d628def-5a2e-4842-9904-d8e4000ff907",
           "attempt": 1,
           "kind": "resolved_input",
           "scope": "retained_legacy_inline",
@@ -1111,7 +1195,7 @@
                 "count": 20,
                 "handles": [],
                 "queries": [],
-                "startedAt": 1790918864547
+                "startedAt": 1790922258585
               },
               "loop": {
                 "bounded_retrieval": {
@@ -1126,16 +1210,30 @@
             "counts": {
               "$.retrieval.handles": 0,
               "$.retrieval.queries": 0
+            },
+            "fields": {
+              "$.state.request": {
+                "present": false,
+                "value": null,
+                "truncated": false,
+                "count": null
+              },
+              "$.state.attempt": {
+                "present": false,
+                "value": null,
+                "truncated": false,
+                "count": null
+              }
             }
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T05:27:44.577Z",
+          "capturedAt": "2026-10-02T06:24:18.634Z",
           "expiresAt": null
         },
         {
-          "id": "196d9aa2-75bd-4b28-8a6c-7a913f60da77",
-          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
-          "stepId": "cb5000a0-b3b1-4f47-baf9-32ddb88f5bd1",
+          "id": "c5b0623b-4b86-47ee-842a-8f92452fc1ce",
+          "runId": "bf129018-54cc-4ea1-bd4c-39c5a656e01c",
+          "stepId": "4d628def-5a2e-4842-9904-d8e4000ff907",
           "attempt": 1,
           "kind": "state_write",
           "scope": "retained_legacy_inline",
@@ -1150,7 +1248,7 @@
                 "count": 20,
                 "handles": [],
                 "queries": [],
-                "startedAt": 1790918864547
+                "startedAt": 1790922258585
               },
               "loop": {
                 "bounded_retrieval": {
@@ -1168,13 +1266,13 @@
             }
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T05:27:44.577Z",
+          "capturedAt": "2026-10-02T06:24:18.634Z",
           "expiresAt": null
         },
         {
-          "id": "not-captured:cb5000a0-b3b1-4f47-baf9-32ddb88f5bd1:executor_request",
-          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
-          "stepId": "cb5000a0-b3b1-4f47-baf9-32ddb88f5bd1",
+          "id": "not-captured:4d628def-5a2e-4842-9904-d8e4000ff907:executor_request",
+          "runId": "bf129018-54cc-4ea1-bd4c-39c5a656e01c",
+          "stepId": "4d628def-5a2e-4842-9904-d8e4000ff907",
           "attempt": 1,
           "kind": "executor_request",
           "scope": "legacy_not_captured",
@@ -1186,9 +1284,9 @@
           "expiresAt": null
         },
         {
-          "id": "not-captured:cb5000a0-b3b1-4f47-baf9-32ddb88f5bd1:returned_output",
-          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
-          "stepId": "cb5000a0-b3b1-4f47-baf9-32ddb88f5bd1",
+          "id": "not-captured:4d628def-5a2e-4842-9904-d8e4000ff907:returned_output",
+          "runId": "bf129018-54cc-4ea1-bd4c-39c5a656e01c",
+          "stepId": "4d628def-5a2e-4842-9904-d8e4000ff907",
           "attempt": 1,
           "kind": "returned_output",
           "scope": "legacy_not_captured",
@@ -1200,9 +1298,9 @@
           "expiresAt": null
         },
         {
-          "id": "not-captured:cb5000a0-b3b1-4f47-baf9-32ddb88f5bd1:side_effect_confirmation",
-          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
-          "stepId": "cb5000a0-b3b1-4f47-baf9-32ddb88f5bd1",
+          "id": "not-captured:4d628def-5a2e-4842-9904-d8e4000ff907:side_effect_confirmation",
+          "runId": "bf129018-54cc-4ea1-bd4c-39c5a656e01c",
+          "stepId": "4d628def-5a2e-4842-9904-d8e4000ff907",
           "attempt": 1,
           "kind": "side_effect_confirmation",
           "scope": "legacy_not_captured",
@@ -1217,16 +1315,16 @@
     },
     {
       "itemKey": null,
-      "id": "9eca765d-9862-4ae2-8411-f0b03c661ce5",
+      "id": "dc305feb-03a5-46b4-bfef-e954bb2a4a34",
       "logicalKey": "bounded-retrieval/check",
-      "parentStepId": "9c8bafba-f905-41e6-8945-58c5040802a7",
+      "parentStepId": "fbfc830e-6dc4-49c2-a387-ef21d136e7ea",
       "attempt": 1,
       "status": "skipped",
       "title": "Validate continuation",
       "description": "Validate semantic Noul only when deterministic evidence supports continuation.",
       "kind": "code",
-      "startedAt": "2026-10-02T05:27:44.548Z",
-      "completedAt": "2026-10-02T05:27:44.548Z",
+      "startedAt": "2026-10-02T06:24:18.588Z",
+      "completedAt": "2026-10-02T06:24:18.588Z",
       "error": null,
       "skipReason": "Validate semantic Noul only when deterministic evidence supports continuation.",
       "continuationReason": null,
@@ -1263,9 +1361,9 @@
       ],
       "evidence": [
         {
-          "id": "d128eaa3-f688-40cd-abcf-1ec96d4d8b8c",
-          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
-          "stepId": "9eca765d-9862-4ae2-8411-f0b03c661ce5",
+          "id": "c12b6f1c-5a2c-4188-bb87-e7f187028baa",
+          "runId": "bf129018-54cc-4ea1-bd4c-39c5a656e01c",
+          "stepId": "dc305feb-03a5-46b4-bfef-e954bb2a4a34",
           "attempt": 1,
           "kind": "resolved_input",
           "scope": "retained_legacy_inline",
@@ -1280,7 +1378,7 @@
                 "count": 20,
                 "handles": [],
                 "queries": [],
-                "startedAt": 1790918864547
+                "startedAt": 1790922258585
               },
               "loop": {
                 "bounded_retrieval": {
@@ -1295,16 +1393,24 @@
             "counts": {
               "$.retrieval.handles": 0,
               "$.retrieval.queries": 0
+            },
+            "fields": {
+              "$.state.request": {
+                "present": false,
+                "value": null,
+                "truncated": false,
+                "count": null
+              }
             }
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T05:27:44.577Z",
+          "capturedAt": "2026-10-02T06:24:18.635Z",
           "expiresAt": null
         },
         {
-          "id": "9320ef6d-04a5-42ad-9f0f-0549f5fcb50d",
-          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
-          "stepId": "9eca765d-9862-4ae2-8411-f0b03c661ce5",
+          "id": "0c0a744c-d730-4447-9548-cacc5337f5f4",
+          "runId": "bf129018-54cc-4ea1-bd4c-39c5a656e01c",
+          "stepId": "dc305feb-03a5-46b4-bfef-e954bb2a4a34",
           "attempt": 1,
           "kind": "state_write",
           "scope": "retained_legacy_inline",
@@ -1319,7 +1425,7 @@
                 "count": 20,
                 "handles": [],
                 "queries": [],
-                "startedAt": 1790918864547
+                "startedAt": 1790922258585
               },
               "loop": {
                 "bounded_retrieval": {
@@ -1337,13 +1443,13 @@
             }
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T05:27:44.577Z",
+          "capturedAt": "2026-10-02T06:24:18.635Z",
           "expiresAt": null
         },
         {
-          "id": "not-captured:9eca765d-9862-4ae2-8411-f0b03c661ce5:executor_request",
-          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
-          "stepId": "9eca765d-9862-4ae2-8411-f0b03c661ce5",
+          "id": "not-captured:dc305feb-03a5-46b4-bfef-e954bb2a4a34:executor_request",
+          "runId": "bf129018-54cc-4ea1-bd4c-39c5a656e01c",
+          "stepId": "dc305feb-03a5-46b4-bfef-e954bb2a4a34",
           "attempt": 1,
           "kind": "executor_request",
           "scope": "legacy_not_captured",
@@ -1355,9 +1461,9 @@
           "expiresAt": null
         },
         {
-          "id": "not-captured:9eca765d-9862-4ae2-8411-f0b03c661ce5:returned_output",
-          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
-          "stepId": "9eca765d-9862-4ae2-8411-f0b03c661ce5",
+          "id": "not-captured:dc305feb-03a5-46b4-bfef-e954bb2a4a34:returned_output",
+          "runId": "bf129018-54cc-4ea1-bd4c-39c5a656e01c",
+          "stepId": "dc305feb-03a5-46b4-bfef-e954bb2a4a34",
           "attempt": 1,
           "kind": "returned_output",
           "scope": "legacy_not_captured",
@@ -1369,9 +1475,9 @@
           "expiresAt": null
         },
         {
-          "id": "not-captured:9eca765d-9862-4ae2-8411-f0b03c661ce5:side_effect_confirmation",
-          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
-          "stepId": "9eca765d-9862-4ae2-8411-f0b03c661ce5",
+          "id": "not-captured:dc305feb-03a5-46b4-bfef-e954bb2a4a34:side_effect_confirmation",
+          "runId": "bf129018-54cc-4ea1-bd4c-39c5a656e01c",
+          "stepId": "dc305feb-03a5-46b4-bfef-e954bb2a4a34",
           "attempt": 1,
           "kind": "side_effect_confirmation",
           "scope": "legacy_not_captured",
@@ -1386,16 +1492,16 @@
     },
     {
       "itemKey": null,
-      "id": "633efeb3-a063-4978-8c96-4a131f8fa158",
+      "id": "dd28acc9-acae-4d5c-9821-33a7064e4495",
       "logicalKey": "bounded-retrieval/choose",
-      "parentStepId": "9c8bafba-f905-41e6-8945-58c5040802a7",
+      "parentStepId": "fbfc830e-6dc4-49c2-a387-ef21d136e7ea",
       "attempt": 2,
       "status": "skipped",
       "title": "Choose read-only action",
       "description": "Advisory typed judgments; deterministic policy owns execution. Skipped after a terminal verdict.",
       "kind": "classifier",
-      "startedAt": "2026-10-02T05:27:44.548Z",
-      "completedAt": "2026-10-02T05:27:44.548Z",
+      "startedAt": "2026-10-02T06:24:18.588Z",
+      "completedAt": "2026-10-02T06:24:18.588Z",
       "error": null,
       "skipReason": "Advisory typed judgments; deterministic policy owns execution. Skipped after a terminal verdict.",
       "continuationReason": null,
@@ -1404,12 +1510,12 @@
       "inputs": [
         {
           "label": "Request",
-          "path": "$.request",
+          "path": "$.state.request",
           "format": "text"
         },
         {
           "label": "Attempt",
-          "path": "$.attempt",
+          "path": "$.state.attempt",
           "format": "count"
         }
       ],
@@ -1432,9 +1538,9 @@
       ],
       "evidence": [
         {
-          "id": "84abb1f8-87ca-49df-9613-16ffca921741",
-          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
-          "stepId": "633efeb3-a063-4978-8c96-4a131f8fa158",
+          "id": "79924fe8-f631-4618-9325-5d50b8f605c2",
+          "runId": "bf129018-54cc-4ea1-bd4c-39c5a656e01c",
+          "stepId": "dd28acc9-acae-4d5c-9821-33a7064e4495",
           "attempt": 1,
           "kind": "resolved_input",
           "scope": "retained_legacy_inline",
@@ -1449,7 +1555,7 @@
                 "count": 20,
                 "handles": [],
                 "queries": [],
-                "startedAt": 1790918864547
+                "startedAt": 1790922258585
               },
               "loop": {
                 "bounded_retrieval": {
@@ -1464,16 +1570,30 @@
             "counts": {
               "$.retrieval.handles": 0,
               "$.retrieval.queries": 0
+            },
+            "fields": {
+              "$.state.request": {
+                "present": false,
+                "value": null,
+                "truncated": false,
+                "count": null
+              },
+              "$.state.attempt": {
+                "present": false,
+                "value": null,
+                "truncated": false,
+                "count": null
+              }
             }
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T05:27:44.578Z",
+          "capturedAt": "2026-10-02T06:24:18.636Z",
           "expiresAt": null
         },
         {
-          "id": "73e60219-16df-43cd-922d-c15b66c17d76",
-          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
-          "stepId": "633efeb3-a063-4978-8c96-4a131f8fa158",
+          "id": "3b5134f2-2a98-42b5-81e3-c93472254173",
+          "runId": "bf129018-54cc-4ea1-bd4c-39c5a656e01c",
+          "stepId": "dd28acc9-acae-4d5c-9821-33a7064e4495",
           "attempt": 1,
           "kind": "state_write",
           "scope": "retained_legacy_inline",
@@ -1488,7 +1608,7 @@
                 "count": 20,
                 "handles": [],
                 "queries": [],
-                "startedAt": 1790918864547
+                "startedAt": 1790922258585
               },
               "loop": {
                 "bounded_retrieval": {
@@ -1506,13 +1626,13 @@
             }
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T05:27:44.578Z",
+          "capturedAt": "2026-10-02T06:24:18.637Z",
           "expiresAt": null
         },
         {
-          "id": "not-captured:633efeb3-a063-4978-8c96-4a131f8fa158:executor_request",
-          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
-          "stepId": "633efeb3-a063-4978-8c96-4a131f8fa158",
+          "id": "not-captured:dd28acc9-acae-4d5c-9821-33a7064e4495:executor_request",
+          "runId": "bf129018-54cc-4ea1-bd4c-39c5a656e01c",
+          "stepId": "dd28acc9-acae-4d5c-9821-33a7064e4495",
           "attempt": 1,
           "kind": "executor_request",
           "scope": "legacy_not_captured",
@@ -1524,9 +1644,9 @@
           "expiresAt": null
         },
         {
-          "id": "not-captured:633efeb3-a063-4978-8c96-4a131f8fa158:returned_output",
-          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
-          "stepId": "633efeb3-a063-4978-8c96-4a131f8fa158",
+          "id": "not-captured:dd28acc9-acae-4d5c-9821-33a7064e4495:returned_output",
+          "runId": "bf129018-54cc-4ea1-bd4c-39c5a656e01c",
+          "stepId": "dd28acc9-acae-4d5c-9821-33a7064e4495",
           "attempt": 1,
           "kind": "returned_output",
           "scope": "legacy_not_captured",
@@ -1538,9 +1658,9 @@
           "expiresAt": null
         },
         {
-          "id": "not-captured:633efeb3-a063-4978-8c96-4a131f8fa158:side_effect_confirmation",
-          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
-          "stepId": "633efeb3-a063-4978-8c96-4a131f8fa158",
+          "id": "not-captured:dd28acc9-acae-4d5c-9821-33a7064e4495:side_effect_confirmation",
+          "runId": "bf129018-54cc-4ea1-bd4c-39c5a656e01c",
+          "stepId": "dd28acc9-acae-4d5c-9821-33a7064e4495",
           "attempt": 1,
           "kind": "side_effect_confirmation",
           "scope": "legacy_not_captured",
@@ -1555,16 +1675,16 @@
     },
     {
       "itemKey": null,
-      "id": "707e8e45-5ad1-4c57-9a88-00ef2628cb8a",
+      "id": "856950f0-b86d-4df8-a30f-24e9d249c4b0",
       "logicalKey": "bounded-retrieval/execute",
-      "parentStepId": "9c8bafba-f905-41e6-8945-58c5040802a7",
+      "parentStepId": "fbfc830e-6dc4-49c2-a387-ef21d136e7ea",
       "attempt": 2,
       "status": "skipped",
       "title": "Retrieve selected source",
       "description": "Validate advisory answers, preserve requested source, execute one read-only action, deduplicate exact records.",
       "kind": "code",
-      "startedAt": "2026-10-02T05:27:44.548Z",
-      "completedAt": "2026-10-02T05:27:44.548Z",
+      "startedAt": "2026-10-02T06:24:18.588Z",
+      "completedAt": "2026-10-02T06:24:18.589Z",
       "error": null,
       "skipReason": "Validate advisory answers, preserve requested source, execute one read-only action, deduplicate exact records.",
       "continuationReason": null,
@@ -1606,9 +1726,9 @@
       ],
       "evidence": [
         {
-          "id": "fb1260f7-f1a2-4208-a6f1-c6b758e7151e",
-          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
-          "stepId": "707e8e45-5ad1-4c57-9a88-00ef2628cb8a",
+          "id": "ea01d3a0-19f4-4b4e-a052-dc32a66138b5",
+          "runId": "bf129018-54cc-4ea1-bd4c-39c5a656e01c",
+          "stepId": "856950f0-b86d-4df8-a30f-24e9d249c4b0",
           "attempt": 1,
           "kind": "resolved_input",
           "scope": "retained_legacy_inline",
@@ -1623,7 +1743,7 @@
                 "count": 20,
                 "handles": [],
                 "queries": [],
-                "startedAt": 1790918864547
+                "startedAt": 1790922258585
               },
               "loop": {
                 "bounded_retrieval": {
@@ -1638,16 +1758,24 @@
             "counts": {
               "$.retrieval.handles": 0,
               "$.retrieval.queries": 0
+            },
+            "fields": {
+              "$.state.request": {
+                "present": false,
+                "value": null,
+                "truncated": false,
+                "count": null
+              }
             }
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T05:27:44.578Z",
+          "capturedAt": "2026-10-02T06:24:18.638Z",
           "expiresAt": null
         },
         {
-          "id": "e44344ef-1b6f-4c59-935c-7626def9a065",
-          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
-          "stepId": "707e8e45-5ad1-4c57-9a88-00ef2628cb8a",
+          "id": "4c41ea7b-d4f2-47a1-b221-92581f9c37bc",
+          "runId": "bf129018-54cc-4ea1-bd4c-39c5a656e01c",
+          "stepId": "856950f0-b86d-4df8-a30f-24e9d249c4b0",
           "attempt": 1,
           "kind": "state_write",
           "scope": "retained_legacy_inline",
@@ -1662,7 +1790,7 @@
                 "count": 20,
                 "handles": [],
                 "queries": [],
-                "startedAt": 1790918864547
+                "startedAt": 1790922258585
               },
               "loop": {
                 "bounded_retrieval": {
@@ -1680,13 +1808,13 @@
             }
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T05:27:44.578Z",
+          "capturedAt": "2026-10-02T06:24:18.639Z",
           "expiresAt": null
         },
         {
-          "id": "not-captured:707e8e45-5ad1-4c57-9a88-00ef2628cb8a:executor_request",
-          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
-          "stepId": "707e8e45-5ad1-4c57-9a88-00ef2628cb8a",
+          "id": "not-captured:856950f0-b86d-4df8-a30f-24e9d249c4b0:executor_request",
+          "runId": "bf129018-54cc-4ea1-bd4c-39c5a656e01c",
+          "stepId": "856950f0-b86d-4df8-a30f-24e9d249c4b0",
           "attempt": 1,
           "kind": "executor_request",
           "scope": "legacy_not_captured",
@@ -1698,9 +1826,9 @@
           "expiresAt": null
         },
         {
-          "id": "not-captured:707e8e45-5ad1-4c57-9a88-00ef2628cb8a:returned_output",
-          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
-          "stepId": "707e8e45-5ad1-4c57-9a88-00ef2628cb8a",
+          "id": "not-captured:856950f0-b86d-4df8-a30f-24e9d249c4b0:returned_output",
+          "runId": "bf129018-54cc-4ea1-bd4c-39c5a656e01c",
+          "stepId": "856950f0-b86d-4df8-a30f-24e9d249c4b0",
           "attempt": 1,
           "kind": "returned_output",
           "scope": "legacy_not_captured",
@@ -1712,9 +1840,9 @@
           "expiresAt": null
         },
         {
-          "id": "not-captured:707e8e45-5ad1-4c57-9a88-00ef2628cb8a:side_effect_confirmation",
-          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
-          "stepId": "707e8e45-5ad1-4c57-9a88-00ef2628cb8a",
+          "id": "not-captured:856950f0-b86d-4df8-a30f-24e9d249c4b0:side_effect_confirmation",
+          "runId": "bf129018-54cc-4ea1-bd4c-39c5a656e01c",
+          "stepId": "856950f0-b86d-4df8-a30f-24e9d249c4b0",
           "attempt": 1,
           "kind": "side_effect_confirmation",
           "scope": "legacy_not_captured",
@@ -1729,16 +1857,16 @@
     },
     {
       "itemKey": null,
-      "id": "c0747105-5df9-4d36-ba12-f4bda914a0c0",
+      "id": "e0aa631b-b2c7-49e6-8e8e-dd373ee19951",
       "logicalKey": "bounded-retrieval/judge-evidence",
-      "parentStepId": "9c8bafba-f905-41e6-8945-58c5040802a7",
+      "parentStepId": "fbfc830e-6dc4-49c2-a387-ef21d136e7ea",
       "attempt": 2,
       "status": "skipped",
       "title": "Judge safe continuation",
       "description": "Advisory typed judgments; deterministic policy owns execution. Skipped after a terminal verdict.",
       "kind": "classifier",
-      "startedAt": "2026-10-02T05:27:44.548Z",
-      "completedAt": "2026-10-02T05:27:44.548Z",
+      "startedAt": "2026-10-02T06:24:18.589Z",
+      "completedAt": "2026-10-02T06:24:18.589Z",
       "error": null,
       "skipReason": "Advisory typed judgments; deterministic policy owns execution. Skipped after a terminal verdict.",
       "continuationReason": null,
@@ -1747,12 +1875,12 @@
       "inputs": [
         {
           "label": "Request",
-          "path": "$.request",
+          "path": "$.state.request",
           "format": "text"
         },
         {
           "label": "Attempt",
-          "path": "$.attempt",
+          "path": "$.state.attempt",
           "format": "count"
         }
       ],
@@ -1775,9 +1903,9 @@
       ],
       "evidence": [
         {
-          "id": "4735e225-52d6-4ef0-875c-3d34749ecaf1",
-          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
-          "stepId": "c0747105-5df9-4d36-ba12-f4bda914a0c0",
+          "id": "39d487bb-fc6e-4d78-93a9-c55f3b3f8fa7",
+          "runId": "bf129018-54cc-4ea1-bd4c-39c5a656e01c",
+          "stepId": "e0aa631b-b2c7-49e6-8e8e-dd373ee19951",
           "attempt": 1,
           "kind": "resolved_input",
           "scope": "retained_legacy_inline",
@@ -1792,7 +1920,7 @@
                 "count": 20,
                 "handles": [],
                 "queries": [],
-                "startedAt": 1790918864547
+                "startedAt": 1790922258585
               },
               "loop": {
                 "bounded_retrieval": {
@@ -1807,16 +1935,30 @@
             "counts": {
               "$.retrieval.handles": 0,
               "$.retrieval.queries": 0
+            },
+            "fields": {
+              "$.state.request": {
+                "present": false,
+                "value": null,
+                "truncated": false,
+                "count": null
+              },
+              "$.state.attempt": {
+                "present": false,
+                "value": null,
+                "truncated": false,
+                "count": null
+              }
             }
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T05:27:44.578Z",
+          "capturedAt": "2026-10-02T06:24:18.639Z",
           "expiresAt": null
         },
         {
-          "id": "686d4785-ed62-4359-95d3-88d9224b8b10",
-          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
-          "stepId": "c0747105-5df9-4d36-ba12-f4bda914a0c0",
+          "id": "c043264c-7aa3-409b-bb4d-525630d7eb88",
+          "runId": "bf129018-54cc-4ea1-bd4c-39c5a656e01c",
+          "stepId": "e0aa631b-b2c7-49e6-8e8e-dd373ee19951",
           "attempt": 1,
           "kind": "state_write",
           "scope": "retained_legacy_inline",
@@ -1831,7 +1973,7 @@
                 "count": 20,
                 "handles": [],
                 "queries": [],
-                "startedAt": 1790918864547
+                "startedAt": 1790922258585
               },
               "loop": {
                 "bounded_retrieval": {
@@ -1849,13 +1991,13 @@
             }
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T05:27:44.578Z",
+          "capturedAt": "2026-10-02T06:24:18.640Z",
           "expiresAt": null
         },
         {
-          "id": "not-captured:c0747105-5df9-4d36-ba12-f4bda914a0c0:executor_request",
-          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
-          "stepId": "c0747105-5df9-4d36-ba12-f4bda914a0c0",
+          "id": "not-captured:e0aa631b-b2c7-49e6-8e8e-dd373ee19951:executor_request",
+          "runId": "bf129018-54cc-4ea1-bd4c-39c5a656e01c",
+          "stepId": "e0aa631b-b2c7-49e6-8e8e-dd373ee19951",
           "attempt": 1,
           "kind": "executor_request",
           "scope": "legacy_not_captured",
@@ -1867,9 +2009,9 @@
           "expiresAt": null
         },
         {
-          "id": "not-captured:c0747105-5df9-4d36-ba12-f4bda914a0c0:returned_output",
-          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
-          "stepId": "c0747105-5df9-4d36-ba12-f4bda914a0c0",
+          "id": "not-captured:e0aa631b-b2c7-49e6-8e8e-dd373ee19951:returned_output",
+          "runId": "bf129018-54cc-4ea1-bd4c-39c5a656e01c",
+          "stepId": "e0aa631b-b2c7-49e6-8e8e-dd373ee19951",
           "attempt": 1,
           "kind": "returned_output",
           "scope": "legacy_not_captured",
@@ -1881,9 +2023,9 @@
           "expiresAt": null
         },
         {
-          "id": "not-captured:c0747105-5df9-4d36-ba12-f4bda914a0c0:side_effect_confirmation",
-          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
-          "stepId": "c0747105-5df9-4d36-ba12-f4bda914a0c0",
+          "id": "not-captured:e0aa631b-b2c7-49e6-8e8e-dd373ee19951:side_effect_confirmation",
+          "runId": "bf129018-54cc-4ea1-bd4c-39c5a656e01c",
+          "stepId": "e0aa631b-b2c7-49e6-8e8e-dd373ee19951",
           "attempt": 1,
           "kind": "side_effect_confirmation",
           "scope": "legacy_not_captured",
@@ -1898,16 +2040,16 @@
     },
     {
       "itemKey": null,
-      "id": "2f14a9d6-8f19-422c-92d1-5212c2688f5e",
+      "id": "7634737f-2084-49ab-b41d-a4af2131c9b5",
       "logicalKey": "bounded-retrieval/check",
-      "parentStepId": "9c8bafba-f905-41e6-8945-58c5040802a7",
+      "parentStepId": "fbfc830e-6dc4-49c2-a387-ef21d136e7ea",
       "attempt": 2,
       "status": "skipped",
       "title": "Validate continuation",
       "description": "Validate semantic Noul only when deterministic evidence supports continuation.",
       "kind": "code",
-      "startedAt": "2026-10-02T05:27:44.548Z",
-      "completedAt": "2026-10-02T05:27:44.548Z",
+      "startedAt": "2026-10-02T06:24:18.589Z",
+      "completedAt": "2026-10-02T06:24:18.589Z",
       "error": null,
       "skipReason": "Validate semantic Noul only when deterministic evidence supports continuation.",
       "continuationReason": null,
@@ -1944,9 +2086,9 @@
       ],
       "evidence": [
         {
-          "id": "64129488-ba86-41a9-8bd8-c2f81b65c35f",
-          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
-          "stepId": "2f14a9d6-8f19-422c-92d1-5212c2688f5e",
+          "id": "ba9530fc-8292-48cb-9f29-2aa309814f5f",
+          "runId": "bf129018-54cc-4ea1-bd4c-39c5a656e01c",
+          "stepId": "7634737f-2084-49ab-b41d-a4af2131c9b5",
           "attempt": 1,
           "kind": "resolved_input",
           "scope": "retained_legacy_inline",
@@ -1961,7 +2103,7 @@
                 "count": 20,
                 "handles": [],
                 "queries": [],
-                "startedAt": 1790918864547
+                "startedAt": 1790922258585
               },
               "loop": {
                 "bounded_retrieval": {
@@ -1976,16 +2118,24 @@
             "counts": {
               "$.retrieval.handles": 0,
               "$.retrieval.queries": 0
+            },
+            "fields": {
+              "$.state.request": {
+                "present": false,
+                "value": null,
+                "truncated": false,
+                "count": null
+              }
             }
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T05:27:44.578Z",
+          "capturedAt": "2026-10-02T06:24:18.640Z",
           "expiresAt": null
         },
         {
-          "id": "b7dbf976-9137-4d20-a32d-545a389d7180",
-          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
-          "stepId": "2f14a9d6-8f19-422c-92d1-5212c2688f5e",
+          "id": "b4060207-0ae8-4931-b2a4-752ce793fc34",
+          "runId": "bf129018-54cc-4ea1-bd4c-39c5a656e01c",
+          "stepId": "7634737f-2084-49ab-b41d-a4af2131c9b5",
           "attempt": 1,
           "kind": "state_write",
           "scope": "retained_legacy_inline",
@@ -2000,7 +2150,7 @@
                 "count": 20,
                 "handles": [],
                 "queries": [],
-                "startedAt": 1790918864547
+                "startedAt": 1790922258585
               },
               "loop": {
                 "bounded_retrieval": {
@@ -2018,13 +2168,13 @@
             }
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T05:27:44.578Z",
+          "capturedAt": "2026-10-02T06:24:18.640Z",
           "expiresAt": null
         },
         {
-          "id": "not-captured:2f14a9d6-8f19-422c-92d1-5212c2688f5e:executor_request",
-          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
-          "stepId": "2f14a9d6-8f19-422c-92d1-5212c2688f5e",
+          "id": "not-captured:7634737f-2084-49ab-b41d-a4af2131c9b5:executor_request",
+          "runId": "bf129018-54cc-4ea1-bd4c-39c5a656e01c",
+          "stepId": "7634737f-2084-49ab-b41d-a4af2131c9b5",
           "attempt": 1,
           "kind": "executor_request",
           "scope": "legacy_not_captured",
@@ -2036,9 +2186,9 @@
           "expiresAt": null
         },
         {
-          "id": "not-captured:2f14a9d6-8f19-422c-92d1-5212c2688f5e:returned_output",
-          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
-          "stepId": "2f14a9d6-8f19-422c-92d1-5212c2688f5e",
+          "id": "not-captured:7634737f-2084-49ab-b41d-a4af2131c9b5:returned_output",
+          "runId": "bf129018-54cc-4ea1-bd4c-39c5a656e01c",
+          "stepId": "7634737f-2084-49ab-b41d-a4af2131c9b5",
           "attempt": 1,
           "kind": "returned_output",
           "scope": "legacy_not_captured",
@@ -2050,9 +2200,9 @@
           "expiresAt": null
         },
         {
-          "id": "not-captured:2f14a9d6-8f19-422c-92d1-5212c2688f5e:side_effect_confirmation",
-          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
-          "stepId": "2f14a9d6-8f19-422c-92d1-5212c2688f5e",
+          "id": "not-captured:7634737f-2084-49ab-b41d-a4af2131c9b5:side_effect_confirmation",
+          "runId": "bf129018-54cc-4ea1-bd4c-39c5a656e01c",
+          "stepId": "7634737f-2084-49ab-b41d-a4af2131c9b5",
           "attempt": 1,
           "kind": "side_effect_confirmation",
           "scope": "legacy_not_captured",
@@ -2067,16 +2217,16 @@
     },
     {
       "itemKey": null,
-      "id": "4f2e5166-29c0-47b4-a50d-90ad08ab0b76",
+      "id": "ab3ec515-25fc-4151-a48e-79ac52705e01",
       "logicalKey": "bounded-retrieval/choose",
-      "parentStepId": "9c8bafba-f905-41e6-8945-58c5040802a7",
+      "parentStepId": "fbfc830e-6dc4-49c2-a387-ef21d136e7ea",
       "attempt": 3,
       "status": "skipped",
       "title": "Choose read-only action",
       "description": "Advisory typed judgments; deterministic policy owns execution. Skipped after a terminal verdict.",
       "kind": "classifier",
-      "startedAt": "2026-10-02T05:27:44.548Z",
-      "completedAt": "2026-10-02T05:27:44.549Z",
+      "startedAt": "2026-10-02T06:24:18.589Z",
+      "completedAt": "2026-10-02T06:24:18.589Z",
       "error": null,
       "skipReason": "Advisory typed judgments; deterministic policy owns execution. Skipped after a terminal verdict.",
       "continuationReason": null,
@@ -2085,12 +2235,12 @@
       "inputs": [
         {
           "label": "Request",
-          "path": "$.request",
+          "path": "$.state.request",
           "format": "text"
         },
         {
           "label": "Attempt",
-          "path": "$.attempt",
+          "path": "$.state.attempt",
           "format": "count"
         }
       ],
@@ -2113,9 +2263,9 @@
       ],
       "evidence": [
         {
-          "id": "60f78ef6-bcfc-482a-af08-1500cbf4fa9f",
-          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
-          "stepId": "4f2e5166-29c0-47b4-a50d-90ad08ab0b76",
+          "id": "cb8e0ae8-fef0-418d-9140-dcc16578ef59",
+          "runId": "bf129018-54cc-4ea1-bd4c-39c5a656e01c",
+          "stepId": "ab3ec515-25fc-4151-a48e-79ac52705e01",
           "attempt": 1,
           "kind": "resolved_input",
           "scope": "retained_legacy_inline",
@@ -2130,7 +2280,7 @@
                 "count": 20,
                 "handles": [],
                 "queries": [],
-                "startedAt": 1790918864547
+                "startedAt": 1790922258585
               },
               "loop": {
                 "bounded_retrieval": {
@@ -2145,16 +2295,30 @@
             "counts": {
               "$.retrieval.handles": 0,
               "$.retrieval.queries": 0
+            },
+            "fields": {
+              "$.state.request": {
+                "present": false,
+                "value": null,
+                "truncated": false,
+                "count": null
+              },
+              "$.state.attempt": {
+                "present": false,
+                "value": null,
+                "truncated": false,
+                "count": null
+              }
             }
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T05:27:44.579Z",
+          "capturedAt": "2026-10-02T06:24:18.641Z",
           "expiresAt": null
         },
         {
-          "id": "4c1dca45-3893-4b33-b990-47ad1db693ae",
-          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
-          "stepId": "4f2e5166-29c0-47b4-a50d-90ad08ab0b76",
+          "id": "9728e6f2-c177-48dd-8a98-a5ca7b8ddce8",
+          "runId": "bf129018-54cc-4ea1-bd4c-39c5a656e01c",
+          "stepId": "ab3ec515-25fc-4151-a48e-79ac52705e01",
           "attempt": 1,
           "kind": "state_write",
           "scope": "retained_legacy_inline",
@@ -2169,7 +2333,7 @@
                 "count": 20,
                 "handles": [],
                 "queries": [],
-                "startedAt": 1790918864547
+                "startedAt": 1790922258585
               },
               "loop": {
                 "bounded_retrieval": {
@@ -2187,13 +2351,13 @@
             }
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T05:27:44.579Z",
+          "capturedAt": "2026-10-02T06:24:18.642Z",
           "expiresAt": null
         },
         {
-          "id": "not-captured:4f2e5166-29c0-47b4-a50d-90ad08ab0b76:executor_request",
-          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
-          "stepId": "4f2e5166-29c0-47b4-a50d-90ad08ab0b76",
+          "id": "not-captured:ab3ec515-25fc-4151-a48e-79ac52705e01:executor_request",
+          "runId": "bf129018-54cc-4ea1-bd4c-39c5a656e01c",
+          "stepId": "ab3ec515-25fc-4151-a48e-79ac52705e01",
           "attempt": 1,
           "kind": "executor_request",
           "scope": "legacy_not_captured",
@@ -2205,9 +2369,9 @@
           "expiresAt": null
         },
         {
-          "id": "not-captured:4f2e5166-29c0-47b4-a50d-90ad08ab0b76:returned_output",
-          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
-          "stepId": "4f2e5166-29c0-47b4-a50d-90ad08ab0b76",
+          "id": "not-captured:ab3ec515-25fc-4151-a48e-79ac52705e01:returned_output",
+          "runId": "bf129018-54cc-4ea1-bd4c-39c5a656e01c",
+          "stepId": "ab3ec515-25fc-4151-a48e-79ac52705e01",
           "attempt": 1,
           "kind": "returned_output",
           "scope": "legacy_not_captured",
@@ -2219,9 +2383,9 @@
           "expiresAt": null
         },
         {
-          "id": "not-captured:4f2e5166-29c0-47b4-a50d-90ad08ab0b76:side_effect_confirmation",
-          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
-          "stepId": "4f2e5166-29c0-47b4-a50d-90ad08ab0b76",
+          "id": "not-captured:ab3ec515-25fc-4151-a48e-79ac52705e01:side_effect_confirmation",
+          "runId": "bf129018-54cc-4ea1-bd4c-39c5a656e01c",
+          "stepId": "ab3ec515-25fc-4151-a48e-79ac52705e01",
           "attempt": 1,
           "kind": "side_effect_confirmation",
           "scope": "legacy_not_captured",
@@ -2236,16 +2400,16 @@
     },
     {
       "itemKey": null,
-      "id": "d79a6673-767d-42ec-ba64-e12b55d28ea2",
+      "id": "78d7c45a-0f11-4e24-a18b-632f7bb1421a",
       "logicalKey": "bounded-retrieval/execute",
-      "parentStepId": "9c8bafba-f905-41e6-8945-58c5040802a7",
+      "parentStepId": "fbfc830e-6dc4-49c2-a387-ef21d136e7ea",
       "attempt": 3,
       "status": "skipped",
       "title": "Retrieve selected source",
       "description": "Validate advisory answers, preserve requested source, execute one read-only action, deduplicate exact records.",
       "kind": "code",
-      "startedAt": "2026-10-02T05:27:44.549Z",
-      "completedAt": "2026-10-02T05:27:44.549Z",
+      "startedAt": "2026-10-02T06:24:18.590Z",
+      "completedAt": "2026-10-02T06:24:18.590Z",
       "error": null,
       "skipReason": "Validate advisory answers, preserve requested source, execute one read-only action, deduplicate exact records.",
       "continuationReason": null,
@@ -2287,9 +2451,9 @@
       ],
       "evidence": [
         {
-          "id": "eaefbb49-d88c-4c91-a99f-2bf8e93a0ba3",
-          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
-          "stepId": "d79a6673-767d-42ec-ba64-e12b55d28ea2",
+          "id": "d182bfb9-d8d7-424b-a4c2-b1387f0da2d3",
+          "runId": "bf129018-54cc-4ea1-bd4c-39c5a656e01c",
+          "stepId": "78d7c45a-0f11-4e24-a18b-632f7bb1421a",
           "attempt": 1,
           "kind": "resolved_input",
           "scope": "retained_legacy_inline",
@@ -2304,7 +2468,7 @@
                 "count": 20,
                 "handles": [],
                 "queries": [],
-                "startedAt": 1790918864547
+                "startedAt": 1790922258585
               },
               "loop": {
                 "bounded_retrieval": {
@@ -2319,16 +2483,24 @@
             "counts": {
               "$.retrieval.handles": 0,
               "$.retrieval.queries": 0
+            },
+            "fields": {
+              "$.state.request": {
+                "present": false,
+                "value": null,
+                "truncated": false,
+                "count": null
+              }
             }
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T05:27:44.579Z",
+          "capturedAt": "2026-10-02T06:24:18.642Z",
           "expiresAt": null
         },
         {
-          "id": "0acd7af3-683f-448f-bee5-ac0ac37c0318",
-          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
-          "stepId": "d79a6673-767d-42ec-ba64-e12b55d28ea2",
+          "id": "cae30bd4-efc8-4d32-9856-c384d81065b9",
+          "runId": "bf129018-54cc-4ea1-bd4c-39c5a656e01c",
+          "stepId": "78d7c45a-0f11-4e24-a18b-632f7bb1421a",
           "attempt": 1,
           "kind": "state_write",
           "scope": "retained_legacy_inline",
@@ -2343,7 +2515,7 @@
                 "count": 20,
                 "handles": [],
                 "queries": [],
-                "startedAt": 1790918864547
+                "startedAt": 1790922258585
               },
               "loop": {
                 "bounded_retrieval": {
@@ -2361,13 +2533,13 @@
             }
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T05:27:44.579Z",
+          "capturedAt": "2026-10-02T06:24:18.643Z",
           "expiresAt": null
         },
         {
-          "id": "not-captured:d79a6673-767d-42ec-ba64-e12b55d28ea2:executor_request",
-          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
-          "stepId": "d79a6673-767d-42ec-ba64-e12b55d28ea2",
+          "id": "not-captured:78d7c45a-0f11-4e24-a18b-632f7bb1421a:executor_request",
+          "runId": "bf129018-54cc-4ea1-bd4c-39c5a656e01c",
+          "stepId": "78d7c45a-0f11-4e24-a18b-632f7bb1421a",
           "attempt": 1,
           "kind": "executor_request",
           "scope": "legacy_not_captured",
@@ -2379,9 +2551,9 @@
           "expiresAt": null
         },
         {
-          "id": "not-captured:d79a6673-767d-42ec-ba64-e12b55d28ea2:returned_output",
-          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
-          "stepId": "d79a6673-767d-42ec-ba64-e12b55d28ea2",
+          "id": "not-captured:78d7c45a-0f11-4e24-a18b-632f7bb1421a:returned_output",
+          "runId": "bf129018-54cc-4ea1-bd4c-39c5a656e01c",
+          "stepId": "78d7c45a-0f11-4e24-a18b-632f7bb1421a",
           "attempt": 1,
           "kind": "returned_output",
           "scope": "legacy_not_captured",
@@ -2393,9 +2565,9 @@
           "expiresAt": null
         },
         {
-          "id": "not-captured:d79a6673-767d-42ec-ba64-e12b55d28ea2:side_effect_confirmation",
-          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
-          "stepId": "d79a6673-767d-42ec-ba64-e12b55d28ea2",
+          "id": "not-captured:78d7c45a-0f11-4e24-a18b-632f7bb1421a:side_effect_confirmation",
+          "runId": "bf129018-54cc-4ea1-bd4c-39c5a656e01c",
+          "stepId": "78d7c45a-0f11-4e24-a18b-632f7bb1421a",
           "attempt": 1,
           "kind": "side_effect_confirmation",
           "scope": "legacy_not_captured",
@@ -2410,16 +2582,16 @@
     },
     {
       "itemKey": null,
-      "id": "3819570f-5185-4b2c-addd-0ed9f7b3f9f0",
+      "id": "ae94aecf-a92b-44d9-abcc-f8c4406748be",
       "logicalKey": "bounded-retrieval/judge-evidence",
-      "parentStepId": "9c8bafba-f905-41e6-8945-58c5040802a7",
+      "parentStepId": "fbfc830e-6dc4-49c2-a387-ef21d136e7ea",
       "attempt": 3,
       "status": "skipped",
       "title": "Judge safe continuation",
       "description": "Advisory typed judgments; deterministic policy owns execution. Skipped after a terminal verdict.",
       "kind": "classifier",
-      "startedAt": "2026-10-02T05:27:44.549Z",
-      "completedAt": "2026-10-02T05:27:44.549Z",
+      "startedAt": "2026-10-02T06:24:18.590Z",
+      "completedAt": "2026-10-02T06:24:18.590Z",
       "error": null,
       "skipReason": "Advisory typed judgments; deterministic policy owns execution. Skipped after a terminal verdict.",
       "continuationReason": null,
@@ -2428,12 +2600,12 @@
       "inputs": [
         {
           "label": "Request",
-          "path": "$.request",
+          "path": "$.state.request",
           "format": "text"
         },
         {
           "label": "Attempt",
-          "path": "$.attempt",
+          "path": "$.state.attempt",
           "format": "count"
         }
       ],
@@ -2456,9 +2628,9 @@
       ],
       "evidence": [
         {
-          "id": "9afaf139-cd3a-4fe0-bae4-4a66044dc82c",
-          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
-          "stepId": "3819570f-5185-4b2c-addd-0ed9f7b3f9f0",
+          "id": "efc2eb59-d191-4405-9269-d19670103ce6",
+          "runId": "bf129018-54cc-4ea1-bd4c-39c5a656e01c",
+          "stepId": "ae94aecf-a92b-44d9-abcc-f8c4406748be",
           "attempt": 1,
           "kind": "resolved_input",
           "scope": "retained_legacy_inline",
@@ -2473,7 +2645,7 @@
                 "count": 20,
                 "handles": [],
                 "queries": [],
-                "startedAt": 1790918864547
+                "startedAt": 1790922258585
               },
               "loop": {
                 "bounded_retrieval": {
@@ -2488,16 +2660,30 @@
             "counts": {
               "$.retrieval.handles": 0,
               "$.retrieval.queries": 0
+            },
+            "fields": {
+              "$.state.request": {
+                "present": false,
+                "value": null,
+                "truncated": false,
+                "count": null
+              },
+              "$.state.attempt": {
+                "present": false,
+                "value": null,
+                "truncated": false,
+                "count": null
+              }
             }
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T05:27:44.579Z",
+          "capturedAt": "2026-10-02T06:24:18.643Z",
           "expiresAt": null
         },
         {
-          "id": "c5f7de01-31a6-4e84-b09b-87bc2b9feaec",
-          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
-          "stepId": "3819570f-5185-4b2c-addd-0ed9f7b3f9f0",
+          "id": "9e7beaef-5112-4b88-ae65-72f4daebbd12",
+          "runId": "bf129018-54cc-4ea1-bd4c-39c5a656e01c",
+          "stepId": "ae94aecf-a92b-44d9-abcc-f8c4406748be",
           "attempt": 1,
           "kind": "state_write",
           "scope": "retained_legacy_inline",
@@ -2512,7 +2698,7 @@
                 "count": 20,
                 "handles": [],
                 "queries": [],
-                "startedAt": 1790918864547
+                "startedAt": 1790922258585
               },
               "loop": {
                 "bounded_retrieval": {
@@ -2530,13 +2716,13 @@
             }
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T05:27:44.579Z",
+          "capturedAt": "2026-10-02T06:24:18.644Z",
           "expiresAt": null
         },
         {
-          "id": "not-captured:3819570f-5185-4b2c-addd-0ed9f7b3f9f0:executor_request",
-          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
-          "stepId": "3819570f-5185-4b2c-addd-0ed9f7b3f9f0",
+          "id": "not-captured:ae94aecf-a92b-44d9-abcc-f8c4406748be:executor_request",
+          "runId": "bf129018-54cc-4ea1-bd4c-39c5a656e01c",
+          "stepId": "ae94aecf-a92b-44d9-abcc-f8c4406748be",
           "attempt": 1,
           "kind": "executor_request",
           "scope": "legacy_not_captured",
@@ -2548,9 +2734,9 @@
           "expiresAt": null
         },
         {
-          "id": "not-captured:3819570f-5185-4b2c-addd-0ed9f7b3f9f0:returned_output",
-          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
-          "stepId": "3819570f-5185-4b2c-addd-0ed9f7b3f9f0",
+          "id": "not-captured:ae94aecf-a92b-44d9-abcc-f8c4406748be:returned_output",
+          "runId": "bf129018-54cc-4ea1-bd4c-39c5a656e01c",
+          "stepId": "ae94aecf-a92b-44d9-abcc-f8c4406748be",
           "attempt": 1,
           "kind": "returned_output",
           "scope": "legacy_not_captured",
@@ -2562,9 +2748,9 @@
           "expiresAt": null
         },
         {
-          "id": "not-captured:3819570f-5185-4b2c-addd-0ed9f7b3f9f0:side_effect_confirmation",
-          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
-          "stepId": "3819570f-5185-4b2c-addd-0ed9f7b3f9f0",
+          "id": "not-captured:ae94aecf-a92b-44d9-abcc-f8c4406748be:side_effect_confirmation",
+          "runId": "bf129018-54cc-4ea1-bd4c-39c5a656e01c",
+          "stepId": "ae94aecf-a92b-44d9-abcc-f8c4406748be",
           "attempt": 1,
           "kind": "side_effect_confirmation",
           "scope": "legacy_not_captured",
@@ -2579,16 +2765,16 @@
     },
     {
       "itemKey": null,
-      "id": "6cc4bc1f-921a-49e2-9695-7bb8302db2fe",
+      "id": "e0bac3c9-e075-443f-a4fb-aa47a3468ec0",
       "logicalKey": "bounded-retrieval/check",
-      "parentStepId": "9c8bafba-f905-41e6-8945-58c5040802a7",
+      "parentStepId": "fbfc830e-6dc4-49c2-a387-ef21d136e7ea",
       "attempt": 3,
       "status": "skipped",
       "title": "Validate continuation",
       "description": "Validate semantic Noul only when deterministic evidence supports continuation.",
       "kind": "code",
-      "startedAt": "2026-10-02T05:27:44.549Z",
-      "completedAt": "2026-10-02T05:27:44.549Z",
+      "startedAt": "2026-10-02T06:24:18.590Z",
+      "completedAt": "2026-10-02T06:24:18.590Z",
       "error": null,
       "skipReason": "Validate semantic Noul only when deterministic evidence supports continuation.",
       "continuationReason": null,
@@ -2625,9 +2811,9 @@
       ],
       "evidence": [
         {
-          "id": "8a90b2d6-2ad0-40d6-9ad9-c03224c93430",
-          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
-          "stepId": "6cc4bc1f-921a-49e2-9695-7bb8302db2fe",
+          "id": "4c9554a2-9a2e-427b-8496-5f1205da6bbe",
+          "runId": "bf129018-54cc-4ea1-bd4c-39c5a656e01c",
+          "stepId": "e0bac3c9-e075-443f-a4fb-aa47a3468ec0",
           "attempt": 1,
           "kind": "resolved_input",
           "scope": "retained_legacy_inline",
@@ -2642,7 +2828,7 @@
                 "count": 20,
                 "handles": [],
                 "queries": [],
-                "startedAt": 1790918864547
+                "startedAt": 1790922258585
               },
               "loop": {
                 "bounded_retrieval": {
@@ -2657,16 +2843,24 @@
             "counts": {
               "$.retrieval.handles": 0,
               "$.retrieval.queries": 0
+            },
+            "fields": {
+              "$.state.request": {
+                "present": false,
+                "value": null,
+                "truncated": false,
+                "count": null
+              }
             }
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T05:27:44.579Z",
+          "capturedAt": "2026-10-02T06:24:18.644Z",
           "expiresAt": null
         },
         {
-          "id": "f52524a0-25d0-4743-9d63-3ad1f88e1fd8",
-          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
-          "stepId": "6cc4bc1f-921a-49e2-9695-7bb8302db2fe",
+          "id": "3bd20a8a-736a-46f5-ae5b-274aebfab452",
+          "runId": "bf129018-54cc-4ea1-bd4c-39c5a656e01c",
+          "stepId": "e0bac3c9-e075-443f-a4fb-aa47a3468ec0",
           "attempt": 1,
           "kind": "state_write",
           "scope": "retained_legacy_inline",
@@ -2681,7 +2875,7 @@
                 "count": 20,
                 "handles": [],
                 "queries": [],
-                "startedAt": 1790918864547
+                "startedAt": 1790922258585
               },
               "loop": {
                 "bounded_retrieval": {
@@ -2699,13 +2893,13 @@
             }
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T05:27:44.579Z",
+          "capturedAt": "2026-10-02T06:24:18.645Z",
           "expiresAt": null
         },
         {
-          "id": "not-captured:6cc4bc1f-921a-49e2-9695-7bb8302db2fe:executor_request",
-          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
-          "stepId": "6cc4bc1f-921a-49e2-9695-7bb8302db2fe",
+          "id": "not-captured:e0bac3c9-e075-443f-a4fb-aa47a3468ec0:executor_request",
+          "runId": "bf129018-54cc-4ea1-bd4c-39c5a656e01c",
+          "stepId": "e0bac3c9-e075-443f-a4fb-aa47a3468ec0",
           "attempt": 1,
           "kind": "executor_request",
           "scope": "legacy_not_captured",
@@ -2717,9 +2911,9 @@
           "expiresAt": null
         },
         {
-          "id": "not-captured:6cc4bc1f-921a-49e2-9695-7bb8302db2fe:returned_output",
-          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
-          "stepId": "6cc4bc1f-921a-49e2-9695-7bb8302db2fe",
+          "id": "not-captured:e0bac3c9-e075-443f-a4fb-aa47a3468ec0:returned_output",
+          "runId": "bf129018-54cc-4ea1-bd4c-39c5a656e01c",
+          "stepId": "e0bac3c9-e075-443f-a4fb-aa47a3468ec0",
           "attempt": 1,
           "kind": "returned_output",
           "scope": "legacy_not_captured",
@@ -2731,9 +2925,9 @@
           "expiresAt": null
         },
         {
-          "id": "not-captured:6cc4bc1f-921a-49e2-9695-7bb8302db2fe:side_effect_confirmation",
-          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
-          "stepId": "6cc4bc1f-921a-49e2-9695-7bb8302db2fe",
+          "id": "not-captured:e0bac3c9-e075-443f-a4fb-aa47a3468ec0:side_effect_confirmation",
+          "runId": "bf129018-54cc-4ea1-bd4c-39c5a656e01c",
+          "stepId": "e0bac3c9-e075-443f-a4fb-aa47a3468ec0",
           "attempt": 1,
           "kind": "side_effect_confirmation",
           "scope": "legacy_not_captured",
@@ -2748,5 +2942,5 @@
     }
   ],
   "children": [],
-  "revision": "da6dd7dd07578af89be41d37eb0865a1e5d50f8f750845cb7887cb11750d4c03"
+  "revision": "5c000059c14085ae8b4759768d7b3587b98925fe04a37bb9b4f9d2efec70388a"
 }

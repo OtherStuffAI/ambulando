@@ -1,3 +1,4 @@
+import { PIPELINE_VIEWER_ENABLED } from './pipeline-viewer-activation.js';
 import { renderPipelineConnections } from './pipeline-viewer-diagram.js';
 import template from './pipeline-viewer.html?raw';
 import { APP_NPUB } from './app-identity.js';
@@ -6,20 +7,23 @@ import { storedPackage } from './autopilot-connection-refresh.js';
 import { createPipelineViewerStore } from './pipeline-viewer-store.js';
 import { createPipelineViewerSession } from './pipeline-viewer-service.js';
 import { viewerContextKey } from './pipeline-viewer-contract.js';
-import { pipelineNodes, flattenPipelineNodes, evidenceText, evidencePreview, portValue, portSelection, latestPortReference, wiringPortPath, wiringEndpoints, diagramPorts, matchingWires } from './pipeline-viewer-projection.js';
+import { pipelineNodes, flattenPipelineNodes, evidenceText, evidencePreview, portValue, portSelection, portPreviewSelection, latestPortReference, wiringPortPath, wiringEndpoints, diagramPorts, matchingWires } from './pipeline-viewer-projection.js';
 import { parsePipelineViewerRoute } from './pipeline-viewer-route.js';
 
 const views = new WeakMap();
+const RECORD_PAGE_SIZE = 50;
 export function disposePipelineViewer(store) { views.get(store)?.suspend(); }
 export function resumePipelineViewer(store) { views.get(store)?.resume(); }
 export function createPipelineViewerView(deps = {}) {
   let shell, db, service, subscription, offValues, generation=0, queued=0, key='', destroyed=false;
   let selectedRef=null, returnFocus=null, routeKey='', restoringFocus=false, navigation=0, observer=null, mutations=null, geometryQueued=false;
   const database=deps.getDb || getWorkspaceDb;
+  let recordSource=null, recordRows=[], recordTerm=null, recordMatches=[];
+  const clearRecords=()=>{recordSource=null;recordRows=[];recordTerm=null;recordMatches=[];};
   return {
     template, status:'unloaded', stale:false, definitions:[], runs:[], snapshot:null, selectedRunId:'', selectedDefinitionId:'',
     selectedConnectionId:'', parentTrail:[], pinned:false, inspector:null, inspectLabel:'', inspectPath:'', preview:'', search:'', notice:'',
-    definitionsCursor:null, runsCursor:null, mode:'run', inspectSide:'', inspectExecutionId:'', inspectEvidenceId:'', previewRevision:0, edges:[], diagramWidth:0, diagramHeight:0,
+    definitionsCursor:null, runsCursor:null, mode:'run', inspectSide:'', inspectExecutionId:'', inspectEvidenceId:'', previewRevision:0, recordPage:1, edges:[], diagramWidth:0, diagramHeight:0,
     init() { shell=deps.store || this.$store.chat; views.set(shell,this); if(globalThis.ResizeObserver && this.$el){observer=new ResizeObserver(()=>this.queueGeometry());observer.observe(this.$el);mutations=new MutationObserver(records=>{if(records.some(record=>record.target.closest?.('.pipeline-viewer-steps')))this.queueGeometry();});mutations.observe(this.$el,{childList:true,subtree:true,characterData:true});} },
     queueGeometry() { if(geometryQueued || destroyed)return;geometryQueued=true;const measure=()=>{const run=()=>{geometryQueued=false;this.measureConnections();};if(globalThis.requestAnimationFrame)requestAnimationFrame(run);else run();};if(this.$nextTick)this.$nextTick(measure);else queueMicrotask(measure); },
     measureConnections() {
@@ -42,6 +46,7 @@ export function createPipelineViewerView(deps = {}) {
       queueMicrotask(()=>{if(ticket===queued&&!destroyed) void this.sync(workspaceId,actorNpub,dbKey,backend,connections,enabled);});
     },
     async sync(workspaceId,actorNpub,dbKey,backend,connections,enabled) {
+      if((deps.enabled ?? PIPELINE_VIEWER_ENABLED)!==true){this.suspend();this.status='pending';return;}
       if(!enabled||!workspaceId||!actorNpub||!(deps.isDbReady||isWorkspaceDbOpenForKey)(dbKey)) { if(key)this.suspend();return; }
       const search=globalThis.location?.search || '';
       const route=parsePipelineViewerRoute(search,connections);
@@ -87,7 +92,7 @@ export function createPipelineViewerView(deps = {}) {
       }
     },
     suspend() {
-      generation++;navigation++;queued++;key='';subscription?.unsubscribe();subscription=null;offValues?.();offValues=null;
+      clearRecords();this.recordPage=1;generation++;navigation++;queued++;key='';subscription?.unsubscribe();subscription=null;offValues?.();offValues=null;
       service?.dispose();service=null;selectedRef=null;returnFocus=null;
       this.mode='run';this.edges=[];this.inspectSide='';this.inspectExecutionId='';this.inspectEvidenceId='';this.selectedConnectionId='';this.status='unloaded';this.selectedRunId='';this.selectedDefinitionId='';this.stale=false;this.definitions=[];this.runs=[];this.snapshot=null;this.inspector=null;this.preview='';this.pinned=false;this.search='';this.parentTrail=[];
     },
@@ -99,11 +104,23 @@ export function createPipelineViewerView(deps = {}) {
     get wires(){return this.definition?.wiring||[];},
     get transformedWires(){return this.wires.filter(wire=>!wire.carriedForward);},
     get carriedWires(){return this.wires.filter(wire=>wire.carriedForward);},
-    get statusMessage(){return {unloaded:'Choose a verified Autopilot service.',loading:'Loading pipeline viewer…',empty:'No pipelines or runs available.',unavailable:'Pipeline viewer unavailable for this service, record or capability.',denied:'Pipeline viewer access denied.',disconnected:'Autopilot disconnected. Retained summaries may be stale.',ready:this.stale?'Showing stale summaries.':'Pipeline viewer ready.'}[this.status]||this.status;},
+    get statusMessage(){return {pending:'Pipeline viewer is pending activation for this build.',unloaded:'Choose a verified Autopilot service.',loading:'Loading pipeline viewer…',empty:'No pipelines or runs available.',unavailable:'Pipeline viewer unavailable for this service, record or capability.',denied:'Pipeline viewer access denied.',disconnected:'Autopilot disconnected. Retained summaries may be stale.',ready:this.stale?'Showing stale summaries.':'Pipeline viewer ready.'}[this.status]||this.status;},
     get inspectedValue(){return this.inspectPath?portValue(this.inspector?.value,this.inspectPath):this.inspector?.value;},
     get fieldStatus(){return this.inspector?.status==='ready'&&this.inspectPath?portSelection(this.inspector.value,this.inspectPath).status:'present';},
     get valueText(){return evidenceText(this.inspectedValue);},
-    get shownRecords(){const values=this.inspectedValue;if(!Array.isArray(values))return [];const term=this.search.toLocaleLowerCase();return values.map((value,index)=>({value,index,text:evidenceText(value)})).filter(row=>!term||row.text.toLocaleLowerCase().includes(term));},
+    get matchingRecords(){
+      const values=this.inspectedValue;if(!Array.isArray(values)){clearRecords();return [];}
+      if(values!==recordSource){recordSource=values;recordRows=values.map((value,index)=>({index,text:evidenceText(value)}));recordTerm=null;}
+      const term=this.search.toLocaleLowerCase();
+      if(term!==recordTerm){recordTerm=term;recordMatches=term?recordRows.filter(row=>row.text.toLocaleLowerCase().includes(term)):recordRows;}
+      return recordMatches;
+    },
+    get recordPageCount(){return Math.max(1,Math.ceil(this.matchingRecords.length/RECORD_PAGE_SIZE));},
+    get currentRecordPage(){return Math.min(this.recordPageCount,Math.max(1,this.recordPage));},
+    get shownRecords(){const start=(this.currentRecordPage-1)*RECORD_PAGE_SIZE;return this.matchingRecords.slice(start,start+RECORD_PAGE_SIZE);},
+    get recordPageSummary(){const count=this.matchingRecords.length,start=(this.currentRecordPage-1)*RECORD_PAGE_SIZE;return `${count?start+1:0}–${Math.min(start+RECORD_PAGE_SIZE,count)} of ${count} ${this.search?'matching':'loaded'} records · Page ${this.currentRecordPage} of ${this.recordPageCount}`;},
+    changeRecordPage(page){this.recordPage=Math.min(this.recordPageCount,Math.max(1,Math.trunc(Number(page))||1));this.$nextTick?.(()=>this.$el?.querySelector('.pipeline-viewer-records')?.scrollIntoView({block:'nearest'}));},
+    searchRecords(term){this.search=term;this.recordPage=1;},
     get valueMatches(){return !this.search||this.valueText.toLocaleLowerCase().includes(this.search.toLocaleLowerCase());},
     text:evidenceText,
     wireLabel(wire){const name=key=>this.nodes.find(node=>node.logicalKey===key)?.title||key;return `${name(wire.sourceStepKey)} · ${wire.sourcePath} → ${name(wire.targetStepKey)} · ${wire.targetPath}`;},
@@ -142,11 +159,10 @@ export function createPipelineViewerView(deps = {}) {
       if(this.mode==='definition')return port.format||'Configured field';
       const preview=ref?service?.preview?.(ref.id):null;
       if(!preview)return ref?.availability==='not_captured'?'Not captured':'Bounded preview unavailable';
-      const selected=portSelection(preview.value,port.path);
-      if(selected.status==='missing')return preview.truncated?'Field outside bounded preview':'Selected field is missing';
-      const path=port.path==='$'?'$':'$.'+port.path.replace(/^\$\.?/,'');
-      const count=preview.counts?.[path]??(port.path==='$'?preview.count:null);
-      return `${count!=null?count+' records · ':''}${selected.status==='null'?'Explicit null':evidenceText(selected.value).slice(0,180)}${preview.truncated?' · bounded excerpt':' · bounded preview'}`;
+      const selected=portPreviewSelection(preview,port.path);
+      if(selected.status==='outside')return 'Field outside bounded preview';
+      if(selected.status==='missing')return 'Selected field is missing';
+      return `${selected.count!=null?selected.count+' records · ':''}${selected.status==='null'?'Explicit null':evidenceText(selected.value).slice(0,180)}${selected.truncated?' · bounded excerpt':' · bounded preview'}`;
     },
     portReference:latestPortReference,
     async inspectPort(node,side,port,event,pin=false,execution=null){
@@ -155,9 +171,9 @@ export function createPipelineViewerView(deps = {}) {
       const step=execution||node.attempts.at(-1),ref=this.portReference(step,side,port);this.inspectExecutionId=step?.id||'';this.inspectEvidenceId=ref?.id||'';
       if(ref&&pin)await this.inspect(ref,event,true,true);else if(ref){selectedRef=null;this.inspector=null;this.preview=this.portPreview(node,side,port);returnFocus=event?.currentTarget||returnFocus;}else{this.inspector=null;selectedRef=null;this.preview=this.mode==='definition'?`Configured ${port.format||'value'} · ${port.path}`:'Not captured for this attempt.';this.pinned=pin;}
     },
-    async inspect(ref,event,pin=true,port=false){if(restoringFocus || (this.pinned&&!pin))return;if(!port){this.inspectPath='';this.inspectLabel='';this.inspectSide='';this.inspectExecutionId=ref.stepId;this.inspectEvidenceId=ref.id;}selectedRef=ref;returnFocus=event?.currentTarget||returnFocus;this.pinned=pin;this.search='';this.notice='';this.inspector=service?.value(ref.id);await service?.evidence(ref);},
+    async inspect(ref,event,pin=true,port=false){if(restoringFocus || (this.pinned&&!pin))return;if(!port){this.inspectPath='';this.inspectLabel='';this.inspectSide='';this.inspectExecutionId=ref.stepId;this.inspectEvidenceId=ref.id;}selectedRef=ref;returnFocus=event?.currentTarget||returnFocus;this.pinned=pin;clearRecords();this.recordPage=1;this.search='';this.notice='';this.inspector=service?.value(ref.id);await service?.evidence(ref);},
     async moreEvidence(){if(selectedRef)await service?.evidence(selectedRef,true);},
-    closeInspector(){selectedRef=null;this.inspector=null;this.preview='';this.pinned=false;this.search='';this.inspectPath='';this.inspectLabel='';this.inspectSide='';this.inspectExecutionId='';this.inspectEvidenceId='';service?.clearValues();restoringFocus=true;returnFocus?.focus?.();restoringFocus=false;returnFocus=null;},
+    closeInspector(){clearRecords();this.recordPage=1;selectedRef=null;this.inspector=null;this.preview='';this.pinned=false;this.search='';this.inspectPath='';this.inspectLabel='';this.inspectSide='';this.inspectExecutionId='';this.inspectEvidenceId='';service?.clearValues();restoringFocus=true;returnFocus?.focus?.();restoringFocus=false;returnFocus=null;},
     async copyRecord(record){try{await (deps.clipboard||navigator.clipboard).writeText(record.text);this.notice='Loaded record copied.';}catch{this.notice='Copy unavailable. Select the exact text to copy.';}},
     async copy(){if(this.fieldStatus==='missing'){this.notice='Selected field is missing from retained evidence.';return;}if(!this.inspector?.complete){this.notice='Load the complete retained value before copying.';return;}try{await (deps.clipboard||navigator.clipboard).writeText(this.valueText);this.notice='Complete retained value copied.';}catch{this.notice='Copy unavailable. Select the exact text to copy.';}},
   };

@@ -2,20 +2,20 @@
   "version": 1,
   "serviceId": "autopilot_runtime_fixture",
   "run": {
-    "id": "3fd884b3-7332-40f4-845c-637be37395c9",
+    "id": "55ee88c1-3fc8-40a3-b711-83d717fc1979",
     "serviceId": "autopilot_runtime_fixture",
-    "definitionId": "shared:de6d392af9ec",
+    "definitionId": "shared:76f8de20137c",
     "definitionVersion": 2,
     "definitionHash": "79885578f419c81d3e5167a3d22ba013aae200e1ac47a55600bf3388ff2fd486",
     "name": "bird.timeline.chat.v2",
     "status": "ok",
-    "startedAt": "2026-10-02T06:24:18.241Z",
-    "completedAt": "2026-10-02T06:24:18.290Z",
+    "startedAt": "2026-10-02T06:24:18.851Z",
+    "completedAt": "2026-10-02T06:24:18.892Z",
     "parentRunId": null,
     "parentStepId": null
   },
   "definition": {
-    "id": "shared:de6d392af9ec",
+    "id": "shared:76f8de20137c",
     "name": "bird.timeline.chat.v2",
     "title": "bird.timeline.chat.v2",
     "description": "Use Bird to return latest tweets from your Following or For You timeline, mentions, user tweets or quoted search. Bare latest/timeline requests ask Following versus For You. Read-only, deterministic exact records and links returned to this chat.",
@@ -377,7 +377,7 @@
   "steps": [
     {
       "itemKey": null,
-      "id": "53bfa01c-f732-4fda-81f3-73ebd580bf1b",
+      "id": "3522f8df-5a91-4bf3-9936-cde5d6ad25f2",
       "logicalKey": "thread",
       "parentStepId": null,
       "attempt": 1,
@@ -385,8 +385,8 @@
       "title": "Validate chat request",
       "description": "Validate the source chat invocation.",
       "kind": "block",
-      "startedAt": "2026-10-02T06:24:18.242Z",
-      "completedAt": "2026-10-02T06:24:18.244Z",
+      "startedAt": "2026-10-02T06:24:18.852Z",
+      "completedAt": "2026-10-02T06:24:18.854Z",
       "error": null,
       "skipReason": null,
       "continuationReason": null,
@@ -408,21 +408,21 @@
       ],
       "evidence": [
         {
-          "id": "e78dbbfc-c678-4d18-bb06-ab9e592cb6e6",
-          "runId": "3fd884b3-7332-40f4-845c-637be37395c9",
-          "stepId": "53bfa01c-f732-4fda-81f3-73ebd580bf1b",
+          "id": "162b2ffc-f5b3-48bf-9b93-7aeb42f73124",
+          "runId": "55ee88c1-3fc8-40a3-b711-83d717fc1979",
+          "stepId": "3522f8df-5a91-4bf3-9936-cde5d6ad25f2",
           "attempt": 1,
           "kind": "resolved_input",
           "scope": "selected_step_input",
           "contentType": "application/json",
-          "bytes": 166,
+          "bytes": 165,
           "availability": "complete",
           "preview": {
             "value": {
               "workspaceId": "11111111-1111-4111-8111-111111111111",
               "threadId": "22222222-2222-4222-8222-222222222222",
               "frmNpub": "npub1requester",
-              "prompt": "Get 35 following tweets"
+              "prompt": "Get 2 following tweets"
             },
             "truncated": false,
             "count": null,
@@ -430,39 +430,39 @@
             "fields": {
               "$.prompt": {
                 "present": true,
-                "value": "Get 35 following tweets",
+                "value": "Get 2 following tweets",
                 "truncated": false,
                 "count": null
               }
             }
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T06:24:18.242Z",
+          "capturedAt": "2026-10-02T06:24:18.852Z",
           "expiresAt": null
         },
         {
-          "id": "8b393c99-ecf4-460d-8bf2-5d2ce1583c61",
-          "runId": "3fd884b3-7332-40f4-845c-637be37395c9",
-          "stepId": "53bfa01c-f732-4fda-81f3-73ebd580bf1b",
+          "id": "daaa6d59-964e-4da0-98d1-4304fce2a7bc",
+          "runId": "55ee88c1-3fc8-40a3-b711-83d717fc1979",
+          "stepId": "3522f8df-5a91-4bf3-9936-cde5d6ad25f2",
           "attempt": 1,
           "kind": "returned_output",
           "scope": "wrapper_output_child_evidence_separate",
           "contentType": "application/json",
-          "bytes": 543,
+          "bytes": 540,
           "availability": "complete",
           "preview": {
             "value": {
               "workspaceId": "11111111-1111-4111-8111-111111111111",
               "threadId": "22222222-2222-4222-8222-222222222222",
               "frmNpub": "npub1requester",
-              "prompt": "Get 35 following tweets",
+              "prompt": "Get 2 following tweets",
               "blocks": {
                 "thread": {
                   "input": {
                     "workspaceId": "11111111-1111-4111-8111-111111111111",
                     "threadId": "22222222-2222-4222-8222-222222222222",
                     "frmNpub": "npub1requester",
-                    "prompt": "Get 35 following tweets"
+                    "prompt": "Get 2 following tweets"
                   }
                 }
               }
@@ -473,39 +473,39 @@
             "fields": {
               "$.prompt": {
                 "present": true,
-                "value": "Get 35 following tweets",
+                "value": "Get 2 following tweets",
                 "truncated": false,
                 "count": null
               }
             }
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T06:24:18.244Z",
+          "capturedAt": "2026-10-02T06:24:18.854Z",
           "expiresAt": null
         },
         {
-          "id": "ab97c376-906a-4afa-acc4-3112627ec85e",
-          "runId": "3fd884b3-7332-40f4-845c-637be37395c9",
-          "stepId": "53bfa01c-f732-4fda-81f3-73ebd580bf1b",
+          "id": "c3db211f-0581-4515-b16f-ec1752fc9c34",
+          "runId": "55ee88c1-3fc8-40a3-b711-83d717fc1979",
+          "stepId": "3522f8df-5a91-4bf3-9936-cde5d6ad25f2",
           "attempt": 1,
           "kind": "state_write",
           "scope": "state_after_assignment",
           "contentType": "application/json",
-          "bytes": 543,
+          "bytes": 540,
           "availability": "complete",
           "preview": {
             "value": {
               "workspaceId": "11111111-1111-4111-8111-111111111111",
               "threadId": "22222222-2222-4222-8222-222222222222",
               "frmNpub": "npub1requester",
-              "prompt": "Get 35 following tweets",
+              "prompt": "Get 2 following tweets",
               "blocks": {
                 "thread": {
                   "input": {
                     "workspaceId": "11111111-1111-4111-8111-111111111111",
                     "threadId": "22222222-2222-4222-8222-222222222222",
                     "frmNpub": "npub1requester",
-                    "prompt": "Get 35 following tweets"
+                    "prompt": "Get 2 following tweets"
                   }
                 }
               }
@@ -515,13 +515,13 @@
             "counts": {}
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T06:24:18.244Z",
+          "capturedAt": "2026-10-02T06:24:18.854Z",
           "expiresAt": null
         },
         {
-          "id": "not-captured:53bfa01c-f732-4fda-81f3-73ebd580bf1b:executor_request",
-          "runId": "3fd884b3-7332-40f4-845c-637be37395c9",
-          "stepId": "53bfa01c-f732-4fda-81f3-73ebd580bf1b",
+          "id": "not-captured:3522f8df-5a91-4bf3-9936-cde5d6ad25f2:executor_request",
+          "runId": "55ee88c1-3fc8-40a3-b711-83d717fc1979",
+          "stepId": "3522f8df-5a91-4bf3-9936-cde5d6ad25f2",
           "attempt": 1,
           "kind": "executor_request",
           "scope": "legacy_not_captured",
@@ -533,9 +533,9 @@
           "expiresAt": null
         },
         {
-          "id": "not-captured:53bfa01c-f732-4fda-81f3-73ebd580bf1b:side_effect_confirmation",
-          "runId": "3fd884b3-7332-40f4-845c-637be37395c9",
-          "stepId": "53bfa01c-f732-4fda-81f3-73ebd580bf1b",
+          "id": "not-captured:3522f8df-5a91-4bf3-9936-cde5d6ad25f2:side_effect_confirmation",
+          "runId": "55ee88c1-3fc8-40a3-b711-83d717fc1979",
+          "stepId": "3522f8df-5a91-4bf3-9936-cde5d6ad25f2",
           "attempt": 1,
           "kind": "side_effect_confirmation",
           "scope": "legacy_not_captured",
@@ -550,16 +550,16 @@
     },
     {
       "itemKey": null,
-      "id": "30212586-3271-4c5c-80b9-e81341e5b174",
+      "id": "1e3bbc52-e077-4d2b-86d4-fc100bb1d87d",
       "logicalKey": "thread/thread / normalise-thread-invocation",
-      "parentStepId": "53bfa01c-f732-4fda-81f3-73ebd580bf1b",
+      "parentStepId": "3522f8df-5a91-4bf3-9936-cde5d6ad25f2",
       "attempt": 1,
       "status": "ok",
       "title": "thread / normalise-thread-invocation",
       "description": "Validate and normalise the reusable four-field Flight Deck thread invocation contract.",
       "kind": "code",
-      "startedAt": "2026-10-02T06:24:18.243Z",
-      "completedAt": "2026-10-02T06:24:18.244Z",
+      "startedAt": "2026-10-02T06:24:18.853Z",
+      "completedAt": "2026-10-02T06:24:18.853Z",
       "error": null,
       "skipReason": null,
       "continuationReason": null,
@@ -591,21 +591,21 @@
       ],
       "evidence": [
         {
-          "id": "ca59ed94-51aa-4852-b887-2e8f19fa26b7",
-          "runId": "3fd884b3-7332-40f4-845c-637be37395c9",
-          "stepId": "30212586-3271-4c5c-80b9-e81341e5b174",
+          "id": "58db818a-9b77-45ed-83eb-f5659c05f022",
+          "runId": "55ee88c1-3fc8-40a3-b711-83d717fc1979",
+          "stepId": "1e3bbc52-e077-4d2b-86d4-fc100bb1d87d",
           "attempt": 1,
           "kind": "resolved_input",
           "scope": "selected_step_input",
           "contentType": "application/json",
-          "bytes": 166,
+          "bytes": 165,
           "availability": "complete",
           "preview": {
             "value": {
               "workspaceId": "11111111-1111-4111-8111-111111111111",
               "threadId": "22222222-2222-4222-8222-222222222222",
               "frmNpub": "npub1requester",
-              "prompt": "Get 35 following tweets"
+              "prompt": "Get 2 following tweets"
             },
             "truncated": false,
             "count": null,
@@ -619,25 +619,25 @@
               },
               "$.prompt": {
                 "present": true,
-                "value": "Get 35 following tweets",
+                "value": "Get 2 following tweets",
                 "truncated": false,
                 "count": null
               }
             }
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T06:24:18.243Z",
+          "capturedAt": "2026-10-02T06:24:18.853Z",
           "expiresAt": null
         },
         {
-          "id": "5efc5dd4-e83e-4959-908b-796aa0d44be3",
-          "runId": "3fd884b3-7332-40f4-845c-637be37395c9",
-          "stepId": "30212586-3271-4c5c-80b9-e81341e5b174",
+          "id": "855f6fef-dd31-4389-b613-cd868d0ed6d3",
+          "runId": "55ee88c1-3fc8-40a3-b711-83d717fc1979",
+          "stepId": "1e3bbc52-e077-4d2b-86d4-fc100bb1d87d",
           "attempt": 1,
           "kind": "executor_request",
           "scope": "code_function_arguments",
           "contentType": "application/json",
-          "bytes": 221,
+          "bytes": 220,
           "availability": "complete",
           "preview": {
             "value": {
@@ -646,7 +646,7 @@
                 "workspaceId": "11111111-1111-4111-8111-111111111111",
                 "threadId": "22222222-2222-4222-8222-222222222222",
                 "frmNpub": "npub1requester",
-                "prompt": "Get 35 following tweets"
+                "prompt": "Get 2 following tweets"
               }
             },
             "truncated": false,
@@ -654,25 +654,25 @@
             "counts": {}
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T06:24:18.243Z",
+          "capturedAt": "2026-10-02T06:24:18.853Z",
           "expiresAt": null
         },
         {
-          "id": "aaff4018-32c0-4d97-af9b-225f8db80358",
-          "runId": "3fd884b3-7332-40f4-845c-637be37395c9",
-          "stepId": "30212586-3271-4c5c-80b9-e81341e5b174",
+          "id": "03eb86bb-faae-4fa6-9717-aac63cc1a3b4",
+          "runId": "55ee88c1-3fc8-40a3-b711-83d717fc1979",
+          "stepId": "1e3bbc52-e077-4d2b-86d4-fc100bb1d87d",
           "attempt": 1,
           "kind": "returned_output",
           "scope": "executor_return",
           "contentType": "application/json",
-          "bytes": 166,
+          "bytes": 165,
           "availability": "complete",
           "preview": {
             "value": {
               "workspaceId": "11111111-1111-4111-8111-111111111111",
               "threadId": "22222222-2222-4222-8222-222222222222",
               "frmNpub": "npub1requester",
-              "prompt": "Get 35 following tweets"
+              "prompt": "Get 2 following tweets"
             },
             "truncated": false,
             "count": null,
@@ -686,39 +686,39 @@
               },
               "$.prompt": {
                 "present": true,
-                "value": "Get 35 following tweets",
+                "value": "Get 2 following tweets",
                 "truncated": false,
                 "count": null
               }
             }
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T06:24:18.244Z",
+          "capturedAt": "2026-10-02T06:24:18.853Z",
           "expiresAt": null
         },
         {
-          "id": "300b6f07-3552-43dd-b52c-80aaa2a8ee4e",
-          "runId": "3fd884b3-7332-40f4-845c-637be37395c9",
-          "stepId": "30212586-3271-4c5c-80b9-e81341e5b174",
+          "id": "f356e7d4-974a-415a-9caa-74d8779d8010",
+          "runId": "55ee88c1-3fc8-40a3-b711-83d717fc1979",
+          "stepId": "1e3bbc52-e077-4d2b-86d4-fc100bb1d87d",
           "attempt": 1,
           "kind": "state_write",
           "scope": "state_after_assignment",
           "contentType": "application/json",
-          "bytes": 543,
+          "bytes": 540,
           "availability": "complete",
           "preview": {
             "value": {
               "workspaceId": "11111111-1111-4111-8111-111111111111",
               "threadId": "22222222-2222-4222-8222-222222222222",
               "frmNpub": "npub1requester",
-              "prompt": "Get 35 following tweets",
+              "prompt": "Get 2 following tweets",
               "blocks": {
                 "thread": {
                   "input": {
                     "workspaceId": "11111111-1111-4111-8111-111111111111",
                     "threadId": "22222222-2222-4222-8222-222222222222",
                     "frmNpub": "npub1requester",
-                    "prompt": "Get 35 following tweets"
+                    "prompt": "Get 2 following tweets"
                   }
                 }
               }
@@ -728,13 +728,13 @@
             "counts": {}
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T06:24:18.244Z",
+          "capturedAt": "2026-10-02T06:24:18.853Z",
           "expiresAt": null
         },
         {
-          "id": "not-captured:30212586-3271-4c5c-80b9-e81341e5b174:side_effect_confirmation",
-          "runId": "3fd884b3-7332-40f4-845c-637be37395c9",
-          "stepId": "30212586-3271-4c5c-80b9-e81341e5b174",
+          "id": "not-captured:1e3bbc52-e077-4d2b-86d4-fc100bb1d87d:side_effect_confirmation",
+          "runId": "55ee88c1-3fc8-40a3-b711-83d717fc1979",
+          "stepId": "1e3bbc52-e077-4d2b-86d4-fc100bb1d87d",
           "attempt": 1,
           "kind": "side_effect_confirmation",
           "scope": "legacy_not_captured",
@@ -749,7 +749,7 @@
     },
     {
       "itemKey": null,
-      "id": "9a3c58ee-7d9d-41f4-bd28-7097bae34d87",
+      "id": "bab765f8-79ec-4048-82e3-6951f5ac46fb",
       "logicalKey": "retrieve",
       "parentStepId": null,
       "attempt": 1,
@@ -757,13 +757,13 @@
       "title": "Retrieve tweets",
       "description": "Run reusable bounded Bird retrieval; ambiguous timelines clarify Following versus For You.",
       "kind": "pipeline",
-      "startedAt": "2026-10-02T06:24:18.244Z",
-      "completedAt": "2026-10-02T06:24:18.280Z",
+      "startedAt": "2026-10-02T06:24:18.854Z",
+      "completedAt": "2026-10-02T06:24:18.886Z",
       "error": null,
       "skipReason": null,
       "continuationReason": null,
-      "exitReason": "requested_count_retrieved",
-      "childRunId": "aa29be43-c1f6-46dd-a5ad-5f9ec44401a9",
+      "exitReason": "no_progress",
+      "childRunId": "3ea628f4-496f-4885-bd40-cb77b49aa281",
       "inputs": [
         {
           "label": "Request",
@@ -785,18 +785,18 @@
       ],
       "evidence": [
         {
-          "id": "7a636d21-b0d9-4999-9f97-9d511254b72c",
-          "runId": "3fd884b3-7332-40f4-845c-637be37395c9",
-          "stepId": "9a3c58ee-7d9d-41f4-bd28-7097bae34d87",
+          "id": "1e7ece23-bf27-4278-b9b3-8e5a268cad23",
+          "runId": "55ee88c1-3fc8-40a3-b711-83d717fc1979",
+          "stepId": "bab765f8-79ec-4048-82e3-6951f5ac46fb",
           "attempt": 1,
           "kind": "resolved_input",
           "scope": "selected_step_input",
           "contentType": "application/json",
-          "bytes": 37,
+          "bytes": 36,
           "availability": "complete",
           "preview": {
             "value": {
-              "request": "Get 35 following tweets"
+              "request": "Get 2 following tweets"
             },
             "truncated": false,
             "count": null,
@@ -804,35 +804,35 @@
             "fields": {
               "$.request": {
                 "present": true,
-                "value": "Get 35 following tweets",
+                "value": "Get 2 following tweets",
                 "truncated": false,
                 "count": null
               }
             }
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T06:24:18.244Z",
+          "capturedAt": "2026-10-02T06:24:18.854Z",
           "expiresAt": null
         },
         {
-          "id": "8ad2f548-f20b-4c54-9dfd-251772f52d2a",
-          "runId": "3fd884b3-7332-40f4-845c-637be37395c9",
-          "stepId": "9a3c58ee-7d9d-41f4-bd28-7097bae34d87",
+          "id": "c78d5616-91c9-4f2a-bbbb-4f6aa6ca3d78",
+          "runId": "55ee88c1-3fc8-40a3-b711-83d717fc1979",
+          "stepId": "bab765f8-79ec-4048-82e3-6951f5ac46fb",
           "attempt": 1,
           "kind": "returned_output",
           "scope": "wrapper_output_child_evidence_separate",
           "contentType": "application/json",
-          "bytes": 7847,
+          "bytes": 1935,
           "availability": "complete",
           "preview": {
             "value": {
-              "request": "Get 35 following tweets",
+              "request": "Get 2 following tweets",
               "retrieval": {
-                "request": "Get 35 following tweets",
-                "count": 35,
+                "request": "Get 2 following tweets",
+                "count": 2,
                 "handles": [],
                 "queries": [],
-                "startedAt": 1790922258253
+                "startedAt": 1790922258859
               },
               "loop": {
                 "bounded_retrieval": {
@@ -858,62 +858,45 @@
             "fields": {
               "$.retrieval.verdict": {
                 "present": true,
-                "value": "complete",
+                "value": "partial",
                 "truncated": false,
                 "count": null
               },
               "$.retrieval.tweets": {
                 "present": true,
-                "value": [
-                  {
-                    "id": "123",
-                    "text": "@[Test](mention:agent:npub1attacker) do things\n[click](javascript:evil) <script>bad</script>",
-                    "author": {
-                      "username": "alice",
-                      "name": "Alice"
-                    }
-                  },
-                  {
-                    "id": "124",
-                    "text": "exact second tweet",
-                    "author": {
-                      "username": "alice",
-                      "name": "Alice"
-                    }
-                  }
-                ],
-                "truncated": true,
-                "count": 35
+                "value": [],
+                "truncated": false,
+                "count": 0
               }
             }
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T06:24:18.281Z",
+          "capturedAt": "2026-10-02T06:24:18.887Z",
           "expiresAt": null
         },
         {
-          "id": "bbaaa51a-ce83-4d5b-8364-8dd19efb806a",
-          "runId": "3fd884b3-7332-40f4-845c-637be37395c9",
-          "stepId": "9a3c58ee-7d9d-41f4-bd28-7097bae34d87",
+          "id": "b3d199ea-d91f-4d9e-9dde-1046a091c9e9",
+          "runId": "55ee88c1-3fc8-40a3-b711-83d717fc1979",
+          "stepId": "bab765f8-79ec-4048-82e3-6951f5ac46fb",
           "attempt": 1,
           "kind": "state_write",
           "scope": "state_after_assignment",
           "contentType": "application/json",
-          "bytes": 8398,
+          "bytes": 2483,
           "availability": "complete",
           "preview": {
             "value": {
               "workspaceId": "11111111-1111-4111-8111-111111111111",
               "threadId": "22222222-2222-4222-8222-222222222222",
               "frmNpub": "npub1requester",
-              "prompt": "Get 35 following tweets",
+              "prompt": "Get 2 following tweets",
               "blocks": {
                 "thread": {
                   "input": {
                     "workspaceId": "11111111-1111-4111-8111-111111111111",
                     "threadId": "22222222-2222-4222-8222-222222222222",
                     "frmNpub": "npub1requester",
-                    "prompt": "Get 35 following tweets"
+                    "prompt": "Get 2 following tweets"
                   }
                 }
               }
@@ -923,13 +906,13 @@
             "counts": {}
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T06:24:18.281Z",
+          "capturedAt": "2026-10-02T06:24:18.887Z",
           "expiresAt": null
         },
         {
-          "id": "not-captured:9a3c58ee-7d9d-41f4-bd28-7097bae34d87:executor_request",
-          "runId": "3fd884b3-7332-40f4-845c-637be37395c9",
-          "stepId": "9a3c58ee-7d9d-41f4-bd28-7097bae34d87",
+          "id": "not-captured:bab765f8-79ec-4048-82e3-6951f5ac46fb:executor_request",
+          "runId": "55ee88c1-3fc8-40a3-b711-83d717fc1979",
+          "stepId": "bab765f8-79ec-4048-82e3-6951f5ac46fb",
           "attempt": 1,
           "kind": "executor_request",
           "scope": "legacy_not_captured",
@@ -941,9 +924,9 @@
           "expiresAt": null
         },
         {
-          "id": "not-captured:9a3c58ee-7d9d-41f4-bd28-7097bae34d87:side_effect_confirmation",
-          "runId": "3fd884b3-7332-40f4-845c-637be37395c9",
-          "stepId": "9a3c58ee-7d9d-41f4-bd28-7097bae34d87",
+          "id": "not-captured:bab765f8-79ec-4048-82e3-6951f5ac46fb:side_effect_confirmation",
+          "runId": "55ee88c1-3fc8-40a3-b711-83d717fc1979",
+          "stepId": "bab765f8-79ec-4048-82e3-6951f5ac46fb",
           "attempt": 1,
           "kind": "side_effect_confirmation",
           "scope": "legacy_not_captured",
@@ -958,7 +941,7 @@
     },
     {
       "itemKey": null,
-      "id": "0f7975b9-4b7c-4e7e-9d2a-5cc8671886a6",
+      "id": "39c9fe28-88a3-45cc-8841-24c589a84e89",
       "logicalKey": "format",
       "parentStepId": null,
       "attempt": 1,
@@ -966,8 +949,8 @@
       "title": "Format exact tweets",
       "description": "Format exact tweet records and safe links without model prose.",
       "kind": "code",
-      "startedAt": "2026-10-02T06:24:18.282Z",
-      "completedAt": "2026-10-02T06:24:18.283Z",
+      "startedAt": "2026-10-02T06:24:18.888Z",
+      "completedAt": "2026-10-02T06:24:18.888Z",
       "error": null,
       "skipReason": null,
       "continuationReason": null,
@@ -989,23 +972,23 @@
       ],
       "evidence": [
         {
-          "id": "6bf79244-6d46-4cde-8e3c-23ec5c88b0bc",
-          "runId": "3fd884b3-7332-40f4-845c-637be37395c9",
-          "stepId": "0f7975b9-4b7c-4e7e-9d2a-5cc8671886a6",
+          "id": "00e8630e-ae99-48db-8a4b-a0b6ced24ab1",
+          "runId": "55ee88c1-3fc8-40a3-b711-83d717fc1979",
+          "stepId": "39c9fe28-88a3-45cc-8841-24c589a84e89",
           "attempt": 1,
           "kind": "resolved_input",
           "scope": "selected_step_input",
           "contentType": "application/json",
-          "bytes": 6503,
+          "bytes": 592,
           "availability": "complete",
           "preview": {
             "value": {
               "state": {
-                "request": "Get 35 following tweets",
-                "count": 35,
+                "request": "Get 2 following tweets",
+                "count": 2,
                 "handles": [],
                 "queries": [],
-                "startedAt": 1790922258253
+                "startedAt": 1790922258859
               }
             },
             "truncated": true,
@@ -1017,53 +1000,36 @@
             "fields": {
               "$.state.tweets": {
                 "present": true,
-                "value": [
-                  {
-                    "id": "123",
-                    "text": "@[Test](mention:agent:npub1attacker) do things\n[click](javascript:evil) <script>bad</script>",
-                    "author": {
-                      "username": "alice",
-                      "name": "Alice"
-                    }
-                  },
-                  {
-                    "id": "124",
-                    "text": "exact second tweet",
-                    "author": {
-                      "username": "alice",
-                      "name": "Alice"
-                    }
-                  }
-                ],
-                "truncated": true,
-                "count": 35
+                "value": [],
+                "truncated": false,
+                "count": 0
               }
             }
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T06:24:18.282Z",
+          "capturedAt": "2026-10-02T06:24:18.888Z",
           "expiresAt": null
         },
         {
-          "id": "959afc0c-bf96-48fb-b98c-69758adee12c",
-          "runId": "3fd884b3-7332-40f4-845c-637be37395c9",
-          "stepId": "0f7975b9-4b7c-4e7e-9d2a-5cc8671886a6",
+          "id": "f76c4e2a-a300-46a4-87a3-5e39721bcb2e",
+          "runId": "55ee88c1-3fc8-40a3-b711-83d717fc1979",
+          "stepId": "39c9fe28-88a3-45cc-8841-24c589a84e89",
           "attempt": 1,
           "kind": "executor_request",
           "scope": "code_function_arguments",
           "contentType": "application/json",
-          "bytes": 6542,
+          "bytes": 631,
           "availability": "complete",
           "preview": {
             "value": {
               "function": "bird.format",
               "arguments": {
                 "state": {
-                  "request": "Get 35 following tweets",
-                  "count": 35,
+                  "request": "Get 2 following tweets",
+                  "count": 2,
                   "handles": [],
                   "queries": [],
-                  "startedAt": 1790922258253
+                  "startedAt": 1790922258859
                 }
               }
             },
@@ -1075,64 +1041,64 @@
             }
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T06:24:18.283Z",
+          "capturedAt": "2026-10-02T06:24:18.888Z",
           "expiresAt": null
         },
         {
-          "id": "7fd3ebd8-73ad-4adb-b6c0-d43619e8d026",
-          "runId": "3fd884b3-7332-40f4-845c-637be37395c9",
-          "stepId": "0f7975b9-4b7c-4e7e-9d2a-5cc8671886a6",
+          "id": "b27cbca9-61ab-4c4b-85de-d2baf2af048a",
+          "runId": "55ee88c1-3fc8-40a3-b711-83d717fc1979",
+          "stepId": "39c9fe28-88a3-45cc-8841-24c589a84e89",
           "attempt": 1,
           "kind": "returned_output",
           "scope": "executor_return",
           "contentType": "application/json",
-          "bytes": 3275,
+          "bytes": 135,
           "availability": "complete",
           "preview": {
             "value": {
-              "message": "Retrieved 35 tweets from Following.\n\n**Alice \\@alice** · [View tweet](https://x.com/alice/status/123)\n> \\@\\[Test\\]\\(mention:agent:npub1attacker\\) do things\n> \\[click\\]\\(javascript:evil\\) &lt;script&gt;bad&lt;/script&gt;\n\n**Alice \\@alice** · [View tweet](ht",
-              "verdict": "complete",
-              "resultCount": 35
+              "message": "Retrieved 0 of 2 requested tweets from Following; Bird stopped before the full count.",
+              "verdict": "partial",
+              "resultCount": 0
             },
-            "truncated": true,
+            "truncated": false,
             "count": null,
             "counts": {},
             "fields": {
               "$.message": {
                 "present": true,
-                "value": "Retrieved 35 tweets from Following.\n\n**Alice \\@alice** · [View tweet](https://x.com/alice/status/123)\n> \\@\\[Test\\]\\(mention:agent:npub1attacker\\) do things\n> \\[click\\]\\(javascript:evil\\) &lt;script&gt;bad&lt;/script&gt;\n\n**Alice \\@alice** · [View tweet](ht",
-                "truncated": true,
+                "value": "Retrieved 0 of 2 requested tweets from Following; Bird stopped before the full count.",
+                "truncated": false,
                 "count": null
               }
             }
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T06:24:18.283Z",
+          "capturedAt": "2026-10-02T06:24:18.889Z",
           "expiresAt": null
         },
         {
-          "id": "ab429dfc-3d1d-4d48-9263-794db4474e9d",
-          "runId": "3fd884b3-7332-40f4-845c-637be37395c9",
-          "stepId": "0f7975b9-4b7c-4e7e-9d2a-5cc8671886a6",
+          "id": "e6c4ccc7-2e30-43fa-a9b3-74756ad8c470",
+          "runId": "55ee88c1-3fc8-40a3-b711-83d717fc1979",
+          "stepId": "39c9fe28-88a3-45cc-8841-24c589a84e89",
           "attempt": 1,
           "kind": "state_write",
           "scope": "state_after_assignment",
           "contentType": "application/json",
-          "bytes": 11685,
+          "bytes": 2630,
           "availability": "complete",
           "preview": {
             "value": {
               "workspaceId": "11111111-1111-4111-8111-111111111111",
               "threadId": "22222222-2222-4222-8222-222222222222",
               "frmNpub": "npub1requester",
-              "prompt": "Get 35 following tweets",
+              "prompt": "Get 2 following tweets",
               "blocks": {
                 "thread": {
                   "input": {
                     "workspaceId": "11111111-1111-4111-8111-111111111111",
                     "threadId": "22222222-2222-4222-8222-222222222222",
                     "frmNpub": "npub1requester",
-                    "prompt": "Get 35 following tweets"
+                    "prompt": "Get 2 following tweets"
                   }
                 }
               }
@@ -1142,13 +1108,13 @@
             "counts": {}
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T06:24:18.284Z",
+          "capturedAt": "2026-10-02T06:24:18.889Z",
           "expiresAt": null
         },
         {
-          "id": "not-captured:0f7975b9-4b7c-4e7e-9d2a-5cc8671886a6:side_effect_confirmation",
-          "runId": "3fd884b3-7332-40f4-845c-637be37395c9",
-          "stepId": "0f7975b9-4b7c-4e7e-9d2a-5cc8671886a6",
+          "id": "not-captured:39c9fe28-88a3-45cc-8841-24c589a84e89:side_effect_confirmation",
+          "runId": "55ee88c1-3fc8-40a3-b711-83d717fc1979",
+          "stepId": "39c9fe28-88a3-45cc-8841-24c589a84e89",
           "attempt": 1,
           "kind": "side_effect_confirmation",
           "scope": "legacy_not_captured",
@@ -1163,7 +1129,7 @@
     },
     {
       "itemKey": null,
-      "id": "5cc52a29-789e-4876-8e28-ba8810b0e3b9",
+      "id": "f4c4bb1e-2c41-48e9-9f2a-53b2a26d3e63",
       "logicalKey": "reply",
       "parentStepId": null,
       "attempt": 1,
@@ -1171,8 +1137,8 @@
       "title": "Deliver to chat",
       "description": "Return to the validated source thread as the addressed managed agent.",
       "kind": "block",
-      "startedAt": "2026-10-02T06:24:18.284Z",
-      "completedAt": "2026-10-02T06:24:18.288Z",
+      "startedAt": "2026-10-02T06:24:18.889Z",
+      "completedAt": "2026-10-02T06:24:18.892Z",
       "error": null,
       "skipReason": null,
       "continuationReason": null,
@@ -1194,62 +1160,62 @@
       ],
       "evidence": [
         {
-          "id": "1d940055-f685-4170-83c8-23bdddb5d367",
-          "runId": "3fd884b3-7332-40f4-845c-637be37395c9",
-          "stepId": "5cc52a29-789e-4876-8e28-ba8810b0e3b9",
+          "id": "e893c5c0-8969-4a67-ab03-27c9efba04e6",
+          "runId": "55ee88c1-3fc8-40a3-b711-83d717fc1979",
+          "stepId": "f4c4bb1e-2c41-48e9-9f2a-53b2a26d3e63",
           "attempt": 1,
           "kind": "resolved_input",
           "scope": "selected_step_input",
           "contentType": "application/json",
-          "bytes": 3402,
+          "bytes": 263,
           "availability": "complete",
           "preview": {
             "value": {
               "workspaceId": "11111111-1111-4111-8111-111111111111",
               "threadId": "22222222-2222-4222-8222-222222222222",
               "frmNpub": "npub1requester",
-              "prompt": "Get 35 following tweets",
-              "message": "Retrieved 35 tweets from Following.\n\n**Alice \\@alice** · [View tweet](https://x.com/alice/status/123)\n> \\@\\[Test\\]\\(mention:agent:npub1attacker\\) do things\n> \\[click\\]\\(javascript:evil\\) &lt;script&gt;bad&lt;/script&gt;\n\n**Alice \\@alice** · [View tweet](ht"
+              "prompt": "Get 2 following tweets",
+              "message": "Retrieved 0 of 2 requested tweets from Following; Bird stopped before the full count."
             },
-            "truncated": true,
+            "truncated": false,
             "count": null,
             "counts": {},
             "fields": {
               "$.message": {
                 "present": true,
-                "value": "Retrieved 35 tweets from Following.\n\n**Alice \\@alice** · [View tweet](https://x.com/alice/status/123)\n> \\@\\[Test\\]\\(mention:agent:npub1attacker\\) do things\n> \\[click\\]\\(javascript:evil\\) &lt;script&gt;bad&lt;/script&gt;\n\n**Alice \\@alice** · [View tweet](ht",
-                "truncated": true,
+                "value": "Retrieved 0 of 2 requested tweets from Following; Bird stopped before the full count.",
+                "truncated": false,
                 "count": null
               }
             }
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T06:24:18.285Z",
+          "capturedAt": "2026-10-02T06:24:18.889Z",
           "expiresAt": null
         },
         {
-          "id": "6538afdd-9d26-4a6a-a673-79cfcb78ac69",
-          "runId": "3fd884b3-7332-40f4-845c-637be37395c9",
-          "stepId": "5cc52a29-789e-4876-8e28-ba8810b0e3b9",
+          "id": "e8dc7dda-dfff-4665-8585-c20d228a2589",
+          "runId": "55ee88c1-3fc8-40a3-b711-83d717fc1979",
+          "stepId": "f4c4bb1e-2c41-48e9-9f2a-53b2a26d3e63",
           "attempt": 1,
           "kind": "returned_output",
           "scope": "wrapper_output_child_evidence_separate",
           "contentType": "application/json",
-          "bytes": 15427,
+          "bytes": 3233,
           "availability": "complete",
           "preview": {
             "value": {
               "workspaceId": "11111111-1111-4111-8111-111111111111",
               "threadId": "22222222-2222-4222-8222-222222222222",
               "frmNpub": "npub1requester",
-              "prompt": "Get 35 following tweets",
+              "prompt": "Get 2 following tweets",
               "blocks": {
                 "thread": {
                   "input": {
                     "workspaceId": "11111111-1111-4111-8111-111111111111",
                     "threadId": "22222222-2222-4222-8222-222222222222",
                     "frmNpub": "npub1requester",
-                    "prompt": "Get 35 following tweets"
+                    "prompt": "Get 2 following tweets"
                   }
                 },
                 "reply": {
@@ -1257,8 +1223,8 @@
                     "workspaceId": "11111111-1111-4111-8111-111111111111",
                     "threadId": "22222222-2222-4222-8222-222222222222",
                     "frmNpub": "npub1requester",
-                    "prompt": "Get 35 following tweets",
-                    "message": "Retrieved 35 tweets from Following.\n\n**Alice \\@alice** · [View tweet](https://x.com/alice/status/123)\n> \\@\\[Test\\]\\(mention:agent:npub1attacker\\) do things\n> \\[click\\]\\(javascript:evil\\) &lt;script&gt;bad&lt;/script&gt;\n\n**Alice \\@alice** · [View tweet](ht"
+                    "prompt": "Get 2 following tweets",
+                    "message": "Retrieved 0 of 2 requested tweets from Following; Bird stopped before the full count."
                   }
                 }
               }
@@ -1276,32 +1242,32 @@
             }
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T06:24:18.289Z",
+          "capturedAt": "2026-10-02T06:24:18.892Z",
           "expiresAt": null
         },
         {
-          "id": "8dd80803-4da7-42da-ba56-e57444d73494",
-          "runId": "3fd884b3-7332-40f4-845c-637be37395c9",
-          "stepId": "5cc52a29-789e-4876-8e28-ba8810b0e3b9",
+          "id": "54a247e8-2de0-4fe7-9a1c-73861e06f055",
+          "runId": "55ee88c1-3fc8-40a3-b711-83d717fc1979",
+          "stepId": "f4c4bb1e-2c41-48e9-9f2a-53b2a26d3e63",
           "attempt": 1,
           "kind": "state_write",
           "scope": "state_after_assignment",
           "contentType": "application/json",
-          "bytes": 15427,
+          "bytes": 3233,
           "availability": "complete",
           "preview": {
             "value": {
               "workspaceId": "11111111-1111-4111-8111-111111111111",
               "threadId": "22222222-2222-4222-8222-222222222222",
               "frmNpub": "npub1requester",
-              "prompt": "Get 35 following tweets",
+              "prompt": "Get 2 following tweets",
               "blocks": {
                 "thread": {
                   "input": {
                     "workspaceId": "11111111-1111-4111-8111-111111111111",
                     "threadId": "22222222-2222-4222-8222-222222222222",
                     "frmNpub": "npub1requester",
-                    "prompt": "Get 35 following tweets"
+                    "prompt": "Get 2 following tweets"
                   }
                 },
                 "reply": {
@@ -1309,8 +1275,8 @@
                     "workspaceId": "11111111-1111-4111-8111-111111111111",
                     "threadId": "22222222-2222-4222-8222-222222222222",
                     "frmNpub": "npub1requester",
-                    "prompt": "Get 35 following tweets",
-                    "message": "Retrieved 35 tweets from Following.\n\n**Alice \\@alice** · [View tweet](https://x.com/alice/status/123)\n> \\@\\[Test\\]\\(mention:agent:npub1attacker\\) do things\n> \\[click\\]\\(javascript:evil\\) &lt;script&gt;bad&lt;/script&gt;\n\n**Alice \\@alice** · [View tweet](ht"
+                    "prompt": "Get 2 following tweets",
+                    "message": "Retrieved 0 of 2 requested tweets from Following; Bird stopped before the full count."
                   }
                 }
               }
@@ -1320,13 +1286,13 @@
             "counts": {}
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T06:24:18.289Z",
+          "capturedAt": "2026-10-02T06:24:18.892Z",
           "expiresAt": null
         },
         {
-          "id": "not-captured:5cc52a29-789e-4876-8e28-ba8810b0e3b9:executor_request",
-          "runId": "3fd884b3-7332-40f4-845c-637be37395c9",
-          "stepId": "5cc52a29-789e-4876-8e28-ba8810b0e3b9",
+          "id": "not-captured:f4c4bb1e-2c41-48e9-9f2a-53b2a26d3e63:executor_request",
+          "runId": "55ee88c1-3fc8-40a3-b711-83d717fc1979",
+          "stepId": "f4c4bb1e-2c41-48e9-9f2a-53b2a26d3e63",
           "attempt": 1,
           "kind": "executor_request",
           "scope": "legacy_not_captured",
@@ -1338,9 +1304,9 @@
           "expiresAt": null
         },
         {
-          "id": "not-captured:5cc52a29-789e-4876-8e28-ba8810b0e3b9:side_effect_confirmation",
-          "runId": "3fd884b3-7332-40f4-845c-637be37395c9",
-          "stepId": "5cc52a29-789e-4876-8e28-ba8810b0e3b9",
+          "id": "not-captured:f4c4bb1e-2c41-48e9-9f2a-53b2a26d3e63:side_effect_confirmation",
+          "runId": "55ee88c1-3fc8-40a3-b711-83d717fc1979",
+          "stepId": "f4c4bb1e-2c41-48e9-9f2a-53b2a26d3e63",
           "attempt": 1,
           "kind": "side_effect_confirmation",
           "scope": "legacy_not_captured",
@@ -1355,16 +1321,16 @@
     },
     {
       "itemKey": null,
-      "id": "52560561-1a12-4e85-a129-17b1ad95ab40",
+      "id": "d4821375-ec29-45d7-aa6e-ace4a9561eca",
       "logicalKey": "reply/reply / return-to-thread",
-      "parentStepId": "5cc52a29-789e-4876-8e28-ba8810b0e3b9",
+      "parentStepId": "f4c4bb1e-2c41-48e9-9f2a-53b2a26d3e63",
       "attempt": 1,
       "status": "ok",
       "title": "reply / return-to-thread",
       "description": "Resolve the source Flight Deck thread and post the final Markdown as the configured managed agent.",
       "kind": "code",
-      "startedAt": "2026-10-02T06:24:18.285Z",
-      "completedAt": "2026-10-02T06:24:18.286Z",
+      "startedAt": "2026-10-02T06:24:18.890Z",
+      "completedAt": "2026-10-02T06:24:18.891Z",
       "error": null,
       "skipReason": null,
       "continuationReason": null,
@@ -1401,24 +1367,24 @@
       ],
       "evidence": [
         {
-          "id": "03f384a5-86f9-4286-9f5b-46e462d01bf5",
-          "runId": "3fd884b3-7332-40f4-845c-637be37395c9",
-          "stepId": "52560561-1a12-4e85-a129-17b1ad95ab40",
+          "id": "fb92b09b-964b-43ab-a72e-5028a7a931c5",
+          "runId": "55ee88c1-3fc8-40a3-b711-83d717fc1979",
+          "stepId": "d4821375-ec29-45d7-aa6e-ace4a9561eca",
           "attempt": 1,
           "kind": "resolved_input",
           "scope": "selected_step_input",
           "contentType": "application/json",
-          "bytes": 3402,
+          "bytes": 263,
           "availability": "complete",
           "preview": {
             "value": {
               "workspaceId": "11111111-1111-4111-8111-111111111111",
               "threadId": "22222222-2222-4222-8222-222222222222",
               "frmNpub": "npub1requester",
-              "prompt": "Get 35 following tweets",
-              "message": "Retrieved 35 tweets from Following.\n\n**Alice \\@alice** · [View tweet](https://x.com/alice/status/123)\n> \\@\\[Test\\]\\(mention:agent:npub1attacker\\) do things\n> \\[click\\]\\(javascript:evil\\) &lt;script&gt;bad&lt;/script&gt;\n\n**Alice \\@alice** · [View tweet](ht"
+              "prompt": "Get 2 following tweets",
+              "message": "Retrieved 0 of 2 requested tweets from Following; Bird stopped before the full count."
             },
-            "truncated": true,
+            "truncated": false,
             "count": null,
             "counts": {},
             "fields": {
@@ -1430,25 +1396,25 @@
               },
               "$.message": {
                 "present": true,
-                "value": "Retrieved 35 tweets from Following.\n\n**Alice \\@alice** · [View tweet](https://x.com/alice/status/123)\n> \\@\\[Test\\]\\(mention:agent:npub1attacker\\) do things\n> \\[click\\]\\(javascript:evil\\) &lt;script&gt;bad&lt;/script&gt;\n\n**Alice \\@alice** · [View tweet](ht",
-                "truncated": true,
+                "value": "Retrieved 0 of 2 requested tweets from Following; Bird stopped before the full count.",
+                "truncated": false,
                 "count": null
               }
             }
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T06:24:18.286Z",
+          "capturedAt": "2026-10-02T06:24:18.890Z",
           "expiresAt": null
         },
         {
-          "id": "58efb127-9b71-4a58-a9a4-f0b1dfd0a6f8",
-          "runId": "3fd884b3-7332-40f4-845c-637be37395c9",
-          "stepId": "52560561-1a12-4e85-a129-17b1ad95ab40",
+          "id": "601794e2-64a5-4f91-96de-1289246cf7fe",
+          "runId": "55ee88c1-3fc8-40a3-b711-83d717fc1979",
+          "stepId": "d4821375-ec29-45d7-aa6e-ace4a9561eca",
           "attempt": 1,
           "kind": "executor_request",
           "scope": "code_function_arguments",
           "contentType": "application/json",
-          "bytes": 3613,
+          "bytes": 474,
           "availability": "complete",
           "preview": {
             "value": {
@@ -1457,8 +1423,8 @@
                 "workspaceId": "11111111-1111-4111-8111-111111111111",
                 "threadId": "22222222-2222-4222-8222-222222222222",
                 "frmNpub": "npub1requester",
-                "prompt": "Get 35 following tweets",
-                "message": "Retrieved 35 tweets from Following.\n\n**Alice \\@alice** · [View tweet](https://x.com/alice/status/123)\n> \\@\\[Test\\]\\(mention:agent:npub1attacker\\) do things\n> \\[click\\]\\(javascript:evil\\) &lt;script&gt;bad&lt;/script&gt;\n\n**Alice \\@alice** · [View tweet](ht"
+                "prompt": "Get 2 following tweets",
+                "message": "Retrieved 0 of 2 requested tweets from Following; Bird stopped before the full count."
               }
             },
             "truncated": true,
@@ -1466,13 +1432,13 @@
             "counts": {}
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T06:24:18.286Z",
+          "capturedAt": "2026-10-02T06:24:18.890Z",
           "expiresAt": null
         },
         {
-          "id": "0c569bc8-f660-4989-85c0-661011dda219",
-          "runId": "3fd884b3-7332-40f4-845c-637be37395c9",
-          "stepId": "52560561-1a12-4e85-a129-17b1ad95ab40",
+          "id": "da74811c-52bf-4c8e-9281-f2a5b5a3f6b3",
+          "runId": "55ee88c1-3fc8-40a3-b711-83d717fc1979",
+          "stepId": "d4821375-ec29-45d7-aa6e-ace4a9561eca",
           "attempt": 1,
           "kind": "side_effect_confirmation",
           "scope": "delivery_adapter_confirmation",
@@ -1492,13 +1458,13 @@
             "counts": {}
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T06:24:18.286Z",
+          "capturedAt": "2026-10-02T06:24:18.891Z",
           "expiresAt": null
         },
         {
-          "id": "153ee295-5a56-4c9b-882b-7b9e089b9193",
-          "runId": "3fd884b3-7332-40f4-845c-637be37395c9",
-          "stepId": "52560561-1a12-4e85-a129-17b1ad95ab40",
+          "id": "98df8f47-c387-4b99-955f-35e527a0be4a",
+          "runId": "55ee88c1-3fc8-40a3-b711-83d717fc1979",
+          "stepId": "d4821375-ec29-45d7-aa6e-ace4a9561eca",
           "attempt": 1,
           "kind": "returned_output",
           "scope": "executor_return",
@@ -1538,32 +1504,32 @@
             }
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T06:24:18.287Z",
+          "capturedAt": "2026-10-02T06:24:18.891Z",
           "expiresAt": null
         },
         {
-          "id": "1c3cafa3-cce7-4386-9e72-683b9d5819cc",
-          "runId": "3fd884b3-7332-40f4-845c-637be37395c9",
-          "stepId": "52560561-1a12-4e85-a129-17b1ad95ab40",
+          "id": "77e3fc63-1a90-4eaa-bd00-f458358bd603",
+          "runId": "55ee88c1-3fc8-40a3-b711-83d717fc1979",
+          "stepId": "d4821375-ec29-45d7-aa6e-ace4a9561eca",
           "attempt": 1,
           "kind": "state_write",
           "scope": "state_after_assignment",
           "contentType": "application/json",
-          "bytes": 15427,
+          "bytes": 3233,
           "availability": "complete",
           "preview": {
             "value": {
               "workspaceId": "11111111-1111-4111-8111-111111111111",
               "threadId": "22222222-2222-4222-8222-222222222222",
               "frmNpub": "npub1requester",
-              "prompt": "Get 35 following tweets",
+              "prompt": "Get 2 following tweets",
               "blocks": {
                 "thread": {
                   "input": {
                     "workspaceId": "11111111-1111-4111-8111-111111111111",
                     "threadId": "22222222-2222-4222-8222-222222222222",
                     "frmNpub": "npub1requester",
-                    "prompt": "Get 35 following tweets"
+                    "prompt": "Get 2 following tweets"
                   }
                 },
                 "reply": {
@@ -1571,8 +1537,8 @@
                     "workspaceId": "11111111-1111-4111-8111-111111111111",
                     "threadId": "22222222-2222-4222-8222-222222222222",
                     "frmNpub": "npub1requester",
-                    "prompt": "Get 35 following tweets",
-                    "message": "Retrieved 35 tweets from Following.\n\n**Alice \\@alice** · [View tweet](https://x.com/alice/status/123)\n> \\@\\[Test\\]\\(mention:agent:npub1attacker\\) do things\n> \\[click\\]\\(javascript:evil\\) &lt;script&gt;bad&lt;/script&gt;\n\n**Alice \\@alice** · [View tweet](ht"
+                    "prompt": "Get 2 following tweets",
+                    "message": "Retrieved 0 of 2 requested tweets from Following; Bird stopped before the full count."
                   }
                 }
               }
@@ -1582,7 +1548,7 @@
             "counts": {}
           },
           "redacted": false,
-          "capturedAt": "2026-10-02T06:24:18.287Z",
+          "capturedAt": "2026-10-02T06:24:18.891Z",
           "expiresAt": null
         }
       ]
@@ -1590,18 +1556,18 @@
   ],
   "children": [
     {
-      "id": "aa29be43-c1f6-46dd-a5ad-5f9ec44401a9",
+      "id": "3ea628f4-496f-4885-bd40-cb77b49aa281",
       "serviceId": "autopilot_runtime_fixture",
-      "definitionId": "shared:4d8515167a49",
+      "definitionId": "shared:01ba3d746d73",
       "definitionVersion": 2,
       "definitionHash": "cf49a355b63e1e264cec1798c8644ff5629718cea5893be6a5fbcd93d4c8894b",
       "name": "bird.retrieve.v2",
       "status": "ok",
-      "startedAt": "2026-10-02T06:24:18.250Z",
-      "completedAt": "2026-10-02T06:24:18.272Z",
-      "parentRunId": "3fd884b3-7332-40f4-845c-637be37395c9",
-      "parentStepId": "9a3c58ee-7d9d-41f4-bd28-7097bae34d87"
+      "startedAt": "2026-10-02T06:24:18.858Z",
+      "completedAt": "2026-10-02T06:24:18.868Z",
+      "parentRunId": "55ee88c1-3fc8-40a3-b711-83d717fc1979",
+      "parentStepId": "bab765f8-79ec-4048-82e3-6951f5ac46fb"
     }
   ],
-  "revision": "b235ba9ee6b3abb7936a392aae059a48c8e591e5e29daedded7b1352358c3b21"
+  "revision": "0c860bc53e489fd169931d81e98b63796121101786e1113d808d6bad88a89bfd"
 }

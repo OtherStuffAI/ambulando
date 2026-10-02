@@ -20,7 +20,7 @@ async function harness(){
  const connections=[connection('one'),connection('two')],pending=new Map(),routes=[];let projection;
  const shell={agentConnections:connections,currentWorkspace:{towerServiceNpub:'tower'},syncRoute(){routes.push({...this.pipelineViewerRoute})}};
  const service={initialize:async()=>true,subscribeValues:()=>()=>{},clearValues(){},list:vi.fn(async()=>{}),selectRun:vi.fn(id=>new Promise(resolve=>pending.set(id,resolve))),selectDefinition:vi.fn(id=>new Promise(resolve=>pending.set(id,resolve))),start:async()=>{},dispose:vi.fn()};
- const view=createPipelineViewerView({store:shell,isDbReady:()=>true,getDb:()=>({}),createStore:()=>({observe:()=>({subscribe:o=>{projection=o.next;return {unsubscribe(){}}}}),state:vi.fn(),clear:vi.fn()}),createConnection:()=>({health:async()=>{},disconnect:vi.fn()}),createClient:()=>({}),createService:()=>service});view.init();
+ const view=createPipelineViewerView({enabled:true,store:shell,isDbReady:()=>true,getDb:()=>({}),createStore:()=>({observe:()=>({subscribe:o=>{projection=o.next;return {unsubscribe(){}}}}),state:vi.fn(),clear:vi.fn()}),createConnection:()=>({health:async()=>{},disconnect:vi.fn()}),createClient:()=>({}),createService:()=>service});view.init();
  const previous=globalThis.location;globalThis.location={search:'?service=one&signer=signer'};await view.sync('workspace','actor','db','backend',connections,true);globalThis.location=previous;
  return {view,service,pending,routes,deny(){projection({state:{status:'denied'},definitions:[],runs:[],snapshot:null})}};
 }
