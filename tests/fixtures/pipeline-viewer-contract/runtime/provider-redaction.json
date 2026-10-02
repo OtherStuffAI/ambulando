@@ -1,0 +1,186 @@
+{
+  "version": 1,
+  "serviceId": "autopilot_runtime_fixture",
+  "run": {
+    "id": "0e702ddf-d06f-4591-a03c-b3678230930b",
+    "serviceId": "autopilot_runtime_fixture",
+    "definitionId": "runtime",
+    "definitionVersion": null,
+    "definitionHash": "d583c1cb24c681c91757fd4d042ee1fecf882a3e8aabbaae8960c8113573562a",
+    "name": "runtime",
+    "status": "ok",
+    "startedAt": "2026-10-02T05:27:30.385Z",
+    "completedAt": "2026-10-02T05:27:30.388Z",
+    "parentRunId": null,
+    "parentStepId": null
+  },
+  "definition": {
+    "id": "runtime",
+    "name": "runtime",
+    "title": "runtime",
+    "description": "",
+    "version": null,
+    "hash": "d583c1cb24c681c91757fd4d042ee1fecf882a3e8aabbaae8960c8113573562a",
+    "availability": "redacted",
+    "steps": [
+      {
+        "logicalKey": "judge-id",
+        "name": "judge-name",
+        "title": "judge-name",
+        "description": "",
+        "type": "classifier",
+        "inputs": [],
+        "outputs": [],
+        "children": []
+      }
+    ],
+    "wiring": []
+  },
+  "steps": [
+    {
+      "itemKey": null,
+      "id": "52ed319f-4c7b-4f3f-90da-801ced291adb",
+      "logicalKey": "judge-id",
+      "parentStepId": null,
+      "attempt": 1,
+      "status": "ok",
+      "title": "judge-name",
+      "description": "",
+      "kind": "classifier",
+      "startedAt": "2026-10-02T05:27:30.387Z",
+      "completedAt": "2026-10-02T05:27:30.388Z",
+      "error": null,
+      "skipReason": null,
+      "continuationReason": null,
+      "exitReason": null,
+      "childRunId": null,
+      "inputs": [],
+      "outputs": [],
+      "evidence": [
+        {
+          "id": "a74c7aa8-e7ea-4858-877b-95ddfa732aea",
+          "runId": "0e702ddf-d06f-4591-a03c-b3678230930b",
+          "stepId": "52ed319f-4c7b-4f3f-90da-801ced291adb",
+          "attempt": 1,
+          "kind": "resolved_input",
+          "scope": "selected_step_input",
+          "contentType": "application/json",
+          "bytes": 2,
+          "availability": "complete",
+          "preview": {
+            "value": {},
+            "truncated": false,
+            "count": null,
+            "counts": {}
+          },
+          "redacted": false,
+          "capturedAt": "2026-10-02T05:27:30.387Z",
+          "expiresAt": null
+        },
+        {
+          "id": "f1fa96ba-1358-41f9-ab3f-315ab4e89844",
+          "runId": "0e702ddf-d06f-4591-a03c-b3678230930b",
+          "stepId": "52ed319f-4c7b-4f3f-90da-801ced291adb",
+          "attempt": 1,
+          "kind": "executor_request",
+          "scope": "assembled_model_request",
+          "contentType": "application/json",
+          "bytes": 441,
+          "availability": "redacted",
+          "preview": {
+            "value": {
+              "model": "openai/gpt-oss-120b:nitro",
+              "messages": [
+                {
+                  "role": "system",
+                  "content": "You are a JSON-only classifier inside a Wingman pipeline. Return exactly one valid JSON object and no prose, no markdown, no code fence. The object must satisfy the step instruction."
+                },
+                {
+                  "role": "user",
+                  "content": "Step instruction:\nContext [REDACTED]\n\nSelected input:\n{}\n\nAttempt: 1"
+                }
+              ],
+              "temperature": 0,
+              "max_tokens": 1200,
+              "response_format": {
+                "type": "json_object"
+              }
+            },
+            "truncated": false,
+            "count": null,
+            "counts": {
+              "$.messages": 2
+            }
+          },
+          "redacted": true,
+          "capturedAt": "2026-10-02T05:27:30.387Z",
+          "expiresAt": null
+        },
+        {
+          "id": "5202903f-3add-4083-8724-4527dcc376c4",
+          "runId": "0e702ddf-d06f-4591-a03c-b3678230930b",
+          "stepId": "52ed319f-4c7b-4f3f-90da-801ced291adb",
+          "attempt": 1,
+          "kind": "returned_output",
+          "scope": "executor_return",
+          "contentType": "application/json",
+          "bytes": 64,
+          "availability": "redacted",
+          "preview": {
+            "value": {
+              "context": "echo [REDACTED]",
+              "ordinary": "  unchanged\n prose  "
+            },
+            "truncated": false,
+            "count": null,
+            "counts": {}
+          },
+          "redacted": true,
+          "capturedAt": "2026-10-02T05:27:30.388Z",
+          "expiresAt": null
+        },
+        {
+          "id": "5ac8dfd4-b102-4861-9e28-d7f5cd16c628",
+          "runId": "0e702ddf-d06f-4591-a03c-b3678230930b",
+          "stepId": "52ed319f-4c7b-4f3f-90da-801ced291adb",
+          "attempt": 1,
+          "kind": "state_write",
+          "scope": "state_after_assignment",
+          "contentType": "application/json",
+          "bytes": 77,
+          "availability": "redacted",
+          "preview": {
+            "value": {
+              "judgment": {
+                "context": "echo [REDACTED]",
+                "ordinary": "  unchanged\n prose  "
+              }
+            },
+            "truncated": false,
+            "count": null,
+            "counts": {}
+          },
+          "redacted": true,
+          "capturedAt": "2026-10-02T05:27:30.388Z",
+          "expiresAt": null
+        },
+        {
+          "id": "not-captured:52ed319f-4c7b-4f3f-90da-801ced291adb:side_effect_confirmation",
+          "runId": "0e702ddf-d06f-4591-a03c-b3678230930b",
+          "stepId": "52ed319f-4c7b-4f3f-90da-801ced291adb",
+          "attempt": 1,
+          "kind": "side_effect_confirmation",
+          "scope": "legacy_not_captured",
+          "contentType": "application/json",
+          "bytes": 0,
+          "availability": "not_captured",
+          "redacted": false,
+          "capturedAt": null,
+          "expiresAt": null
+        }
+      ]
+    }
+  ],
+  "children": [],
+  "revision": "02c85a1f049d5b4ab250899cdff37e9d0bd00954270dec781a02541688241cdc"
+}

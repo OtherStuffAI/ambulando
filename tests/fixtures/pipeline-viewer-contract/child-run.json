@@ -2,17 +2,17 @@
   "version": 1,
   "serviceId": "autopilot_79bd7d7fd684b399857c582b1b7172dd",
   "run": {
-    "id": "0e66b920-61ad-49ee-ac2a-de2daa0b0385",
+    "id": "16e37220-914e-4742-b980-c0434be6c150",
     "serviceId": "autopilot_79bd7d7fd684b399857c582b1b7172dd",
     "definitionId": "bird.retrieve.v2",
     "definitionVersion": 2,
-    "definitionHash": "caa65cd817c6c0e905423a70744c7cd9420ca1980deebeb73865b17ac288a95b",
+    "definitionHash": "db1dce2d4bd5abc5b31d774fa9ef2fc74dcae64dc7f2017bb04c573bda33d8c4",
     "name": "bird.retrieve.v2",
     "status": "ok",
-    "startedAt": "2026-10-02T04:35:00.898Z",
-    "completedAt": "2026-10-02T04:35:00.902Z",
-    "parentRunId": "96c91841-5be5-410b-8572-b721d2346a1d",
-    "parentStepId": "6bbf1233-88b0-4ee2-8a21-ce153116750a"
+    "startedAt": "2026-10-02T05:31:42.048Z",
+    "completedAt": "2026-10-02T05:31:42.052Z",
+    "parentRunId": "22454780-5524-41a6-9bee-7cdc07a5e1dc",
+    "parentStepId": "2e333b7b-d357-4168-ba35-fbb759133b1c"
   },
   "definition": {
     "id": "bird.retrieve.v2",
@@ -20,7 +20,7 @@
     "title": "bird.retrieve.v2",
     "description": "Bounded read-only Bird retrieval with advisory Jev choices and deterministic execution policy.",
     "version": 2,
-    "hash": "caa65cd817c6c0e905423a70744c7cd9420ca1980deebeb73865b17ac288a95b",
+    "hash": "db1dce2d4bd5abc5b31d774fa9ef2fc74dcae64dc7f2017bb04c573bda33d8c4",
     "availability": "complete",
     "steps": [
       {
@@ -244,6 +244,11 @@
     ],
     "wiring": [
       {
+        "sourceValuePath": "$.request",
+        "sourcePortPaths": [],
+        "targetPortPaths": [
+          "$.request"
+        ],
         "sourceStepKey": null,
         "sourcePath": "$.request",
         "targetStepKey": "prepare",
@@ -251,6 +256,14 @@
         "carriedForward": true
       },
       {
+        "sourceValuePath": "$",
+        "sourcePortPaths": [
+          "$.verdict",
+          "$.resultCount",
+          "$.attempt",
+          "$.latencyMs"
+        ],
+        "targetPortPaths": [],
         "sourceStepKey": "prepare",
         "sourcePath": "$.retrieval",
         "targetStepKey": "bounded-retrieval/choose",
@@ -258,6 +271,16 @@
         "carriedForward": false
       },
       {
+        "sourceValuePath": "$",
+        "sourcePortPaths": [
+          "$.verdict",
+          "$.resultCount",
+          "$.attempt",
+          "$.latencyMs"
+        ],
+        "targetPortPaths": [
+          "$.state.request"
+        ],
         "sourceStepKey": "prepare",
         "sourcePath": "$.retrieval",
         "targetStepKey": "bounded-retrieval/execute",
@@ -265,6 +288,13 @@
         "carriedForward": true
       },
       {
+        "sourceValuePath": "$",
+        "sourcePortPaths": [
+          "$.answers.action.choice",
+          "$.usage",
+          "$.latencyMs"
+        ],
+        "targetPortPaths": [],
         "sourceStepKey": "bounded-retrieval/choose",
         "sourcePath": "$.actionDecision",
         "targetStepKey": "bounded-retrieval/execute",
@@ -272,6 +302,15 @@
         "carriedForward": false
       },
       {
+        "sourceValuePath": "$",
+        "sourcePortPaths": [
+          "$.source",
+          "$.verdict",
+          "$.resultCount",
+          "$.attempt",
+          "$.latencyMs"
+        ],
+        "targetPortPaths": [],
         "sourceStepKey": "bounded-retrieval/execute",
         "sourcePath": "$.retrieval",
         "targetStepKey": "bounded-retrieval/judge-evidence",
@@ -279,6 +318,17 @@
         "carriedForward": false
       },
       {
+        "sourceValuePath": "$",
+        "sourcePortPaths": [
+          "$.source",
+          "$.verdict",
+          "$.resultCount",
+          "$.attempt",
+          "$.latencyMs"
+        ],
+        "targetPortPaths": [
+          "$.state.request"
+        ],
         "sourceStepKey": "bounded-retrieval/execute",
         "sourcePath": "$.retrieval",
         "targetStepKey": "bounded-retrieval/check",
@@ -286,6 +336,13 @@
         "carriedForward": true
       },
       {
+        "sourceValuePath": "$",
+        "sourcePortPaths": [
+          "$.answers.continueSafe.noul",
+          "$.usage",
+          "$.latencyMs"
+        ],
+        "targetPortPaths": [],
         "sourceStepKey": "bounded-retrieval/judge-evidence",
         "sourcePath": "$.evidenceDecision",
         "targetStepKey": "bounded-retrieval/check",
@@ -296,7 +353,8 @@
   },
   "steps": [
     {
-      "id": "ce9f2a82-fc15-4a1b-91ba-eacd66f6d00b",
+      "itemKey": null,
+      "id": "ede7d702-50f3-4f75-b353-370ab4071ca1",
       "logicalKey": "bounded-retrieval",
       "parentStepId": null,
       "attempt": 1,
@@ -304,8 +362,8 @@
       "title": "Bounded retrieval attempts",
       "description": "At most three executions; terminal verdicts skip remaining actions.",
       "kind": "loop",
-      "startedAt": "2026-10-02T04:35:00.899Z",
-      "completedAt": "2026-10-02T04:35:00.902Z",
+      "startedAt": "2026-10-02T05:31:42.049Z",
+      "completedAt": "2026-10-02T05:31:42.052Z",
       "error": null,
       "skipReason": null,
       "continuationReason": null,
@@ -332,51 +390,71 @@
       ],
       "evidence": [
         {
-          "id": "317d8948-0e48-4e10-b487-7455cbd03eb1",
-          "runId": "0e66b920-61ad-49ee-ac2a-de2daa0b0385",
-          "stepId": "ce9f2a82-fc15-4a1b-91ba-eacd66f6d00b",
+          "id": "b1f800a3-2844-4c90-824a-7d758eb4adf1",
+          "runId": "16e37220-914e-4742-b980-c0434be6c150",
+          "stepId": "ede7d702-50f3-4f75-b353-370ab4071ca1",
           "attempt": 1,
           "kind": "resolved_input",
           "scope": "selected_step_input",
           "contentType": "application/json",
           "bytes": 2,
           "availability": "complete",
+          "preview": {
+            "value": {},
+            "truncated": false,
+            "count": null,
+            "counts": {}
+          },
           "redacted": false,
-          "capturedAt": "2026-10-02T04:35:00.899Z",
+          "capturedAt": "2026-10-02T05:31:42.049Z",
           "expiresAt": null
         },
         {
-          "id": "840dd2d3-552f-4b75-9cf5-c3e21d558a3b",
-          "runId": "0e66b920-61ad-49ee-ac2a-de2daa0b0385",
-          "stepId": "ce9f2a82-fc15-4a1b-91ba-eacd66f6d00b",
+          "id": "9e600ff1-b236-4559-b707-f960badcc39f",
+          "runId": "16e37220-914e-4742-b980-c0434be6c150",
+          "stepId": "ede7d702-50f3-4f75-b353-370ab4071ca1",
           "attempt": 1,
           "kind": "returned_output",
           "scope": "wrapper_output_child_evidence_separate",
           "contentType": "application/json",
           "bytes": 16,
           "availability": "complete",
+          "preview": {
+            "value": {
+              "iterations": 1
+            },
+            "truncated": false,
+            "count": null,
+            "counts": {}
+          },
           "redacted": false,
-          "capturedAt": "2026-10-02T04:35:00.902Z",
+          "capturedAt": "2026-10-02T05:31:42.052Z",
           "expiresAt": null
         },
         {
-          "id": "30f1980b-92a7-4c12-811a-ad3167f99b61",
-          "runId": "0e66b920-61ad-49ee-ac2a-de2daa0b0385",
-          "stepId": "ce9f2a82-fc15-4a1b-91ba-eacd66f6d00b",
+          "id": "d7730400-8775-4595-821a-5a2f17b10766",
+          "runId": "16e37220-914e-4742-b980-c0434be6c150",
+          "stepId": "ede7d702-50f3-4f75-b353-370ab4071ca1",
           "attempt": 1,
           "kind": "state_write",
           "scope": "state_after_assignment",
           "contentType": "application/json",
           "bytes": 2,
           "availability": "complete",
+          "preview": {
+            "value": {},
+            "truncated": false,
+            "count": null,
+            "counts": {}
+          },
           "redacted": false,
-          "capturedAt": "2026-10-02T04:35:00.902Z",
+          "capturedAt": "2026-10-02T05:31:42.052Z",
           "expiresAt": null
         },
         {
-          "id": "not-captured:ce9f2a82-fc15-4a1b-91ba-eacd66f6d00b:executor_request",
-          "runId": "0e66b920-61ad-49ee-ac2a-de2daa0b0385",
-          "stepId": "ce9f2a82-fc15-4a1b-91ba-eacd66f6d00b",
+          "id": "not-captured:ede7d702-50f3-4f75-b353-370ab4071ca1:executor_request",
+          "runId": "16e37220-914e-4742-b980-c0434be6c150",
+          "stepId": "ede7d702-50f3-4f75-b353-370ab4071ca1",
           "attempt": 1,
           "kind": "executor_request",
           "scope": "legacy_not_captured",
@@ -388,9 +466,9 @@
           "expiresAt": null
         },
         {
-          "id": "not-captured:ce9f2a82-fc15-4a1b-91ba-eacd66f6d00b:side_effect_confirmation",
-          "runId": "0e66b920-61ad-49ee-ac2a-de2daa0b0385",
-          "stepId": "ce9f2a82-fc15-4a1b-91ba-eacd66f6d00b",
+          "id": "not-captured:ede7d702-50f3-4f75-b353-370ab4071ca1:side_effect_confirmation",
+          "runId": "16e37220-914e-4742-b980-c0434be6c150",
+          "stepId": "ede7d702-50f3-4f75-b353-370ab4071ca1",
           "attempt": 1,
           "kind": "side_effect_confirmation",
           "scope": "legacy_not_captured",
@@ -404,16 +482,17 @@
       ]
     },
     {
-      "id": "e7aa16c4-81b0-43a7-931d-57030b901dd2",
+      "itemKey": null,
+      "id": "9c04c443-0cda-41e4-aae8-5f1619a5b123",
       "logicalKey": "bounded-retrieval/choose",
-      "parentStepId": "ce9f2a82-fc15-4a1b-91ba-eacd66f6d00b",
+      "parentStepId": "ede7d702-50f3-4f75-b353-370ab4071ca1",
       "attempt": 1,
       "status": "ok",
       "title": "Choose read-only action",
       "description": "Advisory typed judgments; deterministic policy owns execution. Skipped after a terminal verdict.",
       "kind": "classifier",
-      "startedAt": "2026-10-02T04:35:00.899Z",
-      "completedAt": "2026-10-02T04:35:00.899Z",
+      "startedAt": "2026-10-02T05:31:42.049Z",
+      "completedAt": "2026-10-02T05:31:42.049Z",
       "error": null,
       "skipReason": null,
       "continuationReason": null,
@@ -450,65 +529,143 @@
       ],
       "evidence": [
         {
-          "id": "0bf08d41-7aad-4608-963c-3ce403e49f3c",
-          "runId": "0e66b920-61ad-49ee-ac2a-de2daa0b0385",
-          "stepId": "e7aa16c4-81b0-43a7-931d-57030b901dd2",
+          "id": "35098bca-eb93-428e-88ab-17805bc19090",
+          "runId": "16e37220-914e-4742-b980-c0434be6c150",
+          "stepId": "9c04c443-0cda-41e4-aae8-5f1619a5b123",
           "attempt": 1,
           "kind": "resolved_input",
           "scope": "selected_step_input",
           "contentType": "application/json",
           "bytes": 30658,
           "availability": "complete",
+          "preview": {
+            "value": {
+              "request": "Retrieve 35 tweets from my Following feed.\nSynthetic long request for exact-copy inspection.\nSynthetic long request for exact-copy inspection.\nSynthetic long request for exact-copy inspection.\nSynthetic long request for exact-copy inspection.\nSynthetic lon"
+            },
+            "truncated": true,
+            "count": null,
+            "counts": {}
+          },
           "redacted": false,
-          "capturedAt": "2026-10-02T04:35:00.899Z",
+          "capturedAt": "2026-10-02T05:31:42.049Z",
           "expiresAt": null
         },
         {
-          "id": "8d2c0bba-9149-43b2-960d-1647350ff363",
-          "runId": "0e66b920-61ad-49ee-ac2a-de2daa0b0385",
-          "stepId": "e7aa16c4-81b0-43a7-931d-57030b901dd2",
+          "id": "62d3f6bb-05d4-4e3c-a555-f8968cc6a4d7",
+          "runId": "16e37220-914e-4742-b980-c0434be6c150",
+          "stepId": "9c04c443-0cda-41e4-aae8-5f1619a5b123",
           "attempt": 1,
           "kind": "executor_request",
           "scope": "assembled_model_request",
           "contentType": "application/json",
           "bytes": 33932,
           "availability": "complete",
+          "preview": {
+            "value": {
+              "model": "synthetic-model",
+              "state": {
+                "request": "Retrieve 35 tweets from my Following feed.\nSynthetic long request for exact-copy inspection.\nSynthetic long request for exact-copy inspection.\nSynthetic long request for exact-copy inspection.\nSynthetic long request for exact-copy inspection.\nSynthetic lon"
+              },
+              "questions": {
+                "action": {
+                  "type": "choice",
+                  "instructions": "Select retrieval action for request. When phase=initial, source is not yet selected: choose the one explicitly requested operation. Initial following and for_you need neither handle, query nor cursor. When phase=continuation, select continue only for the e",
+                  "criteria": {
+                    "following": "Initial request for chronological feed of accounts I follow, my fol",
+                    "for_you": "",
+                    "user_tweets": "",
+                    "search": "",
+                    "mentions": ""
+                  }
+                },
+                "handle": {
+                  "fields": 3
+                },
+                "query": {
+                  "fields": 3
+                },
+                "supported": {
+                  "fields": 3
+                }
+              }
+            },
+            "truncated": true,
+            "count": null,
+            "counts": {}
+          },
           "redacted": false,
-          "capturedAt": "2026-10-02T04:35:00.899Z",
+          "capturedAt": "2026-10-02T05:31:42.049Z",
           "expiresAt": null
         },
         {
-          "id": "0fff24a2-610b-4912-85c5-bf4804f285a8",
-          "runId": "0e66b920-61ad-49ee-ac2a-de2daa0b0385",
-          "stepId": "e7aa16c4-81b0-43a7-931d-57030b901dd2",
+          "id": "b9efa07f-9ec5-4811-a1ba-c0c485f147c1",
+          "runId": "16e37220-914e-4742-b980-c0434be6c150",
+          "stepId": "9c04c443-0cda-41e4-aae8-5f1619a5b123",
           "attempt": 1,
           "kind": "returned_output",
           "scope": "executor_return",
           "contentType": "application/json",
           "bytes": 5414,
           "availability": "complete",
+          "preview": {
+            "value": {
+              "verdict": "complete",
+              "reason": "requested_count_reached",
+              "tweets": [
+                {
+                  "id": "1000",
+                  "text": "Synthetic exact tweet 1\nSecond line.",
+                  "author": {
+                    "username": "example",
+                    "name": "Example"
+                  },
+                  "url": "https://x.com/example/status/1000"
+                },
+                {
+                  "id": "1001",
+                  "text": "Synthetic exact tweet 2\nSecond line.",
+                  "author": {
+                    "username": "example",
+                    "name": "Example"
+                  },
+                  "url": "https://x.com/example/status/1001"
+                }
+              ]
+            },
+            "truncated": true,
+            "count": null,
+            "counts": {
+              "$.tweets": 35
+            }
+          },
           "redacted": false,
-          "capturedAt": "2026-10-02T04:35:00.900Z",
+          "capturedAt": "2026-10-02T05:31:42.050Z",
           "expiresAt": null
         },
         {
-          "id": "3536f6b0-2dd1-4ee2-95c5-50919bcbef9f",
-          "runId": "0e66b920-61ad-49ee-ac2a-de2daa0b0385",
-          "stepId": "e7aa16c4-81b0-43a7-931d-57030b901dd2",
+          "id": "f0e8d46e-05d9-4db3-8bf4-fbc699f31d09",
+          "runId": "16e37220-914e-4742-b980-c0434be6c150",
+          "stepId": "9c04c443-0cda-41e4-aae8-5f1619a5b123",
           "attempt": 1,
           "kind": "state_write",
           "scope": "state_after_assignment",
           "contentType": "application/json",
           "bytes": 2,
           "availability": "complete",
+          "preview": {
+            "value": {},
+            "truncated": false,
+            "count": null,
+            "counts": {}
+          },
           "redacted": false,
-          "capturedAt": "2026-10-02T04:35:00.900Z",
+          "capturedAt": "2026-10-02T05:31:42.050Z",
           "expiresAt": null
         },
         {
-          "id": "not-captured:e7aa16c4-81b0-43a7-931d-57030b901dd2:side_effect_confirmation",
-          "runId": "0e66b920-61ad-49ee-ac2a-de2daa0b0385",
-          "stepId": "e7aa16c4-81b0-43a7-931d-57030b901dd2",
+          "id": "not-captured:9c04c443-0cda-41e4-aae8-5f1619a5b123:side_effect_confirmation",
+          "runId": "16e37220-914e-4742-b980-c0434be6c150",
+          "stepId": "9c04c443-0cda-41e4-aae8-5f1619a5b123",
           "attempt": 1,
           "kind": "side_effect_confirmation",
           "scope": "legacy_not_captured",
@@ -522,16 +679,17 @@
       ]
     },
     {
-      "id": "30e6dbd4-af3c-4d9e-a219-bfb955d4c89f",
+      "itemKey": null,
+      "id": "61fb0036-15de-492b-b1ce-6684e69687fe",
       "logicalKey": "bounded-retrieval/execute",
-      "parentStepId": "ce9f2a82-fc15-4a1b-91ba-eacd66f6d00b",
+      "parentStepId": "ede7d702-50f3-4f75-b353-370ab4071ca1",
       "attempt": 1,
       "status": "ok",
       "title": "Retrieve selected source",
       "description": "Validate advisory answers, preserve requested source, execute one read-only action, deduplicate exact records.",
       "kind": "code",
-      "startedAt": "2026-10-02T04:35:00.900Z",
-      "completedAt": "2026-10-02T04:35:00.900Z",
+      "startedAt": "2026-10-02T05:31:42.050Z",
+      "completedAt": "2026-10-02T05:31:42.050Z",
       "error": null,
       "skipReason": null,
       "continuationReason": null,
@@ -573,51 +731,96 @@
       ],
       "evidence": [
         {
-          "id": "a7b6ba7d-2a4d-4930-93a4-559962269de0",
-          "runId": "0e66b920-61ad-49ee-ac2a-de2daa0b0385",
-          "stepId": "30e6dbd4-af3c-4d9e-a219-bfb955d4c89f",
+          "id": "c9a9478e-df19-4103-90d8-2d32a17aa27d",
+          "runId": "16e37220-914e-4742-b980-c0434be6c150",
+          "stepId": "61fb0036-15de-492b-b1ce-6684e69687fe",
           "attempt": 1,
           "kind": "resolved_input",
           "scope": "selected_step_input",
           "contentType": "application/json",
           "bytes": 30658,
           "availability": "complete",
+          "preview": {
+            "value": {
+              "request": "Retrieve 35 tweets from my Following feed.\nSynthetic long request for exact-copy inspection.\nSynthetic long request for exact-copy inspection.\nSynthetic long request for exact-copy inspection.\nSynthetic long request for exact-copy inspection.\nSynthetic lon"
+            },
+            "truncated": true,
+            "count": null,
+            "counts": {}
+          },
           "redacted": false,
-          "capturedAt": "2026-10-02T04:35:00.900Z",
+          "capturedAt": "2026-10-02T05:31:42.050Z",
           "expiresAt": null
         },
         {
-          "id": "70e0d316-a28f-469b-bb2a-892e1eb3abd1",
-          "runId": "0e66b920-61ad-49ee-ac2a-de2daa0b0385",
-          "stepId": "30e6dbd4-af3c-4d9e-a219-bfb955d4c89f",
+          "id": "ce129037-0ca6-4a1a-8d21-6492b6823829",
+          "runId": "16e37220-914e-4742-b980-c0434be6c150",
+          "stepId": "61fb0036-15de-492b-b1ce-6684e69687fe",
           "attempt": 1,
           "kind": "returned_output",
           "scope": "executor_return",
           "contentType": "application/json",
           "bytes": 5414,
           "availability": "complete",
+          "preview": {
+            "value": {
+              "verdict": "complete",
+              "reason": "requested_count_reached",
+              "tweets": [
+                {
+                  "id": "1000",
+                  "text": "Synthetic exact tweet 1\nSecond line.",
+                  "author": {
+                    "username": "example",
+                    "name": "Example"
+                  },
+                  "url": "https://x.com/example/status/1000"
+                },
+                {
+                  "id": "1001",
+                  "text": "Synthetic exact tweet 2\nSecond line.",
+                  "author": {
+                    "username": "example",
+                    "name": "Example"
+                  },
+                  "url": "https://x.com/example/status/1001"
+                }
+              ]
+            },
+            "truncated": true,
+            "count": null,
+            "counts": {
+              "$.tweets": 35
+            }
+          },
           "redacted": false,
-          "capturedAt": "2026-10-02T04:35:00.901Z",
+          "capturedAt": "2026-10-02T05:31:42.051Z",
           "expiresAt": null
         },
         {
-          "id": "75e78616-60fa-4440-b697-4125ac4cd9fc",
-          "runId": "0e66b920-61ad-49ee-ac2a-de2daa0b0385",
-          "stepId": "30e6dbd4-af3c-4d9e-a219-bfb955d4c89f",
+          "id": "505d2720-5fc6-42f7-8053-d369aa13a2e7",
+          "runId": "16e37220-914e-4742-b980-c0434be6c150",
+          "stepId": "61fb0036-15de-492b-b1ce-6684e69687fe",
           "attempt": 1,
           "kind": "state_write",
           "scope": "state_after_assignment",
           "contentType": "application/json",
           "bytes": 2,
           "availability": "complete",
+          "preview": {
+            "value": {},
+            "truncated": false,
+            "count": null,
+            "counts": {}
+          },
           "redacted": false,
-          "capturedAt": "2026-10-02T04:35:00.901Z",
+          "capturedAt": "2026-10-02T05:31:42.051Z",
           "expiresAt": null
         },
         {
-          "id": "not-captured:30e6dbd4-af3c-4d9e-a219-bfb955d4c89f:executor_request",
-          "runId": "0e66b920-61ad-49ee-ac2a-de2daa0b0385",
-          "stepId": "30e6dbd4-af3c-4d9e-a219-bfb955d4c89f",
+          "id": "not-captured:61fb0036-15de-492b-b1ce-6684e69687fe:executor_request",
+          "runId": "16e37220-914e-4742-b980-c0434be6c150",
+          "stepId": "61fb0036-15de-492b-b1ce-6684e69687fe",
           "attempt": 1,
           "kind": "executor_request",
           "scope": "legacy_not_captured",
@@ -629,9 +832,9 @@
           "expiresAt": null
         },
         {
-          "id": "not-captured:30e6dbd4-af3c-4d9e-a219-bfb955d4c89f:side_effect_confirmation",
-          "runId": "0e66b920-61ad-49ee-ac2a-de2daa0b0385",
-          "stepId": "30e6dbd4-af3c-4d9e-a219-bfb955d4c89f",
+          "id": "not-captured:61fb0036-15de-492b-b1ce-6684e69687fe:side_effect_confirmation",
+          "runId": "16e37220-914e-4742-b980-c0434be6c150",
+          "stepId": "61fb0036-15de-492b-b1ce-6684e69687fe",
           "attempt": 1,
           "kind": "side_effect_confirmation",
           "scope": "legacy_not_captured",
@@ -645,16 +848,17 @@
       ]
     },
     {
-      "id": "ad1e6768-ee80-4cdc-a85d-234ee96e24c6",
+      "itemKey": null,
+      "id": "a9626606-517d-45d0-b3f5-41855b3ed0e2",
       "logicalKey": "bounded-retrieval/judge-evidence",
-      "parentStepId": "ce9f2a82-fc15-4a1b-91ba-eacd66f6d00b",
+      "parentStepId": "ede7d702-50f3-4f75-b353-370ab4071ca1",
       "attempt": 1,
       "status": "skipped",
       "title": "Judge safe continuation",
       "description": "Advisory typed judgments; deterministic policy owns execution. Skipped after a terminal verdict.",
       "kind": "classifier",
-      "startedAt": "2026-10-02T04:35:00.901Z",
-      "completedAt": "2026-10-02T04:35:00.901Z",
+      "startedAt": "2026-10-02T05:31:42.051Z",
+      "completedAt": "2026-10-02T05:31:42.051Z",
       "error": null,
       "skipReason": "Advisory typed judgments; deterministic policy owns execution. Skipped after a terminal verdict.",
       "continuationReason": null,
@@ -691,23 +895,51 @@
       ],
       "evidence": [
         {
-          "id": "eaaa3f26-89f7-476c-a380-15bb8ad705a1",
-          "runId": "0e66b920-61ad-49ee-ac2a-de2daa0b0385",
-          "stepId": "ad1e6768-ee80-4cdc-a85d-234ee96e24c6",
+          "id": "f4f00fee-491e-4d7a-8f82-453506242e70",
+          "runId": "16e37220-914e-4742-b980-c0434be6c150",
+          "stepId": "a9626606-517d-45d0-b3f5-41855b3ed0e2",
           "attempt": 1,
           "kind": "resolved_input",
           "scope": "selected_step_input",
           "contentType": "application/json",
           "bytes": 30658,
           "availability": "complete",
+          "preview": {
+            "value": {
+              "request": "Retrieve 35 tweets from my Following feed.\nSynthetic long request for exact-copy inspection.\nSynthetic long request for exact-copy inspection.\nSynthetic long request for exact-copy inspection.\nSynthetic long request for exact-copy inspection.\nSynthetic lon"
+            },
+            "truncated": true,
+            "count": null,
+            "counts": {}
+          },
           "redacted": false,
-          "capturedAt": "2026-10-02T04:35:00.901Z",
+          "capturedAt": "2026-10-02T05:31:42.051Z",
           "expiresAt": null
         },
         {
-          "id": "not-captured:ad1e6768-ee80-4cdc-a85d-234ee96e24c6:executor_request",
-          "runId": "0e66b920-61ad-49ee-ac2a-de2daa0b0385",
-          "stepId": "ad1e6768-ee80-4cdc-a85d-234ee96e24c6",
+          "id": "56c860d8-dc96-41d3-8d8a-e46a8ca6fd95",
+          "runId": "16e37220-914e-4742-b980-c0434be6c150",
+          "stepId": "a9626606-517d-45d0-b3f5-41855b3ed0e2",
+          "attempt": 1,
+          "kind": "state_write",
+          "scope": "retained_legacy_inline",
+          "contentType": "application/json",
+          "bytes": 2,
+          "availability": "complete",
+          "preview": {
+            "value": {},
+            "truncated": false,
+            "count": null,
+            "counts": {}
+          },
+          "redacted": false,
+          "capturedAt": "2026-10-02T05:31:42.053Z",
+          "expiresAt": null
+        },
+        {
+          "id": "not-captured:a9626606-517d-45d0-b3f5-41855b3ed0e2:executor_request",
+          "runId": "16e37220-914e-4742-b980-c0434be6c150",
+          "stepId": "a9626606-517d-45d0-b3f5-41855b3ed0e2",
           "attempt": 1,
           "kind": "executor_request",
           "scope": "legacy_not_captured",
@@ -719,9 +951,9 @@
           "expiresAt": null
         },
         {
-          "id": "not-captured:ad1e6768-ee80-4cdc-a85d-234ee96e24c6:returned_output",
-          "runId": "0e66b920-61ad-49ee-ac2a-de2daa0b0385",
-          "stepId": "ad1e6768-ee80-4cdc-a85d-234ee96e24c6",
+          "id": "not-captured:a9626606-517d-45d0-b3f5-41855b3ed0e2:returned_output",
+          "runId": "16e37220-914e-4742-b980-c0434be6c150",
+          "stepId": "a9626606-517d-45d0-b3f5-41855b3ed0e2",
           "attempt": 1,
           "kind": "returned_output",
           "scope": "legacy_not_captured",
@@ -733,23 +965,9 @@
           "expiresAt": null
         },
         {
-          "id": "not-captured:ad1e6768-ee80-4cdc-a85d-234ee96e24c6:state_write",
-          "runId": "0e66b920-61ad-49ee-ac2a-de2daa0b0385",
-          "stepId": "ad1e6768-ee80-4cdc-a85d-234ee96e24c6",
-          "attempt": 1,
-          "kind": "state_write",
-          "scope": "legacy_not_captured",
-          "contentType": "application/json",
-          "bytes": 0,
-          "availability": "not_captured",
-          "redacted": false,
-          "capturedAt": null,
-          "expiresAt": null
-        },
-        {
-          "id": "not-captured:ad1e6768-ee80-4cdc-a85d-234ee96e24c6:side_effect_confirmation",
-          "runId": "0e66b920-61ad-49ee-ac2a-de2daa0b0385",
-          "stepId": "ad1e6768-ee80-4cdc-a85d-234ee96e24c6",
+          "id": "not-captured:a9626606-517d-45d0-b3f5-41855b3ed0e2:side_effect_confirmation",
+          "runId": "16e37220-914e-4742-b980-c0434be6c150",
+          "stepId": "a9626606-517d-45d0-b3f5-41855b3ed0e2",
           "attempt": 1,
           "kind": "side_effect_confirmation",
           "scope": "legacy_not_captured",
@@ -763,16 +981,17 @@
       ]
     },
     {
-      "id": "01d42a54-902f-4478-9a5e-1d2c62a2e2f7",
+      "itemKey": null,
+      "id": "51c99c0c-a6af-4d15-8bb3-3743540771b1",
       "logicalKey": "bounded-retrieval/check",
-      "parentStepId": "ce9f2a82-fc15-4a1b-91ba-eacd66f6d00b",
+      "parentStepId": "ede7d702-50f3-4f75-b353-370ab4071ca1",
       "attempt": 1,
       "status": "skipped",
       "title": "Validate continuation",
       "description": "Validate semantic Noul only when deterministic evidence supports continuation.",
       "kind": "code",
-      "startedAt": "2026-10-02T04:35:00.902Z",
-      "completedAt": "2026-10-02T04:35:00.902Z",
+      "startedAt": "2026-10-02T05:31:42.051Z",
+      "completedAt": "2026-10-02T05:31:42.052Z",
       "error": null,
       "skipReason": "Validate semantic Noul only when deterministic evidence supports continuation.",
       "continuationReason": null,
@@ -809,23 +1028,51 @@
       ],
       "evidence": [
         {
-          "id": "fbed820a-69fa-417c-a385-03eb63fbd5d9",
-          "runId": "0e66b920-61ad-49ee-ac2a-de2daa0b0385",
-          "stepId": "01d42a54-902f-4478-9a5e-1d2c62a2e2f7",
+          "id": "0089be8b-93da-41da-843d-80a6cce7d432",
+          "runId": "16e37220-914e-4742-b980-c0434be6c150",
+          "stepId": "51c99c0c-a6af-4d15-8bb3-3743540771b1",
           "attempt": 1,
           "kind": "resolved_input",
           "scope": "selected_step_input",
           "contentType": "application/json",
           "bytes": 30658,
           "availability": "complete",
+          "preview": {
+            "value": {
+              "request": "Retrieve 35 tweets from my Following feed.\nSynthetic long request for exact-copy inspection.\nSynthetic long request for exact-copy inspection.\nSynthetic long request for exact-copy inspection.\nSynthetic long request for exact-copy inspection.\nSynthetic lon"
+            },
+            "truncated": true,
+            "count": null,
+            "counts": {}
+          },
           "redacted": false,
-          "capturedAt": "2026-10-02T04:35:00.902Z",
+          "capturedAt": "2026-10-02T05:31:42.052Z",
           "expiresAt": null
         },
         {
-          "id": "not-captured:01d42a54-902f-4478-9a5e-1d2c62a2e2f7:executor_request",
-          "runId": "0e66b920-61ad-49ee-ac2a-de2daa0b0385",
-          "stepId": "01d42a54-902f-4478-9a5e-1d2c62a2e2f7",
+          "id": "33d17243-8204-4d1d-8025-ba3bf03f7c35",
+          "runId": "16e37220-914e-4742-b980-c0434be6c150",
+          "stepId": "51c99c0c-a6af-4d15-8bb3-3743540771b1",
+          "attempt": 1,
+          "kind": "state_write",
+          "scope": "retained_legacy_inline",
+          "contentType": "application/json",
+          "bytes": 2,
+          "availability": "complete",
+          "preview": {
+            "value": {},
+            "truncated": false,
+            "count": null,
+            "counts": {}
+          },
+          "redacted": false,
+          "capturedAt": "2026-10-02T05:31:42.054Z",
+          "expiresAt": null
+        },
+        {
+          "id": "not-captured:51c99c0c-a6af-4d15-8bb3-3743540771b1:executor_request",
+          "runId": "16e37220-914e-4742-b980-c0434be6c150",
+          "stepId": "51c99c0c-a6af-4d15-8bb3-3743540771b1",
           "attempt": 1,
           "kind": "executor_request",
           "scope": "legacy_not_captured",
@@ -837,9 +1084,9 @@
           "expiresAt": null
         },
         {
-          "id": "not-captured:01d42a54-902f-4478-9a5e-1d2c62a2e2f7:returned_output",
-          "runId": "0e66b920-61ad-49ee-ac2a-de2daa0b0385",
-          "stepId": "01d42a54-902f-4478-9a5e-1d2c62a2e2f7",
+          "id": "not-captured:51c99c0c-a6af-4d15-8bb3-3743540771b1:returned_output",
+          "runId": "16e37220-914e-4742-b980-c0434be6c150",
+          "stepId": "51c99c0c-a6af-4d15-8bb3-3743540771b1",
           "attempt": 1,
           "kind": "returned_output",
           "scope": "legacy_not_captured",
@@ -851,23 +1098,9 @@
           "expiresAt": null
         },
         {
-          "id": "not-captured:01d42a54-902f-4478-9a5e-1d2c62a2e2f7:state_write",
-          "runId": "0e66b920-61ad-49ee-ac2a-de2daa0b0385",
-          "stepId": "01d42a54-902f-4478-9a5e-1d2c62a2e2f7",
-          "attempt": 1,
-          "kind": "state_write",
-          "scope": "legacy_not_captured",
-          "contentType": "application/json",
-          "bytes": 0,
-          "availability": "not_captured",
-          "redacted": false,
-          "capturedAt": null,
-          "expiresAt": null
-        },
-        {
-          "id": "not-captured:01d42a54-902f-4478-9a5e-1d2c62a2e2f7:side_effect_confirmation",
-          "runId": "0e66b920-61ad-49ee-ac2a-de2daa0b0385",
-          "stepId": "01d42a54-902f-4478-9a5e-1d2c62a2e2f7",
+          "id": "not-captured:51c99c0c-a6af-4d15-8bb3-3743540771b1:side_effect_confirmation",
+          "runId": "16e37220-914e-4742-b980-c0434be6c150",
+          "stepId": "51c99c0c-a6af-4d15-8bb3-3743540771b1",
           "attempt": 1,
           "kind": "side_effect_confirmation",
           "scope": "legacy_not_captured",
@@ -882,5 +1115,5 @@
     }
   ],
   "children": [],
-  "revision": "78edf24e4ca4cce6165fb453450788ffabee03e4adc8b294e0be9feeabdcef90"
+  "revision": "157d8f5a3036f70cf2b8e20a0c245c082434da2678a704794eeb01d018b53bc4"
 }

@@ -64,12 +64,13 @@ for(const [name,viewport] of [['desktop',{width:1440,height:900}],['mobile',{wid
   await page.getByTestId('pipeline-copy-value').click();expect(await page.evaluate(()=>window.fixture.copied[0])).toBe(await page.evaluate(()=>JSON.stringify(window.fixture.tweetRecords,null,2)));
   expect(await page.locator('script').count()).toBe(1);
   await page.keyboard.press('Escape');await expect(tweets).toBeFocused();
+  await expect(page.locator('.pipeline-viewer-edges g')).toHaveCount(3);
   await page.getByRole('button',{name:'Inspect Format exact response outputs: Response text',exact:true}).click();
   await expect(page.getByTestId('pipeline-exact-value')).toHaveText(await page.evaluate(()=>window.fixture.longText));
   await page.getByTestId('pipeline-copy-value').click();expect(await page.evaluate(()=>window.fixture.copied.at(-1))).toBe(await page.evaluate(()=>window.fixture.longText));
   await fs.mkdir(evidence,{recursive:true});await page.screenshot({path:path.join(evidence,name+'.png'),fullPage:true});
   const geometry=await page.evaluate(()=>{const a=document.querySelector('.pipeline-viewer-diagram').getBoundingClientRect(),b=document.querySelector('.pipeline-viewer-inspector').getBoundingClientRect();return {a:{x:a.x,y:a.y,w:a.width,h:a.height},b:{x:b.x,y:b.y},overflow:document.documentElement.scrollWidth>innerWidth};});expect(geometry.overflow).toBe(false);
-  if(name==='mobile')expect(geometry.b.y).toBeGreaterThanOrEqual(geometry.a.y+geometry.a.h);else expect(geometry.b.x).toBeGreaterThan(geometry.a.x);
+  if(name==='mobile'){expect(geometry.b.y).toBeGreaterThanOrEqual(0);expect(geometry.b.y).toBeLessThan(viewport.height);expect(await page.getByTestId('pipeline-inspector').evaluate(el=>el.getBoundingClientRect().height)).toBeLessThan(viewport.height*.7);}else expect(geometry.b.x).toBeGreaterThan(geometry.a.x);
   await page.keyboard.press('Escape');await page.getByRole('button',{name:'Open child workflow: Retrieve tweets attempt 1',exact:true}).click();
   await expect(page.getByRole('heading',{name:'Retrieval child',exact:true})).toBeVisible();await expect(page.getByText('Exited: Enough retained records after attempt 1',{exact:true})).toBeVisible();
   await page.getByTestId('pipeline-parent').click();await expect(page.getByTestId('pipeline-step-retrieve')).toBeVisible();

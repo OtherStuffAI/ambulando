@@ -30,17 +30,23 @@ export function definitionDto(row) {
   if (!string(row?.id)) invalid();
   return { ...pick(row, ['id', 'name', 'title', 'description', 'hash', 'availability']), version: row.version ?? null,
     steps: list(row.steps).map(node), wiring: list(row.wiring).map(wire => ({
-      ...pick(wire, ['sourceStepKey', 'sourcePath', 'targetStepKey', 'targetPath']), carriedForward: wire.carriedForward === true,
+      ...pick(wire, ['sourceStepKey', 'sourcePath', 'sourceValuePath', 'targetStepKey', 'targetPath']), carriedForward: wire.carriedForward === true, sourcePortPaths:list(wire.sourcePortPaths).map(string), targetPortPaths:list(wire.targetPortPaths).map(string),
     })) };
 }
 export function runDto(row, serviceId) {
   if (!string(row?.id) || row.serviceId !== serviceId || !string(row.status)) invalid();
   return { ...pick(row, ['id', 'serviceId', 'definitionId', 'definitionHash', 'name', 'status', 'startedAt', 'completedAt', 'parentRunId', 'parentStepId']), definitionVersion: row.definitionVersion ?? null };
 }
+function boundedEvidencePreview(row) {
+  if (!row || typeof row !== 'object' || !Object.hasOwn(row,'value') || typeof row.truncated !== 'boolean') return null;
+  if (new TextEncoder().encode(JSON.stringify(row)).length > 2048) invalid();
+  const count=value=>Number.isSafeInteger(value)&&value>=0?value:null;
+  return {value:row.value,truncated:row.truncated,count:count(row.count),counts:Object.fromEntries(Object.entries(row.counts||{}).slice(0,20).map(([key,value])=>[key,count(value)]))};
+}
 export function evidenceDto(row) {
   if (!string(row?.id) || !string(row.runId)) invalid();
   return { ...pick(row, ['id', 'runId', 'stepId', 'kind', 'scope', 'contentType', 'availability', 'capturedAt', 'expiresAt']),
-    attempt: Number.isSafeInteger(row.attempt) ? row.attempt : null, bytes: Number.isSafeInteger(row.bytes) ? row.bytes : null, redacted: row.redacted === true };
+    attempt: Number.isSafeInteger(row.attempt) ? row.attempt : null, bytes: Number.isSafeInteger(row.bytes) ? row.bytes : null, redacted: row.redacted === true, preview: boundedEvidencePreview(row.preview) };
 }
 export function snapshotDto(payload, serviceId) {
   assertViewerEnvelope(payload, serviceId);
@@ -52,7 +58,7 @@ export function snapshotDto(payload, serviceId) {
     if (!string(row?.id) || !string(row.logicalKey) || !Number.isSafeInteger(row.attempt) || ids.has(row.id)) invalid();
     ids.add(row.id);
     // Full inputs/outputs never enter IndexedDB; only lazy evidence references.
-    return { ...pick(row, ['id', 'logicalKey', 'parentStepId', 'status', 'title', 'description', 'kind', 'startedAt', 'completedAt', 'error', 'skipReason', 'continuationReason', 'exitReason', 'childRunId']),
+    return { ...pick(row, ['id', 'logicalKey', 'parentStepId', 'status', 'title', 'description', 'kind', 'startedAt', 'completedAt', 'error', 'skipReason', 'continuationReason', 'exitReason', 'childRunId','itemKey']),
       attempt: row.attempt, inputs: Array.isArray(row.inputs) ? row.inputs.map(port) : [], outputs: Array.isArray(row.outputs) ? row.outputs.map(port) : [], evidence: list(row.evidence).map(evidenceDto) };
   });
   if (steps.some(step => step.evidence.some(ref => ref.runId !== run.id || ref.stepId !== step.id))) invalid();

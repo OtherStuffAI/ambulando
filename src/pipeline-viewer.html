@@ -14,44 +14,49 @@
   <nav aria-label="Parent run context" x-show="parentTrail.length"><span x-text="parentTrail.map(parent=>parent.title).join(' → ')"></span> <button type="button" aria-label="Return to parent run" data-testid="pipeline-parent" @click="backToParent()">Back to parent</button></nav>
   <p x-show="mode==='run' && selectedRunId && snapshot && (!snapshot.definition || snapshot.definition.availability==='unavailable')">The immutable definition snapshot is unavailable for this historical run.</p>
   <div class="pipeline-viewer-layout" x-show="(definition || snapshot) && ['ready','loading','disconnected'].includes(status)">
-    <div class="pipeline-viewer-diagram">
+    <div class="pipeline-viewer-diagram" x-effect="JSON.stringify([nodes,transformedWires,mode,inspectLabel,inspectSide,inspectPath]);queueGeometry()">
       <h3 x-text="definition?.title || definition?.name"></h3><p x-text="definition?.description"></p>
       <p class="pipeline-viewer-status" data-testid="pipeline-run-status" x-show="mode==='run' && snapshot" :data-status="snapshot?.run.status" x-text="'Run status: '+(snapshot?.run.status || '')"></p>
       <p x-show="definition?.availability==='unavailable'">Showing recorded execution nodes. Configured structure is unavailable.</p>
+      <div class="pipeline-viewer-scroll"><div class="pipeline-viewer-canvas">
+      <svg class="pipeline-viewer-edges" aria-hidden="true" :width="diagramWidth" :height="diagramHeight">
+        <defs><marker id="pipeline-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"></path></marker></defs>
+      </svg>
       <ol class="pipeline-viewer-steps" aria-label="Actual pipeline steps">
         <template x-for="node in nodes" :key="node.logicalKey"><li class="pipeline-viewer-step" :data-testid="'pipeline-step-'+node.logicalKey" :data-highlighted="highlighted(node)" :style="node.depth ? 'margin-top:'+node.depth+'rem' : ''">
           <h3 x-text="node.title || node.name"></h3><p x-text="node.description"></p>
           <p x-show="node.depth" x-text="'Defined child/loop depth '+node.depth"></p>
-          <template x-for="side in ['inputs','outputs']" :key="side"><div class="pipeline-viewer-ports"><h4 x-text="side==='inputs'?'Inputs':'Outputs'"></h4><template x-for="port in node[side]" :key="port.path"><button type="button" :aria-label="'Inspect '+(node.title||node.name)+' '+side+': '+port.label" :data-testid="'pipeline-port-'+node.logicalKey+'-'+side+'-'+port.path" @mouseenter="inspectPort(node,side,port,$event,false)" @focus="inspectPort(node,side,port,$event,false)" @click="inspectPort(node,side,port,$event,true)"><span x-text="port.label"></span><small x-text="portPreview(node,side,port)"></small></button></template></div></template>
-          <ul class="pipeline-viewer-links" :aria-label="'Output consumers for '+(node.title||node.name)"><template x-for="(wire,index) in outgoingWires(node)" :key="index"><li x-text="'→ '+wireLabel(wire)"></li></template></ul>
+          <template x-for="side in ['inputs','outputs']" :key="side"><div class="pipeline-viewer-ports"><h4 x-text="side==='inputs'?'Inputs':'Outputs'"></h4><template x-for="port in ports(node,side)" :key="port.path"><button type="button" :aria-label="'Inspect '+(node.title||node.name)+' '+side+': '+port.label" :data-port-node="node.logicalKey" :data-port-side="side" :data-port-path="port.path" :data-testid="'pipeline-port-'+node.logicalKey+'-'+side+'-'+port.path" @mouseenter="inspectPort(node,side,port,$event,false)" @focus="inspectPort(node,side,port,$event,false)" @click="inspectPort(node,side,port,$event,true)"><span x-text="port.label"></span><small x-text="portPreview(node,side,port)"></small></button></template></div></template>
+
           <div x-show="mode==='run'"><p x-show="!node.attempts.length">Not executed in this snapshot.</p><template x-for="step in node.attempts" :key="step.id"><article :data-testid="'pipeline-attempt-'+step.id">
-            <p class="pipeline-viewer-status" :data-status="step.status" x-text="'Attempt '+step.attempt+' · '+step.status"></p>
+            <p x-show="step.itemKey" x-text="'Executed item: '+step.itemKey"></p><p class="pipeline-viewer-status" :data-status="step.status" x-text="'Attempt '+step.attempt+' · '+step.status"></p>
             <p class="pipeline-viewer-reason" x-show="step.skipReason" x-text="'Skipped: '+step.skipReason"></p><p class="pipeline-viewer-reason" x-show="step.continuationReason" x-text="'Continued: '+step.continuationReason"></p><p class="pipeline-viewer-reason" x-show="step.exitReason" x-text="'Exited: '+step.exitReason"></p><p class="pipeline-viewer-reason" x-show="step.error" x-text="'Failure: '+step.error"></p>
+            <p class="pipeline-viewer-reason" x-show="deliveryPreview(step)" x-text="'Delivery: '+deliveryPreview(step)"></p><a x-show="deliveryLink(step)" :href="deliveryLink(step)" target="_blank" rel="noopener noreferrer" :aria-label="'Open confirmed delivery for '+(node.title||node.name)">Open confirmed delivery</a>
             <button type="button" x-show="step.childRunId" :aria-label="'Open child workflow: '+(node.title||node.name)+' attempt '+step.attempt" @click="openChild(step)">Open child workflow</button>
-            <details><summary :aria-label="'Evidence for '+(node.title||node.name)+' attempt '+step.attempt">Actual execution evidence</summary><template x-for="ref in step.evidence" :key="ref.id"><button type="button" :aria-label="'Inspect '+ref.kind+' for '+(node.title||node.name)+' attempt '+step.attempt" @focus="inspect(ref,$event,false)" @click="inspect(ref,$event,true)"><span x-text="ref.kind+' · evidence attempt '+ref.attempt+' · '+ref.availability"></span></button></template><p x-show="!step.evidence.length">No captured evidence for this attempt.</p></details>
+            <details><summary :aria-label="'Evidence for '+(node.title||node.name)+' attempt '+step.attempt">Actual execution evidence</summary><template x-for="side in ['inputs','outputs']" :key="side"><div><template x-for="port in ports(node,side)" :key="port.path"><button type="button" :aria-label="'Inspect '+port.label+' '+side+' for execution '+step.id" @click="inspectPort(node,side,port,$event,true,step)" x-text="side+': '+port.label"></button></template></div></template><template x-for="ref in step.evidence" :key="ref.id"><button type="button" :aria-label="'Inspect '+ref.kind+' for '+(node.title||node.name)+' attempt '+step.attempt" @focus="inspect(ref,$event,false)" @click="inspect(ref,$event,true)"><span x-text="ref.kind+' · evidence attempt '+ref.attempt+' · '+ref.availability"></span></button></template><p x-show="!step.evidence.length">No captured evidence for this attempt.</p></details>
           </article></template></div>
         </li></template>
-      </ol>
-      <section class="pipeline-viewer-wiring" aria-label="Configured field wiring"><h4>Configured fields and consumers</h4><p>Connections describe configured selector provenance, not every internal read.</p><ul><template x-for="(wire,index) in transformedWires" :key="index"><li x-text="wireLabel(wire)"></li></template></ul></section>
+      </ol></div></div>
+      <section class="pipeline-viewer-wiring" aria-label="Configured field wiring"><h4>Configured fields and consumers</h4><p>Connections describe configured selector provenance, not every internal read.</p><ul><template x-for="(wire,index) in transformedWires" :key="index"><li><button type="button" :aria-label="'Inspect connection: '+wireLabel(wire)" @click="inspectWire(wire,$event)" x-text="wireLabel(wire)"></button></li></template></ul></section>
       <section class="pipeline-viewer-wiring pipeline-viewer-metadata" aria-label="Carried forward metadata"><h4>Carried forward metadata</h4><p>These fields are passed through; intervening steps do not claim to transform them.</p><ul><template x-for="(wire,index) in carriedWires" :key="index"><li x-text="wireLabel(wire)"></li></template></ul><p x-show="!carriedWires.length">No carried-forward wiring is declared.</p></section>
       <details><summary aria-label="Pipeline technical information">Technical information</summary><p x-text="'Definition version: '+definition?.version"></p><p x-text="'Definition hash: '+definition?.hash"></p><p x-text="'Run revision: '+(snapshot?.revision ?? 'none')"></p></details>
     </div>
-    <aside class="pipeline-viewer-inspector" aria-label="Value inspector" data-testid="pipeline-inspector">
-      <h3 x-text="pinned?'Pinned value':'Value preview'"></h3><button type="button" aria-label="Close value inspector" @click="closeInspector()">Close</button>
+    <aside class="pipeline-viewer-inspector" aria-label="Value inspector" data-testid="pipeline-inspector" :data-pinned="pinned">
+      <div class="pipeline-viewer-inspector-header"><h3 x-text="pinned?'Pinned value':'Value preview'"></h3><button type="button" aria-label="Close value inspector" @click="closeInspector()">Close</button></div>
       <p x-show="!inspector && !preview">Focus a named port for a preview. Click or tap to pin its retained evidence.</p><p x-show="!inspector" x-text="preview"></p>
       <template x-if="inspector"><div>
         <p x-text="inspector.reference.kind+' · '+inspector.reference.availability"></p><p x-text="'Scope: '+inspector.reference.scope+' · evidence attempt '+inspector.reference.attempt"></p><p x-show="inspector.reference.redacted">Credential redactions are present.</p>
         <p x-show="inspector.status==='loading'" role="status" aria-live="polite">Loading retained value…</p>
         <p data-testid="pipeline-value-completeness" x-text="inspector.complete?'Complete retained value':inspector.nextOffset!=null?'Partial page · more retained records available':'Preview or unavailable · not a complete retained value'"></p>
-        <p x-show="!pinned" x-text="preview"></p>
+        <p x-show="fieldStatus==='missing'" data-testid="pipeline-field-missing">Selected field is missing from retained evidence.</p><p x-show="fieldStatus==='null'" data-testid="pipeline-field-null">Selected field is explicitly null.</p><p x-show="!pinned" x-text="preview"></p>
         <div x-show="pinned && inspector.status==='ready'">
           <label>Search loaded value <input type="search" aria-label="Search loaded value" data-testid="pipeline-value-search" x-model="search"></label>
           <p x-show="inspector.nextOffset!=null">Search covers loaded pages. Load more to search every retained record.</p>
-          <ol class="pipeline-viewer-records" x-show="Array.isArray(inspector.value)"><template x-for="record in shownRecords" :key="record.index"><li :value="record.index+1"><pre x-text="record.text"></pre></li></template></ol>
-          <pre data-testid="pipeline-exact-value" x-show="!Array.isArray(inspector.value) && valueMatches" x-text="valueText"></pre>
-          <p x-show="search && (Array.isArray(inspector.value)?!shownRecords.length:!valueMatches)">No matches in the loaded value.</p>
+          <ol class="pipeline-viewer-records" x-show="Array.isArray(inspectedValue)"><template x-for="record in shownRecords" :key="record.index"><li :value="record.index+1"><pre x-text="record.text"></pre><button type="button" :aria-label="'Copy retained record '+(record.index+1)" @click="copyRecord(record)">Copy record</button></li></template></ol>
+          <pre data-testid="pipeline-exact-value" x-show="!Array.isArray(inspectedValue) && valueMatches" x-text="valueText"></pre>
+          <p x-show="search && (Array.isArray(inspectedValue)?!shownRecords.length:!valueMatches)">No matches in the loaded value.</p>
           <button type="button" aria-label="Load more retained records" data-testid="pipeline-more-evidence" x-show="inspector.nextOffset!=null" @click="moreEvidence()">Load more retained records</button>
-          <button type="button" aria-label="Copy complete retained value" data-testid="pipeline-copy-value" :disabled="!inspector.complete" @click="copy()">Copy complete retained value</button>
+          <button type="button" aria-label="Copy complete retained value" data-testid="pipeline-copy-value" :disabled="!inspector.complete || fieldStatus==='missing'" @click="copy()">Copy complete retained value</button>
         </div>
       </div></template>
       <p role="status" aria-live="polite" x-text="notice"></p>

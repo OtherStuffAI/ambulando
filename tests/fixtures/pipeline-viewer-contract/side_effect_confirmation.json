@@ -2,23 +2,35 @@
   "version": 1,
   "serviceId": "autopilot_79bd7d7fd684b399857c582b1b7172dd",
   "evidence": {
-    "id": "b1ff0612-abee-4381-9030-a107ba653dc8",
-    "runId": "96c91841-5be5-410b-8572-b721d2346a1d",
-    "stepId": "54973b6b-9f53-4204-b1ab-eedc47cea476",
+    "id": "703f201e-666c-4105-93f8-80e328fdd042",
+    "runId": "22454780-5524-41a6-9bee-7cdc07a5e1dc",
+    "stepId": "c47202d1-6818-4931-b0c0-f10dafca0352",
     "attempt": 1,
     "kind": "side_effect_confirmation",
     "scope": "delivery_adapter_confirmation",
     "contentType": "application/json",
-    "bytes": 80,
+    "bytes": 154,
     "availability": "complete",
+    "preview": {
+      "value": {
+        "delivered": true,
+        "messageId": "synthetic-message",
+        "threadId": "synthetic-thread",
+        "url": "https://example.invalid/thread/synthetic-thread#synthetic-message"
+      },
+      "truncated": false,
+      "count": null,
+      "counts": {}
+    },
     "redacted": false,
-    "capturedAt": "2026-10-02T04:35:00.906Z",
+    "capturedAt": "2026-10-02T05:31:42.056Z",
     "expiresAt": null
   },
   "value": {
     "delivered": true,
     "messageId": "synthetic-message",
-    "threadId": "synthetic-thread"
+    "threadId": "synthetic-thread",
+    "url": "https://example.invalid/thread/synthetic-thread#synthetic-message"
   },
   "nextOffset": null
 }

@@ -178,6 +178,9 @@
       ],
       "wiring": [
         {
+          "sourceValuePath": "$.blocks.thread.input.workspaceId",
+          "sourcePortPaths": [],
+          "targetPortPaths": [],
           "sourceStepKey": null,
           "sourcePath": "$.blocks.thread.input.workspaceId",
           "targetStepKey": "thread/thread / normalise-thread-invocation",
@@ -185,6 +188,11 @@
           "carriedForward": true
         },
         {
+          "sourceValuePath": "$.blocks.thread.input.threadId",
+          "sourcePortPaths": [],
+          "targetPortPaths": [
+            "$.threadId"
+          ],
           "sourceStepKey": null,
           "sourcePath": "$.blocks.thread.input.threadId",
           "targetStepKey": "thread/thread / normalise-thread-invocation",
@@ -192,6 +200,9 @@
           "carriedForward": true
         },
         {
+          "sourceValuePath": "$.blocks.thread.input.frmNpub",
+          "sourcePortPaths": [],
+          "targetPortPaths": [],
           "sourceStepKey": null,
           "sourcePath": "$.blocks.thread.input.frmNpub",
           "targetStepKey": "thread/thread / normalise-thread-invocation",
@@ -199,6 +210,11 @@
           "carriedForward": true
         },
         {
+          "sourceValuePath": "$.blocks.thread.input.prompt",
+          "sourcePortPaths": [],
+          "targetPortPaths": [
+            "$.prompt"
+          ],
           "sourceStepKey": null,
           "sourcePath": "$.blocks.thread.input.prompt",
           "targetStepKey": "thread/thread / normalise-thread-invocation",
@@ -206,6 +222,13 @@
           "carriedForward": true
         },
         {
+          "sourceValuePath": "$.prompt",
+          "sourcePortPaths": [
+            "$.prompt"
+          ],
+          "targetPortPaths": [
+            "$.request"
+          ],
           "sourceStepKey": "thread",
           "sourcePath": "$.invocation.prompt",
           "targetStepKey": "retrieve",
@@ -213,6 +236,14 @@
           "carriedForward": false
         },
         {
+          "sourceValuePath": "$.retrieval",
+          "sourcePortPaths": [
+            "$.retrieval.verdict",
+            "$.retrieval.tweets"
+          ],
+          "targetPortPaths": [
+            "$.state.tweets"
+          ],
           "sourceStepKey": "retrieve",
           "sourcePath": "$.bird.retrieval",
           "targetStepKey": "format",
@@ -220,6 +251,9 @@
           "carriedForward": false
         },
         {
+          "sourceValuePath": "$.workspaceId",
+          "sourcePortPaths": [],
+          "targetPortPaths": [],
           "sourceStepKey": "thread",
           "sourcePath": "$.invocation.workspaceId",
           "targetStepKey": "reply",
@@ -227,6 +261,9 @@
           "carriedForward": true
         },
         {
+          "sourceValuePath": "$.threadId",
+          "sourcePortPaths": [],
+          "targetPortPaths": [],
           "sourceStepKey": "thread",
           "sourcePath": "$.invocation.threadId",
           "targetStepKey": "reply",
@@ -234,6 +271,9 @@
           "carriedForward": true
         },
         {
+          "sourceValuePath": "$.frmNpub",
+          "sourcePortPaths": [],
+          "targetPortPaths": [],
           "sourceStepKey": "thread",
           "sourcePath": "$.invocation.frmNpub",
           "targetStepKey": "reply",
@@ -241,6 +281,11 @@
           "carriedForward": true
         },
         {
+          "sourceValuePath": "$.prompt",
+          "sourcePortPaths": [
+            "$.prompt"
+          ],
+          "targetPortPaths": [],
           "sourceStepKey": "thread",
           "sourcePath": "$.invocation.prompt",
           "targetStepKey": "reply",
@@ -248,6 +293,13 @@
           "carriedForward": true
         },
         {
+          "sourceValuePath": "$.message",
+          "sourcePortPaths": [
+            "$.message"
+          ],
+          "targetPortPaths": [
+            "$.message"
+          ],
           "sourceStepKey": "format",
           "sourcePath": "$.response.message",
           "targetStepKey": "reply",
@@ -255,6 +307,9 @@
           "carriedForward": false
         },
         {
+          "sourceValuePath": "$.blocks.reply.input.workspaceId",
+          "sourcePortPaths": [],
+          "targetPortPaths": [],
           "sourceStepKey": null,
           "sourcePath": "$.blocks.reply.input.workspaceId",
           "targetStepKey": "reply/reply / return-to-thread",
@@ -262,6 +317,11 @@
           "carriedForward": true
         },
         {
+          "sourceValuePath": "$.blocks.reply.input.threadId",
+          "sourcePortPaths": [],
+          "targetPortPaths": [
+            "$.threadId"
+          ],
           "sourceStepKey": null,
           "sourcePath": "$.blocks.reply.input.threadId",
           "targetStepKey": "reply/reply / return-to-thread",
@@ -269,6 +329,9 @@
           "carriedForward": true
         },
         {
+          "sourceValuePath": "$.blocks.reply.input.frmNpub",
+          "sourcePortPaths": [],
+          "targetPortPaths": [],
           "sourceStepKey": null,
           "sourcePath": "$.blocks.reply.input.frmNpub",
           "targetStepKey": "reply/reply / return-to-thread",
@@ -276,6 +339,9 @@
           "carriedForward": true
         },
         {
+          "sourceValuePath": "$.blocks.reply.input.prompt",
+          "sourcePortPaths": [],
+          "targetPortPaths": [],
           "sourceStepKey": null,
           "sourcePath": "$.blocks.reply.input.prompt",
           "targetStepKey": "reply/reply / return-to-thread",
@@ -283,6 +349,11 @@
           "carriedForward": true
         },
         {
+          "sourceValuePath": "$.blocks.reply.input.message",
+          "sourcePortPaths": [],
+          "targetPortPaths": [
+            "$.message"
+          ],
           "sourceStepKey": null,
           "sourcePath": "$.blocks.reply.input.message",
           "targetStepKey": "reply/reply / return-to-thread",
@@ -521,6 +592,11 @@
       ],
       "wiring": [
         {
+          "sourceValuePath": "$.request",
+          "sourcePortPaths": [],
+          "targetPortPaths": [
+            "$.request"
+          ],
           "sourceStepKey": null,
           "sourcePath": "$.request",
           "targetStepKey": "prepare",
@@ -528,6 +604,14 @@
           "carriedForward": true
         },
         {
+          "sourceValuePath": "$",
+          "sourcePortPaths": [
+            "$.verdict",
+            "$.resultCount",
+            "$.attempt",
+            "$.latencyMs"
+          ],
+          "targetPortPaths": [],
           "sourceStepKey": "prepare",
           "sourcePath": "$.retrieval",
           "targetStepKey": "bounded-retrieval/choose",
@@ -535,6 +619,16 @@
           "carriedForward": false
         },
         {
+          "sourceValuePath": "$",
+          "sourcePortPaths": [
+            "$.verdict",
+            "$.resultCount",
+            "$.attempt",
+            "$.latencyMs"
+          ],
+          "targetPortPaths": [
+            "$.state.request"
+          ],
           "sourceStepKey": "prepare",
           "sourcePath": "$.retrieval",
           "targetStepKey": "bounded-retrieval/execute",
@@ -542,6 +636,13 @@
           "carriedForward": true
         },
         {
+          "sourceValuePath": "$",
+          "sourcePortPaths": [
+            "$.answers.action.choice",
+            "$.usage",
+            "$.latencyMs"
+          ],
+          "targetPortPaths": [],
           "sourceStepKey": "bounded-retrieval/choose",
           "sourcePath": "$.actionDecision",
           "targetStepKey": "bounded-retrieval/execute",
@@ -549,6 +650,15 @@
           "carriedForward": false
         },
         {
+          "sourceValuePath": "$",
+          "sourcePortPaths": [
+            "$.source",
+            "$.verdict",
+            "$.resultCount",
+            "$.attempt",
+            "$.latencyMs"
+          ],
+          "targetPortPaths": [],
           "sourceStepKey": "bounded-retrieval/execute",
           "sourcePath": "$.retrieval",
           "targetStepKey": "bounded-retrieval/judge-evidence",
@@ -556,6 +666,17 @@
           "carriedForward": false
         },
         {
+          "sourceValuePath": "$",
+          "sourcePortPaths": [
+            "$.source",
+            "$.verdict",
+            "$.resultCount",
+            "$.attempt",
+            "$.latencyMs"
+          ],
+          "targetPortPaths": [
+            "$.state.request"
+          ],
           "sourceStepKey": "bounded-retrieval/execute",
           "sourcePath": "$.retrieval",
           "targetStepKey": "bounded-retrieval/check",
@@ -563,6 +684,13 @@
           "carriedForward": true
         },
         {
+          "sourceValuePath": "$",
+          "sourcePortPaths": [
+            "$.answers.continueSafe.noul",
+            "$.usage",
+            "$.latencyMs"
+          ],
+          "targetPortPaths": [],
           "sourceStepKey": "bounded-retrieval/judge-evidence",
           "sourcePath": "$.evidenceDecision",
           "targetStepKey": "bounded-retrieval/check",

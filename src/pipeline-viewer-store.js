@@ -30,6 +30,8 @@ export function createPipelineViewerStore(db, context) {
     },
     async snapshot(payload, expectedRevision) {
       const dto = snapshotDto(payload, context.serviceId);
+      // Captured excerpts can contain private user text, so keep them session-only too.
+      for (const step of dto.steps) for (const ref of step.evidence) delete ref.preview;
       await db.transaction('rw', ...tables, async () => {
         const previous = await db.pipeline_viewer_snapshots.get(rowKey(dto.run.id));
         if (expectedRevision !== undefined && (previous?.dto.revision ?? null) !== expectedRevision) return;

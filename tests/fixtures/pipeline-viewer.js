@@ -8,7 +8,7 @@ export const birdDefinition = { id: 'bird.timeline.chat.v2', name: 'Bird timelin
   { logicalKey: 'reply', name: 'Deliver response', title: 'Deliver to source thread', description: 'Confirm posting separately from response text.', type: 'code', inputs: [port('Response text', 'response', 'text'), port('Source thread', 'thread', 'metadata')], outputs: [port('Delivery confirmation', 'delivery', 'object')], children: [] },
 ], wiring: [
   { sourceStepKey: 'thread', sourcePath: 'request', targetStepKey: 'retrieve', targetPath: 'request', carriedForward: false },
-  { sourceStepKey: 'retrieve', sourcePath: 'tweets', targetStepKey: 'format', targetPath: 'tweets', carriedForward: false },
+  { sourceStepKey: 'retrieve', sourcePath: '$', targetStepKey: 'format', targetPath: '$', carriedForward: false },
   { sourceStepKey: 'format', sourcePath: 'response', targetStepKey: 'reply', targetPath: 'response', carriedForward: false },
   { sourceStepKey: 'thread', sourcePath: 'thread', targetStepKey: 'reply', targetPath: 'thread', carriedForward: true },
 ] };

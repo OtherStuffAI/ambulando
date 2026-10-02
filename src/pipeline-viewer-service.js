@@ -1,17 +1,20 @@
+import { createAutopilotDiscoveryClient } from './autopilot-connect-client.js';
+import { createPipelineViewerClient } from './pipeline-viewer-client.js';
 import { PipelineViewerError, evidenceDto, viewerFailure } from './pipeline-viewer-contract.js';
 
 // Network, cancellation and recovery live here; Alpine observes only Dexie rows.
-export function createPipelineViewerService({ client, store, pollMs = 2500, schedule = setTimeout, unschedule = clearTimeout }) {
+export function createPipelineViewerService({ client, store, connection, pollMs = 2500, schedule = setTimeout, unschedule = clearTimeout }) {
   let generation = 0, disposed = false, timer, runId = '', definitionId = '', refreshing = null;
   const controllers = new Map();
   const evidenceRequests = new Map();
+  const previews = new Map();
   const values = new Map(); // Explicit session-only private cache; never passed to store.
   const listeners = new Set();
   const emit = () => listeners.forEach(listener => listener());
   function abort() {
     generation++; unschedule(timer); timer = null;
     for (const [controller] of controllers) controller.abort();
-    controllers.clear(); evidenceRequests.clear(); values.clear(); emit();
+    controllers.clear(); evidenceRequests.clear(); values.clear(); previews.clear(); emit();
   }
   async function perform(operation, options, apply) {
     if (disposed) return;
@@ -24,11 +27,18 @@ export function createPipelineViewerService({ client, store, pollMs = 2500, sche
     } catch (error) {
       if (disposed || epoch !== generation || controller.signal.aborted) return;
       for (const [pending] of controllers) if(pending!==controller)pending.abort();
-      values.clear(); emit();
+      values.clear(); previews.clear(); emit();
       const status = viewerFailure(error);
       if (status === 'denied' || status === 'unavailable') await store.clear();
       await store.state({ status, stale: status === 'disconnected', selectedRunId: runId, selectedDefinitionId: definitionId });
     } finally { controllers.delete(controller); }
+  }
+  async function authorize() {
+    if (!connection) return !disposed;
+    const epoch=generation,controller=new AbortController();controllers.set(controller,'health');
+    try {await connection.health(controller.signal);return !disposed&&epoch===generation&&!controller.signal.aborted;}
+    catch(error){if(disposed||epoch!==generation||controller.signal.aborted)return false;abort();const status=viewerFailure(error);if(['denied','unavailable'].includes(status))await store.clear();await store.state({status,stale:status==='disconnected'});return false;}
+    finally{controllers.delete(controller);}
   }
   async function refreshSnapshot(recover = false) {
     if (!runId || disposed) return;
@@ -38,7 +48,10 @@ export function createPipelineViewerService({ client, store, pollMs = 2500, sche
     if (epoch !== generation || disposed) return;
     await perform(recover ? 'run' : 'updates', { id, after: existing.snapshot?.revision ?? 0 }, async payload => {
       if (payload.run?.id !== id) throw new PipelineViewerError('response_invalid', 'The snapshot did not match the selected run.');
-      if (!payload.unchanged) await store.snapshot(payload, existing.snapshot?.revision ?? null);
+      if (!payload.unchanged) {
+        previews.clear();for(const step of payload.steps||[])for(const row of step.evidence||[]){const ref=evidenceDto(row);if(ref.preview)previews.set(ref.id,ref.preview);}emit();
+        await store.snapshot(payload, existing.snapshot?.revision ?? null);
+      }
       else await store.state({ status: 'ready', stale: false });
     });
     if (epoch === generation && !disposed && runId === id) {
@@ -57,6 +70,8 @@ export function createPipelineViewerService({ client, store, pollMs = 2500, sche
     get disposed() { return disposed; },
     subscribeValues(listener) { listeners.add(listener); return () => listeners.delete(listener); },
     value(id) { return values.get(id) || null; },
+    preview(id) { return previews.get(id) || null; },
+    initialize: authorize,
     async start() {
       const saved = await store.read();
       if (disposed) return;
@@ -81,9 +96,10 @@ export function createPipelineViewerService({ client, store, pollMs = 2500, sche
       await store.state({ selectedRunId: id, status: 'loading', stale: false });
       await refresh(true);
     },
-    async recover() { for(const [controller,operation] of controllers)if(operation==='evidence')controller.abort(); values.clear(); emit(); if(runId) await refresh(true); else {await this.list('definitions');await this.list('runs');} },
+    async recover() { if(!await authorize())return;for(const [controller,operation] of controllers)if(operation==='evidence')controller.abort(); values.clear(); emit(); if(runId) await refresh(true); else {await this.list('definitions');await this.list('runs');} },
     async evidence(reference, append = false) {
       if (disposed || reference.runId !== runId) return;
+      if(['not_captured','expired','oversized','unavailable'].includes(reference.availability)){values.set(reference.id,{reference,status:'unavailable',complete:false,nextOffset:null});emit();return;}
       if(evidenceRequests.has(reference.id))return evidenceRequests.get(reference.id);
       if(!append && values.get(reference.id)?.status==='ready')return values.get(reference.id);
       const old = append ? values.get(reference.id) : null;
@@ -105,6 +121,12 @@ export function createPipelineViewerService({ client, store, pollMs = 2500, sche
       if (epoch !== generation) return;
     },
     clearValues() { for(const [controller,operation] of controllers)if(operation==='evidence')controller.abort();evidenceRequests.clear();values.clear(); emit(); },
-    dispose() { disposed = true; abort(); listeners.clear(); },
+    dispose() { disposed = true; abort(); listeners.clear();void connection?.disconnect?.(); },
   };
+}
+
+export function createPipelineViewerSession({verified,context,store,deps={}}) {
+  const connection=(deps.createConnection||createAutopilotDiscoveryClient)(verified);
+  const client=(deps.createClient||createPipelineViewerClient)(connection,context);
+  return (deps.createService||createPipelineViewerService)({client,store,connection});
 }

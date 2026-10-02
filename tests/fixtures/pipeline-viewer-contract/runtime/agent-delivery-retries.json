@@ -1,0 +1,270 @@
+{
+  "version": 1,
+  "serviceId": "autopilot_runtime_fixture",
+  "run": {
+    "id": "63681a40-2ef8-4777-bbb1-6eda2fddc0cd",
+    "serviceId": "autopilot_runtime_fixture",
+    "definitionId": "agent-delivery-retry",
+    "definitionVersion": null,
+    "definitionHash": "a2c202a09a79ef45226a5e19ec6ae256231adfa9c7c6f8b752f2d204b5d23d82",
+    "name": "agent-delivery-retry",
+    "status": "ok",
+    "startedAt": "2026-10-02T05:27:37.795Z",
+    "completedAt": "2026-10-02T05:27:39.564Z",
+    "parentRunId": null,
+    "parentStepId": null
+  },
+  "definition": {
+    "id": "agent-delivery-retry",
+    "name": "agent-delivery-retry",
+    "title": "agent-delivery-retry",
+    "description": "",
+    "version": null,
+    "hash": "a2c202a09a79ef45226a5e19ec6ae256231adfa9c7c6f8b752f2d204b5d23d82",
+    "availability": "complete",
+    "steps": [
+      {
+        "logicalKey": "agent",
+        "name": "agent",
+        "title": "agent",
+        "description": "",
+        "type": "agent",
+        "inputs": [],
+        "outputs": [],
+        "children": []
+      }
+    ],
+    "wiring": []
+  },
+  "steps": [
+    {
+      "itemKey": null,
+      "id": "a778b488-597d-4b67-88fb-4751df6f273b",
+      "logicalKey": "agent",
+      "parentStepId": null,
+      "attempt": 1,
+      "status": "ok",
+      "title": "agent",
+      "description": "",
+      "kind": "agent",
+      "startedAt": "2026-10-02T05:27:37.795Z",
+      "completedAt": "2026-10-02T05:27:39.564Z",
+      "error": null,
+      "skipReason": null,
+      "continuationReason": null,
+      "exitReason": null,
+      "childRunId": null,
+      "inputs": [],
+      "outputs": [],
+      "evidence": [
+        {
+          "id": "6a8e3479-88b8-4e54-a49e-abf99ebc7651",
+          "runId": "63681a40-2ef8-4777-bbb1-6eda2fddc0cd",
+          "stepId": "a778b488-597d-4b67-88fb-4751df6f273b",
+          "attempt": 1,
+          "kind": "resolved_input",
+          "scope": "selected_step_input",
+          "contentType": "application/json",
+          "bytes": 20,
+          "availability": "complete",
+          "preview": {
+            "value": {
+              "topic": "delivery"
+            },
+            "truncated": false,
+            "count": null,
+            "counts": {}
+          },
+          "redacted": false,
+          "capturedAt": "2026-10-02T05:27:37.795Z",
+          "expiresAt": null
+        },
+        {
+          "id": "b796792f-af16-4011-bf6f-e99b6fb0fdbb",
+          "runId": "63681a40-2ef8-4777-bbb1-6eda2fddc0cd",
+          "stepId": "a778b488-597d-4b67-88fb-4751df6f273b",
+          "attempt": 1,
+          "kind": "executor_request",
+          "scope": "agent_invocation_prompt_persistent_session_not_full_conversation",
+          "contentType": "application/json",
+          "bytes": 1232,
+          "availability": "redacted",
+          "preview": {
+            "value": {
+              "prompt": "You are running one step in a Wingmen pipeline.\n\nStep instruction:\nReturn a delivery retry result.\n\nSelected input:\n{\n  \"topic\": \"delivery\"\n}\n\nCompletion contract:\n- You are not complete until the webhook returns HTTP 200.\n- POST exactly one JSON object to",
+              "agent": "codex",
+              "model": null,
+              "sessionId": "delivery-retry-codex-session-1",
+              "type": "user"
+            },
+            "truncated": true,
+            "count": null,
+            "counts": {}
+          },
+          "redacted": true,
+          "capturedAt": "2026-10-02T05:27:38.301Z",
+          "expiresAt": null
+        },
+        {
+          "id": "ad1263a2-c254-42eb-9228-cf25451cac13",
+          "runId": "63681a40-2ef8-4777-bbb1-6eda2fddc0cd",
+          "stepId": "a778b488-597d-4b67-88fb-4751df6f273b",
+          "attempt": 2,
+          "kind": "executor_request",
+          "scope": "agent_invocation_prompt_persistent_session_not_full_conversation",
+          "contentType": "application/json",
+          "bytes": 1232,
+          "availability": "redacted",
+          "preview": {
+            "value": {
+              "prompt": "You are running one step in a Wingmen pipeline.\n\nStep instruction:\nReturn a delivery retry result.\n\nSelected input:\n{\n  \"topic\": \"delivery\"\n}\n\nCompletion contract:\n- You are not complete until the webhook returns HTTP 200.\n- POST exactly one JSON object to",
+              "agent": "codex",
+              "model": null,
+              "sessionId": "delivery-retry-codex-session-2",
+              "type": "user"
+            },
+            "truncated": true,
+            "count": null,
+            "counts": {}
+          },
+          "redacted": true,
+          "capturedAt": "2026-10-02T05:27:38.805Z",
+          "expiresAt": null
+        },
+        {
+          "id": "ebded9e1-2be1-4bea-af9f-e9306cdd8744",
+          "runId": "63681a40-2ef8-4777-bbb1-6eda2fddc0cd",
+          "stepId": "a778b488-597d-4b67-88fb-4751df6f273b",
+          "attempt": 3,
+          "kind": "executor_request",
+          "scope": "agent_invocation_prompt_persistent_session_not_full_conversation",
+          "contentType": "application/json",
+          "bytes": 1232,
+          "availability": "redacted",
+          "preview": {
+            "value": {
+              "prompt": "You are running one step in a Wingmen pipeline.\n\nStep instruction:\nReturn a delivery retry result.\n\nSelected input:\n{\n  \"topic\": \"delivery\"\n}\n\nCompletion contract:\n- You are not complete until the webhook returns HTTP 200.\n- POST exactly one JSON object to",
+              "agent": "codex",
+              "model": null,
+              "sessionId": "delivery-retry-codex-session-3",
+              "type": "user"
+            },
+            "truncated": true,
+            "count": null,
+            "counts": {}
+          },
+          "redacted": true,
+          "capturedAt": "2026-10-02T05:27:39.311Z",
+          "expiresAt": null
+        },
+        {
+          "id": "262ead67-a069-469c-a50f-0b4ee68baef8",
+          "runId": "63681a40-2ef8-4777-bbb1-6eda2fddc0cd",
+          "stepId": "a778b488-597d-4b67-88fb-4751df6f273b",
+          "attempt": 3,
+          "kind": "returned_output",
+          "scope": "executor_return",
+          "contentType": "application/json",
+          "bytes": 37,
+          "availability": "complete",
+          "preview": {
+            "value": {
+              "answer": "delivery retry delivered"
+            },
+            "truncated": false,
+            "count": null,
+            "counts": {}
+          },
+          "redacted": false,
+          "capturedAt": "2026-10-02T05:27:39.311Z",
+          "expiresAt": null
+        },
+        {
+          "id": "34565bd7-3f51-42d0-9a3c-0b3f5a42b248",
+          "runId": "63681a40-2ef8-4777-bbb1-6eda2fddc0cd",
+          "stepId": "a778b488-597d-4b67-88fb-4751df6f273b",
+          "attempt": 3,
+          "kind": "state_write",
+          "scope": "state_after_assignment",
+          "contentType": "application/json",
+          "bytes": 37,
+          "availability": "complete",
+          "preview": {
+            "value": {
+              "answer": "delivery retry delivered"
+            },
+            "truncated": false,
+            "count": null,
+            "counts": {}
+          },
+          "redacted": false,
+          "capturedAt": "2026-10-02T05:27:39.311Z",
+          "expiresAt": null
+        },
+        {
+          "id": "15ca6c26-ea9d-450a-a55a-dc782d424508",
+          "runId": "63681a40-2ef8-4777-bbb1-6eda2fddc0cd",
+          "stepId": "a778b488-597d-4b67-88fb-4751df6f273b",
+          "attempt": 3,
+          "kind": "returned_output",
+          "scope": "executor_return",
+          "contentType": "application/json",
+          "bytes": 37,
+          "availability": "complete",
+          "preview": {
+            "value": {
+              "answer": "delivery retry delivered"
+            },
+            "truncated": false,
+            "count": null,
+            "counts": {}
+          },
+          "redacted": false,
+          "capturedAt": "2026-10-02T05:27:39.564Z",
+          "expiresAt": null
+        },
+        {
+          "id": "100be735-fd0e-48cc-809a-2699a1156066",
+          "runId": "63681a40-2ef8-4777-bbb1-6eda2fddc0cd",
+          "stepId": "a778b488-597d-4b67-88fb-4751df6f273b",
+          "attempt": 3,
+          "kind": "state_write",
+          "scope": "state_after_assignment",
+          "contentType": "application/json",
+          "bytes": 69,
+          "availability": "complete",
+          "preview": {
+            "value": {
+              "topic": "delivery",
+              "agentRaw": {
+                "answer": "delivery retry delivered"
+              }
+            },
+            "truncated": false,
+            "count": null,
+            "counts": {}
+          },
+          "redacted": false,
+          "capturedAt": "2026-10-02T05:27:39.564Z",
+          "expiresAt": null
+        },
+        {
+          "id": "not-captured:a778b488-597d-4b67-88fb-4751df6f273b:side_effect_confirmation",
+          "runId": "63681a40-2ef8-4777-bbb1-6eda2fddc0cd",
+          "stepId": "a778b488-597d-4b67-88fb-4751df6f273b",
+          "attempt": 1,
+          "kind": "side_effect_confirmation",
+          "scope": "legacy_not_captured",
+          "contentType": "application/json",
+          "bytes": 0,
+          "availability": "not_captured",
+          "redacted": false,
+          "capturedAt": null,
+          "expiresAt": null
+        }
+      ]
+    }
+  ],
+  "children": [],
+  "revision": "515e98cdf6fbcd2d9c1006a79519b861680b9f9a9ab35afb71c6d4bd954b9e82"
+}

@@ -1,0 +1,278 @@
+{
+  "version": 1,
+  "serviceId": "autopilot_runtime_fixture",
+  "run": {
+    "id": "976fc0bd-7063-41dd-9a04-6eb2377c718b",
+    "serviceId": "autopilot_runtime_fixture",
+    "definitionId": "classifier-retry-test",
+    "definitionVersion": null,
+    "definitionHash": "515eee4d48830656e4a610a74d1292261d1486aee08df7600789bdb4bf940b54",
+    "name": "classifier-retry-test",
+    "status": "ok",
+    "startedAt": "2026-10-02T05:27:34.714Z",
+    "completedAt": "2026-10-02T05:27:34.715Z",
+    "parentRunId": null,
+    "parentStepId": null
+  },
+  "definition": {
+    "id": "classifier-retry-test",
+    "name": "classifier-retry-test",
+    "title": "classifier-retry-test",
+    "description": "",
+    "version": null,
+    "hash": "515eee4d48830656e4a610a74d1292261d1486aee08df7600789bdb4bf940b54",
+    "availability": "complete",
+    "steps": [
+      {
+        "logicalKey": "classify",
+        "name": "classify",
+        "title": "classify",
+        "description": "",
+        "type": "classifier",
+        "inputs": [],
+        "outputs": [],
+        "children": []
+      }
+    ],
+    "wiring": [
+      {
+        "sourceValuePath": "$.text",
+        "sourcePortPaths": [],
+        "targetPortPaths": [],
+        "sourceStepKey": null,
+        "sourcePath": "$.text",
+        "targetStepKey": "classify",
+        "targetPath": "$.text",
+        "carriedForward": true
+      }
+    ]
+  },
+  "steps": [
+    {
+      "itemKey": null,
+      "id": "e287cfcc-465d-4199-b7ff-e0ed725981ed",
+      "logicalKey": "classify",
+      "parentStepId": null,
+      "attempt": 1,
+      "status": "ok",
+      "title": "classify",
+      "description": "",
+      "kind": "classifier",
+      "startedAt": "2026-10-02T05:27:34.715Z",
+      "completedAt": "2026-10-02T05:27:34.715Z",
+      "error": null,
+      "skipReason": null,
+      "continuationReason": null,
+      "exitReason": null,
+      "childRunId": null,
+      "inputs": [],
+      "outputs": [],
+      "evidence": [
+        {
+          "id": "cdebd464-2599-4912-b759-1168db8ad6a0",
+          "runId": "976fc0bd-7063-41dd-9a04-6eb2377c718b",
+          "stepId": "e287cfcc-465d-4199-b7ff-e0ed725981ed",
+          "attempt": 1,
+          "kind": "resolved_input",
+          "scope": "selected_step_input",
+          "contentType": "application/json",
+          "bytes": 19,
+          "availability": "complete",
+          "preview": {
+            "value": {
+              "text": "build it"
+            },
+            "truncated": false,
+            "count": null,
+            "counts": {}
+          },
+          "redacted": false,
+          "capturedAt": "2026-10-02T05:27:34.715Z",
+          "expiresAt": null
+        },
+        {
+          "id": "9d4509f1-ef7e-4700-9162-3e9011e76353",
+          "runId": "976fc0bd-7063-41dd-9a04-6eb2377c718b",
+          "stepId": "e287cfcc-465d-4199-b7ff-e0ed725981ed",
+          "attempt": 1,
+          "kind": "executor_request",
+          "scope": "assembled_model_request",
+          "contentType": "application/json",
+          "bytes": 462,
+          "availability": "complete",
+          "preview": {
+            "value": {
+              "model": "openai/gpt-oss-120b:nitro",
+              "messages": [
+                {
+                  "role": "system",
+                  "content": "You are a JSON-only classifier inside a Wingman pipeline. Return exactly one valid JSON object and no prose, no markdown, no code fence. The object must satisfy the step instruction."
+                },
+                {
+                  "role": "user",
+                  "content": "Step instruction:\nChoose a pipeline.\n\nSelected input:\n{\"text\":\"build it\"}\n\nAttempt: 1"
+                }
+              ],
+              "temperature": 0,
+              "max_tokens": 1200,
+              "response_format": {
+                "type": "json_object"
+              }
+            },
+            "truncated": false,
+            "count": null,
+            "counts": {
+              "$.messages": 2
+            }
+          },
+          "redacted": false,
+          "capturedAt": "2026-10-02T05:27:34.715Z",
+          "expiresAt": null
+        },
+        {
+          "id": "536676fc-ea6b-41d8-b4c1-904e772fac12",
+          "runId": "976fc0bd-7063-41dd-9a04-6eb2377c718b",
+          "stepId": "e287cfcc-465d-4199-b7ff-e0ed725981ed",
+          "attempt": 2,
+          "kind": "executor_request",
+          "scope": "assembled_model_request",
+          "contentType": "application/json",
+          "bytes": 462,
+          "availability": "complete",
+          "preview": {
+            "value": {
+              "model": "openai/gpt-oss-120b:nitro",
+              "messages": [
+                {
+                  "role": "system",
+                  "content": "You are a JSON-only classifier inside a Wingman pipeline. Return exactly one valid JSON object and no prose, no markdown, no code fence. The object must satisfy the step instruction."
+                },
+                {
+                  "role": "user",
+                  "content": "Step instruction:\nChoose a pipeline.\n\nSelected input:\n{\"text\":\"build it\"}\n\nAttempt: 2"
+                }
+              ],
+              "temperature": 0,
+              "max_tokens": 1200,
+              "response_format": {
+                "type": "json_object"
+              }
+            },
+            "truncated": false,
+            "count": null,
+            "counts": {
+              "$.messages": 2
+            }
+          },
+          "redacted": false,
+          "capturedAt": "2026-10-02T05:27:34.715Z",
+          "expiresAt": null
+        },
+        {
+          "id": "4f4e0552-13d5-43b0-900c-3cb46215ae9f",
+          "runId": "976fc0bd-7063-41dd-9a04-6eb2377c718b",
+          "stepId": "e287cfcc-465d-4199-b7ff-e0ed725981ed",
+          "attempt": 3,
+          "kind": "executor_request",
+          "scope": "assembled_model_request",
+          "contentType": "application/json",
+          "bytes": 462,
+          "availability": "complete",
+          "preview": {
+            "value": {
+              "model": "openai/gpt-oss-120b:nitro",
+              "messages": [
+                {
+                  "role": "system",
+                  "content": "You are a JSON-only classifier inside a Wingman pipeline. Return exactly one valid JSON object and no prose, no markdown, no code fence. The object must satisfy the step instruction."
+                },
+                {
+                  "role": "user",
+                  "content": "Step instruction:\nChoose a pipeline.\n\nSelected input:\n{\"text\":\"build it\"}\n\nAttempt: 3"
+                }
+              ],
+              "temperature": 0,
+              "max_tokens": 1200,
+              "response_format": {
+                "type": "json_object"
+              }
+            },
+            "truncated": false,
+            "count": null,
+            "counts": {
+              "$.messages": 2
+            }
+          },
+          "redacted": false,
+          "capturedAt": "2026-10-02T05:27:34.715Z",
+          "expiresAt": null
+        },
+        {
+          "id": "19dd7b68-4b6a-4ead-9586-a3f909449898",
+          "runId": "976fc0bd-7063-41dd-9a04-6eb2377c718b",
+          "stepId": "e287cfcc-465d-4199-b7ff-e0ed725981ed",
+          "attempt": 3,
+          "kind": "returned_output",
+          "scope": "executor_return",
+          "contentType": "application/json",
+          "bytes": 58,
+          "availability": "complete",
+          "preview": {
+            "value": {
+              "recommendedPipelineId": "do-and-review",
+              "confidence": 0.9
+            },
+            "truncated": false,
+            "count": null,
+            "counts": {}
+          },
+          "redacted": false,
+          "capturedAt": "2026-10-02T05:27:34.715Z",
+          "expiresAt": null
+        },
+        {
+          "id": "5ae014ad-eb7c-49f8-b91d-fb0ca1f9a004",
+          "runId": "976fc0bd-7063-41dd-9a04-6eb2377c718b",
+          "stepId": "e287cfcc-465d-4199-b7ff-e0ed725981ed",
+          "attempt": 3,
+          "kind": "state_write",
+          "scope": "state_after_assignment",
+          "contentType": "application/json",
+          "bytes": 90,
+          "availability": "complete",
+          "preview": {
+            "value": {
+              "text": "build it",
+              "selection": {
+                "recommendedPipelineId": "do-and-review",
+                "confidence": 0.9
+              }
+            },
+            "truncated": false,
+            "count": null,
+            "counts": {}
+          },
+          "redacted": false,
+          "capturedAt": "2026-10-02T05:27:34.715Z",
+          "expiresAt": null
+        },
+        {
+          "id": "not-captured:e287cfcc-465d-4199-b7ff-e0ed725981ed:side_effect_confirmation",
+          "runId": "976fc0bd-7063-41dd-9a04-6eb2377c718b",
+          "stepId": "e287cfcc-465d-4199-b7ff-e0ed725981ed",
+          "attempt": 1,
+          "kind": "side_effect_confirmation",
+          "scope": "legacy_not_captured",
+          "contentType": "application/json",
+          "bytes": 0,
+          "availability": "not_captured",
+          "redacted": false,
+          "capturedAt": null,
+          "expiresAt": null
+        }
+      ]
+    }
+  ],
+  "children": [],
+  "revision": "f062e317f98c2f6895c707b285bf3bb8ceabb0b7a0d8005fd39c3209d0f0201c"
+}

@@ -1,0 +1,2752 @@
+{
+  "version": 1,
+  "serviceId": "autopilot_runtime_fixture",
+  "run": {
+    "id": "60651074-656f-4c09-97e4-a4d3e1a48dce",
+    "serviceId": "autopilot_runtime_fixture",
+    "definitionId": "shared:4b3510ae43b0",
+    "definitionVersion": 2,
+    "definitionHash": "db1dce2d4bd5abc5b31d774fa9ef2fc74dcae64dc7f2017bb04c573bda33d8c4",
+    "name": "bird.retrieve.v2",
+    "status": "ok",
+    "startedAt": "2026-10-02T05:27:44.546Z",
+    "completedAt": "2026-10-02T05:27:44.549Z",
+    "parentRunId": "0c4c230c-7903-4f22-939e-b0450dc50793",
+    "parentStepId": "d465efe4-0a04-4eaf-9d61-552fd938f836"
+  },
+  "definition": {
+    "id": "shared:4b3510ae43b0",
+    "name": "bird.retrieve.v2",
+    "title": "bird.retrieve.v2",
+    "description": "Bounded read-only Bird retrieval with advisory Jev choices and deterministic execution policy.",
+    "version": 2,
+    "hash": "db1dce2d4bd5abc5b31d774fa9ef2fc74dcae64dc7f2017bb04c573bda33d8c4",
+    "availability": "complete",
+    "steps": [
+      {
+        "logicalKey": "prepare",
+        "name": "prepare",
+        "title": "Validate retrieval request",
+        "description": "Extract exact candidates and validate bounded input.",
+        "type": "code",
+        "inputs": [
+          {
+            "label": "Request",
+            "path": "$.request",
+            "format": "text"
+          }
+        ],
+        "outputs": [
+          {
+            "label": "Verdict",
+            "path": "$.verdict",
+            "format": "text"
+          },
+          {
+            "label": "Result Count",
+            "path": "$.resultCount",
+            "format": "count"
+          },
+          {
+            "label": "Attempt",
+            "path": "$.attempt",
+            "format": "count"
+          },
+          {
+            "label": "Latency (ms)",
+            "path": "$.latencyMs",
+            "format": "count"
+          }
+        ],
+        "children": []
+      },
+      {
+        "logicalKey": "bounded-retrieval",
+        "name": "bounded-retrieval",
+        "title": "Bounded retrieval attempts",
+        "description": "At most three executions; terminal verdicts skip remaining actions.",
+        "type": "loop",
+        "inputs": [
+          {
+            "label": "Request",
+            "path": "$.retrieval.request",
+            "format": "text"
+          }
+        ],
+        "outputs": [
+          {
+            "label": "Verdict",
+            "path": "$.current.retrieval.verdict",
+            "format": "text"
+          },
+          {
+            "label": "Results",
+            "path": "$.current.retrieval.tweets",
+            "format": "records"
+          }
+        ],
+        "children": [
+          {
+            "logicalKey": "bounded-retrieval/choose",
+            "name": "choose",
+            "title": "Choose read-only action",
+            "description": "Advisory typed judgments; deterministic policy owns execution. Skipped after a terminal verdict.",
+            "type": "classifier",
+            "inputs": [
+              {
+                "label": "Request",
+                "path": "$.request",
+                "format": "text"
+              },
+              {
+                "label": "Attempt",
+                "path": "$.attempt",
+                "format": "count"
+              }
+            ],
+            "outputs": [
+              {
+                "label": "Chosen Action",
+                "path": "$.answers.action.choice",
+                "format": "text"
+              },
+              {
+                "label": "Usage",
+                "path": "$.usage",
+                "format": "json"
+              },
+              {
+                "label": "Model Latency (ms)",
+                "path": "$.latencyMs",
+                "format": "count"
+              }
+            ],
+            "children": []
+          },
+          {
+            "logicalKey": "bounded-retrieval/execute",
+            "name": "execute",
+            "title": "Retrieve selected source",
+            "description": "Validate advisory answers, preserve requested source, execute one read-only action, deduplicate exact records.",
+            "type": "code",
+            "inputs": [
+              {
+                "label": "Request",
+                "path": "$.state.request",
+                "format": "text"
+              }
+            ],
+            "outputs": [
+              {
+                "label": "Chosen Source",
+                "path": "$.source",
+                "format": "text"
+              },
+              {
+                "label": "Verdict",
+                "path": "$.verdict",
+                "format": "text"
+              },
+              {
+                "label": "Result Count",
+                "path": "$.resultCount",
+                "format": "count"
+              },
+              {
+                "label": "Attempt",
+                "path": "$.attempt",
+                "format": "count"
+              },
+              {
+                "label": "Latency (ms)",
+                "path": "$.latencyMs",
+                "format": "count"
+              }
+            ],
+            "children": []
+          },
+          {
+            "logicalKey": "bounded-retrieval/judge-evidence",
+            "name": "judge-evidence",
+            "title": "Judge safe continuation",
+            "description": "Advisory typed judgments; deterministic policy owns execution. Skipped after a terminal verdict.",
+            "type": "classifier",
+            "inputs": [
+              {
+                "label": "Request",
+                "path": "$.request",
+                "format": "text"
+              },
+              {
+                "label": "Attempt",
+                "path": "$.attempt",
+                "format": "count"
+              }
+            ],
+            "outputs": [
+              {
+                "label": "Continuation Probability",
+                "path": "$.answers.continueSafe.noul",
+                "format": "auto"
+              },
+              {
+                "label": "Usage",
+                "path": "$.usage",
+                "format": "json"
+              },
+              {
+                "label": "Model Latency (ms)",
+                "path": "$.latencyMs",
+                "format": "count"
+              }
+            ],
+            "children": []
+          },
+          {
+            "logicalKey": "bounded-retrieval/check",
+            "name": "check",
+            "title": "Validate continuation",
+            "description": "Validate semantic Noul only when deterministic evidence supports continuation.",
+            "type": "code",
+            "inputs": [
+              {
+                "label": "Request",
+                "path": "$.state.request",
+                "format": "text"
+              }
+            ],
+            "outputs": [
+              {
+                "label": "Verdict",
+                "path": "$.verdict",
+                "format": "text"
+              },
+              {
+                "label": "Result Count",
+                "path": "$.resultCount",
+                "format": "count"
+              },
+              {
+                "label": "Attempt",
+                "path": "$.attempt",
+                "format": "count"
+              },
+              {
+                "label": "Latency (ms)",
+                "path": "$.latencyMs",
+                "format": "count"
+              }
+            ],
+            "children": []
+          }
+        ]
+      }
+    ],
+    "wiring": [
+      {
+        "sourceValuePath": "$.request",
+        "sourcePortPaths": [],
+        "targetPortPaths": [
+          "$.request"
+        ],
+        "sourceStepKey": null,
+        "sourcePath": "$.request",
+        "targetStepKey": "prepare",
+        "targetPath": "$.request",
+        "carriedForward": true
+      },
+      {
+        "sourceValuePath": "$",
+        "sourcePortPaths": [
+          "$.verdict",
+          "$.resultCount",
+          "$.attempt",
+          "$.latencyMs"
+        ],
+        "targetPortPaths": [],
+        "sourceStepKey": "prepare",
+        "sourcePath": "$.retrieval",
+        "targetStepKey": "bounded-retrieval/choose",
+        "targetPath": "$.state",
+        "carriedForward": false
+      },
+      {
+        "sourceValuePath": "$",
+        "sourcePortPaths": [
+          "$.verdict",
+          "$.resultCount",
+          "$.attempt",
+          "$.latencyMs"
+        ],
+        "targetPortPaths": [
+          "$.state.request"
+        ],
+        "sourceStepKey": "prepare",
+        "sourcePath": "$.retrieval",
+        "targetStepKey": "bounded-retrieval/execute",
+        "targetPath": "$.state",
+        "carriedForward": true
+      },
+      {
+        "sourceValuePath": "$",
+        "sourcePortPaths": [
+          "$.answers.action.choice",
+          "$.usage",
+          "$.latencyMs"
+        ],
+        "targetPortPaths": [],
+        "sourceStepKey": "bounded-retrieval/choose",
+        "sourcePath": "$.actionDecision",
+        "targetStepKey": "bounded-retrieval/execute",
+        "targetPath": "$.decision",
+        "carriedForward": false
+      },
+      {
+        "sourceValuePath": "$",
+        "sourcePortPaths": [
+          "$.source",
+          "$.verdict",
+          "$.resultCount",
+          "$.attempt",
+          "$.latencyMs"
+        ],
+        "targetPortPaths": [],
+        "sourceStepKey": "bounded-retrieval/execute",
+        "sourcePath": "$.retrieval",
+        "targetStepKey": "bounded-retrieval/judge-evidence",
+        "targetPath": "$.state",
+        "carriedForward": false
+      },
+      {
+        "sourceValuePath": "$",
+        "sourcePortPaths": [
+          "$.source",
+          "$.verdict",
+          "$.resultCount",
+          "$.attempt",
+          "$.latencyMs"
+        ],
+        "targetPortPaths": [
+          "$.state.request"
+        ],
+        "sourceStepKey": "bounded-retrieval/execute",
+        "sourcePath": "$.retrieval",
+        "targetStepKey": "bounded-retrieval/check",
+        "targetPath": "$.state",
+        "carriedForward": true
+      },
+      {
+        "sourceValuePath": "$",
+        "sourcePortPaths": [
+          "$.answers.continueSafe.noul",
+          "$.usage",
+          "$.latencyMs"
+        ],
+        "targetPortPaths": [],
+        "sourceStepKey": "bounded-retrieval/judge-evidence",
+        "sourcePath": "$.evidenceDecision",
+        "targetStepKey": "bounded-retrieval/check",
+        "targetPath": "$.decision",
+        "carriedForward": false
+      }
+    ]
+  },
+  "steps": [
+    {
+      "itemKey": null,
+      "id": "54a5479c-254b-4989-a112-95d7f47961be",
+      "logicalKey": "prepare",
+      "parentStepId": null,
+      "attempt": 1,
+      "status": "ok",
+      "title": "Validate retrieval request",
+      "description": "Extract exact candidates and validate bounded input.",
+      "kind": "code",
+      "startedAt": "2026-10-02T05:27:44.546Z",
+      "completedAt": "2026-10-02T05:27:44.547Z",
+      "error": null,
+      "skipReason": null,
+      "continuationReason": null,
+      "exitReason": "Would you like your Following feed or your For You feed?",
+      "childRunId": null,
+      "inputs": [
+        {
+          "label": "Request",
+          "path": "$.request",
+          "format": "text"
+        }
+      ],
+      "outputs": [
+        {
+          "label": "Verdict",
+          "path": "$.verdict",
+          "format": "text"
+        },
+        {
+          "label": "Result Count",
+          "path": "$.resultCount",
+          "format": "count"
+        },
+        {
+          "label": "Attempt",
+          "path": "$.attempt",
+          "format": "count"
+        },
+        {
+          "label": "Latency (ms)",
+          "path": "$.latencyMs",
+          "format": "count"
+        }
+      ],
+      "evidence": [
+        {
+          "id": "eb9ceb2d-e5ce-4bea-913f-1858a9b20666",
+          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
+          "stepId": "54a5479c-254b-4989-a112-95d7f47961be",
+          "attempt": 1,
+          "kind": "resolved_input",
+          "scope": "selected_step_input",
+          "contentType": "application/json",
+          "bytes": 65,
+          "availability": "complete",
+          "preview": {
+            "value": {
+              "request": "Use bird to get the latest 20 tweets on my timeline"
+            },
+            "truncated": false,
+            "count": null,
+            "counts": {}
+          },
+          "redacted": false,
+          "capturedAt": "2026-10-02T05:27:44.546Z",
+          "expiresAt": null
+        },
+        {
+          "id": "c41a2e67-d553-435d-b380-66a4511f3958",
+          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
+          "stepId": "54a5479c-254b-4989-a112-95d7f47961be",
+          "attempt": 1,
+          "kind": "executor_request",
+          "scope": "code_function_arguments",
+          "contentType": "application/json",
+          "bytes": 108,
+          "availability": "complete",
+          "preview": {
+            "value": {
+              "function": "bird.prepare.v1",
+              "arguments": {
+                "request": "Use bird to get the latest 20 tweets on my timeline"
+              }
+            },
+            "truncated": false,
+            "count": null,
+            "counts": {}
+          },
+          "redacted": false,
+          "capturedAt": "2026-10-02T05:27:44.547Z",
+          "expiresAt": null
+        },
+        {
+          "id": "3968d711-fa42-4579-8674-7b4e166c335b",
+          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
+          "stepId": "54a5479c-254b-4989-a112-95d7f47961be",
+          "attempt": 1,
+          "kind": "returned_output",
+          "scope": "executor_return",
+          "contentType": "application/json",
+          "bytes": 428,
+          "availability": "complete",
+          "preview": {
+            "value": {
+              "request": "Use bird to get the latest 20 tweets on my timeline",
+              "count": 20,
+              "handles": [],
+              "queries": [],
+              "startedAt": 1790918864547
+            },
+            "truncated": true,
+            "count": null,
+            "counts": {
+              "$.handles": 0,
+              "$.queries": 0
+            }
+          },
+          "redacted": false,
+          "capturedAt": "2026-10-02T05:27:44.547Z",
+          "expiresAt": null
+        },
+        {
+          "id": "368286ff-65dd-4472-8d3a-1c199102c119",
+          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
+          "stepId": "54a5479c-254b-4989-a112-95d7f47961be",
+          "attempt": 1,
+          "kind": "state_write",
+          "scope": "state_after_assignment",
+          "contentType": "application/json",
+          "bytes": 506,
+          "availability": "complete",
+          "preview": {
+            "value": {
+              "request": "Use bird to get the latest 20 tweets on my timeline",
+              "retrieval": {
+                "request": "Use bird to get the latest 20 tweets on my timeline",
+                "count": 20,
+                "handles": [],
+                "queries": [],
+                "startedAt": 1790918864547
+              }
+            },
+            "truncated": true,
+            "count": null,
+            "counts": {
+              "$.retrieval.handles": 0,
+              "$.retrieval.queries": 0
+            }
+          },
+          "redacted": false,
+          "capturedAt": "2026-10-02T05:27:44.547Z",
+          "expiresAt": null
+        },
+        {
+          "id": "not-captured:54a5479c-254b-4989-a112-95d7f47961be:side_effect_confirmation",
+          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
+          "stepId": "54a5479c-254b-4989-a112-95d7f47961be",
+          "attempt": 1,
+          "kind": "side_effect_confirmation",
+          "scope": "legacy_not_captured",
+          "contentType": "application/json",
+          "bytes": 0,
+          "availability": "not_captured",
+          "redacted": false,
+          "capturedAt": null,
+          "expiresAt": null
+        }
+      ]
+    },
+    {
+      "itemKey": null,
+      "id": "9c8bafba-f905-41e6-8945-58c5040802a7",
+      "logicalKey": "bounded-retrieval",
+      "parentStepId": null,
+      "attempt": 1,
+      "status": "ok",
+      "title": "Bounded retrieval attempts",
+      "description": "At most three executions; terminal verdicts skip remaining actions.",
+      "kind": "loop",
+      "startedAt": "2026-10-02T05:27:44.547Z",
+      "completedAt": "2026-10-02T05:27:44.549Z",
+      "error": null,
+      "skipReason": null,
+      "continuationReason": null,
+      "exitReason": "Would you like your Following feed or your For You feed?",
+      "childRunId": null,
+      "inputs": [
+        {
+          "label": "Request",
+          "path": "$.retrieval.request",
+          "format": "text"
+        }
+      ],
+      "outputs": [
+        {
+          "label": "Verdict",
+          "path": "$.current.retrieval.verdict",
+          "format": "text"
+        },
+        {
+          "label": "Results",
+          "path": "$.current.retrieval.tweets",
+          "format": "records"
+        }
+      ],
+      "evidence": [
+        {
+          "id": "c2f47e3e-b84a-491a-a6bd-edbd69f38a68",
+          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
+          "stepId": "9c8bafba-f905-41e6-8945-58c5040802a7",
+          "attempt": 1,
+          "kind": "resolved_input",
+          "scope": "selected_step_input",
+          "contentType": "application/json",
+          "bytes": 506,
+          "availability": "complete",
+          "preview": {
+            "value": {
+              "request": "Use bird to get the latest 20 tweets on my timeline",
+              "retrieval": {
+                "request": "Use bird to get the latest 20 tweets on my timeline",
+                "count": 20,
+                "handles": [],
+                "queries": [],
+                "startedAt": 1790918864547
+              }
+            },
+            "truncated": true,
+            "count": null,
+            "counts": {
+              "$.retrieval.handles": 0,
+              "$.retrieval.queries": 0
+            }
+          },
+          "redacted": false,
+          "capturedAt": "2026-10-02T05:27:44.547Z",
+          "expiresAt": null
+        },
+        {
+          "id": "a73bcfa9-c6f9-46ae-ae8b-01660523de84",
+          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
+          "stepId": "9c8bafba-f905-41e6-8945-58c5040802a7",
+          "attempt": 1,
+          "kind": "returned_output",
+          "scope": "wrapper_output_child_evidence_separate",
+          "contentType": "application/json",
+          "bytes": 598,
+          "availability": "complete",
+          "preview": {
+            "value": {
+              "iterations": 3,
+              "current": {
+                "request": "Use bird to get the latest 20 tweets on my timeline",
+                "retrieval": {
+                  "request": "Use bird to get the latest 20 tweets on my timeline",
+                  "count": 20,
+                  "handles": [],
+                  "queries": [],
+                  "startedAt": 1790918864547
+                },
+                "loop": {
+                  "bounded_retrieval": {
+                    "iteration": 3,
+                    "index": 2,
+                    "total": 3
+                  }
+                }
+              }
+            },
+            "truncated": true,
+            "count": null,
+            "counts": {
+              "$.current.retrieval.handles": 0,
+              "$.current.retrieval.queries": 0
+            }
+          },
+          "redacted": false,
+          "capturedAt": "2026-10-02T05:27:44.549Z",
+          "expiresAt": null
+        },
+        {
+          "id": "710981ee-1e68-4db6-a868-cc8032938f75",
+          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
+          "stepId": "9c8bafba-f905-41e6-8945-58c5040802a7",
+          "attempt": 1,
+          "kind": "state_write",
+          "scope": "state_after_assignment",
+          "contentType": "application/json",
+          "bytes": 571,
+          "availability": "complete",
+          "preview": {
+            "value": {
+              "request": "Use bird to get the latest 20 tweets on my timeline",
+              "retrieval": {
+                "request": "Use bird to get the latest 20 tweets on my timeline",
+                "count": 20,
+                "handles": [],
+                "queries": [],
+                "startedAt": 1790918864547
+              },
+              "loop": {
+                "bounded_retrieval": {
+                  "iteration": 3,
+                  "index": 2,
+                  "total": 3
+                }
+              }
+            },
+            "truncated": true,
+            "count": null,
+            "counts": {
+              "$.retrieval.handles": 0,
+              "$.retrieval.queries": 0
+            }
+          },
+          "redacted": false,
+          "capturedAt": "2026-10-02T05:27:44.549Z",
+          "expiresAt": null
+        },
+        {
+          "id": "not-captured:9c8bafba-f905-41e6-8945-58c5040802a7:executor_request",
+          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
+          "stepId": "9c8bafba-f905-41e6-8945-58c5040802a7",
+          "attempt": 1,
+          "kind": "executor_request",
+          "scope": "legacy_not_captured",
+          "contentType": "application/json",
+          "bytes": 0,
+          "availability": "not_captured",
+          "redacted": false,
+          "capturedAt": null,
+          "expiresAt": null
+        },
+        {
+          "id": "not-captured:9c8bafba-f905-41e6-8945-58c5040802a7:side_effect_confirmation",
+          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
+          "stepId": "9c8bafba-f905-41e6-8945-58c5040802a7",
+          "attempt": 1,
+          "kind": "side_effect_confirmation",
+          "scope": "legacy_not_captured",
+          "contentType": "application/json",
+          "bytes": 0,
+          "availability": "not_captured",
+          "redacted": false,
+          "capturedAt": null,
+          "expiresAt": null
+        }
+      ]
+    },
+    {
+      "itemKey": null,
+      "id": "2d2d0462-30f3-492d-a638-a7c1003b3cb2",
+      "logicalKey": "bounded-retrieval/choose",
+      "parentStepId": "9c8bafba-f905-41e6-8945-58c5040802a7",
+      "attempt": 1,
+      "status": "skipped",
+      "title": "Choose read-only action",
+      "description": "Advisory typed judgments; deterministic policy owns execution. Skipped after a terminal verdict.",
+      "kind": "classifier",
+      "startedAt": "2026-10-02T05:27:44.547Z",
+      "completedAt": "2026-10-02T05:27:44.547Z",
+      "error": null,
+      "skipReason": "Advisory typed judgments; deterministic policy owns execution. Skipped after a terminal verdict.",
+      "continuationReason": null,
+      "exitReason": null,
+      "childRunId": null,
+      "inputs": [
+        {
+          "label": "Request",
+          "path": "$.request",
+          "format": "text"
+        },
+        {
+          "label": "Attempt",
+          "path": "$.attempt",
+          "format": "count"
+        }
+      ],
+      "outputs": [
+        {
+          "label": "Chosen Action",
+          "path": "$.answers.action.choice",
+          "format": "text"
+        },
+        {
+          "label": "Usage",
+          "path": "$.usage",
+          "format": "json"
+        },
+        {
+          "label": "Model Latency (ms)",
+          "path": "$.latencyMs",
+          "format": "count"
+        }
+      ],
+      "evidence": [
+        {
+          "id": "70a34a40-fed3-4029-9ac3-16fa8c1a6023",
+          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
+          "stepId": "2d2d0462-30f3-492d-a638-a7c1003b3cb2",
+          "attempt": 1,
+          "kind": "resolved_input",
+          "scope": "retained_legacy_inline",
+          "contentType": "application/json",
+          "bytes": 571,
+          "availability": "complete",
+          "preview": {
+            "value": {
+              "request": "Use bird to get the latest 20 tweets on my timeline",
+              "retrieval": {
+                "request": "Use bird to get the latest 20 tweets on my timeline",
+                "count": 20,
+                "handles": [],
+                "queries": [],
+                "startedAt": 1790918864547
+              },
+              "loop": {
+                "bounded_retrieval": {
+                  "iteration": 1,
+                  "index": 0,
+                  "total": 3
+                }
+              }
+            },
+            "truncated": true,
+            "count": null,
+            "counts": {
+              "$.retrieval.handles": 0,
+              "$.retrieval.queries": 0
+            }
+          },
+          "redacted": false,
+          "capturedAt": "2026-10-02T05:27:44.577Z",
+          "expiresAt": null
+        },
+        {
+          "id": "70f84cc0-885a-4709-8ba9-79d34c8ef9bc",
+          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
+          "stepId": "2d2d0462-30f3-492d-a638-a7c1003b3cb2",
+          "attempt": 1,
+          "kind": "state_write",
+          "scope": "retained_legacy_inline",
+          "contentType": "application/json",
+          "bytes": 571,
+          "availability": "complete",
+          "preview": {
+            "value": {
+              "request": "Use bird to get the latest 20 tweets on my timeline",
+              "retrieval": {
+                "request": "Use bird to get the latest 20 tweets on my timeline",
+                "count": 20,
+                "handles": [],
+                "queries": [],
+                "startedAt": 1790918864547
+              },
+              "loop": {
+                "bounded_retrieval": {
+                  "iteration": 1,
+                  "index": 0,
+                  "total": 3
+                }
+              }
+            },
+            "truncated": true,
+            "count": null,
+            "counts": {
+              "$.retrieval.handles": 0,
+              "$.retrieval.queries": 0
+            }
+          },
+          "redacted": false,
+          "capturedAt": "2026-10-02T05:27:44.577Z",
+          "expiresAt": null
+        },
+        {
+          "id": "not-captured:2d2d0462-30f3-492d-a638-a7c1003b3cb2:executor_request",
+          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
+          "stepId": "2d2d0462-30f3-492d-a638-a7c1003b3cb2",
+          "attempt": 1,
+          "kind": "executor_request",
+          "scope": "legacy_not_captured",
+          "contentType": "application/json",
+          "bytes": 0,
+          "availability": "not_captured",
+          "redacted": false,
+          "capturedAt": null,
+          "expiresAt": null
+        },
+        {
+          "id": "not-captured:2d2d0462-30f3-492d-a638-a7c1003b3cb2:returned_output",
+          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
+          "stepId": "2d2d0462-30f3-492d-a638-a7c1003b3cb2",
+          "attempt": 1,
+          "kind": "returned_output",
+          "scope": "legacy_not_captured",
+          "contentType": "application/json",
+          "bytes": 0,
+          "availability": "not_captured",
+          "redacted": false,
+          "capturedAt": null,
+          "expiresAt": null
+        },
+        {
+          "id": "not-captured:2d2d0462-30f3-492d-a638-a7c1003b3cb2:side_effect_confirmation",
+          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
+          "stepId": "2d2d0462-30f3-492d-a638-a7c1003b3cb2",
+          "attempt": 1,
+          "kind": "side_effect_confirmation",
+          "scope": "legacy_not_captured",
+          "contentType": "application/json",
+          "bytes": 0,
+          "availability": "not_captured",
+          "redacted": false,
+          "capturedAt": null,
+          "expiresAt": null
+        }
+      ]
+    },
+    {
+      "itemKey": null,
+      "id": "51cb5552-a656-4593-8806-a904edd2b5b8",
+      "logicalKey": "bounded-retrieval/execute",
+      "parentStepId": "9c8bafba-f905-41e6-8945-58c5040802a7",
+      "attempt": 1,
+      "status": "skipped",
+      "title": "Retrieve selected source",
+      "description": "Validate advisory answers, preserve requested source, execute one read-only action, deduplicate exact records.",
+      "kind": "code",
+      "startedAt": "2026-10-02T05:27:44.547Z",
+      "completedAt": "2026-10-02T05:27:44.547Z",
+      "error": null,
+      "skipReason": "Validate advisory answers, preserve requested source, execute one read-only action, deduplicate exact records.",
+      "continuationReason": null,
+      "exitReason": null,
+      "childRunId": null,
+      "inputs": [
+        {
+          "label": "Request",
+          "path": "$.state.request",
+          "format": "text"
+        }
+      ],
+      "outputs": [
+        {
+          "label": "Chosen Source",
+          "path": "$.source",
+          "format": "text"
+        },
+        {
+          "label": "Verdict",
+          "path": "$.verdict",
+          "format": "text"
+        },
+        {
+          "label": "Result Count",
+          "path": "$.resultCount",
+          "format": "count"
+        },
+        {
+          "label": "Attempt",
+          "path": "$.attempt",
+          "format": "count"
+        },
+        {
+          "label": "Latency (ms)",
+          "path": "$.latencyMs",
+          "format": "count"
+        }
+      ],
+      "evidence": [
+        {
+          "id": "145a288f-f884-483c-88a0-ab401c2e6afc",
+          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
+          "stepId": "51cb5552-a656-4593-8806-a904edd2b5b8",
+          "attempt": 1,
+          "kind": "resolved_input",
+          "scope": "retained_legacy_inline",
+          "contentType": "application/json",
+          "bytes": 571,
+          "availability": "complete",
+          "preview": {
+            "value": {
+              "request": "Use bird to get the latest 20 tweets on my timeline",
+              "retrieval": {
+                "request": "Use bird to get the latest 20 tweets on my timeline",
+                "count": 20,
+                "handles": [],
+                "queries": [],
+                "startedAt": 1790918864547
+              },
+              "loop": {
+                "bounded_retrieval": {
+                  "iteration": 1,
+                  "index": 0,
+                  "total": 3
+                }
+              }
+            },
+            "truncated": true,
+            "count": null,
+            "counts": {
+              "$.retrieval.handles": 0,
+              "$.retrieval.queries": 0
+            }
+          },
+          "redacted": false,
+          "capturedAt": "2026-10-02T05:27:44.577Z",
+          "expiresAt": null
+        },
+        {
+          "id": "a553e381-1254-4dd9-9944-85068b19015e",
+          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
+          "stepId": "51cb5552-a656-4593-8806-a904edd2b5b8",
+          "attempt": 1,
+          "kind": "state_write",
+          "scope": "retained_legacy_inline",
+          "contentType": "application/json",
+          "bytes": 571,
+          "availability": "complete",
+          "preview": {
+            "value": {
+              "request": "Use bird to get the latest 20 tweets on my timeline",
+              "retrieval": {
+                "request": "Use bird to get the latest 20 tweets on my timeline",
+                "count": 20,
+                "handles": [],
+                "queries": [],
+                "startedAt": 1790918864547
+              },
+              "loop": {
+                "bounded_retrieval": {
+                  "iteration": 1,
+                  "index": 0,
+                  "total": 3
+                }
+              }
+            },
+            "truncated": true,
+            "count": null,
+            "counts": {
+              "$.retrieval.handles": 0,
+              "$.retrieval.queries": 0
+            }
+          },
+          "redacted": false,
+          "capturedAt": "2026-10-02T05:27:44.577Z",
+          "expiresAt": null
+        },
+        {
+          "id": "not-captured:51cb5552-a656-4593-8806-a904edd2b5b8:executor_request",
+          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
+          "stepId": "51cb5552-a656-4593-8806-a904edd2b5b8",
+          "attempt": 1,
+          "kind": "executor_request",
+          "scope": "legacy_not_captured",
+          "contentType": "application/json",
+          "bytes": 0,
+          "availability": "not_captured",
+          "redacted": false,
+          "capturedAt": null,
+          "expiresAt": null
+        },
+        {
+          "id": "not-captured:51cb5552-a656-4593-8806-a904edd2b5b8:returned_output",
+          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
+          "stepId": "51cb5552-a656-4593-8806-a904edd2b5b8",
+          "attempt": 1,
+          "kind": "returned_output",
+          "scope": "legacy_not_captured",
+          "contentType": "application/json",
+          "bytes": 0,
+          "availability": "not_captured",
+          "redacted": false,
+          "capturedAt": null,
+          "expiresAt": null
+        },
+        {
+          "id": "not-captured:51cb5552-a656-4593-8806-a904edd2b5b8:side_effect_confirmation",
+          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
+          "stepId": "51cb5552-a656-4593-8806-a904edd2b5b8",
+          "attempt": 1,
+          "kind": "side_effect_confirmation",
+          "scope": "legacy_not_captured",
+          "contentType": "application/json",
+          "bytes": 0,
+          "availability": "not_captured",
+          "redacted": false,
+          "capturedAt": null,
+          "expiresAt": null
+        }
+      ]
+    },
+    {
+      "itemKey": null,
+      "id": "cb5000a0-b3b1-4f47-baf9-32ddb88f5bd1",
+      "logicalKey": "bounded-retrieval/judge-evidence",
+      "parentStepId": "9c8bafba-f905-41e6-8945-58c5040802a7",
+      "attempt": 1,
+      "status": "skipped",
+      "title": "Judge safe continuation",
+      "description": "Advisory typed judgments; deterministic policy owns execution. Skipped after a terminal verdict.",
+      "kind": "classifier",
+      "startedAt": "2026-10-02T05:27:44.547Z",
+      "completedAt": "2026-10-02T05:27:44.548Z",
+      "error": null,
+      "skipReason": "Advisory typed judgments; deterministic policy owns execution. Skipped after a terminal verdict.",
+      "continuationReason": null,
+      "exitReason": null,
+      "childRunId": null,
+      "inputs": [
+        {
+          "label": "Request",
+          "path": "$.request",
+          "format": "text"
+        },
+        {
+          "label": "Attempt",
+          "path": "$.attempt",
+          "format": "count"
+        }
+      ],
+      "outputs": [
+        {
+          "label": "Continuation Probability",
+          "path": "$.answers.continueSafe.noul",
+          "format": "auto"
+        },
+        {
+          "label": "Usage",
+          "path": "$.usage",
+          "format": "json"
+        },
+        {
+          "label": "Model Latency (ms)",
+          "path": "$.latencyMs",
+          "format": "count"
+        }
+      ],
+      "evidence": [
+        {
+          "id": "375694a2-0f2c-46f4-8bbe-6cf7d45d1588",
+          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
+          "stepId": "cb5000a0-b3b1-4f47-baf9-32ddb88f5bd1",
+          "attempt": 1,
+          "kind": "resolved_input",
+          "scope": "retained_legacy_inline",
+          "contentType": "application/json",
+          "bytes": 571,
+          "availability": "complete",
+          "preview": {
+            "value": {
+              "request": "Use bird to get the latest 20 tweets on my timeline",
+              "retrieval": {
+                "request": "Use bird to get the latest 20 tweets on my timeline",
+                "count": 20,
+                "handles": [],
+                "queries": [],
+                "startedAt": 1790918864547
+              },
+              "loop": {
+                "bounded_retrieval": {
+                  "iteration": 1,
+                  "index": 0,
+                  "total": 3
+                }
+              }
+            },
+            "truncated": true,
+            "count": null,
+            "counts": {
+              "$.retrieval.handles": 0,
+              "$.retrieval.queries": 0
+            }
+          },
+          "redacted": false,
+          "capturedAt": "2026-10-02T05:27:44.577Z",
+          "expiresAt": null
+        },
+        {
+          "id": "196d9aa2-75bd-4b28-8a6c-7a913f60da77",
+          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
+          "stepId": "cb5000a0-b3b1-4f47-baf9-32ddb88f5bd1",
+          "attempt": 1,
+          "kind": "state_write",
+          "scope": "retained_legacy_inline",
+          "contentType": "application/json",
+          "bytes": 571,
+          "availability": "complete",
+          "preview": {
+            "value": {
+              "request": "Use bird to get the latest 20 tweets on my timeline",
+              "retrieval": {
+                "request": "Use bird to get the latest 20 tweets on my timeline",
+                "count": 20,
+                "handles": [],
+                "queries": [],
+                "startedAt": 1790918864547
+              },
+              "loop": {
+                "bounded_retrieval": {
+                  "iteration": 1,
+                  "index": 0,
+                  "total": 3
+                }
+              }
+            },
+            "truncated": true,
+            "count": null,
+            "counts": {
+              "$.retrieval.handles": 0,
+              "$.retrieval.queries": 0
+            }
+          },
+          "redacted": false,
+          "capturedAt": "2026-10-02T05:27:44.577Z",
+          "expiresAt": null
+        },
+        {
+          "id": "not-captured:cb5000a0-b3b1-4f47-baf9-32ddb88f5bd1:executor_request",
+          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
+          "stepId": "cb5000a0-b3b1-4f47-baf9-32ddb88f5bd1",
+          "attempt": 1,
+          "kind": "executor_request",
+          "scope": "legacy_not_captured",
+          "contentType": "application/json",
+          "bytes": 0,
+          "availability": "not_captured",
+          "redacted": false,
+          "capturedAt": null,
+          "expiresAt": null
+        },
+        {
+          "id": "not-captured:cb5000a0-b3b1-4f47-baf9-32ddb88f5bd1:returned_output",
+          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
+          "stepId": "cb5000a0-b3b1-4f47-baf9-32ddb88f5bd1",
+          "attempt": 1,
+          "kind": "returned_output",
+          "scope": "legacy_not_captured",
+          "contentType": "application/json",
+          "bytes": 0,
+          "availability": "not_captured",
+          "redacted": false,
+          "capturedAt": null,
+          "expiresAt": null
+        },
+        {
+          "id": "not-captured:cb5000a0-b3b1-4f47-baf9-32ddb88f5bd1:side_effect_confirmation",
+          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
+          "stepId": "cb5000a0-b3b1-4f47-baf9-32ddb88f5bd1",
+          "attempt": 1,
+          "kind": "side_effect_confirmation",
+          "scope": "legacy_not_captured",
+          "contentType": "application/json",
+          "bytes": 0,
+          "availability": "not_captured",
+          "redacted": false,
+          "capturedAt": null,
+          "expiresAt": null
+        }
+      ]
+    },
+    {
+      "itemKey": null,
+      "id": "9eca765d-9862-4ae2-8411-f0b03c661ce5",
+      "logicalKey": "bounded-retrieval/check",
+      "parentStepId": "9c8bafba-f905-41e6-8945-58c5040802a7",
+      "attempt": 1,
+      "status": "skipped",
+      "title": "Validate continuation",
+      "description": "Validate semantic Noul only when deterministic evidence supports continuation.",
+      "kind": "code",
+      "startedAt": "2026-10-02T05:27:44.548Z",
+      "completedAt": "2026-10-02T05:27:44.548Z",
+      "error": null,
+      "skipReason": "Validate semantic Noul only when deterministic evidence supports continuation.",
+      "continuationReason": null,
+      "exitReason": null,
+      "childRunId": null,
+      "inputs": [
+        {
+          "label": "Request",
+          "path": "$.state.request",
+          "format": "text"
+        }
+      ],
+      "outputs": [
+        {
+          "label": "Verdict",
+          "path": "$.verdict",
+          "format": "text"
+        },
+        {
+          "label": "Result Count",
+          "path": "$.resultCount",
+          "format": "count"
+        },
+        {
+          "label": "Attempt",
+          "path": "$.attempt",
+          "format": "count"
+        },
+        {
+          "label": "Latency (ms)",
+          "path": "$.latencyMs",
+          "format": "count"
+        }
+      ],
+      "evidence": [
+        {
+          "id": "d128eaa3-f688-40cd-abcf-1ec96d4d8b8c",
+          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
+          "stepId": "9eca765d-9862-4ae2-8411-f0b03c661ce5",
+          "attempt": 1,
+          "kind": "resolved_input",
+          "scope": "retained_legacy_inline",
+          "contentType": "application/json",
+          "bytes": 571,
+          "availability": "complete",
+          "preview": {
+            "value": {
+              "request": "Use bird to get the latest 20 tweets on my timeline",
+              "retrieval": {
+                "request": "Use bird to get the latest 20 tweets on my timeline",
+                "count": 20,
+                "handles": [],
+                "queries": [],
+                "startedAt": 1790918864547
+              },
+              "loop": {
+                "bounded_retrieval": {
+                  "iteration": 1,
+                  "index": 0,
+                  "total": 3
+                }
+              }
+            },
+            "truncated": true,
+            "count": null,
+            "counts": {
+              "$.retrieval.handles": 0,
+              "$.retrieval.queries": 0
+            }
+          },
+          "redacted": false,
+          "capturedAt": "2026-10-02T05:27:44.577Z",
+          "expiresAt": null
+        },
+        {
+          "id": "9320ef6d-04a5-42ad-9f0f-0549f5fcb50d",
+          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
+          "stepId": "9eca765d-9862-4ae2-8411-f0b03c661ce5",
+          "attempt": 1,
+          "kind": "state_write",
+          "scope": "retained_legacy_inline",
+          "contentType": "application/json",
+          "bytes": 571,
+          "availability": "complete",
+          "preview": {
+            "value": {
+              "request": "Use bird to get the latest 20 tweets on my timeline",
+              "retrieval": {
+                "request": "Use bird to get the latest 20 tweets on my timeline",
+                "count": 20,
+                "handles": [],
+                "queries": [],
+                "startedAt": 1790918864547
+              },
+              "loop": {
+                "bounded_retrieval": {
+                  "iteration": 1,
+                  "index": 0,
+                  "total": 3
+                }
+              }
+            },
+            "truncated": true,
+            "count": null,
+            "counts": {
+              "$.retrieval.handles": 0,
+              "$.retrieval.queries": 0
+            }
+          },
+          "redacted": false,
+          "capturedAt": "2026-10-02T05:27:44.577Z",
+          "expiresAt": null
+        },
+        {
+          "id": "not-captured:9eca765d-9862-4ae2-8411-f0b03c661ce5:executor_request",
+          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
+          "stepId": "9eca765d-9862-4ae2-8411-f0b03c661ce5",
+          "attempt": 1,
+          "kind": "executor_request",
+          "scope": "legacy_not_captured",
+          "contentType": "application/json",
+          "bytes": 0,
+          "availability": "not_captured",
+          "redacted": false,
+          "capturedAt": null,
+          "expiresAt": null
+        },
+        {
+          "id": "not-captured:9eca765d-9862-4ae2-8411-f0b03c661ce5:returned_output",
+          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
+          "stepId": "9eca765d-9862-4ae2-8411-f0b03c661ce5",
+          "attempt": 1,
+          "kind": "returned_output",
+          "scope": "legacy_not_captured",
+          "contentType": "application/json",
+          "bytes": 0,
+          "availability": "not_captured",
+          "redacted": false,
+          "capturedAt": null,
+          "expiresAt": null
+        },
+        {
+          "id": "not-captured:9eca765d-9862-4ae2-8411-f0b03c661ce5:side_effect_confirmation",
+          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
+          "stepId": "9eca765d-9862-4ae2-8411-f0b03c661ce5",
+          "attempt": 1,
+          "kind": "side_effect_confirmation",
+          "scope": "legacy_not_captured",
+          "contentType": "application/json",
+          "bytes": 0,
+          "availability": "not_captured",
+          "redacted": false,
+          "capturedAt": null,
+          "expiresAt": null
+        }
+      ]
+    },
+    {
+      "itemKey": null,
+      "id": "633efeb3-a063-4978-8c96-4a131f8fa158",
+      "logicalKey": "bounded-retrieval/choose",
+      "parentStepId": "9c8bafba-f905-41e6-8945-58c5040802a7",
+      "attempt": 2,
+      "status": "skipped",
+      "title": "Choose read-only action",
+      "description": "Advisory typed judgments; deterministic policy owns execution. Skipped after a terminal verdict.",
+      "kind": "classifier",
+      "startedAt": "2026-10-02T05:27:44.548Z",
+      "completedAt": "2026-10-02T05:27:44.548Z",
+      "error": null,
+      "skipReason": "Advisory typed judgments; deterministic policy owns execution. Skipped after a terminal verdict.",
+      "continuationReason": null,
+      "exitReason": null,
+      "childRunId": null,
+      "inputs": [
+        {
+          "label": "Request",
+          "path": "$.request",
+          "format": "text"
+        },
+        {
+          "label": "Attempt",
+          "path": "$.attempt",
+          "format": "count"
+        }
+      ],
+      "outputs": [
+        {
+          "label": "Chosen Action",
+          "path": "$.answers.action.choice",
+          "format": "text"
+        },
+        {
+          "label": "Usage",
+          "path": "$.usage",
+          "format": "json"
+        },
+        {
+          "label": "Model Latency (ms)",
+          "path": "$.latencyMs",
+          "format": "count"
+        }
+      ],
+      "evidence": [
+        {
+          "id": "84abb1f8-87ca-49df-9613-16ffca921741",
+          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
+          "stepId": "633efeb3-a063-4978-8c96-4a131f8fa158",
+          "attempt": 1,
+          "kind": "resolved_input",
+          "scope": "retained_legacy_inline",
+          "contentType": "application/json",
+          "bytes": 571,
+          "availability": "complete",
+          "preview": {
+            "value": {
+              "request": "Use bird to get the latest 20 tweets on my timeline",
+              "retrieval": {
+                "request": "Use bird to get the latest 20 tweets on my timeline",
+                "count": 20,
+                "handles": [],
+                "queries": [],
+                "startedAt": 1790918864547
+              },
+              "loop": {
+                "bounded_retrieval": {
+                  "iteration": 2,
+                  "index": 1,
+                  "total": 3
+                }
+              }
+            },
+            "truncated": true,
+            "count": null,
+            "counts": {
+              "$.retrieval.handles": 0,
+              "$.retrieval.queries": 0
+            }
+          },
+          "redacted": false,
+          "capturedAt": "2026-10-02T05:27:44.578Z",
+          "expiresAt": null
+        },
+        {
+          "id": "73e60219-16df-43cd-922d-c15b66c17d76",
+          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
+          "stepId": "633efeb3-a063-4978-8c96-4a131f8fa158",
+          "attempt": 1,
+          "kind": "state_write",
+          "scope": "retained_legacy_inline",
+          "contentType": "application/json",
+          "bytes": 571,
+          "availability": "complete",
+          "preview": {
+            "value": {
+              "request": "Use bird to get the latest 20 tweets on my timeline",
+              "retrieval": {
+                "request": "Use bird to get the latest 20 tweets on my timeline",
+                "count": 20,
+                "handles": [],
+                "queries": [],
+                "startedAt": 1790918864547
+              },
+              "loop": {
+                "bounded_retrieval": {
+                  "iteration": 2,
+                  "index": 1,
+                  "total": 3
+                }
+              }
+            },
+            "truncated": true,
+            "count": null,
+            "counts": {
+              "$.retrieval.handles": 0,
+              "$.retrieval.queries": 0
+            }
+          },
+          "redacted": false,
+          "capturedAt": "2026-10-02T05:27:44.578Z",
+          "expiresAt": null
+        },
+        {
+          "id": "not-captured:633efeb3-a063-4978-8c96-4a131f8fa158:executor_request",
+          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
+          "stepId": "633efeb3-a063-4978-8c96-4a131f8fa158",
+          "attempt": 1,
+          "kind": "executor_request",
+          "scope": "legacy_not_captured",
+          "contentType": "application/json",
+          "bytes": 0,
+          "availability": "not_captured",
+          "redacted": false,
+          "capturedAt": null,
+          "expiresAt": null
+        },
+        {
+          "id": "not-captured:633efeb3-a063-4978-8c96-4a131f8fa158:returned_output",
+          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
+          "stepId": "633efeb3-a063-4978-8c96-4a131f8fa158",
+          "attempt": 1,
+          "kind": "returned_output",
+          "scope": "legacy_not_captured",
+          "contentType": "application/json",
+          "bytes": 0,
+          "availability": "not_captured",
+          "redacted": false,
+          "capturedAt": null,
+          "expiresAt": null
+        },
+        {
+          "id": "not-captured:633efeb3-a063-4978-8c96-4a131f8fa158:side_effect_confirmation",
+          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
+          "stepId": "633efeb3-a063-4978-8c96-4a131f8fa158",
+          "attempt": 1,
+          "kind": "side_effect_confirmation",
+          "scope": "legacy_not_captured",
+          "contentType": "application/json",
+          "bytes": 0,
+          "availability": "not_captured",
+          "redacted": false,
+          "capturedAt": null,
+          "expiresAt": null
+        }
+      ]
+    },
+    {
+      "itemKey": null,
+      "id": "707e8e45-5ad1-4c57-9a88-00ef2628cb8a",
+      "logicalKey": "bounded-retrieval/execute",
+      "parentStepId": "9c8bafba-f905-41e6-8945-58c5040802a7",
+      "attempt": 2,
+      "status": "skipped",
+      "title": "Retrieve selected source",
+      "description": "Validate advisory answers, preserve requested source, execute one read-only action, deduplicate exact records.",
+      "kind": "code",
+      "startedAt": "2026-10-02T05:27:44.548Z",
+      "completedAt": "2026-10-02T05:27:44.548Z",
+      "error": null,
+      "skipReason": "Validate advisory answers, preserve requested source, execute one read-only action, deduplicate exact records.",
+      "continuationReason": null,
+      "exitReason": null,
+      "childRunId": null,
+      "inputs": [
+        {
+          "label": "Request",
+          "path": "$.state.request",
+          "format": "text"
+        }
+      ],
+      "outputs": [
+        {
+          "label": "Chosen Source",
+          "path": "$.source",
+          "format": "text"
+        },
+        {
+          "label": "Verdict",
+          "path": "$.verdict",
+          "format": "text"
+        },
+        {
+          "label": "Result Count",
+          "path": "$.resultCount",
+          "format": "count"
+        },
+        {
+          "label": "Attempt",
+          "path": "$.attempt",
+          "format": "count"
+        },
+        {
+          "label": "Latency (ms)",
+          "path": "$.latencyMs",
+          "format": "count"
+        }
+      ],
+      "evidence": [
+        {
+          "id": "fb1260f7-f1a2-4208-a6f1-c6b758e7151e",
+          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
+          "stepId": "707e8e45-5ad1-4c57-9a88-00ef2628cb8a",
+          "attempt": 1,
+          "kind": "resolved_input",
+          "scope": "retained_legacy_inline",
+          "contentType": "application/json",
+          "bytes": 571,
+          "availability": "complete",
+          "preview": {
+            "value": {
+              "request": "Use bird to get the latest 20 tweets on my timeline",
+              "retrieval": {
+                "request": "Use bird to get the latest 20 tweets on my timeline",
+                "count": 20,
+                "handles": [],
+                "queries": [],
+                "startedAt": 1790918864547
+              },
+              "loop": {
+                "bounded_retrieval": {
+                  "iteration": 2,
+                  "index": 1,
+                  "total": 3
+                }
+              }
+            },
+            "truncated": true,
+            "count": null,
+            "counts": {
+              "$.retrieval.handles": 0,
+              "$.retrieval.queries": 0
+            }
+          },
+          "redacted": false,
+          "capturedAt": "2026-10-02T05:27:44.578Z",
+          "expiresAt": null
+        },
+        {
+          "id": "e44344ef-1b6f-4c59-935c-7626def9a065",
+          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
+          "stepId": "707e8e45-5ad1-4c57-9a88-00ef2628cb8a",
+          "attempt": 1,
+          "kind": "state_write",
+          "scope": "retained_legacy_inline",
+          "contentType": "application/json",
+          "bytes": 571,
+          "availability": "complete",
+          "preview": {
+            "value": {
+              "request": "Use bird to get the latest 20 tweets on my timeline",
+              "retrieval": {
+                "request": "Use bird to get the latest 20 tweets on my timeline",
+                "count": 20,
+                "handles": [],
+                "queries": [],
+                "startedAt": 1790918864547
+              },
+              "loop": {
+                "bounded_retrieval": {
+                  "iteration": 2,
+                  "index": 1,
+                  "total": 3
+                }
+              }
+            },
+            "truncated": true,
+            "count": null,
+            "counts": {
+              "$.retrieval.handles": 0,
+              "$.retrieval.queries": 0
+            }
+          },
+          "redacted": false,
+          "capturedAt": "2026-10-02T05:27:44.578Z",
+          "expiresAt": null
+        },
+        {
+          "id": "not-captured:707e8e45-5ad1-4c57-9a88-00ef2628cb8a:executor_request",
+          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
+          "stepId": "707e8e45-5ad1-4c57-9a88-00ef2628cb8a",
+          "attempt": 1,
+          "kind": "executor_request",
+          "scope": "legacy_not_captured",
+          "contentType": "application/json",
+          "bytes": 0,
+          "availability": "not_captured",
+          "redacted": false,
+          "capturedAt": null,
+          "expiresAt": null
+        },
+        {
+          "id": "not-captured:707e8e45-5ad1-4c57-9a88-00ef2628cb8a:returned_output",
+          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
+          "stepId": "707e8e45-5ad1-4c57-9a88-00ef2628cb8a",
+          "attempt": 1,
+          "kind": "returned_output",
+          "scope": "legacy_not_captured",
+          "contentType": "application/json",
+          "bytes": 0,
+          "availability": "not_captured",
+          "redacted": false,
+          "capturedAt": null,
+          "expiresAt": null
+        },
+        {
+          "id": "not-captured:707e8e45-5ad1-4c57-9a88-00ef2628cb8a:side_effect_confirmation",
+          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
+          "stepId": "707e8e45-5ad1-4c57-9a88-00ef2628cb8a",
+          "attempt": 1,
+          "kind": "side_effect_confirmation",
+          "scope": "legacy_not_captured",
+          "contentType": "application/json",
+          "bytes": 0,
+          "availability": "not_captured",
+          "redacted": false,
+          "capturedAt": null,
+          "expiresAt": null
+        }
+      ]
+    },
+    {
+      "itemKey": null,
+      "id": "c0747105-5df9-4d36-ba12-f4bda914a0c0",
+      "logicalKey": "bounded-retrieval/judge-evidence",
+      "parentStepId": "9c8bafba-f905-41e6-8945-58c5040802a7",
+      "attempt": 2,
+      "status": "skipped",
+      "title": "Judge safe continuation",
+      "description": "Advisory typed judgments; deterministic policy owns execution. Skipped after a terminal verdict.",
+      "kind": "classifier",
+      "startedAt": "2026-10-02T05:27:44.548Z",
+      "completedAt": "2026-10-02T05:27:44.548Z",
+      "error": null,
+      "skipReason": "Advisory typed judgments; deterministic policy owns execution. Skipped after a terminal verdict.",
+      "continuationReason": null,
+      "exitReason": null,
+      "childRunId": null,
+      "inputs": [
+        {
+          "label": "Request",
+          "path": "$.request",
+          "format": "text"
+        },
+        {
+          "label": "Attempt",
+          "path": "$.attempt",
+          "format": "count"
+        }
+      ],
+      "outputs": [
+        {
+          "label": "Continuation Probability",
+          "path": "$.answers.continueSafe.noul",
+          "format": "auto"
+        },
+        {
+          "label": "Usage",
+          "path": "$.usage",
+          "format": "json"
+        },
+        {
+          "label": "Model Latency (ms)",
+          "path": "$.latencyMs",
+          "format": "count"
+        }
+      ],
+      "evidence": [
+        {
+          "id": "4735e225-52d6-4ef0-875c-3d34749ecaf1",
+          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
+          "stepId": "c0747105-5df9-4d36-ba12-f4bda914a0c0",
+          "attempt": 1,
+          "kind": "resolved_input",
+          "scope": "retained_legacy_inline",
+          "contentType": "application/json",
+          "bytes": 571,
+          "availability": "complete",
+          "preview": {
+            "value": {
+              "request": "Use bird to get the latest 20 tweets on my timeline",
+              "retrieval": {
+                "request": "Use bird to get the latest 20 tweets on my timeline",
+                "count": 20,
+                "handles": [],
+                "queries": [],
+                "startedAt": 1790918864547
+              },
+              "loop": {
+                "bounded_retrieval": {
+                  "iteration": 2,
+                  "index": 1,
+                  "total": 3
+                }
+              }
+            },
+            "truncated": true,
+            "count": null,
+            "counts": {
+              "$.retrieval.handles": 0,
+              "$.retrieval.queries": 0
+            }
+          },
+          "redacted": false,
+          "capturedAt": "2026-10-02T05:27:44.578Z",
+          "expiresAt": null
+        },
+        {
+          "id": "686d4785-ed62-4359-95d3-88d9224b8b10",
+          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
+          "stepId": "c0747105-5df9-4d36-ba12-f4bda914a0c0",
+          "attempt": 1,
+          "kind": "state_write",
+          "scope": "retained_legacy_inline",
+          "contentType": "application/json",
+          "bytes": 571,
+          "availability": "complete",
+          "preview": {
+            "value": {
+              "request": "Use bird to get the latest 20 tweets on my timeline",
+              "retrieval": {
+                "request": "Use bird to get the latest 20 tweets on my timeline",
+                "count": 20,
+                "handles": [],
+                "queries": [],
+                "startedAt": 1790918864547
+              },
+              "loop": {
+                "bounded_retrieval": {
+                  "iteration": 2,
+                  "index": 1,
+                  "total": 3
+                }
+              }
+            },
+            "truncated": true,
+            "count": null,
+            "counts": {
+              "$.retrieval.handles": 0,
+              "$.retrieval.queries": 0
+            }
+          },
+          "redacted": false,
+          "capturedAt": "2026-10-02T05:27:44.578Z",
+          "expiresAt": null
+        },
+        {
+          "id": "not-captured:c0747105-5df9-4d36-ba12-f4bda914a0c0:executor_request",
+          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
+          "stepId": "c0747105-5df9-4d36-ba12-f4bda914a0c0",
+          "attempt": 1,
+          "kind": "executor_request",
+          "scope": "legacy_not_captured",
+          "contentType": "application/json",
+          "bytes": 0,
+          "availability": "not_captured",
+          "redacted": false,
+          "capturedAt": null,
+          "expiresAt": null
+        },
+        {
+          "id": "not-captured:c0747105-5df9-4d36-ba12-f4bda914a0c0:returned_output",
+          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
+          "stepId": "c0747105-5df9-4d36-ba12-f4bda914a0c0",
+          "attempt": 1,
+          "kind": "returned_output",
+          "scope": "legacy_not_captured",
+          "contentType": "application/json",
+          "bytes": 0,
+          "availability": "not_captured",
+          "redacted": false,
+          "capturedAt": null,
+          "expiresAt": null
+        },
+        {
+          "id": "not-captured:c0747105-5df9-4d36-ba12-f4bda914a0c0:side_effect_confirmation",
+          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
+          "stepId": "c0747105-5df9-4d36-ba12-f4bda914a0c0",
+          "attempt": 1,
+          "kind": "side_effect_confirmation",
+          "scope": "legacy_not_captured",
+          "contentType": "application/json",
+          "bytes": 0,
+          "availability": "not_captured",
+          "redacted": false,
+          "capturedAt": null,
+          "expiresAt": null
+        }
+      ]
+    },
+    {
+      "itemKey": null,
+      "id": "2f14a9d6-8f19-422c-92d1-5212c2688f5e",
+      "logicalKey": "bounded-retrieval/check",
+      "parentStepId": "9c8bafba-f905-41e6-8945-58c5040802a7",
+      "attempt": 2,
+      "status": "skipped",
+      "title": "Validate continuation",
+      "description": "Validate semantic Noul only when deterministic evidence supports continuation.",
+      "kind": "code",
+      "startedAt": "2026-10-02T05:27:44.548Z",
+      "completedAt": "2026-10-02T05:27:44.548Z",
+      "error": null,
+      "skipReason": "Validate semantic Noul only when deterministic evidence supports continuation.",
+      "continuationReason": null,
+      "exitReason": null,
+      "childRunId": null,
+      "inputs": [
+        {
+          "label": "Request",
+          "path": "$.state.request",
+          "format": "text"
+        }
+      ],
+      "outputs": [
+        {
+          "label": "Verdict",
+          "path": "$.verdict",
+          "format": "text"
+        },
+        {
+          "label": "Result Count",
+          "path": "$.resultCount",
+          "format": "count"
+        },
+        {
+          "label": "Attempt",
+          "path": "$.attempt",
+          "format": "count"
+        },
+        {
+          "label": "Latency (ms)",
+          "path": "$.latencyMs",
+          "format": "count"
+        }
+      ],
+      "evidence": [
+        {
+          "id": "64129488-ba86-41a9-8bd8-c2f81b65c35f",
+          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
+          "stepId": "2f14a9d6-8f19-422c-92d1-5212c2688f5e",
+          "attempt": 1,
+          "kind": "resolved_input",
+          "scope": "retained_legacy_inline",
+          "contentType": "application/json",
+          "bytes": 571,
+          "availability": "complete",
+          "preview": {
+            "value": {
+              "request": "Use bird to get the latest 20 tweets on my timeline",
+              "retrieval": {
+                "request": "Use bird to get the latest 20 tweets on my timeline",
+                "count": 20,
+                "handles": [],
+                "queries": [],
+                "startedAt": 1790918864547
+              },
+              "loop": {
+                "bounded_retrieval": {
+                  "iteration": 2,
+                  "index": 1,
+                  "total": 3
+                }
+              }
+            },
+            "truncated": true,
+            "count": null,
+            "counts": {
+              "$.retrieval.handles": 0,
+              "$.retrieval.queries": 0
+            }
+          },
+          "redacted": false,
+          "capturedAt": "2026-10-02T05:27:44.578Z",
+          "expiresAt": null
+        },
+        {
+          "id": "b7dbf976-9137-4d20-a32d-545a389d7180",
+          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
+          "stepId": "2f14a9d6-8f19-422c-92d1-5212c2688f5e",
+          "attempt": 1,
+          "kind": "state_write",
+          "scope": "retained_legacy_inline",
+          "contentType": "application/json",
+          "bytes": 571,
+          "availability": "complete",
+          "preview": {
+            "value": {
+              "request": "Use bird to get the latest 20 tweets on my timeline",
+              "retrieval": {
+                "request": "Use bird to get the latest 20 tweets on my timeline",
+                "count": 20,
+                "handles": [],
+                "queries": [],
+                "startedAt": 1790918864547
+              },
+              "loop": {
+                "bounded_retrieval": {
+                  "iteration": 2,
+                  "index": 1,
+                  "total": 3
+                }
+              }
+            },
+            "truncated": true,
+            "count": null,
+            "counts": {
+              "$.retrieval.handles": 0,
+              "$.retrieval.queries": 0
+            }
+          },
+          "redacted": false,
+          "capturedAt": "2026-10-02T05:27:44.578Z",
+          "expiresAt": null
+        },
+        {
+          "id": "not-captured:2f14a9d6-8f19-422c-92d1-5212c2688f5e:executor_request",
+          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
+          "stepId": "2f14a9d6-8f19-422c-92d1-5212c2688f5e",
+          "attempt": 1,
+          "kind": "executor_request",
+          "scope": "legacy_not_captured",
+          "contentType": "application/json",
+          "bytes": 0,
+          "availability": "not_captured",
+          "redacted": false,
+          "capturedAt": null,
+          "expiresAt": null
+        },
+        {
+          "id": "not-captured:2f14a9d6-8f19-422c-92d1-5212c2688f5e:returned_output",
+          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
+          "stepId": "2f14a9d6-8f19-422c-92d1-5212c2688f5e",
+          "attempt": 1,
+          "kind": "returned_output",
+          "scope": "legacy_not_captured",
+          "contentType": "application/json",
+          "bytes": 0,
+          "availability": "not_captured",
+          "redacted": false,
+          "capturedAt": null,
+          "expiresAt": null
+        },
+        {
+          "id": "not-captured:2f14a9d6-8f19-422c-92d1-5212c2688f5e:side_effect_confirmation",
+          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
+          "stepId": "2f14a9d6-8f19-422c-92d1-5212c2688f5e",
+          "attempt": 1,
+          "kind": "side_effect_confirmation",
+          "scope": "legacy_not_captured",
+          "contentType": "application/json",
+          "bytes": 0,
+          "availability": "not_captured",
+          "redacted": false,
+          "capturedAt": null,
+          "expiresAt": null
+        }
+      ]
+    },
+    {
+      "itemKey": null,
+      "id": "4f2e5166-29c0-47b4-a50d-90ad08ab0b76",
+      "logicalKey": "bounded-retrieval/choose",
+      "parentStepId": "9c8bafba-f905-41e6-8945-58c5040802a7",
+      "attempt": 3,
+      "status": "skipped",
+      "title": "Choose read-only action",
+      "description": "Advisory typed judgments; deterministic policy owns execution. Skipped after a terminal verdict.",
+      "kind": "classifier",
+      "startedAt": "2026-10-02T05:27:44.548Z",
+      "completedAt": "2026-10-02T05:27:44.549Z",
+      "error": null,
+      "skipReason": "Advisory typed judgments; deterministic policy owns execution. Skipped after a terminal verdict.",
+      "continuationReason": null,
+      "exitReason": null,
+      "childRunId": null,
+      "inputs": [
+        {
+          "label": "Request",
+          "path": "$.request",
+          "format": "text"
+        },
+        {
+          "label": "Attempt",
+          "path": "$.attempt",
+          "format": "count"
+        }
+      ],
+      "outputs": [
+        {
+          "label": "Chosen Action",
+          "path": "$.answers.action.choice",
+          "format": "text"
+        },
+        {
+          "label": "Usage",
+          "path": "$.usage",
+          "format": "json"
+        },
+        {
+          "label": "Model Latency (ms)",
+          "path": "$.latencyMs",
+          "format": "count"
+        }
+      ],
+      "evidence": [
+        {
+          "id": "60f78ef6-bcfc-482a-af08-1500cbf4fa9f",
+          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
+          "stepId": "4f2e5166-29c0-47b4-a50d-90ad08ab0b76",
+          "attempt": 1,
+          "kind": "resolved_input",
+          "scope": "retained_legacy_inline",
+          "contentType": "application/json",
+          "bytes": 571,
+          "availability": "complete",
+          "preview": {
+            "value": {
+              "request": "Use bird to get the latest 20 tweets on my timeline",
+              "retrieval": {
+                "request": "Use bird to get the latest 20 tweets on my timeline",
+                "count": 20,
+                "handles": [],
+                "queries": [],
+                "startedAt": 1790918864547
+              },
+              "loop": {
+                "bounded_retrieval": {
+                  "iteration": 3,
+                  "index": 2,
+                  "total": 3
+                }
+              }
+            },
+            "truncated": true,
+            "count": null,
+            "counts": {
+              "$.retrieval.handles": 0,
+              "$.retrieval.queries": 0
+            }
+          },
+          "redacted": false,
+          "capturedAt": "2026-10-02T05:27:44.579Z",
+          "expiresAt": null
+        },
+        {
+          "id": "4c1dca45-3893-4b33-b990-47ad1db693ae",
+          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
+          "stepId": "4f2e5166-29c0-47b4-a50d-90ad08ab0b76",
+          "attempt": 1,
+          "kind": "state_write",
+          "scope": "retained_legacy_inline",
+          "contentType": "application/json",
+          "bytes": 571,
+          "availability": "complete",
+          "preview": {
+            "value": {
+              "request": "Use bird to get the latest 20 tweets on my timeline",
+              "retrieval": {
+                "request": "Use bird to get the latest 20 tweets on my timeline",
+                "count": 20,
+                "handles": [],
+                "queries": [],
+                "startedAt": 1790918864547
+              },
+              "loop": {
+                "bounded_retrieval": {
+                  "iteration": 3,
+                  "index": 2,
+                  "total": 3
+                }
+              }
+            },
+            "truncated": true,
+            "count": null,
+            "counts": {
+              "$.retrieval.handles": 0,
+              "$.retrieval.queries": 0
+            }
+          },
+          "redacted": false,
+          "capturedAt": "2026-10-02T05:27:44.579Z",
+          "expiresAt": null
+        },
+        {
+          "id": "not-captured:4f2e5166-29c0-47b4-a50d-90ad08ab0b76:executor_request",
+          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
+          "stepId": "4f2e5166-29c0-47b4-a50d-90ad08ab0b76",
+          "attempt": 1,
+          "kind": "executor_request",
+          "scope": "legacy_not_captured",
+          "contentType": "application/json",
+          "bytes": 0,
+          "availability": "not_captured",
+          "redacted": false,
+          "capturedAt": null,
+          "expiresAt": null
+        },
+        {
+          "id": "not-captured:4f2e5166-29c0-47b4-a50d-90ad08ab0b76:returned_output",
+          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
+          "stepId": "4f2e5166-29c0-47b4-a50d-90ad08ab0b76",
+          "attempt": 1,
+          "kind": "returned_output",
+          "scope": "legacy_not_captured",
+          "contentType": "application/json",
+          "bytes": 0,
+          "availability": "not_captured",
+          "redacted": false,
+          "capturedAt": null,
+          "expiresAt": null
+        },
+        {
+          "id": "not-captured:4f2e5166-29c0-47b4-a50d-90ad08ab0b76:side_effect_confirmation",
+          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
+          "stepId": "4f2e5166-29c0-47b4-a50d-90ad08ab0b76",
+          "attempt": 1,
+          "kind": "side_effect_confirmation",
+          "scope": "legacy_not_captured",
+          "contentType": "application/json",
+          "bytes": 0,
+          "availability": "not_captured",
+          "redacted": false,
+          "capturedAt": null,
+          "expiresAt": null
+        }
+      ]
+    },
+    {
+      "itemKey": null,
+      "id": "d79a6673-767d-42ec-ba64-e12b55d28ea2",
+      "logicalKey": "bounded-retrieval/execute",
+      "parentStepId": "9c8bafba-f905-41e6-8945-58c5040802a7",
+      "attempt": 3,
+      "status": "skipped",
+      "title": "Retrieve selected source",
+      "description": "Validate advisory answers, preserve requested source, execute one read-only action, deduplicate exact records.",
+      "kind": "code",
+      "startedAt": "2026-10-02T05:27:44.549Z",
+      "completedAt": "2026-10-02T05:27:44.549Z",
+      "error": null,
+      "skipReason": "Validate advisory answers, preserve requested source, execute one read-only action, deduplicate exact records.",
+      "continuationReason": null,
+      "exitReason": null,
+      "childRunId": null,
+      "inputs": [
+        {
+          "label": "Request",
+          "path": "$.state.request",
+          "format": "text"
+        }
+      ],
+      "outputs": [
+        {
+          "label": "Chosen Source",
+          "path": "$.source",
+          "format": "text"
+        },
+        {
+          "label": "Verdict",
+          "path": "$.verdict",
+          "format": "text"
+        },
+        {
+          "label": "Result Count",
+          "path": "$.resultCount",
+          "format": "count"
+        },
+        {
+          "label": "Attempt",
+          "path": "$.attempt",
+          "format": "count"
+        },
+        {
+          "label": "Latency (ms)",
+          "path": "$.latencyMs",
+          "format": "count"
+        }
+      ],
+      "evidence": [
+        {
+          "id": "eaefbb49-d88c-4c91-a99f-2bf8e93a0ba3",
+          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
+          "stepId": "d79a6673-767d-42ec-ba64-e12b55d28ea2",
+          "attempt": 1,
+          "kind": "resolved_input",
+          "scope": "retained_legacy_inline",
+          "contentType": "application/json",
+          "bytes": 571,
+          "availability": "complete",
+          "preview": {
+            "value": {
+              "request": "Use bird to get the latest 20 tweets on my timeline",
+              "retrieval": {
+                "request": "Use bird to get the latest 20 tweets on my timeline",
+                "count": 20,
+                "handles": [],
+                "queries": [],
+                "startedAt": 1790918864547
+              },
+              "loop": {
+                "bounded_retrieval": {
+                  "iteration": 3,
+                  "index": 2,
+                  "total": 3
+                }
+              }
+            },
+            "truncated": true,
+            "count": null,
+            "counts": {
+              "$.retrieval.handles": 0,
+              "$.retrieval.queries": 0
+            }
+          },
+          "redacted": false,
+          "capturedAt": "2026-10-02T05:27:44.579Z",
+          "expiresAt": null
+        },
+        {
+          "id": "0acd7af3-683f-448f-bee5-ac0ac37c0318",
+          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
+          "stepId": "d79a6673-767d-42ec-ba64-e12b55d28ea2",
+          "attempt": 1,
+          "kind": "state_write",
+          "scope": "retained_legacy_inline",
+          "contentType": "application/json",
+          "bytes": 571,
+          "availability": "complete",
+          "preview": {
+            "value": {
+              "request": "Use bird to get the latest 20 tweets on my timeline",
+              "retrieval": {
+                "request": "Use bird to get the latest 20 tweets on my timeline",
+                "count": 20,
+                "handles": [],
+                "queries": [],
+                "startedAt": 1790918864547
+              },
+              "loop": {
+                "bounded_retrieval": {
+                  "iteration": 3,
+                  "index": 2,
+                  "total": 3
+                }
+              }
+            },
+            "truncated": true,
+            "count": null,
+            "counts": {
+              "$.retrieval.handles": 0,
+              "$.retrieval.queries": 0
+            }
+          },
+          "redacted": false,
+          "capturedAt": "2026-10-02T05:27:44.579Z",
+          "expiresAt": null
+        },
+        {
+          "id": "not-captured:d79a6673-767d-42ec-ba64-e12b55d28ea2:executor_request",
+          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
+          "stepId": "d79a6673-767d-42ec-ba64-e12b55d28ea2",
+          "attempt": 1,
+          "kind": "executor_request",
+          "scope": "legacy_not_captured",
+          "contentType": "application/json",
+          "bytes": 0,
+          "availability": "not_captured",
+          "redacted": false,
+          "capturedAt": null,
+          "expiresAt": null
+        },
+        {
+          "id": "not-captured:d79a6673-767d-42ec-ba64-e12b55d28ea2:returned_output",
+          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
+          "stepId": "d79a6673-767d-42ec-ba64-e12b55d28ea2",
+          "attempt": 1,
+          "kind": "returned_output",
+          "scope": "legacy_not_captured",
+          "contentType": "application/json",
+          "bytes": 0,
+          "availability": "not_captured",
+          "redacted": false,
+          "capturedAt": null,
+          "expiresAt": null
+        },
+        {
+          "id": "not-captured:d79a6673-767d-42ec-ba64-e12b55d28ea2:side_effect_confirmation",
+          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
+          "stepId": "d79a6673-767d-42ec-ba64-e12b55d28ea2",
+          "attempt": 1,
+          "kind": "side_effect_confirmation",
+          "scope": "legacy_not_captured",
+          "contentType": "application/json",
+          "bytes": 0,
+          "availability": "not_captured",
+          "redacted": false,
+          "capturedAt": null,
+          "expiresAt": null
+        }
+      ]
+    },
+    {
+      "itemKey": null,
+      "id": "3819570f-5185-4b2c-addd-0ed9f7b3f9f0",
+      "logicalKey": "bounded-retrieval/judge-evidence",
+      "parentStepId": "9c8bafba-f905-41e6-8945-58c5040802a7",
+      "attempt": 3,
+      "status": "skipped",
+      "title": "Judge safe continuation",
+      "description": "Advisory typed judgments; deterministic policy owns execution. Skipped after a terminal verdict.",
+      "kind": "classifier",
+      "startedAt": "2026-10-02T05:27:44.549Z",
+      "completedAt": "2026-10-02T05:27:44.549Z",
+      "error": null,
+      "skipReason": "Advisory typed judgments; deterministic policy owns execution. Skipped after a terminal verdict.",
+      "continuationReason": null,
+      "exitReason": null,
+      "childRunId": null,
+      "inputs": [
+        {
+          "label": "Request",
+          "path": "$.request",
+          "format": "text"
+        },
+        {
+          "label": "Attempt",
+          "path": "$.attempt",
+          "format": "count"
+        }
+      ],
+      "outputs": [
+        {
+          "label": "Continuation Probability",
+          "path": "$.answers.continueSafe.noul",
+          "format": "auto"
+        },
+        {
+          "label": "Usage",
+          "path": "$.usage",
+          "format": "json"
+        },
+        {
+          "label": "Model Latency (ms)",
+          "path": "$.latencyMs",
+          "format": "count"
+        }
+      ],
+      "evidence": [
+        {
+          "id": "9afaf139-cd3a-4fe0-bae4-4a66044dc82c",
+          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
+          "stepId": "3819570f-5185-4b2c-addd-0ed9f7b3f9f0",
+          "attempt": 1,
+          "kind": "resolved_input",
+          "scope": "retained_legacy_inline",
+          "contentType": "application/json",
+          "bytes": 571,
+          "availability": "complete",
+          "preview": {
+            "value": {
+              "request": "Use bird to get the latest 20 tweets on my timeline",
+              "retrieval": {
+                "request": "Use bird to get the latest 20 tweets on my timeline",
+                "count": 20,
+                "handles": [],
+                "queries": [],
+                "startedAt": 1790918864547
+              },
+              "loop": {
+                "bounded_retrieval": {
+                  "iteration": 3,
+                  "index": 2,
+                  "total": 3
+                }
+              }
+            },
+            "truncated": true,
+            "count": null,
+            "counts": {
+              "$.retrieval.handles": 0,
+              "$.retrieval.queries": 0
+            }
+          },
+          "redacted": false,
+          "capturedAt": "2026-10-02T05:27:44.579Z",
+          "expiresAt": null
+        },
+        {
+          "id": "c5f7de01-31a6-4e84-b09b-87bc2b9feaec",
+          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
+          "stepId": "3819570f-5185-4b2c-addd-0ed9f7b3f9f0",
+          "attempt": 1,
+          "kind": "state_write",
+          "scope": "retained_legacy_inline",
+          "contentType": "application/json",
+          "bytes": 571,
+          "availability": "complete",
+          "preview": {
+            "value": {
+              "request": "Use bird to get the latest 20 tweets on my timeline",
+              "retrieval": {
+                "request": "Use bird to get the latest 20 tweets on my timeline",
+                "count": 20,
+                "handles": [],
+                "queries": [],
+                "startedAt": 1790918864547
+              },
+              "loop": {
+                "bounded_retrieval": {
+                  "iteration": 3,
+                  "index": 2,
+                  "total": 3
+                }
+              }
+            },
+            "truncated": true,
+            "count": null,
+            "counts": {
+              "$.retrieval.handles": 0,
+              "$.retrieval.queries": 0
+            }
+          },
+          "redacted": false,
+          "capturedAt": "2026-10-02T05:27:44.579Z",
+          "expiresAt": null
+        },
+        {
+          "id": "not-captured:3819570f-5185-4b2c-addd-0ed9f7b3f9f0:executor_request",
+          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
+          "stepId": "3819570f-5185-4b2c-addd-0ed9f7b3f9f0",
+          "attempt": 1,
+          "kind": "executor_request",
+          "scope": "legacy_not_captured",
+          "contentType": "application/json",
+          "bytes": 0,
+          "availability": "not_captured",
+          "redacted": false,
+          "capturedAt": null,
+          "expiresAt": null
+        },
+        {
+          "id": "not-captured:3819570f-5185-4b2c-addd-0ed9f7b3f9f0:returned_output",
+          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
+          "stepId": "3819570f-5185-4b2c-addd-0ed9f7b3f9f0",
+          "attempt": 1,
+          "kind": "returned_output",
+          "scope": "legacy_not_captured",
+          "contentType": "application/json",
+          "bytes": 0,
+          "availability": "not_captured",
+          "redacted": false,
+          "capturedAt": null,
+          "expiresAt": null
+        },
+        {
+          "id": "not-captured:3819570f-5185-4b2c-addd-0ed9f7b3f9f0:side_effect_confirmation",
+          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
+          "stepId": "3819570f-5185-4b2c-addd-0ed9f7b3f9f0",
+          "attempt": 1,
+          "kind": "side_effect_confirmation",
+          "scope": "legacy_not_captured",
+          "contentType": "application/json",
+          "bytes": 0,
+          "availability": "not_captured",
+          "redacted": false,
+          "capturedAt": null,
+          "expiresAt": null
+        }
+      ]
+    },
+    {
+      "itemKey": null,
+      "id": "6cc4bc1f-921a-49e2-9695-7bb8302db2fe",
+      "logicalKey": "bounded-retrieval/check",
+      "parentStepId": "9c8bafba-f905-41e6-8945-58c5040802a7",
+      "attempt": 3,
+      "status": "skipped",
+      "title": "Validate continuation",
+      "description": "Validate semantic Noul only when deterministic evidence supports continuation.",
+      "kind": "code",
+      "startedAt": "2026-10-02T05:27:44.549Z",
+      "completedAt": "2026-10-02T05:27:44.549Z",
+      "error": null,
+      "skipReason": "Validate semantic Noul only when deterministic evidence supports continuation.",
+      "continuationReason": null,
+      "exitReason": null,
+      "childRunId": null,
+      "inputs": [
+        {
+          "label": "Request",
+          "path": "$.state.request",
+          "format": "text"
+        }
+      ],
+      "outputs": [
+        {
+          "label": "Verdict",
+          "path": "$.verdict",
+          "format": "text"
+        },
+        {
+          "label": "Result Count",
+          "path": "$.resultCount",
+          "format": "count"
+        },
+        {
+          "label": "Attempt",
+          "path": "$.attempt",
+          "format": "count"
+        },
+        {
+          "label": "Latency (ms)",
+          "path": "$.latencyMs",
+          "format": "count"
+        }
+      ],
+      "evidence": [
+        {
+          "id": "8a90b2d6-2ad0-40d6-9ad9-c03224c93430",
+          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
+          "stepId": "6cc4bc1f-921a-49e2-9695-7bb8302db2fe",
+          "attempt": 1,
+          "kind": "resolved_input",
+          "scope": "retained_legacy_inline",
+          "contentType": "application/json",
+          "bytes": 571,
+          "availability": "complete",
+          "preview": {
+            "value": {
+              "request": "Use bird to get the latest 20 tweets on my timeline",
+              "retrieval": {
+                "request": "Use bird to get the latest 20 tweets on my timeline",
+                "count": 20,
+                "handles": [],
+                "queries": [],
+                "startedAt": 1790918864547
+              },
+              "loop": {
+                "bounded_retrieval": {
+                  "iteration": 3,
+                  "index": 2,
+                  "total": 3
+                }
+              }
+            },
+            "truncated": true,
+            "count": null,
+            "counts": {
+              "$.retrieval.handles": 0,
+              "$.retrieval.queries": 0
+            }
+          },
+          "redacted": false,
+          "capturedAt": "2026-10-02T05:27:44.579Z",
+          "expiresAt": null
+        },
+        {
+          "id": "f52524a0-25d0-4743-9d63-3ad1f88e1fd8",
+          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
+          "stepId": "6cc4bc1f-921a-49e2-9695-7bb8302db2fe",
+          "attempt": 1,
+          "kind": "state_write",
+          "scope": "retained_legacy_inline",
+          "contentType": "application/json",
+          "bytes": 571,
+          "availability": "complete",
+          "preview": {
+            "value": {
+              "request": "Use bird to get the latest 20 tweets on my timeline",
+              "retrieval": {
+                "request": "Use bird to get the latest 20 tweets on my timeline",
+                "count": 20,
+                "handles": [],
+                "queries": [],
+                "startedAt": 1790918864547
+              },
+              "loop": {
+                "bounded_retrieval": {
+                  "iteration": 3,
+                  "index": 2,
+                  "total": 3
+                }
+              }
+            },
+            "truncated": true,
+            "count": null,
+            "counts": {
+              "$.retrieval.handles": 0,
+              "$.retrieval.queries": 0
+            }
+          },
+          "redacted": false,
+          "capturedAt": "2026-10-02T05:27:44.579Z",
+          "expiresAt": null
+        },
+        {
+          "id": "not-captured:6cc4bc1f-921a-49e2-9695-7bb8302db2fe:executor_request",
+          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
+          "stepId": "6cc4bc1f-921a-49e2-9695-7bb8302db2fe",
+          "attempt": 1,
+          "kind": "executor_request",
+          "scope": "legacy_not_captured",
+          "contentType": "application/json",
+          "bytes": 0,
+          "availability": "not_captured",
+          "redacted": false,
+          "capturedAt": null,
+          "expiresAt": null
+        },
+        {
+          "id": "not-captured:6cc4bc1f-921a-49e2-9695-7bb8302db2fe:returned_output",
+          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
+          "stepId": "6cc4bc1f-921a-49e2-9695-7bb8302db2fe",
+          "attempt": 1,
+          "kind": "returned_output",
+          "scope": "legacy_not_captured",
+          "contentType": "application/json",
+          "bytes": 0,
+          "availability": "not_captured",
+          "redacted": false,
+          "capturedAt": null,
+          "expiresAt": null
+        },
+        {
+          "id": "not-captured:6cc4bc1f-921a-49e2-9695-7bb8302db2fe:side_effect_confirmation",
+          "runId": "60651074-656f-4c09-97e4-a4d3e1a48dce",
+          "stepId": "6cc4bc1f-921a-49e2-9695-7bb8302db2fe",
+          "attempt": 1,
+          "kind": "side_effect_confirmation",
+          "scope": "legacy_not_captured",
+          "contentType": "application/json",
+          "bytes": 0,
+          "availability": "not_captured",
+          "redacted": false,
+          "capturedAt": null,
+          "expiresAt": null
+        }
+      ]
+    }
+  ],
+  "children": [],
+  "revision": "da6dd7dd07578af89be41d37eb0865a1e5d50f8f750845cb7887cb11750d4c03"
+}

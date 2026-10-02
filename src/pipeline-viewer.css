@@ -1,4 +1,4 @@
-.pipeline-viewer{padding:1rem;min-width:0;--pv-border:#61718a;--pv-bg:var(--surface,#17202d);color:var(--text-primary,#e4e9f1)}
+.pipeline-viewer{padding:1rem;min-width:0;--pv-border:#61718a;--pv-bg:var(--surface,#17202d);color:var(--text,#e4e9f1)}
 .pipeline-viewer button,.pipeline-viewer select,.pipeline-viewer input{font:inherit;color:inherit;background:var(--pv-bg);border:1px solid var(--pv-border);border-radius:.4rem;padding:.5rem;min-height:44px}
 .pipeline-viewer button{cursor:pointer}.pipeline-viewer button:disabled{opacity:.55;cursor:default}
 .pipeline-viewer :focus-visible{outline:3px solid #70b9ff;outline-offset:3px}
@@ -20,3 +20,22 @@
 @media(max-width:850px){.pipeline-viewer-layout{grid-template-columns:minmax(0,1fr)}.pipeline-viewer-steps{flex-direction:column}.pipeline-viewer-step{flex:auto;width:100%;box-sizing:border-box}.pipeline-viewer-inspector{position:static;max-height:none}.pipeline-viewer-toolbar select{max-width:100%}}
 
 .pipeline-viewer-links{list-style:none;padding:0;color:#9dcfff;font-size:.85rem;line-height:1.5;overflow-wrap:anywhere}
+
+.pipeline-viewer-scroll{overflow:auto;max-width:100%;padding-bottom:1rem}
+.pipeline-viewer-canvas{position:relative;width:max-content;min-width:100%;padding:1.8rem 0}
+.pipeline-viewer-steps{position:relative;z-index:1;overflow:visible;gap:6rem}
+.pipeline-viewer-edges{position:absolute;inset:0;pointer-events:none;color:var(--text,#9dcfff);overflow:visible;z-index:2}
+.pipeline-viewer-edges g>path{stroke:currentColor;stroke-width:2;fill:none}
+.pipeline-viewer-edges g[data-highlighted="true"]{color:var(--text,#ffd788)}
+.pipeline-viewer-edges g[data-highlighted="true"]>path{stroke:var(--accent,#ffd788);stroke-width:3}
+.pipeline-viewer-edges text{fill:currentColor;font-size:11px;paint-order:stroke;stroke:var(--pv-bg);stroke-width:4px;stroke-linejoin:round}
+.pipeline-viewer-wiring button{text-align:left;overflow-wrap:anywhere}
+@media(max-width:850px){
+ .pipeline-viewer-canvas{width:100%;box-sizing:border-box;padding-right:3rem}
+ .pipeline-viewer-steps{gap:2.5rem}
+ .pipeline-viewer-inspector{max-height:60vh;overflow:auto}
+ .pipeline-viewer-inspector[data-pinned="true"]{position:fixed;z-index:80;bottom:.5rem;left:.5rem;right:.5rem;top:auto;max-height:60vh;box-shadow:0 0 0 1px var(--pv-border),0 -8px 24px #0008}
+}
+
+.pipeline-viewer-inspector-header{position:sticky;top:-1rem;background:var(--pv-bg);z-index:3;display:flex;align-items:center;justify-content:space-between;padding:.5rem 0}
+.pipeline-viewer-inspector-header h3{margin:.3rem 0}

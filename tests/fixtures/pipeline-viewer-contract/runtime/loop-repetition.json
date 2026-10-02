@@ -1,0 +1,1666 @@
+{
+  "version": 1,
+  "serviceId": "autopilot_runtime_fixture",
+  "run": {
+    "id": "e1323339-2768-4087-b43b-80ce01d911f1",
+    "serviceId": "autopilot_runtime_fixture",
+    "definitionId": "loop-test",
+    "definitionVersion": null,
+    "definitionHash": "48813a69cf22cb06c975dbe5629907f4d3922f2bacf0ef2dc85702616bd9c60c",
+    "name": "loop-test",
+    "status": "ok",
+    "startedAt": "2026-10-02T05:27:34.739Z",
+    "completedAt": "2026-10-02T05:27:34.742Z",
+    "parentRunId": null,
+    "parentStepId": null
+  },
+  "definition": {
+    "id": "loop-test",
+    "name": "loop-test",
+    "title": "loop-test",
+    "description": "",
+    "version": null,
+    "hash": "48813a69cf22cb06c975dbe5629907f4d3922f2bacf0ef2dc85702616bd9c60c",
+    "availability": "complete",
+    "steps": [
+      {
+        "logicalKey": "fake-critic",
+        "name": "fake-critic",
+        "title": "fake-critic",
+        "description": "",
+        "type": "code",
+        "inputs": [],
+        "outputs": [],
+        "children": []
+      },
+      {
+        "logicalKey": "fake-response",
+        "name": "fake-response",
+        "title": "fake-response",
+        "description": "",
+        "type": "code",
+        "inputs": [],
+        "outputs": [],
+        "children": []
+      },
+      {
+        "logicalKey": "loop-to-critic",
+        "name": "loop-to-critic",
+        "title": "loop-to-critic",
+        "description": "",
+        "type": "loop",
+        "inputs": [],
+        "outputs": [],
+        "children": []
+      }
+    ],
+    "wiring": [
+      {
+        "sourceValuePath": "$.reviewLoop",
+        "sourcePortPaths": [],
+        "targetPortPaths": [],
+        "sourceStepKey": null,
+        "sourcePath": "$.reviewLoop",
+        "targetStepKey": "fake-critic",
+        "targetPath": "$.loop",
+        "carriedForward": true
+      },
+      {
+        "sourceValuePath": "$.reviewLoop",
+        "sourcePortPaths": [],
+        "targetPortPaths": [],
+        "sourceStepKey": null,
+        "sourcePath": "$.reviewLoop",
+        "targetStepKey": "fake-response",
+        "targetPath": "$.loop",
+        "carriedForward": true
+      },
+      {
+        "sourceValuePath": "$",
+        "sourcePortPaths": [],
+        "targetPortPaths": [],
+        "sourceStepKey": "fake-critic",
+        "sourcePath": "$.iteration.critic",
+        "targetStepKey": "fake-response",
+        "targetPath": "$.critic",
+        "carriedForward": false
+      }
+    ]
+  },
+  "steps": [
+    {
+      "itemKey": null,
+      "id": "8e6ffe48-d26a-482f-bdd8-7e0114d8b972",
+      "logicalKey": "fake-critic",
+      "parentStepId": null,
+      "attempt": 1,
+      "status": "ok",
+      "title": "fake-critic",
+      "description": "",
+      "kind": "code",
+      "startedAt": "2026-10-02T05:27:34.739Z",
+      "completedAt": "2026-10-02T05:27:34.739Z",
+      "error": null,
+      "skipReason": null,
+      "continuationReason": null,
+      "exitReason": null,
+      "childRunId": null,
+      "inputs": [],
+      "outputs": [],
+      "evidence": [
+        {
+          "id": "96eed395-2616-4b21-9977-218d9a7d7af7",
+          "runId": "e1323339-2768-4087-b43b-80ce01d911f1",
+          "stepId": "8e6ffe48-d26a-482f-bdd8-7e0114d8b972",
+          "attempt": 1,
+          "kind": "resolved_input",
+          "scope": "selected_step_input",
+          "contentType": "application/json",
+          "bytes": 71,
+          "availability": "complete",
+          "preview": {
+            "value": {
+              "loop": {
+                "iteration": 1,
+                "index": 0,
+                "completed": 0,
+                "total": 3,
+                "done": false
+              }
+            },
+            "truncated": false,
+            "count": null,
+            "counts": {}
+          },
+          "redacted": false,
+          "capturedAt": "2026-10-02T05:27:34.739Z",
+          "expiresAt": null
+        },
+        {
+          "id": "f098127e-be7f-4385-8510-ae3efe335aad",
+          "runId": "e1323339-2768-4087-b43b-80ce01d911f1",
+          "stepId": "8e6ffe48-d26a-482f-bdd8-7e0114d8b972",
+          "attempt": 1,
+          "kind": "executor_request",
+          "scope": "code_function_arguments",
+          "contentType": "application/json",
+          "bytes": 114,
+          "availability": "complete",
+          "preview": {
+            "value": {
+              "function": "test.fakeCritic",
+              "arguments": {
+                "loop": {
+                  "iteration": 1,
+                  "index": 0,
+                  "completed": 0,
+                  "total": 3,
+                  "done": false
+                }
+              }
+            },
+            "truncated": false,
+            "count": null,
+            "counts": {}
+          },
+          "redacted": false,
+          "capturedAt": "2026-10-02T05:27:34.739Z",
+          "expiresAt": null
+        },
+        {
+          "id": "dd9682aa-1b0f-47ae-b16f-319a324d7c49",
+          "runId": "e1323339-2768-4087-b43b-80ce01d911f1",
+          "stepId": "8e6ffe48-d26a-482f-bdd8-7e0114d8b972",
+          "attempt": 1,
+          "kind": "returned_output",
+          "scope": "executor_return",
+          "contentType": "application/json",
+          "bytes": 32,
+          "availability": "complete",
+          "preview": {
+            "value": {
+              "summary": "critic iteration 1"
+            },
+            "truncated": false,
+            "count": null,
+            "counts": {}
+          },
+          "redacted": false,
+          "capturedAt": "2026-10-02T05:27:34.739Z",
+          "expiresAt": null
+        },
+        {
+          "id": "054a02f1-2d82-431b-bd67-75a194cda364",
+          "runId": "e1323339-2768-4087-b43b-80ce01d911f1",
+          "stepId": "8e6ffe48-d26a-482f-bdd8-7e0114d8b972",
+          "attempt": 1,
+          "kind": "state_write",
+          "scope": "state_after_assignment",
+          "contentType": "application/json",
+          "bytes": 143,
+          "availability": "complete",
+          "preview": {
+            "value": {
+              "count": 3,
+              "reviewLoop": {
+                "iteration": 1,
+                "index": 0,
+                "completed": 0,
+                "total": 3,
+                "done": false
+              },
+              "iteration": {
+                "critic": {
+                  "summary": "critic iteration 1"
+                }
+              }
+            },
+            "truncated": false,
+            "count": null,
+            "counts": {}
+          },
+          "redacted": false,
+          "capturedAt": "2026-10-02T05:27:34.739Z",
+          "expiresAt": null
+        },
+        {
+          "id": "not-captured:8e6ffe48-d26a-482f-bdd8-7e0114d8b972:side_effect_confirmation",
+          "runId": "e1323339-2768-4087-b43b-80ce01d911f1",
+          "stepId": "8e6ffe48-d26a-482f-bdd8-7e0114d8b972",
+          "attempt": 1,
+          "kind": "side_effect_confirmation",
+          "scope": "legacy_not_captured",
+          "contentType": "application/json",
+          "bytes": 0,
+          "availability": "not_captured",
+          "redacted": false,
+          "capturedAt": null,
+          "expiresAt": null
+        }
+      ]
+    },
+    {
+      "itemKey": null,
+      "id": "be80d353-5b59-4f9b-94ba-c2b3923600ae",
+      "logicalKey": "fake-response",
+      "parentStepId": null,
+      "attempt": 1,
+      "status": "ok",
+      "title": "fake-response",
+      "description": "",
+      "kind": "code",
+      "startedAt": "2026-10-02T05:27:34.739Z",
+      "completedAt": "2026-10-02T05:27:34.739Z",
+      "error": null,
+      "skipReason": null,
+      "continuationReason": null,
+      "exitReason": null,
+      "childRunId": null,
+      "inputs": [],
+      "outputs": [],
+      "evidence": [
+        {
+          "id": "4c619bd9-8a79-4c0a-9d22-ac5dab982648",
+          "runId": "e1323339-2768-4087-b43b-80ce01d911f1",
+          "stepId": "be80d353-5b59-4f9b-94ba-c2b3923600ae",
+          "attempt": 1,
+          "kind": "resolved_input",
+          "scope": "selected_step_input",
+          "contentType": "application/json",
+          "bytes": 113,
+          "availability": "complete",
+          "preview": {
+            "value": {
+              "loop": {
+                "iteration": 1,
+                "index": 0,
+                "completed": 0,
+                "total": 3,
+                "done": false
+              },
+              "critic": {
+                "summary": "critic iteration 1"
+              }
+            },
+            "truncated": false,
+            "count": null,
+            "counts": {}
+          },
+          "redacted": false,
+          "capturedAt": "2026-10-02T05:27:34.739Z",
+          "expiresAt": null
+        },
+        {
+          "id": "2f93b8be-795d-4d92-96f0-6aff7547c7fd",
+          "runId": "e1323339-2768-4087-b43b-80ce01d911f1",
+          "stepId": "be80d353-5b59-4f9b-94ba-c2b3923600ae",
+          "attempt": 1,
+          "kind": "executor_request",
+          "scope": "code_function_arguments",
+          "contentType": "application/json",
+          "bytes": 158,
+          "availability": "complete",
+          "preview": {
+            "value": {
+              "function": "test.fakeResponse",
+              "arguments": {
+                "loop": {
+                  "iteration": 1,
+                  "index": 0,
+                  "completed": 0,
+                  "total": 3,
+                  "done": false
+                },
+                "critic": {
+                  "summary": "critic iteration 1"
+                }
+              }
+            },
+            "truncated": false,
+            "count": null,
+            "counts": {}
+          },
+          "redacted": false,
+          "capturedAt": "2026-10-02T05:27:34.739Z",
+          "expiresAt": null
+        },
+        {
+          "id": "7785bb10-a75d-4836-8479-aa914781df40",
+          "runId": "e1323339-2768-4087-b43b-80ce01d911f1",
+          "stepId": "be80d353-5b59-4f9b-94ba-c2b3923600ae",
+          "attempt": 1,
+          "kind": "returned_output",
+          "scope": "executor_return",
+          "contentType": "application/json",
+          "bytes": 34,
+          "availability": "complete",
+          "preview": {
+            "value": {
+              "summary": "response iteration 1"
+            },
+            "truncated": false,
+            "count": null,
+            "counts": {}
+          },
+          "redacted": false,
+          "capturedAt": "2026-10-02T05:27:34.739Z",
+          "expiresAt": null
+        },
+        {
+          "id": "459827d4-3375-466f-abd6-3da937de1634",
+          "runId": "e1323339-2768-4087-b43b-80ce01d911f1",
+          "stepId": "be80d353-5b59-4f9b-94ba-c2b3923600ae",
+          "attempt": 1,
+          "kind": "state_write",
+          "scope": "state_after_assignment",
+          "contentType": "application/json",
+          "bytes": 189,
+          "availability": "complete",
+          "preview": {
+            "value": {
+              "count": 3,
+              "reviewLoop": {
+                "iteration": 1,
+                "index": 0,
+                "completed": 0,
+                "total": 3,
+                "done": false
+              },
+              "iteration": {
+                "critic": {
+                  "summary": "critic iteration 1"
+                },
+                "response": {
+                  "summary": "response iteration 1"
+                }
+              }
+            },
+            "truncated": false,
+            "count": null,
+            "counts": {}
+          },
+          "redacted": false,
+          "capturedAt": "2026-10-02T05:27:34.739Z",
+          "expiresAt": null
+        },
+        {
+          "id": "not-captured:be80d353-5b59-4f9b-94ba-c2b3923600ae:side_effect_confirmation",
+          "runId": "e1323339-2768-4087-b43b-80ce01d911f1",
+          "stepId": "be80d353-5b59-4f9b-94ba-c2b3923600ae",
+          "attempt": 1,
+          "kind": "side_effect_confirmation",
+          "scope": "legacy_not_captured",
+          "contentType": "application/json",
+          "bytes": 0,
+          "availability": "not_captured",
+          "redacted": false,
+          "capturedAt": null,
+          "expiresAt": null
+        }
+      ]
+    },
+    {
+      "itemKey": null,
+      "id": "f91b4d7e-7432-4c40-997b-9272c0b67f6f",
+      "logicalKey": "loop-to-critic",
+      "parentStepId": null,
+      "attempt": 1,
+      "status": "ok",
+      "title": "loop-to-critic",
+      "description": "",
+      "kind": "loop",
+      "startedAt": "2026-10-02T05:27:34.739Z",
+      "completedAt": "2026-10-02T05:27:34.740Z",
+      "error": null,
+      "skipReason": null,
+      "continuationReason": null,
+      "exitReason": null,
+      "childRunId": null,
+      "inputs": [],
+      "outputs": [],
+      "evidence": [
+        {
+          "id": "dc904ea6-e35a-42a0-8d9f-16e1b3868516",
+          "runId": "e1323339-2768-4087-b43b-80ce01d911f1",
+          "stepId": "f91b4d7e-7432-4c40-997b-9272c0b67f6f",
+          "attempt": 1,
+          "kind": "resolved_input",
+          "scope": "selected_step_input",
+          "contentType": "application/json",
+          "bytes": 189,
+          "availability": "complete",
+          "preview": {
+            "value": {
+              "count": 3,
+              "reviewLoop": {
+                "iteration": 1,
+                "index": 0,
+                "completed": 0,
+                "total": 3,
+                "done": false
+              },
+              "iteration": {
+                "critic": {
+                  "summary": "critic iteration 1"
+                },
+                "response": {
+                  "summary": "response iteration 1"
+                }
+              }
+            },
+            "truncated": false,
+            "count": null,
+            "counts": {}
+          },
+          "redacted": false,
+          "capturedAt": "2026-10-02T05:27:34.740Z",
+          "expiresAt": null
+        },
+        {
+          "id": "ee80650d-63d8-41c1-ad4f-ed79056ed21c",
+          "runId": "e1323339-2768-4087-b43b-80ce01d911f1",
+          "stepId": "f91b4d7e-7432-4c40-997b-9272c0b67f6f",
+          "attempt": 1,
+          "kind": "returned_output",
+          "scope": "wrapper_output_child_evidence_separate",
+          "contentType": "application/json",
+          "bytes": 89,
+          "availability": "complete",
+          "preview": {
+            "value": {
+              "critic": {
+                "summary": "critic iteration 1"
+              },
+              "response": {
+                "summary": "response iteration 1"
+              }
+            },
+            "truncated": false,
+            "count": null,
+            "counts": {}
+          },
+          "redacted": false,
+          "capturedAt": "2026-10-02T05:27:34.740Z",
+          "expiresAt": null
+        },
+        {
+          "id": "42143b9d-7fce-456a-a3b8-d512bfaa2da0",
+          "runId": "e1323339-2768-4087-b43b-80ce01d911f1",
+          "stepId": "f91b4d7e-7432-4c40-997b-9272c0b67f6f",
+          "attempt": 1,
+          "kind": "state_write",
+          "scope": "state_after_assignment",
+          "contentType": "application/json",
+          "bytes": 321,
+          "availability": "complete",
+          "preview": {
+            "value": {
+              "count": 3,
+              "reviewLoop": {
+                "iteration": 2,
+                "index": 1,
+                "completed": 1,
+                "total": 3,
+                "done": false
+              },
+              "iteration": {
+                "critic": {
+                  "summary": "critic iteration 1"
+                },
+                "response": {
+                  "summary": "response iteration 1"
+                }
+              },
+              "reviewHistory": {
+                "items": [
+                  {
+                    "iteration": 1,
+                    "critic": {
+                      "fields": 1
+                    },
+                    "response": {
+                      "fields": 1
+                    }
+                  }
+                ]
+              }
+            },
+            "truncated": true,
+            "count": null,
+            "counts": {
+              "$.reviewHistory.items": 1
+            }
+          },
+          "redacted": false,
+          "capturedAt": "2026-10-02T05:27:34.740Z",
+          "expiresAt": null
+        },
+        {
+          "id": "not-captured:f91b4d7e-7432-4c40-997b-9272c0b67f6f:executor_request",
+          "runId": "e1323339-2768-4087-b43b-80ce01d911f1",
+          "stepId": "f91b4d7e-7432-4c40-997b-9272c0b67f6f",
+          "attempt": 1,
+          "kind": "executor_request",
+          "scope": "legacy_not_captured",
+          "contentType": "application/json",
+          "bytes": 0,
+          "availability": "not_captured",
+          "redacted": false,
+          "capturedAt": null,
+          "expiresAt": null
+        },
+        {
+          "id": "not-captured:f91b4d7e-7432-4c40-997b-9272c0b67f6f:side_effect_confirmation",
+          "runId": "e1323339-2768-4087-b43b-80ce01d911f1",
+          "stepId": "f91b4d7e-7432-4c40-997b-9272c0b67f6f",
+          "attempt": 1,
+          "kind": "side_effect_confirmation",
+          "scope": "legacy_not_captured",
+          "contentType": "application/json",
+          "bytes": 0,
+          "availability": "not_captured",
+          "redacted": false,
+          "capturedAt": null,
+          "expiresAt": null
+        }
+      ]
+    },
+    {
+      "itemKey": null,
+      "id": "1fdc09e9-bc18-4a23-a5ec-e76dd9e83310",
+      "logicalKey": "fake-critic",
+      "parentStepId": null,
+      "attempt": 2,
+      "status": "ok",
+      "title": "fake-critic",
+      "description": "",
+      "kind": "code",
+      "startedAt": "2026-10-02T05:27:34.740Z",
+      "completedAt": "2026-10-02T05:27:34.740Z",
+      "error": null,
+      "skipReason": null,
+      "continuationReason": null,
+      "exitReason": null,
+      "childRunId": null,
+      "inputs": [],
+      "outputs": [],
+      "evidence": [
+        {
+          "id": "3e838c18-d92b-49a2-856a-131fef5a0ed6",
+          "runId": "e1323339-2768-4087-b43b-80ce01d911f1",
+          "stepId": "1fdc09e9-bc18-4a23-a5ec-e76dd9e83310",
+          "attempt": 1,
+          "kind": "resolved_input",
+          "scope": "selected_step_input",
+          "contentType": "application/json",
+          "bytes": 71,
+          "availability": "complete",
+          "preview": {
+            "value": {
+              "loop": {
+                "iteration": 2,
+                "index": 1,
+                "completed": 1,
+                "total": 3,
+                "done": false
+              }
+            },
+            "truncated": false,
+            "count": null,
+            "counts": {}
+          },
+          "redacted": false,
+          "capturedAt": "2026-10-02T05:27:34.740Z",
+          "expiresAt": null
+        },
+        {
+          "id": "31be2de6-3551-4055-a6f9-3bc25e08dd5e",
+          "runId": "e1323339-2768-4087-b43b-80ce01d911f1",
+          "stepId": "1fdc09e9-bc18-4a23-a5ec-e76dd9e83310",
+          "attempt": 1,
+          "kind": "executor_request",
+          "scope": "code_function_arguments",
+          "contentType": "application/json",
+          "bytes": 114,
+          "availability": "complete",
+          "preview": {
+            "value": {
+              "function": "test.fakeCritic",
+              "arguments": {
+                "loop": {
+                  "iteration": 2,
+                  "index": 1,
+                  "completed": 1,
+                  "total": 3,
+                  "done": false
+                }
+              }
+            },
+            "truncated": false,
+            "count": null,
+            "counts": {}
+          },
+          "redacted": false,
+          "capturedAt": "2026-10-02T05:27:34.740Z",
+          "expiresAt": null
+        },
+        {
+          "id": "8d8f51ce-dc7f-425c-8628-57c3c2f7114f",
+          "runId": "e1323339-2768-4087-b43b-80ce01d911f1",
+          "stepId": "1fdc09e9-bc18-4a23-a5ec-e76dd9e83310",
+          "attempt": 1,
+          "kind": "returned_output",
+          "scope": "executor_return",
+          "contentType": "application/json",
+          "bytes": 32,
+          "availability": "complete",
+          "preview": {
+            "value": {
+              "summary": "critic iteration 2"
+            },
+            "truncated": false,
+            "count": null,
+            "counts": {}
+          },
+          "redacted": false,
+          "capturedAt": "2026-10-02T05:27:34.740Z",
+          "expiresAt": null
+        },
+        {
+          "id": "de2257ce-d166-4b25-b76e-07361c9e4266",
+          "runId": "e1323339-2768-4087-b43b-80ce01d911f1",
+          "stepId": "1fdc09e9-bc18-4a23-a5ec-e76dd9e83310",
+          "attempt": 1,
+          "kind": "state_write",
+          "scope": "state_after_assignment",
+          "contentType": "application/json",
+          "bytes": 321,
+          "availability": "complete",
+          "preview": {
+            "value": {
+              "count": 3,
+              "reviewLoop": {
+                "iteration": 2,
+                "index": 1,
+                "completed": 1,
+                "total": 3,
+                "done": false
+              },
+              "iteration": {
+                "critic": {
+                  "summary": "critic iteration 2"
+                },
+                "response": {
+                  "summary": "response iteration 1"
+                }
+              },
+              "reviewHistory": {
+                "items": [
+                  {
+                    "iteration": 1,
+                    "critic": {
+                      "fields": 1
+                    },
+                    "response": {
+                      "fields": 1
+                    }
+                  }
+                ]
+              }
+            },
+            "truncated": true,
+            "count": null,
+            "counts": {
+              "$.reviewHistory.items": 1
+            }
+          },
+          "redacted": false,
+          "capturedAt": "2026-10-02T05:27:34.740Z",
+          "expiresAt": null
+        },
+        {
+          "id": "not-captured:1fdc09e9-bc18-4a23-a5ec-e76dd9e83310:side_effect_confirmation",
+          "runId": "e1323339-2768-4087-b43b-80ce01d911f1",
+          "stepId": "1fdc09e9-bc18-4a23-a5ec-e76dd9e83310",
+          "attempt": 1,
+          "kind": "side_effect_confirmation",
+          "scope": "legacy_not_captured",
+          "contentType": "application/json",
+          "bytes": 0,
+          "availability": "not_captured",
+          "redacted": false,
+          "capturedAt": null,
+          "expiresAt": null
+        }
+      ]
+    },
+    {
+      "itemKey": null,
+      "id": "b296f563-a83e-4e38-bfe4-be5313eb479d",
+      "logicalKey": "fake-response",
+      "parentStepId": null,
+      "attempt": 2,
+      "status": "ok",
+      "title": "fake-response",
+      "description": "",
+      "kind": "code",
+      "startedAt": "2026-10-02T05:27:34.740Z",
+      "completedAt": "2026-10-02T05:27:34.740Z",
+      "error": null,
+      "skipReason": null,
+      "continuationReason": null,
+      "exitReason": null,
+      "childRunId": null,
+      "inputs": [],
+      "outputs": [],
+      "evidence": [
+        {
+          "id": "0906b344-bf12-455a-83db-ddde1adfe41c",
+          "runId": "e1323339-2768-4087-b43b-80ce01d911f1",
+          "stepId": "b296f563-a83e-4e38-bfe4-be5313eb479d",
+          "attempt": 1,
+          "kind": "resolved_input",
+          "scope": "selected_step_input",
+          "contentType": "application/json",
+          "bytes": 113,
+          "availability": "complete",
+          "preview": {
+            "value": {
+              "loop": {
+                "iteration": 2,
+                "index": 1,
+                "completed": 1,
+                "total": 3,
+                "done": false
+              },
+              "critic": {
+                "summary": "critic iteration 2"
+              }
+            },
+            "truncated": false,
+            "count": null,
+            "counts": {}
+          },
+          "redacted": false,
+          "capturedAt": "2026-10-02T05:27:34.740Z",
+          "expiresAt": null
+        },
+        {
+          "id": "c39b612b-22d2-4aed-ba80-f05292b9acd4",
+          "runId": "e1323339-2768-4087-b43b-80ce01d911f1",
+          "stepId": "b296f563-a83e-4e38-bfe4-be5313eb479d",
+          "attempt": 1,
+          "kind": "executor_request",
+          "scope": "code_function_arguments",
+          "contentType": "application/json",
+          "bytes": 158,
+          "availability": "complete",
+          "preview": {
+            "value": {
+              "function": "test.fakeResponse",
+              "arguments": {
+                "loop": {
+                  "iteration": 2,
+                  "index": 1,
+                  "completed": 1,
+                  "total": 3,
+                  "done": false
+                },
+                "critic": {
+                  "summary": "critic iteration 2"
+                }
+              }
+            },
+            "truncated": false,
+            "count": null,
+            "counts": {}
+          },
+          "redacted": false,
+          "capturedAt": "2026-10-02T05:27:34.740Z",
+          "expiresAt": null
+        },
+        {
+          "id": "46c31e7e-05bf-4cf1-8a43-939a7db466f5",
+          "runId": "e1323339-2768-4087-b43b-80ce01d911f1",
+          "stepId": "b296f563-a83e-4e38-bfe4-be5313eb479d",
+          "attempt": 1,
+          "kind": "returned_output",
+          "scope": "executor_return",
+          "contentType": "application/json",
+          "bytes": 34,
+          "availability": "complete",
+          "preview": {
+            "value": {
+              "summary": "response iteration 2"
+            },
+            "truncated": false,
+            "count": null,
+            "counts": {}
+          },
+          "redacted": false,
+          "capturedAt": "2026-10-02T05:27:34.740Z",
+          "expiresAt": null
+        },
+        {
+          "id": "85ca211b-e866-4ac4-8391-11665df0534f",
+          "runId": "e1323339-2768-4087-b43b-80ce01d911f1",
+          "stepId": "b296f563-a83e-4e38-bfe4-be5313eb479d",
+          "attempt": 1,
+          "kind": "state_write",
+          "scope": "state_after_assignment",
+          "contentType": "application/json",
+          "bytes": 321,
+          "availability": "complete",
+          "preview": {
+            "value": {
+              "count": 3,
+              "reviewLoop": {
+                "iteration": 2,
+                "index": 1,
+                "completed": 1,
+                "total": 3,
+                "done": false
+              },
+              "iteration": {
+                "critic": {
+                  "summary": "critic iteration 2"
+                },
+                "response": {
+                  "summary": "response iteration 2"
+                }
+              },
+              "reviewHistory": {
+                "items": [
+                  {
+                    "iteration": 1,
+                    "critic": {
+                      "fields": 1
+                    },
+                    "response": {
+                      "fields": 1
+                    }
+                  }
+                ]
+              }
+            },
+            "truncated": true,
+            "count": null,
+            "counts": {
+              "$.reviewHistory.items": 1
+            }
+          },
+          "redacted": false,
+          "capturedAt": "2026-10-02T05:27:34.740Z",
+          "expiresAt": null
+        },
+        {
+          "id": "not-captured:b296f563-a83e-4e38-bfe4-be5313eb479d:side_effect_confirmation",
+          "runId": "e1323339-2768-4087-b43b-80ce01d911f1",
+          "stepId": "b296f563-a83e-4e38-bfe4-be5313eb479d",
+          "attempt": 1,
+          "kind": "side_effect_confirmation",
+          "scope": "legacy_not_captured",
+          "contentType": "application/json",
+          "bytes": 0,
+          "availability": "not_captured",
+          "redacted": false,
+          "capturedAt": null,
+          "expiresAt": null
+        }
+      ]
+    },
+    {
+      "itemKey": null,
+      "id": "f5a2556a-c9c8-4545-836d-3a0daf895a96",
+      "logicalKey": "loop-to-critic",
+      "parentStepId": null,
+      "attempt": 2,
+      "status": "ok",
+      "title": "loop-to-critic",
+      "description": "",
+      "kind": "loop",
+      "startedAt": "2026-10-02T05:27:34.740Z",
+      "completedAt": "2026-10-02T05:27:34.741Z",
+      "error": null,
+      "skipReason": null,
+      "continuationReason": null,
+      "exitReason": null,
+      "childRunId": null,
+      "inputs": [],
+      "outputs": [],
+      "evidence": [
+        {
+          "id": "c074d370-6155-4a79-b2bd-c3f86c3025cc",
+          "runId": "e1323339-2768-4087-b43b-80ce01d911f1",
+          "stepId": "f5a2556a-c9c8-4545-836d-3a0daf895a96",
+          "attempt": 1,
+          "kind": "resolved_input",
+          "scope": "selected_step_input",
+          "contentType": "application/json",
+          "bytes": 321,
+          "availability": "complete",
+          "preview": {
+            "value": {
+              "count": 3,
+              "reviewLoop": {
+                "iteration": 2,
+                "index": 1,
+                "completed": 1,
+                "total": 3,
+                "done": false
+              },
+              "iteration": {
+                "critic": {
+                  "summary": "critic iteration 2"
+                },
+                "response": {
+                  "summary": "response iteration 2"
+                }
+              },
+              "reviewHistory": {
+                "items": [
+                  {
+                    "iteration": 1,
+                    "critic": {
+                      "fields": 1
+                    },
+                    "response": {
+                      "fields": 1
+                    }
+                  }
+                ]
+              }
+            },
+            "truncated": true,
+            "count": null,
+            "counts": {
+              "$.reviewHistory.items": 1
+            }
+          },
+          "redacted": false,
+          "capturedAt": "2026-10-02T05:27:34.741Z",
+          "expiresAt": null
+        },
+        {
+          "id": "4a5fa446-5864-4afb-9e10-66fbfcf6bc3c",
+          "runId": "e1323339-2768-4087-b43b-80ce01d911f1",
+          "stepId": "f5a2556a-c9c8-4545-836d-3a0daf895a96",
+          "attempt": 1,
+          "kind": "returned_output",
+          "scope": "wrapper_output_child_evidence_separate",
+          "contentType": "application/json",
+          "bytes": 89,
+          "availability": "complete",
+          "preview": {
+            "value": {
+              "critic": {
+                "summary": "critic iteration 2"
+              },
+              "response": {
+                "summary": "response iteration 2"
+              }
+            },
+            "truncated": false,
+            "count": null,
+            "counts": {}
+          },
+          "redacted": false,
+          "capturedAt": "2026-10-02T05:27:34.741Z",
+          "expiresAt": null
+        },
+        {
+          "id": "634c7a35-495f-493e-80e3-542d08b8e8bf",
+          "runId": "e1323339-2768-4087-b43b-80ce01d911f1",
+          "stepId": "f5a2556a-c9c8-4545-836d-3a0daf895a96",
+          "attempt": 1,
+          "kind": "state_write",
+          "scope": "state_after_assignment",
+          "contentType": "application/json",
+          "bytes": 425,
+          "availability": "complete",
+          "preview": {
+            "value": {
+              "count": 3,
+              "reviewLoop": {
+                "iteration": 3,
+                "index": 2,
+                "completed": 2,
+                "total": 3,
+                "done": false
+              },
+              "iteration": {
+                "critic": {
+                  "summary": "critic iteration 2"
+                },
+                "response": {
+                  "summary": "response iteration 2"
+                }
+              },
+              "reviewHistory": {
+                "items": [
+                  {
+                    "iteration": 1,
+                    "critic": {
+                      "fields": 1
+                    },
+                    "response": {
+                      "fields": 1
+                    }
+                  },
+                  {
+                    "iteration": 2,
+                    "critic": {
+                      "fields": 1
+                    },
+                    "response": {
+                      "fields": 1
+                    }
+                  }
+                ]
+              }
+            },
+            "truncated": true,
+            "count": null,
+            "counts": {
+              "$.reviewHistory.items": 2
+            }
+          },
+          "redacted": false,
+          "capturedAt": "2026-10-02T05:27:34.741Z",
+          "expiresAt": null
+        },
+        {
+          "id": "not-captured:f5a2556a-c9c8-4545-836d-3a0daf895a96:executor_request",
+          "runId": "e1323339-2768-4087-b43b-80ce01d911f1",
+          "stepId": "f5a2556a-c9c8-4545-836d-3a0daf895a96",
+          "attempt": 1,
+          "kind": "executor_request",
+          "scope": "legacy_not_captured",
+          "contentType": "application/json",
+          "bytes": 0,
+          "availability": "not_captured",
+          "redacted": false,
+          "capturedAt": null,
+          "expiresAt": null
+        },
+        {
+          "id": "not-captured:f5a2556a-c9c8-4545-836d-3a0daf895a96:side_effect_confirmation",
+          "runId": "e1323339-2768-4087-b43b-80ce01d911f1",
+          "stepId": "f5a2556a-c9c8-4545-836d-3a0daf895a96",
+          "attempt": 1,
+          "kind": "side_effect_confirmation",
+          "scope": "legacy_not_captured",
+          "contentType": "application/json",
+          "bytes": 0,
+          "availability": "not_captured",
+          "redacted": false,
+          "capturedAt": null,
+          "expiresAt": null
+        }
+      ]
+    },
+    {
+      "itemKey": null,
+      "id": "700fcdcb-2def-41bf-9794-f28cc2da7b44",
+      "logicalKey": "fake-critic",
+      "parentStepId": null,
+      "attempt": 3,
+      "status": "ok",
+      "title": "fake-critic",
+      "description": "",
+      "kind": "code",
+      "startedAt": "2026-10-02T05:27:34.741Z",
+      "completedAt": "2026-10-02T05:27:34.741Z",
+      "error": null,
+      "skipReason": null,
+      "continuationReason": null,
+      "exitReason": null,
+      "childRunId": null,
+      "inputs": [],
+      "outputs": [],
+      "evidence": [
+        {
+          "id": "bd49d8a2-9be9-41f8-8c5b-aa42f7fa363a",
+          "runId": "e1323339-2768-4087-b43b-80ce01d911f1",
+          "stepId": "700fcdcb-2def-41bf-9794-f28cc2da7b44",
+          "attempt": 1,
+          "kind": "resolved_input",
+          "scope": "selected_step_input",
+          "contentType": "application/json",
+          "bytes": 71,
+          "availability": "complete",
+          "preview": {
+            "value": {
+              "loop": {
+                "iteration": 3,
+                "index": 2,
+                "completed": 2,
+                "total": 3,
+                "done": false
+              }
+            },
+            "truncated": false,
+            "count": null,
+            "counts": {}
+          },
+          "redacted": false,
+          "capturedAt": "2026-10-02T05:27:34.741Z",
+          "expiresAt": null
+        },
+        {
+          "id": "c423b13f-ed55-4c64-901c-d2b5a91d2f4d",
+          "runId": "e1323339-2768-4087-b43b-80ce01d911f1",
+          "stepId": "700fcdcb-2def-41bf-9794-f28cc2da7b44",
+          "attempt": 1,
+          "kind": "executor_request",
+          "scope": "code_function_arguments",
+          "contentType": "application/json",
+          "bytes": 114,
+          "availability": "complete",
+          "preview": {
+            "value": {
+              "function": "test.fakeCritic",
+              "arguments": {
+                "loop": {
+                  "iteration": 3,
+                  "index": 2,
+                  "completed": 2,
+                  "total": 3,
+                  "done": false
+                }
+              }
+            },
+            "truncated": false,
+            "count": null,
+            "counts": {}
+          },
+          "redacted": false,
+          "capturedAt": "2026-10-02T05:27:34.741Z",
+          "expiresAt": null
+        },
+        {
+          "id": "9bd05b35-7451-44ce-96c0-c8fb6626ad94",
+          "runId": "e1323339-2768-4087-b43b-80ce01d911f1",
+          "stepId": "700fcdcb-2def-41bf-9794-f28cc2da7b44",
+          "attempt": 1,
+          "kind": "returned_output",
+          "scope": "executor_return",
+          "contentType": "application/json",
+          "bytes": 32,
+          "availability": "complete",
+          "preview": {
+            "value": {
+              "summary": "critic iteration 3"
+            },
+            "truncated": false,
+            "count": null,
+            "counts": {}
+          },
+          "redacted": false,
+          "capturedAt": "2026-10-02T05:27:34.741Z",
+          "expiresAt": null
+        },
+        {
+          "id": "0f897a40-0bf5-4b5d-95fe-c0610574bf93",
+          "runId": "e1323339-2768-4087-b43b-80ce01d911f1",
+          "stepId": "700fcdcb-2def-41bf-9794-f28cc2da7b44",
+          "attempt": 1,
+          "kind": "state_write",
+          "scope": "state_after_assignment",
+          "contentType": "application/json",
+          "bytes": 425,
+          "availability": "complete",
+          "preview": {
+            "value": {
+              "count": 3,
+              "reviewLoop": {
+                "iteration": 3,
+                "index": 2,
+                "completed": 2,
+                "total": 3,
+                "done": false
+              },
+              "iteration": {
+                "critic": {
+                  "summary": "critic iteration 3"
+                },
+                "response": {
+                  "summary": "response iteration 2"
+                }
+              },
+              "reviewHistory": {
+                "items": [
+                  {
+                    "iteration": 1,
+                    "critic": {
+                      "fields": 1
+                    },
+                    "response": {
+                      "fields": 1
+                    }
+                  },
+                  {
+                    "iteration": 2,
+                    "critic": {
+                      "fields": 1
+                    },
+                    "response": {
+                      "fields": 1
+                    }
+                  }
+                ]
+              }
+            },
+            "truncated": true,
+            "count": null,
+            "counts": {
+              "$.reviewHistory.items": 2
+            }
+          },
+          "redacted": false,
+          "capturedAt": "2026-10-02T05:27:34.741Z",
+          "expiresAt": null
+        },
+        {
+          "id": "not-captured:700fcdcb-2def-41bf-9794-f28cc2da7b44:side_effect_confirmation",
+          "runId": "e1323339-2768-4087-b43b-80ce01d911f1",
+          "stepId": "700fcdcb-2def-41bf-9794-f28cc2da7b44",
+          "attempt": 1,
+          "kind": "side_effect_confirmation",
+          "scope": "legacy_not_captured",
+          "contentType": "application/json",
+          "bytes": 0,
+          "availability": "not_captured",
+          "redacted": false,
+          "capturedAt": null,
+          "expiresAt": null
+        }
+      ]
+    },
+    {
+      "itemKey": null,
+      "id": "271b0a5f-0ae6-4aac-91b3-bff7889ddf76",
+      "logicalKey": "fake-response",
+      "parentStepId": null,
+      "attempt": 3,
+      "status": "ok",
+      "title": "fake-response",
+      "description": "",
+      "kind": "code",
+      "startedAt": "2026-10-02T05:27:34.741Z",
+      "completedAt": "2026-10-02T05:27:34.742Z",
+      "error": null,
+      "skipReason": null,
+      "continuationReason": null,
+      "exitReason": null,
+      "childRunId": null,
+      "inputs": [],
+      "outputs": [],
+      "evidence": [
+        {
+          "id": "0e674407-c2c9-4edb-aef5-37e27d7bea98",
+          "runId": "e1323339-2768-4087-b43b-80ce01d911f1",
+          "stepId": "271b0a5f-0ae6-4aac-91b3-bff7889ddf76",
+          "attempt": 1,
+          "kind": "resolved_input",
+          "scope": "selected_step_input",
+          "contentType": "application/json",
+          "bytes": 113,
+          "availability": "complete",
+          "preview": {
+            "value": {
+              "loop": {
+                "iteration": 3,
+                "index": 2,
+                "completed": 2,
+                "total": 3,
+                "done": false
+              },
+              "critic": {
+                "summary": "critic iteration 3"
+              }
+            },
+            "truncated": false,
+            "count": null,
+            "counts": {}
+          },
+          "redacted": false,
+          "capturedAt": "2026-10-02T05:27:34.742Z",
+          "expiresAt": null
+        },
+        {
+          "id": "94dcc7bc-1e5e-442a-86b7-326ddc5d8bc2",
+          "runId": "e1323339-2768-4087-b43b-80ce01d911f1",
+          "stepId": "271b0a5f-0ae6-4aac-91b3-bff7889ddf76",
+          "attempt": 1,
+          "kind": "executor_request",
+          "scope": "code_function_arguments",
+          "contentType": "application/json",
+          "bytes": 158,
+          "availability": "complete",
+          "preview": {
+            "value": {
+              "function": "test.fakeResponse",
+              "arguments": {
+                "loop": {
+                  "iteration": 3,
+                  "index": 2,
+                  "completed": 2,
+                  "total": 3,
+                  "done": false
+                },
+                "critic": {
+                  "summary": "critic iteration 3"
+                }
+              }
+            },
+            "truncated": false,
+            "count": null,
+            "counts": {}
+          },
+          "redacted": false,
+          "capturedAt": "2026-10-02T05:27:34.742Z",
+          "expiresAt": null
+        },
+        {
+          "id": "f58064fa-934e-4641-b657-12423069babb",
+          "runId": "e1323339-2768-4087-b43b-80ce01d911f1",
+          "stepId": "271b0a5f-0ae6-4aac-91b3-bff7889ddf76",
+          "attempt": 1,
+          "kind": "returned_output",
+          "scope": "executor_return",
+          "contentType": "application/json",
+          "bytes": 34,
+          "availability": "complete",
+          "preview": {
+            "value": {
+              "summary": "response iteration 3"
+            },
+            "truncated": false,
+            "count": null,
+            "counts": {}
+          },
+          "redacted": false,
+          "capturedAt": "2026-10-02T05:27:34.742Z",
+          "expiresAt": null
+        },
+        {
+          "id": "c9615b25-dd16-41ca-98c9-8cd1b31484ed",
+          "runId": "e1323339-2768-4087-b43b-80ce01d911f1",
+          "stepId": "271b0a5f-0ae6-4aac-91b3-bff7889ddf76",
+          "attempt": 1,
+          "kind": "state_write",
+          "scope": "state_after_assignment",
+          "contentType": "application/json",
+          "bytes": 425,
+          "availability": "complete",
+          "preview": {
+            "value": {
+              "count": 3,
+              "reviewLoop": {
+                "iteration": 3,
+                "index": 2,
+                "completed": 2,
+                "total": 3,
+                "done": false
+              },
+              "iteration": {
+                "critic": {
+                  "summary": "critic iteration 3"
+                },
+                "response": {
+                  "summary": "response iteration 3"
+                }
+              },
+              "reviewHistory": {
+                "items": [
+                  {
+                    "iteration": 1,
+                    "critic": {
+                      "fields": 1
+                    },
+                    "response": {
+                      "fields": 1
+                    }
+                  },
+                  {
+                    "iteration": 2,
+                    "critic": {
+                      "fields": 1
+                    },
+                    "response": {
+                      "fields": 1
+                    }
+                  }
+                ]
+              }
+            },
+            "truncated": true,
+            "count": null,
+            "counts": {
+              "$.reviewHistory.items": 2
+            }
+          },
+          "redacted": false,
+          "capturedAt": "2026-10-02T05:27:34.742Z",
+          "expiresAt": null
+        },
+        {
+          "id": "not-captured:271b0a5f-0ae6-4aac-91b3-bff7889ddf76:side_effect_confirmation",
+          "runId": "e1323339-2768-4087-b43b-80ce01d911f1",
+          "stepId": "271b0a5f-0ae6-4aac-91b3-bff7889ddf76",
+          "attempt": 1,
+          "kind": "side_effect_confirmation",
+          "scope": "legacy_not_captured",
+          "contentType": "application/json",
+          "bytes": 0,
+          "availability": "not_captured",
+          "redacted": false,
+          "capturedAt": null,
+          "expiresAt": null
+        }
+      ]
+    },
+    {
+      "itemKey": null,
+      "id": "33cff6f3-134c-4f28-89ef-b28eeef3446c",
+      "logicalKey": "loop-to-critic",
+      "parentStepId": null,
+      "attempt": 3,
+      "status": "ok",
+      "title": "loop-to-critic",
+      "description": "",
+      "kind": "loop",
+      "startedAt": "2026-10-02T05:27:34.742Z",
+      "completedAt": "2026-10-02T05:27:34.742Z",
+      "error": null,
+      "skipReason": null,
+      "continuationReason": null,
+      "exitReason": null,
+      "childRunId": null,
+      "inputs": [],
+      "outputs": [],
+      "evidence": [
+        {
+          "id": "1eac3500-c964-4842-8643-e35349f03e20",
+          "runId": "e1323339-2768-4087-b43b-80ce01d911f1",
+          "stepId": "33cff6f3-134c-4f28-89ef-b28eeef3446c",
+          "attempt": 1,
+          "kind": "resolved_input",
+          "scope": "selected_step_input",
+          "contentType": "application/json",
+          "bytes": 425,
+          "availability": "complete",
+          "preview": {
+            "value": {
+              "count": 3,
+              "reviewLoop": {
+                "iteration": 3,
+                "index": 2,
+                "completed": 2,
+                "total": 3,
+                "done": false
+              },
+              "iteration": {
+                "critic": {
+                  "summary": "critic iteration 3"
+                },
+                "response": {
+                  "summary": "response iteration 3"
+                }
+              },
+              "reviewHistory": {
+                "items": [
+                  {
+                    "iteration": 1,
+                    "critic": {
+                      "fields": 1
+                    },
+                    "response": {
+                      "fields": 1
+                    }
+                  },
+                  {
+                    "iteration": 2,
+                    "critic": {
+                      "fields": 1
+                    },
+                    "response": {
+                      "fields": 1
+                    }
+                  }
+                ]
+              }
+            },
+            "truncated": true,
+            "count": null,
+            "counts": {
+              "$.reviewHistory.items": 2
+            }
+          },
+          "redacted": false,
+          "capturedAt": "2026-10-02T05:27:34.742Z",
+          "expiresAt": null
+        },
+        {
+          "id": "a9ad53b3-5e30-4843-8778-14f105f627b5",
+          "runId": "e1323339-2768-4087-b43b-80ce01d911f1",
+          "stepId": "33cff6f3-134c-4f28-89ef-b28eeef3446c",
+          "attempt": 1,
+          "kind": "returned_output",
+          "scope": "wrapper_output_child_evidence_separate",
+          "contentType": "application/json",
+          "bytes": 89,
+          "availability": "complete",
+          "preview": {
+            "value": {
+              "critic": {
+                "summary": "critic iteration 3"
+              },
+              "response": {
+                "summary": "response iteration 3"
+              }
+            },
+            "truncated": false,
+            "count": null,
+            "counts": {}
+          },
+          "redacted": false,
+          "capturedAt": "2026-10-02T05:27:34.742Z",
+          "expiresAt": null
+        },
+        {
+          "id": "820373ef-171a-4fe5-9a68-384879a90264",
+          "runId": "e1323339-2768-4087-b43b-80ce01d911f1",
+          "stepId": "33cff6f3-134c-4f28-89ef-b28eeef3446c",
+          "attempt": 1,
+          "kind": "state_write",
+          "scope": "state_after_assignment",
+          "contentType": "application/json",
+          "bytes": 528,
+          "availability": "complete",
+          "preview": {
+            "value": {
+              "count": 3,
+              "reviewLoop": {
+                "iteration": 3,
+                "index": 2,
+                "completed": 3,
+                "total": 3,
+                "done": true
+              },
+              "iteration": {
+                "critic": {
+                  "summary": "critic iteration 3"
+                },
+                "response": {
+                  "summary": "response iteration 3"
+                }
+              },
+              "reviewHistory": {
+                "items": [
+                  {
+                    "iteration": 1,
+                    "critic": {
+                      "fields": 1
+                    },
+                    "response": {
+                      "fields": 1
+                    }
+                  },
+                  {
+                    "iteration": 2,
+                    "critic": {
+                      "fields": 1
+                    },
+                    "response": {
+                      "fields": 1
+                    }
+                  }
+                ]
+              }
+            },
+            "truncated": true,
+            "count": null,
+            "counts": {
+              "$.reviewHistory.items": 3
+            }
+          },
+          "redacted": false,
+          "capturedAt": "2026-10-02T05:27:34.742Z",
+          "expiresAt": null
+        },
+        {
+          "id": "not-captured:33cff6f3-134c-4f28-89ef-b28eeef3446c:executor_request",
+          "runId": "e1323339-2768-4087-b43b-80ce01d911f1",
+          "stepId": "33cff6f3-134c-4f28-89ef-b28eeef3446c",
+          "attempt": 1,
+          "kind": "executor_request",
+          "scope": "legacy_not_captured",
+          "contentType": "application/json",
+          "bytes": 0,
+          "availability": "not_captured",
+          "redacted": false,
+          "capturedAt": null,
+          "expiresAt": null
+        },
+        {
+          "id": "not-captured:33cff6f3-134c-4f28-89ef-b28eeef3446c:side_effect_confirmation",
+          "runId": "e1323339-2768-4087-b43b-80ce01d911f1",
+          "stepId": "33cff6f3-134c-4f28-89ef-b28eeef3446c",
+          "attempt": 1,
+          "kind": "side_effect_confirmation",
+          "scope": "legacy_not_captured",
+          "contentType": "application/json",
+          "bytes": 0,
+          "availability": "not_captured",
+          "redacted": false,
+          "capturedAt": null,
+          "expiresAt": null
+        }
+      ]
+    }
+  ],
+  "children": [],
+  "revision": "573879d69936dbac83deca5d6a4e78f3c6a97ec0dfeaa98b1687be593bd5d319"
+}

@@ -51,3 +51,21 @@ it('backend catalogue refresh cannot overwrite historical structure, and exact i
     await service.recover();expect((await store.read()).snapshot.steps.length).toBe(parent.steps.length);
   }finally{service.dispose();await db.delete();}
 });
+it('keeps bounded preview text session-only and does not fetch full evidence for summaries',async()=>{
+ const parent=await fixture('completed-run');const ref=parent.steps[0].evidence[0];
+ ref.preview={value:{request:'PRIVATE_BOUNDED_EXCERPT'},truncated:true,count:null,counts:{}};
+ const db=new Dexie('previews-'+crypto.randomUUID());db.version(1).stores(PIPELINE_VIEWER_STORES);await db.open();
+ const store=createPipelineViewerStore(db,{...viewerContext,serviceId:parent.serviceId}),calls=[];
+ const service=createPipelineViewerService({store,client:{async read(operation){calls.push(operation);return parent;}}});
+ try{await service.selectRun(parent.run.id);expect(service.preview(ref.id).value.request).toBe('PRIVATE_BOUNDED_EXCERPT');expect(calls).toEqual(['run']);
+  expect(JSON.stringify(await db.pipeline_viewer_snapshots.toArray())).not.toContain('PRIVATE_BOUNDED_EXCERPT');
+  service.dispose();expect(service.preview(ref.id)).toBeNull();
+ }finally{service.dispose();await db.delete();}
+});
+
+it('clears cached same-context summaries on mount health denial without catalogue reads',async()=>{
+ const parent=await fixture('completed-run');const db=new Dexie('health-'+crypto.randomUUID());db.version(1).stores(PIPELINE_VIEWER_STORES);await db.open();
+ const store=createPipelineViewerStore(db,{...viewerContext,serviceId:parent.serviceId});await store.snapshot(parent,null);await store.state({selectedRunId:parent.run.id});let reads=0;
+ const service=createPipelineViewerService({store,connection:{health:async()=>{throw {status:403}},disconnect(){}},client:{read(){reads++;}}});
+ try{expect(await service.initialize()).toBe(false);const state=await store.read();expect(state.state.status).toBe('denied');expect(state.snapshot).toBeNull();expect(state.runs).toEqual([]);expect(state.definitions).toEqual([]);expect(reads).toBe(0);}finally{service.dispose();await db.delete();}
+});

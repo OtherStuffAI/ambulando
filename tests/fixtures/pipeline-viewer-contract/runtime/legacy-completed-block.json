@@ -1,0 +1,294 @@
+{
+  "version": 1,
+  "serviceId": "autopilot_runtime_fixture",
+  "run": {
+    "id": "c1da1e69-2c6e-40d8-9af6-f6957e7a0473",
+    "serviceId": "autopilot_runtime_fixture",
+    "definitionId": "runtime",
+    "definitionVersion": null,
+    "definitionHash": "9f15b0b79b213fd69c3dadd6c30a7bbe2381988521c624b30d0e80e56127259a",
+    "name": "runtime",
+    "status": "ok",
+    "startedAt": "2026-10-02T05:27:34.229Z",
+    "completedAt": "2026-10-02T05:27:34.231Z",
+    "parentRunId": null,
+    "parentStepId": null
+  },
+  "definition": {
+    "id": "runtime",
+    "name": "runtime",
+    "title": "runtime",
+    "description": "",
+    "version": null,
+    "hash": "9f15b0b79b213fd69c3dadd6c30a7bbe2381988521c624b30d0e80e56127259a",
+    "availability": "unavailable",
+    "steps": [
+      {
+        "logicalKey": "legacy-id",
+        "name": "legacy",
+        "title": "legacy",
+        "description": "",
+        "type": "block",
+        "inputs": [],
+        "outputs": [],
+        "children": []
+      },
+      {
+        "logicalKey": "finish",
+        "name": "finish",
+        "title": "finish",
+        "description": "",
+        "type": "code",
+        "inputs": [],
+        "outputs": [],
+        "children": []
+      }
+    ],
+    "wiring": []
+  },
+  "steps": [
+    {
+      "itemKey": null,
+      "id": "99dee62d-6b36-4b72-b748-c7c6628f6700",
+      "logicalKey": "legacy-id",
+      "parentStepId": null,
+      "attempt": 1,
+      "status": "ok",
+      "title": "legacy",
+      "description": "",
+      "kind": "block",
+      "startedAt": "2026-10-02T05:27:34.229Z",
+      "completedAt": "2026-10-02T05:27:34.229Z",
+      "error": null,
+      "skipReason": null,
+      "continuationReason": null,
+      "exitReason": null,
+      "childRunId": null,
+      "inputs": [],
+      "outputs": [],
+      "evidence": [
+        {
+          "id": "30ae5b2e-3033-4859-ada7-e627e63675e6",
+          "runId": "c1da1e69-2c6e-40d8-9af6-f6957e7a0473",
+          "stepId": "99dee62d-6b36-4b72-b748-c7c6628f6700",
+          "attempt": 1,
+          "kind": "resolved_input",
+          "scope": "selected_step_input",
+          "contentType": "application/json",
+          "bytes": 2,
+          "availability": "complete",
+          "preview": {
+            "value": {},
+            "truncated": false,
+            "count": null,
+            "counts": {}
+          },
+          "redacted": false,
+          "capturedAt": "2026-10-02T05:27:34.229Z",
+          "expiresAt": null
+        },
+        {
+          "id": "76111539-9657-4408-a972-698b6a24407b",
+          "runId": "c1da1e69-2c6e-40d8-9af6-f6957e7a0473",
+          "stepId": "99dee62d-6b36-4b72-b748-c7c6628f6700",
+          "attempt": 1,
+          "kind": "returned_output",
+          "scope": "wrapper_output_child_evidence_separate",
+          "contentType": "application/json",
+          "bytes": 18,
+          "availability": "complete",
+          "preview": {
+            "value": {
+              "recorded": "old"
+            },
+            "truncated": false,
+            "count": null,
+            "counts": {}
+          },
+          "redacted": false,
+          "capturedAt": "2026-10-02T05:27:34.229Z",
+          "expiresAt": null
+        },
+        {
+          "id": "2f1e8186-13f2-43e0-99b3-2be3298b2b8a",
+          "runId": "c1da1e69-2c6e-40d8-9af6-f6957e7a0473",
+          "stepId": "99dee62d-6b36-4b72-b748-c7c6628f6700",
+          "attempt": 1,
+          "kind": "state_write",
+          "scope": "state_after_assignment",
+          "contentType": "application/json",
+          "bytes": 18,
+          "availability": "complete",
+          "preview": {
+            "value": {
+              "recorded": "old"
+            },
+            "truncated": false,
+            "count": null,
+            "counts": {}
+          },
+          "redacted": false,
+          "capturedAt": "2026-10-02T05:27:34.229Z",
+          "expiresAt": null
+        },
+        {
+          "id": "not-captured:99dee62d-6b36-4b72-b748-c7c6628f6700:executor_request",
+          "runId": "c1da1e69-2c6e-40d8-9af6-f6957e7a0473",
+          "stepId": "99dee62d-6b36-4b72-b748-c7c6628f6700",
+          "attempt": 1,
+          "kind": "executor_request",
+          "scope": "legacy_not_captured",
+          "contentType": "application/json",
+          "bytes": 0,
+          "availability": "not_captured",
+          "redacted": false,
+          "capturedAt": null,
+          "expiresAt": null
+        },
+        {
+          "id": "not-captured:99dee62d-6b36-4b72-b748-c7c6628f6700:side_effect_confirmation",
+          "runId": "c1da1e69-2c6e-40d8-9af6-f6957e7a0473",
+          "stepId": "99dee62d-6b36-4b72-b748-c7c6628f6700",
+          "attempt": 1,
+          "kind": "side_effect_confirmation",
+          "scope": "legacy_not_captured",
+          "contentType": "application/json",
+          "bytes": 0,
+          "availability": "not_captured",
+          "redacted": false,
+          "capturedAt": null,
+          "expiresAt": null
+        }
+      ]
+    },
+    {
+      "itemKey": null,
+      "id": "cbfc5b00-bc5c-422c-82bd-4a6dc907926e",
+      "logicalKey": "finish",
+      "parentStepId": null,
+      "attempt": 1,
+      "status": "ok",
+      "title": "finish",
+      "description": "",
+      "kind": "code",
+      "startedAt": "2026-10-02T05:27:34.230Z",
+      "completedAt": "2026-10-02T05:27:34.231Z",
+      "error": null,
+      "skipReason": null,
+      "continuationReason": null,
+      "exitReason": null,
+      "childRunId": null,
+      "inputs": [],
+      "outputs": [],
+      "evidence": [
+        {
+          "id": "0675242a-36ba-463f-8fd3-261957105ffa",
+          "runId": "c1da1e69-2c6e-40d8-9af6-f6957e7a0473",
+          "stepId": "cbfc5b00-bc5c-422c-82bd-4a6dc907926e",
+          "attempt": 1,
+          "kind": "resolved_input",
+          "scope": "selected_step_input",
+          "contentType": "application/json",
+          "bytes": 18,
+          "availability": "complete",
+          "preview": {
+            "value": {
+              "recorded": "old"
+            },
+            "truncated": false,
+            "count": null,
+            "counts": {}
+          },
+          "redacted": false,
+          "capturedAt": "2026-10-02T05:27:34.230Z",
+          "expiresAt": null
+        },
+        {
+          "id": "577271c2-7ddb-47cb-b426-9a62fedda38f",
+          "runId": "c1da1e69-2c6e-40d8-9af6-f6957e7a0473",
+          "stepId": "cbfc5b00-bc5c-422c-82bd-4a6dc907926e",
+          "attempt": 1,
+          "kind": "executor_request",
+          "scope": "code_function_arguments",
+          "contentType": "application/json",
+          "bytes": 52,
+          "availability": "complete",
+          "preview": {
+            "value": {
+              "function": "finish",
+              "arguments": {
+                "recorded": "old"
+              }
+            },
+            "truncated": false,
+            "count": null,
+            "counts": {}
+          },
+          "redacted": false,
+          "capturedAt": "2026-10-02T05:27:34.231Z",
+          "expiresAt": null
+        },
+        {
+          "id": "6802f292-571d-40a9-bd50-f250f09ed2ec",
+          "runId": "c1da1e69-2c6e-40d8-9af6-f6957e7a0473",
+          "stepId": "cbfc5b00-bc5c-422c-82bd-4a6dc907926e",
+          "attempt": 1,
+          "kind": "returned_output",
+          "scope": "executor_return",
+          "contentType": "application/json",
+          "bytes": 14,
+          "availability": "complete",
+          "preview": {
+            "value": {
+              "used": "old"
+            },
+            "truncated": false,
+            "count": null,
+            "counts": {}
+          },
+          "redacted": false,
+          "capturedAt": "2026-10-02T05:27:34.231Z",
+          "expiresAt": null
+        },
+        {
+          "id": "2377b9e9-ec3c-498c-a559-75e21e725750",
+          "runId": "c1da1e69-2c6e-40d8-9af6-f6957e7a0473",
+          "stepId": "cbfc5b00-bc5c-422c-82bd-4a6dc907926e",
+          "attempt": 1,
+          "kind": "state_write",
+          "scope": "state_after_assignment",
+          "contentType": "application/json",
+          "bytes": 14,
+          "availability": "complete",
+          "preview": {
+            "value": {
+              "used": "old"
+            },
+            "truncated": false,
+            "count": null,
+            "counts": {}
+          },
+          "redacted": false,
+          "capturedAt": "2026-10-02T05:27:34.231Z",
+          "expiresAt": null
+        },
+        {
+          "id": "not-captured:cbfc5b00-bc5c-422c-82bd-4a6dc907926e:side_effect_confirmation",
+          "runId": "c1da1e69-2c6e-40d8-9af6-f6957e7a0473",
+          "stepId": "cbfc5b00-bc5c-422c-82bd-4a6dc907926e",
+          "attempt": 1,
+          "kind": "side_effect_confirmation",
+          "scope": "legacy_not_captured",
+          "contentType": "application/json",
+          "bytes": 0,
+          "availability": "not_captured",
+          "redacted": false,
+          "capturedAt": null,
+          "expiresAt": null
+        }
+      ]
+    }
+  ],
+  "children": [],
+  "revision": "8078ea30ff2b080b7b1ca09b0bc91a42e962d6b98314432781915805c78855fc"
+}

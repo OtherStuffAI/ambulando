@@ -10,7 +10,10 @@ export function pipelineNodes(definition, snapshot) {
     const keys = [...new Set(attempts.map(step => step.logicalKey))];
     return keys.map(logicalKey => { const first=attempts.find(step=>step.logicalKey===logicalKey); return { logicalKey, name:first.title, title:first.title, description:first.description, type:first.kind, inputs:first.inputs||[], outputs:first.outputs||[], children:[], attempts:attempts.filter(step=>step.logicalKey===logicalKey) }; });
   }
-  return project(definition.steps);
+  const projected = project(definition.steps);
+  const known = new Set(flattenPipelineNodes(projected).map(node => node.logicalKey));
+  // Captured executions remain visible even when legacy structure is incomplete.
+  return [...projected, ...pipelineNodes(null, snapshot).filter(node => !known.has(node.logicalKey))];
 }
 export function flattenPipelineNodes(nodes, depth = 0) {
   return nodes.flatMap(node => [{ ...node, depth }, ...flattenPipelineNodes(node.children || [], depth+1)]);
@@ -32,6 +35,38 @@ export function portValue(value, path) {
   }
   return selected;
 }
-export function matchingWires(wiring, nodeKey, path) {
-  return (wiring || []).filter(wire => (wire.sourceStepKey === nodeKey && wire.sourcePath === path) || (wire.targetStepKey === nodeKey && wire.targetPath === path));
+export function wiringPortPath(wire, side) {
+  return side === 'outputs' ? wire.sourceValuePath || wire.sourcePath : wire.targetPath;
+}
+export function wiringEndpoints(wire) {
+  const sourceBase=wiringPortPath(wire,'outputs'),targetBase=wiringPortPath(wire,'inputs');
+  const within=(path,base)=>path===base||path.startsWith(base+'.');
+  const pairs=(wire.sourcePortPaths||[]).flatMap(sourcePath=>(wire.targetPortPaths||[]).filter(targetPath=>within(sourcePath,sourceBase)&&within(targetPath,targetBase)&&sourcePath.slice(sourceBase.length)===targetPath.slice(targetBase.length)).map(targetPath=>({sourcePath,targetPath})));
+  return pairs.length?pairs:[{sourcePath:sourceBase,targetPath:targetBase}];
+}
+export function diagramPorts(node, side, wiring) {
+  const ports = [...(node[side] || [])];
+  for (const wire of wiring || []) {
+    if (wire.carriedForward || (side === 'outputs' ? wire.sourceStepKey : wire.targetStepKey) !== node.logicalKey) continue;
+    for (const endpoint of wiringEndpoints(wire)) {
+    const path = side==='outputs'?endpoint.sourcePath:endpoint.targetPath;
+    if (ports.some(port => port.path === path)) continue;
+    // These fields are explicit configured selectors on the actual definition,
+    // not inferred nodes or reconstructed values. Old state selectors use state evidence.
+    ports.push({path,label:path,format:'Configured selector',configured:true,evidenceKind:side==='outputs'&&!wire.sourceValuePath?'state_write':side==='outputs'?'returned_output':'resolved_input'});
+    }
+  }
+  return ports;
+}
+export function matchingWires(wiring, nodeKey, path, side) {
+  const contains=(parent,child)=>parent===child||child.startsWith(parent+'.')||child.startsWith(parent+'[');
+  return (wiring || []).filter(wire => (side === 'outputs' ? wire.sourceStepKey : side === 'inputs' ? wire.targetStepKey : null) === nodeKey && contains(wiringPortPath(wire,side),path));
+}
+export function latestPortReference(step, side, port) {
+  // Backend insertion order breaks ties between captures within a millisecond.
+  return step?.evidence.filter(ref => ref.kind === (port?.evidenceKind || (side === 'inputs' ? 'resolved_input' : 'returned_output'))).at(-1);
+}
+export function portSelection(value, path) {
+  const selected = portValue(value, path);
+  return { value: selected, status: selected === undefined ? 'missing' : selected === null ? 'null' : 'present' };
 }

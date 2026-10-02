@@ -1,0 +1,887 @@
+{
+  "version": 1,
+  "serviceId": "autopilot_runtime_fixture",
+  "run": {
+    "id": "6cf0af80-58bb-4956-be68-977b01de4a35",
+    "serviceId": "autopilot_runtime_fixture",
+    "definitionId": "runtime",
+    "definitionVersion": null,
+    "definitionHash": "0782e4801f3c5d1a88800474f9deb15c97b1c4b58591fb496beb14be9ab99186",
+    "name": "runtime",
+    "status": "ok",
+    "startedAt": "2026-10-02T05:27:33.452Z",
+    "completedAt": "2026-10-02T05:27:34.209Z",
+    "parentRunId": null,
+    "parentStepId": null
+  },
+  "definition": {
+    "id": "runtime",
+    "name": "runtime",
+    "title": "runtime",
+    "description": "",
+    "version": null,
+    "hash": "0782e4801f3c5d1a88800474f9deb15c97b1c4b58591fb496beb14be9ab99186",
+    "availability": "complete",
+    "steps": [
+      {
+        "logicalKey": "memory-id",
+        "name": "memory-name",
+        "title": "memory-name",
+        "description": "",
+        "type": "block",
+        "inputs": [],
+        "outputs": [],
+        "children": [
+          {
+            "logicalKey": "memory-id/memory-name / extract-memory-entities",
+            "name": "memory-name / extract-memory-entities",
+            "title": "memory-name / extract-memory-entities",
+            "description": "Extract searchable long-term-memory entities from the current prompt.",
+            "type": "agent",
+            "inputs": [],
+            "outputs": [],
+            "children": []
+          },
+          {
+            "logicalKey": "memory-id/memory-name / search-graph-memory",
+            "name": "memory-name / search-graph-memory",
+            "title": "memory-name / search-graph-memory",
+            "description": "Run parallel vector searches for the extracted entities.",
+            "type": "code",
+            "inputs": [],
+            "outputs": [],
+            "children": []
+          },
+          {
+            "logicalKey": "memory-id/memory-name / consolidate-graph-context",
+            "name": "memory-name / consolidate-graph-context",
+            "title": "memory-name / consolidate-graph-context",
+            "description": "Consolidate graph memory matches into agent-consumable graphContext.",
+            "type": "code",
+            "inputs": [],
+            "outputs": [],
+            "children": []
+          }
+        ]
+      }
+    ],
+    "wiring": [
+      {
+        "sourceValuePath": "$.blocks.memory_name.input.prompt",
+        "sourcePortPaths": [],
+        "targetPortPaths": [],
+        "sourceStepKey": null,
+        "sourcePath": "$.blocks.memory_name.input.prompt",
+        "targetStepKey": "memory-id/memory-name / extract-memory-entities",
+        "targetPath": "$.prompt",
+        "carriedForward": true
+      },
+      {
+        "sourceValuePath": "$.blocks.memory_name.input.entityLimit",
+        "sourcePortPaths": [],
+        "targetPortPaths": [],
+        "sourceStepKey": null,
+        "sourcePath": "$.blocks.memory_name.input.entityLimit",
+        "targetStepKey": "memory-id/memory-name / extract-memory-entities",
+        "targetPath": "$.entityLimit",
+        "carriedForward": true
+      },
+      {
+        "sourceValuePath": "$.blocks.memory_name.input.prompt",
+        "sourcePortPaths": [],
+        "targetPortPaths": [],
+        "sourceStepKey": null,
+        "sourcePath": "$.blocks.memory_name.input.prompt",
+        "targetStepKey": "memory-id/memory-name / search-graph-memory",
+        "targetPath": "$.prompt",
+        "carriedForward": true
+      },
+      {
+        "sourceValuePath": "$.entities",
+        "sourcePortPaths": [],
+        "targetPortPaths": [],
+        "sourceStepKey": "memory-id/memory-name / extract-memory-entities",
+        "sourcePath": "$.blocks.memory_name.entityExtraction.entities",
+        "targetStepKey": "memory-id/memory-name / search-graph-memory",
+        "targetPath": "$.entities",
+        "carriedForward": false
+      },
+      {
+        "sourceValuePath": "$.blocks.memory_name.input.topKPerEntity",
+        "sourcePortPaths": [],
+        "targetPortPaths": [],
+        "sourceStepKey": null,
+        "sourcePath": "$.blocks.memory_name.input.topKPerEntity",
+        "targetStepKey": "memory-id/memory-name / search-graph-memory",
+        "targetPath": "$.topKPerEntity",
+        "carriedForward": true
+      },
+      {
+        "sourceValuePath": "$.blocks.memory_name.input.maxEntities",
+        "sourcePortPaths": [],
+        "targetPortPaths": [],
+        "sourceStepKey": null,
+        "sourcePath": "$.blocks.memory_name.input.maxEntities",
+        "targetStepKey": "memory-id/memory-name / search-graph-memory",
+        "targetPath": "$.maxEntities",
+        "carriedForward": true
+      },
+      {
+        "sourceValuePath": "$.blocks.memory_name.input.maxMatches",
+        "sourcePortPaths": [],
+        "targetPortPaths": [],
+        "sourceStepKey": null,
+        "sourcePath": "$.blocks.memory_name.input.maxMatches",
+        "targetStepKey": "memory-id/memory-name / search-graph-memory",
+        "targetPath": "$.maxMatches",
+        "carriedForward": true
+      },
+      {
+        "sourceValuePath": "$.blocks.memory_name.input.index",
+        "sourcePortPaths": [],
+        "targetPortPaths": [],
+        "sourceStepKey": null,
+        "sourcePath": "$.blocks.memory_name.input.index",
+        "targetStepKey": "memory-id/memory-name / search-graph-memory",
+        "targetPath": "$.index",
+        "carriedForward": true
+      },
+      {
+        "sourceValuePath": "$.blocks.memory_name.input.ownerNpub",
+        "sourcePortPaths": [],
+        "targetPortPaths": [],
+        "sourceStepKey": null,
+        "sourcePath": "$.blocks.memory_name.input.ownerNpub",
+        "targetStepKey": "memory-id/memory-name / search-graph-memory",
+        "targetPath": "$.ownerNpub",
+        "carriedForward": true
+      },
+      {
+        "sourceValuePath": "$.blocks.memory_name.input.prompt",
+        "sourcePortPaths": [],
+        "targetPortPaths": [],
+        "sourceStepKey": null,
+        "sourcePath": "$.blocks.memory_name.input.prompt",
+        "targetStepKey": "memory-id/memory-name / consolidate-graph-context",
+        "targetPath": "$.prompt",
+        "carriedForward": true
+      },
+      {
+        "sourceValuePath": "$.entities",
+        "sourcePortPaths": [],
+        "targetPortPaths": [],
+        "sourceStepKey": "memory-id/memory-name / extract-memory-entities",
+        "sourcePath": "$.blocks.memory_name.entityExtraction.entities",
+        "targetStepKey": "memory-id/memory-name / consolidate-graph-context",
+        "targetPath": "$.entities",
+        "carriedForward": true
+      },
+      {
+        "sourceValuePath": "$.matches",
+        "sourcePortPaths": [],
+        "targetPortPaths": [],
+        "sourceStepKey": "memory-id/memory-name / search-graph-memory",
+        "sourcePath": "$.blocks.memory_name.rawMatches.matches",
+        "targetStepKey": "memory-id/memory-name / consolidate-graph-context",
+        "targetPath": "$.matches",
+        "carriedForward": false
+      },
+      {
+        "sourceValuePath": "$.warnings",
+        "sourcePortPaths": [],
+        "targetPortPaths": [],
+        "sourceStepKey": "memory-id/memory-name / search-graph-memory",
+        "sourcePath": "$.blocks.memory_name.rawMatches.warnings",
+        "targetStepKey": "memory-id/memory-name / consolidate-graph-context",
+        "targetPath": "$.warnings",
+        "carriedForward": false
+      },
+      {
+        "sourceValuePath": "$.blocks.memory_name.input.maxChars",
+        "sourcePortPaths": [],
+        "targetPortPaths": [],
+        "sourceStepKey": null,
+        "sourcePath": "$.blocks.memory_name.input.maxChars",
+        "targetStepKey": "memory-id/memory-name / consolidate-graph-context",
+        "targetPath": "$.maxChars",
+        "carriedForward": true
+      }
+    ]
+  },
+  "steps": [
+    {
+      "itemKey": null,
+      "id": "31030633-75c6-457e-965f-1292d69ac21f",
+      "logicalKey": "memory-id",
+      "parentStepId": null,
+      "attempt": 1,
+      "status": "ok",
+      "title": "memory-name",
+      "description": "",
+      "kind": "block",
+      "startedAt": "2026-10-02T05:27:33.452Z",
+      "completedAt": "2026-10-02T05:27:34.209Z",
+      "error": null,
+      "skipReason": null,
+      "continuationReason": null,
+      "exitReason": null,
+      "childRunId": null,
+      "inputs": [],
+      "outputs": [],
+      "evidence": [
+        {
+          "id": "4c1e5284-3220-4726-9a86-cf4d2682326a",
+          "runId": "6cf0af80-58bb-4956-be68-977b01de4a35",
+          "stepId": "31030633-75c6-457e-965f-1292d69ac21f",
+          "attempt": 1,
+          "kind": "resolved_input",
+          "scope": "selected_step_input",
+          "contentType": "application/json",
+          "bytes": 22,
+          "availability": "complete",
+          "preview": {
+            "value": {
+              "prompt": "synthetic"
+            },
+            "truncated": false,
+            "count": null,
+            "counts": {}
+          },
+          "redacted": false,
+          "capturedAt": "2026-10-02T05:27:33.452Z",
+          "expiresAt": null
+        },
+        {
+          "id": "18ec73b4-8d84-43ca-b007-b8830f9b2462",
+          "runId": "6cf0af80-58bb-4956-be68-977b01de4a35",
+          "stepId": "31030633-75c6-457e-965f-1292d69ac21f",
+          "attempt": 1,
+          "kind": "returned_output",
+          "scope": "wrapper_output_child_evidence_separate",
+          "contentType": "application/json",
+          "bytes": 198,
+          "availability": "complete",
+          "preview": {
+            "value": {
+              "prompt": "synthetic",
+              "blocks": {
+                "memory_name": {
+                  "input": {
+                    "prompt": "synthetic"
+                  },
+                  "entityExtraction": {
+                    "answer": "synthetic"
+                  },
+                  "rawMatches": {
+                    "matches": {
+                      "count": 0
+                    },
+                    "warnings": {
+                      "count": 0
+                    }
+                  }
+                }
+              },
+              "context": {
+                "context": "synthetic"
+              }
+            },
+            "truncated": true,
+            "count": null,
+            "counts": {
+              "$.blocks.memory_name.rawMatches.matches": 0,
+              "$.blocks.memory_name.rawMatches.warnings": 0
+            }
+          },
+          "redacted": false,
+          "capturedAt": "2026-10-02T05:27:34.209Z",
+          "expiresAt": null
+        },
+        {
+          "id": "fec8ccbc-7adf-4285-87e7-b2ef2ff1ceff",
+          "runId": "6cf0af80-58bb-4956-be68-977b01de4a35",
+          "stepId": "31030633-75c6-457e-965f-1292d69ac21f",
+          "attempt": 1,
+          "kind": "state_write",
+          "scope": "state_after_assignment",
+          "contentType": "application/json",
+          "bytes": 198,
+          "availability": "complete",
+          "preview": {
+            "value": {
+              "prompt": "synthetic",
+              "blocks": {
+                "memory_name": {
+                  "input": {
+                    "prompt": "synthetic"
+                  },
+                  "entityExtraction": {
+                    "answer": "synthetic"
+                  },
+                  "rawMatches": {
+                    "matches": {
+                      "count": 0
+                    },
+                    "warnings": {
+                      "count": 0
+                    }
+                  }
+                }
+              },
+              "context": {
+                "context": "synthetic"
+              }
+            },
+            "truncated": true,
+            "count": null,
+            "counts": {
+              "$.blocks.memory_name.rawMatches.matches": 0,
+              "$.blocks.memory_name.rawMatches.warnings": 0
+            }
+          },
+          "redacted": false,
+          "capturedAt": "2026-10-02T05:27:34.209Z",
+          "expiresAt": null
+        },
+        {
+          "id": "not-captured:31030633-75c6-457e-965f-1292d69ac21f:executor_request",
+          "runId": "6cf0af80-58bb-4956-be68-977b01de4a35",
+          "stepId": "31030633-75c6-457e-965f-1292d69ac21f",
+          "attempt": 1,
+          "kind": "executor_request",
+          "scope": "legacy_not_captured",
+          "contentType": "application/json",
+          "bytes": 0,
+          "availability": "not_captured",
+          "redacted": false,
+          "capturedAt": null,
+          "expiresAt": null
+        },
+        {
+          "id": "not-captured:31030633-75c6-457e-965f-1292d69ac21f:side_effect_confirmation",
+          "runId": "6cf0af80-58bb-4956-be68-977b01de4a35",
+          "stepId": "31030633-75c6-457e-965f-1292d69ac21f",
+          "attempt": 1,
+          "kind": "side_effect_confirmation",
+          "scope": "legacy_not_captured",
+          "contentType": "application/json",
+          "bytes": 0,
+          "availability": "not_captured",
+          "redacted": false,
+          "capturedAt": null,
+          "expiresAt": null
+        }
+      ]
+    },
+    {
+      "itemKey": null,
+      "id": "1c3b9b88-4744-4e1a-b115-65ebc670f980",
+      "logicalKey": "memory-id/memory-name / extract-memory-entities",
+      "parentStepId": "31030633-75c6-457e-965f-1292d69ac21f",
+      "attempt": 1,
+      "status": "ok",
+      "title": "memory-name / extract-memory-entities",
+      "description": "Extract searchable long-term-memory entities from the current prompt.",
+      "kind": "agent",
+      "startedAt": "2026-10-02T05:27:33.453Z",
+      "completedAt": "2026-10-02T05:27:34.207Z",
+      "error": null,
+      "skipReason": null,
+      "continuationReason": null,
+      "exitReason": null,
+      "childRunId": null,
+      "inputs": [],
+      "outputs": [],
+      "evidence": [
+        {
+          "id": "8feaff2c-88b8-443a-bb01-521c34287044",
+          "runId": "6cf0af80-58bb-4956-be68-977b01de4a35",
+          "stepId": "1c3b9b88-4744-4e1a-b115-65ebc670f980",
+          "attempt": 1,
+          "kind": "resolved_input",
+          "scope": "selected_step_input",
+          "contentType": "application/json",
+          "bytes": 22,
+          "availability": "complete",
+          "preview": {
+            "value": {
+              "prompt": "synthetic",
+              "entityLimit": null
+            },
+            "truncated": false,
+            "count": null,
+            "counts": {}
+          },
+          "redacted": false,
+          "capturedAt": "2026-10-02T05:27:33.453Z",
+          "expiresAt": null
+        },
+        {
+          "id": "612458d8-affd-443f-8619-5a3035da262c",
+          "runId": "6cf0af80-58bb-4956-be68-977b01de4a35",
+          "stepId": "1c3b9b88-4744-4e1a-b115-65ebc670f980",
+          "attempt": 1,
+          "kind": "executor_request",
+          "scope": "agent_invocation_prompt_persistent_session_not_full_conversation",
+          "contentType": "application/json",
+          "bytes": 1658,
+          "availability": "redacted",
+          "preview": {
+            "value": {
+              "prompt": "You are running one step in a Wingmen pipeline.\n\nStep instruction:\nExtract entities, concepts, projects, files, people, systems, decisions, and constraints worth searching long-term graph memory for. Return a JSON result object with this exact shape: { \"en",
+              "agent": "codex",
+              "model": null,
+              "sessionId": "synthetic-0",
+              "type": "user"
+            },
+            "truncated": true,
+            "count": null,
+            "counts": {}
+          },
+          "redacted": true,
+          "capturedAt": "2026-10-02T05:27:33.955Z",
+          "expiresAt": null
+        },
+        {
+          "id": "6f6ec54f-b899-4d7d-9363-1e2f1b9698f6",
+          "runId": "6cf0af80-58bb-4956-be68-977b01de4a35",
+          "stepId": "1c3b9b88-4744-4e1a-b115-65ebc670f980",
+          "attempt": 1,
+          "kind": "returned_output",
+          "scope": "executor_return",
+          "contentType": "application/json",
+          "bytes": 22,
+          "availability": "complete",
+          "preview": {
+            "value": {
+              "answer": "synthetic"
+            },
+            "truncated": false,
+            "count": null,
+            "counts": {}
+          },
+          "redacted": false,
+          "capturedAt": "2026-10-02T05:27:33.955Z",
+          "expiresAt": null
+        },
+        {
+          "id": "c40082b7-b8a4-4e72-a56d-992b8a3eaa74",
+          "runId": "6cf0af80-58bb-4956-be68-977b01de4a35",
+          "stepId": "1c3b9b88-4744-4e1a-b115-65ebc670f980",
+          "attempt": 1,
+          "kind": "state_write",
+          "scope": "state_after_assignment",
+          "contentType": "application/json",
+          "bytes": 22,
+          "availability": "complete",
+          "preview": {
+            "value": {
+              "answer": "synthetic"
+            },
+            "truncated": false,
+            "count": null,
+            "counts": {}
+          },
+          "redacted": false,
+          "capturedAt": "2026-10-02T05:27:33.955Z",
+          "expiresAt": null
+        },
+        {
+          "id": "ce3d88d7-1c22-4a5d-83bb-0564815e2c92",
+          "runId": "6cf0af80-58bb-4956-be68-977b01de4a35",
+          "stepId": "1c3b9b88-4744-4e1a-b115-65ebc670f980",
+          "attempt": 1,
+          "kind": "returned_output",
+          "scope": "executor_return",
+          "contentType": "application/json",
+          "bytes": 22,
+          "availability": "complete",
+          "preview": {
+            "value": {
+              "answer": "synthetic"
+            },
+            "truncated": false,
+            "count": null,
+            "counts": {}
+          },
+          "redacted": false,
+          "capturedAt": "2026-10-02T05:27:34.207Z",
+          "expiresAt": null
+        },
+        {
+          "id": "8d56ec18-c251-4a48-9c31-469b4a43515c",
+          "runId": "6cf0af80-58bb-4956-be68-977b01de4a35",
+          "stepId": "1c3b9b88-4744-4e1a-b115-65ebc670f980",
+          "attempt": 1,
+          "kind": "state_write",
+          "scope": "state_after_assignment",
+          "contentType": "application/json",
+          "bytes": 122,
+          "availability": "complete",
+          "preview": {
+            "value": {
+              "prompt": "synthetic",
+              "blocks": {
+                "memory_name": {
+                  "input": {
+                    "prompt": "synthetic"
+                  },
+                  "entityExtraction": {
+                    "answer": "synthetic"
+                  }
+                }
+              }
+            },
+            "truncated": false,
+            "count": null,
+            "counts": {}
+          },
+          "redacted": false,
+          "capturedAt": "2026-10-02T05:27:34.207Z",
+          "expiresAt": null
+        },
+        {
+          "id": "not-captured:1c3b9b88-4744-4e1a-b115-65ebc670f980:side_effect_confirmation",
+          "runId": "6cf0af80-58bb-4956-be68-977b01de4a35",
+          "stepId": "1c3b9b88-4744-4e1a-b115-65ebc670f980",
+          "attempt": 1,
+          "kind": "side_effect_confirmation",
+          "scope": "legacy_not_captured",
+          "contentType": "application/json",
+          "bytes": 0,
+          "availability": "not_captured",
+          "redacted": false,
+          "capturedAt": null,
+          "expiresAt": null
+        }
+      ]
+    },
+    {
+      "itemKey": null,
+      "id": "e74c1188-e6ba-4656-9e9d-d473bf8d4a35",
+      "logicalKey": "memory-id/memory-name / search-graph-memory",
+      "parentStepId": "31030633-75c6-457e-965f-1292d69ac21f",
+      "attempt": 1,
+      "status": "ok",
+      "title": "memory-name / search-graph-memory",
+      "description": "Run parallel vector searches for the extracted entities.",
+      "kind": "code",
+      "startedAt": "2026-10-02T05:27:34.208Z",
+      "completedAt": "2026-10-02T05:27:34.208Z",
+      "error": null,
+      "skipReason": null,
+      "continuationReason": null,
+      "exitReason": null,
+      "childRunId": null,
+      "inputs": [],
+      "outputs": [],
+      "evidence": [
+        {
+          "id": "6fe09bdc-4808-46df-b5c1-5289458e05dd",
+          "runId": "6cf0af80-58bb-4956-be68-977b01de4a35",
+          "stepId": "e74c1188-e6ba-4656-9e9d-d473bf8d4a35",
+          "attempt": 1,
+          "kind": "resolved_input",
+          "scope": "selected_step_input",
+          "contentType": "application/json",
+          "bytes": 22,
+          "availability": "complete",
+          "preview": {
+            "value": {
+              "prompt": "synthetic",
+              "entities": null,
+              "topKPerEntity": null,
+              "maxEntities": null,
+              "maxMatches": null
+            },
+            "truncated": true,
+            "count": null,
+            "counts": {}
+          },
+          "redacted": false,
+          "capturedAt": "2026-10-02T05:27:34.208Z",
+          "expiresAt": null
+        },
+        {
+          "id": "ba800341-1504-400b-aa25-de5f12df928a",
+          "runId": "6cf0af80-58bb-4956-be68-977b01de4a35",
+          "stepId": "e74c1188-e6ba-4656-9e9d-d473bf8d4a35",
+          "attempt": 1,
+          "kind": "executor_request",
+          "scope": "code_function_arguments",
+          "contentType": "application/json",
+          "bytes": 71,
+          "availability": "complete",
+          "preview": {
+            "value": {
+              "function": "memory.searchEntities",
+              "arguments": {
+                "prompt": "synthetic",
+                "entities": null,
+                "topKPerEntity": null,
+                "maxEntities": null,
+                "maxMatches": null
+              }
+            },
+            "truncated": true,
+            "count": null,
+            "counts": {}
+          },
+          "redacted": false,
+          "capturedAt": "2026-10-02T05:27:34.208Z",
+          "expiresAt": null
+        },
+        {
+          "id": "b841f09f-8002-4f8a-a9b2-b3eb3e9d852d",
+          "runId": "6cf0af80-58bb-4956-be68-977b01de4a35",
+          "stepId": "e74c1188-e6ba-4656-9e9d-d473bf8d4a35",
+          "attempt": 1,
+          "kind": "returned_output",
+          "scope": "executor_return",
+          "contentType": "application/json",
+          "bytes": 28,
+          "availability": "complete",
+          "preview": {
+            "value": {
+              "matches": [],
+              "warnings": []
+            },
+            "truncated": false,
+            "count": null,
+            "counts": {
+              "$.matches": 0,
+              "$.warnings": 0
+            }
+          },
+          "redacted": false,
+          "capturedAt": "2026-10-02T05:27:34.208Z",
+          "expiresAt": null
+        },
+        {
+          "id": "685cec5c-d3ce-4c6e-a375-14e671ebb106",
+          "runId": "6cf0af80-58bb-4956-be68-977b01de4a35",
+          "stepId": "e74c1188-e6ba-4656-9e9d-d473bf8d4a35",
+          "attempt": 1,
+          "kind": "state_write",
+          "scope": "state_after_assignment",
+          "contentType": "application/json",
+          "bytes": 164,
+          "availability": "complete",
+          "preview": {
+            "value": {
+              "prompt": "synthetic",
+              "blocks": {
+                "memory_name": {
+                  "input": {
+                    "prompt": "synthetic"
+                  },
+                  "entityExtraction": {
+                    "answer": "synthetic"
+                  },
+                  "rawMatches": {
+                    "matches": {
+                      "count": 0
+                    },
+                    "warnings": {
+                      "count": 0
+                    }
+                  }
+                }
+              }
+            },
+            "truncated": true,
+            "count": null,
+            "counts": {
+              "$.blocks.memory_name.rawMatches.matches": 0,
+              "$.blocks.memory_name.rawMatches.warnings": 0
+            }
+          },
+          "redacted": false,
+          "capturedAt": "2026-10-02T05:27:34.208Z",
+          "expiresAt": null
+        },
+        {
+          "id": "not-captured:e74c1188-e6ba-4656-9e9d-d473bf8d4a35:side_effect_confirmation",
+          "runId": "6cf0af80-58bb-4956-be68-977b01de4a35",
+          "stepId": "e74c1188-e6ba-4656-9e9d-d473bf8d4a35",
+          "attempt": 1,
+          "kind": "side_effect_confirmation",
+          "scope": "legacy_not_captured",
+          "contentType": "application/json",
+          "bytes": 0,
+          "availability": "not_captured",
+          "redacted": false,
+          "capturedAt": null,
+          "expiresAt": null
+        }
+      ]
+    },
+    {
+      "itemKey": null,
+      "id": "9bd1f88c-bb2f-43d5-983c-e5aa6ab595f0",
+      "logicalKey": "memory-id/memory-name / consolidate-graph-context",
+      "parentStepId": "31030633-75c6-457e-965f-1292d69ac21f",
+      "attempt": 1,
+      "status": "ok",
+      "title": "memory-name / consolidate-graph-context",
+      "description": "Consolidate graph memory matches into agent-consumable graphContext.",
+      "kind": "code",
+      "startedAt": "2026-10-02T05:27:34.208Z",
+      "completedAt": "2026-10-02T05:27:34.209Z",
+      "error": null,
+      "skipReason": null,
+      "continuationReason": null,
+      "exitReason": null,
+      "childRunId": null,
+      "inputs": [],
+      "outputs": [],
+      "evidence": [
+        {
+          "id": "b49a3f00-d5be-46a7-a668-9119c3af0a7e",
+          "runId": "6cf0af80-58bb-4956-be68-977b01de4a35",
+          "stepId": "9bd1f88c-bb2f-43d5-983c-e5aa6ab595f0",
+          "attempt": 1,
+          "kind": "resolved_input",
+          "scope": "selected_step_input",
+          "contentType": "application/json",
+          "bytes": 49,
+          "availability": "complete",
+          "preview": {
+            "value": {
+              "prompt": "synthetic",
+              "entities": null,
+              "matches": [],
+              "warnings": [],
+              "maxChars": null
+            },
+            "truncated": false,
+            "count": null,
+            "counts": {
+              "$.matches": 0,
+              "$.warnings": 0
+            }
+          },
+          "redacted": false,
+          "capturedAt": "2026-10-02T05:27:34.209Z",
+          "expiresAt": null
+        },
+        {
+          "id": "954c19bd-2068-436e-b0d6-9f730466b23f",
+          "runId": "6cf0af80-58bb-4956-be68-977b01de4a35",
+          "stepId": "9bd1f88c-bb2f-43d5-983c-e5aa6ab595f0",
+          "attempt": 1,
+          "kind": "executor_request",
+          "scope": "code_function_arguments",
+          "contentType": "application/json",
+          "bytes": 107,
+          "availability": "complete",
+          "preview": {
+            "value": {
+              "function": "memory.consolidateGraphContext",
+              "arguments": {
+                "prompt": "synthetic",
+                "entities": null,
+                "matches": [],
+                "warnings": [],
+                "maxChars": null
+              }
+            },
+            "truncated": false,
+            "count": null,
+            "counts": {
+              "$.arguments.matches": 0,
+              "$.arguments.warnings": 0
+            }
+          },
+          "redacted": false,
+          "capturedAt": "2026-10-02T05:27:34.209Z",
+          "expiresAt": null
+        },
+        {
+          "id": "ab58e336-dde7-49da-a1a9-20b3db6154bd",
+          "runId": "6cf0af80-58bb-4956-be68-977b01de4a35",
+          "stepId": "9bd1f88c-bb2f-43d5-983c-e5aa6ab595f0",
+          "attempt": 1,
+          "kind": "returned_output",
+          "scope": "executor_return",
+          "contentType": "application/json",
+          "bytes": 23,
+          "availability": "complete",
+          "preview": {
+            "value": {
+              "context": "synthetic"
+            },
+            "truncated": false,
+            "count": null,
+            "counts": {}
+          },
+          "redacted": false,
+          "capturedAt": "2026-10-02T05:27:34.209Z",
+          "expiresAt": null
+        },
+        {
+          "id": "a7739299-a904-4dcc-b1e7-809077eb58ea",
+          "runId": "6cf0af80-58bb-4956-be68-977b01de4a35",
+          "stepId": "9bd1f88c-bb2f-43d5-983c-e5aa6ab595f0",
+          "attempt": 1,
+          "kind": "state_write",
+          "scope": "state_after_assignment",
+          "contentType": "application/json",
+          "bytes": 198,
+          "availability": "complete",
+          "preview": {
+            "value": {
+              "prompt": "synthetic",
+              "blocks": {
+                "memory_name": {
+                  "input": {
+                    "prompt": "synthetic"
+                  },
+                  "entityExtraction": {
+                    "answer": "synthetic"
+                  },
+                  "rawMatches": {
+                    "matches": {
+                      "count": 0
+                    },
+                    "warnings": {
+                      "count": 0
+                    }
+                  }
+                }
+              },
+              "context": {
+                "context": "synthetic"
+              }
+            },
+            "truncated": true,
+            "count": null,
+            "counts": {
+              "$.blocks.memory_name.rawMatches.matches": 0,
+              "$.blocks.memory_name.rawMatches.warnings": 0
+            }
+          },
+          "redacted": false,
+          "capturedAt": "2026-10-02T05:27:34.209Z",
+          "expiresAt": null
+        },
+        {
+          "id": "not-captured:9bd1f88c-bb2f-43d5-983c-e5aa6ab595f0:side_effect_confirmation",
+          "runId": "6cf0af80-58bb-4956-be68-977b01de4a35",
+          "stepId": "9bd1f88c-bb2f-43d5-983c-e5aa6ab595f0",
+          "attempt": 1,
+          "kind": "side_effect_confirmation",
+          "scope": "legacy_not_captured",
+          "contentType": "application/json",
+          "bytes": 0,
+          "availability": "not_captured",
+          "redacted": false,
+          "capturedAt": null,
+          "expiresAt": null
+        }
+      ]
+    }
+  ],
+  "children": [],
+  "revision": "f0fecd00610780a190015dd81cfb6e76cc911191ced1cbcaa9f5d612125b7cf5"
+}

@@ -37,17 +37,45 @@ retained values identify their redaction metadata and remain distinct from
 preview-only, expired, not-captured and unavailable evidence.
 
 The diagram uses actual definition nodes and children. No display-only groups
-are inferred. Configured selector wiring and carried-forward metadata are labelled
+are inferred. Measured SVG links connect actual source and target port buttons, with named field
+labels and a keyboard-accessible connection ledger. Configured selector wiring and carried-forward metadata are labelled
 separately; neither claims every internal read. Child navigation keeps a parent
 trail. When a historical definition is unavailable, only recorded execution nodes
 are shown, without rebuilding from the latest catalogue definition.
 
 All untrusted values use text bindings. Hover/focus provides a preview; click/tap
 pins exact evidence. Escape closes and returns focus. Desktop steps run horizontally;
-small screens use a vertical sequence with the inspector below it. Controls expose
+small screens use a vertical sequence with a bounded pinned inspector in the viewport. Controls expose
 labels, test IDs and live status feedback; technical identifiers are optional.
 
 The reusable synthetic browser harness blocks backend access. Backend-generated
 contract fixtures verify real Bird structure, native statuses, revision tokens,
 child relationships and paginated evidence. Product activation remains dependent
 on compatible backend availability and a fresh signed connection capability.
+
+Optional backend `EvidenceReference.preview` contains only a redacted bounded
+capture summary (maximum 2048 UTF-8 JSON bytes), explicit truncation and collection
+counts. The service keeps even these excerpts session-only and strips them before
+Dexie writes. Older missing previews stay explicitly unavailable. Focus/hover
+never fetches full evidence; pinning does. Exact port selection includes logical
+node, input/output side, path, execution and evidence identity. Latest durable
+capture order selects the winning output; each execution remains inspectable
+separately. Null and absent paths are explicit and never substitute a whole object.
+All loaded records have an exact-copy action; full-value copy requires complete
+retention and excludes sibling fields.
+
+Navigation guards check both context generation and selection ticket after reads,
+so stale selections cannot update the URL or child trail. Nested authority and
+capability changes retrigger context validation. Production-shell tests route-serve
+an isolated real Vite build and mock only external transport/signing and unrelated
+workspace startup work. They seed verified installation/context records, release
+actual delayed promises and exercise service collision/history/revocation/recovery.
+Known hidden WApp null-draft boot errors are recorded separately from viewer errors.
+
+Wiring's additive `sourceValuePath` is relative to the captured writer output;
+`sourcePortPaths` and `targetPortPaths` identify declared ports related to each
+configured selector. The renderer pairs descendant fields only when their relative
+paths match (for example retrieval tweets to input state tweets). Otherwise it
+shows the explicit configured selector endpoint. Older DTO source state selectors
+use exact `state_write` evidence, keeping them separate from returned output.
+No prefix guessing or whole-object substitution supplies a missing named field.

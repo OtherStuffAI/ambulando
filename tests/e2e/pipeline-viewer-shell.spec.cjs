@@ -1,0 +1,152 @@
+const {test,expect}=require('playwright/test');
+const fs=require('node:fs/promises');
+const path=require('node:path');
+const {serveBuiltFlightDeck}=require('./fixtures/serve-built-flightdeck.cjs');
+const evidence=path.resolve(__dirname,'../../tmp/docs/handoffs/pipeline-viewer/correction-browser');
+test.use({hasTouch:true,serviceWorkers:'block'});
+let data;
+test.beforeAll(async()=>{
+ const source=await fs.readFile(path.resolve(__dirname,'../fixtures/pipeline-viewer.js'),'utf8');
+ const compiled=require('esbuild').transformSync(source,{format:'cjs'}).code;
+ const module={exports:{}};new Function('module','exports',compiled)(module,module.exports);const fixture=module.exports;
+ const definition=structuredClone(fixture.birdDefinition);
+ definition.steps[1].outputs[0].path='tweets';definition.steps[2].inputs[0].path='tweets';definition.wiring[1].sourcePath='tweets';definition.wiring[1].targetPath='tweets';
+ const snapshot=fixture.birdSnapshot();snapshot.definition=definition;
+ const values={};
+ for(const step of snapshot.steps){
+  const node=definition.steps.find(n=>n.logicalKey===step.logicalKey);step.inputs=node.inputs;step.outputs=node.outputs;
+  step.evidence.push({...step.evidence[0],id:step.id+'-resolved_input',kind:'resolved_input'});
+  for(const ref of step.evidence){
+   const value=ref.kind==='resolved_input'?{request:'Read my Following timeline',tweets:fixture.tweetRecords,response:'Exact response',thread:'source-thread'}:step.logicalKey==='thread'?{request:'Read my Following timeline'}:step.logicalKey==='retrieve'?{tweets:fixture.tweetRecords,privateSibling:'EXCLUDE_PRIVATE_SIBLING'}:step.logicalKey==='format'?{response:fixture.longText,privateSibling:'EXCLUDE_PRIVATE_SIBLING'}:{delivery:{delivered:true,url:'https://example.invalid/delivery/1'}};
+   values[ref.id]=value;
+   ref.preview={value:step.logicalKey==='retrieve'?{tweets:fixture.tweetRecords.slice(0,2)}:step.logicalKey==='format'?{response:'Exact retained request…'}:value,truncated:step.logicalKey==='retrieve'||step.logicalKey==='format',count:null,counts:step.logicalKey==='retrieve'?{'$.tweets':237}:{}};
+   if(ref.kind==='resolved_input')ref.preview={value:{request:'Read my Following timeline',response:'Exact response',thread:'source-thread'},truncated:true,count:null,counts:{}};
+  }
+ }
+ data={definition,snapshot,values,longText:fixture.longText,tweetRecords:fixture.tweetRecords};
+});
+async function setup(page,baseURL,viewport,fixtureData=data){
+ await page.setViewportSize(viewport);const errors=[],consoleErrors=[];page.on('pageerror',e=>errors.push(e.message));page.on('console',m=>{if(m.type()==='error')consoleErrors.push(m.text())});
+ await page.addInitScript(({data})=>{
+  let failure=null;const delayed=new Set(),releases=new Map(),requests=[];
+  const pubkey='44'.repeat(32);
+  window.nostr={getPublicKey:async()=>pubkey,signEvent:async event=>({...event,pubkey,id:'55'.repeat(32),sig:'66'.repeat(64)})};
+  window.fipsTransport={version:2,available:true,connect:async args=>({version:2,...args,disconnect:async()=>{},fetch:async(url,options)=>{
+   const u=new URL(url),serviceId=u.hostname==='peer-two.fips'?'installation-two':'installation';
+   requests.push({url,serviceId,workspace:u.searchParams.get('workspace_id')});
+   const event=JSON.parse(atob(options.headers.Authorization.slice(6)));if(!event.tags.some(tag=>tag[0]==='u'&&tag[1]===url))throw Error('Unsigned exact URL');
+   const id=decodeURIComponent(u.pathname.split('/runs/')[1]?.split('/')[0]||'');
+   if(delayed.has(id)){delayed.delete(id);await new Promise(resolve=>releases.set(id,resolve));}
+   if(failure)return new Response('{}',{status:failure});
+   let payload;const base={version:1,serviceId};
+   if(u.pathname.endsWith('/health'))payload={ok:true,installation_id:serviceId,installation_npub:serviceId==='installation'?'signer':'signer-two',api_version:1};
+   else if(u.pathname.endsWith('/definitions'))payload={...base,definitions:[data.definition],nextCursor:null};
+   else if(u.pathname.includes('/definitions/'))payload={...base,definition:data.definition};
+   else if(u.pathname.endsWith('/runs'))payload={...base,runs:[{...data.snapshot.run,serviceId},{...data.snapshot.run,id:'slow',name:'Slow run',serviceId},{...data.snapshot.run,id:'fast',name:'Fast run',serviceId}],nextCursor:null};
+   else if(u.pathname.includes('/evidence/')){const evidenceId=decodeURIComponent(u.pathname.split('/evidence/')[1]),ref=data.snapshot.steps.flatMap(s=>s.evidence).find(r=>r.id===evidenceId);payload={...base,evidence:ref,value:data.values[evidenceId],nextOffset:null};}
+   else {payload=structuredClone(data.snapshot);payload.serviceId=serviceId;payload.run.serviceId=serviceId;payload.run.id=id||'run';payload.run.name=serviceId+' '+(id||'run');for(const child of payload.children||[]){child.serviceId=serviceId;child.parentRunId=payload.run.id;}for(const step of payload.steps)for(const ref of step.evidence)ref.runId=payload.run.id;if(id==='absent')payload.definition=null;if(id==='child'){payload.run.parentRunId='run';payload.run.parentStepId='retrieve-exec';}}
+   return new Response(JSON.stringify(payload),{headers:{'Content-Type':'application/json'}});
+  }})};
+  window.shellFixture={data,requests,setFailure(v){failure=v},delay(id){delayed.add(id)},hasPending(id){return releases.has(id)},release(id){const fn=releases.get(id);if(!fn)throw Error('Delay not outstanding');releases.delete(id);fn();}};
+ },{data:fixtureData});
+ await page.route('**/*',route=>serveBuiltFlightDeck(route));
+ await page.goto(new URL(baseURL).origin+'/fixture/agents',{waitUntil:'domcontentloaded'});
+ await page.waitForFunction(()=>window.Alpine?.store('chat'));
+ await page.evaluate(async()=>{
+  const s=window.Alpine.store('chat');
+  for(const name of ['startSharedLiveQueries','stopWorkspaceLiveQueries','startWorkspaceLiveQueries','ensureWorkspaceSessionKey','loadLocalWorkspaceCoreData','persistWorkspaceSettings','refreshWorkspaceSettings','syncWorkspaceProfileDraft','refreshLegacyWorkspaceRecovery','stopDrive','validateSelectedBoardId','normalizeSettingsTab','registerCurrentWorkspaceApp','publishCurrentWorkspaceAppSchema'])s[name]=async()=>{};
+  s.session={npub:'npub1fixtureactor'};s.backendUrl='http://127.0.0.1:3100';s.knownWorkspaces=[{workspaceId:'workspace',workspaceKey:'viewer-shell',workspaceOwnerNpub:'owner',towerServiceNpub:'tower',sourceAppNpub:'app',slug:'fixture',name:'Fixture',pgBackendMode:true},{workspaceId:'other',workspaceKey:'viewer-other',workspaceOwnerNpub:'owner',towerServiceNpub:'tower',sourceAppNpub:'app',slug:'other',name:'Other',pgBackendMode:true}];
+  s.wappDelegationDraft={};s.wappPublishingDraftInstallation={};
+  await s.selectWorkspace('viewer-shell',{skipPgVerification:true});
+  const connection=(id,installation,signer,peer)=>({id,installation_id:installation,installation_identity_verified:true,display_name:installation,fips_endpoint:'http://'+peer+'.fips:43101',fips_transport_npub:peer,capabilities:['pipelines.viewer.read.v1'],metadata:{installation_npub:signer,health_path:'/api/owners/owner/control-plane/v1/health',pipeline_viewer_path:'/api/owners/owner/control-plane/v1/pipeline-viewer'}});
+  s.agentConnections=[connection('one','installation','signer','peer'),connection('two','installation-two','signer-two','peer-two')];s.workspaceAgents=[{id:'agent',agent_npub:'fixture-agent',connection_id:'one'}];s.selectedWorkspaceAgentId='agent';s.navSection='agents';
+  localStorage.setItem('nostr_secure_auth_recovery_v1',JSON.stringify({method:'extension',pubkey:'44'.repeat(32),expiresAt:Date.now()+86400000}));
+  // Use the real shell URL builder/navigation; seed only backend-independent state.
+  s.openPipelineViewer({connection:s.agentConnections[0],runId:'run'});
+ });
+ await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+ // Hidden WApp editors have known null-draft startup errors before fixture seeding.
+ expect(errors.every(message=>/^Cannot read properties of null/.test(message))).toBe(true);const initialPageErrors=[...errors];errors.length=0;
+ const initialConsoleErrors=[...consoleErrors];consoleErrors.length=0;
+ await fs.mkdir(evidence,{recursive:true});await fs.writeFile(path.join(evidence,'known-startup-errors.json'),JSON.stringify({knownNullDraftErrors:initialPageErrors,consoleErrors:initialConsoleErrors},null,2));
+ await expect(page.getByTestId('pipeline-status')).toHaveText('Pipeline viewer ready.');
+ return {errors,consoleErrors,initialConsoleErrors};
+}
+for(const [name,viewport] of [['desktop',{width:1440,height:900}],['mobile',{width:390,height:844}]])test('production shell '+name+' previews, ports, exact inspection and touch/keyboard',async({page,baseURL})=>{
+ const observed=await setup(page,baseURL,viewport);
+ await expect(page.getByTestId('pipeline-step-retrieve')).toBeVisible();
+ expect(await page.locator('.pipeline-viewer').evaluate(el=>getComputedStyle(el).color)).toBe('rgb(17, 24, 39)');
+ const tweets=page.getByRole('button',{name:'Inspect Retrieve tweets outputs: Tweets',exact:true});
+ await expect(tweets).toContainText('237 records');await expect(page.getByRole('button',{name:'Inspect Validate chat invocation inputs: Request',exact:true})).toContainText('Following');
+ await expect(page.getByRole('button',{name:'Inspect Format exact response outputs: Response text',exact:true})).toContainText('Exact retained request');
+ await expect(page.getByRole('button',{name:'Inspect Deliver to source thread outputs: Delivery confirmation',exact:true})).toContainText('https://example.invalid/delivery/1');
+ expect(await page.evaluate(()=>window.shellFixture.requests.filter(r=>r.url.includes('/evidence/')).length)).toBe(0);
+ await expect(page.locator('.pipeline-viewer-edges g')).toHaveCount(3);
+ await fs.mkdir(evidence,{recursive:true});await page.getByTestId('pipeline-step-retrieve').scrollIntoViewIfNeeded();await page.screenshot({path:path.join(evidence,name+'-diagram.png'),fullPage:false});
+ if(name==='mobile')await tweets.tap();else{await tweets.focus();await page.keyboard.press('Enter');}await expect(page.locator('.pipeline-viewer-records li')).toHaveCount(237);
+ await page.getByTestId('pipeline-value-search').fill('tweet 237');await expect(page.locator('.pipeline-viewer-records li')).toHaveCount(1);
+ await page.evaluate(()=>{window.copied=[];Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:async value=>window.copied.push(value)}})});
+ await page.getByRole('button',{name:'Copy retained record 237',exact:true}).click();expect(await page.evaluate(()=>window.copied.at(-1))).toBe(JSON.stringify(data.tweetRecords[236],null,2));
+ await page.getByTestId('pipeline-copy-value').click();expect(await page.evaluate(()=>window.copied.at(-1))).toBe(JSON.stringify(data.tweetRecords,null,2));
+ await page.keyboard.press('Escape');await expect(tweets).toBeFocused();
+ const response=page.getByRole('button',{name:'Inspect Format exact response outputs: Response text',exact:true});await response.click();
+ await expect(page.getByTestId('pipeline-exact-value')).toHaveText(data.longText);await page.getByTestId('pipeline-copy-value').click();expect(await page.evaluate(()=>window.copied.at(-1))).toBe(data.longText);
+ await page.screenshot({path:path.join(evidence,name+'-inspector.png'),fullPage:false});
+ const bounds=await page.getByTestId('pipeline-inspector').boundingBox();expect(bounds.height).toBeLessThan(viewport.height*.95);
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth)).toBe(false);
+ await page.getByRole('button',{name:'Close value inspector',exact:true}).click();
+ await page.getByRole('button',{name:'Open child workflow: Retrieve tweets attempt 1',exact:true}).click();await expect(page).toHaveURL(/run=child/);
+ await page.getByTestId('pipeline-parent').click();await expect(page).toHaveURL(/run=run/);
+ expect(observed.errors).toEqual([]);expect(observed.consoleErrors).toEqual([]);
+});
+test('production shell dropdown, colliding run IDs, history, authority and released stale read',async({page,baseURL})=>{
+ const observed=await setup(page,baseURL,{width:1440,height:900});
+ await page.getByTestId('pipeline-service').selectOption('two');await expect(page.getByTestId('pipeline-status')).toHaveText('Pipeline viewer ready.');
+ await page.getByRole('button',{name:'Open run: Bird request · run',exact:true}).click();await expect(page).toHaveURL(/service=installation-two/);await expect(page).toHaveURL(/run=run/);
+ await page.goBack();await expect(page.getByTestId('pipeline-service')).toHaveValue('two');await page.goBack();await expect(page.getByTestId('pipeline-service')).toHaveValue('one');
+ await page.goForward();await expect(page.getByTestId('pipeline-service')).toHaveValue('two');
+ await page.evaluate(()=>window.shellFixture.delay('slow'));
+ await page.getByRole('button',{name:'Open run: Slow run · slow',exact:true}).click();await page.waitForFunction(()=>window.shellFixture.hasPending('slow'));
+ await page.getByRole('button',{name:'Open run: Fast run · fast',exact:true}).click();await expect(page).toHaveURL(/run=fast/);
+ await page.evaluate(()=>window.shellFixture.release('slow'));await page.waitForTimeout(100);await expect(page).toHaveURL(/run=fast/);
+ await page.evaluate(()=>window.shellFixture.setFailure(403));await page.getByTestId('pipeline-retry').click();await expect(page.getByTestId('pipeline-status')).toContainText('denied');await expect(page.getByTestId('pipeline-step-retrieve')).toHaveCount(0);
+ await page.evaluate(()=>{window.shellFixture.setFailure(null);const s=window.Alpine.store('chat');s.agentConnections[1].capabilities=[]});await expect(page.getByTestId('pipeline-status')).toContainText('unavailable');
+ await page.evaluate(()=>{window.Alpine.store('chat').agentConnections[1].capabilities=['pipelines.viewer.read.v1']});await expect(page.getByTestId('pipeline-status')).toHaveText('Pipeline viewer ready.');
+ await page.evaluate(()=>{const s=window.Alpine.store('chat');s.selectedWorkspaceAgentId='';s.pipelineViewerRoute={service:'installation-two',signer:'signer-two',run:'absent'};s.syncRoute()});await expect(page.getByText('The immutable definition snapshot is unavailable for this historical run.')).toBeVisible();expect(await page.locator('[data-testid^="pipeline-step-"]').count()).toBe(4);
+ await page.evaluate(async()=>{const s=window.Alpine.store('chat');await s.selectWorkspace('viewer-other',{skipPgVerification:true});s.navSection='agents'});await expect(page.getByTestId('pipeline-status')).toHaveText('Pipeline viewer ready.');
+ expect(await page.evaluate(()=>window.Alpine.$data(document.querySelector('.pipeline-viewer')).inspector)).toBeNull();
+ await page.evaluate(()=>window.Alpine.store('chat').navigateTo('chat'));await expect(page.getByTestId('pipeline-viewer')).toHaveCount(0);
+ expect(observed.errors).toEqual([]);expect(observed.consoleErrors).toEqual([]);
+});
+test('production shell rejects released old reads across service, workspace, denial and disposal',async({page,baseURL})=>{
+ const observed=await setup(page,baseURL,{width:1440,height:900});
+ const begin=async()=>{await page.evaluate(()=>window.shellFixture.delay('slow'));await page.getByRole('button',{name:'Open run: Slow run · slow',exact:true}).click();await page.waitForFunction(()=>window.shellFixture.hasPending('slow'));};
+ const release=async()=>{await page.evaluate(()=>window.shellFixture.release('slow'));await page.waitForTimeout(100);};
+ await begin();await page.getByTestId('pipeline-service').selectOption('two');await expect(page.getByTestId('pipeline-status')).toHaveText('Pipeline viewer ready.');await release();await expect(page).toHaveURL(/service=installation-two/);expect(new URL(page.url()).searchParams.get('run')).not.toBe('slow');
+ await begin();await page.evaluate(async()=>{const s=window.Alpine.store('chat');await s.selectWorkspace('viewer-other',{skipPgVerification:true});s.navSection='agents';s.pipelineViewerRoute={service:'installation-two',signer:'signer-two',run:'fast'};s.syncRoute()});await expect(page).toHaveURL(/run=fast/);await expect(page.getByTestId('pipeline-status')).toHaveText('Pipeline viewer ready.');await release();await expect(page).toHaveURL(/run=fast/);
+ await begin();await page.evaluate(()=>window.shellFixture.setFailure(403));await page.getByTestId('pipeline-definition').selectOption('bird.timeline.chat.v2');await expect(page.getByTestId('pipeline-status')).toContainText('denied');await release();expect(new URL(page.url()).searchParams.get('run')).not.toBe('slow');await expect(page.getByTestId('pipeline-step-retrieve')).toHaveCount(0);
+ await page.evaluate(()=>{window.shellFixture.setFailure(null);const s=window.Alpine.store('chat');s.agentConnections[1].metadata={...s.agentConnections[1].metadata,connect_package_version:2}});await expect(page.getByTestId('pipeline-status')).toHaveText('Pipeline viewer ready.');
+ await begin();await page.getByTestId('pipeline-viewer-close').click();const url=page.url();await release();expect(page.url()).toBe(url);await expect(page.getByTestId('pipeline-viewer')).toHaveCount(0);
+ expect(observed.errors).toEqual([]);expect(observed.consoleErrors).toEqual([]);
+});
+for(const [name,viewport] of [['desktop',{width:1440,height:900}],['mobile',{width:390,height:844}]])test('production shell actual API Bird definition '+name+' connects configured ports and previews before evidence reads',async({page,baseURL})=>{
+ const snapshot=JSON.parse(await fs.readFile(path.resolve(__dirname,'../fixtures/pipeline-viewer-contract/completed-run.json'),'utf8'));
+ const actual={snapshot,definition:snapshot.definition,values:{}};const observed=await setup(page,baseURL,viewport,actual);
+ const count=snapshot.definition.wiring.filter(w=>!w.carriedForward).length;
+ await expect(page.locator('.pipeline-viewer-edges g')).toHaveCount(count);
+ await expect(page.getByRole('button',{name:'Inspect Retrieve tweets outputs: Tweets',exact:true})).toContainText('35 records');
+ await expect(page.getByRole('button',{name:'Inspect Format exact tweets outputs: Response',exact:true})).toContainText('Synthetic exact tweet 1');
+ expect(await page.evaluate(()=>window.shellFixture.requests.filter(r=>r.url.includes('/evidence/')).length)).toBe(0);
+ await page.getByTestId('pipeline-step-retrieve').scrollIntoViewIfNeeded();await page.screenshot({path:path.join(evidence,name+'-actual-bird.png'),fullPage:false});
+ const endpoints=await page.evaluate(()=>window.Alpine.$data(document.querySelector('.pipeline-viewer')).edges.map(edge=>({path:edge.path,label:edge.label})));
+ expect(endpoints.every(edge=>edge.path.startsWith('M ')&&edge.label.includes('→'))).toBe(true);
+ expect(observed.errors).toEqual([]);expect(observed.consoleErrors).toEqual([]);
+});
+
+test('production shell clears cached summaries when same-context remount health is denied',async({page,baseURL})=>{
+ const observed=await setup(page,baseURL,{width:1440,height:900});await expect(page.getByTestId('pipeline-step-retrieve')).toBeVisible();
+ await page.getByTestId('pipeline-viewer-close').click();await page.evaluate(()=>{window.shellFixture.setFailure(403);window.Alpine.store('chat').openPipelineViewer({runId:'run'})});
+ await expect(page.getByTestId('pipeline-status')).toContainText('denied');await expect(page.locator('[data-testid^="pipeline-step-"]')).toHaveCount(0);
+ await page.evaluate(()=>window.shellFixture.setFailure(null));await page.getByTestId('pipeline-retry').click();await expect(page.getByTestId('pipeline-status')).toHaveText('Pipeline viewer ready.');
+ expect(observed.errors).toEqual([]);expect(observed.consoleErrors).toEqual([]);
+});
