@@ -2609,6 +2609,13 @@
       "notes": [
         "Manage scopes and channels in one compact list. Edit scope details and people, agent and group access together in the scope modal."
       ]
+    },
+    {
+      "buildNumber": 2173,
+      "label": "Unified scope access picker",
+      "notes": [
+        "Search people, agents and groups together by readable name in one compact access row. Keyboard selection preserves canonical identity and existing grants."
+      ]
     }
   ]
 }

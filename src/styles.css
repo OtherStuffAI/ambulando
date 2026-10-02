@@ -6010,10 +6010,11 @@ button:disabled {
 }
 
 .inbox-type-toggles { display: flex; flex: 0 0 auto; gap: 2px; }
-.inbox-type-toggle { display: grid; place-items: center; width: 32px; height: 36px; padding: 5px; border: 1px solid var(--border); border-radius: 5px; background: #fff; color: #64748b; cursor: pointer; }
-.inbox-type-toggle[aria-pressed="true"] { background: #dbeafe; border-color: #bfdbfe; color: #1d4ed8; }
+.inbox-type-toggle { display: grid; place-items: center; width: 32px; height: 36px; padding: 5px; border: 1px solid var(--border); border-radius: 5px; background: var(--surface); color: var(--text-muted); cursor: pointer; }
+.inbox-type-toggle[aria-pressed="true"] { color: var(--accent); }
+.inbox-type-toggle:hover { background: var(--surface-hover); }
 .inbox-type-toggle svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-.inbox-type-toggle:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
+.inbox-type-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 
 .inbox-search-form input {
@@ -24704,3 +24705,15 @@ html.wingman-iphone-webview .chat-channel-tab-scroll * {
 .scope-edit-modal .channel-grant-form { display: grid; gap: .5rem; }
 .scope-edit-modal .channel-grant-form p { grid-column: 1 / -1; }
 .scope-edit-modal .channel-grant-form label { min-width: 0; font-size: .82rem; }
+
+.scope-access-add { display: flex; align-items: center; gap: .5rem; margin: .75rem 0 .25rem; }
+.scope-access-picker { position: relative; flex: 1; min-width: 0; }
+.scope-access-add > select { width: 145px; }
+.scope-access-add > button { flex-shrink: 0; white-space: nowrap; }
+.scope-access-results { position: absolute; z-index: 5; top: calc(100% + 4px); width: 100%; max-height: 220px; overflow-y: auto; background: var(--bg, white); color: var(--text); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 8px 20px #0002; }
+.scope-access-option { display: flex; align-items: center; gap: .5rem; width: 100%; text-align: left; padding: .5rem .6rem; border: 0; background: transparent; color: inherit; }
+.scope-access-option[aria-selected="true"], .scope-access-option:hover { background: var(--bg-elevated, #f1f5f9); }
+.scope-access-option small { display: block; color: var(--text-muted); font-size: .7rem; }
+.scope-access-type { font-size: .65rem; border: 1px solid var(--border); border-radius: 4px; padding: .1rem .3rem; }
+.scope-access-role-help { color: var(--text-muted); }
+@media(max-width:600px) { .scope-access-add { flex-wrap: wrap; } .scope-access-picker { flex-basis: 100%; } .scope-access-add > select { flex: 1; } }
