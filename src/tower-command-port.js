@@ -155,7 +155,9 @@ export function prepareTowerWorkspaceCommand(store, name, input = {}) {
       reconcile: async result => {
         // Acknowledgement is not convergence: subtree responses contain counts,
         // and canonical worker recovery publishes the complete authority batch.
-        await store.runTowerPgWorkspaceSync({ force: true });
+        // A pre-acknowledgement snapshot may omit this mutation. Wait for its
+        // cursor owner to finish, then recover the acknowledged change.
+        await store.runTowerPgWorkspaceSync({ force: true, afterCurrent: true });
         return result;
       },
     };

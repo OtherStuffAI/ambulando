@@ -2517,6 +2517,21 @@
       "notes": [
         "Report a missing Context Tree backend route as a load failure, while preserving neutral access denials and management-only editing."
       ]
+    },
+    {
+      "buildNumber": 2156,
+      "label": "Bounded pipeline records and actual port previews",
+      "notes": [
+        "Browse every retained record with render pages, search all loaded records, and copy exact single or complete values.",
+        "See safe declared-field samples and counts from actual pipeline runs, with exact retained delivery paths."
+      ]
+    },
+    {
+      "buildNumber": 2157,
+      "label": "Reliable Context Tree recovery",
+      "notes": [
+        "Share workspace recovery when opening Context Tree during updates, and reload acknowledged edits after the current snapshot finishes."
+      ]
     }
   ]
 }

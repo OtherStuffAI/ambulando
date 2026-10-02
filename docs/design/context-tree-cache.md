@@ -45,6 +45,14 @@ Service entrypoints (no UI-owned SSE or timer):
   queue. Acknowledgement is followed by canonical recovery; write acknowledgement
   alone does not establish convergence.
 
+All workspace recovery entrypoints share the active TowerSyncService's
+`workspace-record-recovery` request. Opening Context Tree during startup/SSE
+recovery joins that cursor owner instead of starting a competing snapshot.
+Acknowledged context commands wait for a pre-existing snapshot to finish and
+then recover again: joining a snapshot started before acknowledgement could
+otherwise miss the newly committed mutation. Workspace disposal still prevents
+old requests from publishing into a new workspace.
+
 Existing SSE hints trigger workspace recovery, bypassing replay-delta suppression
 for context events. Events include mutation/scope/component hints, never target
 metadata. Worker ownership, reconnect and disposal remain the existing lifecycle.

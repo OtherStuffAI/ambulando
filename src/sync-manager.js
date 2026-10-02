@@ -862,6 +862,20 @@ export const syncManagerMixin = {
   },
 
   async runTowerPgWorkspaceSync(options = {}) {
+    const service = this.getTowerSyncService();
+    // Before a workspace service is available, retain bootstrap's existing
+    // validation/error path; there is no active cursor owner to share yet.
+    if (!service) return this.performTowerPgWorkspaceSync(options);
+    // Context loads, startup and SSE recovery share one cursor/worker. Family
+    // request coalescing alone cannot prevent two different entrypoints racing.
+    if (options.afterCurrent) {
+      await service.inFlight.get('workspace-record-recovery')?.catch(() => {});
+      service.assertActive();
+    }
+    return service.coalesce('workspace-record-recovery', () => this.performTowerPgWorkspaceSync(options));
+  },
+
+  async performTowerPgWorkspaceSync(options = {}) {
     const connectionKey = this.buildSSEConnectionKey();
     this.beginStartupSyncProgress();
     const progress = this.startupSyncProgress;

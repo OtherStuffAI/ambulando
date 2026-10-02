@@ -52,5 +52,7 @@ it('unlink passes signed DELETE JSON CAS and delete passes explicit preview toke
   const descriptor=prepareTowerWorkspaceCommand(store,'context.delete',{scopeId,componentId:'component',body:{confirmation_token:'confirmed'}});
   const result=await descriptor.execute();await descriptor.reconcile(result);
   expect(requestTowerPgContext).toHaveBeenLastCalledWith(workspaceId,scopeId,'/component/delete',expect.objectContaining({method:'POST',body:{confirmation_token:'confirmed'}}));
-  expect(store.runTowerPgWorkspaceSync).toHaveBeenCalledOnce();expect(await db.pending_writes.count()).toBe(0);
+  expect(store.runTowerPgWorkspaceSync).toHaveBeenCalledOnce();
+  expect(store.runTowerPgWorkspaceSync).toHaveBeenCalledWith({force:true,afterCurrent:true});
+  expect(await db.pending_writes.count()).toBe(0);
 });

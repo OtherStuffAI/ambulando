@@ -24,6 +24,7 @@ import {
   acknowledgeSSEBatch,
 } from '../src/sync-worker-client.js';
 import { syncManagerMixin } from '../src/sync-manager.js';
+import { TowerSyncService } from '../src/tower-sync-service.js';
 import { getSyncFamilyHash } from '../src/sync-families.js';
 import { createNip98AuthHeader, createNip98AuthHeaderForSecret } from '../src/auth/nostr.js';
 import { getActiveWorkspaceKeySecretForAuth } from '../src/crypto/workspace-keys.js';
@@ -3541,6 +3542,36 @@ it('keeps a real workspace failure stable through fast automatic retries and cle
   expect(store.startupSyncProgress).toMatchObject({ visible: false, active: false, error: null });
 });
 
+it('coalesces Context Tree and startup pulls onto one record cursor owner', async () => {
+  const service = new TowerSyncService({ workspaceKey: 'context-recovery' });
+  const { fn } = bindMethod('runTowerPgWorkspaceSync', { getTowerSyncService: () => service });
+  let finish;
+  syncTowerPgWorkspace.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+  const startup = fn();
+  const context = fn({ force: true });
+  await Promise.resolve();
+  expect(syncTowerPgWorkspace).toHaveBeenCalledTimes(1);
+  finish({ applied: 1, pages: 2 });
+  await expect(startup).resolves.toEqual({ applied: 1, pages: 2 });
+  await expect(context).resolves.toEqual({ applied: 1, pages: 2 });
+});
+
+it('recovers acknowledged edits after the in-flight snapshot instead of racing or reusing it', async () => {
+  const service = new TowerSyncService({ workspaceKey: 'context-recovery' });
+  const { fn } = bindMethod('runTowerPgWorkspaceSync', { getTowerSyncService: () => service });
+  let finish;
+  syncTowerPgWorkspace.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+  const startup = fn();
+  const editRecovery = fn({ force: true, afterCurrent: true });
+  await Promise.resolve();
+  expect(syncTowerPgWorkspace).toHaveBeenCalledTimes(1);
+  syncTowerPgWorkspace.mockResolvedValueOnce({ applied: 1, pages: 1 });
+  finish({ applied: 0, pages: 2 });
+  await startup;
+  await expect(editRecovery).resolves.toEqual({ applied: 1, pages: 1 });
+  expect(syncTowerPgWorkspace).toHaveBeenCalledTimes(2);
+});
+
 it('projects reactive reader identity into cloneable scalar data for cursor recovery', () => {
   const proxy = value => new Proxy(value, {});
   const { fn } = bindMethod('buildTowerPgMaterializationStoreSnapshot', {
@@ -3556,15 +3587,22 @@ it('projects reactive reader identity into cloneable scalar data for cursor reco
 
 it('does not carry retry errors or late completion across workspace switches', async () => {
   let key = 'workspace-a', rejectOld;
-  const { fn, store } = bindMethod('runTowerPgWorkspaceSync', { buildSSEConnectionKey: () => key, getTowerSyncService: () => ({ disposed: false }), markTowerReachabilityRecovered: vi.fn() });
+  const services = new Map();
+  const { fn, store } = bindMethod('runTowerPgWorkspaceSync', { buildSSEConnectionKey: () => key, getTowerSyncService: () => {
+    if (!services.has(key)) services.set(key, new TowerSyncService({ workspaceKey: key }));
+    return services.get(key);
+  }, markTowerReachabilityRecovered: vi.fn() });
   syncTowerPgWorkspace.mockRejectedValueOnce(new Error('workspace A failed'));
   await expect(fn()).rejects.toThrow('workspace A failed');
   syncTowerPgWorkspace.mockImplementationOnce(() => new Promise((_resolve, reject) => { rejectOld = reject; }));
   const oldRetry = fn();
+  await Promise.resolve();
   key = 'workspace-b';
   syncTowerPgWorkspace.mockResolvedValueOnce({ applied: 0, pages: 1 });
   await fn();
   expect(store.startupSyncProgress).toMatchObject({ connectionKey: 'workspace-b', active: false, visible: false, error: null });
+  // Reopening the same workspace creates a new service lifetime.
+  services.set('workspace-a', new TowerSyncService({ workspaceKey: 'workspace-a' }));
   key = 'workspace-a';
   syncTowerPgWorkspace.mockResolvedValueOnce({ applied: 0, pages: 1 });
   await fn();
