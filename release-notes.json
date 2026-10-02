@@ -2575,6 +2575,13 @@
       "notes": [
         "Return focus to the canvas when a deleted component has no remaining focusable opener on mobile."
       ]
+    },
+    {
+      "buildNumber": 2164,
+      "label": "Pipeline evidence redaction review",
+      "notes": [
+        "Withhold cached pipeline evidence and selectors when the service requires credential redaction review. Keep unrelated connection conflicts recoverable."
+      ]
     }
   ]
 }

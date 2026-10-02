@@ -6,7 +6,7 @@ import { getWorkspaceDb, isWorkspaceDbOpenForKey } from './db.js';
 import { storedPackage } from './autopilot-connection-refresh.js';
 import { createPipelineViewerStore } from './pipeline-viewer-store.js';
 import { createPipelineViewerSession } from './pipeline-viewer-service.js';
-import { viewerContextKey } from './pipeline-viewer-contract.js';
+import { viewerContextKey, REDACTION_REVIEW_REQUIRED, REDACTION_REVIEW_MESSAGE } from './pipeline-viewer-contract.js';
 import { pipelineNodes, flattenPipelineNodes, evidenceText, evidencePreview, portValue, portSelection, portPreviewSelection, latestPortReference, wiringPortPath, wiringEndpoints, diagramPorts, matchingWires } from './pipeline-viewer-projection.js';
 import { parsePipelineViewerRoute } from './pipeline-viewer-route.js';
 
@@ -21,7 +21,7 @@ export function createPipelineViewerView(deps = {}) {
   let recordSource=null, recordRows=[], recordTerm=null, recordMatches=[];
   const clearRecords=()=>{recordSource=null;recordRows=[];recordTerm=null;recordMatches=[];};
   return {
-    template, status:'unloaded', stale:false, definitions:[], runs:[], snapshot:null, selectedRunId:'', selectedDefinitionId:'',
+    template, reason:null, status:'unloaded', stale:false, definitions:[], runs:[], snapshot:null, selectedRunId:'', selectedDefinitionId:'',
     selectedConnectionId:'', parentTrail:[], pinned:false, inspector:null, inspectLabel:'', inspectPath:'', preview:'', search:'', notice:'',
     definitionsCursor:null, runsCursor:null, mode:'run', inspectSide:'', inspectExecutionId:'', inspectEvidenceId:'', previewRevision:0, recordPage:1, edges:[], diagramWidth:0, diagramHeight:0,
     init() { shell=deps.store || this.$store.chat; views.set(shell,this); if(globalThis.ResizeObserver && this.$el){observer=new ResizeObserver(()=>this.queueGeometry());observer.observe(this.$el);mutations=new MutationObserver(records=>{if(records.some(record=>record.target.closest?.('.pipeline-viewer-steps')))this.queueGeometry();});mutations.observe(this.$el,{childList:true,subtree:true,characterData:true});} },
@@ -74,7 +74,7 @@ export function createPipelineViewerView(deps = {}) {
       service=createPipelineViewerSession({verified,context,store,deps});
       subscription=store.observe().subscribe({next:projection=>{
         if(epoch!==generation)return;
-        this.status=projection.state.status;this.stale=projection.state.stale===true;this.definitions=projection.definitions;this.runs=projection.runs;this.snapshot=projection.snapshot;
+        this.reason=projection.state.reason||null;this.status=projection.state.status;this.stale=projection.state.stale===true;this.definitions=projection.definitions;this.runs=projection.runs;this.snapshot=projection.snapshot;
         if(['denied','unavailable'].includes(this.status)){navigation++;this.closeInspector();this.parentTrail=[];}
         this.queueGeometry();this.selectedRunId=projection.state.selectedRunId||'';this.selectedDefinitionId=projection.state.selectedDefinitionId||'';
         this.definitionsCursor=projection.state.definitionsCursor;this.runsCursor=projection.state.runsCursor;
@@ -94,7 +94,7 @@ export function createPipelineViewerView(deps = {}) {
     suspend() {
       clearRecords();this.recordPage=1;generation++;navigation++;queued++;key='';subscription?.unsubscribe();subscription=null;offValues?.();offValues=null;
       service?.dispose();service=null;selectedRef=null;returnFocus=null;
-      this.mode='run';this.edges=[];this.inspectSide='';this.inspectExecutionId='';this.inspectEvidenceId='';this.selectedConnectionId='';this.status='unloaded';this.selectedRunId='';this.selectedDefinitionId='';this.stale=false;this.definitions=[];this.runs=[];this.snapshot=null;this.inspector=null;this.preview='';this.pinned=false;this.search='';this.parentTrail=[];
+      this.reason=null;this.mode='run';this.edges=[];this.inspectSide='';this.inspectExecutionId='';this.inspectEvidenceId='';this.selectedConnectionId='';this.status='unloaded';this.selectedRunId='';this.selectedDefinitionId='';this.stale=false;this.definitions=[];this.runs=[];this.snapshot=null;this.inspector=null;this.preview='';this.pinned=false;this.search='';this.parentTrail=[];
     },
     resume(){this.queueSync(shell.currentWorkspace?.workspaceId,shell.signingNpub,shell.workspaceDbKey,shell.backendUrl,shell.agentConnections,shell.navSection==='agents'&&shell.pipelineViewerOpen);},
     destroy(){destroyed=true;observer?.disconnect();mutations?.disconnect();this.suspend();views.delete(shell);},
@@ -104,7 +104,7 @@ export function createPipelineViewerView(deps = {}) {
     get wires(){return this.definition?.wiring||[];},
     get transformedWires(){return this.wires.filter(wire=>!wire.carriedForward);},
     get carriedWires(){return this.wires.filter(wire=>wire.carriedForward);},
-    get statusMessage(){return {pending:'Pipeline viewer is pending activation for this build.',unloaded:'Choose a verified Autopilot service.',loading:'Loading pipeline viewer…',empty:'No pipelines or runs available.',unavailable:'Pipeline viewer unavailable for this service, record or capability.',denied:'Pipeline viewer access denied.',disconnected:'Autopilot disconnected. Retained summaries may be stale.',ready:this.stale?'Showing stale summaries.':'Pipeline viewer ready.'}[this.status]||this.status;},
+    get statusMessage(){if(this.reason===REDACTION_REVIEW_REQUIRED)return REDACTION_REVIEW_MESSAGE;return {pending:'Pipeline viewer is pending activation for this build.',unloaded:'Choose a verified Autopilot service.',loading:'Loading pipeline viewer…',empty:'No pipelines or runs available.',unavailable:'Pipeline viewer unavailable for this service, record or capability.',denied:'Pipeline viewer access denied.',disconnected:'Autopilot disconnected. Retained summaries may be stale.',ready:this.stale?'Showing stale summaries.':'Pipeline viewer ready.'}[this.status]||this.status;},
     get inspectedValue(){return this.inspectPath?portValue(this.inspector?.value,this.inspectPath):this.inspector?.value;},
     get fieldStatus(){return this.inspector?.status==='ready'&&this.inspectPath?portSelection(this.inspector.value,this.inspectPath).status:'present';},
     get valueText(){return evidenceText(this.inspectedValue);},
@@ -140,7 +140,7 @@ export function createPipelineViewerView(deps = {}) {
       const ticket=++navigation,epoch=generation,current=service;
       this.closeInspector();this.mode=mode;
       if(mode==='run')await current?.selectRun(id);else await current?.selectDefinition(id);
-      if(ticket!==navigation||epoch!==generation||current!==service||destroyed||['denied','unavailable'].includes(this.status))return;
+      if(ticket!==navigation||epoch!==generation||current!==service||destroyed||current?.withheld||['denied','unavailable'].includes(this.status))return;
       this.parentTrail=trail;this.setRoute(mode==='run'?id:'',mode==='definition'?id:'');
     },
     async chooseDefinition(id){await this.navigateSelection(id,'definition');},

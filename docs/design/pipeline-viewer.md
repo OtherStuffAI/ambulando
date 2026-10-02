@@ -108,3 +108,18 @@ publication, activate and verify the compatible backend, signed capability,
 authorization, pinned transport and isolated live preflight. An isolated opted-in
 acceptance build is source validation, not deployment permission. Default builds
 therefore preserve this boundary when other features are published.
+
+The exact installation-scoped HTTP 409 error
+`pipeline-viewer-evidence-redaction-review-required` means evidence is withheld
+pending credential redaction review. The transport recognizes that code only in
+a matching v1 service envelope; unrelated conflicts remain disconnected/stale.
+The service aborts outstanding reads and advances its generation, clears all
+private previews/full values, and atomically removes this context's Dexie
+collections/snapshots while retaining only a static reason and recovery run ID.
+Alpine observes that reason, closes the inspector and clears derived search,
+port selection and child navigation state. Old successful responses cannot
+restore projections even when transport ignores abort; transaction guards also
+reject invalidated writes. A same-context remount or successful health check
+preserves the refusal. Only a fresh authoritative successful run snapshot clears
+it; catalogue reads, unchanged updates and retained values cannot restore access.
+Original backend archives are outside Flight Deck's ownership and are untouched.

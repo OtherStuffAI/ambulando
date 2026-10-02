@@ -1,10 +1,11 @@
 import { createAutopilotDiscoveryClient } from './autopilot-connect-client.js';
 import { createPipelineViewerClient } from './pipeline-viewer-client.js';
-import { PipelineViewerError, evidenceDto, viewerFailure } from './pipeline-viewer-contract.js';
+import { PipelineViewerError, evidenceDto, viewerFailure, isRedactionReviewRefusal, REDACTION_REVIEW_REQUIRED } from './pipeline-viewer-contract.js';
 
 // Network, cancellation and recovery live here; Alpine observes only Dexie rows.
 export function createPipelineViewerService({ client, store, connection, pollMs = 2500, schedule = setTimeout, unschedule = clearTimeout }) {
   let generation = 0, disposed = false, timer, runId = '', definitionId = '', refreshing = null;
+  let withheld = false;
   const controllers = new Map();
   const evidenceRequests = new Map();
   const previews = new Map();
@@ -23,21 +24,32 @@ export function createPipelineViewerService({ client, store, connection, pollMs 
     try {
       const payload = await client.read(operation, options, controller.signal);
       if (disposed || epoch !== generation || controller.signal.aborted) return;
-      return await apply(payload);
+      return await apply(payload, () => !disposed && epoch === generation && !controller.signal.aborted);
     } catch (error) {
       if (disposed || epoch !== generation || controller.signal.aborted) return;
+      if (isRedactionReviewRefusal(error)) {
+        withheld = true; abort();
+        await store.withhold(runId);
+        return false;
+      }
       for (const [pending] of controllers) if(pending!==controller)pending.abort();
       values.clear(); previews.clear(); emit();
       const status = viewerFailure(error);
-      if (status === 'denied' || status === 'unavailable') await store.clear();
+      if (!withheld && (status === 'denied' || status === 'unavailable')) await store.clear();
       await store.state({ status, stale: status === 'disconnected', selectedRunId: runId, selectedDefinitionId: definitionId });
     } finally { controllers.delete(controller); }
   }
   async function authorize() {
+    const epoch = generation;
+    if (disposed) return false;
+    const saved = await store.read();
+    if (disposed || epoch !== generation) return false;
+    withheld = withheld || saved.state.reason === REDACTION_REVIEW_REQUIRED;
+    if (withheld) runId = saved.state.recoveryRunId || runId;
     if (!connection) return !disposed;
-    const epoch=generation,controller=new AbortController();controllers.set(controller,'health');
+    const controller=new AbortController();controllers.set(controller,'health');
     try {await connection.health(controller.signal);return !disposed&&epoch===generation&&!controller.signal.aborted;}
-    catch(error){if(disposed||epoch!==generation||controller.signal.aborted)return false;abort();const status=viewerFailure(error);if(['denied','unavailable'].includes(status))await store.clear();await store.state({status,stale:status==='disconnected'});return false;}
+    catch(error){if(disposed||epoch!==generation||controller.signal.aborted)return false;abort();if(isRedactionReviewRefusal(error)){withheld=true;await store.withhold(runId);return false;}const status=viewerFailure(error);if(!withheld&&['denied','unavailable'].includes(status))await store.clear();await store.state({status,stale:status==='disconnected'});return false;}
     finally{controllers.delete(controller);}
   }
   async function refreshSnapshot(recover = false) {
@@ -46,15 +58,18 @@ export function createPipelineViewerService({ client, store, connection, pollMs 
     const id = runId, epoch = generation;
     const existing = await store.read();
     if (epoch !== generation || disposed) return;
-    await perform(recover ? 'run' : 'updates', { id, after: existing.snapshot?.revision ?? 0 }, async payload => {
+    await perform(recover ? 'run' : 'updates', { id, after: existing.snapshot?.revision ?? 0 }, async (payload, valid) => {
       if (payload.run?.id !== id) throw new PipelineViewerError('response_invalid', 'The snapshot did not match the selected run.');
       if (!payload.unchanged) {
+        const committed = await store.snapshot(payload, existing.snapshot?.revision ?? null, { valid, authoritative: recover });
+        if (!committed || !valid()) return false;
+        withheld = false;
         previews.clear();for(const step of payload.steps||[])for(const row of step.evidence||[]){const ref=evidenceDto(row);if(ref.preview)previews.set(ref.id,ref.preview);}emit();
-        await store.snapshot(payload, existing.snapshot?.revision ?? null);
+        return true;
       }
-      else await store.state({ status: 'ready', stale: false });
+      else if (!withheld) await store.state({ status: 'ready', stale: false }, valid);
     });
-    if (epoch === generation && !disposed && runId === id) {
+    if (epoch === generation && !disposed && !withheld && runId === id) {
       const current = await store.read();
       if (current.state.status === 'disconnected' || (current.state.status === 'ready' && !current.snapshot?.run.completedAt && !['ok', 'error', 'completed', 'failed', 'cancelled', 'canceled'].includes(current.snapshot?.run.status))) timer = schedule(() => { void refresh(current.state.status === 'disconnected'); }, pollMs);
     }
@@ -67,6 +82,7 @@ export function createPipelineViewerService({ client, store, connection, pollMs 
     return promise;
   }
   return {
+    get withheld() { return withheld; },
     get disposed() { return disposed; },
     subscribeValues(listener) { listeners.add(listener); return () => listeners.delete(listener); },
     value(id) { return values.get(id) || null; },
@@ -75,20 +91,22 @@ export function createPipelineViewerService({ client, store, connection, pollMs 
     async start() {
       const saved = await store.read();
       if (disposed) return;
+      if (saved.state.reason === REDACTION_REVIEW_REQUIRED) { withheld = true; runId = saved.state.recoveryRunId || ''; return; }
       runId = saved.state.selectedRunId || ''; definitionId = saved.state.selectedDefinitionId || '';
       await this.list('definitions');
       await this.list('runs');
       if (runId) await this.selectRun(runId);
     },
     async list(kind, cursor = null) {
-      if (!['definitions', 'runs'].includes(kind)) return;
+      if (withheld || !['definitions', 'runs'].includes(kind)) return;
       await store.state({ status: 'loading' });
-      await perform(kind, { ...(cursor ? { cursor } : {}), ...(definitionId && kind === 'runs' ? { definitionId } : {}) }, payload => store.page(kind, payload, !cursor));
+      await perform(kind, { ...(cursor ? { cursor } : {}), ...(definitionId && kind === 'runs' ? { definitionId } : {}) }, (payload, valid) => store.page(kind, payload, !cursor, valid));
     },
     async selectDefinition(id) {
+      if (withheld) return false;
       abort(); runId = ''; definitionId = id;
       await store.state({ selectedRunId: '', selectedDefinitionId: id, status: 'loading' });
-      await perform('definition', { id }, payload => store.page('definitions', { definitions: [payload.definition], nextCursor: null }));
+      await perform('definition', { id }, (payload, valid) => store.page('definitions', { definitions: [payload.definition], nextCursor: null }, false, valid));
       await this.list('runs');
     },
     async selectRun(id) {
@@ -98,7 +116,7 @@ export function createPipelineViewerService({ client, store, connection, pollMs 
     },
     async recover() { if(!await authorize())return;for(const [controller,operation] of controllers)if(operation==='evidence')controller.abort(); values.clear(); emit(); if(runId) await refresh(true); else {await this.list('definitions');await this.list('runs');} },
     async evidence(reference, append = false) {
-      if (disposed || reference.runId !== runId) return;
+      if (disposed || withheld || reference.runId !== runId) return;
       if(['not_captured','expired','oversized','unavailable'].includes(reference.availability)){values.set(reference.id,{reference,status:'unavailable',complete:false,nextOffset:null});emit();return;}
       if(evidenceRequests.has(reference.id))return evidenceRequests.get(reference.id);
       if(!append && values.get(reference.id)?.status==='ready')return values.get(reference.id);

@@ -1,4 +1,7 @@
 // Autopilot viewer DTOs are separate from persisted projections and rendered nodes.
+export const REDACTION_REVIEW_REQUIRED = 'pipeline-viewer-evidence-redaction-review-required';
+export const REDACTION_REVIEW_MESSAGE = 'Evidence withheld pending credential redaction review';
+export const isRedactionReviewRefusal = error => error?.status === 409 && error?.code === REDACTION_REVIEW_REQUIRED;
 export const PIPELINE_VIEWER_CAPABILITY = 'pipelines.viewer.read.v1';
 export class PipelineViewerError extends Error {
   constructor(code, message) { super(message); this.name = 'PipelineViewerError'; this.code = code; }
@@ -74,6 +77,7 @@ export function snapshotDto(payload, serviceId) {
     children: list(payload.children).map(row => runDto(row, serviceId)), revision: payload.revision };
 }
 export function viewerFailure(error) {
+  if (isRedactionReviewRefusal(error)) return 'unavailable';
   if (error?.status === 403 || error?.code === 'auth_failed') return 'denied';
   if (error?.status === 404 || ['route_unavailable', 'capability_unavailable', 'context_unavailable'].includes(error?.code)) return 'unavailable';
   if (['response_invalid', 'installation_mismatch'].includes(error?.code)) return 'unavailable';

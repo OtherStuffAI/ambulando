@@ -1,5 +1,6 @@
 import { nip19, verifyEvent } from 'nostr-tools';
 import { createNip98AuthHeader } from './auth/nostr.js';
+import { REDACTION_REVIEW_REQUIRED, REDACTION_REVIEW_MESSAGE } from './pipeline-viewer-contract.js';
 import { pipelineViewerRequestPath } from './pipeline-viewer-client.js';
 
 export const AUTOPILOT_CONNECT_KIND = 'wingman_autopilot_connect';
@@ -364,7 +365,18 @@ export function createAutopilotDiscoveryClient(verifiedPackage, {
     } catch (error) {
       fail('connection_failed', `Could not reach Autopilot ${operation} through FIPS.`, { cause: error });
     }
-    if (!response.ok) throw mapResponseFailure(response, operation);
+    if (!response.ok) {
+      if (operation === 'pipeline viewer' && response.status === 409) {
+        // Recognize only this installation's exact refusal; never expose remote text.
+        let payload;
+        try { payload = await response.json(); } catch { /* Ordinary conflict. */ }
+        if (payload?.version === 1 && payload.serviceId === verifiedPackage.installationId
+          && payload.error === REDACTION_REVIEW_REQUIRED) {
+          throw new AutopilotConnectError(REDACTION_REVIEW_REQUIRED, REDACTION_REVIEW_MESSAGE, { status: 409 });
+        }
+      }
+      throw mapResponseFailure(response, operation);
+    }
     return response;
   }
 

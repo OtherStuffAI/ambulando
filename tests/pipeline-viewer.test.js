@@ -98,3 +98,43 @@ it('an access failure aborts outstanding evidence before it can repopulate the p
   const {service}=await setup(async(op,_options,s)=>{if(op==='evidence'){signal=s;return new Promise(resolve=>release=resolve);}if(denied)throw Object.assign(Error('denied'),{status:403});return birdSnapshot();});
   await service.selectRun('run');const pending=service.evidence(ref);await vi.waitFor(()=>expect(release).toBeTypeOf('function'));denied=true;await service.recover();expect(signal.aborted).toBe(true);release({version:1,serviceId:'installation',evidence:ref,value:'late private',nextOffset:null});await pending;expect(service.value(ref.id)).toBeNull();service.dispose();
 });
+it('withholds persisted selectors and private values, rejecting genuinely released old snapshots and evidence after refusal',async()=>{
+  const code='pipeline-viewer-evidence-redaction-review-required';
+  const old=birdSnapshot();const ref=old.steps[1].evidence[0];const secret='SYNTHETIC_OLD_CREDENTIAL';
+  old.definition.steps[1].outputs[0].path='$.'+secret;old.steps[1].outputs=[{label:'Unsafe old selector',path:'$.'+secret}];
+  ref.preview={value:secret,fields:{['$.'+secret]:{present:true,value:secret,truncated:false}},truncated:false};
+  const pending=new Map(),signals=new Map();let defer=false,refuse=false;
+  const {db,store,service,client}=await setup(async(op,_options,signal)=>{
+    if(refuse)throw Object.assign(Error('private backend text'),{status:409,code});
+    if(defer&&(op==='evidence'||op==='run')){signals.set(op,signal);return new Promise(resolve=>pending.set(op,resolve));}
+    if(op==='evidence')return {version:1,serviceId:'installation',evidence:ref,value:{[secret]:secret},nextOffset:null};
+    if(op==='definitions')return {definitions:[old.definition],nextCursor:null};
+    if(op==='runs')return {runs:[old.run],nextCursor:null};
+    return old;
+  });
+  await service.selectRun('run');await service.list('definitions');await service.evidence(ref);
+  expect(service.value(ref.id).complete).toBe(true);expect(service.preview(ref.id).value).toBe(secret);
+  expect(JSON.stringify(await db.pipeline_viewer_snapshots.toArray())).toContain(secret);
+  service.clearValues();defer=true;const evidence=service.evidence(ref),snapshot=service.recover();
+  await vi.waitFor(()=>expect(pending.size).toBe(2));refuse=true;await service.list('runs');
+  expect(signals.get('run').aborted).toBe(true);expect(signals.get('evidence').aborted).toBe(true);
+  expect(await store.read()).toMatchObject({state:{status:'unavailable',stale:false,reason:code,selectedRunId:'',selectedDefinitionId:''},definitions:[],runs:[],snapshot:null});
+  expect(service.value(ref.id)).toBeNull();expect(service.preview(ref.id)).toBeNull();
+  for(const name of ['pipeline_viewer_definitions','pipeline_viewer_runs','pipeline_viewer_snapshots'])expect(await db.table(name).count()).toBe(0);
+  // The fake transport ignores AbortSignal: these are real old200 completions AFTER409.
+  pending.get('run')(old);pending.get('evidence')({version:1,serviceId:'installation',evidence:ref,value:{[secret]:secret},nextOffset:null});await Promise.all([evidence,snapshot]);
+  expect((await store.read()).snapshot).toBeNull();expect(service.value(ref.id)).toBeNull();expect(service.preview(ref.id)).toBeNull();
+  const count=client.read.mock.calls.length;await service.evidence(ref);await service.list('definitions');expect(client.read).toHaveBeenCalledTimes(count);
+  service.dispose();const remount=createPipelineViewerService({client,store,connection:{health:async()=>({ok:true})},schedule:vi.fn(),unschedule:vi.fn()});
+  expect(await remount.initialize()).toBe(true);await remount.start();await remount.evidence(ref);
+  expect((await store.read()).state.reason).toBe(code);expect(client.read).toHaveBeenCalledTimes(count);
+  // Health success and an unchanged update cannot clear refusal; only a new snapshot can.
+  refuse=false;defer=false;const safe=birdSnapshot(2);client.read.mockImplementation(async()=>safe);await remount.recover();
+  expect((await store.read()).state).toMatchObject({status:'ready',reason:null,selectedRunId:'run'});
+  expect(JSON.stringify(await db.pipeline_viewer_snapshots.toArray())).not.toContain(secret);remount.dispose();
+});
+it('unrelated409 retains stale summaries and ordinary snapshot recovery',async()=>{
+  let conflict=false;const {service,store}=await setup(async()=>{if(conflict)throw Object.assign(Error('conflict'),{status:409,code:'unrelated-conflict'});return birdSnapshot();});
+  await service.selectRun('run');conflict=true;await service.recover();expect((await store.read()).state).toMatchObject({status:'disconnected',stale:true});expect((await store.read()).snapshot).not.toBeNull();
+  conflict=false;await service.recover();expect((await store.read()).state).toMatchObject({status:'ready',stale:false});service.dispose();
+});

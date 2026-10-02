@@ -33,3 +33,13 @@ it('revokes a handle that finishes connecting after its client was disconnected'
   const connection=createAutopilotDiscoveryClient(verified,{transport,authHeader:vi.fn()});const pending=connection.readPipelineViewer(viewerContext,'runs');await Promise.resolve();await connection.disconnect();release();
   await expect(pending).rejects.toMatchObject({code:'connection_failed'});expect(disconnect).toHaveBeenCalledTimes(1);
 });
+it('recognizes only the exact installation-scoped redaction review refusal on viewer reads',async()=>{
+  const code='pipeline-viewer-evidence-redaction-review-required';
+  const refusal=setup({version:1,serviceId:'installation',error:code,message:'private server text'},409);
+  await expect(refusal.client.read('run',{id:'run'})).rejects.toMatchObject({status:409,code,message:'Evidence withheld pending credential redaction review'});
+  expect(refusal.fetch.mock.calls[0][0]).toContain('http://peer.fips:43101/');
+  for(const payload of [{version:1,serviceId:'installation',error:'other-conflict'},{version:1,serviceId:'foreign',error:code},{error:code}]){
+    await expect(setup(payload,409).client.read('run',{id:'run'})).rejects.toMatchObject({status:409,code:'connection_failed'});
+  }
+  await expect(setup({version:1,serviceId:'installation',error:code},500).client.read('run',{id:'run'})).rejects.toMatchObject({status:500,code:'connection_failed'});
+});

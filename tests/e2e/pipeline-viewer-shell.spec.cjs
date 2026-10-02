@@ -28,7 +28,7 @@ test.beforeAll(async()=>{
 async function setup(page,baseURL,viewport,fixtureData=data){
  await page.setViewportSize(viewport);const errors=[],consoleErrors=[];page.on('pageerror',e=>errors.push(e.message));page.on('console',m=>{if(m.type()==='error')consoleErrors.push(m.text())});
  await page.addInitScript(({data})=>{
-  let failure=null;const delayed=new Set(),releases=new Map(),requests=[];
+  let failure=null;const delayed=new Set(),delayedReads=new Set(),heldSignals=new Map(),releases=new Map(),requests=[];let viewerFailure=null;
   const pubkey='44'.repeat(32);
   const workspaces=[['workspace','viewer-shell','fixture'],['other','viewer-other','other']].map(([workspaceId,workspaceKey,slug])=>({workspaceId,workspaceKey,workspaceOwnerNpub:'owner',workspaceServiceNpub:'workspace-service',towerServiceNpub:'tower',appNpub:'app',sourceAppNpub:'app',directHttpsUrl:'http://127.0.0.1:3100',slug,name:slug,pgBackendMode:true}));
   // Alpine.store invokes init when registering the store. Seed valid identity and
@@ -53,6 +53,7 @@ async function setup(page,baseURL,viewport,fixtureData=data){
    const id=decodeURIComponent(u.pathname.split('/runs/')[1]?.split('/')[0]||'');
    if(delayed.has(id)){delayed.delete(id);await new Promise(resolve=>releases.set(id,resolve));}
    if(failure)return new Response('{}',{status:failure});
+   if(viewerFailure&&!u.pathname.endsWith('/health'))return new Response(JSON.stringify({version:1,serviceId,error:viewerFailure.error}),{status:viewerFailure.status});
    let payload;const base={version:1,serviceId};
    if(u.pathname.endsWith('/health'))payload={ok:true,installation_id:serviceId,installation_npub:u.hostname==='peer-two.fips'?'signer-two':'signer',api_version:1};
    else if(data.runtime){
@@ -68,9 +69,13 @@ async function setup(page,baseURL,viewport,fixtureData=data){
    else if(u.pathname.endsWith('/runs'))payload={...base,runs:[{...data.snapshot.run,serviceId},{...data.snapshot.run,id:'slow',name:'Slow run',serviceId},{...data.snapshot.run,id:'fast',name:'Fast run',serviceId}],nextCursor:null};
    else if(u.pathname.includes('/evidence/')){const evidenceId=decodeURIComponent(u.pathname.split('/evidence/')[1]),ref=data.snapshot.steps.flatMap(s=>s.evidence).find(r=>r.id===evidenceId);payload={...base,evidence:ref,value:data.values[evidenceId],nextOffset:null};}
    else {payload=structuredClone(data.snapshot);payload.serviceId=serviceId;payload.run.serviceId=serviceId;payload.run.id=id||'run';payload.run.name=serviceId+' '+(id||'run');for(const child of payload.children||[]){child.serviceId=serviceId;child.parentRunId=payload.run.id;}for(const step of payload.steps)for(const ref of step.evidence)ref.runId=payload.run.id;if(id==='absent')payload.definition=null;if(id==='child'){payload.run.parentRunId='run';payload.run.parentStepId='retrieve-exec';}}
-   return new Response(JSON.stringify(payload),{headers:{'Content-Type':'application/json'}});
+   // Freeze a genuine200 before waiting. These reads deliberately ignore abort.
+   const response=new Response(JSON.stringify(payload),{headers:{'Content-Type':'application/json'}});
+   const readKey=u.pathname.includes('/evidence/')?'evidence:'+decodeURIComponent(u.pathname.split('/evidence/')[1]):u.pathname.endsWith('/updates')?'updates:'+id:'snapshot:'+id;
+   if(delayedReads.has(readKey)){delayedReads.delete(readKey);heldSignals.set(readKey,options.signal);await new Promise(resolve=>releases.set(readKey,resolve));}
+   return response;
   }})};
-  window.shellFixture={data,workspaces,requests,setFailure(v){failure=v},delay(id){delayed.add(id)},hasPending(id){return releases.has(id)},release(id){const fn=releases.get(id);if(!fn)throw Error('Delay not outstanding');releases.delete(id);fn();}};
+  window.shellFixture={data,workspaces,requests,delayRead(key){delayedReads.add(key)},isAborted(key){return heldSignals.get(key)?.aborted===true},setViewerFailure(status,error){viewerFailure=status?{status,error}:null},setFailure(v){failure=v},delay(id){delayed.add(id)},hasPending(id){return releases.has(id)},release(id){const fn=releases.get(id);if(!fn)throw Error('Delay not outstanding');releases.delete(id);fn();}};
  },{data:fixtureData});
  await page.route('**/*',route=>serveBuiltFlightDeck(route));
  await page.goto(new URL(baseURL).origin+'/fixture/agents',{waitUntil:'domcontentloaded'});
@@ -164,6 +169,79 @@ for(const [name,viewport] of [['desktop',{width:1440,height:900}],['mobile',{wid
  await page.getByTestId('pipeline-step-retrieve').scrollIntoViewIfNeeded();await page.screenshot({path:path.join(evidence,name+'-actual-bird.png'),fullPage:false});
  const endpoints=await page.evaluate(()=>window.Alpine.$data(document.querySelector('.pipeline-viewer')).edges.map(edge=>({path:edge.path,label:edge.label})));
  expect(endpoints.every(edge=>edge.path.startsWith('M ')&&edge.label.includes('→'))).toBe(true);
+ expect(observed.errors).toEqual([]);expect(observed.consoleErrors).toEqual([]);
+});
+
+
+test('production shell exact redaction refusal clears cached selectors, full values and derived inspector, rejecting old200 after409',async({page,baseURL})=>{
+ const unsafe=structuredClone(data),selector='SYNTHETIC_OLD_SELECTOR',secret='SYNTHETIC_OLD_VALUE';
+ unsafe.snapshot.run.status='running';unsafe.snapshot.run.completedAt=null;unsafe.snapshot.revision='a'.repeat(64);
+ unsafe.definition.steps[1].outputs.push({label:'Old selector',path:'$.'+selector});
+ unsafe.snapshot.steps[1].outputs=unsafe.definition.steps[1].outputs;
+ unsafe.tweetRecords[0].text=secret;const ref=unsafe.snapshot.steps[1].evidence.find(r=>r.kind==='returned_output');
+ unsafe.values[ref.id].tweets=unsafe.tweetRecords;unsafe.values[ref.id][selector]=secret;
+ ref.preview={value:{tweets:[unsafe.tweetRecords[0]],[selector]:secret},truncated:true,count:null,counts:{'$.tweets':237}};
+ const observed=await setup(page,baseURL,{width:1440,height:900},unsafe);
+ await page.getByRole('button',{name:'Inspect Retrieve tweets outputs: Tweets',exact:true}).click();await expect(page.getByTestId('pipeline-value-completeness')).toHaveText('Complete retained value');
+ await page.getByTestId('pipeline-value-search').fill(secret);await expect(page.locator('.pipeline-viewer-records li')).toHaveCount(1);
+ expect(await page.evaluate(()=>window.Alpine.$data(document.querySelector('.pipeline-viewer')).matchingRecords[0].text)).toContain(secret);
+ const dbRows=async()=>page.evaluate(async()=>{
+  const rows={};for(const info of await indexedDB.databases()){
+   if(!info.name)continue;const database=await new Promise((resolve,reject)=>{const request=indexedDB.open(info.name);request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error)});
+   const names=['pipeline_viewer_state','pipeline_viewer_definitions','pipeline_viewer_runs','pipeline_viewer_snapshots'];
+   if(names.every(name=>database.objectStoreNames.contains(name)))for(const name of names)rows[name]=await new Promise((resolve,reject)=>{const request=database.transaction(name).objectStore(name).getAll();request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error)});
+   database.close();
+  }return rows;
+ });
+ expect(JSON.stringify(await dbRows())).toContain(selector);
+ await page.evaluate(()=>{window.shellFixture.delayRead('updates:run');window.shellFixture.delayRead('evidence:format-exec-returned_output');});
+ await page.waitForFunction(()=>window.shellFixture.hasPending('updates:run'));
+ await page.evaluate(()=>{const v=window.Alpine.$data(document.querySelector('.pipeline-viewer')),n=v.nodes.find(n=>n.logicalKey==='format');void v.inspectPort(n,'outputs',v.ports(n,'outputs')[0],null,true);});
+ await page.waitForFunction(()=>window.shellFixture.hasPending('evidence:format-exec-returned_output'));
+ const code='pipeline-viewer-evidence-redaction-review-required';
+ await page.evaluate(async(code)=>{window.shellFixture.setViewerFailure(409,code);await window.Alpine.$data(document.querySelector('.pipeline-viewer')).moreRuns();},code);
+ await expect(page.getByTestId('pipeline-status')).toHaveText('Evidence withheld pending credential redaction review');
+ await expect(page.locator('[data-testid^="pipeline-step-"]')).toHaveCount(0);await expect(page.getByTestId('pipeline-inspector')).not.toBeVisible();
+ const assertCleared=async()=>{
+  const rows=await dbRows();for(const name of ['pipeline_viewer_definitions','pipeline_viewer_runs','pipeline_viewer_snapshots'])expect(rows[name]).toEqual([]);
+  expect(rows.pipeline_viewer_state.some(row=>row.reason===code&&row.status==='unavailable'&&!row.selectedRunId&&!row.selectedDefinitionId)).toBe(true);
+  expect(JSON.stringify(rows)).not.toContain(selector);expect(JSON.stringify(rows)).not.toContain(secret);
+  expect(await page.evaluate(()=>{const v=window.Alpine.$data(document.querySelector('.pipeline-viewer'));return {snapshot:v.snapshot,definitions:v.definitions,runs:v.runs,inspector:v.inspector,preview:v.preview,path:v.inspectPath,evidence:v.inspectEvidenceId,execution:v.inspectExecutionId,label:v.inspectLabel,side:v.inspectSide,trail:v.parentTrail,records:v.matchingRecords};})).toEqual({snapshot:null,definitions:[],runs:[],inspector:null,preview:'',path:'',evidence:'',execution:'',label:'',side:'',trail:[],records:[]});
+  expect(await page.locator('.pipeline-viewer').textContent()).not.toContain(secret);expect(await page.locator('.pipeline-viewer').textContent()).not.toContain(selector);
+ };
+ await assertCleared();expect(await page.evaluate(()=>['updates:run','evidence:format-exec-returned_output'].every(key=>window.shellFixture.isAborted(key)))).toBe(true);
+ const url=page.url();await page.evaluate(()=>{window.shellFixture.release('updates:run');window.shellFixture.release('evidence:format-exec-returned_output')});await page.waitForTimeout(150);
+ await assertCleared();expect(page.url()).toBe(url);
+ // Same-context remount uses the same evidence IDs and successful health, still409.
+ await page.getByTestId('pipeline-viewer-close').click();await page.evaluate(()=>window.Alpine.store('chat').openPipelineViewer({runId:'run'}));
+ await expect(page.getByTestId('pipeline-status')).toHaveText('Evidence withheld pending credential redaction review');await assertCleared();
+ // New authoritative safe snapshot is the sole recovery source, not cached values.
+ await page.evaluate(()=>{const d=window.shellFixture.data;d.snapshot.run.status='completed';d.snapshot.run.completedAt='2026-10-02T00:00:01Z';d.snapshot.revision='b'.repeat(64);d.definition.steps[1].outputs=d.definition.steps[1].outputs.filter(p=>p.label!=='Old selector');d.snapshot.steps[1].outputs=d.definition.steps[1].outputs;d.snapshot.definition=d.definition;const ref=d.snapshot.steps[1].evidence.find(r=>r.kind==='returned_output');ref.preview={value:{tweets:[{id:'1',text:'SAFE_NEW_VALUE'}]},truncated:true,count:null,counts:{'$.tweets':237}};d.values[ref.id]={tweets:[{id:'1',text:'SAFE_NEW_VALUE'}]};window.shellFixture.setViewerFailure(null);});
+ await page.getByTestId('pipeline-retry').click();await expect(page.getByTestId('pipeline-status')).toHaveText('Pipeline viewer ready.');
+ await page.getByRole('button',{name:'Inspect Retrieve tweets outputs: Tweets',exact:true}).click();await expect(page.locator('.pipeline-viewer-records li')).toContainText('SAFE_NEW_VALUE');
+ expect(await page.locator('.pipeline-viewer').textContent()).not.toContain(secret);expect(await page.locator('.pipeline-viewer').textContent()).not.toContain(selector);
+ expect(observed.errors).toEqual([]);expect(observed.consoleErrors).toEqual([]);
+});
+
+test('production shell refuses late snapshot navigation after exact redaction409',async({page,baseURL})=>{
+ const observed=await setup(page,baseURL,{width:1440,height:900});
+ await page.evaluate(()=>window.shellFixture.delayRead('snapshot:slow'));
+ await page.getByRole('button',{name:'Open run: Slow run · slow',exact:true}).click();await page.waitForFunction(()=>window.shellFixture.hasPending('snapshot:slow'));
+ const url=page.url();await page.evaluate(async()=>{window.shellFixture.setViewerFailure(409,'pipeline-viewer-evidence-redaction-review-required');await window.Alpine.$data(document.querySelector('.pipeline-viewer')).moreRuns();});
+ await expect(page.getByTestId('pipeline-status')).toHaveText('Evidence withheld pending credential redaction review');
+ expect(await page.evaluate(()=>window.shellFixture.isAborted('snapshot:slow'))).toBe(true);
+ await page.evaluate(()=>window.shellFixture.release('snapshot:slow'));await page.waitForTimeout(150);
+ expect(page.url()).toBe(url);expect(new URL(page.url()).searchParams.get('run')).not.toBe('slow');
+ expect(await page.evaluate(()=>{const v=window.Alpine.$data(document.querySelector('.pipeline-viewer'));return {selected:v.selectedRunId,snapshot:v.snapshot,path:v.inspectPath,trail:v.parentTrail};})).toEqual({selected:'',snapshot:null,path:'',trail:[]});
+ await expect(page.locator('[data-testid^="pipeline-step-"]')).toHaveCount(0);
+ expect(observed.errors).toEqual([]);expect(observed.consoleErrors).toEqual([]);
+});
+
+test('production shell unrelated409 retains stale summaries and recovers normally',async({page,baseURL})=>{
+ const observed=await setup(page,baseURL,{width:1440,height:900});
+ await page.evaluate(()=>window.shellFixture.setViewerFailure(409,'other-conflict'));await page.getByTestId('pipeline-retry').click();
+ await expect(page.getByTestId('pipeline-status')).toHaveText('Autopilot disconnected. Retained summaries may be stale.');await expect(page.getByTestId('pipeline-step-retrieve')).toBeVisible();
+ await page.evaluate(()=>window.shellFixture.setViewerFailure(null));await page.getByTestId('pipeline-retry').click();await expect(page.getByTestId('pipeline-status')).toHaveText('Pipeline viewer ready.');
  expect(observed.errors).toEqual([]);expect(observed.consoleErrors).toEqual([]);
 });
 
