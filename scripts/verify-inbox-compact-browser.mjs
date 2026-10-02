@@ -1,4 +1,4 @@
-// Render actual Inbox templates and CSS offline; no server or backend traffic.
+// Render Inbox templates and CSS with fixture data; optional served asset input.
 import { chromium, webkit } from 'playwright';
 import { JSDOM } from 'jsdom';
 import { readFile, writeFile, mkdtemp, rm } from 'node:fs/promises';
@@ -7,11 +7,19 @@ import assert from 'node:assert/strict';
 import path from 'node:path';
 import { tmpdir } from 'node:os';
 const source = process.env.FLIGHTDECK_INBOX_SOURCE;
-const html = await readFile(source ? path.join(source, 'index.html') : 'index.html', 'utf8');
+const servedBase = process.env.FLIGHTDECK_INBOX_SERVED_URL;
+async function readServedAsset(url) {
+ const response = await fetch(url, { signal: AbortSignal.timeout(15000) });
+ assert(response.ok, `Served asset is available: ${url}`);
+ return response.text();
+}
+const html = servedBase ? await readServedAsset(servedBase) : await readFile(source ? path.join(source, 'index.html') : 'index.html', 'utf8');
 const sourceCss = await readFile(source ? path.join(source, 'styles.css') : 'src/styles.css', 'utf8');
 // Compile nesting/minification with the same Vite production CSS transform.
 const { transformWithEsbuild } = await import('vite');
-const css = (await transformWithEsbuild(sourceCss, 'styles.css', { loader: 'css', minify: true, target: ['chrome87', 'edge88', 'es2020', 'firefox78', 'safari14'] })).code;
+const css = servedBase ? (await Promise.all([...new JSDOM(html).window.document.querySelectorAll('link[rel="stylesheet"]')].map(async link => {
+ return readServedAsset(new URL(link.getAttribute('href'), servedBase));
+}))).join('\n') : (await transformWithEsbuild(sourceCss, 'styles.css', { loader: 'css', minify: true, target: ['chrome87', 'edge88', 'es2020', 'firefox78', 'safari14'] })).code;
 const document = new JSDOM(html).window.document;
 const find = (node, selector) => node && (node.querySelector(selector) || [...node.querySelectorAll('template')].map(t => find(t.content, selector)).find(Boolean));
 const inbox = find(document, '[data-deck-column="inbox"] .attention-card-list').outerHTML
@@ -80,7 +88,7 @@ try {
   const geometry=await cards.evaluateAll(cards=>cards.map(c=>({height:c.getBoundingClientRect().height,width:c.getBoundingClientRect().width,overflow:c.scrollWidth>c.clientWidth+1})));
   assert(geometry.every(c=>!c.overflow));
   assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
-  const screenshot=path.join(evidenceDir, `flightdeck-inbox-${source?'before':'after'}-${process.env.FLIGHTDECK_VERIFY_BROWSER || 'chrome'}-${width}.png`);
+  const screenshot=path.join(evidenceDir, `flightdeck-inbox-${servedBase?'served':source?'before':'after'}-${process.env.FLIGHTDECK_VERIFY_BROWSER || 'chrome'}-${width}.png`);
   await page.screenshot({path:screenshot,fullPage:true});
   const controls = page.locator('.inbox-panel-heading').locator('h3, .inbox-type-toggle, input, .inbox-search-submit, .deck-new-thread-button, .doc-actions-toggle');
   const toolbar = await controls.evaluateAll(nodes => nodes.map(n => { const r=n.getBoundingClientRect(); return {tag:n.tagName, x:r.x,y:r.y,width:r.width,height:r.height,center:r.y+r.height/2}; }));

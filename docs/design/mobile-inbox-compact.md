@@ -29,3 +29,11 @@ The offline browser script renders the production heading and cards at 320,
 search callbacks, new-thread dispatch, menu keyboard opening/Escape/actions,
 menu hit testing and sticky scrolling. Read/done and whole-card actions use
 instrumented local callbacks; backend navigation is outside this probe.
+
+To check the template and CSS that an existing runtime actually serves, run
+`FLIGHTDECK_INBOX_SERVED_URL=http://127.0.0.1:<registered-port>/ node scripts/verify-inbox-compact-browser.mjs`.
+The probe downloads the served HTML and every linked stylesheet without recompiling
+source CSS, then runs the same fixture behavior checks and mobile/desktop screenshots.
+It uses synthetic records and does not authenticate or contact Tower. This proves
+served layout behavior, but does not establish the build loaded in an existing user
+tab. Check runtime asset hashes and service-worker state separately.

@@ -2438,6 +2438,12 @@
       "label": "Conversation fix validation checkpoint",
       "notes": [],
       "noUserVisibleChanges": true
+    },
+    {
+      "buildNumber": 2145,
+      "label": "Served compact Inbox verification",
+      "notes": [],
+      "noUserVisibleChanges": true
     }
   ]
 }
