@@ -1,3 +1,4 @@
+import { createContextTreeEditor } from './context-tree-editor.js';
 import { observeContextScope } from './context-cache.js';
 import { getWorkspaceDb, isWorkspaceDbOpenForKey } from './db.js';
 import { layoutContextTree, contextPath, fitContextTree } from './context-tree-layout.js';
@@ -7,24 +8,16 @@ const views = new WeakMap();
 export function disposeContextTreeView(store) { views.get(store)?.suspend(); }
 export function resumeContextTreeView(store) { views.get(store)?.resume(); }
 
-// Artifact descriptors are external links, never claims of target access.
-export function contextArtifactOrigin(target) {
-  try {
-    const origin = new URL(target?.origin);
-    if (!['http:', 'https:'].includes(origin.protocol) || origin.username || origin.password || origin.pathname !== '/' || origin.search || origin.hash
-      || !/^[A-Za-z0-9_-]{1,128}$/.test(target.project) || !/^[A-Za-z0-9_-]{1,128}$/.test(target.artifact)
-      || target.page !== 'index.html' || target.version_policy !== 'latest') return '';
-    return origin.origin;
-  } catch { return ''; }
-}
+export { contextArtifactOrigin } from './context-artifact-link.js';
+import { contextArtifactOrigin, contextArtifactLatestUrl } from './context-artifact-link.js';
 
 export function createContextTreeView(deps = {}) {
   let subscription, resizeObserver, generation = 0, request = 0, queued = 0, key = '', db, service, store;
-  let refSignature = '', hadAvailable = false, fitted = false, drag = null, destroyed = false;
+  let refSignature = '', hadAvailable = false, fitted = false, drag = null, destroyed = false, pendingRevealId = '';
   const observe = deps.observe || observeContextScope;
   const database = deps.getDb || getWorkspaceDb;
   const ready = deps.isDbReady || isWorkspaceDbOpenForKey;
-  return {
+  const view = {
     hasContext: false, status: 'unloaded', components: [], references: [], selectedId: '', focusedId: '', collapsed: [],
     layout: layoutContextTree([]), scale: 1, panX: 0, panY: 0, viewportWidth: 800, viewportHeight: 500,
     refsLoading: false, refsError: '', notice: '', scopeTitle: '', workspaceId: '', scopeId: '',
@@ -59,15 +52,18 @@ export function createContextTreeView(deps = {}) {
         next: snapshot => {
           if (!active()) return;
           this.status = snapshot.status;
+          this.capabilities = snapshot.capabilities || {read:false,manage:false};
+          if (!this.canManage) this.clearEditor();
           this.components = ['complete', 'loading'].includes(snapshot.status) ? snapshot.components : [];
           this.references = snapshot.status === 'complete' ? snapshot.references : [];
           if (this.selectedId && !this.components.some(row => row.id === this.selectedId)) {
-            this.selectedId = ''; this.refsLoading = false; this.refsError = ''; request++;
+            this.clearEditor(); this.selectedId = ''; this.refsLoading = false; this.refsError = ''; request++;
             this.notice = 'The selected component is no longer available.';
           }
           const ids = new Set(this.components.map(row => row.id));
           this.collapsed = this.collapsed.filter(id => ids.has(id));
           this.relayout();
+          if (pendingRevealId && this.components.some(row => row.id === pendingRevealId)) this.revealCreated(pendingRevealId);
           if (!fitted && this.layout.nodes.length) this.fit();
           const refs = this.directReferences;
           const signature = refs.map(row => `${row.id}:${row.row_version}`).sort().join('|');
@@ -83,11 +79,12 @@ export function createContextTreeView(deps = {}) {
       void this.loadTree();
     },
     reset() {
+      this.clearEditor(); this.capabilities = {read:false,manage:false};
       generation++; request++; subscription?.unsubscribe(); subscription = null;
       this.hasContext = false; this.status = 'unloaded'; this.components = []; this.references = []; this.selectedId = ''; this.focusedId = '';
       this.collapsed = []; this.refsLoading = false; this.refsError = ''; this.notice = '';
       this.layout = layoutContextTree([]); this.scale = 1; this.panX = 0; this.panY = 0;
-      refSignature = ''; hadAvailable = false; fitted = false; drag = null;
+      refSignature = ''; hadAvailable = false; fitted = false; drag = null; pendingRevealId = '';
     },
     resume() {
       this.queueSync(store.currentWorkspace?.workspaceId || store.currentWorkspace?.workspace_id,
@@ -130,8 +127,18 @@ export function createContextTreeView(deps = {}) {
       this.layout = layoutContextTree(this.components, this.collapsed);
       if (!this.layout.nodes.some(node => node.id === this.focusedId)) this.focusedId = this.layout.nodes[0]?.id || '';
     },
+    revealCreated(id) {
+      pendingRevealId = id;
+      const row = this.components.find(row => row.id === id);
+      if (!row || this.busy || this.status !== 'complete') return;
+      const ancestors = contextPath(this.components, id).map(row => row.id);
+      this.collapsed = this.collapsed.filter(id => !ancestors.includes(id));
+      this.relayout(); pendingRevealId = ''; this.select(id); this.reveal(id);
+    },
     select(id) {
       if (this.status !== 'complete' || !this.components.some(row => row.id === id)) return;
+      if (this.busy) return;
+      this.clearEditor();
       this.selectedId = id; this.focusedId = id; this.notice = ''; refSignature = ''; hadAvailable = false;
       void this.loadReferences();
     },
@@ -208,13 +215,13 @@ export function createContextTreeView(deps = {}) {
     referenceTitle(row) {
       if (this.refsLoading) return 'Checking reference…';
       if (this.refsError) return 'Reference unavailable';
-      if (row.target_type === 'artifact') return contextArtifactOrigin(row.target) ? `Open artifact site: ${row.target.project} / ${row.target.artifact} (latest)` : 'Reference unavailable';
+      if (row.target_type === 'artifact') return contextArtifactOrigin(row.target) ? `Open latest artifact: ${row.target.project} / ${row.target.artifact} (latest)` : 'Reference unavailable';
       return row.resolution?.status === 'available' ? row.resolution.title || 'Untitled record' : 'Reference unavailable';
     },
     canOpen(row) { return !this.refsLoading && !this.refsError && (row.target_type === 'artifact' ? !!contextArtifactOrigin(row.target) : row.resolution?.status === 'available'); },
     async openReference(row) {
       if (!this.canOpen(row)) return;
-      if (row.target_type === 'artifact') { (deps.openExternal || (url => window.open(url, '_blank', 'noopener,noreferrer')))(contextArtifactOrigin(row.target)); return; }
+      if (row.target_type === 'artifact') { (deps.openExternal || (url => window.open(url, '_blank', 'noopener,noreferrer')))(contextArtifactLatestUrl(row.target)); return; }
       const epoch = generation, id = row.target?.record_id;
       try {
         // Recheck context resolution, then reuse ordinary target routes/viewers (their ACL remains authoritative).
@@ -242,4 +249,6 @@ export function createContextTreeView(deps = {}) {
       } catch { if (epoch === generation) this.refsError = 'Reference unavailable. Access may have changed.'; }
     },
   };
+  Object.defineProperties(view, Object.getOwnPropertyDescriptors(createContextTreeEditor({getService: () => service, getDb: () => db, getStore: () => store, online: deps.online, observe: deps.observePicker})));
+  return view;
 }

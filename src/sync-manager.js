@@ -83,6 +83,7 @@ import {
   hydrateTowerPgChannelMessages,
   hydrateTowerPgChannelAgentActivities,
   hydrateTowerPgAgentSessionHealth,
+  hydrateTowerPgScopeTasks,
   hydrateTowerPgChannelTasks,
   hydrateTowerPgChannels,
   hydrateTowerPgDailyNoteTarget,
@@ -619,6 +620,7 @@ export const syncManagerMixin = {
       case 'channels': return hydrateTowerPgChannels(this, options);
       case 'tasks': return hydrateTowerPgTasks(this, options);
       case 'documents': return hydrateTowerPgDocumentsAndFiles(this, options);
+      case 'scope-tasks': return hydrateTowerPgScopeTasks(this, id, options);
       case 'channel-tasks': return hydrateTowerPgChannelTasks(this, id, options);
       case 'channel-documents': return hydrateTowerPgChannelDocumentsAndFiles(this, id, options);
       case 'channel-messages': return hydrateTowerPgChannelMessages(this, id, options);

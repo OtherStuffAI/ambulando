@@ -271,8 +271,8 @@ describe('expanded sidebar scope/channel navigation', () => {
     expect(mobile).toMatch(/\.global-pg-channel-bar\.global-pg-channel-bar-sidebar-expanded\s*\{[^}]*display:\s*flex;/s);
   });
 
-  it('places Home directly below Setup without a dedicated divider in desktop or mobile layouts', () => {
-    expect(html).toMatch(/<span class="sidebar-label">Setup<\/span>[\s\S]*<\/ul>\s*<section\s+class="sidebar-scope-navigation"/s);
+  it('places Home below primary navigation without a dedicated divider in desktop or mobile layouts', () => {
+    expect(html).toMatch(/<span class="sidebar-label">Context<\/span>[\s\S]*<\/ul>\s*<section\s+class="sidebar-scope-navigation"/s);
     expect(html).not.toContain('sidebar-workspace-navigation-divider');
     expect(styles).not.toContain('sidebar-workspace-navigation-divider');
   });

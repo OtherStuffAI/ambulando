@@ -2612,6 +2612,19 @@ export async function hydrateTowerPgChannelTasks(store, channelId, deps = {}) {
   return tasks;
 }
 
+// Context reference browsing includes scope-owned tasks outside channels.
+export async function hydrateTowerPgScopeTasks(store, scopeId, deps = {}) {
+  const context = resolveTowerPgWorkspaceContext(store);
+  const read = deps.getTowerPgScopeTasks || getTowerPgScopeTasks;
+  const write = deps.upsertTask || upsertTask;
+  const actorNpubByActorId = await resolveActorNpubByActorIdWithFallback(store, deps, context);
+  const result = await read(context.workspaceId, scopeId, {baseUrl:context.baseUrl,appNpub:context.appNpub});
+  const rows = (result?.tasks || []).map(task => mapPgTaskToLocal(task, {workspaceOwnerNpub:context.workspaceOwnerNpub,actorNpubByActorId}));
+  assertTowerPgWorkspaceCurrent(store, context);
+  for (const row of rows) { assertTowerPgWorkspaceCurrent(store, context); await write(row); }
+  return rows;
+}
+
 export async function hydrateTowerPgTask(store, taskId, deps = {}) {
   const context = resolveTowerPgWorkspaceContext(store);
   const recordId = trimText(taskId);

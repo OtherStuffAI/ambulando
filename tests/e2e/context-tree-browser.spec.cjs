@@ -60,8 +60,8 @@ for (const [name, viewport] of [['desktop', { width: 1440, height: 900 }], ['mob
     await expect.poll(() => page.evaluate(() => window.fixture.opened)).toContainEqual({ type: 'doc', id: 'doc' });
     await page.getByRole('button', { name: 'Current task title', exact: true }).click();
     await expect.poll(() => page.evaluate(() => window.fixture.opened)).toContainEqual({ type: 'task', id: 'task' });
-    await page.getByRole('button', { name: 'Open artifact site: Suite / Design (latest)', exact: true }).click();
-    expect(await page.evaluate(() => window.fixture.opened)).toContainEqual({ url: 'https://artifacts.example' });
+    await page.getByRole('button', { name: 'Open latest artifact: Suite / Design (latest)', exact: true }).click();
+    expect(await page.evaluate(() => window.fixture.opened)).toContainEqual({ url: 'https://artifacts.example/artifacts/Suite/Design/' });
     await page.getByRole('button', { name: 'Current file title', exact: true }).click();
     await expect.poll(() => page.evaluate(() => window.fixture.opened)).toContainEqual({ object_id: 'authorized-storage', name: 'Authorized file', kind: 'file' });
     const before = await page.evaluate(() => window.fixture.calls.length);
@@ -150,12 +150,23 @@ test('built Flight Deck shell registers Context Tree and navigates desktop/mobil
     store.openConnectModal=()=>{}; store.showConnectModal=false;
     store.session={npub:'fixture-viewer'};store.navCollapsed=true;store.navSection='chat';
   });
-  await page.locator('.sidebar').getByRole('button', { name: 'Context Tree', exact: true }).click();
+  const labels = ['Deck', 'Chat', 'Tasks', 'Docs', 'Files', 'Agents', 'Context'];
+  await expect(page.locator('.sidebar-nav > li:not([x-show="false"]) .sidebar-label')).toHaveText(labels);
+  await expect(page.locator('.expanded-sidebar-section-switcher-btn')).toHaveText(labels);
+  await page.locator('.sidebar').getByRole('button', { name: 'Context', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Context Tree', exact: true })).toBeVisible();
   await expect(page.getByText('Choose a scope to browse its context.', { exact: true })).toBeVisible();
   expect(await page.evaluate(() => window.Alpine.store('chat').getRoutePath())).toMatch(/\/context$/);
   await page.evaluate(() => {window.Alpine.store('chat').navigateTo('chat');});
   await page.setViewportSize({width:390,height:844});
-  await page.locator('.mobile-section-switcher').getByRole('button', { name: 'Context Tree', exact: true }).click();
+  expect(await page.locator('.mobile-section-switcher-btn').evaluateAll(buttons => buttons.map(button => button.getAttribute('aria-label')))).toEqual(labels);
+  await page.locator('.mobile-section-switcher').getByRole('button', { name: 'Context', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Context Tree', exact: true })).toBeVisible();
+  for (const width of [390, 1280]) {
+    await page.setViewportSize({ width, height: 844 });
+    await page.locator('.avatar-chip').click();
+    await page.locator('#profile-avatar-menu').getByRole('button', { name: 'Setup', exact: true }).click();
+    expect(await page.evaluate(() => window.Alpine.store('chat').navSection)).toBe('settings');
+    await expect(page.locator('#profile-avatar-menu')).toBeHidden();
+  }
 });

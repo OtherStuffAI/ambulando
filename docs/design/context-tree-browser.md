@@ -38,15 +38,13 @@ missing or revoked files remain unavailable. No document body is rendered or
 copied into the component panel.
 
 Artifact descriptors display the project/artifact and latest policy without claiming
-ACL-checked metadata. The validated HTTP(S) origin opens the ordinary artifact
-site, where the user chooses the artifact's latest version. Local Artifact WApp
-`catalog-routing.js` currently parses only versioned artifact paths; no supported
-unversioned/latest deep link exists. WP3 does not invent one, fix a version,
-fetch a private cross-origin catalog, or change the WApp. WP4 must establish an
-approved follow-latest opener before direct artifact navigation can be enabled.
+ACL-checked metadata. WP4 adds the verified WApp-owned unversioned opener and
+editing; see [context-tree-editing.md](context-tree-editing.md) for the route,
+authority, conflict and source/runtime boundaries. The WApp owns authenticated
+catalog resolution; Flight Deck never fetches private cross-origin catalogs.
 
 WP4 extends the controller/template with the already accepted service commands
-and permission/conflict UX. It must not persist view selection or expansion or
+and permission/conflict UX. It does not persist view selection or expansion or
 introduce optimistic destructive writes. WP2's cache, coverage and resolution
 stores stay authoritative; WP4's editing uses the existing `context.*` command
 port and delete preview. Browser fixtures verify this source view, not live Tower

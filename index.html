@@ -445,7 +445,7 @@
           <button type="button" @click="$store.chat.syncNow()">Full sync</button>
           <button type="button" x-show="!$store.chat.isTowerPgMode" @click="$store.chat.openPendingWritesModal()">Pending Writes</button>
           <button type="button" @click="$store.chat.showAvatarMenu = false; $store.chat.navigateTo('settings'); $store.chat.openSettingsTab('apps')">App Management</button>
-          <button type="button" @click="$store.chat.navigateTo('settings')">Setup</button>
+          <button type="button" @click="$store.chat.showAvatarMenu = false; $store.chat.navigateTo('settings')">Setup</button>
           <button type="button" @click="$store.chat.logout()">Log out</button>
         </div>
       </div>
@@ -1133,7 +1133,6 @@
       <div class="mobile-sidebar-backdrop" x-show="$store.chat.mobileNavOpen" @click="$store.chat.mobileNavOpen = false"></div>
       <nav class="sidebar" :class="{ 'sidebar-collapsed': $store.chat.navCollapsed, 'sidebar-mobile-open': $store.chat.mobileNavOpen }">
         <ul class="sidebar-nav" x-show="$store.chat.navCollapsed && !$store.chat.mobileNavOpen">
-          <li :class="{ active: $store.chat.navSection === 'context' }"><button type="button" class="context-nav-button" title="Context Tree" aria-label="Context Tree" @click="$store.chat.navigateTo('context')"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="9" y="2" width="6" height="5" rx="1"/><path d="M12 7v5M4 17v-5h16v5"/><rect x="1" y="17" width="6" height="5" rx="1"/><rect x="17" y="17" width="6" height="5" rx="1"/></svg><span class="sidebar-label">Context Tree</span></button></li>
           <li :class="{ active: $store.chat.navSection === 'status' }" @click="$store.chat.navigateTo('status')">
             <span class="sidebar-icon" aria-hidden="true">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
@@ -1141,7 +1140,7 @@
                 <path d="M10 17a2 2 0 0 0 4 0"></path>
               </svg>
             </span>
-            <span class="sidebar-label">Flight Deck</span>
+            <span class="sidebar-label">Deck</span>
           </li>
           <li :class="{ active: $store.chat.navSection === 'chat' }" @click="$store.chat.navigateTo('chat')" class="sidebar-chat-row">
             <span class="sidebar-icon" aria-hidden="true">
@@ -1182,6 +1181,7 @@
             <span class="sidebar-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8" r="3"></circle><path d="M5 21a7 7 0 0 1 14 0M4 4h3M17 4h3"></path></svg></span>
             <span class="sidebar-label">Agents</span>
           </li>
+          <li :class="{ active: $store.chat.navSection === 'context' }"><button type="button" class="context-nav-button" title="Context" aria-label="Context" @click="$store.chat.navigateTo('context')"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="9" y="2" width="6" height="5" rx="1"/><path d="M12 7v5M4 17v-5h16v5"/><rect x="1" y="17" width="6" height="5" rx="1"/><rect x="17" y="17" width="6" height="5" rx="1"/></svg><span class="sidebar-label">Context</span></button></li>
           <!-- Jobs nav: hidden — stub feature (as-built remediation 04) -->
           <li x-cloak x-show="false" :class="{ active: $store.chat.navSection === 'jobs' }" @click="$store.chat.navigateTo('jobs'); $store.chat.loadJobDefinitions();">
             <span class="sidebar-icon" aria-hidden="true">
@@ -1193,15 +1193,6 @@
               </svg>
             </span>
             <span class="sidebar-label">Jobs</span>
-          </li>
-          <li :class="{ active: $store.chat.navSection === 'settings' }" @click="$store.chat.navigateTo('settings')">
-            <span class="sidebar-icon" aria-hidden="true">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-                <circle cx="12" cy="12" r="3"></circle>
-                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06A1.65 1.65 0 0 0 15 19.4a1.65 1.65 0 0 0-1 .6 1.65 1.65 0 0 1-2 0 1.65 1.65 0 0 0-1-.6 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-.6-1 1.65 1.65 0 0 1 0-2 1.65 1.65 0 0 0 .6-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-.6 1.65 1.65 0 0 1 2 0 1.65 1.65 0 0 0 1 .6 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9c.24.31.44.65.6 1 .3.65.3 1.35 0 2-.16.35-.36.69-.6 1Z"></path>
-              </svg>
-            </span>
-            <span class="sidebar-label">Setup</span>
           </li>
         </ul>
         <section
@@ -1433,7 +1424,6 @@
                 x-cloak
                 aria-label="Flight Deck sections"
               >
-                <button type="button" class="expanded-sidebar-section-switcher-btn" :class="{ 'expanded-sidebar-section-switcher-btn-active': $store.chat.navSection === 'context' }" :aria-current="$store.chat.navSection === 'context' ? 'page' : null" @click="$store.chat.navigateTo('context')"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="9" y="2" width="6" height="5" rx="1"/><path d="M12 7v5M4 17v-5h16v5"/><rect x="1" y="17" width="6" height="5" rx="1"/><rect x="17" y="17" width="6" height="5" rx="1"/></svg><span>Context Tree</span></button>
                 <button type="button" class="expanded-sidebar-section-switcher-btn" :class="{ 'expanded-sidebar-section-switcher-btn-active': $store.chat.navSection === 'status' }" :aria-current="$store.chat.navSection === 'status' ? 'page' : null" @click="$store.chat.navigateTo('status')">
                   <span class="expanded-sidebar-section-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M15 17h5l-1.4-1.4A2 2 0 0 1 18 14.2V11a6 6 0 1 0-12 0v3.2a2 2 0 0 1-.6 1.4L4 17h5"></path><path d="M10 17a2 2 0 0 0 4 0"></path></svg></span>
                   <span>Deck</span>
@@ -1502,13 +1492,10 @@
                     <path :d="$store.chat.isCurrentViewLocked ? 'M8 10V6a4 4 0 0 1 8 0v4' : 'M8 10V6a4 4 0 0 1 8 0'"></path>
                   </svg>
                 </button>
-                <button type="button" class="expanded-sidebar-section-switcher-btn" :class="{ 'expanded-sidebar-section-switcher-btn-active': $store.chat.navSection === 'settings' }" :aria-current="$store.chat.navSection === 'settings' ? 'page' : null" @click="$store.chat.navigateTo('settings')">
-                  <span class="expanded-sidebar-section-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06A1.65 1.65 0 0 0 15 19.4a1.65 1.65 0 0 0-1 .6 1.65 1.65 0 0 1-2 0 1.65 1.65 0 0 0-1-.6 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-.6-1 1.65 1.65 0 0 1 0-2 1.65 1.65 0 0 0 .6-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-.6 1.65 1.65 0 0 1 2 0 1.65 1.65 0 0 0 1 .6 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9c.24.31.44.65.6 1 .3.65.3 1.35 0 2-.16.35-.36.69-.6 1Z"></path></svg></span>
-                  <span>Setup</span>
-                </button>
                 <button type="button" class="expanded-sidebar-section-switcher-btn" :class="{ 'expanded-sidebar-section-switcher-btn-active': $store.chat.navSection === 'agents' }" :aria-current="$store.chat.navSection === 'agents' ? 'page' : null" @click="$store.chat.navigateTo('agents')">
                   <span class="expanded-sidebar-section-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8" r="3"></circle><path d="M5 21a7 7 0 0 1 14 0"></path></svg></span><span>Agents</span>
                 </button>
+                <button type="button" class="expanded-sidebar-section-switcher-btn" :class="{ 'expanded-sidebar-section-switcher-btn-active': $store.chat.navSection === 'context' }" :aria-current="$store.chat.navSection === 'context' ? 'page' : null" @click="$store.chat.navigateTo('context')"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="9" y="2" width="6" height="5" rx="1"/><path d="M12 7v5M4 17v-5h16v5"/><rect x="1" y="17" width="6" height="5" rx="1"/><rect x="17" y="17" width="6" height="5" rx="1"/></svg><span>Context</span></button>
               </nav>
               <button
                 type="button"
@@ -1636,7 +1623,6 @@
             </div>
             <nav class="mobile-section-switcher" x-show="!$store.chat.mobileNavOpen"
               @resize.window="$store.chat.updateNavigationViewport()" aria-label="Scope section navigation">
-              <div class="mobile-section-switcher-item"><button type="button" class="mobile-section-switcher-btn" aria-label="Context Tree" title="Context Tree" :class="{ 'mobile-section-switcher-btn-active': $store.chat.navSection === 'context' }" @click="$store.chat.navigateTo('context')"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="9" y="2" width="6" height="5" rx="1"/><path d="M12 7v5M4 17v-5h16v5"/><rect x="1" y="17" width="6" height="5" rx="1"/><rect x="17" y="17" width="6" height="5" rx="1"/></svg></button></div>
               <div class="mobile-section-switcher-item">
                 <button type="button" class="mobile-section-switcher-btn"
                   :class="{ 'mobile-section-switcher-btn-active': $store.chat.navSection === 'status' }"
@@ -1748,6 +1734,7 @@
                   </svg>
                 </button>
               </div>
+              <div class="mobile-section-switcher-item"><button type="button" class="mobile-section-switcher-btn" aria-label="Context" title="Context" :class="{ 'mobile-section-switcher-btn-active': $store.chat.navSection === 'context' }" @click="$store.chat.navigateTo('context')"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="9" y="2" width="6" height="5" rx="1"/><path d="M12 7v5M4 17v-5h16v5"/><rect x="1" y="17" width="6" height="5" rx="1"/><rect x="17" y="17" width="6" height="5" rx="1"/></svg></button></div>
             </nav>
           </div>
 
@@ -1758,6 +1745,7 @@
             <header class="context-tree-header">
               <div><h1>Context Tree<span x-show="scopeTitle" x-text="': ' + scopeTitle"></span></h1><p>Explore components and their direct references.</p></div>
               <div class="context-tree-tools" role="group" aria-label="Tree view controls">
+                <button type="button" x-show="canManage" :disabled="busy" @click="startCreate()">Add top-level component</button>
                 <button type="button" @click="zoom(1 / 1.25)" aria-label="Zoom out">−</button>
                 <output aria-label="Zoom level" x-text="Math.round(scale * 100) + '%'"></output>
                 <button type="button" @click="zoom(1.25)" aria-label="Zoom in">+</button>
@@ -1766,6 +1754,16 @@
               </div>
             </header>
             <p class="context-tree-notice" role="status" x-show="notice" x-text="notice"></p>
+            <p class="context-tree-notice" role="alert" x-show="editError" x-text="editError"></p>
+            <template x-if="editing && canManage"><form class="context-tree-editor" @submit.prevent="saveComponent()" aria-label="Component editor">
+              <label>Name<input aria-label="Component name" type="text" maxlength="256" x-model="draftTitle" :disabled="busy" required></label>
+              <label>Parent<select aria-label="Component parent" x-model="draftParent" :disabled="busy"><option value="">Top level</option><template x-for="parent in parentChoices" :key="parent.id"><option :value="parent.id" x-text="parent.title"></option></template></select></label>
+              <button type="submit" :disabled="busy" x-text="busy ? 'Saving…' : 'Save component'"></button><button type="button" :disabled="busy" @click="cancelEdit()">Cancel edit</button>
+            </form></template>
+            <div class="context-tree-editor" x-show="deletePreview && canManage" role="group" aria-label="Confirm component deletion">
+              <p x-text="deletePreview ? 'Delete this component and ' + deletePreview.descendant_count + ' descendants? ' + deletePreview.reference_count + ' reference links will be removed. Linked content will remain.' : ''"></p>
+              <button type="button" :disabled="busy" @click="confirmDelete()" x-text="busy ? 'Deleting…' : 'Confirm deletion'"></button><button type="button" :disabled="busy" @click="cancelEdit()">Cancel deletion</button>
+            </div>
             <div class="context-tree-panes">
               <div class="context-tree-canvas" x-ref="canvas" role="tree" aria-label="Scope components" :aria-busy="status === 'loading'" tabindex="0"
                 @wheel="wheel($event)" @pointerdown="pointerDown($event)" @pointermove="pointerMove($event)" @pointerup="pointerUp()" @pointercancel="pointerUp()" @lostpointercapture="pointerUp()"
@@ -1776,6 +1774,7 @@
                   <template x-for="node in visibleNodes" :key="node.id">
                     <div class="context-tree-node" :class="{ 'context-tree-node-selected': selectedId === node.id }" :style="{ left: node.x + 'px', top: node.y + 'px', width: node.width + 'px', height: node.height + 'px' }">
                       <button type="button" class="context-tree-node-title" role="treeitem" :data-context-node="node.id" :tabindex="focusedId === node.id ? 0 : -1" :aria-level="node.depth + 1" :aria-selected="selectedId === node.id" :aria-expanded="node.childCount ? node.expanded : null" :title="node.title" @focus="focusedId = node.id" @click="select(node.id)" @keydown="keydown($event, node.id)" x-text="node.title"></button>
+                      <button type="button" class="context-tree-node-add" x-show="canManage" :disabled="busy" :aria-label="'Add child to ' + node.title" @click.stop="startCreate(node.id)">+</button>
                       <button type="button" class="context-tree-node-toggle" x-show="node.childCount" tabindex="-1" :aria-label="(node.expanded ? 'Collapse ' : 'Expand ') + node.title" @click.stop="toggle(node.id)" x-text="node.expanded ? '−' : '+'"></button>
                     </div>
                   </template>
@@ -1788,6 +1787,26 @@
                   <div>
                     <nav class="context-tree-path" aria-label="Component path"><template x-for="part in path" :key="part.id"><button type="button" @click="select(part.id); reveal(part.id)" x-text="part.title"></button></template></nav>
                     <h2 x-text="selected.title"></h2>
+                    <div class="context-tree-tools" x-show="canManage"><button type="button" :disabled="busy" @click="startEdit()">Rename or move</button><button type="button" :disabled="busy" @click="startPicker()">Link reference</button><button type="button" :disabled="busy" @click="previewDelete()">Delete component</button></div>
+                    <form class="context-tree-editor" x-show="picker && canManage" @submit.prevent="attachArtifact()" aria-label="Reference picker">
+                      <label>Type<select aria-label="Reference type" x-model="pickerType" @change="loadPicker()" :disabled="busy"><option value="doc">Document</option><option value="file">File</option><option value="task">Task</option><option value="artifact">Artifact</option></select></label>
+                      <div x-show="pickerType !== 'artifact'">
+                        <label>Channel or scope<select aria-label="Reference channel" x-model="pickerChannel" @change="loadPicker()" :disabled="busy"><option value="">Choose a channel</option><template x-for="channel in pickerChannels" :key="channel.record_id"><option :value="channel.record_id" x-text="channel.title"></option></template><template x-for="scope in pickerScopes" :key="'scope:' + scope.record_id"><option :value="'scope:' + scope.record_id" x-text="'Scope: ' + scope.title"></option></template></select></label>
+                        <label>Find<input aria-label="Find reference" type="search" x-model="pickerSearch" :disabled="busy"></label>
+                        <p role="status" x-show="pickerLoading">Checking accessible records…</p>
+                        <p x-show="!pickerLoading && !filteredPickerRows.length">No available records. Choose another channel or retry.</p>
+                        <button type="button" :disabled="busy || pickerLoading" @click="loadPicker()">Refresh records</button>
+                        <ul><template x-for="candidate in filteredPickerRows" :key="candidate.id"><li><button type="button" :disabled="busy || pickerLoading" @click="attachRecord(candidate)" x-text="candidate.title"></button></li></template></ul>
+                      </div>
+                      <div x-show="pickerType === 'artifact'">
+                        <label>Origin<input aria-label="Artifact origin" type="url" x-model="artifactOrigin" :disabled="busy" placeholder="https://artifacts.example"></label>
+                        <label>Project<input aria-label="Artifact project" x-model="artifactProject" :disabled="busy"></label>
+                        <label>Artifact<input aria-label="Artifact name" x-model="artifactName" :disabled="busy"></label>
+                        <p>Opens the latest version available through the artifact site's normal sign-in.</p>
+                        <button type="submit" :disabled="busy">Link artifact</button>
+                      </div>
+                      <button type="button" :disabled="busy" @click="cancelEdit()">Close picker</button>
+                    </form>
                     <h3>Direct references</h3>
                     <p role="status" x-show="refsLoading">Checking references…</p>
                     <div role="status" x-show="refsError"><p x-text="refsError"></p><button type="button" @click="loadReferences()">Retry references</button></div>
@@ -1795,7 +1814,8 @@
                     <ul class="context-tree-references"><template x-for="reference in directReferences" :key="reference.id"><li>
                       <span class="context-tree-reference-type" x-text="reference.target_type === 'doc' ? 'Document' : reference.target_type"></span>
                       <button type="button" :disabled="!canOpen(reference)" @click="openReference(reference)" x-text="referenceTitle(reference)"></button>
-                      <small x-show="reference.target_type === 'artifact'">External artifact · choose its latest version on the site</small>
+                      <small x-show="reference.target_type === 'artifact'">External artifact · follows latest through site access</small>
+                      <button type="button" x-show="canManage" :disabled="busy" @click="unlinkReference(reference)" :aria-label="'Unlink ' + referenceTitle(reference)">Unlink</button>
                     </li></template></ul>
                   </div>
                 </template>

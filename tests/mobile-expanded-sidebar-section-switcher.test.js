@@ -43,24 +43,17 @@ describe('expanded left-column section switcher', () => {
       ['tasks', 'Tasks'],
       ['docs', 'Docs'],
       ['files', 'Files'],
-      ['settings', 'Setup'],
       ['agents', 'Agents'],
+      ['context', 'Context'],
     ]) {
       expect(expandedSwitcher).toContain(`navigateTo('${section}')`);
       expect(expandedSwitcher).toContain(`$store.chat.navSection === '${section}' ? 'page' : null`);
       expect(expandedSwitcher).toMatch(new RegExp(`>${label}<\\/span>`));
     }
 
-    expect(expandedSwitcher.match(/class="expanded-sidebar-section-icon"/g)).toHaveLength(7);
-    expect(expandedSwitcher.match(/navigateTo\('settings'\)/g)).toHaveLength(1);
-    const setupButton = expandedSwitcher.match(/<button[^>]*navigateTo\('settings'\)[^>]*>[\s\S]*?<\/button>/)?.[0] ?? '';
-    const canonicalSetupItem = sidebar.match(/<li[^>]*navSection === 'settings'[^>]*>[\s\S]*?<\/li>/)?.[0] ?? '';
-    const setupGear = setupButton.match(/<svg[\s\S]*?<\/svg>/)?.[0].replace(/\s+/g, '') ?? '';
-    const canonicalGear = canonicalSetupItem.match(/<svg[\s\S]*?<\/svg>/)?.[0].replace(/\s+/g, '') ?? '';
-    expect(setupButton).toContain('class="expanded-sidebar-section-switcher-btn"');
-    expect(setupButton).not.toContain('mobileNavOpen');
-    expect(setupButton).not.toContain('mobile-only');
-    expect(setupGear).toBe(canonicalGear);
+    expect(expandedSwitcher.match(/class="expanded-sidebar-section-switcher-btn"/g)).toHaveLength(7);
+    expect(expandedSwitcher).not.toContain("navigateTo('settings')");
+
   });
 
   it('removes the actual expanded left-column navigation set and its layout space', () => {
@@ -68,7 +61,7 @@ describe('expanded left-column section switcher', () => {
     expect(sidebar).toMatch(/<\/ul>\s*<section\s+class="sidebar-scope-navigation"/s);
     expect(sidebar).not.toContain('sidebar-workspace-navigation-divider');
     expect(sidebar).not.toContain('mobile-expanded-section-switcher');
-    expect(sidebar.match(/navigateTo\('settings'\)/g)).toHaveLength(1);
+    expect(sidebar).not.toContain("navigateTo('settings')");
     expect(styles).toMatch(/\.sidebar\.sidebar-mobile-open \.sidebar-nav\s*\{[^}]*display:\s*none;/s);
     expect(styles).not.toMatch(/global-pg-channel-bar-sidebar-expanded\s*\{[^}]*display:\s*none;/s);
   });

@@ -18,6 +18,7 @@ import {
   hydrateTowerPgReactionTarget,
   hydrateTowerPgTask,
   hydrateTowerPgTasks,
+  hydrateTowerPgScopeTasks,
   hydrateTowerPgTaskComments,
   hydrateTowerPgWorkroom,
   hydrateTowerPgWorkrooms,
@@ -3329,4 +3330,27 @@ it('waits for unfinished core writes before returning a failed SSE batch', async
   const run = hydrateTowerPgEventUpdates(target, [{ entity_type: 'message', channel_id: 'bad' }, { entity_type: 'message', channel_id: 'good' }]);
   await Promise.resolve(); expect(committed).toBe(false); finish();
   await expect(run).rejects.toThrow('core failed'); expect(committed).toBe(true);
+});
+
+
+describe('Context reference scope-task browsing', () => {
+  it('returns only fresh accessible scope rows and writes through ordinary task materialization', async () => {
+    const target = store();
+    const getTowerPgScopeTasks = vi.fn(async () => ({tasks:[{id:'scope-task',workspace_id:'workspace-1',scope_id:'other-scope',title:'Current task',row_version:3}]}));
+    const upsertTask = vi.fn();
+    const result = await hydrateTowerPgScopeTasks(target,'other-scope',{getTowerPgScopeTasks,upsertTask,actorNpubByActorId:new Map()});
+    expect(getTowerPgScopeTasks).toHaveBeenCalledWith('workspace-1','other-scope',{baseUrl:'https://tower.example',appNpub:'flightdeck_pg'});
+    expect(result).toMatchObject([{record_id:'scope-task',title:'Current task',pg_workspace_id:'workspace-1',pg_record_type:'task'}]);
+    expect(upsertTask).toHaveBeenCalledWith(result[0]);
+  });
+  it('does not substitute cached private task metadata after a denied browse', async () => {
+    const upsertTask=vi.fn();
+    await expect(hydrateTowerPgScopeTasks(store({tasks:[{record_id:'private',title:'PRIVATE'}]}),'denied',{getTowerPgScopeTasks:vi.fn(async()=>{throw Object.assign(new Error('Denied'),{status:403})}),upsertTask,actorNpubByActorId:new Map()})).rejects.toMatchObject({status:403});
+    expect(upsertTask).not.toHaveBeenCalled();
+  });
+  it('ignores a response from a workspace replaced during the request',async()=>{
+    const target=store(),upsertTask=vi.fn();
+    await expect(hydrateTowerPgScopeTasks(target,'scope',{getTowerPgScopeTasks:vi.fn(async()=>{target.currentWorkspace={...target.currentWorkspace,workspaceId:'other'};return {tasks:[{id:'stale'}]}}),upsertTask,actorNpubByActorId:new Map()})).rejects.toThrow();
+    expect(upsertTask).not.toHaveBeenCalled();
+  });
 });

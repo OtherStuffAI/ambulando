@@ -2452,6 +2452,27 @@
         "Inspect actual pipeline steps, child workflows and attempt history from a verified Autopilot connection.",
         "Read retained values with explicit availability, paginated records, exact copy and keyboard or touch controls. Requires the Autopilot pipeline viewer capability."
       ]
+    },
+    {
+      "buildNumber": 2147,
+      "label": "Edit Context Tree components and references",
+      "notes": [
+        "Create roots and children, rename or move components, and link or unlink accessible workspace records with management permissions.",
+        "Confirm subtree deletion with exact counts and refreshed conflicts; linked content remains. Artifact links follow the latest accessible version."
+      ]
+    },
+    {
+      "buildNumber": 2148,
+      "label": "Clear primary navigation",
+      "notes": [
+        "Order navigation as Deck, Chat, Tasks, Docs, Files, Agents, Context on desktop and mobile. Open Setup from the avatar menu."
+      ]
+    },
+    {
+      "buildNumber": 2149,
+      "label": "Validated navigation and pipeline viewer",
+      "notes": [],
+      "noUserVisibleChanges": true
     }
   ]
 }

@@ -343,8 +343,8 @@ describe('flight deck summary template', () => {
   it('labels setup without changing the settings route', () => {
     const html = readFileSync(INDEX_PATH, 'utf8');
 
-    expect(html).toContain('@click="$store.chat.navigateTo(\'settings\')">Setup</button>');
-    expect(html).toContain('<span class="sidebar-label">Setup</span>');
+    expect(html).toContain('@click="$store.chat.showAvatarMenu = false; $store.chat.navigateTo(\'settings\')">Setup</button>');
+    expect(html).not.toContain('<span class="sidebar-label">Setup</span>');
     expect(html).not.toContain('<span class="sidebar-label">Settings</span>');
   });
 
