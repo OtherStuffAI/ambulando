@@ -24674,3 +24674,10 @@ html.wingman-iphone-webview .chat-channel-tab-scroll * {
  .context-tree-dialog button { min-height:38px; }
  .context-tree-hint { font-size:9px; }
 }
+
+.scope-access-panel { padding: 20px; margin: 16px 0; border: 1px solid var(--border-color, #8885); border-radius: 12px; }
+.scope-access-heading, .scope-access-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.scope-access-row { padding: 12px 0; border-top: 1px solid #8883; }
+.scope-access-row small { display: block; margin-top: 4px; opacity: .8; }
+.scope-access-panel label { display: flex; flex-direction: column; gap: 6px; }
+@media(max-width: 600px) { .scope-access-heading, .scope-access-row { align-items: flex-start; flex-wrap: wrap; } }

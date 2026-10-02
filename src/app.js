@@ -40,6 +40,7 @@ import {
   normalizeDocTableTimestamp,
   sortDocBrowserRows,
 } from './docs-table.js';
+import { scopeAccessManagerMixin } from './scope-access-manager.js';
 import { scopesManagerMixin } from './scopes-manager.js';
 import { channelsManagerMixin } from './channels-manager.js';
 import { audioRecordingManagerMixin } from './audio-recording-manager.js';
@@ -9876,6 +9877,7 @@ export function initApp() {
     onboardingAnnouncementsManagerMixin,
     channelsManagerMixin,
     scopesManagerMixin,
+    scopeAccessManagerMixin,
     docsManagerMixin,
     jobsManagerMixin,
     audioRecordingManagerMixin,

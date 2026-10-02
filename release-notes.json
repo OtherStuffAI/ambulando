@@ -583,7 +583,7 @@
       "buildNumber": 1771,
       "label": "Delegated WApp management",
       "notes": [
-        "Grant a person or agent narrow, expiring WApp management authority from Setup → Permissions, preview its limits before signing, and revoke it immediately.",
+        "Grant a person or agent narrow, expiring WApp management authority from Setup \u2192 Permissions, preview its limits before signing, and revoke it immediately.",
         "Assign existing WApps through installation intents and inspect pending, active, failed, repairable, or revoked lifecycle state with reconcile and revoke controls."
       ]
     },
@@ -1227,7 +1227,7 @@
       "label": "Dismissible recovery controls",
       "notes": [
         "Review legacy local-edit recovery from the avatar menu and dismiss it on this device.",
-        "Choose Tower’s version to refresh the workspace and stop prompting about older drafts, while retaining the old cache as a fallback."
+        "Choose Tower\u2019s version to refresh the workspace and stop prompting about older drafts, while retaining the old cache as a fallback."
       ]
     },
     {
@@ -1353,7 +1353,7 @@
       "buildNumber": 1910,
       "label": "Working history in the menu",
       "notes": [
-        "Chat and Inbox show only current working commentary. Open Menu → Working history & diagnostics for retained runs, earlier updates and connection details, even after work finishes."
+        "Chat and Inbox show only current working commentary. Open Menu \u2192 Working history & diagnostics for retained runs, earlier updates and connection details, even after work finishes."
       ]
     },
     {
@@ -2157,7 +2157,7 @@
       "buildNumber": 2098,
       "label": "Numbered scope selection",
       "notes": [
-        "Select any of the first ten visible scopes with 1–9 or 0; numbered scope shortcuts follow the current filtered order."
+        "Select any of the first ten visible scopes with 1\u20139 or 0; numbered scope shortcuts follow the current filtered order."
       ]
     },
     {
@@ -2494,7 +2494,7 @@
       "label": "Authenticated manual feed links",
       "notes": [
         "Add a registered Book of Sand link even when Autopilot app discovery is unavailable. Your reader validates Editions and saves its subscription through Tower.",
-        "Book of Sand graph reads use the workspace’s trusted source binding. Manual links preserve your configured transport and offer validation and retry."
+        "Book of Sand graph reads use the workspace\u2019s trusted source binding. Manual links preserve your configured transport and offer validation and retry."
       ]
     },
     {
@@ -2581,6 +2581,26 @@
       "label": "Pipeline evidence redaction review",
       "notes": [
         "Withhold cached pipeline evidence and selectors when the service requires credential redaction review. Keep unrelated connection conflicts recoverable."
+      ]
+    },
+    {
+      "buildNumber": 2165,
+      "label": "Scope Context editor access",
+      "notes": [
+        "Assign Context editor or Scope manager to people, agents and groups in Setup \u2192 Scopes \u2192 Access. See direct and group-derived access, and revoke role grants while preserving custom permissions."
+      ]
+    },
+    {
+      "buildNumber": 2168,
+      "label": "Scope Access validation checkpoint",
+      "notes": [],
+      "noUserVisibleChanges": true
+    },
+    {
+      "buildNumber": 2169,
+      "label": "Scope manager grant choices",
+      "notes": [
+        "Scope managers can choose canonical people, agents and groups without unrelated workspace directory permissions."
       ]
     }
   ]

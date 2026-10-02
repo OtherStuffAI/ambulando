@@ -8344,6 +8344,30 @@
             <p class="scopes-subtitle" x-text="$store.chat.isTowerPgMode ? 'Create top-level work areas. Channels and threads provide the next levels of context.' : 'Organize work into a hierarchy of scopes.'"></p>
           </div>
 
+          <section class="scope-access-panel channel-access-card" x-show="$store.chat.scopeAccessVisible" x-cloak aria-label="Scope Access">
+            <div class="scope-access-heading"><h3><span x-text="$store.chat.scopeAccessScope?.title"></span> · Access</h3><button type="button" class="btn-secondary" @click="$store.chat.closeScopeAccess()" :disabled="$store.chat.scopeAccessBusy">Close Access</button></div>
+            <p>Access applies to this scope only. Child scopes, channels and linked content keep their own permissions.</p>
+            <p>Context editor can create, rename and move components, link and unlink references, and delete confirmed subtrees. Scope manager can also manage scope settings and access.</p>
+            <button type="button" class="btn-secondary" @click="$store.chat.refreshScopeAccess()" :disabled="$store.chat.scopeAccessBusy">Refresh Access</button>
+            <p role="alert" x-show="$store.chat.scopeAccessError" x-text="$store.chat.scopeAccessError"></p>
+            <p role="status" x-show="$store.chat.scopeAccessNotice" x-text="$store.chat.scopeAccessNotice"></p>
+            <p x-show="$store.chat.scopeAccessBusy">Checking scope access…</p>
+            <p x-show="$store.chat.scopeAccessData && !$store.chat.scopeAccessData.can_manage">Scope manager permission is required to change access. Your effective access is shown below.</p>
+            <div class="channel-grant-form" x-show="$store.chat.scopeAccessData?.can_manage">
+              <label>Assign to<select aria-label="Assign to" class="new-group-input" x-model="$store.chat.scopeAccessPrincipalKind" @change="$store.chat.scopeAccessPrincipalId = ''" :disabled="$store.chat.scopeAccessBusy"><option value="human">People</option><option value="agent">Agents</option><option value="group">Groups</option></select></label>
+              <label>Person, agent or group<select aria-label="Person, agent or group" class="new-group-input" x-model="$store.chat.scopeAccessPrincipalId" :disabled="$store.chat.scopeAccessBusy"><option value="">Choose…</option><template x-for="option in $store.chat.scopeAccessPrincipalOptions" :key="option.id"><option :value="option.id" x-text="option.label"></option></template></select></label>
+              <label>Role<select aria-label="Role" class="new-group-input" x-model="$store.chat.scopeAccessRole" :disabled="$store.chat.scopeAccessBusy"><template x-for="role in $store.chat.scopeAccessRoles" :key="role.value"><option :value="role.value" x-text="role.label"></option></template></select></label>
+              <button type="button" class="btn-primary" @click="$store.chat.saveScopeAccess()" :disabled="$store.chat.scopeAccessBusy || !$store.chat.scopeAccessPrincipalId">Save access</button>
+              <p x-text="$store.chat.scopeAccessRoleDescription"></p>
+              <p>Saving adds this role and preserves existing permissions. To narrow a manager’s access, revoke their role grants, then add Context editor.</p>
+            </div>
+            <h4 x-show="$store.chat.scopeAccessData?.can_manage">Direct grants</h4>
+            <template x-for="grant in ($store.chat.scopeAccessData?.grants || [])" :key="grant.principal_type + ':' + grant.principal_id"><div class="scope-access-row"><div><strong x-text="grant.label"></strong> · <span x-text="$store.chat.scopeAccessRoleLabel(grant.role)"></span><small x-text="grant.kind === 'group' ? 'Granted to group' : (grant.kind === 'agent' ? 'Agent · direct grant' : 'Person · direct grant')"></small><small x-show="grant.permissions.some(p => !['scope.manage','context.edit'].includes(p))">Additional permissions are preserved.</small></div><button type="button" class="btn-secondary" x-show="$store.chat.scopeAccessData.can_manage && grant.role !== 'custom'" :disabled="$store.chat.scopeAccessBusy" @click="$store.chat.saveScopeAccess(grant, true)" :aria-label="'Revoke role grants for ' + grant.label">Revoke role grants</button></div></template>
+            <h4>Effective access</h4>
+            <template x-for="entry in ($store.chat.scopeAccessData?.effective_access || [])" :key="entry.actor_id"><div class="scope-access-row"><div><strong x-text="entry.label"></strong> · <span x-text="$store.chat.scopeAccessRoleLabel(entry.role)"></span><small x-text="entry.sources.map(source => source.via === 'Direct' ? 'Direct grant' : 'Via ' + source.via).filter((s,i,a) => a.indexOf(s) === i).join(' · ')"></small></div></div></template>
+            <p x-show="$store.chat.scopeAccessData && !$store.chat.scopeAccessData.effective_access.length">No Context editor or Scope manager access to show.</p>
+          </section>
+
           <!-- New scope form -->
           <div class="scope-create-bar" x-show="$store.chat.canAdminWorkspace">
             <div class="scope-create-actions">
@@ -8371,6 +8395,7 @@
                         </button>
                         <div class="doc-actions-popover" x-show="actionsOpen" x-cloak x-transition>
 	                          <button x-show="!$store.chat.isTowerPgMode && $store.chat.canAdminWorkspace && parseInt(s1.level.slice(1)) < 5" type="button" @click.stop="$store.chat.startNewScope('l' + (parseInt(s1.level.slice(1)) + 1), s1.record_id); actionsOpen = false">Add child scope</button>
+                          <button type="button" x-show="$store.chat.isTowerPgMode" @click.stop="$store.chat.openScopeAccess(s1); actionsOpen = false">Access</button>
 	                          <button type="button" x-show="$store.chat.canManageScope(s1)" @click.stop="$store.chat.startEditScope(s1.record_id); actionsOpen = false">Rename scope</button>
 	                          <button type="button" @click.stop="$store.chat.copyFlightDeckReference('scope', s1.record_id, s1.title || 'Untitled scope'); actionsOpen = false">FD Ref</button>
 	                          <button type="button" x-show="!$store.chat.isTowerPgMode" @click.stop="$store.chat.openRecordStatusModal({ familyId: 'scope', recordId: s1.record_id, label: s1.title || 'Untitled scope' }); actionsOpen = false">Check status</button>
@@ -8383,7 +8408,7 @@
                   <div class="scope-card-clickable" @click="expanded = !expanded">
                     <h3 class="scope-card-title" x-text="s1.title"></h3>
                     <p class="scope-card-desc" x-show="s1.description" x-text="s1.description"></p>
-                    <div class="scope-card-meta" x-show="$store.chat.getScopeGroupSummary(s1) !== 'No groups'">
+                    <div class="scope-card-meta" x-show="!$store.chat.isTowerPgMode && $store.chat.getScopeGroupSummary(s1) !== 'No groups'">
                       <span class="scope-card-meta-label">Groups:</span>
                       <span x-text="$store.chat.getScopeGroupSummary(s1)"></span>
                     </div>

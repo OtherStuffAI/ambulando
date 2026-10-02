@@ -2677,3 +2677,12 @@ export async function requestTowerPgContext(workspaceId, scopeId, suffix = '', {
   const resp = await signedTowerPgFetch(requestPath, { method, body, baseUrl, appNpub });
   return json(resp, { requestUrl, method, prefix: 'Tower PG context API' });
 }
+
+export async function getTowerPgScopeAccess(workspaceId, scopeId, {baseUrl = _baseUrl, appNpub = FLIGHT_DECK_PG_APP_NPUB} = {}) {
+  const path = `/api/v4/flightdeck-pg/workspaces/${encodeURIComponent(workspaceId)}/scopes/${encodeURIComponent(scopeId)}/grants`;
+  return json(await signedTowerPgFetch(path,{baseUrl,appNpub}),{requestUrl:resolveTowerPgUrl(path,baseUrl),method:'GET',prefix:'Tower PG API'});
+}
+export async function putTowerPgScopeAccess(workspaceId, scopeId, body, {baseUrl = _baseUrl, appNpub = FLIGHT_DECK_PG_APP_NPUB} = {}) {
+  const path = `/api/v4/flightdeck-pg/workspaces/${encodeURIComponent(workspaceId)}/scopes/${encodeURIComponent(scopeId)}/grants`;
+  return json(await signedTowerPgFetch(path,{method:'PUT',body,baseUrl,appNpub}),{requestUrl:resolveTowerPgUrl(path,baseUrl),method:'PUT',prefix:'Tower PG API'});
+}

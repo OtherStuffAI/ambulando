@@ -71,7 +71,7 @@ export const TOWER_WORKSPACE_COMMAND_CONTRACT = Object.freeze({
   ]),
   acknowledgementWithTargetedCoverage: Object.freeze([
     'task.assignments.sync', 'thread.delete', 'thread.archive', 'thread.title.update',
-    'channel.reorder', 'channel-grant.create', 'channel-grant.update', 'channel-grant.delete',
+    'scope-access.put', 'channel.reorder', 'channel-grant.create', 'channel-grant.update', 'channel-grant.delete',
     'workspace.update', 'personal-agent-settings.update', 'workspace.delete', 'workspace.bootstrap',
     'workspace-member.create', 'workspace-member.profile.update', 'workspace-group.create',
     'workspace-group-member.add', 'workspace-group-member.remove',
@@ -185,6 +185,7 @@ export function prepareTowerWorkspaceCommand(store, name, input = {}) {
     'channel.create': 'createTowerPgScopeChannel',
     'channel.delete': 'deleteTowerPgChannel',
     'channel.reorder': 'reorderTowerPgChannel',
+    'scope-access.put': 'putTowerPgScopeAccess',
     'channel-grant.create': 'createTowerPgChannelGrant',
     'channel-grant.update': 'updateTowerPgChannelGrant',
     'channel-grant.delete': 'deleteTowerPgChannelGrant',

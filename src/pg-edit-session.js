@@ -319,3 +319,14 @@ export function addPgEditLeaseToSaveBody(store, record, entityType, body = {}) {
   const leaseToken = trimText(session?.lease?.lease_token || store?.getPgEditLeaseToken?.(entityType, record?.record_id));
   return leaseToken ? { ...body, lease_token: leaseToken } : body;
 }
+
+// Short scope access commands use the same canonical edit leases as long edits.
+export async function acquirePgScopeAccessLease(context, scopeId) {
+  const result = await acquireTowerPgEditLease(context.workspaceId, {entity_type:'scope',entity_id:scopeId,ttl_seconds:120}, context);
+  return result.lease;
+}
+export async function releasePgScopeAccessLease(context, lease) {
+  if (lease?.id) await releaseTowerPgEditLease(context.workspaceId,lease.id,{lease_token:lease.lease_token},context);
+}
+
+export const resolvePgEditWorkspaceContext = (...args) => resolveTowerPgWorkspaceContext(...args);

@@ -130,3 +130,5 @@ export const updateTowerPgContextComponent = (store, input, mutationId) => issue
 export const attachTowerPgContextReference = (store, input, mutationId) => issue(store, 'context.attach', input, mutationId);
 export const unlinkTowerPgContextReference = (store, input, mutationId) => issue(store, 'context.unlink', input, mutationId);
 export const deleteTowerPgContextSubtree = (store, input, mutationId) => issue(store, 'context.delete', input, mutationId);
+
+export const putTowerPgScopeAccess = (store, ...args) => issueTypedApi(store, 'scope-access.put', args, args[1]);

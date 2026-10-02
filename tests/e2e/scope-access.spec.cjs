@@ -1,0 +1,28 @@
+const {test,expect}=require('playwright/test');
+const {build}=require('esbuild');
+const fs=require('node:fs/promises');
+const path=require('node:path');
+const {JSDOM}=require('jsdom');
+let bundle,markup,css;
+test.beforeAll(async()=>{
+ const root=path.resolve(__dirname,'../..'),doc=new JSDOM(await fs.readFile(path.join(root,'index.html'),'utf8'));
+ function find(node){return node.querySelector('.scope-access-panel')||[...node.querySelectorAll('template')].map(t=>find(t.content)).find(Boolean)}
+ markup=find(doc.window.document).outerHTML;css=await fs.readFile(path.join(root,'src/styles.css'),'utf8');
+ const result=await build({bundle:true,write:false,format:'esm',logLevel:'silent',plugins:[{name:'labelled-disposable-browser-fixture',setup(b){b.onResolve({filter:/pg-edit-session\.js|tower-command-intents\.js/},args=>({path:args.path,namespace:'fixture'}));b.onLoad({filter:/.*/,namespace:'fixture'},args=>({contents:args.path.includes('pg-edit-session')?`export const resolvePgEditWorkspaceContext=s=>({workspaceId:'fixture-workspace'}); export const acquirePgScopeAccessLease=async()=>({id:'fixture-lease',lease_token:'fixture-token'});export const releasePgScopeAccessLease=async()=>{};`:`export const putTowerPgScopeAccess=async(s,w,id,b)=>window.fixture.save(b);`,loader:'js'}))}}],stdin:{resolveDir:root,contents:`
+ import Alpine from 'alpinejs';import {scopeAccessManagerMixin as mixin} from './src/scope-access-manager.js';
+ const data={can_manage:true,revision:'1',grants:[],effective_access:[]};let counter=1,deny=false;
+ const labels={person:'Fixture Pete',agent:'Fixture Rick',group:'Fixture builders'};
+ window.fixture={data,save:async b=>{if(deny)throw {status:403};if(b.expected_revision!==data.revision)throw {status:409};const index=data.grants.findIndex(g=>g.principal_id===b.principal_id);if(b.revoke){if(index>=0)data.grants.splice(index,1);}else{const row={principal_type:b.principal_type,principal_id:b.principal_id,label:labels[b.principal_id],kind:b.principal_id==='agent'?'agent':b.principal_type==='group'?'group':'human',role:b.role,permissions:[b.role==='scope_manager'?'scope.manage':'context.edit']};if(index<0)data.grants.push(row);else data.grants[index]=row;}data.revision=String(++counter);data.effective_access=data.grants.map(g=>({actor_id:g.principal_id,label:g.label,role:g.role,sources:[{via:g.kind==='group'?'Fixture builders':'Direct'}]}));return JSON.parse(JSON.stringify(data));},setReader(){data.can_manage=false;Alpine.store('chat').scopeAccessData=JSON.parse(JSON.stringify(data));deny=true;}};
+ const s={isTowerPgMode:true,pgWorkspaceMembers:[{actor_id:'person',kind:'human',display_name:labels.person},{actor_id:'agent',kind:'agent',display_name:labels.agent}],pgChannelGrantGroupOptions:[{groupId:'group',label:labels.group}],getPgWorkspaceMemberLabel:m=>m.display_name,getTowerSyncService:()=>({ensureLoaded:async()=>JSON.parse(JSON.stringify(data))}),refreshGroups:async()=>{},refreshTowerPgWorkspaceMembers:async()=>{}};
+ Object.defineProperties(s,Object.getOwnPropertyDescriptors(mixin));Alpine.store('chat',s);window.Alpine=Alpine;Alpine.start();await Alpine.store('chat').openScopeAccess({record_id:'fixture-scope',title:'Disposable browser fixture'});`}});bundle=result.outputFiles[0].text;
+});
+async function start(page,baseURL){const origin=new URL(baseURL).origin;await page.route(origin+'/__scope-access',r=>r.fulfill({contentType:'text/html',body:`<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>[x-cloak]{display:none!important}body{font-family:system-ui;padding:24px}${css}</style><p>Labelled disposable browser fixture — no production grants</p><div x-data>${markup}</div><script type="module" src="/__scope-access.js"></script>`}));await page.route(origin+'/__scope-access.js',r=>r.fulfill({contentType:'text/javascript',body:bundle}));await page.goto(origin+'/__scope-access');await expect(page.getByRole('button',{name:'Save access',exact:true})).toBeVisible();}
+test('people/agents/groups, role labels, save/reload/revoke and reader rejection',async({page,baseURL})=>{const errors=[];page.on('pageerror',e=>errors.push(e.message));await start(page,baseURL);
+ for(const [kind,id,label]of [['human','person','Fixture Pete'],['agent','agent','Fixture Rick'],['group','group','Fixture builders']]){
+  await page.getByLabel('Assign to',{exact:true}).selectOption(kind);await page.getByLabel('Person, agent or group',{exact:true}).selectOption(id);await page.getByLabel('Role',{exact:true}).selectOption('context_editor');await page.getByRole('button',{name:'Save access',exact:true}).click();await expect(page.locator('.scope-access-row strong').filter({hasText:label}).first()).toBeVisible();await page.getByRole('button',{name:'Refresh Access',exact:true}).click();await expect(page.locator('.scope-access-row strong').filter({hasText:label}).first()).toBeVisible();
+ }
+ await expect(page.getByText('Via Fixture builders',{exact:true})).toBeVisible();
+ const evidence=path.resolve(__dirname,'../../tmp/docs/handoffs/scope-context-editor');await fs.mkdir(evidence,{recursive:true});await page.screenshot({path:path.join(evidence,'fixture-setup-access.png'),fullPage:true});
+ await page.getByRole('button',{name:'Revoke role grants for Fixture Rick',exact:true}).click();await expect(page.locator('.scope-access-row strong').filter({hasText:'Fixture Rick'})).toHaveCount(0);
+ await page.evaluate(()=>window.fixture.setReader());await expect(page.getByRole('button',{name:'Save access',exact:true})).toBeHidden();await expect(page.getByText('Scope manager permission is required to change access. Your effective access is shown below.',{exact:true})).toBeVisible();expect(errors).toEqual([]);
+});

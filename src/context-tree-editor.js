@@ -36,7 +36,7 @@ export function createContextTreeEditor({ getService, getDb, getStore, online = 
     set draftTitle(value) { if (this.editing) this.editing.title = value; },
     get draftParent() { return this.editing?.parentId || ''; },
     set draftParent(value) { if (this.editing) this.editing.parentId = value; },
-    get canManage() { return this.status === 'complete' && this.capabilities?.manage === true; },
+    get canManage() { return this.status === 'complete' && (this.capabilities?.edit ?? this.capabilities?.manage) === true; },
     get dialogOpen() { return this.canManage && !!(this.editing || this.picker || this.dialogMode === 'delete'); },
     get parentResults() { const q=this.parentSearch.trim().toLowerCase(), top={id:'',title:'Top level',subtitle:'No parent'}; return [...(('Top level No parent'.toLowerCase().includes(q)) ? [top] : []), ...contextSearchChoices(this.components,q,new Set(this.parentChoices.map(row=>row.id)))].slice(0,40); },
     chooseParent(row) { if (!this.parentResults.some(p=>p.id===row.id)) return; this.draftParent=row.id; this.parentSearch=row.title; this.parentUncommitted=false; this.parentOpen=false; },

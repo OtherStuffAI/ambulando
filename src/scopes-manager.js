@@ -251,7 +251,7 @@ export const scopesManagerMixin = {
   },
 
   get canAccessScopeSettings() {
-    return Boolean(this.canAdminWorkspace || (this.scopes || []).some((scope) => this.canManageScope(scope)));
+    return Boolean(this.canAdminWorkspace || (this.isTowerPgMode && (this.scopes || []).length) || (this.scopes || []).some((scope) => this.canManageScope(scope)));
   },
 
   openScopeManagement() {

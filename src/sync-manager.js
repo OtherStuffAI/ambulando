@@ -1,3 +1,5 @@
+import { resolveTowerPgWorkspaceContext } from './pg-read-hydrator.js';
+import { getTowerPgScopeAccess } from './api.js';
 import { disposeContextTreeView } from './context-tree-view.js';
 import { loadTowerPgContext, loadTowerPgContextReferences, readTowerPgContextDeletePreview } from './pg-read-hydrator.js';
 import { hydrateFeedReader } from './feed/tower.js';
@@ -614,6 +616,7 @@ export const syncManagerMixin = {
   loadTowerSyncTarget(family, id, options = {}) {
     switch (family) {
       case 'context-references': return loadTowerPgContextReferences(this, options.scopeId, id);
+      case 'scope-access': { const context = resolveTowerPgWorkspaceContext(this); return getTowerPgScopeAccess(context.workspaceId, id, {baseUrl:context.baseUrl,appNpub:context.appNpub}); }
       case 'context-tree': return loadTowerPgContext(this, id, options);
       case 'context-delete-preview': return readTowerPgContextDeletePreview(this, options.scopeId, id);
       case 'scopes': return hydrateTowerPgScopes(this, options);
