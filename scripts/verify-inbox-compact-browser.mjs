@@ -110,9 +110,26 @@ try {
   const types = ['chats', 'tasks', 'documents', 'files'];
   for (const name of types) assert.equal(await page.getByRole('button',{name:`Show ${name}`,exact:true}).getAttribute('aria-pressed'), 'true');
   const fileToggle = page.getByRole('button',{name:'Show files',exact:true});
+  const filterStyle = () => fileToggle.evaluate(n => {
+    const style=getComputedStyle(n), root=getComputedStyle(document.documentElement);
+    const rgb = token => { const probe=document.createElement('span'); probe.style.color=root.getPropertyValue(token); document.body.append(probe); const value=getComputedStyle(probe).color; probe.remove(); return value; };
+    return {color:style.color, background:style.backgroundColor, border:style.borderColor, outline:style.outlineStyle, outlineWidth:style.outlineWidth, accent:rgb('--accent'), muted:rgb('--text-muted'), surface:rgb('--surface'), hover:rgb('--surface-hover')};
+  });
+  await page.mouse.move(width-1,999);
+  const included=await filterStyle();
+  assert.equal(included.color,included.accent,'Included icon uses theme accent');
+  assert.equal(included.background,included.surface,'Included filter has neutral surface');
+  await fileToggle.hover();
+  assert.equal((await filterStyle()).background,included.hover,'Hover remains neutral');
+  await page.mouse.move(width-1,999);
   await fileToggle.focus(); await page.keyboard.press('Space');
   assert.equal(await fileToggle.getAttribute('aria-pressed'), 'false');
-  assert.equal(await fileToggle.evaluate(n=>getComputedStyle(n).backgroundColor), 'rgb(255, 255, 255)');
+  const excluded=await filterStyle();
+  assert.equal(excluded.color,excluded.muted,'Excluded icon uses theme grey');
+  assert.equal(excluded.background,included.background,'Both states retain neutral surface');
+  assert.equal(excluded.border,included.border,'Selection does not tint borders');
+  assert.equal(excluded.outline,'solid','Keyboard focus remains visible');
+  assert.equal(excluded.outlineWidth,'2px');
   await page.screenshot({path:screenshot.replace('.png','-hidden.png'),fullPage:true});
   assert.equal(await cards.count(),5);
   for (const name of types.slice(0,3)) await page.getByRole('button',{name:`Show ${name}`,exact:true}).click();

@@ -2616,6 +2616,19 @@
       "notes": [
         "Search people, agents and groups together by readable name in one compact access row. Keyboard selection preserves canonical identity and existing grants."
       ]
+    },
+    {
+      "buildNumber": 2175,
+      "label": "Quieter Inbox filters",
+      "notes": [
+        "Inbox filters use blue icons for included types and grey icons for excluded types, with neutral backgrounds and visible keyboard focus."
+      ]
+    },
+    {
+      "buildNumber": 2177,
+      "label": "Inbox filter validation checkpoint",
+      "notes": [],
+      "noUserVisibleChanges": true
     }
   ]
 }

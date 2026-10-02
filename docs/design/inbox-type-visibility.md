@@ -1,7 +1,10 @@
 # Independent Inbox record type visibility
 
 The Inbox toolbar exposes chat, task, document and file buttons alongside Search on desktop.
-Blue means shown; white means hidden. Each native button independently changes
+Blue icons mean shown; grey icons mean hidden. Both states use the theme's
+neutral surface and border, with neutral hover feedback and a visible accent
+focus outline. Only these four filter buttons use this treatment.
+Each native button independently changes
 its family and exposes a stable accessible name and `aria-pressed`. Enter and
 Space use native button activation. Every combination, including all hidden,
 is valid. All hidden displays an explicit status message.
