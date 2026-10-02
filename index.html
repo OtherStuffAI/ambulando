@@ -8953,7 +8953,7 @@
               </div>
 
           <section class="scope-access-panel channel-access-card" x-show="$store.chat.scopeAccessVisible" x-cloak aria-label="Scope Access">
-            <div class="scope-access-heading"><h3><span x-text="$store.chat.scopeAccessScope?.title"></span> · Access</h3><button type="button" class="btn-secondary" @click="$store.chat.closeScopeAccess()" :disabled="$store.chat.scopeAccessBusy">Close Access</button></div>
+            <div class="scope-access-heading"><h3><span x-text="$store.chat.scopeAccessScope?.title"></span> · Access</h3></div>
             <p>Access applies to this scope only. Child scopes, channels and linked content keep their own permissions.</p>
             <p>Context editor can create, rename and move components, link and unlink references, and delete confirmed subtrees. Scope manager can also manage scope settings and access.</p>
             <button type="button" class="btn-secondary" @click="$store.chat.refreshScopeAccess()" :disabled="$store.chat.scopeAccessBusy">Refresh Access</button>
