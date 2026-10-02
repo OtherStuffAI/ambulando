@@ -91,7 +91,7 @@ import {
   isUnsyncedLocalPgRecord,
   releasePgEditLeaseForRecord,
 } from './pg-edit-session.js';
-import { createShellState } from './shell-state.js';
+import { createShellState, detachLoggedOutWorkspace } from './shell-state.js';
 import {
   checkoutErrorMessage,
   describeCheckoutHolder,
@@ -175,7 +175,6 @@ import {
 
 import { getShortNpub, getInitials } from './utils/naming.js';
 import {
-  hasWorkspaceDb,
   getSettings,
   saveSettings,
   getWorkspaceSettings,
@@ -219,7 +218,6 @@ import {
   deleteSyncState,
   getChannelById,
   getAddressBookPeople,
-  clearRuntimeData,
   isWorkspaceDbOpenForKey,
 } from './db.js';
 import {
@@ -2332,16 +2330,17 @@ export function initApp() {
         this.selectedWorkspaceKey = this.knownWorkspaces[0].workspaceKey || '';
         this.currentWorkspaceOwnerNpub = this.knownWorkspaces[0].workspaceOwnerNpub;
       }
-      if (this.selectedWorkspaceKey || this.currentWorkspaceOwnerNpub) {
-        await this.selectWorkspace(this.selectedWorkspaceKey || this.currentWorkspaceOwnerNpub, {
-          refresh: false,
-          skipPgVerification: isTowerPgBackendMode(),
-        });
-      }
-      if (this.selectedWorkspaceKey) {
-        await this.bootstrapSelectedWorkspace({ runAccessPrune: false });
+      if (!isTowerPgBackendMode()) {
+        if (this.selectedWorkspaceKey || this.currentWorkspaceOwnerNpub) {
+          await this.selectWorkspace(this.selectedWorkspaceKey || this.currentWorkspaceOwnerNpub, { refresh: false });
+        }
+        if (this.selectedWorkspaceKey) await this.bootstrapSelectedWorkspace({ runAccessPrune: false });
       }
       await this.maybeAutoLogin();
+      if (isTowerPgBackendMode() && this.session?.npub && this.selectedWorkspaceKey) {
+        await this.selectWorkspace(this.selectedWorkspaceKey, { refresh: false });
+        await this.bootstrapSelectedWorkspace({ runAccessPrune: false });
+      }
       this.updateWorkspaceBootstrapPrompt();
       if (this.session?.npub && (!this.backendUrl || (!this.selectedWorkspaceKey && !this.showWorkspaceBootstrapModal))) {
         this.openConnectModal();
@@ -3015,6 +3014,9 @@ export function initApp() {
           await this.selectWorkspace(this.selectedWorkspaceKey || this.currentWorkspaceOwnerNpub, { refresh: false });
         }
 
+        // A denied/failed selection must not mount or replay retained state.
+        if (this.selectedWorkspaceKey && this.localWorkspaceCoreLoadedForKey !== this.selectedWorkspaceKey) return;
+
         await this.persistWorkspaceSettings();
 
         if (this.selectedWorkspaceKey) {
@@ -3034,15 +3036,13 @@ export function initApp() {
     },
 
     async logout() {
-      this.stopDrive();
-      this.stopBackgroundSync();
-      this.stopAllLiveQueries();
-      this.stopExtensionSignerWatch();
-      this.clearDocCommentConnector();
-      this.revokeStorageImageObjectUrls();
-      await clearAutoLogin();
-      if (hasWorkspaceDb()) await clearRuntimeData();
-      clearCryptoContext();
+      try {
+        if (this.docEditDraftDirty) await this.persistSelectedDocDraft?.({ immediate: true });
+      } finally {
+        // A draft-storage failure must still end authentication.
+        detachLoggedOutWorkspace(this);
+        await clearAutoLogin();
+      }
       this.session = null;
       this.ownerNpub = '';
       this.channels = [];
@@ -3118,7 +3118,6 @@ export function initApp() {
       this.error = null;
       this.showAvatarMenu = false;
       this.syncRoute(true);
-      await this.refreshSyncStatus();
     },
 
     hasExtensionSigner() {
@@ -6118,8 +6117,12 @@ export function initApp() {
 
     async resumePgTaskWriteQueue() {
       if (!isTowerPgBackendMode()) return 0;
+      const generation = this._workspaceSelectionGeneration;
+      const workspaceKey = this.currentWorkspaceKey;
+      const actor = this.session?.npub;
       const persisted = await this.readPersistedPgTaskWriteQueue();
-      if (persisted.length === 0) return 0;
+      if (!actor || this.session?.npub !== actor || this.currentWorkspaceKey !== workspaceKey
+        || this._workspaceSelectionGeneration !== generation || persisted.length === 0) return 0;
       const currentById = new Map((this.pgTaskWriteQueue || []).map((item) => [item.queueId, item]));
       for (const item of persisted) {
         if (!currentById.has(item.queueId)) currentById.set(item.queueId, item);
@@ -6174,7 +6177,7 @@ export function initApp() {
     },
 
     schedulePgTaskWriteQueueProcessing() {
-      if (this.pgTaskWriteProcessTimer) return;
+      if (!this.session?.npub || !this.selectedWorkspaceKey || this.pgTaskWriteProcessTimer) return;
       const run = () => {
         this.pgTaskWriteProcessTimer = null;
         void this.processPgTaskWriteQueue();
@@ -6188,9 +6191,16 @@ export function initApp() {
     },
 
     async processPgTaskWriteQueueItem(item) {
+      const generation = this._workspaceSelectionGeneration;
+      const actor = this.session?.npub;
+      const workspaceKey = this.currentWorkspaceKey;
+      const isCurrent = () => Boolean(actor && this.session?.npub === actor
+        && this.currentWorkspaceKey === workspaceKey && this._workspaceSelectionGeneration === generation);
+      if (!isCurrent()) return { status: 'detached', item };
       const previousTask = item.previousTask;
       try {
         const currentBeforeWrite = await getTaskById(item.recordId) || this.tasks.find((task) => task.record_id === item.recordId);
+        if (!isCurrent()) return { status: 'detached', item };
         const queuedVersion = Number(item.updatedTask?.version ?? 0) || 0;
         const currentVersionBeforeWrite = Number(currentBeforeWrite?.version ?? 0) || 0;
         const currentSyncStatus = String(currentBeforeWrite?.sync_status || '').trim();
@@ -6200,11 +6210,14 @@ export function initApp() {
         const currentLocal = await getTaskById(item.recordId)
           || this.tasks.find((task) => task.record_id === item.recordId)
           || item.updatedTask;
+        if (!isCurrent()) return { status: 'detached', item };
         const acceptedTask = await updateTowerPgTaskFromLocal(this, {
           ...currentLocal,
           record_id: item.recordId,
         }, previousTask, item.patch || {});
+        if (!isCurrent()) return { status: 'detached', item };
         await upsertTask(acceptedTask);
+        if (!isCurrent()) return { status: 'detached', item };
         const currentAfterWrite = this.tasks.find((task) => task.record_id === item.recordId);
         const currentVersion = Number(currentAfterWrite?.version ?? 0) || 0;
         if (!currentAfterWrite || currentVersion <= queuedVersion) {
@@ -6217,12 +6230,14 @@ export function initApp() {
         if (item.options?.releasePatchPgLease) await releasePgEditLeaseForRecord(this, previousTask, 'task');
         return { status: 'synced', item, acceptedTask };
       } catch (error) {
+        if (!isCurrent()) return { status: 'detached', item };
         const failedTask = {
           ...(this.tasks.find((task) => task.record_id === item.recordId) || item.updatedTask),
           sync_status: 'failed',
           updated_at: new Date().toISOString(),
         };
         await upsertTask(failedTask);
+        if (!isCurrent()) return { status: 'detached', item };
         this.tasks = this.tasks.map((task) => task.record_id === item.recordId ? failedTask : task);
         if (this.editingTask?.record_id === item.recordId) this.replaceEditingTaskFromRecord(failedTask, { force: true });
         this.error = error?.message || 'Failed to update PG task';
@@ -6233,15 +6248,21 @@ export function initApp() {
     },
 
     async processPgTaskWriteQueue() {
-      if (this.pgTaskWriteInFlight) return;
+      if (!this.session?.npub || !this.selectedWorkspaceKey || this.pgTaskWriteInFlight) return;
+      const generation = this._workspaceSelectionGeneration;
+      const actor = this.session.npub;
+      const workspaceKey = this.currentWorkspaceKey;
+      const isCurrent = () => this.session?.npub === actor && this.currentWorkspaceKey === workspaceKey
+        && this._workspaceSelectionGeneration === generation;
       this.pgTaskWriteInFlight = true;
       try {
-        while ((this.pgTaskWriteQueue || []).length > 0) {
+        while (isCurrent() && (this.pgTaskWriteQueue || []).length > 0) {
           const batch = selectPgTaskWriteBatch(this.pgTaskWriteQueue);
           if (batch.length === 0) break;
           const completedQueueIds = new Set(batch.map((item) => item.queueId));
           await Promise.all(batch.map(async (item) => {
             await this.processPgTaskWriteQueueItem(item);
+            if (!isCurrent()) return;
             this.pgTaskWriteProgressDone = Number(this.pgTaskWriteProgressDone || 0) + 1;
             this.updateSyncSession?.({
               state: 'syncing',
@@ -6251,9 +6272,11 @@ export function initApp() {
               pushTotal: this.pgTaskWriteProgressTotal,
             });
           }));
+          if (!isCurrent()) return;
           this.pgTaskWriteQueue = removePgTaskWriteQueueItems(this.pgTaskWriteQueue, completedQueueIds);
           await this.persistPgTaskWriteQueue();
         }
+        if (!isCurrent()) return;
         const failedCount = Number(this.pgTaskWriteFailedCount || 0);
         this.syncStatus = failedCount > 0 ? 'error' : 'synced';
         this.updateSyncSession?.(failedCount > 0
@@ -6278,8 +6301,8 @@ export function initApp() {
         this.pgTaskWriteProgressTotal = 0;
         this.pgTaskWriteFailedCount = 0;
       } finally {
-        this.pgTaskWriteInFlight = false;
-        if ((this.pgTaskWriteQueue || []).length > 0) this.schedulePgTaskWriteQueueProcessing();
+        if (isCurrent()) this.pgTaskWriteInFlight = false;
+        if (isCurrent() && (this.pgTaskWriteQueue || []).length > 0) this.schedulePgTaskWriteQueueProcessing();
       }
     },
 

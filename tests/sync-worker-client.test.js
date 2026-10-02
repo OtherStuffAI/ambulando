@@ -136,6 +136,27 @@ describe('worker-only sync enforcement', () => {
     expect(result).toEqual({ pushed: 5 });
   });
 
+  it('logout shutdown cancels active and queued writes without recovery or replay into a new worker', async () => {
+    const created = [];
+    globalThis.Worker = class {
+      constructor() { created.push(this); this.messages = []; this.terminated = false; }
+      addEventListener() {} removeEventListener() {}
+      postMessage(message) { this.messages.push(message); }
+      terminate() { this.terminated = true; }
+    };
+    const active = client.flushOnly('alice', null, { workspaceDbKey: 'alice-partition' });
+    const queued = client.flushOnly('alice', null, { workspaceDbKey: 'alice-partition' });
+    const activeRejected = expect(active).rejects.toMatchObject({ name: 'AbortError' });
+    const queuedRejected = expect(queued).rejects.toMatchObject({ name: 'AbortError' });
+    expect(created).toHaveLength(1);
+    client.shutdownSyncWorker();
+    client.connectSSE('bob', 'bob', 'http://localhost', 'bob-partition');
+    await Promise.all([activeRejected, queuedRejected]);
+    expect(created).toHaveLength(2);
+    expect(created[0].terminated).toBe(true);
+    expect(created[1].messages.some(message => message.type === 'sync-worker:request')).toBe(false);
+  });
+
   it('detaches native requests before terminating a sync worker', () => {
     const originalWindow = globalThis.window;
     const order = [];

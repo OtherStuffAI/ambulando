@@ -20,7 +20,7 @@ vi.mock('../src/db.js', () => ({
   getSettings,
   hasWorkspaceDb: vi.fn(() => false),
   openWorkspaceDb,
-  clearRuntimeData: vi.fn().mockResolvedValue(undefined),
+  closeWorkspaceDb: vi.fn(),
 }));
 
 vi.mock('../src/api.js', () => ({
@@ -138,9 +138,6 @@ describe('shell PG startup restore', () => {
       const selectSessions = [];
       const bootstrapSessions = [];
       shell.selectWorkspace = vi.fn(async function selectWorkspace() {
-        expect(openWorkspaceDb).toHaveBeenCalledWith(workspace.workspaceKey);
-        expect(openWorkspaceDb.mock.invocationCallOrder[0])
-          .toBeLessThan(shell.selectWorkspace.mock.invocationCallOrder[0]);
         selectSessions.push(this.session?.npub || '');
       });
       shell.bootstrapSelectedWorkspace = vi.fn(async function bootstrapSelectedWorkspace() {
@@ -151,13 +148,8 @@ describe('shell PG startup restore', () => {
       await flushStartupTail();
 
       expect(tryAutoLoginFromStorage).toHaveBeenCalled();
-      expect(openWorkspaceDb).toHaveBeenCalledTimes(1);
-      expect(shell.activateCachedWorkspace).toHaveBeenCalledWith({
-        workspace: expect.objectContaining(workspace),
-        workspaceKey: workspace.workspaceKey,
-      });
-      expect(shell.activateCachedWorkspace.mock.invocationCallOrder[0])
-        .toBeLessThan(tryAutoLoginFromStorage.mock.invocationCallOrder[0]);
+      expect(openWorkspaceDb).not.toHaveBeenCalled();
+      expect(shell.activateCachedWorkspace).not.toHaveBeenCalled();
       expect(selectSessions).toEqual(['npub1user', 'npub1user']);
       expect(bootstrapSessions).toEqual(['npub1user', 'npub1user']);
       expect(selectSessions).not.toContain('');
@@ -199,17 +191,14 @@ describe('shell PG startup restore', () => {
 
       expect(shell.selectWorkspace).not.toHaveBeenCalled();
       expect(shell.bootstrapSelectedWorkspace).not.toHaveBeenCalled();
-      expect(openWorkspaceDb).toHaveBeenCalledWith(workspace.workspaceKey);
-      expect(shell.activateCachedWorkspace).toHaveBeenCalledWith({
-        workspace: expect.objectContaining(workspace),
-        workspaceKey: workspace.workspaceKey,
-      });
+      expect(openWorkspaceDb).not.toHaveBeenCalled();
+      expect(shell.activateCachedWorkspace).not.toHaveBeenCalled();
     } finally {
       restoreGlobals();
     }
   });
 
-  it('projects the saved cache while authentication is still pending', async () => {
+  it('keeps the retained cache detached while authentication is pending', async () => {
     const restoreGlobals = installWindow();
     try {
       const { createShellState } = await import('../src/shell-state.js');
@@ -247,17 +236,19 @@ describe('shell PG startup restore', () => {
       shell.bootstrapSelectedWorkspace = vi.fn();
 
       const initializing = shell.init();
-      await vi.waitFor(() => expect(shell.activateCachedWorkspace).toHaveBeenCalled());
-      expect(shell.scopes.map(row => row.record_id)).toEqual(['cached-scope']);
-      expect(shell.channels.map(row => row.record_id)).toEqual(['cached-channel']);
-      expect(shell.startWorkspaceLiveQueries).toHaveBeenCalledTimes(1);
+      await vi.waitFor(() => expect(tryAutoLoginFromStorage).toHaveBeenCalled());
+      expect(shell.activateCachedWorkspace).not.toHaveBeenCalled();
+      expect(openWorkspaceDb).not.toHaveBeenCalled();
+      expect(shell.scopes).toEqual([]);
+      expect(shell.channels).toEqual([]);
+      expect(shell.startWorkspaceLiveQueries).not.toHaveBeenCalled();
       expect(shell.session).toBeNull();
 
       finishAuthentication(null);
       await initializing;
       await flushStartupTail();
-      expect(shell.scopes).toHaveLength(1);
-      expect(shell.channels).toHaveLength(1);
+      expect(shell.scopes).toHaveLength(0);
+      expect(shell.channels).toHaveLength(0);
     } finally {
       restoreGlobals();
     }

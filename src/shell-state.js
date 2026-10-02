@@ -14,6 +14,7 @@
  * See docs/design/store-template-decomposition.md for the full decomposition plan.
  */
 
+import { shutdownSyncWorker } from './sync-worker-client.js';
 import { disposePipelineViewer } from './pipeline-viewer-view.js';
 import { getRunningBuildId } from './version-check.js';
 import {
@@ -32,9 +33,7 @@ import {
 import { getShortNpub, getInitials } from './utils/naming.js';
 import {
   getSettings,
-  hasWorkspaceDb,
-  openWorkspaceDb,
-  clearRuntimeData,
+  closeWorkspaceDb,
 } from './db.js';
 import { registerWorkspaceKey, setBaseUrl } from './api.js';
 import {
@@ -254,6 +253,81 @@ export const SHELL_METHOD_NAMES = Object.freeze([
   'hasExtensionSigner',
   'openHarnessLink',
 ]);
+
+// Shared by the assembled shell and the inline fallback auth path. Durable rows,
+// drafts and outbox remain in the signer/workspace partition, never in this runtime.
+export function detachLoggedOutWorkspace(store) {
+  store._workspaceSelectionRequest = (store._workspaceSelectionRequest || 0) + 1;
+  store._workspaceSelectionGeneration = (store._workspaceSelectionGeneration || 0) + 1;
+  store.stopDrive?.();
+  store.stopBackgroundSync();
+  shutdownSyncWorker();
+  store.stopAllLiveQueries();
+  store.stopExtensionSignerWatch();
+  store.clearDocCommentConnector();
+  store.revokeStorageImageObjectUrls();
+  if (store.pgTaskWriteProcessTimer) clearTimeout(store.pgTaskWriteProcessTimer);
+  store.pgTaskWriteProcessTimer = null;
+  store.pgTaskWriteInFlight = false;
+  store.pgTaskWriteProgressDone = 0;
+  store.pgTaskWriteProgressTotal = 0;
+  store.pgTaskWriteFailedCount = 0;
+  for (const timer of Object.values(store.pgEditLeaseRenewalTimers || {})) clearTimeout(timer);
+  store.pgEditLeaseRenewalTimers = {};
+  store.pgEditLeaseSessions = {};
+  store.lockManagedCheckoutSessions = {};
+  store.cancelDocAutosave?.();
+  store.cancelDocLocalDraftPersistence?.();
+  store.loadDocEditorFromSelection?.(null);
+  store.chatComposerDrafts = {};
+  store.selectedAgentMentionsByComposer = { message: [], thread: [] };
+  store.pgEditLeaseAcquirePromises = {};
+  store.pgEditLeaseInspectionPromises = {};
+  store.scopeAccessScope = null;
+  store.scopeAccessData = null;
+  store.scopeAccessWorkspaceId = '';
+  clearActiveWorkspaceKey();
+  clearCryptoContext();
+  store.session = null;
+  store.ownerNpub = '';
+  store.selectedWorkspaceKey = '';
+  store.currentWorkspaceOwnerNpub = '';
+  store.localWorkspaceCoreLoadedForKey = '';
+  closeWorkspaceDb();
+  store.chatPresentationCache?.clear?.();
+  store.resetWappActivityProjection?.();
+  store.closeMentionPopover?.();
+  for (const key of [
+    'channels', 'messages', 'groups', 'documents', 'directories', 'tasks',
+    'schedules', 'scopes', 'reports', 'flows', 'approvals', 'persons',
+    'organisations', 'opportunities', 'wapps', 'dailyNotes', 'audioNotes',
+    'fileFolders', 'fileMessages', 'fileComments', 'docComments', 'taskComments',
+    'opportunityComments', 'pgWorkspaceMembers', 'statusRecentChanges',
+    'recentChannelMessages', 'reactionRows', 'channelResponseActivities',
+    'threadResponseActivities', 'agentActivities', 'agentSessionHealth',
+    'recordSyncConflicts', 'avatarSyncConflicts', 'pendingWriteDiagnostics',
+    'syncQuarantine', 'pgTaskWriteQueue', 'connectWorkspaces', 'channelGrants',
+    'docVersionHistory', 'recordVersionHistory', 'documentSessionRows',
+    'invocationHistoryRows', 'workspaceAccessGateWorkspaces',
+    'messageAudioDrafts', 'messageFileDrafts', 'threadAudioDrafts', 'threadFileDrafts',
+    'taskCommentAudioDrafts', 'docCommentAudioDrafts', 'docCommentReplyAudioDrafts',
+    'workrooms', 'workroomParticipants', 'workroomEvents', 'workroomLinks',
+    'workroomApprovals', 'agentConnections', 'workspaceAgents',
+  ]) store[key] = [];
+  for (const key of ['messageInput', 'threadInput', 'newTaskTitle', 'newSubtaskTitle',
+    'newScheduleTitle', 'newScheduleDescription', 'newDocModalTitle', 'newTaskCommentBody',
+    'newDocCommentBody', 'newDocCommentReplyBody']) store[key] = '';
+  for (const key of ['chatTaskModalOpen', 'chatDocModalOpen', 'personalWappsOverlayOpen',
+    'personalAgentsOverlayOpen', 'workroomDetailOpen', 'workroomRoomDetailsOpen']) store[key] = false;
+  store.chatTaskModalTitle = '';
+  store.chatDocModalTitle = '';
+  store.activeWorkroomId = '';
+  store.editingTask = null;
+  store.showTaskDetail = false;
+  store.scopesLoaded = false;
+  store.syncing = false;
+  store.syncStatus = 'idle';
+}
 
 /**
  * Create the shell state object with all shell-owned state, getters, and methods.
@@ -544,22 +618,8 @@ export function createShellState(options = {}) {
         this.refreshKnownHostsMetadata().catch(() => {});
       }
       const towerPgMode = isTowerPgBackendMode();
-      if (towerPgMode) {
-        const savedWorkspace = findWorkspaceByKey(this.knownWorkspaces, this.selectedWorkspaceKey)
-          || (!this.selectedWorkspaceKey
-            ? this.knownWorkspaces.find((workspace) => workspace.workspaceOwnerNpub === this.currentWorkspaceOwnerNpub)
-            : null);
-        const savedWorkspaceDbKey = String(
-          savedWorkspace?.workspaceKey || savedWorkspace?.workspaceOwnerNpub || '',
-        ).trim();
-        if (savedWorkspaceDbKey) {
-          openWorkspaceDb(savedWorkspaceDbKey);
-          await this.activateCachedWorkspace?.({
-            workspace: savedWorkspace,
-            workspaceKey: savedWorkspaceDbKey,
-          });
-        }
-      }
+      // Retained caches require restored identity and verified workspace access.
+      // selectWorkspace opens the partition only after those checks succeed.
       if (!towerPgMode) {
         if (!this.selectedWorkspaceKey && this.currentWorkspaceOwnerNpub) {
           const legacyMatch = this.knownWorkspaces.find((workspace) => workspace.workspaceOwnerNpub === this.currentWorkspaceOwnerNpub) || null;
@@ -699,6 +759,7 @@ export function createShellState(options = {}) {
         }
         this.startWorkspaceLiveQueries?.();
         await this.ensureTowerPgControlPlaneHydrated?.({ force: true, syncRoute: false });
+        await this.resumePgTaskWriteQueue?.();
       } else {
         await this.ensureWorkspaceSessionKey();
         await this.refreshGroups({ maxAgeMs: this.GROUP_KEY_REFRESH_MAX_AGE_MS });
@@ -1230,6 +1291,9 @@ export function createShellState(options = {}) {
           await this.selectWorkspace(this.selectedWorkspaceKey || this.currentWorkspaceOwnerNpub, { refresh: false });
         }
 
+        // A denied/failed selection must not mount or replay retained state.
+        if (this.selectedWorkspaceKey && this.localWorkspaceCoreLoadedForKey !== this.selectedWorkspaceKey) return;
+
         await this.persistWorkspaceSettings();
 
         if (this.selectedWorkspaceKey) {
@@ -1249,14 +1313,13 @@ export function createShellState(options = {}) {
     },
 
     async logout() {
-      this.stopBackgroundSync();
-      this.stopAllLiveQueries();
-      this.stopExtensionSignerWatch();
-      this.clearDocCommentConnector();
-      this.revokeStorageImageObjectUrls();
-      await clearAutoLogin();
-      if (hasWorkspaceDb()) await clearRuntimeData();
-      clearCryptoContext();
+      try {
+        if (this.docEditDraftDirty) await this.persistSelectedDocDraft?.({ immediate: true });
+      } finally {
+        // A draft-storage failure must still end authentication.
+        detachLoggedOutWorkspace(this);
+        await clearAutoLogin();
+      }
       this.session = null;
       this.ownerNpub = '';
       this.channels = [];
@@ -1323,7 +1386,6 @@ export function createShellState(options = {}) {
       this.error = null;
       this.showAvatarMenu = false;
       this.syncRoute(true);
-      await this.refreshSyncStatus();
     },
 
     hasExtensionSigner() {

@@ -2643,6 +2643,37 @@
       "label": "Reconnect validation checkpoint",
       "notes": [],
       "noUserVisibleChanges": true
+    },
+    {
+      "buildNumber": 2181,
+      "label": "Keep workspace cache after logout",
+      "notes": [
+        "Logging out keeps saved workspace data, sync position and local edits for the same identity. Login verifies workspace access before reusing them; explicit cache reset still clears them."
+      ]
+    },
+    {
+      "buildNumber": 2182,
+      "label": "Logout retention validation checkpoint",
+      "notes": [],
+      "noUserVisibleChanges": true
+    },
+    {
+      "buildNumber": 2183,
+      "label": "Logout retention worker validation",
+      "notes": [],
+      "noUserVisibleChanges": true
+    },
+    {
+      "buildNumber": 2184,
+      "label": "Logout retention final checkpoint",
+      "notes": [],
+      "noUserVisibleChanges": true
+    },
+    {
+      "buildNumber": 2185,
+      "label": "Logout retention verified release",
+      "notes": [],
+      "noUserVisibleChanges": true
     }
   ]
 }

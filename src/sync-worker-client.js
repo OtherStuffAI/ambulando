@@ -25,6 +25,7 @@ let nextRequestId = 1;
 const pendingRequests = new Map();
 const requestQueue = [];
 let drainingQueue = false;
+let workerSessionGeneration = 0;
 
 function supportsWorker() {
   return typeof Worker !== 'undefined';
@@ -222,10 +223,11 @@ function sendToWorker(worker, method, payload, onProgress) {
   });
 }
 
-async function invokeWithWorker(method, payload, onProgress) {
+async function invokeWithWorker(method, payload, onProgress, generation) {
   let lastError = null;
 
   for (let attempt = 0; attempt <= MAX_RECOVERY_ATTEMPTS; attempt++) {
+    if (generation !== workerSessionGeneration) throw new DOMException('Sync session ended', 'AbortError');
     const worker = ensureWorkerInstance();
     if (!worker) {
       const reason = supportsWorker()
@@ -240,6 +242,7 @@ async function invokeWithWorker(method, payload, onProgress) {
     try {
       return await sendToWorker(worker, method, payload, onProgress);
     } catch (error) {
+      if (generation !== workerSessionGeneration) throw new DOMException('Sync session ended', 'AbortError');
       lastError = error;
       // Reset the dead worker so ensureWorkerInstance creates a fresh one
       resetWorkerInstance();
@@ -259,7 +262,7 @@ async function invokeWithWorker(method, payload, onProgress) {
 
 function enqueue(method, payload, onProgress) {
   return new Promise((resolve, reject) => {
-    requestQueue.push({ method, payload, onProgress, resolve, reject });
+    requestQueue.push({ method, payload, onProgress, resolve, reject, generation: workerSessionGeneration });
     if (!drainingQueue) {
       void drainQueue();
     }
@@ -272,7 +275,7 @@ async function drainQueue() {
     while (requestQueue.length > 0) {
       const request = requestQueue.shift();
       try {
-        const value = await invokeWithWorker(request.method, request.payload, request.onProgress);
+        const value = await invokeWithWorker(request.method, request.payload, request.onProgress, request.generation);
         request.resolve(value);
       } catch (error) {
         request.reject(error);
@@ -288,8 +291,13 @@ export function primeSyncWorker() {
 }
 
 export function shutdownSyncWorker() {
+  workerSessionGeneration += 1;
   stopWorkerFlushTimer();
   resetWorkerInstance();
+  const error = new DOMException('Sync session ended', 'AbortError');
+  rejectPendingRequests(error);
+  for (const request of requestQueue.splice(0)) request.reject(error);
+  _sseStatusCallback = null;
 }
 
 /**

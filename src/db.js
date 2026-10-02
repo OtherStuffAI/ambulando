@@ -338,6 +338,14 @@ export function openWorkspaceDb(workspaceDbKey) {
   return _currentWorkspaceDb;
 }
 
+// Logout releases the active handle without deleting any durable workspace state.
+export function closeWorkspaceDb() {
+  const db = _currentWorkspaceDb;
+  _currentWorkspaceDb = null;
+  _currentWorkspaceDbKey = null;
+  db?.close();
+}
+
 export function getWorkspaceDb() {
   if (!_currentWorkspaceDb) throw new Error('No workspace database open — call openWorkspaceDb(workspaceDbKey) first');
   return _currentWorkspaceDb;

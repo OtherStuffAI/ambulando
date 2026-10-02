@@ -378,3 +378,37 @@ composer fixture checks document identity, focus, caret, scroll, selected thread
 continued typing and discoverable recovery through repeated reconnect failures.
 It is synthetic browser evidence, not acceptance for a particular human profile
 or native WM App device.
+
+### Logout/login retention (build 2185)
+
+Logout stops background sync, live queries, Drive and task-queue timers,
+terminates the SSE/sync worker (cancelling queued/in-flight requests without
+automatic recovery across authentication), closes
+(the database handle for) the active partition and clears personal/delegated
+signing state and rendered workspace collections. It retains cached rows,
+opaque cursors, pending writes, document drafts and the persisted PG task queue.
+Both the canonical shell and inline fallback logout use the same detach path.
+The same signer can resume the exact durable cursor after workspace verification;
+no login-triggered snapshot or cursor reset is added.
+
+PG startup no longer mounts a saved cache before signer restoration. Login and
+restoration use the existing descriptor/me verification before opening the
+signer-and-workspace UUID partition. Verification failure leaves retained data
+unmounted and does not replay intent. This deliberately trades unauthenticated
+cache-first display for identity/access isolation. Membership revocation, typed
+tombstones and authorized replacement omission keep their existing sync policy;
+retention does not grant authority or bypass Tower write/lease checks.
+
+Pending intent stays device-local in its original partition. A late PG task
+result after logout or identity/workspace activation cannot mutate the next
+runtime/partition or consume the original persisted queue. Tower may already
+have accepted a request sent before logout; later reconciliation/replay uses
+normal version/access checks. Saved document drafts survive; a dirty document
+is persisted before detach, while transient composer buffers and attachment
+selections are cleared. Draft-storage failure still ends authentication and is
+returned to the caller. Login resumes the persisted task queue only after access/control-plane
+verification. Explicit browser Clear cache (`?reset=1`) still deletes workspace
+IndexedDB databases, including all cursors, queues and drafts.
+
+This change targets logout/login. It does not fix or diagnose bulk resync on
+reopening without logout, and does not change Tower cursor/reset semantics.
