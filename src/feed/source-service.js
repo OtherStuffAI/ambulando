@@ -53,6 +53,7 @@ export class FeedSourceService {
     try {
       const resolutionTimer = setTimeout(() => controller.abort(new Error('feed_timeout')), FEED_LIMITS.timeout);
       let binding; try { binding = await this.resolve(sub, controller.signal); } finally { clearTimeout(resolutionTimer); } current();
+      if (binding.tower_binding_id) status.tower_binding_id = binding.tower_binding_id;
       let page = binding.url; const visited = new Set(), items = new Map();
       for (let n = 0; page && n < FEED_LIMITS.pages; n++) {
         current(); if (visited.has(page)) throw new Error('pagination_loop'); visited.add(page);

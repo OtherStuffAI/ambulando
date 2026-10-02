@@ -49,12 +49,32 @@ Flight Deck origin. Book of Sand independently needs the exact origin in
 reader actor initialization or restarting Flight Deck.
 
 The registry publisher `appNpub` must not be assumed to identify a separate
-existing graph corpus. A source with a distinct graph identity needs an
-explicit authoritative feed graph binding published by the platform; clients
-must validate that binding before signing. Do not rotate a publisher or accept
+existing graph corpus. A source with a distinct graph identity uses the explicit
+Tower launcher feed binding described below; clients validate that binding before signing. Do not rotate a publisher or accept
 arbitrary bootstrap identities to work around a mismatch. Graph targets must
-use the reader’s selected logical Tower origin. A server-local Tower URL needs
-a dedicated feed public signing origin, preserving unrelated publisher paths.
+use the reader’s selected logical Tower origin. Book of Sand supports
+`BOOK_OF_SAND_FEED_TOWER_URL` for that public signing/forwarding origin, preserving
+its unrelated legacy `TOWER_URL` publishing paths.
+
+Manual Book of Sand links accept the registered home URL, `/feed/`, or
+`/feed/editions` without query/fragment. Flight Deck resolves them from Tower
+personal-WApp launcher metadata through the existing workspace bootstrap and Dexie,
+independently of Autopilot registry availability. A launcher `metadata.feed_binding`
+pins `protocol: book-of-sand-v1`, the verified `installation_id`, the shared
+`autopilot_connection_id`, and `graph_source_app_npub`. The launcher supplies the
+registered root origin and app ID; an ambiguous, archived or missing binding fails
+visibly. Publishing that configuration uses existing Tower launcher permissions,
+not a feed bootstrap's self-declared identity. No new Tower source kind is added.
+
+Manual validation signs Book of Sand's bootstrap and list as the actual reader,
+checks the graph origin/owner/source/group/query bounds, and saves the standard
+Tower WApp tuple only when Editions is readable. Reload resolves the same Tower
+pin and reauthenticates the source without requiring `/api/wapps`. Binding removal
+or change invalidates cached private bodies; a formerly pinned source cannot
+quietly switch to registry-derived authority. Connected browsing still lists the
+authorized registry and checks its origin/app/installation against any Tower pin.
+The independent graph pin distinguishes an existing corpus from its publisher.
+The manual button remains usable while registry discovery is pending or failed.
 
 Public URLs accept JSON Feed 1.1 or RSS/podcast feeds through direct browser CORS,
 with no reader credentials, cookies or public proxy. The user selects the format.

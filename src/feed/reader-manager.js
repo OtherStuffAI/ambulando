@@ -4,12 +4,12 @@ import { readerContext, ensureFeedReaderIdentity } from './tower.js';
 import { feedContextKey, feedProjection, feedRowKey, purgePrivateFeedBodies } from './store.js';
 import { FeedSourceService } from './source-service.js';
 import { FeedParser } from './parser.js';
-import { defaultFeedConnectionTransport, discoverFeedApps, listWappFeeds, resolveSubscriptionSource } from './transport.js';
+import { defaultFeedConnectionTransport, discoverFeedApps, listWappFeeds, resolveSubscriptionSource, registeredFeedApps, manualFeedApp } from './transport.js';
 import { publicFeedUrl, safeFeedUrl } from './normalize.js';
 const RUNTIMES = new WeakMap();
 export const subscribedReaderMixin = {
   subscribedFeedView: 'legacy', subscribedFeedItems: [], subscribedFeedSources: [], subscribedFeedStatus: [], subscribedFeedError: '',
-  feedPickerGeneration: 0, feedConnections: [], feedConnectionChoices: {}, feedAddStatus: '', feedAddOpen: false, feedAddBusy: false, feedApps: [], feedDiscoveryErrors: [], feedChoices: [], feedSelectedApp: '', publicFeedDraft: '', publicFeedFormat: 'jsonfeed-1.1', showDismissedFeeds: false,
+  feedPickerGeneration: 0, feedManualGeneration: 0, feedConnections: [], feedConnectionChoices: {}, feedAddStatus: '', feedAddOpen: false, feedAddBusy: false, feedManualBusy: false, feedManualStatus: '', feedApps: [], feedDiscoveryErrors: [], feedChoices: [], feedSelectedApp: '', publicFeedDraft: '', publicFeedFormat: 'book-of-sand', showDismissedFeeds: false,
   get visibleSubscribedFeedItems() { return this.subscribedFeedItems.filter(i => this.showDismissedFeeds || !i.dismissed).slice(0, 500); },
   startSubscribedReader() {
     const c = readerContext(this); if (!c.workspaceId || !c.readerActorId || !this.session) return;
@@ -29,10 +29,14 @@ export const subscribedReaderMixin = {
       runtime.subscription = this.createLiveSubscription(async () => {
         const p = await feedProjection(db, context);
         const connections = await db.autopilot_connections.where('workspace_id').equals(c.workspaceId).toArray();
-        return { ...p, connections };
+        const bindings = await db.wapps.toArray();
+        return { ...p, connections, bindings };
       }, async p => {
         if (!current()) return;
         this.subscribedFeedItems = p.items; this.subscribedFeedSources = p.subscriptions; this.subscribedFeedStatus = p.statuses;
+        const bindingFingerprint = JSON.stringify(p.bindings.filter(w => w.metadata?.feed_binding).map(w => [w.record_id, w.app_id, w.launch_url, w.status, w.record_state, w.metadata.feed_binding]));
+        if (runtime.bindingFingerprint && runtime.bindingFingerprint !== bindingFingerprint) for (const sub of p.subscriptions.filter(s => s.source.kind === 'wapp')) await runtime.source.revoke(sub.id);
+        runtime.bindingFingerprint = bindingFingerprint;
         for (const con of p.connections) {
           const fingerprint = JSON.stringify([con.https_endpoint, con.fips_endpoint, con.archived_at, con.row_version]);
           if (runtime.registry.has(con.id) && runtime.registry.get(con.id) !== fingerprint) for (const sub of p.subscriptions.filter(s => s.source.kind === 'wapp' && s.source.autopilot_connection_id === con.id)) await runtime.source.revoke(sub.id);
@@ -55,8 +59,8 @@ export const subscribedReaderMixin = {
     this.subscribedFeedView = view; if (view !== 'subscribed') return;
     await this.runFeedIntent(async () => { await ensureFeedReaderIdentity(this); this.startSubscribedReader(); await this.requestTowerSyncFamily('feed-reader', '', { force: true }); });
   },
-  async runFeedIntent(run, current = () => true) { this.subscribedFeedError = ''; try { return await run(); } catch (e) { if (!current()) return null;  this.subscribedFeedError = e.status === 404 ? (e.feedSource ? 'This app does not expose feeds. Choose another app or ask its maintainer to enable feeds.' : 'Feed reader APIs are unavailable on this Tower source build.') : e.status === 401 || e.status === 403 ? (e.feedSource ? 'This app denied feed access to your signed-in identity. Check its reader access, then retry.' : 'Feed access denied. Sign in with an authorised reader.') : e.message === 'reader_identity_pending' ? 'Your reader identity is still connecting. Retry when signed in to this workspace.' : e.message === 'feed_disposed' ? 'Your workspace or identity changed. Open Feed again to continue.' : e.message === 'unsupported_source_transport' ? 'This app has no registered FIPS feed endpoint. Choose HTTPS for this connection to read its feeds.' : e.message === 'unsafe_graph_target' ? 'The source graph target does not match this workspace registration.' : e instanceof TypeError ? 'Cannot reach this feed. Check the source connection and its browser CORS settings, then retry.' : e.name === 'AbortError' || e.name === 'TimeoutError' ? 'The feed request timed out. Retry to reconnect.' : e.message || 'Feed unavailable.'; return null; } },
-  closeFeedAdd() { this.feedPickerGeneration++; RUNTIMES.get(this)?.discovery?.abort(); this.feedAddOpen = false; this.feedAddBusy = false; this.feedAddStatus = ''; },
+  async runFeedIntent(run, current = () => true) { this.subscribedFeedError = ''; try { return await run(); } catch (e) { if (!current()) return null;  this.subscribedFeedError = e.status === 404 ? (e.feedSource ? 'This app does not expose feeds. Choose another app or ask its maintainer to enable feeds.' : 'Feed reader APIs are unavailable on this Tower source build.') : e.status === 401 || e.status === 403 ? (e.feedSource ? 'This app denied feed access to your signed-in identity. Check its reader access, then retry.' : 'Feed access denied. Sign in with an authorised reader.') : e.message === 'reader_identity_pending' ? 'Your reader identity is still connecting. Retry when signed in to this workspace.' : e.message === 'feed_disposed' ? 'Your workspace or identity changed. Open Feed again to continue.' : e.message === 'unsupported_source_transport' ? 'This app has no registered FIPS feed endpoint. Choose HTTPS for this connection to read its feeds.' : e.message === 'invalid_manual_feed_url' ? 'Use the registered Book of Sand home link or /feed/editions without a query or fragment.' : e.message === 'manual_feed_unregistered' ? 'This Book of Sand link has no trusted feed binding in this workspace. Ask its maintainer to register it, then retry.' : e.message === 'manual_feed_empty' ? 'No completed editions are readable by your identity. Check source access, then retry.' : e.message === 'unsafe_graph_target' ? 'The source graph target does not match this workspace registration.' : e instanceof TypeError ? 'Cannot reach this feed. Check the source connection and its browser CORS settings, then retry.' : e.name === 'AbortError' || e.name === 'TimeoutError' ? 'The feed request timed out. Retry to reconnect.' : e.message || 'Feed unavailable.'; return null; } },
+  closeFeedAdd() { this.feedPickerGeneration++; this.feedManualGeneration++; RUNTIMES.get(this)?.discovery?.abort(); this.feedAddOpen = false; this.feedAddBusy = false; this.feedAddStatus = ''; this.feedManualBusy = false; this.feedManualStatus = ''; },
   async openFeedAdd() {
     const generation = ++this.feedPickerGeneration, current = () => this.feedPickerGeneration === generation && this.feedAddOpen;
     this.feedAddOpen = true; this.feedAddBusy = true; this.feedAddStatus = 'Connecting your reader…'; this.feedApps = []; this.feedDiscoveryErrors = []; this.feedChoices = []; this.feedSelectedApp = '';
@@ -92,6 +96,8 @@ export const subscribedReaderMixin = {
     this.feedSelectedApp = key; this.feedChoices = []; this.feedAddBusy = true; this.feedAddStatus = 'Loading available feeds…';
     await this.runFeedIntent(async () => { const runtime = RUNTIMES.get(this), app = this.feedApps.find(a => a.key === key); if (!runtime || !app) return;
       runtime.discovery?.abort(); const controller = new AbortController(); runtime.discovery = controller;
+      if (this.requestTowerSyncFamily) await this.requestTowerSyncFamily('workspace-bootstrap', '', { force: true });
+      if (!current() || RUNTIMES.get(this) !== runtime) return;
       let choices; try { choices = await listWappFeeds(app, controller.signal, readerContext(this)); } catch (e) {
         if ([401, 403, 404].includes(e.status)) for (const sub of this.subscribedFeedSources.filter(s => s.source.kind === 'wapp' && s.source.installation_id === app.installation_id && s.source.autopilot_connection_id === app.connection.id)) await runtime.source.revoke(sub.id);
         throw e;
@@ -105,7 +111,33 @@ export const subscribedReaderMixin = {
     if (runtime) await runtime.db.feed_connection_transports.put({ key: JSON.stringify([runtime.context, app.connection.id]), context: runtime.context, connection_id: app.connection.id, transport: app.transport });
     await this.subscribeFeedSource({ kind: 'wapp', autopilot_connection_id: app.connection.id, installation_id: app.installation_id, feed_id: feed.id, endpoint: feed.endpoint, format: feed.format }, feed.title);
   },
-  async subscribePublicFeed() { await this.runFeedIntent(() => this.subscribeFeedSource({ kind: 'public', url: publicFeedUrl(this.publicFeedDraft.trim()), format: this.publicFeedFormat }, '')); },
+  async subscribePublicFeed() {
+    if (this.feedManualBusy) return;
+    const manualGeneration = ++this.feedManualGeneration;
+    this.feedManualBusy = true; this.feedManualStatus = 'Validating your feed link…';
+    const generation = ++this.feedPickerGeneration, current = () => this.feedPickerGeneration === generation && this.feedAddOpen;
+    RUNTIMES.get(this)?.discovery?.abort();
+    try { await this.runFeedIntent(async () => {
+      let url; try { url = safeFeedUrl(this.publicFeedDraft.trim()); } catch { throw new Error('Enter an absolute HTTP(S) feed link without credentials.'); }
+      await ensureFeedReaderIdentity(this); if (!current()) return; this.startSubscribedReader();
+      const runtime = RUNTIMES.get(this), c = readerContext(this);
+      const controller = new AbortController(); runtime.discovery = controller;
+      await this.requestTowerSyncFamily('workspace-bootstrap', '', { force: true }); if (!current()) return;
+      const connections = await runtime.db.autopilot_connections.where('workspace_id').equals(c.workspaceId).toArray();
+      const apps = await registeredFeedApps(connections, c, { db: runtime.db }); if (!current()) return;
+      const input = new URL(url);
+      const known = apps.some(a => new URL(a.launch_url).origin === input.origin);
+      if (this.publicFeedFormat === 'book-of-sand' || known) {
+        const app = manualFeedApp(url, apps);
+        const preference = await runtime.db.feed_connection_transports.get(JSON.stringify([runtime.context, app.connection.id]));
+        app.transport = this.feedConnectionChoices[app.connection.id] || preference?.transport || defaultFeedConnectionTransport(app.connection);
+        const feeds = await listWappFeeds(app, controller.signal, c, { db: runtime.db }); if (!current()) return;
+        const edition = feeds.find(f => f.id === 'editions'); if (!edition) throw new Error('manual_feed_empty');
+        await runtime.db.feed_connection_transports.put({ key: JSON.stringify([runtime.context, app.connection.id]), context: runtime.context, connection_id: app.connection.id, transport: app.transport });
+        await this.subscribeFeedSource({ kind: 'wapp', autopilot_connection_id: app.connection.id, installation_id: app.installation_id, feed_id: edition.id, endpoint: edition.endpoint, format: edition.format }, edition.title);
+      } else await this.subscribeFeedSource({ kind: 'public', url: publicFeedUrl(url), format: this.publicFeedFormat }, '');
+    }, current); } finally { if (this.feedManualGeneration === manualGeneration) { this.feedManualBusy = false; this.feedManualStatus = ''; } if (current()) this.feedAddBusy = false; }
+  },
   async subscribeFeedSource(source, title) {
     this.feedAddBusy = true; this.feedAddStatus = 'Saving your subscription…';
     await this.runFeedIntent(async () => {

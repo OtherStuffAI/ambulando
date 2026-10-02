@@ -56,6 +56,40 @@ export function feedDiscoveryError(error) {
   if (error instanceof TypeError) return 'Cannot reach this Autopilot. Check the connection and its browser CORS settings, then retry.';
   return error?.message || 'App discovery unavailable. Retry this connection.';
 }
+// Tower launcher metadata is an independent, portable source binding. It is
+// read through the normal materializer, never learned from feed content.
+export async function registeredFeedApps(connections, towerContext, options = {}) {
+  const db = options.db || getWorkspaceDb();
+  const rows = await db.wapps.toArray();
+  return rows.flatMap(row => {
+    const pin = row.metadata?.feed_binding;
+    const connection = connections.find(c => c.id === pin?.autopilot_connection_id && c.pg_backend && !c.archived_at);
+    if (!connection || connection.workspace_id !== towerContext.workspaceId || !row.pg_backend || row.pg_workspace_id !== towerContext.workspaceId
+      || row.status === 'archived' || row.record_state === 'deleted' || row.record_state === 'archived'
+      || pin?.protocol !== 'book-of-sand-v1' || !/^[\da-f-]{36}$/i.test(pin.installation_id || '')
+      || !/^npub1[023456789acdefghjklmnpqrstuvwxyz]{58}$/.test(pin.graph_source_app_npub || '') || !row.app_id) return [];
+    let launch; try { launch = new URL(safeFeedUrl(row.launch_url)); } catch { return []; }
+    if (launch.pathname !== '/' || launch.search || launch.hash) return [];
+    return [{ connection, installation_id: pin.installation_id, app_id: row.app_id, title: row.title,
+      launch_url: launch.href, graph_source_app_npub: pin.graph_source_app_npub, feed_protocol: pin.protocol,
+      tower_binding_id: row.record_id }];
+  });
+}
+export function manualFeedApp(url, apps) {
+  const input = new URL(safeFeedUrl(url));
+  if (input.search || input.hash || !['/', '/feed/', '/feed/editions'].includes(input.pathname)) throw new Error('invalid_manual_feed_url');
+  const matches = apps.filter(app => new URL(app.launch_url).origin === input.origin);
+  if (matches.length !== 1) throw new Error('manual_feed_unregistered');
+  return matches[0];
+}
+async function applyTowerFeedBinding(app, towerContext, options) {
+  if (!app.connection || !towerContext.workspaceId) return app;
+  const pins = await registeredFeedApps([app.connection], towerContext, options);
+  const pin = pins.find(p => p.installation_id === app.installation_id);
+  if (!pin) return app;
+  if (pin.app_id !== app.app_id || new URL(pin.launch_url).origin !== new URL(safeFeedUrl(app.launch_url)).origin) throw new Error('unsafe_graph_target');
+  return { ...app, ...pin, transport: app.transport };
+}
 export function validateGraphTargets(targets, app, towerContext) {
   const result = {};
   for (const [name, label] of [['stories', 'Story'], ['history', 'Reference']]) {
@@ -63,7 +97,8 @@ export function validateGraphTargets(targets, app, towerContext) {
     const q = u.searchParams;
     if (u.origin !== tower.origin || u.pathname !== `${tower.pathname.replace(/\/$/, '')}/api/v4/graph/nodes` || u.hash
       || [...q.keys()].some(k => !['workspace_owner_npub', 'source_app_npub', 'visibility', 'group_id', 'source', 'run_id', 'label', 'limit', 'offset'].includes(k))
-      || q.get('workspace_owner_npub') !== towerContext.workspaceOwnerNpub || q.get('source_app_npub') !== app.app_npub
+      || q.get('workspace_owner_npub') !== towerContext.workspaceOwnerNpub || q.get('source_app_npub') !== (app.graph_source_app_npub || app.app_npub)
+      || [...q.keys()].some(k => q.getAll(k).length !== 1)
       || !['group', 'personal'].includes(q.get('visibility')) || (q.get('visibility') === 'group' && !towerContext.graphGroupIds?.includes(q.get('group_id'))) || (q.get('visibility') === 'personal' && q.has('group_id')) || q.get('label') !== label || q.get('limit') !== '200' || q.get('offset') !== '0') throw new Error('unsafe_graph_target');
     result[name] = raw;
   }
@@ -78,7 +113,8 @@ async function resolveWappBinding(app, signal, towerContext, options = {}) {
   const origin = base.origin, sign = options.sign || createNip98AuthHeader;
   let targets = null;
   // This is W1's Book of Sand-specific signed graph-read extension.
-  if (app.title?.toLowerCase().includes('book of sand')) {
+  app = await applyTowerFeedBinding(app, towerContext, options);
+  if (app.feed_protocol === 'book-of-sand-v1' || app.title?.toLowerCase().includes('book of sand')) {
     const bootstrap = await signedReaderJson(`${origin}/api/feed/read-targets`, signal, options);
     const db = options.db || getWorkspaceDb();
     const groups = await db.groups.toArray();
@@ -115,6 +151,13 @@ export async function resolveSubscriptionSource(sub, signal, towerContext, optio
   if (!c || !c.pg_backend || c.workspace_id !== towerContext.workspaceId || c.archived_at) throw new Error('registry_revoked');
   const partition = JSON.stringify([towerContext.baseUrl, towerContext.workspaceId, towerContext.readerActorId]);
   const preference = await db.feed_connection_transports.get(JSON.stringify([partition, c.id]));
+  const pinned = (await registeredFeedApps([c], towerContext, { ...options, db })).find(a => a.installation_id === sub.source.installation_id);
+  if (pinned) {
+    const binding = await resolveWappBinding({ ...pinned, transport: preference?.transport || defaultFeedConnectionTransport(c) }, signal, towerContext, { ...options, db });
+    return { url: feedEndpoint(binding.origin, sub.source.endpoint, sub.source.feed_id), headers: binding.headers, tower_binding_id: pinned.tower_binding_id };
+  }
+  const status = await db.feed_source_status.get(JSON.stringify([partition, sub.id, '']));
+  if (status?.tower_binding_id) throw new Error('registry_revoked');
   const result = await discoverFeedApps([c], signal, { ...options, discoveryTransport: preference?.transport || defaultFeedConnectionTransport(c) }); if (result.errors.length) { const e = new Error(result.errors[0].error); e.status = result.errors[0].status; throw e; }
   const app = result.apps.find(a => a.installation_id === sub.source.installation_id); if (!app) throw new Error('registry_revoked');
   const binding = await resolveWappBinding(app, signal, towerContext, options);

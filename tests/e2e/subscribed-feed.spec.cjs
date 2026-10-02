@@ -36,14 +36,14 @@ for (const viewport of [{ width: 1440, height: 1000 }, { width: 390, height: 844
     await expect(page.locator('.wapp-updates-body[aria-label="Feed"]')).toBeHidden();
     const width = await body.evaluate(el => el.getBoundingClientRect().width); expect(width).toBeLessThanOrEqual(viewport.width);
     await page.getByRole('button', { name: 'Add feed', exact: true }).click(); await expect(page.getByRole('dialog', { name: 'Add feed', exact: true })).toBeVisible();
-    await expect(page.getByLabel('Public feed URL', { exact: true })).toBeVisible(); await expect(page.getByText(/Public sources must allow direct browser CORS/)).toBeVisible();
+    await expect(page.getByLabel('Feed link', { exact: true })).toBeVisible(); await expect(page.getByText(/Book of Sand links use your signed-in reader/)).toBeVisible();
     await page.getByRole('button', { name: 'Close add feed', exact: true }).click();
     expect(await page.evaluate(() => window.feedFlags.map(f => f.field))).toEqual(['read', 'saved']);
   });
 }
 
-for (const width of [1440, 390]) {
-  test(`Feed picker uses canonical actor and Agents registry ${width}`, async ({ page }) => {
+for (const width of [1440, 390]) for (const manual of [false, true]) {
+  test(`Feed picker uses canonical actor and ${manual ? "manual Tower binding" : "Agents registry"} ${width}`, async ({ page }) => {
     test.setTimeout(45000);
     await page.setViewportSize({ width, height: 1000 });
     const { generateSecretKey, getPublicKey, nip19 } = await import('nostr-tools');
@@ -63,7 +63,7 @@ for (const width of [1440, 390]) {
         return route.fulfill({ json: { wapps: [{ wappInstallationId: installationId, title: 'Book of Sand', launchUrl: 'https://book.example.invalid', appNpub: 'app' }] } });
       }
       if (url.pathname === '/api/feed/read-targets') {
-        const target = label => `https://tower.example.invalid/api/v4/graph/nodes?workspace_owner_npub=owner&source_app_npub=app&visibility=personal&label=${label}&limit=200&offset=0`;
+        const target = label => `https://tower.example.invalid/api/v4/graph/nodes?workspace_owner_npub=owner&source_app_npub=${manual ? npub : 'app'}&visibility=personal&label=${label}&limit=200&offset=0`;
         return route.fulfill({ json: { graph_read_targets: { stories: target('Story'), history: target('Reference') } } });
       }
       if (url.pathname === '/feed/editions') return route.fulfill({ json: { version: 'https://jsonfeed.org/version/1.1', title: 'Editions', feed_url: 'https://book.example.invalid/feed/editions', items: [{ date_published: '2026-10-01T00:00:00Z', id: 'edition:fixture', title: 'Completed edition headline', url: 'https://book.example.invalid/?story=exact-headline', content_text: 'Fixture edition summary' }] } });
@@ -75,7 +75,7 @@ for (const width of [1440, 390]) {
       return route.abort();
     });
     await page.goto('/'); await page.waitForFunction(() => Boolean(window.Alpine?.store?.('chat')));
-    await page.evaluate(async ({ workspaceId, connectionId, npub, pubkey, secretHex, width }) => {
+    const configureFixture = async ({ workspaceId, connectionId, installationId, npub, pubkey, secretHex, width, manual, seed }) => {
       const s = window.Alpine.store('chat'); s.stopBackgroundSync?.(); s.stopAllLiveQueries?.();
       for (const method of ['startSharedLiveQueries', 'startWorkspaceLiveQueries', 'syncRoute', 'performSync', 'ensureWorkspaceSessionKey', 'loadLocalWorkspaceCoreData', 'persistWorkspaceSettings', 'refreshWorkspaceSettings', 'refreshLegacyWorkspaceRecovery', 'syncWorkspaceProfileDraft', 'validateSelectedBoardId']) s[method] = () => {};
       s.requestTowerSyncFamily = async () => {};
@@ -84,18 +84,28 @@ for (const width of [1440, 390]) {
       s.knownWorkspaces = [{ workspaceKey: 'picker-fixture', workspaceId, workspaceOwnerNpub: 'owner', directHttpsUrl: 'https://tower.example.invalid', pgBackendMode: true, pgSessionNpub: npub, pgMe: { actor: { actor_id: 'fixture-actor', npub }, identity: { workspace_id: workspaceId } } }];
       await s.selectWorkspace('picker-fixture', { pgVerified: true });
       if (width === 390) delete s.currentWorkspace.pgMe;
+      if (seed) {
       await s.openFeedAdd(); s.closeFeedAdd();
       const request = indexedDB.open('wingman-fd-ws-picker-fixture');
       await new Promise((resolve, reject) => { request.onerror = reject; request.onsuccess = () => {
-        const db = request.result, tx = db.transaction('autopilot_connections', 'readwrite');
+        const db = request.result, tx = db.transaction(['autopilot_connections', 'wapps'], 'readwrite');
         tx.objectStore('autopilot_connections').put({ id: connectionId, workspace_id: workspaceId, pg_backend: true, display_name: 'Connected Autopilot', https_endpoint: 'https://agents.example.invalid', fips_endpoint: 'http://npub-node.fips:3601' });
+        if (manual) tx.objectStore('wapps').put({ record_id: 'book-launcher', pg_backend: true, pg_workspace_id: workspaceId, title: 'Book of Sand', app_id: 'book-app', launch_url: 'https://book.example.invalid', status: 'active', metadata: { feed_binding: { protocol: 'book-of-sand-v1', installation_id: installationId, autopilot_connection_id: connectionId, graph_source_app_npub: npub } } });
         tx.oncomplete = () => { db.close(); resolve(); }; tx.onerror = reject;
       }; });
+      }
       s.subscribedFeedView = 'subscribed'; s.showConnectModal = false; s.showWorkspaceBootstrapModal = false;
-    }, { workspaceId, connectionId, npub, pubkey, width, secretHex: Buffer.from(secret).toString('hex') });
+      if (!seed) await s.selectSubscribedFeedView('subscribed');
+    };
+    const fixture = { workspaceId, connectionId, installationId, npub, pubkey, width, manual, secretHex: Buffer.from(secret).toString('hex') };
+    await page.evaluate(configureFixture, { ...fixture, seed: true });
     await page.getByRole('button', { name: 'Add feed', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: 'Add feed', exact: true });
     await expect(dialog.getByText(/browser CORS settings/)).toBeVisible();
+    if (manual) {
+      await dialog.getByLabel('Feed link', { exact: true }).fill('https://book.example.invalid/feed/editions');
+      await dialog.getByRole('button', { name: 'Subscribe to link', exact: true }).click();
+    } else {
     registryFail = false; await dialog.getByRole('button', { name: 'Retry', exact: true }).click();
     await expect(dialog.getByLabel('Feed app')).toBeEnabled();
     await dialog.getByLabel('Feed app').selectOption({ label: 'https://agents.example.invalid · Book of Sand' });
@@ -105,11 +115,20 @@ for (const width of [1440, 390]) {
     const bounds = await dialog.boundingBox(); expect(bounds.width).toBeLessThanOrEqual(width); expect(bounds.x).toBeGreaterThanOrEqual(0);
     if (process.env.FEED_PICKER_SCREENSHOTS) await dialog.screenshot({ path: require('node:path').join(process.env.FEED_PICKER_SCREENSHOTS, `feed-picker-${width}.png`) });
     expect(registryRequests).toBe(2);
-    await dialog.getByRole('button', { name: 'Subscribe to Editions' }).click(); await expect(dialog).toBeHidden();
+    await dialog.getByRole('button', { name: 'Subscribe to Editions' }).click();
+    }
+    await expect(dialog).toBeHidden();
     expect(subscriptionBody.source.autopilot_connection_id).toBe(connectionId); expect(subscriptionBody.source.feed_id).toBe('editions');
+    if (manual) expect(registryRequests).toBe(1);
     expect(subscriptionBody.reader_actor_id).toBeUndefined(); expect(meRequests).toBe(width === 390 ? 1 : 0);
     await expect(page.locator('.subscribed-feed').getByText('Completed edition headline', { exact: true })).toBeVisible();
     expect(signedUrls).toContain('https://book.example.invalid/feed/list?limit=100');
+    await page.evaluate(async () => { const s = window.Alpine.store('chat'); await s.disposeSubscribedReader(); await s.selectSubscribedFeedView('subscribed'); });
+    await expect(page.locator('.subscribed-feed').getByText('Completed edition headline', { exact: true })).toBeVisible();
+    await page.reload(); await page.waitForFunction(() => Boolean(window.Alpine?.store?.('chat')));
+    await page.evaluate(configureFixture, { ...fixture, seed: false });
+    await expect(page.locator('.subscribed-feed').getByText('Completed edition headline', { exact: true })).toBeVisible();
+    // Reload keeps real Dexie subscription/cache, while session/workspace bootstrap is a fixture.
     // Synthetic local signer and routed source responses; no claim of human ACL or live CORS proof.
   });
 }
