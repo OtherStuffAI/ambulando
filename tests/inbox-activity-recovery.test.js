@@ -265,7 +265,9 @@ it('supports every independent family combination in bounded source recovery', a
     for (const source of sources) {
       const page = await queryInboxSource(input(shown), owner, source);
       expect(Array.isArray(page.rows)).toBe(true);
-      if (!shown.length) expect(page).toEqual({ rows: [], hasMore: false });
+      const supported = { chat_messages: ['chat', 'file'], tasks: ['task', 'file'], documents: ['document', 'file'], comments: ['task', 'document', 'file'] };
+      if (!supported[source].some(type => shown.includes(type))) expect(page).toEqual({ rows: [], hasMore: false });
+      if (shown.includes('chat') && source === 'chat_messages' || shown.includes('task') && source === 'tasks' || shown.includes('document') && source === 'documents') expect(page.rows.length).toBeGreaterThan(0);
     }
   }
 });

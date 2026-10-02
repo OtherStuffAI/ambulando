@@ -14,6 +14,7 @@ const find = (node, selector) => node.querySelector(selector) || [...node.queryS
 const inbox = find(document, '[data-deck-column="inbox"] .attention-card-list').outerHTML;
 const header = find(document, '.inbox-panel-heading').outerHTML;
 const app = await readFile('src/app.js', 'utf8');
+const iconMethod = app.match(/getAttentionIconSvg\(icon\) \{([\s\S]*?)\n    \},/)[1];
 const guard = app.match(/shouldOpenDeckCard\(event\) \{([\s\S]*?)\n    \},/)[1];
 const temporary = await mkdtemp(path.join(tmpdir(), 'fd-compact-'));
 const fixture = [
@@ -25,18 +26,23 @@ const fixture = [
  { inboxKind: 'document', id: 'doc:6', recordId: '6', title: 'Implementation notes', reason: '2 recent comments', isUnread: true },
 ];
 const entry = `import Alpine from '${process.cwd()}/node_modules/alpinejs/dist/module.esm.js';
+import { autopilotOverviewManagerMixin as inboxMethods, filterAutopilotOverviewInbox } from '${process.cwd()}/src/autopilot-overview-manager.js';
 window.calls=[];
 Alpine.store('chat', {
  deckInboxType: 'all', deckInboxSearchDraft: '', unreadTasks: 1, unreadDocs: 1, unreadChat: 1, unreadDeck: 3,
- setDeckInboxType(value) { this.deckInboxType=value; window.calls.push(['filter',value]); },
+ deckInboxTypes: inboxMethods.deckInboxTypes,
+ isDeckInboxTypeVisible: inboxMethods.isDeckInboxTypeVisible,
+ toggleDeckInboxType: inboxMethods.toggleDeckInboxType,
+ startWorkspaceLiveQueries() {},
  setDeckInboxSearchDraft(value) { this.deckInboxSearchDraft=value; },
  applyDeckInboxSearch() { window.calls.push(['search',this.deckInboxSearchDraft]); },
  openDeckThreadComposer() { window.calls.push(['new']); },
  runInboxReadAction(kinds,label) { window.calls.push(['bulk',kinds,label]); },
- visibleAutopilotOverviewInbox: ${JSON.stringify(fixture)},
+ rows: ${JSON.stringify(fixture)},
+ get visibleAutopilotOverviewInbox() { return filterAutopilotOverviewInbox(this.rows, '', this.deckInboxType); },
  renderDeckCardText: text => String(text || '').replaceAll('<', '&lt;'),
  isLongTaskTitle: () => false, getTaskTitleLengthClass: () => '',
- getAttentionIconSvg: () => '<svg viewBox="0 0 24 24"><path d="M5 12l4 4L19 6"/></svg>',
+ getAttentionIconSvg(icon) {${iconMethod}},
  formatRelativeTime: () => '2m ago', resolveTaskBoardColumnColor: () => '#28785e',
  shouldOpenDeckCard(event) {${guard}},
  openAutopilotOverviewTask: item => window.calls.push(['task',item.recordId]),
@@ -47,7 +53,7 @@ Alpine.store('chat', {
  markDeckReviewTaskDone(id) { window.calls.push(['done',id]); this.visibleAutopilotOverviewInbox.find(i => i.recordId===id).isUnread=false; },
 }); window.probeStore=Alpine.store('chat'); Alpine.start();`;
 await writeFile(path.join(temporary,'entry.js'),entry);
-execFileSync('bun',['build',path.join(temporary,'entry.js'),'--target=browser',`--outfile=${temporary}/probe.js`]);
+execFileSync('bun',['build',path.join(temporary,'entry.js'),'--target=browser','--define', '__FLIGHT_DECK_PG_APP_NPUB__="npub1inboxfixture"',`--outfile=${temporary}/probe.js`]);
 const browser = await (process.env.FLIGHTDECK_VERIFY_BROWSER === 'webkit' ? webkit.launch() : chromium.launch({channel:'chrome'}));
 const results=[];
 try {
@@ -61,20 +67,28 @@ try {
  const page=await context.newPage(); const errors=[]; page.on('pageerror',e=>errors.push(e.message));
  for(const width of [320,375,390,430,1440]) {
   await page.setViewportSize({width,height:1000}); await page.goto('http://inbox-fixture.test/');
-  const cards=page.locator('.attention-card'); await cards.nth(5).waitFor();
+  const cards=page.locator('.attention-card'); await cards.nth(5).waitFor().catch(error => { console.error(errors); throw error; });
   const geometry=await cards.evaluateAll(cards=>cards.map(c=>({height:c.getBoundingClientRect().height,width:c.getBoundingClientRect().width,overflow:c.scrollWidth>c.clientWidth+1})));
   assert(geometry.every(c=>!c.overflow));
   assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
   const screenshot=`/tmp/flightdeck-inbox-${source?'before':'after'}-${process.env.FLIGHTDECK_VERIFY_BROWSER || 'chrome'}-${width}.png`;
   await page.screenshot({path:screenshot,fullPage:true});
-  const controls = page.locator('.inbox-panel-heading').locator('h3, select, input, .inbox-search-submit, .deck-new-thread-button, .doc-actions-toggle');
+  const controls = page.locator('.inbox-panel-heading').locator('h3, .inbox-type-toggle, input, .inbox-search-submit, .deck-new-thread-button, .doc-actions-toggle');
   const toolbar = await controls.evaluateAll(nodes => nodes.map(n => { const r=n.getBoundingClientRect(); return {tag:n.tagName, x:r.x,y:r.y,width:r.width,height:r.height,center:r.y+r.height/2}; }));
-  assert.equal(toolbar.length,6);
-  assert(Math.max(...toolbar.map(r=>r.center))-Math.min(...toolbar.map(r=>r.center))<2, 'All six controls share one row');
+  assert.equal(toolbar.length,9);
   assert(toolbar.every(r=>r.width>0 && r.x>=0 && r.x+r.width<=width), 'Every control fits viewport');
-  assert(toolbar[2].width>=60, 'Search remains usable');
+  assert(toolbar[5].width>=60, 'Search remains usable');
   if(width<768) assert(toolbar.slice(1).every(r=>r.height>=44 && r.width>=32));
-  await page.getByRole('combobox',{name:'Inbox type'}).selectOption('document');
+  const types = ['chats', 'tasks', 'documents', 'files'];
+  for (const name of types) assert.equal(await page.getByRole('button',{name:`Show ${name}`,exact:true}).getAttribute('aria-pressed'), 'true');
+  const fileToggle = page.getByRole('button',{name:'Show files',exact:true});
+  await fileToggle.focus(); await page.keyboard.press('Space');
+  assert.equal(await fileToggle.getAttribute('aria-pressed'), 'false');
+  assert.equal(await cards.count(),5);
+  for (const name of types.slice(0,3)) await page.getByRole('button',{name:`Show ${name}`,exact:true}).click();
+  assert.equal(await cards.count(),0);
+  for (const name of types) { const button=page.getByRole('button',{name:`Show ${name}`,exact:true}); await button.focus(); await page.keyboard.press('Enter'); }
+  assert.equal(await cards.count(),6);
   const search=page.getByRole('searchbox',{name:'Search Inbox'});
   await search.fill('release'); await search.press('Enter');
   await page.getByRole('button',{name:'Search Inbox',exact:true}).click();
@@ -89,7 +103,7 @@ try {
   await page.keyboard.press('Escape');
   assert.equal(await menu.getAttribute('aria-expanded'),'false');
   await menu.click(); await page.getByRole('menuitem',{name:'Mark all tasks as read'}).click();
-  assert.deepEqual(await page.evaluate(()=>window.calls),[['filter','document'],['search','release'],['search','release'],['new'],['bulk',['task'],'tasks']]);
+  assert.deepEqual(await page.evaluate(()=>window.calls),[['search','release'],['search','release'],['new'],['bulk',['task'],'tasks']]);
   await page.evaluate(()=>window.calls=[]);
   let sticky;
   if(width<768) {

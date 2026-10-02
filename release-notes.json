@@ -2383,6 +2383,13 @@
       "label": "Context Tree synchronization and cache adapters",
       "notes": [],
       "noUserVisibleChanges": true
+    },
+    {
+      "buildNumber": 2135,
+      "label": "Independent Inbox record type toggles",
+      "notes": [
+        "Show or hide chats, tasks, documents and files independently using the icons before Search. Any combination is supported, including hiding every type."
+      ]
     }
   ]
 }
