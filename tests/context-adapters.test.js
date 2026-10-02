@@ -23,10 +23,18 @@ it('loader distinguishes loading from complete empty and carries capabilities af
 });
 it('permission denial clears cached rows; disposed late reads cannot write to another workspace',async()=>{
   await db.context_components.put(mapContextRow(fixture.components[0]));
-  requestTowerPgContext.mockRejectedValueOnce(Object.assign(Error('denied'),{status:404}));
+  requestTowerPgContext.mockRejectedValueOnce(Object.assign(Error('denied'),{status:404,code:'context_not_found'}));
   await expect(loadTowerPgContext(store,scopeId)).rejects.toThrow('denied');expect(await db.context_components.count()).toBe(0);
   requestTowerPgContext.mockImplementationOnce(async()=>{service.dispose();return {capabilities:{read:true}};});
   await expect(loadTowerPgContext(store,scopeId)).rejects.toThrow();expect(store.runTowerPgWorkspaceSync).not.toHaveBeenCalled();
+});
+it('an unregistered route sets error coverage without declaring access revoked',async()=>{
+  await db.context_components.put(mapContextRow(fixture.components[0]));
+  requestTowerPgContext.mockRejectedValueOnce(Object.assign(Error('404 Not Found'),{status:404}));
+  await expect(loadTowerPgContext(store,scopeId)).rejects.toThrow('404 Not Found');
+  expect((await db.context_coverage.get(scopeId)).status).toBe('error');
+  expect(await db.context_components.count()).toBe(1);
+  expect((await db.context_coverage.get(scopeId)).capabilities).toBeUndefined();
 });
 it('target resolution follows all ACL-checked pages and matches cache row versions',async()=>{
   const row=fixture.references[0];await db.context_references.put(mapContextRow(row));

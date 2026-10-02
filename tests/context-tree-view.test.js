@@ -13,6 +13,19 @@ function harness() {
 }
 const tick = async () => { await Promise.resolve(); await Promise.resolve(); };
 describe('read-only Context Tree controller', () => {
+  it('shows a load error for an unregistered route and neutral denial for an inaccessible scope', async () => {
+    const h = harness(); await tick();
+    h.service.ensureLoaded.mockRejectedValueOnce(Object.assign(new Error('404 Not Found'), { status: 404 }));
+    await h.view.loadTree();
+    expect(h.view.status).toBe('error');
+    expect(h.view.stateMessage).toContain('could not be loaded');
+    expect(h.view.canManage).toBe(false);
+    h.service.ensureLoaded.mockRejectedValueOnce(Object.assign(new Error('Context unavailable'), { status: 404, code: 'context_not_found' }));
+    await h.view.loadTree();
+    expect(h.view.status).toBe('denied');
+    expect(h.view.stateMessage).toContain('unavailable for your access');
+    expect(h.view.canManage).toBe(false);
+  });
   it('loads only through TowerSyncService; expansion and view transforms never fetch or persist', async () => {
     const h = harness(); h.emit(); await tick();
     expect(h.service.ensureLoaded).toHaveBeenCalledWith('context-tree', 'scope', { force: true });

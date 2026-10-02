@@ -1,4 +1,5 @@
 import { requestTowerPgContext } from './api.js';
+import { isContextAccessDenied } from './context-tree-errors.js';
 import { materializeFeedReaderEvent } from './feed/materialize.js';
 import { clampBranchEffectiveMessageIds, threadHistoryLineage, mergeThreadHistoryIds, threadHistoryAuthority as pgAuthorityToken } from './thread-history-coverage.js';
 import { FLIGHT_DECK_PG_APP_NPUB } from './app-identity.js';
@@ -3536,7 +3537,7 @@ export async function loadTowerPgContext(store, scopeId, options = {}) {
     return { scopeId, status: 'complete', capabilities: result.capabilities };
   } catch (error) {
     guard();
-    const denied = [403, 404].includes(error.status);
+    const denied = isContextAccessDenied(error);
     await db.transaction('rw', db.context_components, db.context_references, db.context_coverage, db.context_reference_resolutions, async () => {
       if (denied) {
         await db.context_components.where('scope_id').equals(scopeId).delete();

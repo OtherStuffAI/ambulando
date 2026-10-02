@@ -1,4 +1,5 @@
 import { canonicalContextArtifact } from './context-artifact-link.js';
+import { isContextAccessDenied } from './context-tree-errors.js';
 import { liveQuery } from 'dexie';
 
 export function contextParentChoices(components, id) {
@@ -16,7 +17,7 @@ export function contextParentChoices(components, id) {
 
 function contextEditError(error) {
   if (error?.status === 409) return 'Conflict: this context changed. Reload and reopen the edit before saving.';
-  if ([403,404].includes(error?.status)) return 'This action or target is unavailable for your access.';
+  if (isContextAccessDenied(error)) return 'This action or target is unavailable for your access.';
   if (error?.status === 400) return 'Check the name, parent or reference and try again.';
   return 'The change could not be confirmed. Reload to check the current context before trying again.';
 }

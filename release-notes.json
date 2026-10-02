@@ -2510,6 +2510,13 @@
         "Follow actual named-port connections and bounded request, tweet, response and delivery previews.",
         "Inspect exact retained fields and safely change services or runs while reads are pending."
       ]
+    },
+    {
+      "buildNumber": 2155,
+      "label": "Clear Context Tree loading failures",
+      "notes": [
+        "Report a missing Context Tree backend route as a load failure, while preserving neutral access denials and management-only editing."
+      ]
     }
   ]
 }

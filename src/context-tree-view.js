@@ -1,4 +1,5 @@
 import { createContextTreeEditor } from './context-tree-editor.js';
+import { isContextAccessDenied } from './context-tree-errors.js';
 import { observeContextScope } from './context-cache.js';
 import { getWorkspaceDb, isWorkspaceDbOpenForKey } from './db.js';
 import { layoutContextTree, contextPath, fitContextTree } from './context-tree-layout.js';
@@ -101,7 +102,7 @@ export function createContextTreeView(deps = {}) {
         await service.ensureLoaded('context-tree', this.scopeId, { force: true });
       } catch (error) {
         if (epoch !== generation) return;
-        this.status = [403, 404].includes(error?.status) ? 'denied' : 'error';
+        this.status = isContextAccessDenied(error) ? 'denied' : 'error';
         this.components = []; this.references = []; this.selectedId = ''; this.relayout();
       }
     },
