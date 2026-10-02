@@ -50,10 +50,10 @@ async function start(page, baseURL, viewport) {
 test.afterEach(async ({ page }) => { await page.evaluate(() => window.fixture?.cleanup()).catch(() => {}); });
 for (const [name, viewport] of [['desktop', { width: 1440, height: 900 }], ['mobile', { width: 390, height: 844 }]]) {
   test(`${name} automatic roots, selection/references, keyboard, collapse, zoom/pan, deletion and workspace disposal`, async ({ page, baseURL }) => {
-    console.log('starting',name); const errors = []; page.on('pageerror', error => errors.push(error.message));
-    await start(page, baseURL, viewport); console.log(name,'started');
+    const errors = []; page.on('pageerror', error => errors.push(error.message));
+    await start(page, baseURL, viewport);
     const flight = page.getByRole('treeitem', { name: 'Flight Deck', exact: true });
-    console.log(name,'selecting'); await flight.click(); await expect(page.getByRole('button', { name: 'Current doc title', exact: true })).toBeEnabled();
+    await flight.click(); await expect(page.getByRole('button', { name: 'Current doc title', exact: true })).toBeEnabled();
     await expect(page.getByRole('button', { name: 'Reference unavailable', exact: true })).toBeDisabled();
     await expect(page.getByRole('heading', { name: 'Flight Deck', exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Current doc title', exact: true }).click();
@@ -64,7 +64,7 @@ for (const [name, viewport] of [['desktop', { width: 1440, height: 900 }], ['mob
     expect(await page.evaluate(() => window.fixture.opened)).toContainEqual({ url: 'https://artifacts.example' });
     await page.getByRole('button', { name: 'Current file title', exact: true }).click();
     await expect.poll(() => page.evaluate(() => window.fixture.opened)).toContainEqual({ object_id: 'authorized-storage', name: 'Authorized file', kind: 'file' });
-    console.log(name,'openers done'); const before = await page.evaluate(() => window.fixture.calls.length);
+    const before = await page.evaluate(() => window.fixture.calls.length);
     await flight.focus(); await page.keyboard.press('ArrowLeft');
     await expect(page.getByRole('treeitem', { name: 'Tree browser', exact: true })).toHaveCount(0);
     await page.keyboard.press('ArrowRight'); await page.keyboard.press('ArrowRight'); await page.keyboard.press('Enter');
@@ -83,12 +83,14 @@ for (const [name, viewport] of [['desktop', { width: 1440, height: 900 }], ['mob
     expect(geometry.overflow).toBe(false);
     if(name==='mobile') expect(geometry.panel.y).toBeGreaterThanOrEqual(geometry.tree.y+geometry.tree.height);
     else expect(geometry.panel.x).toBeGreaterThanOrEqual(geometry.tree.x+geometry.tree.width);
+    await page.evaluate(() => {window.fixture.view.suspend(); window.fixture.view.resume();});
+    await expect(flight).toBeVisible();
     await flight.click(); await expect(page.getByRole('button', { name: 'Current doc title', exact: true })).toBeEnabled();
-    console.log(name,'geometry done'); await fs.mkdir(evidence, { recursive: true }); await page.screenshot({ path: path.join(evidence, `${name}.png`), fullPage: true });
+    await fs.mkdir(evidence, { recursive: true }); await page.screenshot({ path: path.join(evidence, `${name}.png`), fullPage: true });
     await page.evaluate(async () => {const {db}=window.fixture;await db.transaction('rw',db.context_components,db.context_references,db.context_reference_resolutions,async()=>{await db.context_components.bulkDelete(['flight','tree']);await db.context_references.clear();await db.context_reference_resolutions.clear();});});
     await expect(page.getByRole('heading', { name: 'Flight Deck', exact: true })).toHaveCount(0);
     await expect(page.getByText('The selected component is no longer available.', { exact: true })).toBeVisible();
-    console.log(name,'deletion done'); await page.evaluate(() => window.fixture.switchWorkspace());
+    await page.evaluate(() => window.fixture.switchWorkspace());
     await expect(page.getByText('No components in this scope yet.', { exact: true })).toBeVisible();
     await expect(page.getByRole('treeitem')).toHaveCount(0); expect(errors).toEqual([]);
   });
@@ -129,4 +131,31 @@ test('representative wide/deep scope lays out and remains keyboard navigable wit
   expect(await page.getByRole('treeitem').count()).toBeLessThan(100);
   console.log(JSON.stringify({contextTree2005RowsLayoutMs:timing,zoomedRenderedNodes:await page.getByRole('treeitem').count()}));
   expect(timing).toBeLessThan(2500);
+});
+
+test('built Flight Deck shell registers Context Tree and navigates desktop/mobile without backend contact', async ({ page, baseURL }) => {
+  const origin = new URL(baseURL).origin, dist = path.resolve(__dirname, '../../dist');
+  await page.route('**/*', async route => {
+    const url = new URL(route.request().url());
+    if (url.origin !== origin) return route.abort();
+    if (url.pathname.startsWith('/api/')) return route.fulfill({ status: 503, contentType: 'application/json', body: '{}' });
+    const relative = url.pathname.startsWith('/assets/') ? url.pathname.slice(1) : url.pathname === '/version.json' ? 'version.json' : 'index.html';
+    const mime = relative.endsWith('.js') ? 'text/javascript' : relative.endsWith('.css') ? 'text/css' : relative.endsWith('.json') ? 'application/json' : 'text/html';
+    return route.fulfill({ contentType: mime, body: await fs.readFile(path.join(dist, relative)) });
+  });
+  await page.goto(`${origin}/fixture/flight-deck`); await page.waitForFunction(() => window.Alpine?.store('chat'));
+  await page.evaluate(() => {
+    const store=window.Alpine.store('chat');
+    store.startWorkspaceLiveQueries=()=>{}; store.syncRoute=()=>{}; store.stopReadAloud=()=>{};
+    store.openConnectModal=()=>{}; store.showConnectModal=false;
+    store.session={npub:'fixture-viewer'};store.navCollapsed=true;store.navSection='chat';
+  });
+  await page.locator('.sidebar').getByRole('button', { name: 'Context Tree', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Context Tree', exact: true })).toBeVisible();
+  await expect(page.getByText('Choose a scope to browse its context.', { exact: true })).toBeVisible();
+  expect(await page.evaluate(() => window.Alpine.store('chat').getRoutePath())).toMatch(/\/context$/);
+  await page.evaluate(() => {window.Alpine.store('chat').navigateTo('chat');});
+  await page.setViewportSize({width:390,height:844});
+  await page.locator('.mobile-section-switcher').getByRole('button', { name: 'Context Tree', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Context Tree', exact: true })).toBeVisible();
 });

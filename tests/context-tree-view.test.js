@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createContextTreeView, contextArtifactOrigin, disposeContextTreeView } from '../src/context-tree-view.js';
+import { createContextTreeView, contextArtifactOrigin, disposeContextTreeView, resumeContextTreeView } from '../src/context-tree-view.js';
 const component = (id, parent_id = null) => ({ id, title: id, parent_id, row_version: 1 });
 function harness() {
   let next;
@@ -84,8 +84,26 @@ describe('read-only Context Tree controller', () => {
     expect(h.service.ensureLoaded).toHaveBeenCalledTimes(1);
   });
 });
-it('canonical external artifacts follow latest and reject executable/credential/path descriptors', () => {
+it('canonical external artifact origins preserve latest policy and reject executable/credential/path descriptors', () => {
   const target = { origin: 'https://artifacts.example', project: 'Suite', artifact: 'Design', page: 'index.html', version_policy: 'latest' };
   expect(contextArtifactOrigin(target)).toBe('https://artifacts.example');
   for (const patch of [{ origin: 'javascript:alert(1)' }, { origin: 'https://user:pass@example.com' }, { origin: 'https://example.com/path' }, { project: '../private' }, { page: 'evil.html' }, { version_policy: 'v4' }]) expect(contextArtifactOrigin({ ...target, ...patch })).toBe('');
+});
+
+it('opens from committed ACL resolution when liveQuery still shows cleared resolutions', async () => {
+  const h = harness(); h.emit(); h.view.select('root'); await tick();
+  const ref = { id: 'r', component_id: 'root', target_type: 'doc', target: { record_id: 'doc' }, row_version: 1, resolution: { status: 'available', title: 'Authorized' } };
+  h.emit(undefined, [ref]); await tick();
+  h.service.ensureLoaded.mockImplementationOnce(async () => {
+    h.emit(undefined, [{ ...ref, resolution: { status: 'unavailable' } }]);
+    h.db.context_reference_resolutions.get = async () => ({row_version:1,resolution:{status:'available'}});
+  });
+  await h.view.openReference(ref);
+  expect(h.store.handleMentionNavigate).toHaveBeenCalledWith('doc', 'doc');
+});
+it('resumes on the same workspace after sync-service/lifecycle suspension', async () => {
+  const h = harness(); h.emit(); disposeContextTreeView(h.store);
+  Object.assign(h.store, { currentWorkspace: {workspaceId:'workspace'}, pgContextScope:{record_id:'scope',title:'Scope'}, workspaceDbKey:'key', isLoggedIn:true, isTowerPgMode:true });
+  resumeContextTreeView(h.store); await tick(); h.emit();
+  expect(h.view.status).toBe('complete'); expect(h.view.layout.nodes).toHaveLength(2);
 });

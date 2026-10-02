@@ -9,7 +9,8 @@ SSE connection, polling loop or editing controls.
 `queueSync` watches shell identity, then binds `observeContextScope` to the
 currently open workspace database. Scope/workspace changes unsubscribe and
 reset local selection, focus, collapsed IDs and transforms. Section destruction
-and workspace shutdown dispose the view. Late subscription/load results are
+and workspace/sync-service shutdown suspend the view. Starting workspace live
+queries resumes a mounted view even when reconnecting the same workspace. Late subscription/load results are
 ignored by generation and selection tokens; a deleted selection becomes a
 neutral notice. Denied/error views conceal cached structure.
 

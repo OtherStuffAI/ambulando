@@ -1,4 +1,4 @@
-import { disposeContextTreeView } from './context-tree-view.js';
+import { disposeContextTreeView, resumeContextTreeView } from './context-tree-view.js';
 import {
   getAddressBookPeople,
   getChannelsByOwner,
@@ -1078,16 +1078,19 @@ export const sectionLiveQueryMixin = {
     }
 
     if (!ownerNpub) {
+      disposeContextTreeView(this);
       stopBucket(this, state.workspace);
       stopBucket(this, state.detail);
       return;
     }
     if (!isWorkspaceDbOpenForKey(workspaceKey)) {
+      disposeContextTreeView(this);
       stopBucket(this, state.workspace);
       stopBucket(this, state.detail);
       return;
     }
 
+    resumeContextTreeView(this);
     syncLiveQuerySet(this, state.workspace, buildWorkspaceSpecs(this));
     syncLiveQuerySet(this, state.detail, buildDetailSpecs(this));
 

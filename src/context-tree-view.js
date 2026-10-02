@@ -5,6 +5,7 @@ import { normalizeRecordLinkType } from './record-links.js';
 
 const views = new WeakMap();
 export function disposeContextTreeView(store) { views.get(store)?.suspend(); }
+export function resumeContextTreeView(store) { views.get(store)?.resume(); }
 
 // Artifact descriptors are external links, never claims of target access.
 export function contextArtifactOrigin(target) {
@@ -88,6 +89,11 @@ export function createContextTreeView(deps = {}) {
       this.layout = layoutContextTree([]); this.scale = 1; this.panX = 0; this.panY = 0;
       refSignature = ''; hadAvailable = false; fitted = false; drag = null;
     },
+    resume() {
+      this.queueSync(store.currentWorkspace?.workspaceId || store.currentWorkspace?.workspace_id,
+        store.pgContextScope?.record_id || store.selectedBoardScope?.record_id, store.workspaceDbKey,
+        store.pgContextScope?.title || store.selectedBoardScope?.title || '', store.isLoggedIn && store.isTowerPgMode);
+    },
     suspend() { queued++; this.reset(); key = ''; },
     destroy() { destroyed = true; this.suspend(); resizeObserver?.disconnect(); views.delete(store); },
     async loadTree() {
@@ -98,7 +104,7 @@ export function createContextTreeView(deps = {}) {
         await service.ensureLoaded('context-tree', this.scopeId, { force: true });
       } catch (error) {
         if (epoch !== generation) return;
-        this.status = error?.status === 403 ? 'denied' : 'error';
+        this.status = [403, 404].includes(error?.status) ? 'denied' : 'error';
         this.components = []; this.references = []; this.selectedId = ''; this.relayout();
       }
     },

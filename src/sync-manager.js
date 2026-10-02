@@ -1,3 +1,4 @@
+import { disposeContextTreeView } from './context-tree-view.js';
 import { loadTowerPgContext, loadTowerPgContextReferences, readTowerPgContextDeletePreview } from './pg-read-hydrator.js';
 import { hydrateFeedReader } from './feed/tower.js';
 import { hydrateDriveShares } from './drive.js';
@@ -597,6 +598,7 @@ export const syncManagerMixin = {
   },
 
   disposeTowerSyncService(reason = 'dispose') {
+    disposeContextTreeView(this);
     const service = this._towerSyncService;
     this._towerSyncService = null;
     service?.dispose(reason);

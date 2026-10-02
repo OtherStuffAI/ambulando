@@ -2410,6 +2410,28 @@
       "notes": [
         "Mobile Inbox Search starts as a small icon beside independent record filters. Focus expands Search for typing and submission; leaving it retains the query and restores the compact toolbar."
       ]
+    },
+    {
+      "buildNumber": 2141,
+      "label": "Read-only scope Context Tree",
+      "notes": [
+        "Browse scope components as automatically arranged trees with selection, direct references, expansion, pan, zoom and fit. Keyboard navigation and stacked mobile panels keep the view usable without editing structure.",
+        "Reference titles are checked separately for access. Unavailable targets remain neutral; artifact descriptors open their site while direct latest navigation awaits integration."
+      ]
+    },
+    {
+      "buildNumber": 2142,
+      "label": "Context browser lifecycle recovery",
+      "notes": [
+        "Resume the Context Tree after reconnecting the same workspace and clear its view immediately when the sync service is disposed. Preserve read-only navigation and separately checked reference titles."
+      ]
+    },
+    {
+      "buildNumber": 2143,
+      "label": "Local-first conversation content",
+      "notes": [
+        "Count and display authored messages once, keeping thread titles in the header. Show the latest local conversation content while Tower refresh runs in the background, and reuse fresh history coverage on reopen."
+      ]
     }
   ]
 }
