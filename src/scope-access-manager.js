@@ -1,4 +1,5 @@
 import { acquirePgScopeAccessLease, releasePgScopeAccessLease, resolvePgEditWorkspaceContext } from './pg-edit-session.js';
+import { sortChannelsByScopePosition } from './channel-order.js';
 import { putTowerPgScopeAccess } from './tower-command-intents.js';
 export const SCOPE_ACCESS_ROLES = [
   {value:'context_editor',label:'Context editor',description:'Create, rename and move components, link and unlink references, and delete confirmed subtrees. No scope administration or additional linked-content access.'},
@@ -18,23 +19,36 @@ export const scopeAccessManagerMixin = {
       .map(m=>({id:m.actor_id || m.id,label: m.display_name || (/^(npub1|[0-9a-f]{8}-)/i.test(this.getPgWorkspaceMemberLabel?.(m) || '') ? '' : this.getPgWorkspaceMemberLabel?.(m)) || (m.kind==='agent'?'Unnamed agent':'Unnamed person')}));
   },
   scopeAccessRoleLabel(role) { return SCOPE_ACCESS_ROLES.find(r=>r.value===role)?.label || 'Custom access'; },
+  scopeSetupChannels(scopeId) { return sortChannelsByScopePosition((this.channels || []).filter(c=>c.scope_id===scopeId && c.record_state!=='deleted')); },
+  handleScopeModalKeydown(event) {
+    if (event.key==='Escape') { event.preventDefault(); this.showNewScopeForm ? this.cancelNewScope() : this.cancelEditScope(); return; }
+    if (event.key!=='Tab') return;
+    const controls=[...event.currentTarget.querySelectorAll('button, input, select, textarea, [tabindex="0"]')].filter(el=>!el.disabled && el.getClientRects().length);
+    if (!controls.length) return;
+    const first=controls[0],last=controls.at(-1);
+    if(event.shiftKey && (document.activeElement===first || document.activeElement===event.currentTarget)) { event.preventDefault(); last.focus(); }
+    else if(!event.shiftKey && document.activeElement===last) { event.preventDefault(); first.focus(); }
+  },
   async openScopeAccess(scope) {
     if (!this.isTowerPgMode) return;
+    this.scopeModalOpener=globalThis.document?.activeElement;
+    this.editingScopeId=scope.record_id; this.editingScopeTitle=scope.title || ''; this.editingScopeDescription=scope.description || ''; this.editingScopeAssignedGroupIds=this.getScopeShareGroupIds?.(scope) || []; this.editingScopeSaving=false; this.editingScopeError='';
     this.scopeAccessWorkspaceId=resolvePgEditWorkspaceContext(this).workspaceId; this.scopeAccessScope=scope; this.scopeAccessData=null; this.scopeAccessError=''; this.scopeAccessNotice=''; this.scopeAccessPrincipalId='';
+    globalThis.requestAnimationFrame?.(()=>document.querySelector('.scope-edit-modal')?.focus());
     await this.refreshScopeAccess();
     if (this.scopeAccessData?.can_manage && !this.scopeAccessData.principals) {
       try { await Promise.all([this.refreshGroups?.({force:true,minIntervalMs:0}),this.refreshTowerPgWorkspaceMembers?.({force:true,limit:200})]); }
       catch { this.scopeAccessError='Access loaded, but people and groups could not be loaded. Refresh when your connection and signer are available.'; }
     }
   },
-  closeScopeAccess() { if(this.scopeAccessBusy) return; this.scopeAccessScope=null; this.scopeAccessData=null; },
+  closeScopeAccess() { if(this.scopeAccessBusy) return; this.scopeAccessScope=null; this.scopeAccessData=null; this.editingScopeId=null; this.scopeModalOpener?.focus?.(); },
   async refreshScopeAccess() {
     const scope=this.scopeAccessScope, context=resolvePgEditWorkspaceContext(this);
     if (!scope || !context.workspaceId) return;
     this.scopeAccessBusy=true; this.scopeAccessError='';
     try {
       const result=await this.getTowerSyncService().ensureLoaded('scope-access',scope.record_id,{force:true});
-      if (this.scopeAccessScope?.record_id===scope.record_id && resolvePgEditWorkspaceContext(this).workspaceId===context.workspaceId) this.scopeAccessData=result;
+      if (this.scopeAccessScope?.record_id===scope.record_id && resolvePgEditWorkspaceContext(this).workspaceId===context.workspaceId) { this.scopeAccessData=result; this.scopeAccessScope.pg_can_manage=result.can_manage===true; const row=this.scopes?.find(s=>s.record_id===scope.record_id); if(row) row.pg_can_manage=result.can_manage===true; }
     } catch(e) { this.scopeAccessError=e.status===403?'You do not have permission to view this scope access.':e.status===404?'This scope is unavailable.':'Scope access could not be loaded. Check your connection and signer, then refresh.'; }
     finally {this.scopeAccessBusy=false;}
   },

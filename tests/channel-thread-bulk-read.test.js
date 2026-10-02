@@ -116,7 +116,7 @@ describe('channel thread bulk read', () => {
     expect(html).toContain('data-testid="mark-channel-threads-read"');
     expect(html).toContain('Mark all threads as read');
     const settingsCalls = [...html.matchAll(/openChannelSettings\(([^)]*)\)/g)].map((match) => match[1]);
-    expect(settingsCalls).toHaveLength(7);
+    expect(settingsCalls).toHaveLength(8);
     expect(settingsCalls.every((argument) => argument === 'channel.record_id' || argument === 'ch.record_id')).toBe(true);
   });
 });

@@ -1791,10 +1791,12 @@ export const scopesManagerMixin = {
     this.editingScopeError = '';
     this.scopePolicyRepairSummary = '';
     this.scopePolicyRepairBusy = false;
+    if (this.isTowerPgMode) void this.openScopeAccess?.(scope);
   },
 
   cancelEditScope() {
-    if (this.editingScopeSaving) return;
+    if (this.editingScopeSaving || this.scopeAccessBusy) return;
+    this.closeScopeAccess?.();
     this.editingScopeId = null;
     this.editingScopeTitle = '';
     this.editingScopeDescription = '';

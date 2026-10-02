@@ -24681,3 +24681,20 @@ html.wingman-iphone-webview .chat-channel-tab-scroll * {
 .scope-access-row small { display: block; margin-top: 4px; opacity: .8; }
 .scope-access-panel label { display: flex; flex-direction: column; gap: 6px; }
 @media(max-width: 600px) { .scope-access-heading, .scope-access-row { align-items: flex-start; flex-wrap: wrap; } }
+
+/* Setup Scopes: compact hierarchy, with details and grants in one modal. */
+.scopes-section .scope-layout { display: block; }
+.scopes-section .scope-tree-nav { display: none; }
+.scopes-section .scope-cards { gap: 0; border: 1px solid var(--border); border-radius: 8px; }
+.scopes-section .scope-card { position: relative; padding: .55rem .8rem; border: 0; border-bottom: 1px solid var(--border); border-radius: 0; }
+.scopes-section .scope-card-header { float: right; margin: 0; }
+.scopes-section .scope-card-clickable { display: block; width: calc(100% - 36px); text-align: left; border: 0; background: transparent; color: inherit; padding: 0; cursor: pointer; }
+.scopes-section .scope-card-title { margin: 0; font-size: .9rem; }
+.scopes-section .scope-card-desc { margin: .2rem 0; font-size: .8rem; }
+.scopes-section .scope-card-children { margin-left: .6rem; }
+.scope-setup-channels { padding: .6rem 0 .1rem .9rem; }
+.scope-setup-channel-heading, .scope-setup-channel-row { display: flex; justify-content: space-between; align-items: center; gap: .5rem; padding: .25rem 0; font-size: .85rem; }
+.scope-edit-modal .scope-access-panel { border: 0; border-top: 1px solid var(--border); padding: .75rem 0; margin-top: .75rem; }
+.scope-edit-modal { width: min(640px, calc(100vw - 24px)); max-height: calc(100dvh - 32px); overflow-y: auto; }
+.scope-edit-modal .channel-grant-form { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media(max-width: 600px) { .scope-edit-modal .channel-grant-form { grid-template-columns: 1fr; } .scope-setup-channel-row { flex-wrap: wrap; } }

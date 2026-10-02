@@ -1,6 +1,6 @@
 # Scope Access editor
 
-In a Tower PG workspace, open **Setup → Scopes → the scope’s ⋮ menu → Access**. A scope manager can choose People, Agents or Groups, select the named principal, choose Context editor or Scope manager, and Save access. Choose Agents, the desired agent, Context editor, Save access. This release does not assign production grants.
+In a Tower PG workspace, open **Setup → Scopes → the scope’s ⋮ menu → Access**. Scope rows expand to show channels and existing channel create/edit actions without leaving Setup. The page uses one compact hierarchy without a separate right navigation. Edit scope and Access both open the same scope settings modal containing details and access. A scope manager can choose People, Agents or Groups, select the named principal, choose Context editor or Scope manager, and Save access. Choose Agents, the desired agent, Context editor, Save access. This release does not assign production grants.
 
 Context editor edits the component hierarchy and direct references, including confirmed subtree deletion. Scope manager also administers the scope and its grants. Access applies to the exact scope; child scopes, channels and linked content retain their separate access checks. Group membership is resolved by Tower, including established nested groups. Effective access identifies direct grants and the granting group; revoke group authority on that group’s grant row.
 

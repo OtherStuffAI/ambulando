@@ -17,7 +17,7 @@ describe('scope rename surface', () => {
   it('keeps safe scope actions reachable while gating rename independently', () => {
     expect(html).toContain('<div class="scope-card-actions">');
     expect(html).toContain('<button type="button" x-show="$store.chat.canManageScope(s1)" @click.stop="$store.chat.startEditScope(s1.record_id); actionsOpen = false">');
-    expect(html).toContain('Rename scope</button>');
+    expect(html).toContain('Edit scope</button>');
     expect(html).toContain("copyFlightDeckReference('scope', s1.record_id");
   });
 

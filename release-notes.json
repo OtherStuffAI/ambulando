@@ -2602,6 +2602,13 @@
       "notes": [
         "Scope managers can choose canonical people, agents and groups without unrelated workspace directory permissions."
       ]
+    },
+    {
+      "buildNumber": 2170,
+      "label": "Compact scope and channel setup",
+      "notes": [
+        "Manage scopes and channels in one compact list. Edit scope details and people, agent and group access together in the scope modal."
+      ]
     }
   ]
 }
