@@ -2444,6 +2444,14 @@
       "label": "Served compact Inbox verification",
       "notes": [],
       "noUserVisibleChanges": true
+    },
+    {
+      "buildNumber": 2146,
+      "label": "Inspect Autopilot pipeline runs",
+      "notes": [
+        "Inspect actual pipeline steps, child workflows and attempt history from a verified Autopilot connection.",
+        "Read retained values with explicit availability, paginated records, exact copy and keyboard or touch controls. Requires the Autopilot pipeline viewer capability."
+      ]
     }
   ]
 }

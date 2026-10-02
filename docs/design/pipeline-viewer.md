@@ -1,0 +1,53 @@
+# Autopilot pipeline viewer
+
+Flight Deck reads a selected, identity-verified Autopilot installation through
+its existing connection client. `pipelines.viewer.read.v1` and the exact signed
+`pipeline_viewer_path` are required. Old clients and Agent Space management views
+remain compatible; missing viewer capability is explicitly unavailable.
+
+The connection client signs owner-scoped GET requests with explicit workspace,
+Tower service and app context, and the selected agent binding where available.
+It uses the existing immutable peer-pinned FIPS handle. HTTPS metadata is never
+a fallback for a selected FIPS connection. Service identity is installation ID
+plus installation signer, independently of its endpoint.
+
+`pipeline-viewer-service.js` owns reads, cancellation and bounded recovery.
+`pipeline-viewer-store.js` writes small projections to workspace Dexie tables;
+`pipeline-viewer-view.js` observes those projections with liveQuery. These local
+execution projections are not Tower record families and do not participate in
+TowerSyncService replication or its outbox. Definition ports, persisted summaries
+and the rendered diagram are separate shapes.
+
+Snapshots replace the authoritative run projection, including all attempts,
+without merging replayed execution IDs. SHA-256 revision tokens are opaque:
+compare-and-swap against the preceding revision and coalesced requests prevent
+late responses from replacing a newer projection. Recovery requests a fresh run
+snapshot. Native statuses, completion timestamps, skip/continuation/exit reasons
+and child references retain their backend meanings. Logical node attempts and
+executor evidence retries have separate attempt numbers.
+
+Full evidence is lazy and lives only in an explicit in-memory session cache.
+Changing workspace, actor, service, agent context or run aborts requests and clears
+private values. They never enter Dexie, localStorage, logs or URL parameters.
+Denied/unavailable reads clear the corresponding projection; disconnected reads
+retain summaries marked stale. Arrays page until `nextOffset` is null, with no
+first-N ceiling. A partial page is not labelled complete. Search describes its
+loaded-page scope and complete-value copy requires every retained page. Redacted
+retained values identify their redaction metadata and remain distinct from
+preview-only, expired, not-captured and unavailable evidence.
+
+The diagram uses actual definition nodes and children. No display-only groups
+are inferred. Configured selector wiring and carried-forward metadata are labelled
+separately; neither claims every internal read. Child navigation keeps a parent
+trail. When a historical definition is unavailable, only recorded execution nodes
+are shown, without rebuilding from the latest catalogue definition.
+
+All untrusted values use text bindings. Hover/focus provides a preview; click/tap
+pins exact evidence. Escape closes and returns focus. Desktop steps run horizontally;
+small screens use a vertical sequence with the inspector below it. Controls expose
+labels, test IDs and live status feedback; technical identifiers are optional.
+
+The reusable synthetic browser harness blocks backend access. Backend-generated
+contract fixtures verify real Bird structure, native statuses, revision tokens,
+child relationships and paginated evidence. Product activation remains dependent
+on compatible backend availability and a fresh signed connection capability.

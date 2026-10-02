@@ -1,0 +1,576 @@
+{
+  "version": 1,
+  "serviceId": "autopilot_79bd7d7fd684b399857c582b1b7172dd",
+  "definitions": [
+    {
+      "id": "bird.timeline.chat.v2",
+      "name": "bird.timeline.chat.v2",
+      "title": "bird.timeline.chat.v2",
+      "description": "Use Bird to return latest tweets from your Following or For You timeline, mentions, user tweets or quoted search. Bare latest/timeline requests ask Following versus For You. Read-only, deterministic exact records and links returned to this chat.",
+      "version": 2,
+      "hash": "fe2e5b5904a9377d7339a03c2636af996d2e68b75206090d70c8b4a1d8cddc3c",
+      "availability": "complete",
+      "steps": [
+        {
+          "logicalKey": "thread",
+          "name": "thread",
+          "title": "Validate chat request",
+          "description": "Validate the source chat invocation.",
+          "type": "block",
+          "inputs": [
+            {
+              "label": "Chat Message",
+              "path": "$.prompt",
+              "format": "text"
+            }
+          ],
+          "outputs": [
+            {
+              "label": "Chat Message",
+              "path": "$.prompt",
+              "format": "text"
+            }
+          ],
+          "children": [
+            {
+              "logicalKey": "thread/thread / normalise-thread-invocation",
+              "name": "thread / normalise-thread-invocation",
+              "title": "thread / normalise-thread-invocation",
+              "description": "Validate and normalise the reusable four-field Flight Deck thread invocation contract.",
+              "type": "code",
+              "inputs": [
+                {
+                  "label": "Thread",
+                  "path": "$.threadId",
+                  "format": "text"
+                },
+                {
+                  "label": "Chat Message",
+                  "path": "$.prompt",
+                  "format": "text"
+                }
+              ],
+              "outputs": [
+                {
+                  "label": "Thread",
+                  "path": "$.threadId",
+                  "format": "text"
+                },
+                {
+                  "label": "Chat Message",
+                  "path": "$.prompt",
+                  "format": "text"
+                }
+              ],
+              "children": []
+            }
+          ]
+        },
+        {
+          "logicalKey": "retrieve",
+          "name": "retrieve",
+          "title": "Retrieve tweets",
+          "description": "Run reusable bounded Bird retrieval; ambiguous timelines clarify Following versus For You.",
+          "type": "pipeline",
+          "inputs": [
+            {
+              "label": "Request",
+              "path": "$.request",
+              "format": "text"
+            }
+          ],
+          "outputs": [
+            {
+              "label": "Verdict",
+              "path": "$.retrieval.verdict",
+              "format": "text"
+            },
+            {
+              "label": "Tweets",
+              "path": "$.retrieval.tweets",
+              "format": "records"
+            }
+          ],
+          "children": []
+        },
+        {
+          "logicalKey": "format",
+          "name": "format",
+          "title": "Format exact tweets",
+          "description": "Format exact tweet records and safe links without model prose.",
+          "type": "code",
+          "inputs": [
+            {
+              "label": "Tweets",
+              "path": "$.state.tweets",
+              "format": "records"
+            }
+          ],
+          "outputs": [
+            {
+              "label": "Response",
+              "path": "$.message",
+              "format": "text"
+            }
+          ],
+          "children": []
+        },
+        {
+          "logicalKey": "reply",
+          "name": "reply",
+          "title": "Deliver to chat",
+          "description": "Return to the validated source thread as the addressed managed agent.",
+          "type": "block",
+          "inputs": [
+            {
+              "label": "Response",
+              "path": "$.message",
+              "format": "text"
+            }
+          ],
+          "outputs": [
+            {
+              "label": "Delivered",
+              "path": "$.delivered",
+              "format": "auto"
+            }
+          ],
+          "children": [
+            {
+              "logicalKey": "reply/reply / return-to-thread",
+              "name": "reply / return-to-thread",
+              "title": "reply / return-to-thread",
+              "description": "Resolve the source Flight Deck thread and post the final Markdown as the configured managed agent.",
+              "type": "code",
+              "inputs": [
+                {
+                  "label": "Thread",
+                  "path": "$.threadId",
+                  "format": "text"
+                },
+                {
+                  "label": "Response",
+                  "path": "$.message",
+                  "format": "text"
+                }
+              ],
+              "outputs": [
+                {
+                  "label": "Delivered",
+                  "path": "$.delivered",
+                  "format": "auto"
+                },
+                {
+                  "label": "Thread",
+                  "path": "$.threadId",
+                  "format": "text"
+                },
+                {
+                  "label": "Message ID",
+                  "path": "$.messageId",
+                  "format": "text"
+                }
+              ],
+              "children": []
+            }
+          ]
+        }
+      ],
+      "wiring": [
+        {
+          "sourceStepKey": null,
+          "sourcePath": "$.blocks.thread.input.workspaceId",
+          "targetStepKey": "thread/thread / normalise-thread-invocation",
+          "targetPath": "$.workspaceId",
+          "carriedForward": true
+        },
+        {
+          "sourceStepKey": null,
+          "sourcePath": "$.blocks.thread.input.threadId",
+          "targetStepKey": "thread/thread / normalise-thread-invocation",
+          "targetPath": "$.threadId",
+          "carriedForward": true
+        },
+        {
+          "sourceStepKey": null,
+          "sourcePath": "$.blocks.thread.input.frmNpub",
+          "targetStepKey": "thread/thread / normalise-thread-invocation",
+          "targetPath": "$.frmNpub",
+          "carriedForward": true
+        },
+        {
+          "sourceStepKey": null,
+          "sourcePath": "$.blocks.thread.input.prompt",
+          "targetStepKey": "thread/thread / normalise-thread-invocation",
+          "targetPath": "$.prompt",
+          "carriedForward": true
+        },
+        {
+          "sourceStepKey": "thread",
+          "sourcePath": "$.invocation.prompt",
+          "targetStepKey": "retrieve",
+          "targetPath": "$.request",
+          "carriedForward": false
+        },
+        {
+          "sourceStepKey": "retrieve",
+          "sourcePath": "$.bird.retrieval",
+          "targetStepKey": "format",
+          "targetPath": "$.state",
+          "carriedForward": false
+        },
+        {
+          "sourceStepKey": "thread",
+          "sourcePath": "$.invocation.workspaceId",
+          "targetStepKey": "reply",
+          "targetPath": "$.workspaceId",
+          "carriedForward": true
+        },
+        {
+          "sourceStepKey": "thread",
+          "sourcePath": "$.invocation.threadId",
+          "targetStepKey": "reply",
+          "targetPath": "$.threadId",
+          "carriedForward": true
+        },
+        {
+          "sourceStepKey": "thread",
+          "sourcePath": "$.invocation.frmNpub",
+          "targetStepKey": "reply",
+          "targetPath": "$.frmNpub",
+          "carriedForward": true
+        },
+        {
+          "sourceStepKey": "thread",
+          "sourcePath": "$.invocation.prompt",
+          "targetStepKey": "reply",
+          "targetPath": "$.prompt",
+          "carriedForward": true
+        },
+        {
+          "sourceStepKey": "format",
+          "sourcePath": "$.response.message",
+          "targetStepKey": "reply",
+          "targetPath": "$.message",
+          "carriedForward": false
+        },
+        {
+          "sourceStepKey": null,
+          "sourcePath": "$.blocks.reply.input.workspaceId",
+          "targetStepKey": "reply/reply / return-to-thread",
+          "targetPath": "$.workspaceId",
+          "carriedForward": true
+        },
+        {
+          "sourceStepKey": null,
+          "sourcePath": "$.blocks.reply.input.threadId",
+          "targetStepKey": "reply/reply / return-to-thread",
+          "targetPath": "$.threadId",
+          "carriedForward": true
+        },
+        {
+          "sourceStepKey": null,
+          "sourcePath": "$.blocks.reply.input.frmNpub",
+          "targetStepKey": "reply/reply / return-to-thread",
+          "targetPath": "$.frmNpub",
+          "carriedForward": true
+        },
+        {
+          "sourceStepKey": null,
+          "sourcePath": "$.blocks.reply.input.prompt",
+          "targetStepKey": "reply/reply / return-to-thread",
+          "targetPath": "$.prompt",
+          "carriedForward": true
+        },
+        {
+          "sourceStepKey": null,
+          "sourcePath": "$.blocks.reply.input.message",
+          "targetStepKey": "reply/reply / return-to-thread",
+          "targetPath": "$.message",
+          "carriedForward": true
+        }
+      ]
+    },
+    {
+      "id": "bird.retrieve.v2",
+      "name": "bird.retrieve.v2",
+      "title": "bird.retrieve.v2",
+      "description": "Bounded read-only Bird retrieval with advisory Jev choices and deterministic execution policy.",
+      "version": 2,
+      "hash": "caa65cd817c6c0e905423a70744c7cd9420ca1980deebeb73865b17ac288a95b",
+      "availability": "complete",
+      "steps": [
+        {
+          "logicalKey": "prepare",
+          "name": "prepare",
+          "title": "Validate retrieval request",
+          "description": "Extract exact candidates and validate bounded input.",
+          "type": "code",
+          "inputs": [
+            {
+              "label": "Request",
+              "path": "$.request",
+              "format": "text"
+            }
+          ],
+          "outputs": [
+            {
+              "label": "Verdict",
+              "path": "$.verdict",
+              "format": "text"
+            },
+            {
+              "label": "Result Count",
+              "path": "$.resultCount",
+              "format": "count"
+            },
+            {
+              "label": "Attempt",
+              "path": "$.attempt",
+              "format": "count"
+            },
+            {
+              "label": "Latency (ms)",
+              "path": "$.latencyMs",
+              "format": "count"
+            }
+          ],
+          "children": []
+        },
+        {
+          "logicalKey": "bounded-retrieval",
+          "name": "bounded-retrieval",
+          "title": "Bounded retrieval attempts",
+          "description": "At most three executions; terminal verdicts skip remaining actions.",
+          "type": "loop",
+          "inputs": [
+            {
+              "label": "Request",
+              "path": "$.retrieval.request",
+              "format": "text"
+            }
+          ],
+          "outputs": [
+            {
+              "label": "Verdict",
+              "path": "$.current.retrieval.verdict",
+              "format": "text"
+            },
+            {
+              "label": "Results",
+              "path": "$.current.retrieval.tweets",
+              "format": "records"
+            }
+          ],
+          "children": [
+            {
+              "logicalKey": "bounded-retrieval/choose",
+              "name": "choose",
+              "title": "Choose read-only action",
+              "description": "Advisory typed judgments; deterministic policy owns execution. Skipped after a terminal verdict.",
+              "type": "classifier",
+              "inputs": [
+                {
+                  "label": "Request",
+                  "path": "$.request",
+                  "format": "text"
+                },
+                {
+                  "label": "Attempt",
+                  "path": "$.attempt",
+                  "format": "count"
+                }
+              ],
+              "outputs": [
+                {
+                  "label": "Chosen Action",
+                  "path": "$.answers.action.choice",
+                  "format": "text"
+                },
+                {
+                  "label": "Usage",
+                  "path": "$.usage",
+                  "format": "json"
+                },
+                {
+                  "label": "Model Latency (ms)",
+                  "path": "$.latencyMs",
+                  "format": "count"
+                }
+              ],
+              "children": []
+            },
+            {
+              "logicalKey": "bounded-retrieval/execute",
+              "name": "execute",
+              "title": "Retrieve selected source",
+              "description": "Validate advisory answers, preserve requested source, execute one read-only action, deduplicate exact records.",
+              "type": "code",
+              "inputs": [
+                {
+                  "label": "Request",
+                  "path": "$.state.request",
+                  "format": "text"
+                }
+              ],
+              "outputs": [
+                {
+                  "label": "Chosen Source",
+                  "path": "$.source",
+                  "format": "text"
+                },
+                {
+                  "label": "Verdict",
+                  "path": "$.verdict",
+                  "format": "text"
+                },
+                {
+                  "label": "Result Count",
+                  "path": "$.resultCount",
+                  "format": "count"
+                },
+                {
+                  "label": "Attempt",
+                  "path": "$.attempt",
+                  "format": "count"
+                },
+                {
+                  "label": "Latency (ms)",
+                  "path": "$.latencyMs",
+                  "format": "count"
+                }
+              ],
+              "children": []
+            },
+            {
+              "logicalKey": "bounded-retrieval/judge-evidence",
+              "name": "judge-evidence",
+              "title": "Judge safe continuation",
+              "description": "Advisory typed judgments; deterministic policy owns execution. Skipped after a terminal verdict.",
+              "type": "classifier",
+              "inputs": [
+                {
+                  "label": "Request",
+                  "path": "$.request",
+                  "format": "text"
+                },
+                {
+                  "label": "Attempt",
+                  "path": "$.attempt",
+                  "format": "count"
+                }
+              ],
+              "outputs": [
+                {
+                  "label": "Continuation Probability",
+                  "path": "$.answers.continueSafe.noul",
+                  "format": "auto"
+                },
+                {
+                  "label": "Usage",
+                  "path": "$.usage",
+                  "format": "json"
+                },
+                {
+                  "label": "Model Latency (ms)",
+                  "path": "$.latencyMs",
+                  "format": "count"
+                }
+              ],
+              "children": []
+            },
+            {
+              "logicalKey": "bounded-retrieval/check",
+              "name": "check",
+              "title": "Validate continuation",
+              "description": "Validate semantic Noul only when deterministic evidence supports continuation.",
+              "type": "code",
+              "inputs": [
+                {
+                  "label": "Request",
+                  "path": "$.state.request",
+                  "format": "text"
+                }
+              ],
+              "outputs": [
+                {
+                  "label": "Verdict",
+                  "path": "$.verdict",
+                  "format": "text"
+                },
+                {
+                  "label": "Result Count",
+                  "path": "$.resultCount",
+                  "format": "count"
+                },
+                {
+                  "label": "Attempt",
+                  "path": "$.attempt",
+                  "format": "count"
+                },
+                {
+                  "label": "Latency (ms)",
+                  "path": "$.latencyMs",
+                  "format": "count"
+                }
+              ],
+              "children": []
+            }
+          ]
+        }
+      ],
+      "wiring": [
+        {
+          "sourceStepKey": null,
+          "sourcePath": "$.request",
+          "targetStepKey": "prepare",
+          "targetPath": "$.request",
+          "carriedForward": true
+        },
+        {
+          "sourceStepKey": "prepare",
+          "sourcePath": "$.retrieval",
+          "targetStepKey": "bounded-retrieval/choose",
+          "targetPath": "$.state",
+          "carriedForward": false
+        },
+        {
+          "sourceStepKey": "prepare",
+          "sourcePath": "$.retrieval",
+          "targetStepKey": "bounded-retrieval/execute",
+          "targetPath": "$.state",
+          "carriedForward": true
+        },
+        {
+          "sourceStepKey": "bounded-retrieval/choose",
+          "sourcePath": "$.actionDecision",
+          "targetStepKey": "bounded-retrieval/execute",
+          "targetPath": "$.decision",
+          "carriedForward": false
+        },
+        {
+          "sourceStepKey": "bounded-retrieval/execute",
+          "sourcePath": "$.retrieval",
+          "targetStepKey": "bounded-retrieval/judge-evidence",
+          "targetPath": "$.state",
+          "carriedForward": false
+        },
+        {
+          "sourceStepKey": "bounded-retrieval/execute",
+          "sourcePath": "$.retrieval",
+          "targetStepKey": "bounded-retrieval/check",
+          "targetPath": "$.state",
+          "carriedForward": true
+        },
+        {
+          "sourceStepKey": "bounded-retrieval/judge-evidence",
+          "sourcePath": "$.evidenceDecision",
+          "targetStepKey": "bounded-retrieval/check",
+          "targetPath": "$.decision",
+          "carriedForward": false
+        }
+      ]
+    }
+  ],
+  "nextCursor": null
+}

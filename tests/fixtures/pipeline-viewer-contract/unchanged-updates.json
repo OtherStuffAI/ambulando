@@ -1,0 +1,756 @@
+{
+  "version": 1,
+  "serviceId": "autopilot_79bd7d7fd684b399857c582b1b7172dd",
+  "run": {
+    "id": "96c91841-5be5-410b-8572-b721d2346a1d",
+    "serviceId": "autopilot_79bd7d7fd684b399857c582b1b7172dd",
+    "definitionId": "bird.timeline.chat.v2",
+    "definitionVersion": 2,
+    "definitionHash": "fe2e5b5904a9377d7339a03c2636af996d2e68b75206090d70c8b4a1d8cddc3c",
+    "name": "bird.timeline.chat.v2",
+    "status": "ok",
+    "startedAt": "2026-10-02T04:35:00.895Z",
+    "completedAt": "2026-10-02T04:35:00.906Z",
+    "parentRunId": null,
+    "parentStepId": null
+  },
+  "definition": {
+    "id": "bird.timeline.chat.v2",
+    "name": "bird.timeline.chat.v2",
+    "title": "bird.timeline.chat.v2",
+    "description": "Use Bird to return latest tweets from your Following or For You timeline, mentions, user tweets or quoted search. Bare latest/timeline requests ask Following versus For You. Read-only, deterministic exact records and links returned to this chat.",
+    "version": 2,
+    "hash": "fe2e5b5904a9377d7339a03c2636af996d2e68b75206090d70c8b4a1d8cddc3c",
+    "availability": "complete",
+    "steps": [
+      {
+        "logicalKey": "thread",
+        "name": "thread",
+        "title": "Validate chat request",
+        "description": "Validate the source chat invocation.",
+        "type": "block",
+        "inputs": [
+          {
+            "label": "Chat Message",
+            "path": "$.prompt",
+            "format": "text"
+          }
+        ],
+        "outputs": [
+          {
+            "label": "Chat Message",
+            "path": "$.prompt",
+            "format": "text"
+          }
+        ],
+        "children": [
+          {
+            "logicalKey": "thread/thread / normalise-thread-invocation",
+            "name": "thread / normalise-thread-invocation",
+            "title": "thread / normalise-thread-invocation",
+            "description": "Validate and normalise the reusable four-field Flight Deck thread invocation contract.",
+            "type": "code",
+            "inputs": [
+              {
+                "label": "Thread",
+                "path": "$.threadId",
+                "format": "text"
+              },
+              {
+                "label": "Chat Message",
+                "path": "$.prompt",
+                "format": "text"
+              }
+            ],
+            "outputs": [
+              {
+                "label": "Thread",
+                "path": "$.threadId",
+                "format": "text"
+              },
+              {
+                "label": "Chat Message",
+                "path": "$.prompt",
+                "format": "text"
+              }
+            ],
+            "children": []
+          }
+        ]
+      },
+      {
+        "logicalKey": "retrieve",
+        "name": "retrieve",
+        "title": "Retrieve tweets",
+        "description": "Run reusable bounded Bird retrieval; ambiguous timelines clarify Following versus For You.",
+        "type": "pipeline",
+        "inputs": [
+          {
+            "label": "Request",
+            "path": "$.request",
+            "format": "text"
+          }
+        ],
+        "outputs": [
+          {
+            "label": "Verdict",
+            "path": "$.retrieval.verdict",
+            "format": "text"
+          },
+          {
+            "label": "Tweets",
+            "path": "$.retrieval.tweets",
+            "format": "records"
+          }
+        ],
+        "children": []
+      },
+      {
+        "logicalKey": "format",
+        "name": "format",
+        "title": "Format exact tweets",
+        "description": "Format exact tweet records and safe links without model prose.",
+        "type": "code",
+        "inputs": [
+          {
+            "label": "Tweets",
+            "path": "$.state.tweets",
+            "format": "records"
+          }
+        ],
+        "outputs": [
+          {
+            "label": "Response",
+            "path": "$.message",
+            "format": "text"
+          }
+        ],
+        "children": []
+      },
+      {
+        "logicalKey": "reply",
+        "name": "reply",
+        "title": "Deliver to chat",
+        "description": "Return to the validated source thread as the addressed managed agent.",
+        "type": "block",
+        "inputs": [
+          {
+            "label": "Response",
+            "path": "$.message",
+            "format": "text"
+          }
+        ],
+        "outputs": [
+          {
+            "label": "Delivered",
+            "path": "$.delivered",
+            "format": "auto"
+          }
+        ],
+        "children": [
+          {
+            "logicalKey": "reply/reply / return-to-thread",
+            "name": "reply / return-to-thread",
+            "title": "reply / return-to-thread",
+            "description": "Resolve the source Flight Deck thread and post the final Markdown as the configured managed agent.",
+            "type": "code",
+            "inputs": [
+              {
+                "label": "Thread",
+                "path": "$.threadId",
+                "format": "text"
+              },
+              {
+                "label": "Response",
+                "path": "$.message",
+                "format": "text"
+              }
+            ],
+            "outputs": [
+              {
+                "label": "Delivered",
+                "path": "$.delivered",
+                "format": "auto"
+              },
+              {
+                "label": "Thread",
+                "path": "$.threadId",
+                "format": "text"
+              },
+              {
+                "label": "Message ID",
+                "path": "$.messageId",
+                "format": "text"
+              }
+            ],
+            "children": []
+          }
+        ]
+      }
+    ],
+    "wiring": [
+      {
+        "sourceStepKey": null,
+        "sourcePath": "$.blocks.thread.input.workspaceId",
+        "targetStepKey": "thread/thread / normalise-thread-invocation",
+        "targetPath": "$.workspaceId",
+        "carriedForward": true
+      },
+      {
+        "sourceStepKey": null,
+        "sourcePath": "$.blocks.thread.input.threadId",
+        "targetStepKey": "thread/thread / normalise-thread-invocation",
+        "targetPath": "$.threadId",
+        "carriedForward": true
+      },
+      {
+        "sourceStepKey": null,
+        "sourcePath": "$.blocks.thread.input.frmNpub",
+        "targetStepKey": "thread/thread / normalise-thread-invocation",
+        "targetPath": "$.frmNpub",
+        "carriedForward": true
+      },
+      {
+        "sourceStepKey": null,
+        "sourcePath": "$.blocks.thread.input.prompt",
+        "targetStepKey": "thread/thread / normalise-thread-invocation",
+        "targetPath": "$.prompt",
+        "carriedForward": true
+      },
+      {
+        "sourceStepKey": "thread",
+        "sourcePath": "$.invocation.prompt",
+        "targetStepKey": "retrieve",
+        "targetPath": "$.request",
+        "carriedForward": false
+      },
+      {
+        "sourceStepKey": "retrieve",
+        "sourcePath": "$.bird.retrieval",
+        "targetStepKey": "format",
+        "targetPath": "$.state",
+        "carriedForward": false
+      },
+      {
+        "sourceStepKey": "thread",
+        "sourcePath": "$.invocation.workspaceId",
+        "targetStepKey": "reply",
+        "targetPath": "$.workspaceId",
+        "carriedForward": true
+      },
+      {
+        "sourceStepKey": "thread",
+        "sourcePath": "$.invocation.threadId",
+        "targetStepKey": "reply",
+        "targetPath": "$.threadId",
+        "carriedForward": true
+      },
+      {
+        "sourceStepKey": "thread",
+        "sourcePath": "$.invocation.frmNpub",
+        "targetStepKey": "reply",
+        "targetPath": "$.frmNpub",
+        "carriedForward": true
+      },
+      {
+        "sourceStepKey": "thread",
+        "sourcePath": "$.invocation.prompt",
+        "targetStepKey": "reply",
+        "targetPath": "$.prompt",
+        "carriedForward": true
+      },
+      {
+        "sourceStepKey": "format",
+        "sourcePath": "$.response.message",
+        "targetStepKey": "reply",
+        "targetPath": "$.message",
+        "carriedForward": false
+      },
+      {
+        "sourceStepKey": null,
+        "sourcePath": "$.blocks.reply.input.workspaceId",
+        "targetStepKey": "reply/reply / return-to-thread",
+        "targetPath": "$.workspaceId",
+        "carriedForward": true
+      },
+      {
+        "sourceStepKey": null,
+        "sourcePath": "$.blocks.reply.input.threadId",
+        "targetStepKey": "reply/reply / return-to-thread",
+        "targetPath": "$.threadId",
+        "carriedForward": true
+      },
+      {
+        "sourceStepKey": null,
+        "sourcePath": "$.blocks.reply.input.frmNpub",
+        "targetStepKey": "reply/reply / return-to-thread",
+        "targetPath": "$.frmNpub",
+        "carriedForward": true
+      },
+      {
+        "sourceStepKey": null,
+        "sourcePath": "$.blocks.reply.input.prompt",
+        "targetStepKey": "reply/reply / return-to-thread",
+        "targetPath": "$.prompt",
+        "carriedForward": true
+      },
+      {
+        "sourceStepKey": null,
+        "sourcePath": "$.blocks.reply.input.message",
+        "targetStepKey": "reply/reply / return-to-thread",
+        "targetPath": "$.message",
+        "carriedForward": true
+      }
+    ]
+  },
+  "steps": [
+    {
+      "id": "dcd541e4-86d0-4deb-962d-e9d96e2f4e33",
+      "logicalKey": "thread",
+      "parentStepId": null,
+      "attempt": 1,
+      "status": "ok",
+      "title": "Validate chat request",
+      "description": "Validate the source chat invocation.",
+      "kind": "block",
+      "startedAt": "2026-10-02T04:35:00.896Z",
+      "completedAt": "2026-10-02T04:35:00.897Z",
+      "error": null,
+      "skipReason": null,
+      "continuationReason": null,
+      "exitReason": null,
+      "childRunId": null,
+      "inputs": [
+        {
+          "label": "Chat Message",
+          "path": "$.prompt",
+          "format": "text"
+        }
+      ],
+      "outputs": [
+        {
+          "label": "Chat Message",
+          "path": "$.prompt",
+          "format": "text"
+        }
+      ],
+      "evidence": [
+        {
+          "id": "c3774a1c-adef-49e9-8ceb-923f51a23526",
+          "runId": "96c91841-5be5-410b-8572-b721d2346a1d",
+          "stepId": "dcd541e4-86d0-4deb-962d-e9d96e2f4e33",
+          "attempt": 1,
+          "kind": "resolved_input",
+          "scope": "selected_step_input",
+          "contentType": "application/json",
+          "bytes": 30658,
+          "availability": "complete",
+          "redacted": false,
+          "capturedAt": "2026-10-02T04:35:00.897Z",
+          "expiresAt": null
+        },
+        {
+          "id": "7886201d-3cce-4a5f-b338-d579eb479965",
+          "runId": "96c91841-5be5-410b-8572-b721d2346a1d",
+          "stepId": "dcd541e4-86d0-4deb-962d-e9d96e2f4e33",
+          "attempt": 1,
+          "kind": "returned_output",
+          "scope": "wrapper_output_child_evidence_separate",
+          "contentType": "application/json",
+          "bytes": 30657,
+          "availability": "complete",
+          "redacted": false,
+          "capturedAt": "2026-10-02T04:35:00.897Z",
+          "expiresAt": null
+        },
+        {
+          "id": "339c7a84-f7b3-483a-9d8d-471b2e2eac4f",
+          "runId": "96c91841-5be5-410b-8572-b721d2346a1d",
+          "stepId": "dcd541e4-86d0-4deb-962d-e9d96e2f4e33",
+          "attempt": 1,
+          "kind": "state_write",
+          "scope": "state_after_assignment",
+          "contentType": "application/json",
+          "bytes": 30657,
+          "availability": "complete",
+          "redacted": false,
+          "capturedAt": "2026-10-02T04:35:00.897Z",
+          "expiresAt": null
+        },
+        {
+          "id": "not-captured:dcd541e4-86d0-4deb-962d-e9d96e2f4e33:executor_request",
+          "runId": "96c91841-5be5-410b-8572-b721d2346a1d",
+          "stepId": "dcd541e4-86d0-4deb-962d-e9d96e2f4e33",
+          "attempt": 1,
+          "kind": "executor_request",
+          "scope": "legacy_not_captured",
+          "contentType": "application/json",
+          "bytes": 0,
+          "availability": "not_captured",
+          "redacted": false,
+          "capturedAt": null,
+          "expiresAt": null
+        },
+        {
+          "id": "not-captured:dcd541e4-86d0-4deb-962d-e9d96e2f4e33:side_effect_confirmation",
+          "runId": "96c91841-5be5-410b-8572-b721d2346a1d",
+          "stepId": "dcd541e4-86d0-4deb-962d-e9d96e2f4e33",
+          "attempt": 1,
+          "kind": "side_effect_confirmation",
+          "scope": "legacy_not_captured",
+          "contentType": "application/json",
+          "bytes": 0,
+          "availability": "not_captured",
+          "redacted": false,
+          "capturedAt": null,
+          "expiresAt": null
+        }
+      ]
+    },
+    {
+      "id": "6bbf1233-88b0-4ee2-8a21-ce153116750a",
+      "logicalKey": "retrieve",
+      "parentStepId": null,
+      "attempt": 1,
+      "status": "ok",
+      "title": "Retrieve tweets",
+      "description": "Run reusable bounded Bird retrieval; ambiguous timelines clarify Following versus For You.",
+      "kind": "pipeline",
+      "startedAt": "2026-10-02T04:35:00.898Z",
+      "completedAt": "2026-10-02T04:35:00.905Z",
+      "error": null,
+      "skipReason": null,
+      "continuationReason": null,
+      "exitReason": "requested_count_reached",
+      "childRunId": "0e66b920-61ad-49ee-ac2a-de2daa0b0385",
+      "inputs": [
+        {
+          "label": "Request",
+          "path": "$.request",
+          "format": "text"
+        }
+      ],
+      "outputs": [
+        {
+          "label": "Verdict",
+          "path": "$.retrieval.verdict",
+          "format": "text"
+        },
+        {
+          "label": "Tweets",
+          "path": "$.retrieval.tweets",
+          "format": "records"
+        }
+      ],
+      "evidence": [
+        {
+          "id": "db46b37a-4f6c-45a9-b9d5-5c3a0d0a04b7",
+          "runId": "96c91841-5be5-410b-8572-b721d2346a1d",
+          "stepId": "6bbf1233-88b0-4ee2-8a21-ce153116750a",
+          "attempt": 1,
+          "kind": "resolved_input",
+          "scope": "selected_step_input",
+          "contentType": "application/json",
+          "bytes": 30658,
+          "availability": "complete",
+          "redacted": false,
+          "capturedAt": "2026-10-02T04:35:00.898Z",
+          "expiresAt": null
+        },
+        {
+          "id": "ac2f4e4e-cf0e-4a77-94e2-3172a17450e9",
+          "runId": "96c91841-5be5-410b-8572-b721d2346a1d",
+          "stepId": "6bbf1233-88b0-4ee2-8a21-ce153116750a",
+          "attempt": 1,
+          "kind": "returned_output",
+          "scope": "wrapper_output_child_evidence_separate",
+          "contentType": "application/json",
+          "bytes": 5428,
+          "availability": "complete",
+          "redacted": false,
+          "capturedAt": "2026-10-02T04:35:00.905Z",
+          "expiresAt": null
+        },
+        {
+          "id": "2d9de6e6-d944-4854-8bce-da2a36af969a",
+          "runId": "96c91841-5be5-410b-8572-b721d2346a1d",
+          "stepId": "6bbf1233-88b0-4ee2-8a21-ce153116750a",
+          "attempt": 1,
+          "kind": "state_write",
+          "scope": "state_after_assignment",
+          "contentType": "application/json",
+          "bytes": 5428,
+          "availability": "complete",
+          "redacted": false,
+          "capturedAt": "2026-10-02T04:35:00.905Z",
+          "expiresAt": null
+        },
+        {
+          "id": "9795c1d9-6960-4f18-b403-7c40a1265d4b",
+          "runId": "96c91841-5be5-410b-8572-b721d2346a1d",
+          "stepId": "6bbf1233-88b0-4ee2-8a21-ce153116750a",
+          "attempt": 1,
+          "kind": "returned_output",
+          "scope": "synthetic_record_collection",
+          "contentType": "application/json",
+          "bytes": 5347,
+          "availability": "complete",
+          "redacted": false,
+          "capturedAt": "2026-10-02T04:35:00.910Z",
+          "expiresAt": null
+        },
+        {
+          "id": "not-captured:6bbf1233-88b0-4ee2-8a21-ce153116750a:executor_request",
+          "runId": "96c91841-5be5-410b-8572-b721d2346a1d",
+          "stepId": "6bbf1233-88b0-4ee2-8a21-ce153116750a",
+          "attempt": 1,
+          "kind": "executor_request",
+          "scope": "legacy_not_captured",
+          "contentType": "application/json",
+          "bytes": 0,
+          "availability": "not_captured",
+          "redacted": false,
+          "capturedAt": null,
+          "expiresAt": null
+        },
+        {
+          "id": "not-captured:6bbf1233-88b0-4ee2-8a21-ce153116750a:side_effect_confirmation",
+          "runId": "96c91841-5be5-410b-8572-b721d2346a1d",
+          "stepId": "6bbf1233-88b0-4ee2-8a21-ce153116750a",
+          "attempt": 1,
+          "kind": "side_effect_confirmation",
+          "scope": "legacy_not_captured",
+          "contentType": "application/json",
+          "bytes": 0,
+          "availability": "not_captured",
+          "redacted": false,
+          "capturedAt": null,
+          "expiresAt": null
+        }
+      ]
+    },
+    {
+      "id": "4dd8b2da-b7ed-4a5a-bddb-86d0178639ff",
+      "logicalKey": "format",
+      "parentStepId": null,
+      "attempt": 1,
+      "status": "ok",
+      "title": "Format exact tweets",
+      "description": "Format exact tweet records and safe links without model prose.",
+      "kind": "code",
+      "startedAt": "2026-10-02T04:35:00.905Z",
+      "completedAt": "2026-10-02T04:35:00.906Z",
+      "error": null,
+      "skipReason": null,
+      "continuationReason": null,
+      "exitReason": null,
+      "childRunId": null,
+      "inputs": [
+        {
+          "label": "Tweets",
+          "path": "$.state.tweets",
+          "format": "records"
+        }
+      ],
+      "outputs": [
+        {
+          "label": "Response",
+          "path": "$.message",
+          "format": "text"
+        }
+      ],
+      "evidence": [
+        {
+          "id": "ec04f1c9-e62d-4864-95c6-f56a590594a8",
+          "runId": "96c91841-5be5-410b-8572-b721d2346a1d",
+          "stepId": "4dd8b2da-b7ed-4a5a-bddb-86d0178639ff",
+          "attempt": 1,
+          "kind": "resolved_input",
+          "scope": "selected_step_input",
+          "contentType": "application/json",
+          "bytes": 5358,
+          "availability": "complete",
+          "redacted": false,
+          "capturedAt": "2026-10-02T04:35:00.906Z",
+          "expiresAt": null
+        },
+        {
+          "id": "2f804cab-5596-4391-ba29-2d26d5eec491",
+          "runId": "96c91841-5be5-410b-8572-b721d2346a1d",
+          "stepId": "4dd8b2da-b7ed-4a5a-bddb-86d0178639ff",
+          "attempt": 1,
+          "kind": "returned_output",
+          "scope": "executor_return",
+          "contentType": "application/json",
+          "bytes": 2696,
+          "availability": "complete",
+          "redacted": false,
+          "capturedAt": "2026-10-02T04:35:00.906Z",
+          "expiresAt": null
+        },
+        {
+          "id": "de213386-0736-4685-b0ad-00ee70388814",
+          "runId": "96c91841-5be5-410b-8572-b721d2346a1d",
+          "stepId": "4dd8b2da-b7ed-4a5a-bddb-86d0178639ff",
+          "attempt": 1,
+          "kind": "state_write",
+          "scope": "state_after_assignment",
+          "contentType": "application/json",
+          "bytes": 2696,
+          "availability": "complete",
+          "redacted": false,
+          "capturedAt": "2026-10-02T04:35:00.906Z",
+          "expiresAt": null
+        },
+        {
+          "id": "not-captured:4dd8b2da-b7ed-4a5a-bddb-86d0178639ff:executor_request",
+          "runId": "96c91841-5be5-410b-8572-b721d2346a1d",
+          "stepId": "4dd8b2da-b7ed-4a5a-bddb-86d0178639ff",
+          "attempt": 1,
+          "kind": "executor_request",
+          "scope": "legacy_not_captured",
+          "contentType": "application/json",
+          "bytes": 0,
+          "availability": "not_captured",
+          "redacted": false,
+          "capturedAt": null,
+          "expiresAt": null
+        },
+        {
+          "id": "not-captured:4dd8b2da-b7ed-4a5a-bddb-86d0178639ff:side_effect_confirmation",
+          "runId": "96c91841-5be5-410b-8572-b721d2346a1d",
+          "stepId": "4dd8b2da-b7ed-4a5a-bddb-86d0178639ff",
+          "attempt": 1,
+          "kind": "side_effect_confirmation",
+          "scope": "legacy_not_captured",
+          "contentType": "application/json",
+          "bytes": 0,
+          "availability": "not_captured",
+          "redacted": false,
+          "capturedAt": null,
+          "expiresAt": null
+        }
+      ]
+    },
+    {
+      "id": "54973b6b-9f53-4204-b1ab-eedc47cea476",
+      "logicalKey": "reply",
+      "parentStepId": null,
+      "attempt": 1,
+      "status": "ok",
+      "title": "Deliver to chat",
+      "description": "Return to the validated source thread as the addressed managed agent.",
+      "kind": "block",
+      "startedAt": "2026-10-02T04:35:00.906Z",
+      "completedAt": "2026-10-02T04:35:00.906Z",
+      "error": null,
+      "skipReason": null,
+      "continuationReason": null,
+      "exitReason": null,
+      "childRunId": null,
+      "inputs": [
+        {
+          "label": "Response",
+          "path": "$.message",
+          "format": "text"
+        }
+      ],
+      "outputs": [
+        {
+          "label": "Delivered",
+          "path": "$.delivered",
+          "format": "auto"
+        }
+      ],
+      "evidence": [
+        {
+          "id": "8c0efea2-cb35-48c2-83b8-1d4d76c0df58",
+          "runId": "96c91841-5be5-410b-8572-b721d2346a1d",
+          "stepId": "54973b6b-9f53-4204-b1ab-eedc47cea476",
+          "attempt": 1,
+          "kind": "resolved_input",
+          "scope": "selected_step_input",
+          "contentType": "application/json",
+          "bytes": 5358,
+          "availability": "complete",
+          "redacted": false,
+          "capturedAt": "2026-10-02T04:35:00.906Z",
+          "expiresAt": null
+        },
+        {
+          "id": "b1ff0612-abee-4381-9030-a107ba653dc8",
+          "runId": "96c91841-5be5-410b-8572-b721d2346a1d",
+          "stepId": "54973b6b-9f53-4204-b1ab-eedc47cea476",
+          "attempt": 1,
+          "kind": "side_effect_confirmation",
+          "scope": "delivery_adapter_confirmation",
+          "contentType": "application/json",
+          "bytes": 80,
+          "availability": "complete",
+          "redacted": false,
+          "capturedAt": "2026-10-02T04:35:00.906Z",
+          "expiresAt": null
+        },
+        {
+          "id": "0e16e057-0f73-4900-8a07-58db53984183",
+          "runId": "96c91841-5be5-410b-8572-b721d2346a1d",
+          "stepId": "54973b6b-9f53-4204-b1ab-eedc47cea476",
+          "attempt": 1,
+          "kind": "returned_output",
+          "scope": "wrapper_output_child_evidence_separate",
+          "contentType": "application/json",
+          "bytes": 80,
+          "availability": "complete",
+          "redacted": false,
+          "capturedAt": "2026-10-02T04:35:00.906Z",
+          "expiresAt": null
+        },
+        {
+          "id": "4d092881-1823-4069-9a15-9198d7cc60e3",
+          "runId": "96c91841-5be5-410b-8572-b721d2346a1d",
+          "stepId": "54973b6b-9f53-4204-b1ab-eedc47cea476",
+          "attempt": 1,
+          "kind": "state_write",
+          "scope": "state_after_assignment",
+          "contentType": "application/json",
+          "bytes": 80,
+          "availability": "complete",
+          "redacted": false,
+          "capturedAt": "2026-10-02T04:35:00.906Z",
+          "expiresAt": null
+        },
+        {
+          "id": "not-captured:54973b6b-9f53-4204-b1ab-eedc47cea476:executor_request",
+          "runId": "96c91841-5be5-410b-8572-b721d2346a1d",
+          "stepId": "54973b6b-9f53-4204-b1ab-eedc47cea476",
+          "attempt": 1,
+          "kind": "executor_request",
+          "scope": "legacy_not_captured",
+          "contentType": "application/json",
+          "bytes": 0,
+          "availability": "not_captured",
+          "redacted": false,
+          "capturedAt": null,
+          "expiresAt": null
+        }
+      ]
+    }
+  ],
+  "children": [
+    {
+      "id": "0e66b920-61ad-49ee-ac2a-de2daa0b0385",
+      "serviceId": "autopilot_79bd7d7fd684b399857c582b1b7172dd",
+      "definitionId": "bird.retrieve.v2",
+      "definitionVersion": 2,
+      "definitionHash": "caa65cd817c6c0e905423a70744c7cd9420ca1980deebeb73865b17ac288a95b",
+      "name": "bird.retrieve.v2",
+      "status": "ok",
+      "startedAt": "2026-10-02T04:35:00.898Z",
+      "completedAt": "2026-10-02T04:35:00.902Z",
+      "parentRunId": "96c91841-5be5-410b-8572-b721d2346a1d",
+      "parentStepId": "6bbf1233-88b0-4ee2-8a21-ce153116750a"
+    }
+  ],
+  "revision": "dbca815823d8763b1a28decf3ec003c49ae96cb33280b10bd4826cf0afc7306a",
+  "unchanged": true
+}

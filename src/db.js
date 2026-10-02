@@ -1,5 +1,6 @@
 import { clampBranchEffectiveMessageIds, threadHistoryLineage, mergeThreadHistoryIds, threadHistoryAuthority } from './thread-history-coverage.js';
 import Dexie from 'dexie';
+import { PIPELINE_VIEWER_STORES } from './pipeline-viewer-store.js';
 import { taskIndexFields, compareIndexedTasks } from './task-index-keys.js';
 import {
   preserveHydratedDocumentContent,
@@ -310,6 +311,8 @@ function createWorkspaceDb(workspaceDbKey) {
     context_coverage: '&scope_id, status',
     context_reference_resolutions: '&record_id, component_id, scope_id',
   });
+  // Autopilot-local viewer projections are never Tower record families.
+  db.version(32).stores(PIPELINE_VIEWER_STORES);
   const commentFields = activityIndexFields;
   db.documents.hook('creating', (_key, row) => { Object.assign(row, commentFields(row)); });
   db.documents.hook('updating', (changes, _key, row) => commentFields({ ...row, ...changes }));

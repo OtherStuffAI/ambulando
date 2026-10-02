@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "serviceId": "autopilot_79bd7d7fd684b399857c582b1b7172dd",
+  "evidence": {
+    "id": "b1ff0612-abee-4381-9030-a107ba653dc8",
+    "runId": "96c91841-5be5-410b-8572-b721d2346a1d",
+    "stepId": "54973b6b-9f53-4204-b1ab-eedc47cea476",
+    "attempt": 1,
+    "kind": "side_effect_confirmation",
+    "scope": "delivery_adapter_confirmation",
+    "contentType": "application/json",
+    "bytes": 80,
+    "availability": "complete",
+    "redacted": false,
+    "capturedAt": "2026-10-02T04:35:00.906Z",
+    "expiresAt": null
+  },
+  "value": {
+    "delivered": true,
+    "messageId": "synthetic-message",
+    "threadId": "synthetic-thread"
+  },
+  "nextOffset": null
+}

@@ -1,0 +1,156 @@
+{
+  "version": 1,
+  "serviceId": "autopilot_79bd7d7fd684b399857c582b1b7172dd",
+  "evidence": {
+    "id": "9795c1d9-6960-4f18-b403-7c40a1265d4b",
+    "runId": "96c91841-5be5-410b-8572-b721d2346a1d",
+    "stepId": "6bbf1233-88b0-4ee2-8a21-ce153116750a",
+    "attempt": 1,
+    "kind": "returned_output",
+    "scope": "synthetic_record_collection",
+    "contentType": "application/json",
+    "bytes": 5347,
+    "availability": "complete",
+    "redacted": false,
+    "capturedAt": "2026-10-02T04:35:00.910Z",
+    "expiresAt": null
+  },
+  "value": [
+    {
+      "id": "1020",
+      "text": "Synthetic exact tweet 21\nSecond line.",
+      "author": {
+        "username": "example",
+        "name": "Example"
+      },
+      "url": "https://x.com/example/status/1020"
+    },
+    {
+      "id": "1021",
+      "text": "Synthetic exact tweet 22\nSecond line.",
+      "author": {
+        "username": "example",
+        "name": "Example"
+      },
+      "url": "https://x.com/example/status/1021"
+    },
+    {
+      "id": "1022",
+      "text": "Synthetic exact tweet 23\nSecond line.",
+      "author": {
+        "username": "example",
+        "name": "Example"
+      },
+      "url": "https://x.com/example/status/1022"
+    },
+    {
+      "id": "1023",
+      "text": "Synthetic exact tweet 24\nSecond line.",
+      "author": {
+        "username": "example",
+        "name": "Example"
+      },
+      "url": "https://x.com/example/status/1023"
+    },
+    {
+      "id": "1024",
+      "text": "Synthetic exact tweet 25\nSecond line.",
+      "author": {
+        "username": "example",
+        "name": "Example"
+      },
+      "url": "https://x.com/example/status/1024"
+    },
+    {
+      "id": "1025",
+      "text": "Synthetic exact tweet 26\nSecond line.",
+      "author": {
+        "username": "example",
+        "name": "Example"
+      },
+      "url": "https://x.com/example/status/1025"
+    },
+    {
+      "id": "1026",
+      "text": "Synthetic exact tweet 27\nSecond line.",
+      "author": {
+        "username": "example",
+        "name": "Example"
+      },
+      "url": "https://x.com/example/status/1026"
+    },
+    {
+      "id": "1027",
+      "text": "Synthetic exact tweet 28\nSecond line.",
+      "author": {
+        "username": "example",
+        "name": "Example"
+      },
+      "url": "https://x.com/example/status/1027"
+    },
+    {
+      "id": "1028",
+      "text": "Synthetic exact tweet 29\nSecond line.",
+      "author": {
+        "username": "example",
+        "name": "Example"
+      },
+      "url": "https://x.com/example/status/1028"
+    },
+    {
+      "id": "1029",
+      "text": "Synthetic exact tweet 30\nSecond line.",
+      "author": {
+        "username": "example",
+        "name": "Example"
+      },
+      "url": "https://x.com/example/status/1029"
+    },
+    {
+      "id": "1030",
+      "text": "Synthetic exact tweet 31\nSecond line.",
+      "author": {
+        "username": "example",
+        "name": "Example"
+      },
+      "url": "https://x.com/example/status/1030"
+    },
+    {
+      "id": "1031",
+      "text": "Synthetic exact tweet 32\nSecond line.",
+      "author": {
+        "username": "example",
+        "name": "Example"
+      },
+      "url": "https://x.com/example/status/1031"
+    },
+    {
+      "id": "1032",
+      "text": "Synthetic exact tweet 33\nSecond line.",
+      "author": {
+        "username": "example",
+        "name": "Example"
+      },
+      "url": "https://x.com/example/status/1032"
+    },
+    {
+      "id": "1033",
+      "text": "Synthetic exact tweet 34\nSecond line.",
+      "author": {
+        "username": "example",
+        "name": "Example"
+      },
+      "url": "https://x.com/example/status/1033"
+    },
+    {
+      "id": "1034",
+      "text": "Synthetic exact tweet 35\nSecond line.",
+      "author": {
+        "username": "example",
+        "name": "Example"
+      },
+      "url": "https://x.com/example/status/1034"
+    }
+  ],
+  "nextOffset": null
+}

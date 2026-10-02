@@ -1,4 +1,6 @@
 import Alpine from 'alpinejs';
+import { createPipelineViewerView } from './pipeline-viewer-view.js';
+import './pipeline-viewer.css';
 import { createContextTreeView } from './context-tree-view.js';
 import { installStableHtml } from './stable-html.js';
 import { initializeTowerTransports } from './tower-transport.js';
@@ -18,6 +20,7 @@ async function boot() {
   if (await maybePerformHardReset()) return;
   await initializeTowerTransports();
   installStableHtml(Alpine);
+  Alpine.data('pipelineViewerView', () => createPipelineViewerView());
   Alpine.data('contextTreeView', () => createContextTreeView());
   initApp();
   installNotificationClickRouteHandler();

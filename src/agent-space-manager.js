@@ -103,7 +103,7 @@ export const agentSpaceManagerMixin = {
         installation_id: verified.installationId, fips_transport_npub: verified.transportNpub,
         display_name: `Autopilot ${verified.installationId}`,
         fips_endpoint: verified.fipsEndpoint, https_endpoint: verified.httpsEndpoint, api_version: String(verified.apiVersion),
-        capabilities: [...verified.capabilities], metadata: { connect_package_version: verified.version, installation_npub: verified.installationNpub, health_path: verified.healthPath, agents_path: verified.agentsPath, controlled_restart_path: verified.controlledRestartPath, controlled_restart_status_path: verified.controlledRestartStatusPath },
+        capabilities: [...verified.capabilities], metadata: { connect_package_version: verified.version, installation_npub: verified.installationNpub, health_path: verified.healthPath, agents_path: verified.agentsPath, pipeline_viewer_path: verified.pipelineViewerPath, controlled_restart_path: verified.controlledRestartPath, controlled_restart_status_path: verified.controlledRestartStatusPath },
       }, { baseUrl: this.backendUrl });
       const connection = response?.autopilot_connection;
       if (!connection?.id) throw new Error('Tower did not return the Autopilot connection.');
@@ -175,6 +175,7 @@ export const agentSpaceManagerMixin = {
     }
   },
   async selectAgentSpaceView(view, { syncRoute = false } = {}) {
+    if(this.pipelineViewerOpen)this.closePipelineViewer?.();
     const nextView = VIEWS.has(view) ? view : 'overview'; this.agentSpaceView = nextView;
     if (syncRoute) this.syncRoute?.();
     await this.loadSelectedAgentSpaceView();

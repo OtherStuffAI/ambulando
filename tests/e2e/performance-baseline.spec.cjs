@@ -1,4 +1,5 @@
 const { test, expect } = require('playwright/test');
+const { serveBuiltFlightDeck } = require('./fixtures/serve-built-flightdeck.cjs');
 
 const CHANNEL_ID = 'perf-channel';
 const THREAD_ID = 'perf-thread';
@@ -26,6 +27,7 @@ function summarize(values) {
 
 async function blockExternalRequests(page) {
   await page.route('**/*', route => {
+    if (process.env.FLIGHTDECK_PERF_DIST === '1') return serveBuiltFlightDeck(route);
     const url = new URL(route.request().url());
     if (['127.0.0.1', 'localhost'].includes(url.hostname)) return route.continue();
     return route.abort();

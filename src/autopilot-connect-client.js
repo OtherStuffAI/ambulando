@@ -1,5 +1,6 @@
 import { nip19, verifyEvent } from 'nostr-tools';
 import { createNip98AuthHeader } from './auth/nostr.js';
+import { pipelineViewerRequestPath } from './pipeline-viewer-client.js';
 
 export const AUTOPILOT_CONNECT_KIND = 'wingman_autopilot_connect';
 export const AUTOPILOT_CONNECT_VERSION = 1;
@@ -211,6 +212,8 @@ export function verifyAutopilotConnectPackage(input, { now = new Date(), maxAgeS
     capabilities: Object.freeze([...new Set((manifest.api.capabilities || []).map(text).filter(Boolean))]),
     healthPath: exactPath(manifest.api.health_path, 'Health route'),
     agentsPath: exactPath(manifest.api.agents_path, 'Agent discovery route'),
+    pipelineViewerPath: manifest.api.capabilities?.includes('pipelines.viewer.read.v1')
+      ? exactPath(manifest.api.pipeline_viewer_path, 'Pipeline viewer route') : null,
     controlledRestartPath: manifest.api.capabilities?.includes('system.controlled-restart.v1')
       ? exactPath(manifest.api.controlled_restart_path, 'Controlled restart route') : null,
     controlledRestartStatusPath: manifest.api.capabilities?.includes('system.controlled-restart.v1')
@@ -269,6 +272,7 @@ export function createAutopilotDiscoveryClient(verifiedPackage, {
   }
   let connected = false;
   let handle = null;
+  let connectionGeneration = 0;
   const requestId = verifiedPackage.correlationId || correlationId();
   const advertisedPaths = new Set([verifiedPackage.healthPath, verifiedPackage.agentsPath]);
   if (verifiedPackage.controlledRestartPath) advertisedPaths.add(verifiedPackage.controlledRestartPath);
@@ -287,6 +291,7 @@ export function createAutopilotDiscoveryClient(verifiedPackage, {
   }
 
   async function connect() {
+    const epoch = connectionGeneration;
     let descriptor;
     diagnose('native_connect_invoked', requestId);
     try {
@@ -311,6 +316,10 @@ export function createAutopilotDiscoveryClient(verifiedPackage, {
       || typeof descriptor.fetch !== 'function' || typeof descriptor.disconnect !== 'function') {
       await descriptor?.disconnect?.();
       fail('endpoint_mismatch', 'Native FIPS bridge connected to a different endpoint than the signed package.');
+    }
+    if (epoch !== connectionGeneration) {
+      await descriptor.disconnect();
+      fail('connection_failed', 'The selected Autopilot connection changed before connecting.');
     }
     handle = descriptor;
     diagnose('native_connect_succeeded', requestId);
@@ -390,8 +399,8 @@ export function createAutopilotDiscoveryClient(verifiedPackage, {
     readFeedAppRegistry(signal) {
       return request('/api/wapps', 'feed app discovery', { signal });
     },
-    async health() {
-      const payload = await request(verifiedPackage.healthPath, 'health');
+    async health(signal) {
+      const payload = await request(verifiedPackage.healthPath, 'health', { signal });
       if (payload?.installation_id !== verifiedPackage.installationId
         || payload?.installation_npub !== verifiedPackage.installationNpub
         || payload?.api_version !== verifiedPackage.apiVersion) {
@@ -448,6 +457,10 @@ export function createAutopilotDiscoveryClient(verifiedPackage, {
       }
       return payload;
     },
+    readPipelineViewer(context, operation, options = {}, signal) {
+      const path = pipelineViewerRequestPath(verifiedPackage, context, operation, options);
+      return request(path, 'pipeline viewer', { signal });
+    },
     async liveThreadSnapshot(context) {
       if (!verifiedPackage.capabilities?.includes('flightdeck.live-thread-activity.v1')) {
         fail('route_unavailable', 'Autopilot does not advertise live thread activity.');
@@ -463,6 +476,7 @@ export function createAutopilotDiscoveryClient(verifiedPackage, {
       });
     },
     async disconnect() {
+      connectionGeneration++;
       connected = false;
       const selectedHandle = handle;
       handle = null;

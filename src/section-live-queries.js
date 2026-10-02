@@ -1,3 +1,4 @@
+import { disposePipelineViewer, resumePipelineViewer } from './pipeline-viewer-view.js';
 import { disposeContextTreeView, resumeContextTreeView } from './context-tree-view.js';
 import {
   getAddressBookPeople,
@@ -1079,18 +1080,21 @@ export const sectionLiveQueryMixin = {
 
     if (!ownerNpub) {
       disposeContextTreeView(this);
+      disposePipelineViewer(this);
       stopBucket(this, state.workspace);
       stopBucket(this, state.detail);
       return;
     }
     if (!isWorkspaceDbOpenForKey(workspaceKey)) {
       disposeContextTreeView(this);
+      disposePipelineViewer(this);
       stopBucket(this, state.workspace);
       stopBucket(this, state.detail);
       return;
     }
 
     resumeContextTreeView(this);
+    resumePipelineViewer(this);
     syncLiveQuerySet(this, state.workspace, buildWorkspaceSpecs(this));
     syncLiveQuerySet(this, state.detail, buildDetailSpecs(this));
 
@@ -1105,6 +1109,7 @@ export const sectionLiveQueryMixin = {
 
   stopWorkspaceLiveQueries() {
     disposeContextTreeView(this);
+    disposePipelineViewer(this);
     this.disposeSubscribedReader?.();
     const state = getSectionState(this);
     stopBucket(this, state.workspace);
@@ -1113,6 +1118,7 @@ export const sectionLiveQueryMixin = {
 
   stopAllLiveQueries() {
     disposeContextTreeView(this);
+    disposePipelineViewer(this);
     this.disposeSubscribedReader?.();
     const state = getSectionState(this);
     stopBucket(this, state.shared);

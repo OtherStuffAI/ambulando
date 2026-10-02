@@ -7496,7 +7496,12 @@
               <p aria-live="polite" data-testid="controlled-restart-progress" x-show="$store.chat.controlledRestartStatus" x-text="$store.chat.controlledRestartStatusLabel"></p>
               <p class="agent-space-error" role="alert" x-show="$store.chat.controlledRestartError" x-text="$store.chat.controlledRestartError"></p>
             </section>
-          <section class="agent-space" data-testid="agent-space">
+          <div class="pipeline-viewer-toolbar">
+            <button type="button" class="btn-secondary" aria-label="Open pipeline viewer" data-testid="pipeline-viewer-open" x-show="!$store.chat.pipelineViewerOpen" @click="$store.chat.openPipelineViewer()">Pipeline viewer</button>
+            <button type="button" class="btn-secondary" aria-label="Return to Agent Space" data-testid="pipeline-viewer-close" x-show="$store.chat.pipelineViewerOpen" @click="$store.chat.closePipelineViewer()">Back to Agent Space</button>
+          </div>
+          <template x-if="$store.chat.pipelineViewerOpen"><div class="pipeline-viewer" x-data="pipelineViewerView" x-html="template" x-effect="queueSync($store.chat.currentWorkspace?.workspaceId, $store.chat.signingNpub, $store.chat.workspaceDbKey, $store.chat.backendUrl, $store.chat.agentConnections, $store.chat.navSection==='agents' &amp;&amp; $store.chat.pipelineViewerOpen, JSON.stringify([$store.chat.pipelineViewerRoute, $store.chat.selectedWorkspaceAgent?.agent_npub]))"></div></template>
+          <section class="agent-space" data-testid="agent-space" x-show="!$store.chat.pipelineViewerOpen">
             <aside class="agent-space-list" aria-label="Installed agents">
               <header><h2>Agents</h2><button type="button" class="btn-primary" @click="$store.chat.openAgentConnectModal()">Connect</button></header>
               <p class="agent-space-empty" x-show="$store.chat.workspaceAgents.length === 0">No agents are connected to this workspace yet.</p>
@@ -7523,7 +7528,7 @@
                   <section x-show="!$store.chat.agentSpaceLoading && !$store.chat.agentSpaceError && $store.chat.agentSpaceView === 'pipelines'" class="agent-space-panel">
                     <p x-text="$store.chat.agentSpaceData?.availabilityMode === 'implicit_all' ? 'All library definitions are available implicitly.' : 'Availability is explicitly assigned.'"></p>
                     <p x-text="$store.chat.agentSpaceData?.defaultMode === 'implicit_library' ? 'Library default markers apply.' : 'Defaults are explicitly assigned.'"></p>
-                    <template x-for="pipeline in [...($store.chat.agentSpaceData?.definitions || []), ...($store.chat.agentSpaceData?.missing || [])]" :key="pipeline.id"><article class="agent-space-row"><strong x-text="pipeline.name"></strong><p x-text="pipeline.description || pipeline.id"></p><div class="agent-space-chips"><span x-show="pipeline.assigned">Assigned</span><span x-show="pipeline.default">Default</span><span x-show="pipeline.missing">Missing definition</span><template x-for="override in pipeline.overrides" :key="override.kind + override.contextId"><span x-text="override.kind + ': ' + override.contextId"></span></template></div></article></template>
+                    <template x-for="pipeline in [...($store.chat.agentSpaceData?.definitions || []), ...($store.chat.agentSpaceData?.missing || [])]" :key="pipeline.id"><article class="agent-space-row"><strong x-text="pipeline.name"></strong><button type="button" class="btn-secondary" :aria-label="'Inspect pipeline: '+pipeline.name" @click="$store.chat.openPipelineViewer({definitionId:pipeline.id})" :disabled="pipeline.missing">Inspect pipeline</button><p x-text="pipeline.description || pipeline.id"></p><div class="agent-space-chips"><span x-show="pipeline.assigned">Assigned</span><span x-show="pipeline.default">Default</span><span x-show="pipeline.missing">Missing definition</span><template x-for="override in pipeline.overrides" :key="override.kind + override.contextId"><span x-text="override.kind + ': ' + override.contextId"></span></template></div></article></template>
                   </section>
                   <section x-show="!$store.chat.agentSpaceLoading && !$store.chat.agentSpaceError && ['schedules','triggers'].includes($store.chat.agentSpaceView)" class="agent-space-panel">
                     <p x-show="!Array.isArray($store.chat.agentSpaceData) || $store.chat.agentSpaceData.length === 0">No rows are bound to this agent.</p>

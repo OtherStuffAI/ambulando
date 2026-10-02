@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "serviceId": "autopilot_79bd7d7fd684b399857c582b1b7172dd",
+  "runs": [
+    {
+      "id": "96c91841-5be5-410b-8572-b721d2346a1d",
+      "serviceId": "autopilot_79bd7d7fd684b399857c582b1b7172dd",
+      "definitionId": "bird.timeline.chat.v2",
+      "definitionVersion": 2,
+      "definitionHash": "fe2e5b5904a9377d7339a03c2636af996d2e68b75206090d70c8b4a1d8cddc3c",
+      "name": "bird.timeline.chat.v2",
+      "status": "running",
+      "startedAt": "2026-10-02T04:35:00.895Z",
+      "completedAt": null,
+      "parentRunId": null,
+      "parentStepId": null
+    }
+  ],
+  "nextCursor": null
+}

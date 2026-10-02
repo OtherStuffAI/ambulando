@@ -1,0 +1,886 @@
+{
+  "version": 1,
+  "serviceId": "autopilot_79bd7d7fd684b399857c582b1b7172dd",
+  "run": {
+    "id": "0e66b920-61ad-49ee-ac2a-de2daa0b0385",
+    "serviceId": "autopilot_79bd7d7fd684b399857c582b1b7172dd",
+    "definitionId": "bird.retrieve.v2",
+    "definitionVersion": 2,
+    "definitionHash": "caa65cd817c6c0e905423a70744c7cd9420ca1980deebeb73865b17ac288a95b",
+    "name": "bird.retrieve.v2",
+    "status": "ok",
+    "startedAt": "2026-10-02T04:35:00.898Z",
+    "completedAt": "2026-10-02T04:35:00.902Z",
+    "parentRunId": "96c91841-5be5-410b-8572-b721d2346a1d",
+    "parentStepId": "6bbf1233-88b0-4ee2-8a21-ce153116750a"
+  },
+  "definition": {
+    "id": "bird.retrieve.v2",
+    "name": "bird.retrieve.v2",
+    "title": "bird.retrieve.v2",
+    "description": "Bounded read-only Bird retrieval with advisory Jev choices and deterministic execution policy.",
+    "version": 2,
+    "hash": "caa65cd817c6c0e905423a70744c7cd9420ca1980deebeb73865b17ac288a95b",
+    "availability": "complete",
+    "steps": [
+      {
+        "logicalKey": "prepare",
+        "name": "prepare",
+        "title": "Validate retrieval request",
+        "description": "Extract exact candidates and validate bounded input.",
+        "type": "code",
+        "inputs": [
+          {
+            "label": "Request",
+            "path": "$.request",
+            "format": "text"
+          }
+        ],
+        "outputs": [
+          {
+            "label": "Verdict",
+            "path": "$.verdict",
+            "format": "text"
+          },
+          {
+            "label": "Result Count",
+            "path": "$.resultCount",
+            "format": "count"
+          },
+          {
+            "label": "Attempt",
+            "path": "$.attempt",
+            "format": "count"
+          },
+          {
+            "label": "Latency (ms)",
+            "path": "$.latencyMs",
+            "format": "count"
+          }
+        ],
+        "children": []
+      },
+      {
+        "logicalKey": "bounded-retrieval",
+        "name": "bounded-retrieval",
+        "title": "Bounded retrieval attempts",
+        "description": "At most three executions; terminal verdicts skip remaining actions.",
+        "type": "loop",
+        "inputs": [
+          {
+            "label": "Request",
+            "path": "$.retrieval.request",
+            "format": "text"
+          }
+        ],
+        "outputs": [
+          {
+            "label": "Verdict",
+            "path": "$.current.retrieval.verdict",
+            "format": "text"
+          },
+          {
+            "label": "Results",
+            "path": "$.current.retrieval.tweets",
+            "format": "records"
+          }
+        ],
+        "children": [
+          {
+            "logicalKey": "bounded-retrieval/choose",
+            "name": "choose",
+            "title": "Choose read-only action",
+            "description": "Advisory typed judgments; deterministic policy owns execution. Skipped after a terminal verdict.",
+            "type": "classifier",
+            "inputs": [
+              {
+                "label": "Request",
+                "path": "$.request",
+                "format": "text"
+              },
+              {
+                "label": "Attempt",
+                "path": "$.attempt",
+                "format": "count"
+              }
+            ],
+            "outputs": [
+              {
+                "label": "Chosen Action",
+                "path": "$.answers.action.choice",
+                "format": "text"
+              },
+              {
+                "label": "Usage",
+                "path": "$.usage",
+                "format": "json"
+              },
+              {
+                "label": "Model Latency (ms)",
+                "path": "$.latencyMs",
+                "format": "count"
+              }
+            ],
+            "children": []
+          },
+          {
+            "logicalKey": "bounded-retrieval/execute",
+            "name": "execute",
+            "title": "Retrieve selected source",
+            "description": "Validate advisory answers, preserve requested source, execute one read-only action, deduplicate exact records.",
+            "type": "code",
+            "inputs": [
+              {
+                "label": "Request",
+                "path": "$.state.request",
+                "format": "text"
+              }
+            ],
+            "outputs": [
+              {
+                "label": "Chosen Source",
+                "path": "$.source",
+                "format": "text"
+              },
+              {
+                "label": "Verdict",
+                "path": "$.verdict",
+                "format": "text"
+              },
+              {
+                "label": "Result Count",
+                "path": "$.resultCount",
+                "format": "count"
+              },
+              {
+                "label": "Attempt",
+                "path": "$.attempt",
+                "format": "count"
+              },
+              {
+                "label": "Latency (ms)",
+                "path": "$.latencyMs",
+                "format": "count"
+              }
+            ],
+            "children": []
+          },
+          {
+            "logicalKey": "bounded-retrieval/judge-evidence",
+            "name": "judge-evidence",
+            "title": "Judge safe continuation",
+            "description": "Advisory typed judgments; deterministic policy owns execution. Skipped after a terminal verdict.",
+            "type": "classifier",
+            "inputs": [
+              {
+                "label": "Request",
+                "path": "$.request",
+                "format": "text"
+              },
+              {
+                "label": "Attempt",
+                "path": "$.attempt",
+                "format": "count"
+              }
+            ],
+            "outputs": [
+              {
+                "label": "Continuation Probability",
+                "path": "$.answers.continueSafe.noul",
+                "format": "auto"
+              },
+              {
+                "label": "Usage",
+                "path": "$.usage",
+                "format": "json"
+              },
+              {
+                "label": "Model Latency (ms)",
+                "path": "$.latencyMs",
+                "format": "count"
+              }
+            ],
+            "children": []
+          },
+          {
+            "logicalKey": "bounded-retrieval/check",
+            "name": "check",
+            "title": "Validate continuation",
+            "description": "Validate semantic Noul only when deterministic evidence supports continuation.",
+            "type": "code",
+            "inputs": [
+              {
+                "label": "Request",
+                "path": "$.state.request",
+                "format": "text"
+              }
+            ],
+            "outputs": [
+              {
+                "label": "Verdict",
+                "path": "$.verdict",
+                "format": "text"
+              },
+              {
+                "label": "Result Count",
+                "path": "$.resultCount",
+                "format": "count"
+              },
+              {
+                "label": "Attempt",
+                "path": "$.attempt",
+                "format": "count"
+              },
+              {
+                "label": "Latency (ms)",
+                "path": "$.latencyMs",
+                "format": "count"
+              }
+            ],
+            "children": []
+          }
+        ]
+      }
+    ],
+    "wiring": [
+      {
+        "sourceStepKey": null,
+        "sourcePath": "$.request",
+        "targetStepKey": "prepare",
+        "targetPath": "$.request",
+        "carriedForward": true
+      },
+      {
+        "sourceStepKey": "prepare",
+        "sourcePath": "$.retrieval",
+        "targetStepKey": "bounded-retrieval/choose",
+        "targetPath": "$.state",
+        "carriedForward": false
+      },
+      {
+        "sourceStepKey": "prepare",
+        "sourcePath": "$.retrieval",
+        "targetStepKey": "bounded-retrieval/execute",
+        "targetPath": "$.state",
+        "carriedForward": true
+      },
+      {
+        "sourceStepKey": "bounded-retrieval/choose",
+        "sourcePath": "$.actionDecision",
+        "targetStepKey": "bounded-retrieval/execute",
+        "targetPath": "$.decision",
+        "carriedForward": false
+      },
+      {
+        "sourceStepKey": "bounded-retrieval/execute",
+        "sourcePath": "$.retrieval",
+        "targetStepKey": "bounded-retrieval/judge-evidence",
+        "targetPath": "$.state",
+        "carriedForward": false
+      },
+      {
+        "sourceStepKey": "bounded-retrieval/execute",
+        "sourcePath": "$.retrieval",
+        "targetStepKey": "bounded-retrieval/check",
+        "targetPath": "$.state",
+        "carriedForward": true
+      },
+      {
+        "sourceStepKey": "bounded-retrieval/judge-evidence",
+        "sourcePath": "$.evidenceDecision",
+        "targetStepKey": "bounded-retrieval/check",
+        "targetPath": "$.decision",
+        "carriedForward": false
+      }
+    ]
+  },
+  "steps": [
+    {
+      "id": "ce9f2a82-fc15-4a1b-91ba-eacd66f6d00b",
+      "logicalKey": "bounded-retrieval",
+      "parentStepId": null,
+      "attempt": 1,
+      "status": "ok",
+      "title": "Bounded retrieval attempts",
+      "description": "At most three executions; terminal verdicts skip remaining actions.",
+      "kind": "loop",
+      "startedAt": "2026-10-02T04:35:00.899Z",
+      "completedAt": "2026-10-02T04:35:00.902Z",
+      "error": null,
+      "skipReason": null,
+      "continuationReason": null,
+      "exitReason": null,
+      "childRunId": null,
+      "inputs": [
+        {
+          "label": "Request",
+          "path": "$.retrieval.request",
+          "format": "text"
+        }
+      ],
+      "outputs": [
+        {
+          "label": "Verdict",
+          "path": "$.current.retrieval.verdict",
+          "format": "text"
+        },
+        {
+          "label": "Results",
+          "path": "$.current.retrieval.tweets",
+          "format": "records"
+        }
+      ],
+      "evidence": [
+        {
+          "id": "317d8948-0e48-4e10-b487-7455cbd03eb1",
+          "runId": "0e66b920-61ad-49ee-ac2a-de2daa0b0385",
+          "stepId": "ce9f2a82-fc15-4a1b-91ba-eacd66f6d00b",
+          "attempt": 1,
+          "kind": "resolved_input",
+          "scope": "selected_step_input",
+          "contentType": "application/json",
+          "bytes": 2,
+          "availability": "complete",
+          "redacted": false,
+          "capturedAt": "2026-10-02T04:35:00.899Z",
+          "expiresAt": null
+        },
+        {
+          "id": "840dd2d3-552f-4b75-9cf5-c3e21d558a3b",
+          "runId": "0e66b920-61ad-49ee-ac2a-de2daa0b0385",
+          "stepId": "ce9f2a82-fc15-4a1b-91ba-eacd66f6d00b",
+          "attempt": 1,
+          "kind": "returned_output",
+          "scope": "wrapper_output_child_evidence_separate",
+          "contentType": "application/json",
+          "bytes": 16,
+          "availability": "complete",
+          "redacted": false,
+          "capturedAt": "2026-10-02T04:35:00.902Z",
+          "expiresAt": null
+        },
+        {
+          "id": "30f1980b-92a7-4c12-811a-ad3167f99b61",
+          "runId": "0e66b920-61ad-49ee-ac2a-de2daa0b0385",
+          "stepId": "ce9f2a82-fc15-4a1b-91ba-eacd66f6d00b",
+          "attempt": 1,
+          "kind": "state_write",
+          "scope": "state_after_assignment",
+          "contentType": "application/json",
+          "bytes": 2,
+          "availability": "complete",
+          "redacted": false,
+          "capturedAt": "2026-10-02T04:35:00.902Z",
+          "expiresAt": null
+        },
+        {
+          "id": "not-captured:ce9f2a82-fc15-4a1b-91ba-eacd66f6d00b:executor_request",
+          "runId": "0e66b920-61ad-49ee-ac2a-de2daa0b0385",
+          "stepId": "ce9f2a82-fc15-4a1b-91ba-eacd66f6d00b",
+          "attempt": 1,
+          "kind": "executor_request",
+          "scope": "legacy_not_captured",
+          "contentType": "application/json",
+          "bytes": 0,
+          "availability": "not_captured",
+          "redacted": false,
+          "capturedAt": null,
+          "expiresAt": null
+        },
+        {
+          "id": "not-captured:ce9f2a82-fc15-4a1b-91ba-eacd66f6d00b:side_effect_confirmation",
+          "runId": "0e66b920-61ad-49ee-ac2a-de2daa0b0385",
+          "stepId": "ce9f2a82-fc15-4a1b-91ba-eacd66f6d00b",
+          "attempt": 1,
+          "kind": "side_effect_confirmation",
+          "scope": "legacy_not_captured",
+          "contentType": "application/json",
+          "bytes": 0,
+          "availability": "not_captured",
+          "redacted": false,
+          "capturedAt": null,
+          "expiresAt": null
+        }
+      ]
+    },
+    {
+      "id": "e7aa16c4-81b0-43a7-931d-57030b901dd2",
+      "logicalKey": "bounded-retrieval/choose",
+      "parentStepId": "ce9f2a82-fc15-4a1b-91ba-eacd66f6d00b",
+      "attempt": 1,
+      "status": "ok",
+      "title": "Choose read-only action",
+      "description": "Advisory typed judgments; deterministic policy owns execution. Skipped after a terminal verdict.",
+      "kind": "classifier",
+      "startedAt": "2026-10-02T04:35:00.899Z",
+      "completedAt": "2026-10-02T04:35:00.899Z",
+      "error": null,
+      "skipReason": null,
+      "continuationReason": null,
+      "exitReason": "requested_count_reached",
+      "childRunId": null,
+      "inputs": [
+        {
+          "label": "Request",
+          "path": "$.request",
+          "format": "text"
+        },
+        {
+          "label": "Attempt",
+          "path": "$.attempt",
+          "format": "count"
+        }
+      ],
+      "outputs": [
+        {
+          "label": "Chosen Action",
+          "path": "$.answers.action.choice",
+          "format": "text"
+        },
+        {
+          "label": "Usage",
+          "path": "$.usage",
+          "format": "json"
+        },
+        {
+          "label": "Model Latency (ms)",
+          "path": "$.latencyMs",
+          "format": "count"
+        }
+      ],
+      "evidence": [
+        {
+          "id": "0bf08d41-7aad-4608-963c-3ce403e49f3c",
+          "runId": "0e66b920-61ad-49ee-ac2a-de2daa0b0385",
+          "stepId": "e7aa16c4-81b0-43a7-931d-57030b901dd2",
+          "attempt": 1,
+          "kind": "resolved_input",
+          "scope": "selected_step_input",
+          "contentType": "application/json",
+          "bytes": 30658,
+          "availability": "complete",
+          "redacted": false,
+          "capturedAt": "2026-10-02T04:35:00.899Z",
+          "expiresAt": null
+        },
+        {
+          "id": "8d2c0bba-9149-43b2-960d-1647350ff363",
+          "runId": "0e66b920-61ad-49ee-ac2a-de2daa0b0385",
+          "stepId": "e7aa16c4-81b0-43a7-931d-57030b901dd2",
+          "attempt": 1,
+          "kind": "executor_request",
+          "scope": "assembled_model_request",
+          "contentType": "application/json",
+          "bytes": 33932,
+          "availability": "complete",
+          "redacted": false,
+          "capturedAt": "2026-10-02T04:35:00.899Z",
+          "expiresAt": null
+        },
+        {
+          "id": "0fff24a2-610b-4912-85c5-bf4804f285a8",
+          "runId": "0e66b920-61ad-49ee-ac2a-de2daa0b0385",
+          "stepId": "e7aa16c4-81b0-43a7-931d-57030b901dd2",
+          "attempt": 1,
+          "kind": "returned_output",
+          "scope": "executor_return",
+          "contentType": "application/json",
+          "bytes": 5414,
+          "availability": "complete",
+          "redacted": false,
+          "capturedAt": "2026-10-02T04:35:00.900Z",
+          "expiresAt": null
+        },
+        {
+          "id": "3536f6b0-2dd1-4ee2-95c5-50919bcbef9f",
+          "runId": "0e66b920-61ad-49ee-ac2a-de2daa0b0385",
+          "stepId": "e7aa16c4-81b0-43a7-931d-57030b901dd2",
+          "attempt": 1,
+          "kind": "state_write",
+          "scope": "state_after_assignment",
+          "contentType": "application/json",
+          "bytes": 2,
+          "availability": "complete",
+          "redacted": false,
+          "capturedAt": "2026-10-02T04:35:00.900Z",
+          "expiresAt": null
+        },
+        {
+          "id": "not-captured:e7aa16c4-81b0-43a7-931d-57030b901dd2:side_effect_confirmation",
+          "runId": "0e66b920-61ad-49ee-ac2a-de2daa0b0385",
+          "stepId": "e7aa16c4-81b0-43a7-931d-57030b901dd2",
+          "attempt": 1,
+          "kind": "side_effect_confirmation",
+          "scope": "legacy_not_captured",
+          "contentType": "application/json",
+          "bytes": 0,
+          "availability": "not_captured",
+          "redacted": false,
+          "capturedAt": null,
+          "expiresAt": null
+        }
+      ]
+    },
+    {
+      "id": "30e6dbd4-af3c-4d9e-a219-bfb955d4c89f",
+      "logicalKey": "bounded-retrieval/execute",
+      "parentStepId": "ce9f2a82-fc15-4a1b-91ba-eacd66f6d00b",
+      "attempt": 1,
+      "status": "ok",
+      "title": "Retrieve selected source",
+      "description": "Validate advisory answers, preserve requested source, execute one read-only action, deduplicate exact records.",
+      "kind": "code",
+      "startedAt": "2026-10-02T04:35:00.900Z",
+      "completedAt": "2026-10-02T04:35:00.900Z",
+      "error": null,
+      "skipReason": null,
+      "continuationReason": null,
+      "exitReason": "requested_count_reached",
+      "childRunId": null,
+      "inputs": [
+        {
+          "label": "Request",
+          "path": "$.state.request",
+          "format": "text"
+        }
+      ],
+      "outputs": [
+        {
+          "label": "Chosen Source",
+          "path": "$.source",
+          "format": "text"
+        },
+        {
+          "label": "Verdict",
+          "path": "$.verdict",
+          "format": "text"
+        },
+        {
+          "label": "Result Count",
+          "path": "$.resultCount",
+          "format": "count"
+        },
+        {
+          "label": "Attempt",
+          "path": "$.attempt",
+          "format": "count"
+        },
+        {
+          "label": "Latency (ms)",
+          "path": "$.latencyMs",
+          "format": "count"
+        }
+      ],
+      "evidence": [
+        {
+          "id": "a7b6ba7d-2a4d-4930-93a4-559962269de0",
+          "runId": "0e66b920-61ad-49ee-ac2a-de2daa0b0385",
+          "stepId": "30e6dbd4-af3c-4d9e-a219-bfb955d4c89f",
+          "attempt": 1,
+          "kind": "resolved_input",
+          "scope": "selected_step_input",
+          "contentType": "application/json",
+          "bytes": 30658,
+          "availability": "complete",
+          "redacted": false,
+          "capturedAt": "2026-10-02T04:35:00.900Z",
+          "expiresAt": null
+        },
+        {
+          "id": "70e0d316-a28f-469b-bb2a-892e1eb3abd1",
+          "runId": "0e66b920-61ad-49ee-ac2a-de2daa0b0385",
+          "stepId": "30e6dbd4-af3c-4d9e-a219-bfb955d4c89f",
+          "attempt": 1,
+          "kind": "returned_output",
+          "scope": "executor_return",
+          "contentType": "application/json",
+          "bytes": 5414,
+          "availability": "complete",
+          "redacted": false,
+          "capturedAt": "2026-10-02T04:35:00.901Z",
+          "expiresAt": null
+        },
+        {
+          "id": "75e78616-60fa-4440-b697-4125ac4cd9fc",
+          "runId": "0e66b920-61ad-49ee-ac2a-de2daa0b0385",
+          "stepId": "30e6dbd4-af3c-4d9e-a219-bfb955d4c89f",
+          "attempt": 1,
+          "kind": "state_write",
+          "scope": "state_after_assignment",
+          "contentType": "application/json",
+          "bytes": 2,
+          "availability": "complete",
+          "redacted": false,
+          "capturedAt": "2026-10-02T04:35:00.901Z",
+          "expiresAt": null
+        },
+        {
+          "id": "not-captured:30e6dbd4-af3c-4d9e-a219-bfb955d4c89f:executor_request",
+          "runId": "0e66b920-61ad-49ee-ac2a-de2daa0b0385",
+          "stepId": "30e6dbd4-af3c-4d9e-a219-bfb955d4c89f",
+          "attempt": 1,
+          "kind": "executor_request",
+          "scope": "legacy_not_captured",
+          "contentType": "application/json",
+          "bytes": 0,
+          "availability": "not_captured",
+          "redacted": false,
+          "capturedAt": null,
+          "expiresAt": null
+        },
+        {
+          "id": "not-captured:30e6dbd4-af3c-4d9e-a219-bfb955d4c89f:side_effect_confirmation",
+          "runId": "0e66b920-61ad-49ee-ac2a-de2daa0b0385",
+          "stepId": "30e6dbd4-af3c-4d9e-a219-bfb955d4c89f",
+          "attempt": 1,
+          "kind": "side_effect_confirmation",
+          "scope": "legacy_not_captured",
+          "contentType": "application/json",
+          "bytes": 0,
+          "availability": "not_captured",
+          "redacted": false,
+          "capturedAt": null,
+          "expiresAt": null
+        }
+      ]
+    },
+    {
+      "id": "ad1e6768-ee80-4cdc-a85d-234ee96e24c6",
+      "logicalKey": "bounded-retrieval/judge-evidence",
+      "parentStepId": "ce9f2a82-fc15-4a1b-91ba-eacd66f6d00b",
+      "attempt": 1,
+      "status": "skipped",
+      "title": "Judge safe continuation",
+      "description": "Advisory typed judgments; deterministic policy owns execution. Skipped after a terminal verdict.",
+      "kind": "classifier",
+      "startedAt": "2026-10-02T04:35:00.901Z",
+      "completedAt": "2026-10-02T04:35:00.901Z",
+      "error": null,
+      "skipReason": "Advisory typed judgments; deterministic policy owns execution. Skipped after a terminal verdict.",
+      "continuationReason": null,
+      "exitReason": null,
+      "childRunId": null,
+      "inputs": [
+        {
+          "label": "Request",
+          "path": "$.request",
+          "format": "text"
+        },
+        {
+          "label": "Attempt",
+          "path": "$.attempt",
+          "format": "count"
+        }
+      ],
+      "outputs": [
+        {
+          "label": "Continuation Probability",
+          "path": "$.answers.continueSafe.noul",
+          "format": "auto"
+        },
+        {
+          "label": "Usage",
+          "path": "$.usage",
+          "format": "json"
+        },
+        {
+          "label": "Model Latency (ms)",
+          "path": "$.latencyMs",
+          "format": "count"
+        }
+      ],
+      "evidence": [
+        {
+          "id": "eaaa3f26-89f7-476c-a380-15bb8ad705a1",
+          "runId": "0e66b920-61ad-49ee-ac2a-de2daa0b0385",
+          "stepId": "ad1e6768-ee80-4cdc-a85d-234ee96e24c6",
+          "attempt": 1,
+          "kind": "resolved_input",
+          "scope": "selected_step_input",
+          "contentType": "application/json",
+          "bytes": 30658,
+          "availability": "complete",
+          "redacted": false,
+          "capturedAt": "2026-10-02T04:35:00.901Z",
+          "expiresAt": null
+        },
+        {
+          "id": "not-captured:ad1e6768-ee80-4cdc-a85d-234ee96e24c6:executor_request",
+          "runId": "0e66b920-61ad-49ee-ac2a-de2daa0b0385",
+          "stepId": "ad1e6768-ee80-4cdc-a85d-234ee96e24c6",
+          "attempt": 1,
+          "kind": "executor_request",
+          "scope": "legacy_not_captured",
+          "contentType": "application/json",
+          "bytes": 0,
+          "availability": "not_captured",
+          "redacted": false,
+          "capturedAt": null,
+          "expiresAt": null
+        },
+        {
+          "id": "not-captured:ad1e6768-ee80-4cdc-a85d-234ee96e24c6:returned_output",
+          "runId": "0e66b920-61ad-49ee-ac2a-de2daa0b0385",
+          "stepId": "ad1e6768-ee80-4cdc-a85d-234ee96e24c6",
+          "attempt": 1,
+          "kind": "returned_output",
+          "scope": "legacy_not_captured",
+          "contentType": "application/json",
+          "bytes": 0,
+          "availability": "not_captured",
+          "redacted": false,
+          "capturedAt": null,
+          "expiresAt": null
+        },
+        {
+          "id": "not-captured:ad1e6768-ee80-4cdc-a85d-234ee96e24c6:state_write",
+          "runId": "0e66b920-61ad-49ee-ac2a-de2daa0b0385",
+          "stepId": "ad1e6768-ee80-4cdc-a85d-234ee96e24c6",
+          "attempt": 1,
+          "kind": "state_write",
+          "scope": "legacy_not_captured",
+          "contentType": "application/json",
+          "bytes": 0,
+          "availability": "not_captured",
+          "redacted": false,
+          "capturedAt": null,
+          "expiresAt": null
+        },
+        {
+          "id": "not-captured:ad1e6768-ee80-4cdc-a85d-234ee96e24c6:side_effect_confirmation",
+          "runId": "0e66b920-61ad-49ee-ac2a-de2daa0b0385",
+          "stepId": "ad1e6768-ee80-4cdc-a85d-234ee96e24c6",
+          "attempt": 1,
+          "kind": "side_effect_confirmation",
+          "scope": "legacy_not_captured",
+          "contentType": "application/json",
+          "bytes": 0,
+          "availability": "not_captured",
+          "redacted": false,
+          "capturedAt": null,
+          "expiresAt": null
+        }
+      ]
+    },
+    {
+      "id": "01d42a54-902f-4478-9a5e-1d2c62a2e2f7",
+      "logicalKey": "bounded-retrieval/check",
+      "parentStepId": "ce9f2a82-fc15-4a1b-91ba-eacd66f6d00b",
+      "attempt": 1,
+      "status": "skipped",
+      "title": "Validate continuation",
+      "description": "Validate semantic Noul only when deterministic evidence supports continuation.",
+      "kind": "code",
+      "startedAt": "2026-10-02T04:35:00.902Z",
+      "completedAt": "2026-10-02T04:35:00.902Z",
+      "error": null,
+      "skipReason": "Validate semantic Noul only when deterministic evidence supports continuation.",
+      "continuationReason": null,
+      "exitReason": null,
+      "childRunId": null,
+      "inputs": [
+        {
+          "label": "Request",
+          "path": "$.state.request",
+          "format": "text"
+        }
+      ],
+      "outputs": [
+        {
+          "label": "Verdict",
+          "path": "$.verdict",
+          "format": "text"
+        },
+        {
+          "label": "Result Count",
+          "path": "$.resultCount",
+          "format": "count"
+        },
+        {
+          "label": "Attempt",
+          "path": "$.attempt",
+          "format": "count"
+        },
+        {
+          "label": "Latency (ms)",
+          "path": "$.latencyMs",
+          "format": "count"
+        }
+      ],
+      "evidence": [
+        {
+          "id": "fbed820a-69fa-417c-a385-03eb63fbd5d9",
+          "runId": "0e66b920-61ad-49ee-ac2a-de2daa0b0385",
+          "stepId": "01d42a54-902f-4478-9a5e-1d2c62a2e2f7",
+          "attempt": 1,
+          "kind": "resolved_input",
+          "scope": "selected_step_input",
+          "contentType": "application/json",
+          "bytes": 30658,
+          "availability": "complete",
+          "redacted": false,
+          "capturedAt": "2026-10-02T04:35:00.902Z",
+          "expiresAt": null
+        },
+        {
+          "id": "not-captured:01d42a54-902f-4478-9a5e-1d2c62a2e2f7:executor_request",
+          "runId": "0e66b920-61ad-49ee-ac2a-de2daa0b0385",
+          "stepId": "01d42a54-902f-4478-9a5e-1d2c62a2e2f7",
+          "attempt": 1,
+          "kind": "executor_request",
+          "scope": "legacy_not_captured",
+          "contentType": "application/json",
+          "bytes": 0,
+          "availability": "not_captured",
+          "redacted": false,
+          "capturedAt": null,
+          "expiresAt": null
+        },
+        {
+          "id": "not-captured:01d42a54-902f-4478-9a5e-1d2c62a2e2f7:returned_output",
+          "runId": "0e66b920-61ad-49ee-ac2a-de2daa0b0385",
+          "stepId": "01d42a54-902f-4478-9a5e-1d2c62a2e2f7",
+          "attempt": 1,
+          "kind": "returned_output",
+          "scope": "legacy_not_captured",
+          "contentType": "application/json",
+          "bytes": 0,
+          "availability": "not_captured",
+          "redacted": false,
+          "capturedAt": null,
+          "expiresAt": null
+        },
+        {
+          "id": "not-captured:01d42a54-902f-4478-9a5e-1d2c62a2e2f7:state_write",
+          "runId": "0e66b920-61ad-49ee-ac2a-de2daa0b0385",
+          "stepId": "01d42a54-902f-4478-9a5e-1d2c62a2e2f7",
+          "attempt": 1,
+          "kind": "state_write",
+          "scope": "legacy_not_captured",
+          "contentType": "application/json",
+          "bytes": 0,
+          "availability": "not_captured",
+          "redacted": false,
+          "capturedAt": null,
+          "expiresAt": null
+        },
+        {
+          "id": "not-captured:01d42a54-902f-4478-9a5e-1d2c62a2e2f7:side_effect_confirmation",
+          "runId": "0e66b920-61ad-49ee-ac2a-de2daa0b0385",
+          "stepId": "01d42a54-902f-4478-9a5e-1d2c62a2e2f7",
+          "attempt": 1,
+          "kind": "side_effect_confirmation",
+          "scope": "legacy_not_captured",
+          "contentType": "application/json",
+          "bytes": 0,
+          "availability": "not_captured",
+          "redacted": false,
+          "capturedAt": null,
+          "expiresAt": null
+        }
+      ]
+    }
+  ],
+  "children": [],
+  "revision": "78edf24e4ca4cce6165fb453450788ffabee03e4adc8b294e0be9feeabdcef90"
+}

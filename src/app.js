@@ -61,6 +61,7 @@ import { reportsManagerMixin } from './reports-manager.js';
 import { filesManagerMixin } from './files-manager.js';
 import { writeContextManagerMixin } from './write-context-manager.js';
 import { autopilotOverviewManagerMixin } from './autopilot-overview-manager.js';
+import { pipelineViewerManagerMixin } from './pipeline-viewer-manager.js';
 import { agentSpaceManagerMixin } from './agent-space-manager.js';
 import { threadLiveActivityManagerMixin } from './thread-live-activity-manager.js';
 import { resolveDeckInboxEnabled } from './deck-inbox-preference.js';
@@ -9882,6 +9883,7 @@ export function initApp() {
     filesManagerMixin,
     autopilotOverviewManagerMixin,
     agentSpaceManagerMixin,
+    pipelineViewerManagerMixin,
     threadLiveActivityManagerMixin,
     notificationsManagerMixin,
     subscribedReaderMixin,

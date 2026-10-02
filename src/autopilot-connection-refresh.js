@@ -15,6 +15,7 @@ export function storedPackage(connection) {
     installationNpub: text(metadata.installation_npub), transportNpub, fipsEndpoint: endpoint.origin,
     httpsEndpoint: text(connection.https_endpoint) || null, apiVersion: Number(connection.api_version || 1),
     capabilities: Object.freeze([...(connection.capabilities || [])]), healthPath: text(metadata.health_path), agentsPath: text(metadata.agents_path),
+    pipelineViewerPath: text(metadata.pipeline_viewer_path),
     controlledRestartPath: text(metadata.controlled_restart_path), controlledRestartStatusPath: text(metadata.controlled_restart_status_path),
   });
 }
@@ -33,6 +34,7 @@ export function verifiedConnectionPayload(verified, connection = {}) {
       installation_npub: verified.installationNpub,
       health_path: verified.healthPath,
       agents_path: verified.agentsPath,
+      pipeline_viewer_path: verified.pipelineViewerPath,
       controlled_restart_path: verified.controlledRestartPath,
       controlled_restart_status_path: verified.controlledRestartStatusPath,
     },

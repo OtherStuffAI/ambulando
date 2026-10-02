@@ -14,6 +14,7 @@
  * See docs/design/store-template-decomposition.md for the full decomposition plan.
  */
 
+import { disposePipelineViewer } from './pipeline-viewer-view.js';
 import { getRunningBuildId } from './version-check.js';
 import {
   bootstrapWorkspaceSessionKey,
@@ -297,6 +298,7 @@ export function createShellState(options = {}) {
     get navSection() { return this._navSection; },
     set navSection(section) {
       if (section !== this._navSection) this.lockedView = null;
+      if(section!=='agents')disposePipelineViewer(this);
       this._navSection = section;
     },
     get canLockCurrentView() {
@@ -803,6 +805,7 @@ export function createShellState(options = {}) {
       } else if (this.navSection === 'agents') {
         if (this.selectedWorkspaceAgentId) url.searchParams.set('agentid', this.selectedWorkspaceAgentId);
         if (this.agentSpaceView && this.agentSpaceView !== 'overview') url.searchParams.set('agentview', this.agentSpaceView);
+        if(this.pipelineViewerOpen){url.searchParams.set('viewer','1');for(const [key,value] of Object.entries(this.pipelineViewerRoute||{}))if(value)url.searchParams.set(key,value);}
       }
 
       return `${url.pathname}${url.search}${this.navSection === 'files' && url.hash.startsWith('#drive?') ? url.hash : ''}`;
@@ -969,7 +972,9 @@ export function createShellState(options = {}) {
           this.selectedWorkspaceAgentId = route.params.agentid || this.workspaceAgents?.[0]?.id || '';
           this.agentSpaceView = ['overview', 'pipelines', 'schedules', 'triggers'].includes(route.params.agentview)
             ? route.params.agentview : 'overview';
-          if (this.selectedWorkspaceAgentId) await this.loadSelectedAgentSpaceView?.();
+          this.pipelineViewerOpen=route.params.viewer==='1';
+          this.pipelineViewerRoute=this.pipelineViewerOpen?{service:route.params.service,signer:route.params.signer,run:route.params.run,definition:route.params.definition}:{};
+          if (this.selectedWorkspaceAgentId && !this.pipelineViewerOpen) await this.loadSelectedAgentSpaceView?.();
         }
       } finally {
         this.routeSyncPaused = false;
