@@ -24074,18 +24074,19 @@ html.wingman-iphone-webview .chat-channel-tab-scroll * {
 .current-working-count { display: block; margin-top: 4px; font-size: 12px; }
 .current-working-history { color: var(--text); }
 
-/* Mobile Inbox: compact Search beside filters; focus opens a full search row. */
+/* Mobile Inbox: one compact default row; focus opens a full search row. */
 @media (max-width: 767px) {
   .inbox-panel-heading[data-deck-mobile-sticky-heading] {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 44px 44px;
-    gap: 8px;
+    grid-template-columns: minmax(0, 1fr) auto 30px 30px 30px;
+    column-gap: 4px;
+    row-gap: 8px;
     padding: 8px;
   }
   .inbox-panel-heading h3 { grid-column: 1; grid-row: 1; font-size: 14px; white-space: nowrap; }
-  .inbox-panel-heading .deck-new-thread-button { grid-column: 2; grid-row: 1; margin: 0; }
-  .inbox-panel-heading .inbox-read-menu { grid-column: 3; grid-row: 1; margin: 0; }
-  .inbox-panel-heading .inbox-search-form { grid-column: 3; grid-row: 2; width: 44px; gap: 8px; }
+  .inbox-panel-heading .deck-new-thread-button { grid-column: 4; grid-row: 1; margin: 0; }
+  .inbox-panel-heading .inbox-read-menu { grid-column: 5; grid-row: 1; margin: 0; }
+  .inbox-panel-heading .inbox-search-form { grid-column: 3; grid-row: 1; width: 30px; gap: 8px; }
   .inbox-panel-heading .inbox-search-form:not(:focus-within) input {
     color: transparent;
     padding: 0;
@@ -24098,10 +24099,9 @@ html.wingman-iphone-webview .chat-channel-tab-scroll * {
   .inbox-panel-heading .inbox-search-form:not(:focus-within) input::-webkit-search-cancel-button { display: none; }
   .inbox-panel-heading .inbox-search-form:not(:focus-within) input:not(:placeholder-shown) { border-color: var(--accent); }
   .inbox-panel-heading .inbox-search-form:not(:focus-within) .inbox-search-submit { display: none; }
-  .inbox-panel-heading .inbox-search-form:focus-within { grid-column: 1 / -1; width: 100%; }
-  .inbox-panel-heading:has(.inbox-search-form:focus-within) .inbox-type-toggles { grid-row: 3; }
-  .inbox-panel-heading .inbox-type-toggles { grid-column: 1 / 3; grid-row: 2; gap: 6px; }
-  .inbox-panel-heading .inbox-type-toggle { width: 44px; height: 44px; padding: 8px; border-radius: 8px; }
+  .inbox-panel-heading .inbox-search-form:focus-within { grid-column: 1 / -1; grid-row: 2; width: 100%; }
+  .inbox-panel-heading .inbox-type-toggles { grid-column: 2; grid-row: 1; gap: 4px; }
+  .inbox-panel-heading .inbox-type-toggle { width: 30px; height: 44px; padding: 4px; border-radius: 5px; }
   .inbox-panel-heading .inbox-search-form input {
     width: 0;
     min-height: 44px;
@@ -24111,9 +24111,9 @@ html.wingman-iphone-webview .chat-channel-tab-scroll * {
   .inbox-panel-heading .inbox-search-submit,
   .inbox-panel-heading .deck-new-thread-button,
   .inbox-panel-heading .doc-actions-toggle {
-    flex: 0 0 44px;
-    width: 44px;
-    min-width: 44px;
+    flex: 0 0 30px;
+    width: 30px;
+    min-width: 30px;
     height: 44px;
     min-height: 44px;
     padding: 0;

@@ -16,13 +16,13 @@ The full suite at implementation time passed 3666/3668 tests; failures were an u
 
 Independent chat, task, document and file visibility buttons replace the old
 single-selection dropdown; see [Inbox visibility](inbox-type-visibility.md).
-Desktop keeps the controls inline. Below 768px, title and adjacent create/menu
-buttons occupy the first row. Independent filters share the second row with a
-44px Search icon. Focus opens a full-width Search field and submit button,
-with filters accessible below. Blur collapses Search while retaining its query;
-the border indicates a retained draft. Enter submits, and focusing Search also
-exposes its submit button and native clear control. Mobile buttons retain 44px
-touch targets. The heading stays sticky and the read menu remains unclipped.
+Desktop keeps the controls inline. Below 768px, Inbox title, four independent
+filters, Search, create and menu share one default horizontal row. Controls use
+30px widths, 44px heights and 4px gaps to fit even a 320px viewport without
+clipping or scrolling. Accessible labels and visible keyboard focus remain.
+Focus opens Search and its submit button on a full-width second row, keeping
+filters above. Blur collapses Search while retaining its query; the border
+indicates a retained draft. Enter submits; expanded Search exposes native clear. The heading stays sticky and the read menu remains unclipped.
 
 The offline browser script renders the production heading and cards at 320,
 375, 390, 430 and 1440px. It checks control bounds, keyboard toggles, all hidden,

@@ -18,13 +18,13 @@ protecting against stale results. Source recovery applies the same visible
 family set, and hidden source families cannot advertise additional pages.
 Visibility does not mark cards read or change record state or card actions.
 
-Desktop keeps the controls inline. Below 768px, title and adjacent create/menu
-buttons occupy the first row. Independent filters share the second row with a
-44px Search icon. Focus opens a full-width Search field and submit button,
-with filters accessible below. Blur collapses Search while retaining its query;
-the border indicates a retained draft. Enter submits, and focusing Search also
-exposes its submit button and native clear control. Mobile buttons retain 44px
-touch targets. The heading stays sticky and the read menu remains unclipped.
+Desktop keeps the controls inline. Below 768px, Inbox title, four independent
+filters, Search, create and menu share one default horizontal row. Controls use
+30px widths, 44px heights and 4px gaps to fit even a 320px viewport without
+clipping or scrolling. Accessible labels and visible keyboard focus remain.
+Focus opens Search and its submit button on a full-width second row, keeping
+filters above. Blur collapses Search while retaining its query; the border
+indicates a retained draft. Enter submits; expanded Search exposes native clear. The heading stays sticky and the read menu remains unclipped.
 
 Validation covers all 16 combinations, search intersections and legacy
 in-memory normalization in unit tests. `scripts/verify-inbox-compact-browser.mjs`

@@ -95,16 +95,17 @@ try {
   assert.equal(toolbar.length,9);
   const visibleToolbar = toolbar.filter(r=>r.width>0);
   assert(visibleToolbar.every(r=>r.x>=0 && r.x+r.width<=width), 'Every control fits viewport');
-  assert(toolbar[5].width>=44, 'Collapsed Search remains accessible');
+  assert(toolbar[5].width>=24, 'Collapsed Search remains accessible');
   if(width<768) {
-    assert(visibleToolbar.slice(1).every(r=>r.height>=44 && r.width>=44));
+    assert(visibleToolbar.slice(1).every(r=>r.height>=44 && r.width>=24));
     const box = selector => page.locator(selector).boundingBox();
     const title = await box('h3'), create = await box('.deck-new-thread-button'), menu = await box('.doc-actions-toggle');
     const search = await box('input'), submit = await box('.inbox-search-submit'), filters = await box('.inbox-type-toggles');
     assert(Math.abs(create.y-menu.y)<1 && menu.x-create.x-create.width<=9, 'Heading actions are grouped');
-    assert(title.y < search.y && Math.abs(search.y-filters.y)<1, 'Compact Search shares the filters row');
-    assert(search.width===44 && submit===null, 'Search collapses to one accessible icon');
-    assert((await box('.inbox-panel-heading')).height<=120, 'Default toolbar is two rows');
+    assert(Math.max(...visibleToolbar.map(r=>r.center))-Math.min(...visibleToolbar.map(r=>r.center))<1, 'Title and every default control share one horizontal line');
+    assert(title.x+title.width<=filters.x && filters.x+filters.width<=search.x && search.x+search.width<=create.x && create.x+create.width<=menu.x, 'Default controls retain order and do not overlap');
+    assert(search.width===30 && submit===null, 'Search collapses to one accessible icon');
+    assert((await box('.inbox-panel-heading')).height<=64, 'Default toolbar is one row');
   }
   const types = ['chats', 'tasks', 'documents', 'files'];
   for (const name of types) assert.equal(await page.getByRole('button',{name:`Show ${name}`,exact:true}).getAttribute('aria-pressed'), 'true');
@@ -131,14 +132,14 @@ try {
   if(width<768) {
     const expanded=await search.boundingBox();
     assert(expanded.width>=200, 'Focused Search expands for typing and native clear');
-    assert((await page.locator('.inbox-type-toggles').boundingBox()).y>expanded.y, 'Filters remain available below expanded Search');
+    assert((await page.locator('.inbox-type-toggles').boundingBox()).y<expanded.y, 'Filters remain available above expanded Search');
   }
   await page.screenshot({path:screenshot.replace('.png','-search.png'),fullPage:true});
   await search.press('Enter');
   await search.blur();
   assert.equal(await search.inputValue(), 'release', 'Blur retains draft');
   assert.equal(await page.evaluate(()=>window.probeStore.deckInboxSearchQuery), 'release', 'Enter submits query');
-  if(width<768) assert.equal((await search.boundingBox()).width,44,'Blur collapses Search');
+  if(width<768) assert.equal((await search.boundingBox()).width,30,'Blur collapses Search');
   await search.focus();
   await page.getByRole('button',{name:'Search Inbox',exact:true}).click();
   await page.getByRole('button',{name:'New thread',exact:true}).click();

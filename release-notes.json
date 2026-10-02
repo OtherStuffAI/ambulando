@@ -2473,6 +2473,21 @@
       "label": "Validated navigation and pipeline viewer",
       "notes": [],
       "noUserVisibleChanges": true
+    },
+    {
+      "buildNumber": 2150,
+      "label": "Clear pipeline connections and exact evidence",
+      "notes": [
+        "Follow labelled connections between named ports, see bounded run previews, and inspect exact retained fields with a usable mobile inspector.",
+        "Service switching and delayed navigation preserve the selected run and historical structure."
+      ]
+    },
+    {
+      "buildNumber": 2151,
+      "label": "Single-line mobile Inbox",
+      "notes": [
+        "Keep the Inbox title, all four type icons, Search, create and menu on one compact mobile line. Search expands for typing and retains its query when collapsed."
+      ]
     }
   ]
 }
