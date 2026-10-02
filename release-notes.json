@@ -2377,6 +2377,12 @@
       "notes": [
         "Review task cards in the Deck Inbox now offer Mark read alongside Mark done. Mark read clears unread activity without opening the task or changing its review state."
       ]
+    },
+    {
+      "buildNumber": 2134,
+      "label": "Context Tree synchronization and cache adapters",
+      "notes": [],
+      "noUserVisibleChanges": true
     }
   ]
 }

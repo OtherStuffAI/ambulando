@@ -2666,3 +2666,14 @@ export async function towerPgFeedRequest(workspaceId, suffix, { baseUrl = _baseU
   const response = await signedTowerPgFetch(requestUrl, { baseUrl, appNpub, method, body, useWorkspaceKey: false });
   return json(response, { requestUrl, method, prefix: 'Tower feed reader' });
 }
+
+// Context Tree uses the same signed typed PG transport, including DELETE bodies.
+export async function requestTowerPgContext(workspaceId, scopeId, suffix = '', {
+  method = 'GET', body, baseUrl = _baseUrl, appNpub = FLIGHT_DECK_PG_APP_NPUB,
+} = {}) {
+  if (!workspaceId || !scopeId) throw new Error('Context workspace and scope are required');
+  const requestPath = `/api/v4/flightdeck-pg/workspaces/${encodeURIComponent(workspaceId)}/scopes/${encodeURIComponent(scopeId)}/context/components${suffix}`;
+  const requestUrl = resolveTowerPgUrl(requestPath, baseUrl);
+  const resp = await signedTowerPgFetch(requestPath, { method, body, baseUrl, appNpub });
+  return json(resp, { requestUrl, method, prefix: 'Tower PG context API' });
+}

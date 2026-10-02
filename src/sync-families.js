@@ -36,6 +36,8 @@ export const SYNC_FAMILY_OPTIONS = Object.freeze([
 // record-sync. Keep them in the central registry without adding them to the
 // legacy default pull set or published encrypted schema manifests.
 export const PG_SYNC_FAMILY_OPTIONS = Object.freeze([
+  { id: 'context_component', table: 'context_components', transport: 'tower_pg' },
+  { id: 'context_reference', table: 'context_references', transport: 'tower_pg' },
   { id: 'feed_subscription', envelope: 'feed_subscriptions', table: 'feed_subscriptions', transport: 'tower_pg' },
   { id: 'feed_item_state', envelope: 'feed_item_states', table: 'feed_item_states', transport: 'tower_pg' },
   { id: 'autopilot_connection', envelope: 'autopilot_connections', table: 'autopilot_connections', transport: 'tower_pg' },

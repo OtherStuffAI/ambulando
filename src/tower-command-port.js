@@ -46,6 +46,7 @@ import { inboundAutopilotConnection, inboundWorkspaceAgent } from './translators
 
 export const TOWER_WORKSPACE_COMMAND_CONTRACT = Object.freeze({
   descriptorReconciled: Object.freeze([
+    'context.create', 'context.update', 'context.attach', 'context.unlink', 'context.delete',
     'feed-subscription.create', 'feed-subscription.patch', 'feed-state.patch',
     'record-conflict.accept-remote',
     'task.create', 'task.update', 'task.delete', 'task.move', 'task-comment.create',
@@ -147,6 +148,18 @@ async function reconcileTypedCommand(name, result, { owner = '', args = [] } = {
 }
 
 export function prepareTowerWorkspaceCommand(store, name, input = {}) {
+  if (['context.create', 'context.update', 'context.attach', 'context.unlink', 'context.delete'].includes(name)) {
+    return {
+      entityKey: `context:${input.scopeId}:${input.componentId || 'new'}`,
+      execute: () => pgWrites.writeTowerPgContext(store, name.split('.')[1], input),
+      reconcile: async result => {
+        // Acknowledgement is not convergence: subtree responses contain counts,
+        // and canonical worker recovery publishes the complete authority batch.
+        await store.runTowerPgWorkspaceSync({ force: true });
+        return result;
+      },
+    };
+  }
   if (name.startsWith('feed-subscription.') || name === 'feed-state.patch') return prepareFeedCommand(store, name, input);
   if (name === 'thread.branch') {
     return {

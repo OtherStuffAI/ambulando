@@ -759,9 +759,17 @@ function inboxRowSearchText(row = {}) {
   return '';
 }
 
+export const DECK_INBOX_TYPES = Object.freeze(['chat', 'task', 'document', 'file']);
+
+// Accept the old in-memory single selection while allowing any combination.
+export function normalizeDeckInboxTypes(value = 'all') {
+  if (Array.isArray(value)) return DECK_INBOX_TYPES.filter(type => value.includes(type));
+  return DECK_INBOX_TYPES.includes(value) ? [value] : [...DECK_INBOX_TYPES];
+}
+
 export function filterAutopilotOverviewInbox(rows = [], query = '', type = 'all') {
   const needle = normalizeInboxSearchText(query);
-  const source = (Array.isArray(rows) ? rows : []).filter(row => type === 'all' || row.inboxKind === type);
+  const source = (Array.isArray(rows) ? rows : []).filter(row => normalizeDeckInboxTypes(type).includes(row.inboxKind));
   if (!needle) return source;
   return source.filter((row) => normalizeInboxSearchText(inboxRowSearchText(row)).includes(needle));
 }
@@ -1414,8 +1422,21 @@ export const autopilotOverviewManagerMixin = {
     this.startWorkspaceLiveQueries?.();
   },
 
+  deckInboxTypes: DECK_INBOX_TYPES,
+
+  isDeckInboxTypeVisible(type) {
+    return normalizeDeckInboxTypes(this.deckInboxType).includes(type);
+  },
+
+  toggleDeckInboxType(type) {
+    if (!DECK_INBOX_TYPES.includes(type)) return;
+    const shown = normalizeDeckInboxTypes(this.deckInboxType);
+    this.deckInboxType = DECK_INBOX_TYPES.filter(value => value === type ? !shown.includes(value) : shown.includes(value));
+    autopilotOverviewManagerMixin.resetDeckInboxSources.call(this);
+  },
+
   setDeckInboxType(value) {
-    this.deckInboxType = ['chat', 'task', 'document', 'file'].includes(value) ? value : 'all';
+    this.deckInboxType = normalizeDeckInboxTypes(value);
     autopilotOverviewManagerMixin.resetDeckInboxSources.call(this);
   },
 

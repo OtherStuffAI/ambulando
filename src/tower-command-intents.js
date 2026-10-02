@@ -124,3 +124,9 @@ export const acceptTowerPgRemoteConflict = (store, key) => issue(store, 'record-
 export const createFeedSubscription = (store, input) => issue(store, 'feed-subscription.create', input, input.body.mutation_id);
 export const patchFeedSubscription = (store, input) => issue(store, 'feed-subscription.patch', input, input.body.mutation_id);
 export const patchFeedItemState = (store, input) => issue(store, 'feed-state.patch', input, input.body.mutation_id);
+
+export const createTowerPgContextComponent = (store, input, mutationId) => issue(store, 'context.create', input, mutationId);
+export const updateTowerPgContextComponent = (store, input, mutationId) => issue(store, 'context.update', input, mutationId);
+export const attachTowerPgContextReference = (store, input, mutationId) => issue(store, 'context.attach', input, mutationId);
+export const unlinkTowerPgContextReference = (store, input, mutationId) => issue(store, 'context.unlink', input, mutationId);
+export const deleteTowerPgContextSubtree = (store, input, mutationId) => issue(store, 'context.delete', input, mutationId);

@@ -3656,3 +3656,14 @@ it('does not acknowledge or retain late optional work after switching away and b
   expect(acknowledgeSSEBatch).not.toHaveBeenCalled();
   expect(store.deferredTowerPgSSEHydrations?.size || 0).toBe(0);
 });
+
+it('context mutation hints force canonical recovery even after a recent SSE delta', async () => {
+  hydrateTowerPgEventUpdates.mockResolvedValueOnce({ fallbackEvents: 1 });
+  const requestTowerSyncFamily = vi.fn(async () => ({ applied: 3 }));
+  const { fn } = bindMethod('handleSSEStatus', { sseConnectionKey: 'current', towerPgLastReplayDeltaAt: Date.now(), requestTowerSyncFamily });
+  isTowerPgBackendMode.mockReturnValue(true);
+  await fn({ status: 'pull-complete', families: ['flightdeck_pg'], connectionKey: 'current', batchId: 'context-delete',
+    pgEvents: [{ entity_type: 'context_component', entity_id: 'root', payload: { mutation_id: 'delete', scope_id: 'scope', component_id: 'root' } }] });
+  expect(requestTowerSyncFamily).toHaveBeenCalledWith('workspace-bootstrap', '', { force: false });
+  expect(acknowledgeSSEBatch).toHaveBeenCalledWith(expect.objectContaining({ batchId: 'context-delete' }));
+});

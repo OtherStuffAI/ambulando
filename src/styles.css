@@ -6009,22 +6009,11 @@ button:disabled {
   margin: 0;
 }
 
-.inbox-type-select {
-  flex: 0 0 auto;
-  width: 76px;
-  min-height: 36px;
-  border: 1px solid var(--border-color, #dfe4ed);
-  border-radius: 8px;
-  background: var(--bg-primary, #fff);
-  color: inherit;
-  font: inherit;
-  font-size: 12px;
-  padding: 4px;
-}
-.inbox-type-select:focus-visible {
-  outline: 2px solid #2563eb;
-  outline-offset: 2px;
-}
+.inbox-type-toggles { display: flex; flex: 0 0 auto; gap: 2px; }
+.inbox-type-toggle { display: grid; place-items: center; width: 32px; height: 36px; padding: 5px; border: 1px solid var(--border); border-radius: 5px; background: #fff; color: #64748b; cursor: pointer; }
+.inbox-type-toggle[aria-pressed="true"] { background: #dbeafe; border-color: #bfdbfe; color: #1d4ed8; }
+.inbox-type-toggle svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.inbox-type-toggle:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
 
 
 .inbox-search-form input {
@@ -24085,7 +24074,7 @@ html.wingman-iphone-webview .chat-channel-tab-scroll * {
 .current-working-count { display: block; margin-top: 4px; font-size: 12px; }
 .current-working-history { color: var(--text); }
 
-/* One mobile Inbox toolbar, including the native filter and search form. */
+/* One mobile Inbox toolbar, including independent type toggles and search form. */
 @media (max-width: 767px) {
   .inbox-panel-heading[data-deck-mobile-sticky-heading] {
     gap: 3px;
@@ -24093,7 +24082,9 @@ html.wingman-iphone-webview .chat-channel-tab-scroll * {
   }
   .inbox-panel-heading h3 { font-size: 14px; white-space: nowrap; }
   .inbox-panel-heading .inbox-search-form { flex: 1 1 0; gap: 3px; }
-  .inbox-panel-heading .inbox-type-select { width: 54px; min-height: 44px; padding: 2px; }
+  .inbox-panel-heading .inbox-type-toggle { width: 32px; min-height: 44px; padding: 4px; }
+  .inbox-panel-heading { flex-wrap: wrap; }
+  .inbox-panel-heading .inbox-search-form { order: 4; flex: 1 0 100%; }
   .inbox-panel-heading .inbox-search-form input {
     width: 0;
     min-height: 44px;

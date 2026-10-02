@@ -255,3 +255,17 @@ it('keeps comment-driven task search and scoped comment/chat files in their orig
   await db.chat_messages.update(message.record_id, { body: '[Chat evidence](storage://chat-evidence)' });
   expect((await queryInboxSource(input('file', task.scope_id), owner, 'chat_messages')).rows.some(row => row.record_id === message.record_id)).toBe(true);
 });
+
+
+it('supports every independent family combination in bounded source recovery', async () => {
+  const types = ['chat', 'task', 'document', 'file'];
+  const sources = ['chat_messages', 'tasks', 'documents', 'comments'];
+  for (let mask = 0; mask < 16; mask++) {
+    const shown = types.filter((_, i) => mask & (1 << i));
+    for (const source of sources) {
+      const page = await queryInboxSource(input(shown), owner, source);
+      expect(Array.isArray(page.rows)).toBe(true);
+      if (!shown.length) expect(page).toEqual({ rows: [], hasMore: false });
+    }
+  }
+});

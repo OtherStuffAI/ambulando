@@ -53,7 +53,7 @@ import { flightDeckLog } from './logging.js';
 import { parsePgTaskBoardId, resolvePgThreadId } from './pg-record-context.js';
 import { sameLogicalValue } from './utils/state-helpers.js';
 import { normalizeInboxSearchText, scopeMatches, buildAutopilotOverviewThreads, buildAutopilotOverviewTasks, buildAutopilotOverviewDocuments,
-  buildAutopilotOverviewFiles, buildAutopilotOverviewInbox, filterAutopilotOverviewInbox } from './autopilot-overview-manager.js';
+  buildAutopilotOverviewFiles, buildAutopilotOverviewInbox, filterAutopilotOverviewInbox, normalizeDeckInboxTypes } from './autopilot-overview-manager.js';
 import { buildFileBrowserRows } from './files-manager.js';
 
 const SECTION_STATE = new WeakMap();
@@ -61,20 +61,21 @@ const SECTION_STATE = new WeakMap();
 // Apply card classification, scope and search while selecting source candidates,
 // before the bounded display prefix. Unrelated types cannot keep paging alive.
 export async function queryInboxSource(store, ownerNpub, tableName) {
+  const types = normalizeDeckInboxTypes(store.deckInboxType);
+  if (!types.length) return { rows: [], hasMore: false };
   const context = store.autopilotOverviewContext || {};
   const channels = await getChannelsByOwner(ownerNpub);
   const scopes = await getScopesByOwner(ownerNpub);
   const options = { selectedScopeId: context.scopeId, selectedChannelId: context.channelId,
     scopesMap: new Map(scopes.map(row => [row.record_id, row])) };
-  const type = store.deckInboxType || 'all';
+  const type = types.length === 1 ? types[0] : 'all';
   const scoped = context.scopeId && !['all', '__all__'].includes(context.scopeId);
   const scopeIds = scoped ? (context.scopeId === '__unscoped__' ? [''] : scopes
     .filter(row => scopeMatches(row.record_id, context.scopeId, options.scopesMap)).map(row => row.record_id)) : undefined;
   const sourceOptions = { scopeIds, search: type === 'file' ? 'storage://' : normalizeInboxSearchText(store.deckInboxSearchQuery), filesOnly: type === 'file', channelId: context.channelId && context.channelId !== 'all' ? context.channelId : undefined };
 
-  if ((type === 'chat' && tableName !== 'chat_messages')
-    || (type === 'task' && !['tasks', 'comments'].includes(tableName))
-    || (type === 'document' && !['documents', 'comments'].includes(tableName))) return { rows: [], hasMore: false };
+  const sourceTypes = { chat_messages: ['chat', 'file'], tasks: ['task', 'file'], documents: ['document', 'file'], comments: ['task', 'document', 'file'] };
+  if (!sourceTypes[tableName]?.some(type => types.includes(type))) return { rows: [], hasMore: false };
   const matches = (row, comments = []) => {
     const sources = { channels, documents: [], tasks: [], fileMessages: [], fileComments: comments };
     sources[{ chat_messages: 'fileMessages', comments: 'fileComments', tasks: 'tasks', documents: 'documents' }[tableName]] = [row];
@@ -84,14 +85,14 @@ export async function queryInboxSource(store, ownerNpub, tableName) {
       documents: buildAutopilotOverviewDocuments({ ...options, documents: sources.documents, comments }),
       files: buildAutopilotOverviewFiles(buildFileBrowserRows(sources), options),
     });
-    return filterAutopilotOverviewInbox(cards, store.deckInboxSearchQuery, type).length > 0;
+    return filterAutopilotOverviewInbox(cards, store.deckInboxSearchQuery, types).length > 0;
   };
   // Comments enrich the selected parent cards; they are not independent Inbox
   // cards and must never advertise another page by themselves.
   if (tableName === 'comments') {
     const parents = await Promise.all(['tasks', 'documents'].map(name => queryInboxSource(store, ownerNpub, name)));
     const pages = await Promise.all(parents.flatMap(page => page.rows).map(row => getCommentsByTarget(row.record_id, { limit: 100 })));
-    if (type === 'all' || type === 'file') {
+    if (types.includes('file')) {
       const attachments = await getOwnerActivityWindow('comments', ownerNpub, {
         limit: store.inboxActivityVisibleCount || 100, matches, ...sourceOptions, filesOnly: true,
       });

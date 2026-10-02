@@ -304,6 +304,12 @@ function createWorkspaceDb(workspaceDbKey) {
     feed_commands: '&mutation_id, context, subscription_id',
     feed_connection_transports: '&key, context, connection_id',
   });
+  db.version(31).stores({
+    context_components: '&record_id, workspace_id, scope_id, parent_id, [scope_id+parent_id], [scope_id+sort_order]',
+    context_references: '&record_id, workspace_id, scope_id, component_id, [scope_id+component_id]',
+    context_coverage: '&scope_id, status',
+    context_reference_resolutions: '&record_id, component_id, scope_id',
+  });
   const commentFields = activityIndexFields;
   db.documents.hook('creating', (_key, row) => { Object.assign(row, commentFields(row)); });
   db.documents.hook('updating', (changes, _key, row) => commentFields({ ...row, ...changes }));

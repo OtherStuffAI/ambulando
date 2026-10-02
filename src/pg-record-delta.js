@@ -1,3 +1,4 @@
+import { publishContextAuthority, clearContextAuthority, mapContextRow } from './context-cache.js';
 import { resolvePgReaderActorId } from './pg-reader-identity.js';
 import { inboundFeedReaderRow } from './translators/feed-reader.js';
 import { feedContextKey } from './feed/store.js';
@@ -17,6 +18,8 @@ import {
 import { inboundAutopilotConnection, inboundWorkspaceAgent } from './translators/autopilot-connections.js';
 
 const FAMILY = {
+  context_component: ['context_components', mapContextRow],
+  context_reference: ['context_references', mapContextRow],
   scope: ['scopes', mapPgScopeToLocal], channel: ['channels', mapPgChannelToLocal],
   thread: ['chat_messages', mapPgThreadToLocal], message: ['chat_messages', mapPgMessageToLocal],
   task: ['tasks', mapPgTaskToLocal], task_comment: ['comments', mapPgTaskCommentToLocal],
@@ -40,7 +43,7 @@ export function isTowerWinsLocalAssetConflict(conflict = {}) {
 }
 function validatePage(page, workspaceId) {
   if (page?.protocol_version !== 1 || !['snapshot', 'delta'].includes(page.mode)
-    || !Array.isArray(page.families) || !PG_RECORD_DELTA_FAMILIES.filter(f => !f.startsWith('feed_')).every(f => page.families.includes(f))
+    || !Array.isArray(page.families) || !PG_RECORD_DELTA_FAMILIES.filter(f => !f.startsWith('feed_') && !f.startsWith('context_')).every(f => page.families.includes(f))
     || !Array.isArray(page.changes) || page.changes.length > 200
     || typeof page.next_cursor !== 'string' || !page.next_cursor || typeof page.has_more !== 'boolean') {
     throw new Error('Invalid Tower record-delta v1 page');
@@ -270,7 +273,7 @@ async function applyRecordPage(store, page, options = {}) {
     }
     if (changedKeys.size) await db.pg_record_rows.bulkPut([...changedKeys].map(key => versions.get(key)));
     const materialize = async (raw) => {
-      if (!FAMILY[raw.family]) return;
+      if (!FAMILY[raw.family] || raw.family.startsWith('context_')) return;
       const [tableName, mapRow] = FAMILY[raw.family];
       const table = db.table(tableName);
       let localId = raw.id;
@@ -434,8 +437,13 @@ async function applyRecordPage(store, page, options = {}) {
     // terminal cursor remains at the preceding page until all omissions commit.
     const retirementPending = !options.reconcileOnly && state.snapshotComplete
       && state.snapshotReconciliationPending === true && page.mode === 'delta' && !page.has_more;
+    if (page.changes.length) await db.context_reference_resolutions.clear();
+    const contextDirty = state.contextDirty || page.changes.some(c => c.family.startsWith('context_') || c.family === 'scope');
+    if (!options.reconcileOnly && !options.partialPage && (contextDirty || await db.context_coverage.where('status').equals('loading').count()) && page.mode === 'delta' && !page.has_more && !retirementPending && page.families.includes('context_component') && page.families.includes('context_reference')) {
+      await publishContextAuthority(db, context.workspaceId, state);
+    }
     if (options.beforeCommit) await options.beforeCommit();
-    const nextState = { ...state, viewBaselineInitialized: options.viewBaselineInitialized || state.viewBaselineInitialized || false, legacyFallbackActive: false, resetting: false, cursor: retirementPending || options.partialPage ? state.cursor : page.next_cursor, applyingPage: options.partialPage ? { nextCursor: page.next_cursor, through: options.pageOffset } : null, generation, incrementalSnapshot: true, snapshotRetirement: retirementPending ? state.snapshotRetirement || { tableIndex: 0, after: null, nextCursor: page.next_cursor } : null, snapshotId: page.mode === 'snapshot' ? page.snapshot_id : state.snapshotId,
+    const nextState = { ...state, contextDirty: page.has_more || options.partialPage ? contextDirty : false, viewBaselineInitialized: options.viewBaselineInitialized || state.viewBaselineInitialized || false, legacyFallbackActive: false, resetting: false, cursor: retirementPending || options.partialPage ? state.cursor : page.next_cursor, applyingPage: options.partialPage ? { nextCursor: page.next_cursor, through: options.pageOffset } : null, generation, incrementalSnapshot: true, snapshotRetirement: retirementPending ? state.snapshotRetirement || { tableIndex: 0, after: null, nextCursor: page.next_cursor } : null, snapshotId: page.mode === 'snapshot' ? page.snapshot_id : state.snapshotId,
       snapshotFamilies: page.mode === 'snapshot' ? page.families.filter(f => PG_RECORD_DELTA_FAMILIES.includes(f)) : state.snapshotFamilies,
       snapshotComplete: page.snapshot_complete || state.snapshotComplete || false,
       snapshotReconciliationPending: page.mode === 'snapshot' ? true
@@ -451,7 +459,7 @@ async function applyRecordPage(store, page, options = {}) {
 // checkpoint through the same authority generation compare-and-swap as pages.
 async function retireSnapshotOmissions(store, options) {
   const db = getWorkspaceDb(), cursorKey = recordDeltaCursorKey(store);
-  const tables = [...new Set(Object.values(FAMILY).map(([name]) => name)), 'pg_record_rows', 'pg_actors', 'pg_resource_attention', 'pg_attention_counts'];
+  const tables = [...new Set(Object.values(FAMILY).map(([name]) => name).filter(name => !name.startsWith('context_'))), 'pg_record_rows', 'pg_actors', 'pg_resource_attention', 'pg_attention_counts'];
   while (true) {
     const done = await db.transaction('rw', db.tables, async () => {
       const state = (await db.sync_state.get(cursorKey))?.value;
@@ -461,6 +469,8 @@ async function retireSnapshotOmissions(store, options) {
       if (!checkpoint || checkpoint.nextCursor !== options.terminalCursor) throw new Error('Record-delta retirement authority changed');
       const tableName = tables[checkpoint.tableIndex];
       if (!tableName) {
+        if (state.snapshotFamilies?.includes('context_component') && state.snapshotFamilies?.includes('context_reference'))
+          await publishContextAuthority(db, resolveTowerPgWorkspaceContext(store).workspaceId, state);
         await db.sync_state.put({ key: cursorKey, value: { ...state, cursor: checkpoint.nextCursor,
           snapshotRetirement: null, snapshotReconciliationPending: false, converged: true } });
         return true;
@@ -541,6 +551,7 @@ export async function resetPgRecordAuthority(store, { preserveViews = false, exp
     const localGeneration = Number(priorState?.localGeneration || 0) + 1;
     const prefix = `${cursorKey}:staged:`;
     await db.sync_state.where('key').between(prefix, `${prefix}\uffff`, true, true).delete();
+    await clearContextAuthority(db);
     if (preserveViews) {
       await db.sync_state.delete(`${cursorKey}:summary-backfill`);
       await db.sync_state.put({ key: cursorKey, value: { cursor: null, resetting: true, localGeneration } });

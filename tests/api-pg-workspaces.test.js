@@ -32,6 +32,19 @@ describe('Tower PG API helpers', () => {
     vi.restoreAllMocks();
   });
 
+  it('signs the exact context unlink URL and DELETE JSON version payload', async () => {
+    const { createNip98AuthHeader } = await import('../src/auth/nostr.js');
+    const api = await import('../src/api.js');
+    const body = { expected_row_version: 3 };
+    await api.requestTowerPgContext('workspace', 'scope', '/component/references/reference', {
+      method: 'DELETE', body, baseUrl: 'https://tower.example', appNpub: 'flightdeck_pg',
+    });
+    const [url, options] = globalThis.fetch.mock.calls[0];
+    expect(url).toBe('https://tower.example/api/v4/flightdeck-pg/workspaces/workspace/scopes/scope/context/components/component/references/reference');
+    expect(options.method).toBe('DELETE'); expect(JSON.parse(options.body)).toEqual(body);
+    expect(createNip98AuthHeader).toHaveBeenLastCalledWith(url, 'DELETE', body, expect.objectContaining({ priority: 'high' }));
+  });
+
   it('calls Tower PG descriptor and me routes with browser NIP-98 auth', async () => {
     const { createNip98AuthHeader, createNip98AuthHeaderForSecret } = await import('../src/auth/nostr.js');
     const api = await import('../src/api.js');

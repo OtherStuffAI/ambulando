@@ -1,3 +1,4 @@
+import { requestTowerPgContext } from './api.js';
 import { materializeFeedReaderEvent } from './feed/materialize.js';
 import { clampBranchEffectiveMessageIds, threadHistoryLineage, mergeThreadHistoryIds } from './thread-history-coverage.js';
 import { FLIGHT_DECK_PG_APP_NPUB } from './app-identity.js';
@@ -3497,4 +3498,81 @@ export async function hydrateTowerPgAudioNotes(store, deps = {}) {
   assertTowerPgWorkspaceCurrent(store, context);
   await replaceAudioNotes(context.workspaceOwnerNpub, audioNotes);
   return audioNotes;
+}
+
+
+// Structure recovery is exclusively the canonical workspace worker. This typed
+// read provides capabilities and an ACL check, never a competing list snapshot.
+export async function loadTowerPgContext(store, scopeId, options = {}) {
+  const context = resolveTowerPgWorkspaceContext(store);
+  const service = store.getTowerSyncService();
+  const db = getWorkspaceDb();
+  const guard = () => {
+    service.assertActive();
+    if (getWorkspaceDb() !== db) throw new Error('Context workspace changed');
+  };
+  guard();
+  await db.context_coverage.put({ scope_id: scopeId, workspace_id: context.workspaceId, status: 'loading' });
+  try {
+    const result = await requestTowerPgContext(context.workspaceId, scopeId, '?limit=1', {
+      baseUrl: context.baseUrl, appNpub: context.appNpub,
+    });
+    guard();
+    await store.runTowerPgWorkspaceSync(options);
+    guard();
+    const coverage = await db.context_coverage.get(scopeId);
+    if (coverage?.status !== 'complete') throw new Error('Context record recovery is unavailable or incomplete');
+    await db.context_coverage.put({ ...coverage, capabilities: result.capabilities });
+    return { scopeId, status: 'complete', capabilities: result.capabilities };
+  } catch (error) {
+    guard();
+    const denied = [403, 404].includes(error.status);
+    await db.transaction('rw', db.context_components, db.context_references, db.context_coverage, db.context_reference_resolutions, async () => {
+      if (denied) {
+        await db.context_components.where('scope_id').equals(scopeId).delete();
+        await db.context_references.where('scope_id').equals(scopeId).delete();
+        await db.context_reference_resolutions.where('scope_id').equals(scopeId).delete();
+      }
+      await db.context_coverage.put({ scope_id: scopeId, workspace_id: context.workspaceId, status: denied ? 'denied' : 'error' });
+    });
+    throw error;
+  }
+}
+
+export async function readTowerPgContextDeletePreview(store, scopeId, componentId) {
+  const context = resolveTowerPgWorkspaceContext(store);
+  return requestTowerPgContext(context.workspaceId, scopeId, `/${encodeURIComponent(componentId)}/delete-preview`, {
+    baseUrl: context.baseUrl, appNpub: context.appNpub,
+  });
+}
+
+
+// Only the ACL-checked reference route can supply target titles. Identifiers in
+// record-delta and SSE hints never serve as target access or resolution.
+export async function loadTowerPgContextReferences(store, scopeId, componentId) {
+  const context = resolveTowerPgWorkspaceContext(store), db = getWorkspaceDb();
+  const service = store.getTowerSyncService();
+  const guard = () => { service.assertActive(); if (getWorkspaceDb() !== db) throw new Error('Context workspace changed'); };
+  guard();
+  await db.context_reference_resolutions.where('component_id').equals(componentId).delete();
+  let cursor = null; const references = [], seen = new Set();
+  do {
+    const suffix = `/${encodeURIComponent(componentId)}/references?limit=200${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`;
+    const result = await requestTowerPgContext(context.workspaceId, scopeId, suffix, { baseUrl: context.baseUrl, appNpub: context.appNpub });
+    guard(); references.push(...result.references); cursor = result.next_cursor;
+    if (cursor && seen.has(cursor)) throw new Error('Repeated context reference cursor');
+    if (cursor) seen.add(cursor);
+  } while (cursor);
+  guard();
+  await db.transaction('rw', db.context_references, db.context_reference_resolutions, async () => {
+    await db.context_reference_resolutions.where('component_id').equals(componentId).delete();
+    for (const row of references) {
+      const cached = await db.context_references.get(row.id);
+      if (cached?.workspace_id === context.workspaceId && cached.scope_id === scopeId && cached.row_version === row.row_version) {
+        await db.context_reference_resolutions.put({ record_id: row.id, workspace_id: context.workspaceId, scope_id: scopeId,
+          component_id: componentId, row_version: row.row_version, resolution: row.resolution || { status: 'unavailable' } });
+      }
+    }
+  });
+  return { componentId, complete: true };
 }

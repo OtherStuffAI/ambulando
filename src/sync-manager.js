@@ -1,3 +1,4 @@
+import { loadTowerPgContext, loadTowerPgContextReferences, readTowerPgContextDeletePreview } from './pg-read-hydrator.js';
 import { hydrateFeedReader } from './feed/tower.js';
 import { hydrateDriveShares } from './drive.js';
 import { resolveTowerSigningUrl } from './tower-transport.js';
@@ -609,6 +610,9 @@ export const syncManagerMixin = {
 
   loadTowerSyncTarget(family, id, options = {}) {
     switch (family) {
+      case 'context-references': return loadTowerPgContextReferences(this, options.scopeId, id);
+      case 'context-tree': return loadTowerPgContext(this, id, options);
+      case 'context-delete-preview': return readTowerPgContextDeletePreview(this, options.scopeId, id);
       case 'scopes': return hydrateTowerPgScopes(this, options);
       case 'channels': return hydrateTowerPgChannels(this, options);
       case 'tasks': return hydrateTowerPgTasks(this, options);
@@ -3182,7 +3186,7 @@ export const syncManagerMixin = {
         const deltaRequested = targetRecoveryRequired || fallbackRefreshRequested
           || replayBurst
           || Number(eventResult?.fallbackEvents || 0) > 0;
-        const recentEventDelta = !targetRecoveryRequired && deltaRequested
+        const recentEventDelta = !events.some(event => ['context_component', 'context_reference'].includes(event?.entity_type)) && !targetRecoveryRequired && deltaRequested
           && Date.now() - Number(this.towerPgLastReplayDeltaAt || 0) < 30_000;
         const ranWorkspaceDelta = deltaRequested && !recentEventDelta;
         if (ranWorkspaceDelta) {

@@ -2036,3 +2036,36 @@ describe('autopilot overview manager', () => {
     });
   });
 });
+
+
+describe('independent Inbox types', () => {
+  const types = ['chat', 'task', 'document', 'file'];
+  const rows = types.map(inboxKind => ({ inboxKind, title: 'needle', name: 'needle', isUnread: true }));
+  it('filters all 16 combinations and intersects search without mutating cards', () => {
+    for (let mask = 0; mask < 16; mask++) {
+      const shown = types.filter((_, i) => mask & (1 << i));
+      expect(filterAutopilotOverviewInbox(rows, '', shown).map(row => row.inboxKind)).toEqual(shown);
+      expect(filterAutopilotOverviewInbox(rows, 'NEEDLE', shown).map(row => row.inboxKind)).toEqual(shown);
+      expect(filterAutopilotOverviewInbox(rows, 'missing', shown)).toEqual([]);
+    }
+    expect(rows.every(row => row.isUnread)).toBe(true);
+  });
+  it('defaults to all and toggles independently through all off, preserving active search', () => {
+    const store = { ...autopilotOverviewManagerMixin, deckInboxSearchQuery: 'needle', startWorkspaceLiveQueries: vi.fn() };
+    expect(types.every(type => store.isDeckInboxTypeVisible(type))).toBe(true);
+    for (const type of types) store.toggleDeckInboxType(type);
+    expect(store.deckInboxType).toEqual([]);
+    expect(store.deckInboxSearchQuery).toBe('needle');
+    expect(store.deckInboxVisibleCount).toBe(50);
+    store.toggleDeckInboxType('file');
+    expect(store.deckInboxType).toEqual(['file']);
+    expect(store.startWorkspaceLiveQueries).toHaveBeenCalledTimes(5);
+  });
+  it('preserves a legacy in-memory single selection on the first toggle', () => {
+    const store = { ...autopilotOverviewManagerMixin, deckInboxType: 'task' };
+    store.toggleDeckInboxType('file');
+    expect(store.deckInboxType).toEqual(['task', 'file']);
+    store.toggleDeckInboxType('task');
+    expect(store.deckInboxType).toEqual(['file']);
+  });
+});

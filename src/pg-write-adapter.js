@@ -1,3 +1,4 @@
+import { requestTowerPgContext } from './api.js';
 import {
   createTowerPgChannelAudioNote,
   createTowerPgChannelDoc,
@@ -847,4 +848,22 @@ export async function archiveTowerPgThreadFromLocal(store, parentMessage, archiv
     ...pgRequestOptions(context),
   });
   return result.thread;
+}
+
+export async function writeTowerPgContext(store, operation, input) {
+  const context = resolveTowerPgWorkspaceContext(store);
+  const id = encodeURIComponent(input.componentId || '');
+  const routes = {
+    create: ['POST', ''], update: ['PATCH', `/${id}`],
+    attach: ['POST', `/${id}/references`],
+    unlink: ['DELETE', `/${id}/references/${encodeURIComponent(input.referenceId || '')}`],
+    delete: ['POST', `/${id}/delete`],
+  };
+  const route = routes[operation];
+  if (!route || !input.scopeId || operation !== 'create' && !input.componentId
+    || operation === 'unlink' && !input.referenceId) throw new Error('Invalid context command');
+  // No optimistic hierarchy, offline queue or inferred delete confirmation.
+  return requestTowerPgContext(context.workspaceId, input.scopeId, route[1], {
+    ...pgRequestOptions(context), method: route[0], body: input.body,
+  });
 }
