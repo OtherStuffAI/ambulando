@@ -7,7 +7,7 @@ const INDEX_PATH = resolve(process.cwd(), 'index.html');
 const STYLES_PATH = resolve(process.cwd(), 'src/styles.css');
 
 describe('Deck card Mark read action', () => {
-  it('renders Mark done only for review tasks in Inbox while preserving other read actions', () => {
+  it('renders separate read and done actions for review tasks while preserving other read actions', () => {
     const html = readFileSync(INDEX_PATH, 'utf8');
     const summary = html.slice(
       html.indexOf('data-testid="flightdeck-summary-inbox"'),
@@ -37,7 +37,7 @@ describe('Deck card Mark read action', () => {
     expect(inboxTask).toContain('<template x-if="item.taskState === \'review\'">');
     expect(inboxTask).toContain('markDeckReviewTaskDone(item.recordId)');
     expect(inboxTask).toContain('>Mark done</button>');
-    expect(inboxTask).toContain('<template x-if="item.taskState !== \'review\'">');
+    expect(inboxTask).not.toContain('<template x-if="item.taskState !== \'review\'">');
     expect(inboxTask).toContain("markDeckResourceRead('task', item.recordId)");
   });
 
@@ -81,6 +81,22 @@ describe('Deck card Mark read action', () => {
     expect(store.markTaskRead).toHaveBeenCalledWith('task-1');
     expect(store.markDocRead).toHaveBeenCalledOnce();
     expect(store.markDocRead).toHaveBeenCalledWith('doc-1');
+  });
+
+  it('acknowledges review activity without patching state or opening the task and preserves failures', async () => {
+    const task = { record_id: 'review-1', state: 'review', activity_version: 7 };
+    const store = {
+      isTowerPgMode: true, currentWorkspace: { pgBackendMode: true }, tasks: [task],
+      markTaskRead: unreadStoreMixin.markTaskRead,
+      markTowerPgResourceViewed: vi.fn().mockResolvedValueOnce(true).mockResolvedValueOnce(false),
+      applyTaskPatch: vi.fn(), openAutopilotOverviewTask: vi.fn(),
+    };
+    await expect(unreadStoreMixin.markDeckResourceRead.call(store, 'task', task.record_id)).resolves.toBe(true);
+    await expect(unreadStoreMixin.markDeckResourceRead.call(store, 'task', task.record_id)).resolves.toBe(false);
+    expect(store.markTowerPgResourceViewed).toHaveBeenCalledWith('task', 'review-1', 7);
+    expect(task).toEqual({ record_id: 'review-1', state: 'review', activity_version: 7 });
+    expect(store.applyTaskPatch).not.toHaveBeenCalled();
+    expect(store.openAutopilotOverviewTask).not.toHaveBeenCalled();
   });
 
   it('marks a review task done before clearing its read state', async () => {

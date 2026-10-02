@@ -114,9 +114,18 @@ try {
   const read=cards.nth(2).getByRole('button',{name:'Mark read',exact:true}); await read.focus(); await page.keyboard.press('Enter');
   await page.waitForFunction(()=>!window.probeStore.visibleAutopilotOverviewInbox[2].isUnread);
   assert(!(await cards.nth(2).getAttribute('class')).includes('inbox-unread'));
-  await cards.nth(4).getByRole('button',{name:'Mark done',exact:true}).click();
+  const review = cards.nth(4);
+  assert.equal(await review.getByRole('button', {name:'Mark done',exact:true}).count(), 1);
+  const reviewRead = review.getByRole('button', {name:'Mark read',exact:true});
+  await reviewRead.focus(); await page.keyboard.press('Space');
+  await page.waitForFunction(()=>!window.probeStore.visibleAutopilotOverviewInbox[4].isUnread);
+  assert.equal(await page.evaluate(()=>window.probeStore.visibleAutopilotOverviewInbox[4].taskState), 'review');
+  assert(!(await review.getAttribute('class')).includes('inbox-unread'));
+  await page.evaluate(()=>window.probeStore.visibleAutopilotOverviewInbox[4].isUnread=true);
+  await review.getByRole('button',{name:'Mark done',exact:true}).focus();
+  await page.keyboard.press('Enter');
   await cards.nth(5).click();
-  assert.deepEqual(await page.evaluate(()=>window.calls),[['task','1'],['file','2'],['chat','3','implementation'],['read','thread','3'],['done','5'],['document','6']]);
+  assert.deepEqual(await page.evaluate(()=>window.calls),[['task','1'],['file','2'],['chat','3','implementation'],['read','thread','3'],['read','task','5'],['done','5'],['document','6']]);
  }
  assert.deepEqual(errors,[]); console.log(JSON.stringify({browser:browser.version(),results,errors},null,2));
 } finally {await browser.close();await rm(temporary,{recursive:true,force:true});}

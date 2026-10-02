@@ -2370,6 +2370,13 @@
         "Reconcile missing activity and workroom targets without blocking valid messages. Retain real errors and retry failed updates after connectivity recovers.",
         "Preserve Feed subscriptions during recovery from snapshots that do not include Feed families, and keep reader identity and permissions intact across the worker boundary."
       ]
+    },
+    {
+      "buildNumber": 2133,
+      "label": "Acknowledge review tasks without completing them",
+      "notes": [
+        "Review task cards in the Deck Inbox now offer Mark read alongside Mark done. Mark read clears unread activity without opening the task or changing its review state."
+      ]
     }
   ]
 }
