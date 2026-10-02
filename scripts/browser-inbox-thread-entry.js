@@ -33,7 +33,7 @@ window.startThreadProbe = async ({ worker, workspaceId }) => {
   const store = Alpine.store('chat');
   window.probeStore = store;
   const client = new TowerPgMaterializationWorkerClient({ workspaceKey: 'inbox-browser', workerFactory: () => new Worker(`/assets/${worker}`, { type: 'module' }) });
-  window.materializeThreadProbe = bundle => client.materialize({ workspaceDbKey: 'inbox-browser', store: { workspaceOwnerNpub: 'npub1owner', currentWorkspace: { workspaceId } }, bundle });
+  window.materializeThreadProbe = bundle => client.materialize({ workspaceDbKey: 'inbox-browser', store: { workspaceOwnerNpub: 'npub1owner', session: { npub: 'npub1viewer' }, currentWorkspace: { workspaceId } }, bundle });
   window.threadReads = [];
   window.threadRemote = {};
   store._towerSyncService = new TowerSyncService({ workspaceKey: [store.backendUrl, store.workspaceDbKey, workspaceId].join('|'), families: {

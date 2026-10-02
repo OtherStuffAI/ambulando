@@ -364,7 +364,7 @@ export function buildAutopilotOverviewThreads({
   );
   const threadRows = new Map();
 
-  for (const message of Array.isArray(messages) ? messages : []) {
+  for (const message of new Map((Array.isArray(messages) ? messages : []).map(row => [row?.record_id, row])).values()) {
     if (!message?.record_id || message.record_state === 'deleted') continue;
     const channel = channelById.get(message.channel_id);
     if (!channel) continue;
@@ -376,7 +376,8 @@ export function buildAutopilotOverviewThreads({
     const existing = threadRows.get(threadId);
     const messageTs = timestampMs(message.updated_at);
     const existingTs = timestampMs(existing?.latestMessageUpdatedAt);
-    const isPersistedThread = message.pg_record_type === 'thread' || Boolean(normalizeString(message.title) && message.pg_thread_id && !message.parent_message_id);
+    const isMetadata = message.pg_record_type === 'thread';
+    const isPersistedThread = isMetadata || Boolean(normalizeString(message.title) && message.pg_thread_id && !message.parent_message_id);
     const isThreadRoot = !message.parent_message_id || message.record_id === threadId || isPersistedThread;
     const rootTitle = normalizeString(message.title || message.subject || message.body);
 
@@ -387,13 +388,15 @@ export function buildAutopilotOverviewThreads({
         channelLabel: overviewChannelLabel(channel, { getChannelLabel, getParticipants, getSenderName, sessionNpub }),
         scopeId: channelScopeId || null,
         title: rootTitle || '(empty thread)',
-        latestMessage: normalizeString(message.body),
-        latestMessageUpdatedAt: message.updated_at || '',
-        latestMessageSender: message.sender_npub || '',
-        messageBodies: [normalizeString(message.body)],
-        messageCount: 1,
+        latestMessage: isMetadata ? '' : normalizeString(message.body),
+        latestMessageUpdatedAt: isMetadata ? '' : message.updated_at || '',
+        latestMessageSender: isMetadata ? '' : message.sender_npub || '',
+        messageBodies: isMetadata ? [] : [normalizeString(message.body)],
+        messageCount: isMetadata ? 0 : 1,
         rootRecordId: isThreadRoot ? message.record_id : (normalizeString(message.parent_message_id) || threadId),
         hasPersistedTitle: isPersistedThread,
+        hasMetadataTitle: isMetadata,
+        isBranch: Boolean(isMetadata && message.pg_parent_thread_id),
         isUnread: resourceViewStateMode
           ? unreadThreadMap?.[threadId] === true
           : unreadChannelMap?.[message.channel_id] === true,
@@ -401,20 +404,27 @@ export function buildAutopilotOverviewThreads({
       continue;
     }
 
-    existing.messageCount += 1;
-    existing.messageBodies.push(normalizeString(message.body));
+    if (!isMetadata) {
+      existing.messageCount += 1;
+      existing.messageBodies.push(normalizeString(message.body));
+      if (isThreadRoot && !existing.isBranch) existing.rootRecordId = message.record_id;
+    }
+    if (isMetadata && message.pg_parent_thread_id) {
+      existing.isBranch = true;
+      existing.rootRecordId = message.record_id;
+    }
     existing.isUnread = existing.isUnread || (resourceViewStateMode
       ? unreadThreadMap?.[threadId] === true
       : unreadChannelMap?.[message.channel_id] === true);
-    if (isPersistedThread && rootTitle) {
+    if (isPersistedThread && rootTitle && (isMetadata || !existing.hasMetadataTitle)) {
       existing.title = rootTitle;
-      existing.rootRecordId = message.record_id;
       existing.hasPersistedTitle = true;
+      existing.hasMetadataTitle = isMetadata;
     } else if (isThreadRoot && rootTitle && !existing.hasPersistedTitle) {
       existing.title = rootTitle;
       existing.rootRecordId = message.record_id;
     }
-    if (messageTs > existingTs || (messageTs === existingTs && String(message.record_id).localeCompare(String(existing.id)) > 0)) {
+    if (!isMetadata && (messageTs > existingTs || (messageTs === existingTs && String(message.record_id).localeCompare(String(existing.id)) > 0))) {
       existing.latestMessage = normalizeString(message.body);
       existing.latestMessageUpdatedAt = message.updated_at || '';
       existing.latestMessageSender = message.sender_npub || '';

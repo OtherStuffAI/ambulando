@@ -38,6 +38,29 @@ allow SSE echo and refresh, and switch conversations during a delayed send.
 Verify draft isolation and scroll position in desktop and mobile layouts.
 Source and build validation does not establish installed-client activation.
 
+## Titles, local content and history refresh
+
+Thread rows in `chat_messages` carry title and transcript membership metadata.
+They are retained for headers and branch authority, but never counted as authored
+messages or rendered as message bubbles. Overview roots prefer the real source
+for ordinary threads and the thread identity for branches. Detail projections
+retain title metadata alongside bounded latest content, deduplicate by record ID
+and exclude a separately rendered real parent from the effective reply list.
+Identical message bodies remain distinct records.
+
+Inbox opening keeps only matching selected-thread content, then the dedicated
+Dexie live query reads the latest rows. Own replies can display even with a
+partially cached root; inherited rows still require effective membership.
+Profile enrichment is deferred until after local publication. Initial loading
+appears only without local content; remote refresh has a separate status.
+Selection/workspace generations continue to guard publication and pagination.
+
+Persisted history coverage restores continuation on reopening. Automatic
+first-page reads can reuse coverage for 30 seconds while thread lineage,
+version, activity version and workspace authority match. Explicit history
+expansion remains force-loaded. Authority changes, expired coverage and thread
+updates trigger revalidation without gating the local content projection.
+
 ## Validation checkpoint
 
 - `bun run test tests/chat-message-manager.test.js tests/inbox-thread-history.test.js tests/chat-presentation-cache.test.js tests/section-live-queries.test.js`: 226 passed, including both real workspace-switch completion cases.

@@ -4439,7 +4439,8 @@
                 <p>Your first message starts this thread in <strong x-text="'#' + ($store.chat.getChannelLabel($store.chat.activeThreadChannel) || 'channel')"></strong>.</p>
               </div>
               <div class="thread-replies" data-thread-replies x-show="!$store.chat.deckThreadComposerOpen">
-                <p x-show="$store.chat.threadHistoryLoading || $store.chat.threadHistoryLoadAll" role="status">Loading conversation history…</p>
+                <p x-show="($store.chat.threadHistoryLoading && !$store.chat.threadHasLocalContent) || $store.chat.threadHistoryLoadAll" role="status">Loading conversation history…</p>
+                <p x-show="$store.chat.threadHistoryLoading && $store.chat.threadHasLocalContent && !$store.chat.threadHistoryLoadAll" role="status">Refreshing conversation…</p>
                 <p x-show="$store.chat.threadHistoryError" x-text="$store.chat.threadHistoryError" role="alert"></p>
                 <button
                   type="button"
@@ -4449,7 +4450,7 @@
                   :aria-busy="($store.chat.threadHistoryLoading || $store.chat.threadHistoryLoadAll).toString()"
                   @click="$store.chat.showMoreThreadMessages()"
                 >Load all messages in thread</button>
-                <template x-if="$store.chat.getThreadParentMessage()">
+                <template x-if="$store.chat.getThreadParentMessage() && $store.chat.getThreadParentMessage().pg_record_type !== 'thread'">
                   <div class="thread-message" :class="{ 'thread-message-focused': $store.chat.isFocusedMessage($store.chat.getThreadParentMessage()?.record_id) }" :data-thread-message-id="$store.chat.getThreadParentMessage()?.record_id || ''">
                     <div class="chat-msg-actions-menu" @click.outside="$store.chat.isMessageActionsMenuOpen($store.chat.getThreadParentMessage()?.record_id) && $store.chat.closeMessageActionsMenu()">
                       <button type="button" class="chat-msg-actions-toggle" title="Message actions" aria-label="Message actions" @click.stop="$store.chat.toggleMessageActionsMenu($store.chat.getThreadParentMessage()?.record_id)">

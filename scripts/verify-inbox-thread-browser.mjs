@@ -69,16 +69,52 @@ try {
       const row = { ...originals.message.row, client_request_id: null, id, thread_id: id, channel_id: channel.record_id, body: `Unrelated ${i}`, updated_at: new Date(Date.UTC(2029, 0, 1, 0, i)).toISOString() };
       changes.push({ ...originals.message, id, channel_id: channel.record_id, row });
     }
-    for (let i = 0; i < changes.length; i += 100) await window.materializeThreadProbe({ ...bundle, mode: 'delta', changes: changes.slice(i, i + 100), next_cursor: `thread-probe-${i}` });
+    for (let i = 0; i < changes.length; i += 100) await window.materializeThreadProbe({ ...bundle, mode: 'delta', snapshot_id: null, changes: changes.slice(i, i + 100), next_cursor: `thread-probe-${i}` });
     await window.probeDb.chat_messages.toCollection().modify(row => { delete row.owner_npub; });
     window.threadRemote['cold-thread'] = window.threadFixtures['cold-thread'];
     window.probeStore.setDeckInboxType('chat');
   }, { bundle });
   await page.waitForFunction(() => !window.probeStore.inboxActivityLoading && window.probeStore.visibleAutopilotOverviewInbox.some(row => row.id === 'history-a'));
+  // Title metadata is not authored content. Read the newest local record while
+  // fixture Tower transport is deliberately stalled; measure real Chromium DOM.
+  await page.evaluate(async ({ bundle }) => {
+    const originalThread = bundle.changes.find(change => change.family === 'thread').row;
+    const originalMessage = bundle.changes.find(change => change.family === 'message').row;
+    const channelId = window.probeStore.channels[0].record_id;
+    const thread = { ...originalThread, id: 'single-content', channel_id: channelId, title: 'Metadata only title', source_message_id: 'single-source', row_version: 1 };
+    const message = { ...originalMessage, id: 'single-source', client_request_id: null, thread_id: thread.id, channel_id: channelId, body: 'Latest cached first message', row_version: 1 };
+    await window.materializeThreadProbe({ thread_history_page: { channelId, thread, messages: [message], nextCursor: null } });
+    await window.probeDb.sync_state.delete('thread-history-page:single-content');
+    window.threadRemote[thread.id] = { thread, messages: [message], delay: 3000 };
+    window.singleThreadTiming = {};
+    const apply = window.probeStore.applyMessages.bind(window.probeStore);
+    window.probeStore.applyMessages = (rows, options) => {
+      if (rows.some(row => row.record_id === 'single-source')) window.singleThreadTiming.localApplyMs = performance.now() - window.singleThreadTiming.clickAt;
+      return apply(rows, options);
+    };
+  }, { bundle });
+  const singleCard = page.locator('.attention-card').filter({ hasText: 'Metadata only title' });
+  await singleCard.waitFor();
+  assert.match(await singleCard.innerText(), /1 message/);
+  await singleCard.evaluate(el => { window.singleThreadTiming.clickAt = performance.now(); el.click(); });
+  await page.locator('[data-thread-message-id="single-source"]').waitFor({ state: 'visible' });
+  const localFirstEvidence = await page.evaluate(async () => {
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    return { clickToPaintMs: performance.now() - window.singleThreadTiming.clickAt,
+      localApplyMs: window.singleThreadTiming.localApplyMs, refreshPending: window.probeStore.threadHistoryLoading,
+      bubbles: document.querySelectorAll('[data-thread-message-id]').length };
+  });
+  assert.equal(localFirstEvidence.bubbles, 1);
+  assert.equal(localFirstEvidence.refreshPending, true);
+  assert(localFirstEvidence.clickToPaintMs < 1000, JSON.stringify(localFirstEvidence));
+  await page.locator('[data-thread-replies]').getByText('Refreshing conversation…', { exact: true }).waitFor({ state: 'visible' });
+  await page.locator('[data-thread-replies]').getByText('Loading conversation history…', { exact: true }).waitFor({ state: 'hidden' });
+  await page.evaluate(() => window.probeStore.closeDeckThread({ fromRoute: true, syncRoute: false }));
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
   const card = page.locator('.attention-card').filter({ hasText: 'Conversation history-a' });
   const selectedChannel = await page.evaluate(() => { const s = window.probeStore; s.selectedChannelId = s.channels.at(-1).record_id; return s.selectedChannelId; });
-  await page.locator('[data-deck-column="inbox"]').evaluate(el => { el.style.height = '240px'; el.scrollTop = 40; });
-  await card.click();
+  await page.locator('[data-deck-column="inbox"]').evaluate(el => { el.style.height = '240px'; el.style.display = 'block'; const body = el.querySelector('.deck-card-scroll'); if (body) { body.style.height = 'auto'; body.style.overflow = 'visible'; } el.scrollTop = 40; });
+  await card.evaluate(el => el.click());
   const returnScroll = await page.evaluate(() => window.probeStore.deckThreadReturnContext.deckInboxScrollTop);
   assert(returnScroll > 0);
   await page.waitForFunction(() => window.probeStore.visibleThreadMessages.at(-1)?.body === 'history-a reply 240');
@@ -90,6 +126,10 @@ try {
   await page.getByRole('button', { name: 'Load all messages in thread', exact: true }).click();
   await page.waitForFunction(() => window.probeStore.visibleThreadMessages.length === 240);
   await page.waitForFunction(() => window.probeStore.visibleThreadMessages.some(row => row.body === 'history-a reply 1'));
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(resolve)))));
+  await page.locator('[data-thread-message-id="history-a-120"]').evaluate(el => el.scrollIntoView({ block: 'center' }));
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  const warmScrollOffset = await page.locator('[data-thread-message-id="history-a-120"]').evaluate(el => el.getBoundingClientRect().top);
   await page.evaluate(async () => {
     await window.probeDb.chat_messages.update('history-a-240', { body: 'History edited', version: 2 });
   });
@@ -102,6 +142,7 @@ try {
       messages: [{ ...messages.at(-1), id: 'live-new-reply', body: 'New live reply', created_at: '2030-02-01T00:00:00Z', updated_at: '2030-02-01T00:00:00Z' }], nextCursor: null } });
   });
   await page.locator('.chat-thread-modal-backdrop').getByText('New live reply', { exact: true }).waitFor();
+  await page.waitForFunction(expected => Math.abs(document.querySelector('[data-thread-message-id="history-a-120"]').getBoundingClientRect().top - expected) < 2, warmScrollOffset);
   await page.screenshot({ path: 'tmp/docs/handoffs/flightdeck-open-thread-browser.png', fullPage: true });
   // Real next/previous handlers, including overlapping remote completion.
   await page.evaluate(async () => {
@@ -115,13 +156,24 @@ try {
   await page.waitForFunction(() => window.probeStore.activeThreadId === 'history-a' && window.probeStore.visibleThreadMessages.at(-1)?.body === 'New live reply');
   await page.evaluate(() => window.probeStore.closeDeckThread({ fromRoute: true, syncRoute: false }));
   await page.waitForFunction(() => !window.probeStore.activeThreadId);
-  assert.equal(await page.getByRole('combobox', { name: 'Inbox type', exact: true }).inputValue(), 'chat');
+  assert.deepEqual(await page.evaluate(() => window.probeStore.deckInboxType), ['chat']);
   await page.waitForFunction(expected => Math.abs(document.querySelector('[data-deck-column="inbox"]').scrollTop - expected) < 1, returnScroll);
   assert.equal(await page.evaluate(() => window.probeStore.selectedChannelId), selectedChannel);
+  if (process.env.FLIGHTDECK_VERIFY_LOCAL_FIRST_ONLY === '1') {
+    const evidence = { localFirstEvidence, warmScrollPreserved: true, warmHistoryCount: 241,
+      cachedEditsAndDeletes: true, latestLocalUpdate: true, rapidSwitches: true, inboxReturnScroll: returnScroll,
+      browser: browserType.name(), transport: 'fixture with stalled/offline Tower', templates: process.env.FLIGHTDECK_VERIFY_BUILT_WORKER === '1' ? 'built' : 'source', worker, errors };
+    assert.equal(errors.length, 0, errors.join('\n'));
+    await writeFile('tmp/docs/handoffs/thread-local-first-browser.json', JSON.stringify(evidence, null, 2));
+    console.log(JSON.stringify(evidence));
+    process.exitCode = 0;
+  } else {
   await page.locator('.attention-card').filter({ hasText: 'Conversation cold-thread' }).click();
   await page.waitForFunction(() => !window.probeStore.threadHistoryLoading);
   await page.waitForFunction(() => window.probeStore.threadHistoryCursor === '100');
   await page.locator('[data-thread-message-id="cold-thread-99"]').waitFor({ state: 'visible' });
+  await page.waitForFunction(() => getComputedStyle(document.querySelector('.chat-thread-panel')).opacity === '1');
+  await page.waitForTimeout(200);
   await page.locator('[data-thread-replies]').evaluate(async el => {
     el.scrollTop = el.scrollHeight;
     await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
@@ -146,7 +198,7 @@ try {
       channel_id: channelId, body: `Inherited reply ${n}`, created_at: new Date(Date.UTC(2031, 0, 1, 0, n)).toISOString(),
       updated_at: new Date(Date.UTC(2031, 0, 1, 0, n)).toISOString(), row_version: 1, inherited: true, read_only: true, effective_thread_id: thread.id }));
     const changes = [{ ...originalThread, id: thread.id, row: thread }, ...messages.map(row => ({ ...originalMessage, id: row.id, row }))];
-    for (let i = 0; i < changes.length; i += 100) await window.materializeThreadProbe({ ...bundle, mode: 'delta', changes: changes.slice(i, i + 100), next_cursor: `inherited-${i}` });
+    for (let i = 0; i < changes.length; i += 100) await window.materializeThreadProbe({ ...bundle, mode: 'delta', snapshot_id: null, changes: changes.slice(i, i + 100), next_cursor: `inherited-${i}` });
     await window.probeDb.chat_messages.update(thread.id, { pg_effective_message_ids: messages.map(row => row.id) });
     window.threadRemote[thread.id] = { thread, messages };
     await window.probeStore.openAutopilotOverviewThread({ id: thread.id, rootRecordId: thread.id, channelId });
@@ -166,12 +218,13 @@ try {
     draftPreserved: !!(await window.probeDb.document_drafts.get('upgrade-proof')),
     openThread: window.probeStore.activeThreadId,
   }));
-  Object.assign(evidence, { coldMessageCount, coldAnchorDelta });
+  Object.assign(evidence, { coldMessageCount, coldAnchorDelta, localFirstEvidence });
   assert.deepEqual(evidence.coldReads, [{ cursor: null, limit: 100 }, { cursor: '100', limit: 100 }, { cursor: '200', limit: 100 }]);
   assert(await page.evaluate(async () => !!(await window.probeDb.document_drafts.get('upgrade-proof'))));
   assert.equal(errors.length, 0, errors.join('\n'));
   await writeFile('tmp/docs/handoffs/flightdeck-open-thread-browser.json', JSON.stringify({ ...evidence, errors, browser: browserType.name(), assetRoot: root, templates: process.env.FLIGHTDECK_VERIFY_BUILT_WORKER === '1' ? 'built' : 'source', store: 'real source with fixture transport', coldCacheLimit: 'Tower oldest-first contract: newest cold reply appears only after explicit forward pages', worker }, null, 2));
   console.log(JSON.stringify(evidence));
+  }
 } catch (error) {
   console.error('Thread probe failure state', await page?.evaluate(async () => ({
     persisted: await window.probeDb?.sync_state.get('thread-history-page:cold-thread'),

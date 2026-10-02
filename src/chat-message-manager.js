@@ -10,6 +10,7 @@ import {
   getMessagesByChannel,
   getMessagePresentationWindowByChannels,
   getThreadMessagePresentationWindow,
+  getThreadHistoryCoverage,
   getCurrentWorkspaceDbKey,
   withWorkspaceMessageTransaction,
   getMessageById,
@@ -64,7 +65,7 @@ import {
   deleteTowerPgThreadFromLocal,
   updateTowerPgThreadTitleFromLocal,
 } from './tower-command-intents.js';
-import { resolveTowerPgWorkspaceContext } from './pg-read-hydrator.js';
+import { resolveTowerPgWorkspaceContext, towerPgSyncCursorKey } from './pg-read-hydrator.js';
 import { resolvePgThreadId } from './pg-record-context.js';
 import { buildSectionUrl, parseRouteLocation } from './route-helpers.js';
 import {
@@ -370,7 +371,7 @@ function getChatDerivedState(store) {
   const threadRepliesByParentId = new Map();
   for (const message of messages) {
     const parentMessageId = String(message?.parent_message_id || '').trim();
-    if (!parentMessageId) continue;
+    if (!parentMessageId || message.pg_record_type === 'thread') continue;
     const replies = threadRepliesByParentId.get(parentMessageId) || [];
     replies.push(message);
     threadRepliesByParentId.set(parentMessageId, replies);
@@ -383,7 +384,7 @@ function getChatDerivedState(store) {
     ? messages.find((message) => message?.record_id === activeThreadId) || null
     : null;
   const effectiveMessageIds = Array.isArray(activeThreadRecord?.pg_effective_message_ids)
-    ? activeThreadRecord.pg_effective_message_ids.map(String)
+    ? [...new Set(activeThreadRecord.pg_effective_message_ids.map(String))]
     : [];
   const messageById = new Map(messages.map((message) => [String(message?.record_id || ''), message]));
   let threadMessages;
@@ -391,7 +392,7 @@ function getChatDerivedState(store) {
     const effectiveIdSet = new Set(effectiveMessageIds);
     const effectiveMessages = effectiveMessageIds
       .map((messageId) => messageById.get(messageId))
-      .filter(Boolean);
+      .filter(message => message && message.pg_record_type !== 'thread' && message.record_id !== activeThreadId);
     const newlyOwnedMessages = (threadRepliesByParentId.get(activeThreadId) || [])
       .filter((message) => !effectiveIdSet.has(String(message?.record_id || '')));
     threadMessages = newlyOwnedMessages.length > 0
@@ -1692,7 +1693,13 @@ export const chatMessageManagerMixin = {
     this.threadHistoryLoading = false;
     this.threadHistoryLoadAll = false;
     this.activeThreadId = recordId;
-    if (this.navSection === 'status' && this.deckThreadChannelId) this.messages = [];
+    if (this.navSection === 'status' && this.deckThreadChannelId) {
+      // Retain only this selection. Dexie liveQuery publishes the latest rows;
+      // never reuse an unvalidated cross-thread presentation cache.
+      const threadId = this.deckThreadTowerId || message?.pg_thread_id || recordId;
+      this.messages = this.messages.filter(row => row.channel_id === this.deckThreadChannelId
+        && (row.pg_thread_id === threadId || row.record_id === recordId || row.parent_message_id === recordId));
+    }
     this.threadMenuOpen = false;
     this.threadTitleEditing = false;
     this.threadTitleError = '';
@@ -1706,7 +1713,7 @@ export const chatMessageManagerMixin = {
       this.threadHistoryCursor = null;
       this.threadHistoryError = '';
       this.threadHistoryLoading = false;
-      void this.loadDeckThreadHistoryPage();
+      void this.loadDeckThreadHistoryPage({ initial: true });
     }
     const actualThreadId = String(message?.pg_thread_id
       || (this.navSection === 'status' ? this.deckThreadTowerId : '') || '').trim();
@@ -1717,7 +1724,7 @@ export const chatMessageManagerMixin = {
     if (options.syncRoute !== false) this.syncRoute();
   },
 
-  async loadDeckThreadHistoryPage({ all = false } = {}) {
+  async loadDeckThreadHistoryPage({ all = false, initial = false } = {}) {
     if (this.threadHistoryLoading || !this.requestTowerSyncFamily) return;
     const rootId = this.activeThreadId;
     const channelId = this.navSection === 'status' ? this.deckThreadChannelId : this.selectedChannelId;
@@ -1733,9 +1740,17 @@ export const chatMessageManagerMixin = {
     try {
       if (!threadId) threadId = (await getMessageById(rootId))?.pg_thread_id || rootId;
       if (!isCurrent()) return;
+      if (initial) {
+        const coverage = await getThreadHistoryCoverage(channelId, threadId, `${towerPgSyncCursorKey(this)}:record-delta-v1`);
+        if (!isCurrent()) return;
+        this.threadHistoryCursor = coverage?.nextCursor || null;
+        if (coverage?.fresh) return;
+      }
       const seen = new Set();
+      let firstPage = initial;
       do {
-        const cursor = this.threadHistoryCursor || null;
+        const cursor = firstPage ? null : this.threadHistoryCursor || null;
+        firstPage = false;
         seen.add(cursor);
         const result = await this.requestTowerSyncFamily('thread-history-page', `${channelId}:${threadId}:${cursor || 'first'}`, {
           channelId, threadId, cursor, limit: 100, force: all,
@@ -1933,7 +1948,18 @@ export const chatMessageManagerMixin = {
   },
 
   getThreadMessageCount(recordId) {
-    return 1 + this.getThreadReplyCount(recordId);
+    const root = this.messages.find(row => row.record_id === recordId);
+    const ids = new Set(this.getThreadReplies(recordId).map(row => row.record_id));
+    if (root && root.pg_record_type !== 'thread') ids.add(root.record_id);
+    for (const id of root?.pg_effective_message_ids || []) {
+      if (this.messages.some(row => row.record_id === id && row.pg_record_type !== 'thread')) ids.add(id);
+    }
+    return ids.size;
+  },
+
+  get threadHasLocalContent() {
+    return Boolean(this.getThreadParentMessage()?.pg_record_type !== 'thread' && this.getThreadParentMessage())
+      || this.threadMessages.length > 0;
   },
 
   getThreadCardTitle(message) {

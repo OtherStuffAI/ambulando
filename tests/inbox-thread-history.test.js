@@ -2,9 +2,9 @@ import { threadHistoryLineage } from '../src/thread-history-coverage.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { liveQuery } from 'dexie';
 import { openWorkspaceDb, deleteWorkspaceDb, getWorkspaceDb, getThreadMessagePresentationWindow } from '../src/db.js';
-import { mapPgThreadToLocal, mapPgMessageToLocal, readTowerPgThreadHistoryPage, hydrateTowerPgSyncBundle } from '../src/pg-read-hydrator.js';
+import { mapPgThreadToLocal, mapPgMessageToLocal, readTowerPgThreadHistoryPage, hydrateTowerPgSyncBundle, towerPgSyncCursorKey } from '../src/pg-read-hydrator.js';
 import { chatMessageManagerMixin } from '../src/chat-message-manager.js';
-import { autopilotOverviewManagerMixin } from '../src/autopilot-overview-manager.js';
+import { buildAutopilotOverviewThreads, autopilotOverviewManagerMixin } from '../src/autopilot-overview-manager.js';
 import { sectionLiveQueryMixin } from '../src/section-live-queries.js';
 import { instrumentIndexedDb } from './helpers/indexeddb-metrics.js';
 import { TowerSyncService } from '../src/tower-sync-service.js';
@@ -40,6 +40,93 @@ function store() {
 }
 
 describe('real Inbox thread history path', () => {
+  it('counts and renders content once for metadata/source navigation, rename and identical bodies', async () => {
+    openWorkspaceDb(key); await seed('thread-a', 1);
+    const db = getWorkspaceDb();
+    await db.chat_messages.update('thread-a', { pg_effective_message_ids: ['thread-a-source'], title: 'Metadata title' });
+    const s = store();
+    for (const rootRecordId of ['thread-a', 'thread-a-source']) {
+      await s.openAutopilotOverviewThread({ id: 'thread-a', rootRecordId, channelId: 'channel-a' });
+      await vi.waitFor(() => expect(s.threadHasLocalContent).toBe(true));
+      const parent = s.getThreadParentMessage();
+      const bubbles = [...(parent?.pg_record_type !== 'thread' && parent ? [parent] : []), ...s.visibleThreadMessages];
+      expect(bubbles.map(row => row.record_id)).toEqual(['thread-a-source']);
+      expect(s.getThreadMessageCount(rootRecordId)).toBe(1);
+      expect(s.getActiveThreadTitle()).toBe('Metadata title');
+    }
+    await db.chat_messages.update('thread-a', { title: 'Renamed', body: 'Renamed', version: 2 });
+    await vi.waitFor(() => expect(s.getActiveThreadTitle()).toBe('Renamed'));
+    const rows = await db.chat_messages.toArray();
+    const build = messages => buildAutopilotOverviewThreads({ channels: [{ record_id: 'channel-a' }], messages });
+    for (const messages of [rows, [...rows].reverse()]) {
+      expect(build(messages)[0]).toMatchObject({ messageCount: 1, rootRecordId: 'thread-a-source', title: 'Renamed', latestMessage: 'thread-a reply 0' });
+    }
+    await db.chat_messages.put({ ...rows.find(row => row.pg_record_type === 'message'), record_id: 'same-body', parent_message_id: 'thread-a-source' });
+    expect(build(await db.chat_messages.toArray())[0].messageCount).toBe(2);
+  });
+
+  it('renders source-less inherited branches without a title bubble and honors revocation', async () => {
+    openWorkspaceDb(key); await seed('ancestor', 3);
+    const db = getWorkspaceDb(); const s = store();
+    const thread = { ...rawThread('branch'), source_message_id: null, parent_thread_id: 'ancestor', branch_point_message_id: 'ancestor-2' };
+    await hydrateTowerPgSyncBundle(s, { thread_history_page: { channelId: 'channel-a', thread,
+      messages: [1, 2].map(n => ({ ...rawMessage('ancestor', n), inherited: true, read_only: true, effective_thread_id: 'branch' })), nextCursor: null } });
+    await s.openAutopilotOverviewThread({ id: 'branch', rootRecordId: 'branch', channelId: 'channel-a' });
+    await vi.waitFor(() => expect(s.visibleThreadMessages).toHaveLength(2));
+    expect(s.visibleThreadMessages.every(row => row.pg_record_type === 'message' && row.read_only)).toBe(true);
+    expect(s.getThreadMessageCount('branch')).toBe(2);
+    await db.pg_record_rows.put({ key: 'message:ancestor-2', family: 'message', id: 'ancestor-2', operation: 'delete' });
+    await vi.waitFor(() => expect(s.visibleThreadMessages.map(row => row.record_id)).toEqual(['ancestor-1']));
+    await db.pg_record_rows.put({ key: 'thread:branch', family: 'thread', id: 'branch', operation: 'delete' });
+    await vi.waitFor(() => expect(s.messages).toEqual([]));
+    expect(s.threadHasLocalContent).toBe(false);
+  });
+
+  it('publishes the latest local rows with stalled/offline refresh and retains matching content only', async () => {
+    openWorkspaceDb(key); await seed('thread-a', 12); await seed('thread-b', 2);
+    const s = store();
+    s.requestTowerSyncFamily = vi.fn(() => new Promise(() => {}));
+    await s.openAutopilotOverviewThread({ id: 'thread-a', rootRecordId: 'thread-a', channelId: 'channel-a' });
+    await vi.waitFor(() => expect(s.visibleThreadMessages.at(-1)?.body).toBe('thread-a reply 11'));
+    expect(s.threadHistoryLoading).toBe(true);
+    expect(s.threadHasLocalContent).toBe(true);
+    await getWorkspaceDb().chat_messages.update('thread-a-11', { body: 'Latest local inbox content', version: 2 });
+    await vi.waitFor(() => expect(s.visibleThreadMessages.at(-1)?.body).toBe('Latest local inbox content'));
+    s.openThread('thread-a', { scrollToLatest: false });
+    expect(s.visibleThreadMessages.at(-1)?.body).toBe('Latest local inbox content');
+    s.requestTowerSyncFamily = vi.fn(async () => { throw new Error('offline'); });
+    await s.openAutopilotOverviewThread({ id: 'thread-b', rootRecordId: 'thread-b', channelId: 'channel-a' });
+    expect(s.messages.some(row => row.pg_thread_id === 'thread-a')).toBe(false);
+    await vi.waitFor(() => expect(s.visibleThreadMessages.at(-1)?.body).toBe('thread-b reply 1'));
+    await vi.waitFor(() => expect(s.threadHistoryError).toBe('offline'));
+    expect(s.threadHasLocalContent).toBe(true);
+  });
+
+  it('restores fresh continuation and invalidates it on version/activity/authority or lineage changes', async () => {
+    openWorkspaceDb(key); await seed('thread-a', 3);
+    const s = store(); const db = getWorkspaceDb();
+    await hydrateTowerPgSyncBundle(s, { thread_history_page: { channelId: 'channel-a', thread: rawThread('thread-a'), messages: [rawMessage('thread-a', 0)], nextCursor: 'next' } });
+    const historyRead = vi.fn(async () => ({ nextCursor: 'next' }));
+    s.requestTowerSyncFamily = (family, ...args) => family === 'thread-history-page' ? historyRead(...args) : Promise.resolve();
+    const open = async () => {
+      await s.openAutopilotOverviewThread({ id: 'thread-a', rootRecordId: 'thread-a', channelId: 'channel-a' });
+      await vi.waitFor(() => expect(s.threadHistoryLoading).toBe(false));
+    };
+    await open();
+    expect(s.threadHistoryCursor).toBe('next');
+    expect(historyRead).not.toHaveBeenCalled();
+    await db.chat_messages.update('thread-a', { activity_version: 2 });
+    await open(); expect(historyRead).toHaveBeenCalledTimes(1);
+    expect(historyRead.mock.calls[0][1].cursor).toBeNull();
+    await db.chat_messages.update('thread-a', { activity_version: 0, version: 2 });
+    await open(); expect(historyRead).toHaveBeenCalledTimes(2);
+    await db.chat_messages.update('thread-a', { version: 1, pg_parent_thread_id: 'ancestor' });
+    await open(); expect(historyRead).toHaveBeenCalledTimes(3);
+    await db.chat_messages.update('thread-a', { pg_parent_thread_id: null });
+    await db.sync_state.put({ key: `${towerPgSyncCursorKey(s)}:record-delta-v1`, value: { cursor: 'new-authority' } });
+    await open(); expect(historyRead).toHaveBeenCalledTimes(4);
+  });
+
   it('opens canonical ownerless history beyond Inbox sources and selected-channel windows, pages and follows edits/deletes', async () => {
     openWorkspaceDb(key); await seed('thread-a', 241); await seed('thread-b', 131);
     const s = store();
@@ -49,7 +136,7 @@ describe('real Inbox thread history path', () => {
     expect(s.selectedChannelId).toBe('unrelated-channel');
     expect(s.markTowerPgResourceViewed).toHaveBeenCalledWith('thread', 'thread-a', undefined);
     expect(s.fileMessages).toEqual([]);
-    expect(s.messages.length).toBeLessThanOrEqual(8);
+    expect(s.messages.length).toBeLessThanOrEqual(9);
     await s.showMoreThreadMessages();
     await vi.waitFor(() => expect(s.visibleThreadMessages).toHaveLength(240));
     await vi.waitFor(() => expect(s.visibleThreadMessages.some(row => row.body === 'thread-a reply 1')).toBe(true));
@@ -228,7 +315,7 @@ describe('real Inbox thread history path', () => {
     const metrics = instrumentIndexedDb();
     try {
       const page = await getThreadMessagePresentationWindow('channel-a', 'wanted-source', { replyLimit: 6 });
-      expect(page).toHaveLength(8);
+      expect(page).toHaveLength(9);
       expect(metrics.snapshot().valueRowsRead).toBeLessThanOrEqual(18);
     } finally { metrics.restore(); }
   });
@@ -237,11 +324,14 @@ describe('real Inbox thread history path', () => {
     openWorkspaceDb(key); await seed('thread-a', 10); await seed('thread-b', 10);
     const s = store();
     const pending = [];
-    s.requestTowerSyncFamily = vi.fn(() => new Promise(resolve => pending.push(resolve)));
+    s.requestTowerSyncFamily = vi.fn((family) => family === 'thread-history-page' ? new Promise(resolve => pending.push(resolve)) : Promise.resolve());
     const row = id => ({ id, rootRecordId: id, channelId: 'channel-a' });
     await s.openAutopilotOverviewThread(row('thread-a'));
+    await vi.waitFor(() => expect(pending).toHaveLength(1));
     await s.openAutopilotOverviewThread(row('thread-b'));
+    await vi.waitFor(() => expect(pending).toHaveLength(2));
     await s.openAutopilotOverviewThread(row('thread-a'));
+    await vi.waitFor(() => expect(pending).toHaveLength(3));
     pending[0]({ nextCursor: 'stale-a' }); pending[1]({ nextCursor: 'stale-b' });
     await Promise.resolve();
     expect(s.threadHistoryCursor).toBeNull();

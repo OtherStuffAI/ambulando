@@ -1,6 +1,6 @@
 import { requestTowerPgContext } from './api.js';
 import { materializeFeedReaderEvent } from './feed/materialize.js';
-import { clampBranchEffectiveMessageIds, threadHistoryLineage, mergeThreadHistoryIds } from './thread-history-coverage.js';
+import { clampBranchEffectiveMessageIds, threadHistoryLineage, mergeThreadHistoryIds, threadHistoryAuthority as pgAuthorityToken } from './thread-history-coverage.js';
 import { FLIGHT_DECK_PG_APP_NPUB } from './app-identity.js';
 import { normalizeBackendUrl } from './utils/state-helpers.js';
 import {
@@ -2031,9 +2031,6 @@ function tagPgSnapshotRead(row, authority) {
     ? { ...row, pg_delta_generation: authority.generation } : row;
 }
 
-function pgAuthorityToken(state) {
-  return JSON.stringify([state?.incrementalSnapshot && state?.snapshotReconciliationPending ? state.generation : state?.cursor || null, state?.localGeneration || 0, Boolean(state?.resetting), Boolean(state?.staging), Boolean(state?.snapshotRetirement), state?.commandRevision || null]);
-}
 
 function pgReadAuthorityCancellation(message, code = 'pg_read_authority_changed') {
   return Object.assign(new Error(message), { code });
@@ -2309,7 +2306,7 @@ async function materializeThreadHistoryPage(store, page) {
     const nextCursor = advances ? page.nextCursor : priorCoverage.nextCursor;
     assertTowerPgWorkspaceCurrent(store, context);
     await replacePgMessagesForChannel(page.channelId, [...current, { ...thread, pg_effective_message_ids: ids }].map(row => tagPgSnapshotRead(row, authorityState)));
-    await db.sync_state.put({ key, value: { lineage, version: thread.version, nextCursor, messageIds: ids } });
+    await db.sync_state.put({ key, value: { lineage, version: thread.version, nextCursor, messageIds: ids, loadedAt: Date.now(), activityVersion: thread.activity_version, authority: pgAuthorityToken(authorityState) } });
     return { nextCursor, count: rows.length };
   });
 }

@@ -707,7 +707,7 @@ function buildDetailSpecs(store) {
       query,
       onNext: messages => {
         if (!isCurrent() || (store.threadVisibleReplyCount || store.THREAD_REPLY_PAGE_SIZE || 6) !== replyLimit) return;
-        const result = store.applyMessages(messages, { isCurrent, threadDetail: true });
+        const result = store.applyMessages(messages, { isCurrent, threadDetail: true, deferEnrichment: true });
         void store.startThreadLiveActivity?.();
         return result;
       },

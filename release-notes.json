@@ -2432,6 +2432,12 @@
       "notes": [
         "Count and display authored messages once, keeping thread titles in the header. Show the latest local conversation content while Tower refresh runs in the background, and reuse fresh history coverage on reopen."
       ]
+    },
+    {
+      "buildNumber": 2144,
+      "label": "Conversation fix validation checkpoint",
+      "notes": [],
+      "noUserVisibleChanges": true
     }
   ]
 }

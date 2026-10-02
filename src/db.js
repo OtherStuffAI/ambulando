@@ -1,4 +1,4 @@
-import { clampBranchEffectiveMessageIds, threadHistoryLineage, mergeThreadHistoryIds } from './thread-history-coverage.js';
+import { clampBranchEffectiveMessageIds, threadHistoryLineage, mergeThreadHistoryIds, threadHistoryAuthority } from './thread-history-coverage.js';
 import Dexie from 'dexie';
 import { taskIndexFields, compareIndexedTasks } from './task-index-keys.js';
 import {
@@ -958,6 +958,26 @@ export async function getMessagePresentationWindowByChannel(channelId, options =
   return buildThreadAwarePresentationWindow(presentationRows, { ...options, rootLimit: rootLimit + 1 });
 }
 
+// A fresh history page may suppress a repeated automatic first-page read only
+// while its lineage, version and workspace authority still match Dexie.
+export async function getThreadHistoryCoverage(channelId, threadId, authorityKey) {
+  const db = wsDb();
+  const [thread, coverage, authority, records] = await Promise.all([
+    db.chat_messages.get(threadId), db.sync_state.get(`thread-history-page:${threadId}`),
+    authorityKey ? db.sync_state.get(authorityKey) : null,
+    db.pg_record_rows.bulkGet([`thread:${threadId}`, `channel:${channelId}`]),
+  ]);
+  const value = coverage?.value;
+  if (!thread || thread.channel_id !== channelId || thread.record_state === 'deleted'
+    || value?.lineage !== threadHistoryLineage(thread)
+    || records.some(record => record?.operation === 'delete' || record?.row?.deleted_at)) return null;
+  const state = authority?.value;
+  return { ...value, fresh: value.version === thread.version
+    && value.activityVersion === thread.activity_version
+    && value.authority === threadHistoryAuthority(state)
+    && !state?.resetting && Date.now() - Number(value.loadedAt || 0) < 30_000 };
+}
+
 // A thread detail must not inherit the selected channel or Inbox source window.
 // Each parent key reads only the explicitly requested prefix plus one lookahead.
 export async function getThreadMessagePresentationWindow(channelId, rootId, options = {}) {
@@ -966,7 +986,7 @@ export async function getThreadMessagePresentationWindow(channelId, rootId, opti
   const threadId = String(options.threadId || root?.pg_thread_id || rootId || '').trim();
   const thread = threadId === rootId ? root : await db.chat_messages.get(threadId);
   const limit = Math.max(1, Number(options.replyLimit) || 6) + 1;
-  const keys = [...new Set([threadId, rootId].filter(Boolean))];
+  const keys = [...new Set([threadId, rootId, thread?.pg_source_message_id].filter(Boolean))];
   const pages = await Promise.all(keys.map(key => db.chat_messages
     .where('[cache_parent+cache_active+cache_time+record_id]')
     .between([key, 1, Dexie.minKey, Dexie.minKey], [key, 1, '\uffff', Dexie.maxKey])
@@ -981,8 +1001,8 @@ export async function getThreadMessagePresentationWindow(channelId, rootId, opti
   const source = sourceId && sourceId !== rootId ? await db.chat_messages.get(sourceId) : null;
   const parent = root || thread;
   if (thread?.record_state === 'deleted') return [];
-  if (!parent || parent.channel_id !== channelId || parent.record_state === 'deleted') return [];
-  const candidates = [...pages.flat(), ...effective, source].filter(Boolean);
+  if (parent && (parent.channel_id !== channelId || parent.record_state === 'deleted')) return [];
+  const candidates = [...pages.flat(), ...effective, source, parent].filter(Boolean);
   const authority = await db.pg_record_rows.bulkGet([`thread:${threadId}`, `channel:${channelId}`, ...candidates.map(row => `message:${row.record_id}`)]);
   const revoked = record => record && (record.operation === 'delete' || record.row?.deleted_at);
   if (revoked(authority[0]) || revoked(authority[1])) return [];
@@ -991,11 +1011,13 @@ export async function getThreadMessagePresentationWindow(channelId, rootId, opti
     if (revoked(authority[index + 2])) continue;
     // Indexed own-thread replies remain live; inherited rows require membership.
     if (row.pg_thread_id && row.pg_thread_id !== threadId && !clampedEffectiveIds.includes(row.record_id)) continue;
-    if (!row || row.channel_id !== channelId || row.record_state === 'deleted' || row.record_id === rootId) continue;
+    if (!row || row.channel_id !== channelId || row.record_state === 'deleted' || row.record_id === rootId || row.pg_record_type === 'thread') continue;
     rows.set(row.record_id, { ...row, parent_message_id: rootId });
   }
-  return [parent, ...[...rows.values()].sort((a, b) => String(a.updated_at || '').localeCompare(String(b.updated_at || ''))
-    || String(a.record_id).localeCompare(String(b.record_id))).slice(-limit)];
+  const parentAuthority = authority.at(-1);
+  const visibleParent = parent && !revoked(parentAuthority) ? parent : null;
+  return [visibleParent, ...(thread && thread !== parent ? [thread] : []), ...[...rows.values()].sort((a, b) => String(a.updated_at || '').localeCompare(String(b.updated_at || ''))
+    || String(a.record_id).localeCompare(String(b.record_id))).slice(-limit)].filter(Boolean);
 }
 
 export async function getMessagesByChannels(channelIds = [], options = {}) {

@@ -54,3 +54,8 @@ export function clampBranchEffectiveMessageIds(ids = [], rows = [], thread = {})
     return rowThreadId === threadId || owningThreadId === threadId;
   });
 }
+
+// Shared by history materialization and local reopen freshness checks.
+export function threadHistoryAuthority(state) {
+  return JSON.stringify([state?.incrementalSnapshot && state?.snapshotReconciliationPending ? state.generation : state?.cursor || null, state?.localGeneration || 0, Boolean(state?.resetting), Boolean(state?.staging), Boolean(state?.snapshotRetirement), state?.commandRevision || null]);
+}
