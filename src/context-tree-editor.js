@@ -25,7 +25,7 @@ function contextEditError(error) {
 
 // Drafts are local view state. Only acknowledged service commands change records.
 export function createContextTreeEditor({ getService, getDb, getStore, online = () => globalThis.navigator?.onLine !== false, observe = liveQuery }) {
-  let epoch = 0, pickerRequest = 0, subscription, pending = false;
+  let epoch = 0, pickerRequest = 0, subscription, pending = false, dialogReturnFocus;
   const unsubscribe = () => { subscription?.unsubscribe(); subscription = null; };
   return {
     capabilities: {read:false,manage:false}, editing: null, busy: false, editError: '', deletePreview: null,
@@ -55,8 +55,12 @@ export function createContextTreeEditor({ getService, getDb, getStore, online = 
       if(items.length && (event.shiftKey && index<=0 || !event.shiftKey && (index===items.length-1 || index<0))) { event.preventDefault(); items[event.shiftKey?items.length-1:0].focus(); }
     },
     syncDialog(el) {
-      if(this.dialogOpen && !el.open) { el.showModal(); this.$nextTick?.(()=>{ const target=el.querySelector(this.editing ? '[aria-label="Component name"]' : this.picker ? '[aria-label="Find reference"]' : '[aria-label="Confirm component deletion"] button'); target?.focus(); }); }
+      if(this.dialogOpen && !el.open) { dialogReturnFocus=el.ownerDocument.activeElement; el.showModal(); this.$nextTick?.(()=>{ const target=el.querySelector(this.editing ? '[aria-label="Component name"]' : this.picker ? '[aria-label="Find reference"]' : '[aria-label="Confirm component deletion"] button'); target?.focus(); }); }
       else if(!this.dialogOpen && el.open) el.close();
+    },
+    restoreDialogFocus(el) {
+      const target=dialogReturnFocus;
+      this.$nextTick?.(()=>{ if(el.open)return; if(target?.isConnected && target.matches('button,input,select,textarea,a[href],[tabindex]') && target.getClientRects().length) target.focus(); else el.closest('.context-tree-view')?.querySelector('.context-tree-canvas')?.focus(); });
     },
     get parentChoices() { return contextParentChoices(this.components, this.editing?.id); },
     get pickerChannels() { return (getStore()?.channels || []).filter(row => row.pg_workspace_id === this.workspaceId && row.record_state === 'active'); },

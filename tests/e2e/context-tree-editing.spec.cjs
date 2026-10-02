@@ -90,7 +90,7 @@ for(const [name,viewport] of [['desktop',{width:1440,height:900}],['mobile',{wid
   await fs.mkdir(evidence,{recursive:true});await page.screenshot({path:path.join(evidence,`${name}-references.png`),fullPage:true});
   await page.getByRole('button',{name:'Delete component',exact:true}).click();await expect(page.getByText('Delete this component and 1 descendants? 2 reference links will be removed. Linked content will remain.',{exact:true})).toBeVisible();
   await page.getByRole('button',{name:'Cancel deletion',exact:true}).click();await expect(page.getByRole('treeitem',{name:'Moved root',exact:true})).toBeVisible();
-  await page.getByRole('button',{name:'Delete component',exact:true}).click();await page.getByRole('button',{name:'Confirm deletion',exact:true}).click();await expect(page.getByRole('treeitem',{name:'Moved root',exact:true})).toHaveCount(0);await expect(page.getByRole('treeitem',{name:'New child',exact:true})).toHaveCount(0);
+  await page.getByRole('button',{name:'Delete component',exact:true}).click();await page.getByRole('button',{name:'Confirm deletion',exact:true}).click();await expect(page.getByRole('treeitem',{name:'Moved root',exact:true})).toHaveCount(0);await expect(page.getByRole('treeitem',{name:'New child',exact:true})).toHaveCount(0);await expect(page.getByRole('tree',{name:'Scope components',exact:true})).toBeFocused();
   expect(await page.evaluate(async()=>({doc:!!await window.fixture.db.documents.get('doc'),file:!!await window.fixture.db.documents.get('file'),task:!!await window.fixture.db.tasks.get('task')}))).toEqual({doc:true,file:true,task:true});
   expect(errors).toEqual([]);await fs.mkdir(evidence,{recursive:true});await page.screenshot({path:path.join(evidence,`${name}-editing.png`),fullPage:true});
  });

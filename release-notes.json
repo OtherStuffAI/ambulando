@@ -2554,6 +2554,27 @@
       "notes": [
         "Keep reference-search empty states accurate while showing matching accessible records."
       ]
+    },
+    {
+      "buildNumber": 2161,
+      "label": "Context Tree keyboard finishing touches",
+      "notes": [
+        "Fit searched components at readable zoom and return focus to the canvas when deletion removes the dialog opener."
+      ]
+    },
+    {
+      "buildNumber": 2162,
+      "label": "Context Tree focus restoration",
+      "notes": [
+        "Restore keyboard focus after the browser closes a component dialog, including after confirmed deletion."
+      ]
+    },
+    {
+      "buildNumber": 2163,
+      "label": "Context Tree mobile focus",
+      "notes": [
+        "Return focus to the canvas when a deleted component has no remaining focusable opener on mobile."
+      ]
     }
   ]
 }

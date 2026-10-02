@@ -1800,7 +1800,7 @@
                 </template>
               </aside>
             </div>
-            <dialog class="context-tree-dialog" x-ref="editorDialog" x-effect="syncDialog($el)" @keydown="dialogKey($event)" @cancel.prevent="cancelEdit()" aria-labelledby="context-dialog-title">
+            <dialog class="context-tree-dialog" x-ref="editorDialog" x-effect="syncDialog($el)" @close="restoreDialogFocus($el)" @keydown="dialogKey($event)" @cancel.prevent="cancelEdit()" aria-labelledby="context-dialog-title">
               <header><div><small x-text="selected?.title || scopeTitle"></small><h2 id="context-dialog-title" x-text="editing ? (editing.id ? 'Edit component' : 'New component') : picker ? 'Link a reference' : 'Delete component'"></h2></div><button type="button" aria-label="Close dialog" :disabled="busy" @click="cancelEdit()">×</button></header>
               <p class="context-tree-notice" role="alert" x-show="editError" x-text="editError"></p>
               <template x-if="editing"><form class="context-tree-editor" @submit.prevent="saveComponent()" aria-label="Component editor">

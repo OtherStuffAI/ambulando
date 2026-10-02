@@ -71,7 +71,7 @@ current parent. Sidebar New child starts a draft under the selected component.
 Create/edit, reference linking and confirmed deletion use a small native modal
 dialog, preserving selection and canvas transforms. Native modality plus explicit
 Tab/Shift-Tab wrapping keeps focus inside; Escape cancels without a mutation and
-closing returns focus to the opener. Delete waits for the existing service preview
+closing returns focus to the opener (or canvas if deletion removes it). Delete waits for the existing service preview
 and never deletes target content. Pending commands continue to block duplicate
 submissions and cancellation; stale previews require another confirmation.
 
