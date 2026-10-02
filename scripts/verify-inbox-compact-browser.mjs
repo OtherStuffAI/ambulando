@@ -8,9 +8,12 @@ import path from 'node:path';
 import { tmpdir } from 'node:os';
 const source = process.env.FLIGHTDECK_INBOX_SOURCE;
 const html = await readFile(source ? path.join(source, 'index.html') : 'index.html', 'utf8');
-const css = await readFile(source ? path.join(source, 'styles.css') : 'src/styles.css', 'utf8');
+const sourceCss = await readFile(source ? path.join(source, 'styles.css') : 'src/styles.css', 'utf8');
+// Compile nesting/minification with the same Vite production CSS transform.
+const { transformWithEsbuild } = await import('vite');
+const css = (await transformWithEsbuild(sourceCss, 'styles.css', { loader: 'css', minify: true, target: ['chrome87', 'edge88', 'es2020', 'firefox78', 'safari14'] })).code;
 const document = new JSDOM(html).window.document;
-const find = (node, selector) => node.querySelector(selector) || [...node.querySelectorAll('template')].map(t => find(t.content, selector)).find(Boolean);
+const find = (node, selector) => node && (node.querySelector(selector) || [...node.querySelectorAll('template')].map(t => find(t.content, selector)).find(Boolean));
 const inbox = find(document, '[data-deck-column="inbox"] .attention-card-list').outerHTML
   + find(document, '.inbox-no-results').outerHTML;
 const header = find(document, '.inbox-panel-heading').outerHTML;
@@ -60,7 +63,7 @@ Alpine.store('chat', {
 }); window.probeStore=Alpine.store('chat'); Alpine.start();`;
 await writeFile(path.join(temporary,'entry.js'),entry);
 execFileSync('bun',['build',path.join(temporary,'entry.js'),'--target=browser','--define', '__FLIGHT_DECK_PG_APP_NPUB__="npub1inboxfixture"',`--outfile=${temporary}/probe.js`]);
-const browser = await (process.env.FLIGHTDECK_VERIFY_BROWSER === 'webkit' ? webkit.launch() : chromium.launch({channel:'chrome'}));
+const browser = await (process.env.FLIGHTDECK_VERIFY_BROWSER === 'webkit' ? webkit.launch({timeout:15000}) : chromium.launch({channel:'chrome'}));
 const results=[];
 try {
  const context=await browser.newContext();
@@ -68,7 +71,7 @@ try {
   const url=new URL(route.request().url());
   if(url.pathname==='/probe.js') return route.fulfill({contentType:'text/javascript',body:await readFile(path.join(temporary,'probe.js'))});
   if(url.pathname!=='/') return route.abort();
-  return route.fulfill({contentType:'text/html',body:`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>${css}</style><style>body{display:block}main{width:100%;margin:auto}[x-cloak]{display:none!important}</style></head><body x-data><main><div class="flightdeck-summary-overview"><div class="deck-columns-track" data-deck-ready><section class="flightdeck-summary-panel flightdeck-summary-panel-inbox deck-column" data-deck-column="inbox" style="height:700px;min-height:0">${header}<div class="deck-card-scroll" aria-label="Inbox cards" tabindex="0">${inbox}<div style="height:1200px;flex-shrink:0" aria-hidden="true"></div></div></section><div class="deck-right-stack"></div></div></div></main><script type="module" src="/probe.js"></script></body></html>`});
+  return route.fulfill({contentType:'text/html',body:`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>${css}</style><style>body{display:block}main{width:100%;margin:auto}[x-cloak]{display:none!important}</style></head><body x-data><main><div class="flightdeck-summary-overview flightdeck-summary-overview-deck"><div class="deck-columns-track" data-deck-ready><section class="flightdeck-summary-panel flightdeck-summary-panel-inbox deck-column" data-deck-column="inbox" style="height:700px;min-height:0">${header}<div class="deck-card-scroll" aria-label="Inbox cards" tabindex="0">${inbox}<div style="height:1200px;flex-shrink:0" aria-hidden="true"></div></div></section><div class="deck-right-stack"></div></div></div></main><script type="module" src="/probe.js"></script></body></html>`});
  });
  const page=await context.newPage(); const errors=[]; page.on('pageerror',e=>errors.push(e.message));
  for(const width of [320,375,390,430,1440]) {
@@ -82,14 +85,26 @@ try {
   const controls = page.locator('.inbox-panel-heading').locator('h3, .inbox-type-toggle, input, .inbox-search-submit, .deck-new-thread-button, .doc-actions-toggle');
   const toolbar = await controls.evaluateAll(nodes => nodes.map(n => { const r=n.getBoundingClientRect(); return {tag:n.tagName, x:r.x,y:r.y,width:r.width,height:r.height,center:r.y+r.height/2}; }));
   assert.equal(toolbar.length,9);
-  assert(toolbar.every(r=>r.width>0 && r.x>=0 && r.x+r.width<=width), 'Every control fits viewport');
-  assert(toolbar[5].width>=60, 'Search remains usable');
-  if(width<768) assert(toolbar.slice(1).every(r=>r.height>=44 && r.width>=32));
+  const visibleToolbar = toolbar.filter(r=>r.width>0);
+  assert(visibleToolbar.every(r=>r.x>=0 && r.x+r.width<=width), 'Every control fits viewport');
+  assert(toolbar[5].width>=44, 'Collapsed Search remains accessible');
+  if(width<768) {
+    assert(visibleToolbar.slice(1).every(r=>r.height>=44 && r.width>=44));
+    const box = selector => page.locator(selector).boundingBox();
+    const title = await box('h3'), create = await box('.deck-new-thread-button'), menu = await box('.doc-actions-toggle');
+    const search = await box('input'), submit = await box('.inbox-search-submit'), filters = await box('.inbox-type-toggles');
+    assert(Math.abs(create.y-menu.y)<1 && menu.x-create.x-create.width<=9, 'Heading actions are grouped');
+    assert(title.y < search.y && Math.abs(search.y-filters.y)<1, 'Compact Search shares the filters row');
+    assert(search.width===44 && submit===null, 'Search collapses to one accessible icon');
+    assert((await box('.inbox-panel-heading')).height<=120, 'Default toolbar is two rows');
+  }
   const types = ['chats', 'tasks', 'documents', 'files'];
   for (const name of types) assert.equal(await page.getByRole('button',{name:`Show ${name}`,exact:true}).getAttribute('aria-pressed'), 'true');
   const fileToggle = page.getByRole('button',{name:'Show files',exact:true});
   await fileToggle.focus(); await page.keyboard.press('Space');
   assert.equal(await fileToggle.getAttribute('aria-pressed'), 'false');
+  assert.equal(await fileToggle.evaluate(n=>getComputedStyle(n).backgroundColor), 'rgb(255, 255, 255)');
+  await page.screenshot({path:screenshot.replace('.png','-hidden.png'),fullPage:true});
   assert.equal(await cards.count(),5);
   for (const name of types.slice(0,3)) await page.getByRole('button',{name:`Show ${name}`,exact:true}).click();
   assert.equal(await cards.count(),0);
@@ -104,7 +119,19 @@ try {
   await page.evaluate(() => { window.probeStore.deckInboxSearchDraft=''; window.probeStore.applyDeckInboxSearch(); window.calls=[]; });
   assert.equal(await cards.count(),6);
   const search=page.getByRole('searchbox',{name:'Search Inbox'});
-  await search.fill('release'); await search.press('Enter');
+  await search.fill('release');
+  if(width<768) {
+    const expanded=await search.boundingBox();
+    assert(expanded.width>=200, 'Focused Search expands for typing and native clear');
+    assert((await page.locator('.inbox-type-toggles').boundingBox()).y>expanded.y, 'Filters remain available below expanded Search');
+  }
+  await page.screenshot({path:screenshot.replace('.png','-search.png'),fullPage:true});
+  await search.press('Enter');
+  await search.blur();
+  assert.equal(await search.inputValue(), 'release', 'Blur retains draft');
+  assert.equal(await page.evaluate(()=>window.probeStore.deckInboxSearchQuery), 'release', 'Enter submits query');
+  if(width<768) assert.equal((await search.boundingBox()).width,44,'Blur collapses Search');
+  await search.focus();
   await page.getByRole('button',{name:'Search Inbox',exact:true}).click();
   await page.getByRole('button',{name:'New thread',exact:true}).click();
   const menu=page.getByRole('button',{name:'Inbox read actions'});

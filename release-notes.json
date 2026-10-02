@@ -2396,6 +2396,20 @@
       "label": "Inbox toggle browser regression coverage",
       "notes": [],
       "noUserVisibleChanges": true
+    },
+    {
+      "buildNumber": 2137,
+      "label": "Balanced mobile Inbox toolbar",
+      "notes": [
+        "Group Inbox heading actions, give mobile Search its own full-width row, and space independent record-type icons with comfortable touch targets."
+      ]
+    },
+    {
+      "buildNumber": 2139,
+      "label": "Compact mobile Inbox Search",
+      "notes": [
+        "Mobile Inbox Search starts as a small icon beside independent record filters. Focus expands Search for typing and submission; leaving it retains the query and restores the compact toolbar."
+      ]
     }
   ]
 }

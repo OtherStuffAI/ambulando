@@ -1,6 +1,6 @@
 # Independent Inbox record type visibility
 
-The Inbox toolbar exposes chat, task, document and file buttons before Search.
+The Inbox toolbar exposes chat, task, document and file buttons alongside Search on desktop.
 Blue means shown; white means hidden. Each native button independently changes
 its family and exposes a stable accessible name and `aria-pressed`. Enter and
 Space use native button activation. Every combination, including all hidden,
@@ -18,9 +18,13 @@ protecting against stale results. Source recovery applies the same visible
 family set, and hidden source families cannot advertise additional pages.
 Visibility does not mark cards read or change record state or card actions.
 
-Desktop keeps the buttons inline. Below 768px, Search and its type buttons
-occupy the second toolbar row to retain usable search width at 320px; buttons
-are at least 44px tall. The heading remains sticky and the read menu unclipped.
+Desktop keeps the controls inline. Below 768px, title and adjacent create/menu
+buttons occupy the first row. Independent filters share the second row with a
+44px Search icon. Focus opens a full-width Search field and submit button,
+with filters accessible below. Blur collapses Search while retaining its query;
+the border indicates a retained draft. Enter submits, and focusing Search also
+exposes its submit button and native clear control. Mobile buttons retain 44px
+touch targets. The heading stays sticky and the read menu remains unclipped.
 
 Validation covers all 16 combinations, search intersections and legacy
 in-memory normalization in unit tests. `scripts/verify-inbox-compact-browser.mjs`

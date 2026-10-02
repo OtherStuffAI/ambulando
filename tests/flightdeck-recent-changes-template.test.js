@@ -187,7 +187,7 @@ describe('flight deck summary template', () => {
     const heading = inbox.slice(headingStart, headingEnd);
 
     expect(inbox).not.toContain('<span>Search Inbox</span>');
-    expect(heading).toMatch(/<h3>Inbox<\/h3>\s*<form class="inbox-search-form"/);
+    expect(heading).toMatch(/<h3>Inbox<\/h3>\s*<div class="inbox-type-toggles"/);
     expect(heading).toContain('<form class="inbox-search-form" role="search" @submit.prevent="$store.chat.applyDeckInboxSearch()">');
     expect(heading).toContain('type="search" autocomplete="off" aria-label="Search Inbox"');
     expect(heading).toContain('placeholder="Search"');
