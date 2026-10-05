@@ -35,6 +35,15 @@ at normal readable scale at the first root rather than fitting every branch.
 Fit has an 85% minimum; larger trees remain pannable. Zoom, pointer pan and wheel
 pan controls appear only in Visual. Numeric edges remain viewport bounded.
 
+L1/L2/L3 actions expand ancestors and collapse components at and below the
+chosen boundary in both views; roots are L1. They update only the existing
+collapsed-ID presentation state. Hidden selections retain their reference/editor
+panel, while keyboard focus moves to the nearest visible ancestor. Manual
+disclosures, search reveals and created-component reveals keep ordinary navigation
+available. L1/L2/L3/All is active only when branch collapse state exactly matches
+that preset; otherwise the toolbar displays Custom. All restores full expansion.
+The toolbar wraps at narrow widths. Presets do not fetch or write.
+
 The explicit Outline / Visual toggle preserves selection, focus and collapsed
 IDs and shares the existing reference/detail panel and editor. Only the view
 preference is persisted in localStorage (`flightdeck.context-tree.view`); invalid

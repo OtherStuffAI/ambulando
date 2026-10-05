@@ -2696,6 +2696,20 @@
       "notes": [
         "Switching from Visual to a deeply scrolled Outline now applies the new layout before scrolling, keeping the selected branch visible and avoiding sideways overflow."
       ]
+    },
+    {
+      "buildNumber": 2189,
+      "label": "Context tree level presets",
+      "notes": [
+        "Use L1, L2 or L3 to show only the first one, two or three levels in Outline or Visual. Roots are L1; manual expansion, search and the selected component panel remain available."
+      ]
+    },
+    {
+      "buildNumber": 2190,
+      "label": "Context tree preset focus and expansion",
+      "notes": [
+        "L1, L2, L3 and All show the current display depth in either tree view. Hidden selections keep their details while focus moves to a visible ancestor; manual changes show Custom when no preset matches."
+      ]
     }
   ]
 }

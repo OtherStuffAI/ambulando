@@ -1738,6 +1738,14 @@
                 <button type="button" :aria-pressed="viewMode === 'outline'" @click="setView('outline')">Outline</button>
                 <button type="button" :aria-pressed="viewMode === 'visual'" @click="setView('visual')">Visual</button>
               </div>
+              <div class="context-tree-levels" role="group" aria-label="Display levels (roots are level 1)">
+                <span>Levels</span>
+                <button type="button" :aria-pressed="activeLevelPreset === '1'" @click="setLevelPreset('1')" :disabled="busy || status !== 'complete'" aria-label="L1: Show levels 1 through 1; roots are level 1" title="Show levels 1 through 1; roots are level 1">L1</button>
+                <button type="button" :aria-pressed="activeLevelPreset === '2'" @click="setLevelPreset('2')" :disabled="busy || status !== 'complete'" aria-label="L2: Show levels 1 through 2; roots are level 1" title="Show levels 1 through 2; roots are level 1">L2</button>
+                <button type="button" :aria-pressed="activeLevelPreset === '3'" @click="setLevelPreset('3')" :disabled="busy || status !== 'complete'" aria-label="L3: Show levels 1 through 3; roots are level 1" title="Show levels 1 through 3; roots are level 1">L3</button>
+                <button type="button" :aria-pressed="activeLevelPreset === 'All'" @click="setLevelPreset('All')" :disabled="busy || status !== 'complete'" aria-label="All: Expand all levels" title="Expand all levels">All</button>
+                <output aria-label="Current display levels" aria-live="polite" x-text="activeLevelPreset === 'Custom' ? 'Custom' : activeLevelPreset === 'All' ? 'All' : 'L' + activeLevelPreset"></output>
+              </div>
               <div class="context-tree-tools" role="group" aria-label="Tree view controls">
                 <button type="button" x-show="canManage" :disabled="busy" @click="startCreate()">Add top-level component</button>
                 <button type="button" x-show="viewMode === 'visual'" @click="zoom(1 / 1.25)" aria-label="Zoom out">−</button>

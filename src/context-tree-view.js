@@ -23,6 +23,7 @@ export function createContextTreeView(deps = {}) {
   let outlineRevealTicket = 0, outlineScrollPending = false;
   const preference = () => { try { return (deps.storage || globalThis.localStorage)?.getItem(viewPreferenceKey) === 'visual' ? 'visual' : 'outline'; } catch { return 'outline'; } };
   const view = {
+    levelPreset: 'All', branchLevels: [],
     viewMode: preference(), outlineScroll: 0, outlineRows: [], outlineHeight: 0,
     hasContext: false, status: 'unloaded', components: [], references: [], selectedId: '', focusedId: '', collapsed: [],
     layout: layoutContextTree([]), scale: 1, panX: 0, panY: 0, viewportWidth: 800, viewportHeight: 500,
@@ -149,7 +150,7 @@ export function createContextTreeView(deps = {}) {
       this.nodeSearch=''; this.nodeSearchOpen=false; this.clearEditor(); this.capabilities = {read:false,manage:false};
       generation++; request++; rowObserver?.disconnect(); subscription?.unsubscribe(); subscription = null;
       this.hasContext = false; this.status = 'unloaded'; this.components = []; this.references = []; this.selectedId = ''; this.focusedId = '';
-      this.collapsed = []; this.refsLoading = false; this.refsError = ''; this.notice = '';
+      this.collapsed = []; this.branchLevels = []; this.levelPreset = 'All'; this.refsLoading = false; this.refsError = ''; this.notice = '';
       outlineRevealTicket++; outlineScrollPending = false;
       rowHeights.clear(); this.outlineRows = []; this.outlineHeight = 0; this.outlineScroll = 0;
       if (this.$refs?.canvas) this.$refs.canvas.scrollTop = 0;
@@ -194,10 +195,30 @@ export function createContextTreeView(deps = {}) {
     get visibleEdges() { const ids = new Set(this.visibleNodes.map(node => node.id)); return this.layout.edges.filter(edge => ids.has(edge.id) || ids.has(edge.parentId)); },
     // Only pure-layout numeric paths enter this SVG markup; no record text/URL.
     get edgeMarkup() { return this.visibleEdges.map(edge => `<path d="${edge.path}"></path>`).join(''); },
+    get activeLevelPreset() {
+      const closed = new Set(this.collapsed);
+      const matches = level => this.branchLevels.every(node => closed.has(node.id) === (level !== 'All' && node.depth + 1 >= Number(level)));
+      if (matches(this.levelPreset)) return this.levelPreset;
+      return ['All', '1', '2', '3'].find(matches) || 'Custom';
+    },
+    setLevelPreset(level) {
+      if (!['1', '2', '3', 'All'].includes(level) || this.status !== 'complete' || this.busy) return;
+      const target = this.selectedId || this.focusedId;
+      this.levelPreset = level;
+      this.collapsed = level === 'All' ? [] : this.branchLevels.filter(node => node.depth + 1 >= Number(level)).map(node => node.id);
+      this.relayout();
+      const visible = new Set(this.layout.nodes.map(node => node.id));
+      const nearest = contextPath(this.components, target).reverse().find(node => visible.has(node.id));
+      this.focusNode(nearest?.id || this.focusedId);
+    },
     relayout() {
+      this.branchLevels = layoutContextTree(this.components).nodes.filter(node => node.childCount);
       this.layout = layoutContextTree(this.components, this.collapsed);
       this.rebuildOutline(); this.observeOutlineRows();
-      if (!this.layout.nodes.some(node => node.id === this.focusedId)) this.focusedId = this.layout.nodes[0]?.id || '';
+      if (!this.layout.nodes.some(node => node.id === this.focusedId)) {
+        const visible = new Set(this.layout.nodes.map(node => node.id));
+        this.focusedId = contextPath(this.components, this.focusedId).reverse().find(node => visible.has(node.id))?.id || this.layout.nodes[0]?.id || '';
+      }
     },
     revealCreated(id) {
       pendingRevealId = id;

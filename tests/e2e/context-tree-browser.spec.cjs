@@ -223,3 +223,64 @@ for (const [name, viewport] of [['desktop',{width:1440,height:900}],['narrow',{w
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true); expect(errors).toEqual([]);
  });
 }
+
+for(const [name,viewport] of [['desktop',{width:1440,height:900}],['narrow',{width:390,height:844}]]) {
+ test(`${name} level presets share collapse state across views and retain hidden selection/reference editing`,async({page,baseURL})=>{
+  await start(page,baseURL,viewport);
+  const find=page.getByRole('combobox',{name:'Find component',exact:true});await find.fill('Tree browser');await find.press('Enter');
+  for(const mode of ['Outline','Visual']) {
+   await page.getByRole('button',{name:mode,exact:true}).click();
+   for(const level of [1,2,3]) {
+    await page.getByRole('button',{name:new RegExp('^L'+level+':')}).click();
+    await expect(page.getByRole('button',{name:new RegExp('^L'+level+':')})).toHaveAttribute('aria-pressed','true');
+    expect(await page.evaluate(()=>window.fixture.view.layout.nodes.map(n=>n.depth))).not.toContain(level);
+    expect(await page.evaluate(()=>window.fixture.view.selectedId)).toBe('tree');
+    await expect(page.getByRole('heading',{name:'Tree browser',exact:true})).toBeVisible();
+   }
+   await page.getByRole('button',{name:/^L1:/}).click();
+   await page.getByRole('treeitem',{name:'Wingman Suite',exact:true}).press('ArrowRight');
+   await expect(page.getByRole('button',{name:/^L1:/})).toHaveAttribute('aria-pressed','false');
+   await find.fill('Tree browser');await find.press('Enter');
+   await expect(page.getByRole('treeitem',{name:'Tree browser',exact:true})).toBeFocused();
+  }
+  await fs.mkdir(evidence,{recursive:true});await page.screenshot({path:path.join(evidence,`${name}-level-presets.png`),fullPage:true});
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+ });
+}
+
+for (const width of [1440, 320]) test(`${width}px level presets in both views retain details, focus and hierarchy`, async ({page,baseURL}) => {
+  await start(page,baseURL,{width,height:900});
+  await page.evaluate(async()=> {
+    await window.fixture.db.context_components.bulkPut([
+      {id:'leaf',title:'Deep leaf',parent_id:'tree'}, {id:'ops-child',title:'Ops child',parent_id:'ops'},
+      {id:'ops-grandchild',title:'Ops grandchild',parent_id:'ops-child'}, {id:'ops-leaf',title:'Ops leaf',parent_id:'ops-grandchild'}
+    ].map(row=>({...row,record_id:row.id,workspace_id:'workspace',scope_id:'scope',sort_order:0,row_version:1})));
+  });
+  const snapshot=await page.evaluate(async()=>({components:await window.fixture.db.context_components.toArray(),references:await window.fixture.db.context_references.toArray()}));
+  const group=page.getByRole('group',{name:'Display levels (roots are level 1)',exact:true});
+  const preset=label=>group.getByRole('button',{name:new RegExp('^'+label+':')});
+  for(const mode of ['Outline','Visual']) {
+    await page.getByRole('button',{name:mode,exact:true}).click();
+    const search=page.getByRole('combobox',{name:'Find component'});
+    await search.fill('Deep leaf'); await search.press('Enter');
+    await expect(page.getByRole('treeitem',{name:'Deep leaf',exact:true})).toBeFocused();
+    for(const [level,count,focus] of [['L1',2,'suite'],['L2',5,'flight'],['L3',7,'tree'],['All',9,'leaf']]) {
+      await preset(level).click();
+      await expect(preset(level)).toHaveAttribute('aria-pressed','true');
+      await expect.poll(()=>page.evaluate(()=>window.fixture.view.layout.nodes.length)).toBe(count);
+      await expect(page.locator(`[data-context-node="${focus}"]`)).toBeFocused();
+      await expect(page.getByRole('heading',{name:'Deep leaf',exact:true})).toBeVisible();
+      expect(await page.evaluate(()=>window.fixture.view.selectedId)).toBe('leaf');
+    }
+    await preset('L1').click(); await page.getByRole('button',{name:'Expand Wingman Suite',exact:true}).click();
+    await expect(group.getByLabel('Current display levels')).toHaveText('Custom');
+    await expect(preset('L1')).toHaveAttribute('aria-pressed','false');
+    await search.fill('Deep leaf'); await search.press('Enter');
+    await expect(page.getByRole('treeitem',{name:'Deep leaf',exact:true})).toBeFocused();
+    await preset('L2').click();
+    await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+    for(const button of await group.getByRole('button').all()) await expect(button).toBeVisible();
+    await fs.mkdir(evidence,{recursive:true}); await page.screenshot({path:path.join(evidence,`levels-${width}-${mode.toLowerCase()}.png`),fullPage:true});
+  }
+  expect(await page.evaluate(async()=>({components:await window.fixture.db.context_components.toArray(),references:await window.fixture.db.context_references.toArray()}))).toEqual(snapshot);
+});

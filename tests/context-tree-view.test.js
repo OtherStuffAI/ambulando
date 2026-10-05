@@ -166,3 +166,53 @@ it('defers native Outline scrolling until the switched DOM geometry is committed
   expect(canvas.scrollTop).toBe(h.view.outlineScroll);
   expect(h.view.visibleNodes.some(n=>n.id==='child-1999')).toBe(true);
 });
+
+it('applies L1/L2/L3 across forests and views, preserves hidden selection, and allows manual/search overrides', async () => {
+  const h=harness(); const rows=[component('root'),component('child','root'),component('grandchild','child'),component('leaf','grandchild'),component('other')];
+  h.emit(rows); h.view.select('leaf'); await tick(); h.service.ensureLoaded.mockClear();
+  for(const mode of ['outline','visual']) {
+    h.view.setView(mode);
+    for(const level of [1,2,3]) {
+      h.view.setLevelPreset(String(level));
+      expect(h.view.activeLevelPreset).toBe(String(level));
+      expect(h.view.layout.nodes.filter(n=>n.depth>=level)).toEqual([]);
+      expect(h.view.layout.nodes.map(n=>n.id)).toContain('other');
+      expect(h.view.selectedId).toBe('leaf');
+      expect(h.view.layout.nodes.some(n=>n.id===h.view.focusedId)).toBe(true);
+    }
+  }
+  expect(h.service.ensureLoaded).not.toHaveBeenCalled(); expect(h.view.components).toEqual(rows);
+  h.view.toggle('grandchild'); expect(h.view.activeLevelPreset).toBe('All'); expect(h.view.layout.nodes.map(n=>n.id)).toContain('leaf');
+  h.view.setLevelPreset('1');h.view.nodeSearch='leaf';h.view.chooseNode(h.view.nodeResults[0]);
+  expect(h.view.activeLevelPreset).toBe('All');expect(h.view.layout.nodes.map(n=>n.id)).toContain('leaf');
+  h.view.busy=true;h.view.setLevelPreset('1');expect(h.view.activeLevelPreset).toBe('All');
+});
+
+for (const mode of ['outline', 'visual']) it(`${mode} level presets collapse every boundary branch in a forest, retain selection and reveal search`, async () => {
+  const h = harness();
+  const rows = [component('a'), component('b','a'), component('c','b'), component('d','c'), component('e'), component('f','e'), component('g','f'), component('h','g')];
+  const references = [{id:'ref',component_id:'d',row_version:1}];
+  h.emit(rows, references); h.view.setView(mode); h.view.select('d'); await tick(); h.service.ensureLoaded.mockClear();
+  for (const [level, visible, closed, focus] of [
+    ['1',['a','e'],['a','b','c','e','f','g'],'a'],
+    ['2',['a','b','e','f'],['b','c','f','g'],'b'],
+    ['3',['a','b','c','e','f','g'],['c','g'],'c'],
+    ['All',['a','b','c','d','e','f','g','h'],[],'d'],
+  ]) {
+    h.view.setLevelPreset(level);
+    expect(h.view.layout.nodes.map(n=>n.id)).toEqual(visible);
+    expect(h.view.collapsed).toEqual(closed);
+    expect(h.view.activeLevelPreset).toBe(level);
+    expect(h.view.focusedId).toBe(focus);
+    expect(h.view.selectedId).toBe('d'); expect(h.view.directReferences).toEqual(references);
+  }
+  expect(h.service.ensureLoaded).not.toHaveBeenCalled();
+  h.view.setLevelPreset('1'); h.view.toggle('a');
+  expect(h.view.activeLevelPreset).toBe('Custom');
+  expect(h.view.layout.nodes.map(n=>n.id)).toEqual(['a','b','e']);
+  h.view.toggle('a'); expect(h.view.activeLevelPreset).toBe('1');
+  h.view.nodeSearch='d'; h.view.chooseNode(h.view.nodeResults[0]);
+  expect(h.view.selectedId).toBe('d'); expect(h.view.focusedId).toBe('d');
+  expect(h.view.activeLevelPreset).toBe('Custom');
+  expect(h.view.components).toEqual(rows); expect(h.view.references).toEqual(references);
+});

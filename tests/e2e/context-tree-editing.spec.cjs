@@ -125,6 +125,9 @@ for (const [name,viewport] of [['desktop',{width:1440,height:900}],['mobile',{wi
   const search=page.getByRole('combobox',{name:'Find component',exact:true});await search.fill('Flight Deck');
   await expect(page.getByRole('option',{name:'Tree browser Wingman Suite / Flight Deck / Tree browser'})).toBeVisible();await search.press('ArrowDown');await search.press('Enter');
   await expect(page.getByRole('treeitem',{name:'Tree browser',exact:true})).toBeFocused();
+  await page.getByRole('button',{name:/^L1:/}).click();
+  await expect(page.getByRole('treeitem',{name:'Tree browser',exact:true})).toHaveCount(0);
+  await expect(page.getByRole('heading',{name:'Tree browser',exact:true})).toBeVisible();
   const canvas=await page.locator('.context-tree-canvas').boundingBox();const transform=await page.evaluate(()=>window.fixture.view.transform);
   const child=page.getByRole('button',{name:'+ New child',exact:true});await child.click();
   const dialog=page.getByRole('dialog');await expect(dialog).toBeVisible();await expect(page.getByRole('textbox',{name:'Component name',exact:true})).toBeFocused();
