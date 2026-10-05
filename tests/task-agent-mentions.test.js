@@ -42,7 +42,8 @@ describe('typed PG task agent mentions', () => {
   it('uses mention-aware task detail composers in responsive details and comments panes', () => {
     const html = fs.readFileSync('index.html', 'utf8');
     const css = fs.readFileSync('src/styles.css', 'utf8');
-    expect(html).toContain("initMentionComposer($el, 'task-description')");
+    expect(html).toContain("mountTaskRichDescriptionEditor($el)");
+    expect(html).toContain("handleMentionInput($event.target.closest('.ProseMirror'), $event)");
     expect(html).toContain("initMentionComposer($el, 'task-comment')");
     expect(html).toContain('taskCommentAudioDrafts.length > 0');
     expect(css).toMatch(/@media[^{}]*\(max-width:[^)]+\)[\s\S]*\.task-detail-body\s*\{[\s\S]*grid-template-columns:\s*1fr/);

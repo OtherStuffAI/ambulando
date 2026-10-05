@@ -11,13 +11,15 @@ export function createTiptapEditorAdapter({
   onEditIntent = () => {},
   onUpdate = () => {},
   onPaste = () => false,
+  onKeydown = () => false,
+  extensions,
   placeholder = 'Start writing...',
 } = {}) {
   if (!element) throw new Error('Tiptap editor adapter requires a mount element.');
   const editor = new Editor({
     element,
     editable,
-    extensions: createFlightDeckTiptapExtensions({ placeholder }),
+    extensions: extensions || createFlightDeckTiptapExtensions({ placeholder }),
     content: editorState || resolveDocumentProseMirrorState(document || {}),
     editorProps: {
       handlePaste: (_view, event) => onPaste(event, editor) === true,
@@ -30,9 +32,9 @@ export function createTiptapEditorAdapter({
           onEditIntent('focus');
           return false;
         },
-        keydown: () => {
+        keydown: (_view, event) => {
           onEditIntent('keyboard');
-          return false;
+          return onKeydown(event, editor) === true;
         },
       },
     },

@@ -12,7 +12,7 @@ async function openFixture(page) {
     store.backendUrl = "http://127.0.0.1:3100";
     store.selectedWorkspaceKey = "fixture-workspace";
     store.session = { npub: 'npub1fixture' };
-    store.tasks = [{ record_id: 'layout-task', title: 'A readable task record', description: '## Expected outcome\n\nA clear brief with a working conversation.\n\n- Preserve rich descriptions\n- Keep dependencies accessible', state: 'in_progress', assigned_to_npubs: [], scope_id: 'scope-preserved', predecessor_task_ids: ['dependency'], tags: [], record_state: 'active', sync_status: 'synced', version: 1 }, { record_id: 'dependency', title: 'Agree the layout', state: 'done', tags: [], record_state: 'active', version: 1 }];
+    store.tasks = [{ record_id: 'layout-task', title: 'A readable task record', description: '## Expected outcome\n\nA clear brief with a working conversation.\n\n- Preserve rich descriptions\n- Keep dependencies accessible', state: 'in_progress', assigned_to_npubs: [], scope_id: 'scope-preserved', predecessor_task_ids: ['dependency'], tags: '', record_state: 'active', sync_status: 'synced', version: 1 }, { record_id: 'dependency', title: 'Agree the layout', state: 'done', tags: '', record_state: 'active', version: 1 }];
     store.loadTaskComments = async () => store.applyTaskComments([
       { record_id: 'old', body: 'Earlier update', updated_at: '2026-10-05T01:00:00Z', sender_npub: 'npub1fixture' },
       { record_id: 'new', body: 'Latest update', updated_at: '2026-10-05T02:00:00Z', sender_npub: 'npub1fixture' },
@@ -101,7 +101,7 @@ for (const mode of ['edit', 'view']) {
           '# Durable device checkpoints',
           'Flight Deck must adopt independent device checkpoints so each browser cache resumes after its own last committed position. Preserve pending edits, permissions and older-server support. Coordinate with @[Layout reviewer](mention:person:npub1fixture).',
           ...Array.from({ length: 14 }, (_, i) => `## Implementation requirement ${i + 1}\n\nThe browser must commit the complete materialization before acknowledging its position. Interrupted requests must recover safely without dropping local edits or replaying incomplete state. Coordinate the worker, transport and local persistence while preserving existing behavior.\n\nValidate cold bootstrap, incremental recovery and concurrent changes with realistic records and meaningful assertions.`),
-          '## Final acceptance\n\nThe whole description remains accessible, and dependency and subtask controls follow it.',
+          '## Final acceptance\n\n- The whole description remains accessible.\n- Dependency and subtask controls follow it.\n\n[Guide](https://example.com/guide) and @[Dependency](mention:task:dependency).',
         ].join('\n\n');
         store.editingTask.assigned_to_npubs = ['npub1fixture'];
         store.getSenderName = () => 'Layout reviewer';
@@ -111,8 +111,13 @@ for (const mode of ['edit', 'view']) {
       const panel = page.locator('.task-detail-panel');
       const main = panel.locator('.task-detail-main');
       const scrollOwner = width > 768 ? main : panel.locator('.task-detail-body');
-      const surface = panel.locator(mode === 'edit' ? '.task-mention-composer' : '.task-desc-preview');
+      const surface = panel.locator(mode === 'edit' ? '.task-rich-editor .ProseMirror' : '.task-desc-preview');
       await expect(surface).toBeVisible();
+      await expect(surface.locator('h1')).toHaveText('Durable device checkpoints');
+      await expect(surface.locator('h2')).toHaveCount(15);
+      await expect(surface.locator('li')).toHaveCount(2);
+      await expect(surface.locator('a[href="https://example.com/guide"]')).toHaveText('Guide');
+      await expect(surface.locator('[data-mention-type=task]')).toHaveAttribute('data-mention-id', 'dependency');
       if (mode === 'edit') {
         await expect(surface).toHaveAttribute('contenteditable', 'true');
         await expect(panel.locator('.task-detail-fields select').first()).toHaveValue('in_progress');
@@ -130,21 +135,38 @@ for (const mode of ['edit', 'view']) {
         await expect(surface.locator('h2')).toHaveCount(15);
       }
       if (mode === 'edit' && width === 1280) {
-        await expect(surface.locator('[data-mention-token]')).toContainText('Layout reviewer');
+        await expect(surface.locator('[data-mention-type=person]')).toContainText('Layout reviewer');
+        await page.evaluate(() => {
+          const editor = window.Alpine.store('chat').taskRichDescriptionAdapter.getEditor();
+          const from = editor.state.doc.firstChild.nodeSize + 1;
+          editor.commands.setTextSelection({ from, to: from + 11 });
+        });
+        await panel.getByRole('button', { name: 'Bold', exact: true }).click();
+        await expect(surface.locator('strong')).toContainText('Flight Deck');
+
         await surface.evaluate(node => {
+          const editor = window.Alpine.store('chat').taskRichDescriptionAdapter.getEditor();
+          editor.commands.setTextSelection(editor.state.doc.content.size - 1);
           node.focus();
-          const selection = getSelection();
-          const range = document.createRange();
-          range.selectNodeContents(node);
-          range.collapse(false);
-          selection.removeAllRanges();
-          selection.addRange(range);
           const clipboardData = new DataTransfer();
           clipboardData.setData('text/plain', '\nPasted acceptance paragraph.');
           node.dispatchEvent(new ClipboardEvent('paste', { clipboardData, bubbles: true, cancelable: true }));
         });
-        await expect.poll(() => page.evaluate(() => window.Alpine.store('chat').editingTask.description)).toContain('Pasted acceptance paragraph.');
-        await expect(surface.locator('[data-mention-token]')).toContainText('Layout reviewer');
+        await expect.poll(() => page.evaluate(() => window.Alpine.store('chat').editingTask.description)).toContain('Pasted acceptance paragraph');
+        await expect(surface.locator('[data-mention-type=person]')).toContainText('Layout reviewer');
+        await page.evaluate(() => {
+          const store = window.Alpine.store('chat');
+          store.searchMentions = () => [{ type: 'person', id: 'npub1inserted', label: 'Mention recipient' }];
+          store.refreshMentionResultsFromLocalIndex = () => {};
+          const editor = store.taskRichDescriptionAdapter.getEditor();
+          editor.commands.focus('end');
+        });
+        await surface.press('End');
+        await page.keyboard.type(' @Mention');
+        await expect.poll(() => page.evaluate(() => window.Alpine.store('chat').mentionActive)).toBe(true);
+        await surface.press('Enter');
+        await expect(surface.locator('[data-mention-id=npub1inserted]')).toHaveText('Mention recipient');
+        await expect.poll(() => page.evaluate(() => window.Alpine.store('chat').editingTask.description)).toContain('@[Mention recipient](mention:person:npub1inserted)');
         await scrollOwner.evaluate(node => { node.scrollTop = 0; });
       }
       const geometry = await surface.evaluate(node => {
@@ -191,6 +213,12 @@ for (const mode of ['edit', 'view']) {
       }
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
       await expect(panel.locator('label').filter({ hasText: /^Scope$/ })).toHaveCount(0);
+      await page.evaluate(() => {
+        const store = window.Alpine.store('chat');
+        store.openChatTaskModal = async id => { window.taskReferenceOpened = id; };
+      });
+      await surface.locator('[data-mention-type=task]').click();
+      await expect.poll(() => page.evaluate(() => window.taskReferenceOpened)).toBe('dependency');
     });
   }
 }

@@ -18665,6 +18665,16 @@ html.wingman-iphone-webview .chat-channel-tab-scroll * {
   line-height: 1.7;
 }
 
+.task-description-section .daily-note-tiptap-toolbar {
+  padding: 0 0 0.5rem;
+  border: 0;
+  background: transparent;
+}
+
+.task-description-section .ProseMirror:focus {
+  outline: none;
+}
+
 .task-description-section .task-mention-composer:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: -2px;

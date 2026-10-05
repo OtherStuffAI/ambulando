@@ -57,7 +57,8 @@ describe('task comments panel fullscreen affordance', () => {
     expect(record).toContain('>Comments</button>');
     expect(record).toContain('handleEditingTaskDraftChanged()');
     expect(record).toContain('assignEditingTask(person.npub)');
-    expect(record).toContain('handleMentionComposerPaste');
+    expect(record).toContain('mountTaskRichDescriptionEditor($el)');
+    expect(readProjectFile('src/app.js')).toContain('handleTaskRichPaste?.(event, editor)');
   });
 
   it('defines fullscreen store state and detail lifecycle reset', () => {

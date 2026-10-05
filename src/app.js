@@ -1055,6 +1055,9 @@ export function initApp() {
     taskDraftRemoteChanged: false,
     taskDraftAutosaveTimer: null,
     taskRichDescriptionAdapter: null,
+    taskRichDescriptionToolbar: null,
+    taskRichDescriptionModel: '',
+    taskRichDescriptionUploadIds: [],
     taskRichDescriptionMountEl: null,
     taskRichDescriptionRecordId: '',
     taskAssigneeQuery: '',
@@ -5895,6 +5898,10 @@ export function initApp() {
     },
 
     destroyTaskRichDescriptionEditor() {
+      this.taskRichDescriptionToolbar?.destroy();
+      this.taskRichDescriptionToolbar = null;
+      this.taskRichDescriptionModel = '';
+      this.taskRichDescriptionUploadIds = [];
       if (this.taskRichDescriptionAdapter) {
         this.taskRichDescriptionAdapter.destroy();
       }
@@ -5904,34 +5911,60 @@ export function initApp() {
     },
 
     async mountTaskRichDescriptionEditor(element = null) {
-      if (!element || !this.editingTask?.record_id || !this.isTaskDetailEditing()) return;
+      if (!element || !this.editingTask?.record_id || !this.isTaskDetailEditing() || !this.taskDescriptionEditing) return;
       if (
         this.taskRichDescriptionAdapter
         && this.taskRichDescriptionMountEl === element
         && this.taskRichDescriptionRecordId === this.editingTask.record_id
-      ) return;
+      ) {
+        if (this.taskRichDescriptionModel !== this.editingTask.description) {
+          this.taskRichDescriptionModel = this.editingTask.description || '';
+          this.taskRichDescriptionAdapter.setDescription(this.taskRichDescriptionModel);
+        }
+        return;
+      }
       this.destroyTaskRichDescriptionEditor();
       this.taskRichDescriptionMountEl = element;
-      this.taskRichDescriptionRecordId = this.editingTask.record_id;
-      const { createTiptapEditorAdapter } = await loadTiptapEditorAdapter();
-      if (this.taskRichDescriptionMountEl !== element || !this.editingTask?.record_id) return;
-      this.taskRichDescriptionAdapter = createTiptapEditorAdapter({
-        element,
-        document: {
-          content: this.editingTask.description || '',
-          content_blocks: [],
-          editor_state: null,
-        },
+      const recordId = this.editingTask.record_id;
+      this.taskRichDescriptionRecordId = recordId;
+      const { createTaskDescriptionEditor } = await import('./task-description-editor.js');
+      if (this.taskRichDescriptionMountEl !== element || this.editingTask?.record_id !== recordId
+        || !this.isTaskDetailEditing() || !this.taskDescriptionEditing) return;
+      // Two Alpine effects can request a mount while the lazy import resolves.
+      if (this.taskRichDescriptionAdapter) return;
+      element.replaceChildren();
+      const editorMount = element.ownerDocument.createElement('div');
+      element.append(editorMount);
+      this.taskRichDescriptionModel = this.editingTask.description || '';
+      this.taskRichDescriptionAdapter = createTaskDescriptionEditor({
+        element: editorMount,
+        description: this.taskRichDescriptionModel,
         editable: true,
-        placeholder: 'Add a description...',
         onPaste: (event, editor) => this.handleTaskRichPaste?.(event, editor) === true,
+        onKeydown: (event, editor) => {
+          this.handleMentionKeydown({
+            currentTarget: editor.view.dom,
+            key: event.key,
+            isComposing: event.isComposing,
+            preventDefault: () => event.preventDefault(),
+          });
+          return event.defaultPrevented;
+        },
         onUpdate: (contentModel) => {
-          if (!this.editingTask) return;
-          this.editingTask.description = contentModel?.content || '';
+          if (this.editingTask?.record_id !== recordId || !this.isTaskDetailEditing()) return;
+          this.taskRichDescriptionModel = contentModel?.content || '';
+          this.editingTask.description = this.taskRichDescriptionModel;
           this.handleEditingTaskDraftChanged();
           this.scheduleStorageImageHydration?.();
         },
       });
+      const editor = this.taskRichDescriptionAdapter.getEditor();
+      this.taskRichDescriptionToolbar = createDailyNoteTiptapToolbar(editor);
+      this.taskRichDescriptionToolbar.element.setAttribute('aria-label', 'Task description formatting');
+      element.prepend(this.taskRichDescriptionToolbar.element);
+      editor.view.dom.setAttribute('aria-label', 'Task description');
+      editor.view.dom.setAttribute('role', 'textbox');
+      editor.view.dom.setAttribute('aria-multiline', 'true');
       this.scheduleStorageImageHydration?.();
     },
 
@@ -6624,7 +6657,7 @@ export function initApp() {
         return;
       }
       if (this.taskDetailSaving) return;
-      if (this.containsInlineImageUploadToken(this.editingTask.description)) {
+      if (this.taskRichDescriptionUploadIds.length > 0 || this.containsInlineImageUploadToken(this.editingTask.description)) {
         this.error = 'Wait for image upload to finish.';
         return;
       }
@@ -8707,6 +8740,19 @@ export function initApp() {
       const el = this._mentionTargetEl;
       if (!el || this._mentionStartPos < 0 || this._mentionEndPos < this._mentionStartPos) return;
 
+      const richEditor = this.taskRichDescriptionAdapter?.getEditor();
+      if (richEditor?.view.dom === el) {
+        const to = richEditor.state.selection.from;
+        const from = to - this.mentionQuery.length - 1;
+        richEditor.chain().focus().insertContentAt({ from, to }, [
+          { type: 'text', text: result.label, marks: [{
+            type: 'fdMention', attrs: { mentionType: result.type, mentionId: result.id, label: result.label },
+          }] },
+          { type: 'text', text: ' ' },
+        ]).run();
+        this.closeMentionPopover();
+        return;
+      }
       const contentEditable = el?.isContentEditable || el?.getAttribute?.('contenteditable') === 'true';
       if (contentEditable) {
         const pill = createMentionPill(el.ownerDocument, {
@@ -9694,6 +9740,7 @@ export function initApp() {
       const uploadId = globalThis.crypto?.randomUUID
         ? `task-rich-upload-${globalThis.crypto.randomUUID()}`
         : `task-rich-upload-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      this.taskRichDescriptionUploadIds = [...this.taskRichDescriptionUploadIds, uploadId];
       editor?.chain?.()
         .focus()
         .insertContent({
@@ -9712,6 +9759,8 @@ export function initApp() {
             accessGroupIds: task.group_ids ?? [],
             fileLabel: 'task-rich',
           });
+          if (editor.isDestroyed || this.editingTask?.record_id !== task.record_id
+            || this.taskRichDescriptionAdapter?.getEditor() !== editor) return;
           this.replaceDocRichUploadPlaceholder(editor, uploadId, {
             type: 'fdStorageImage',
             attrs: {
@@ -9728,11 +9777,15 @@ export function initApp() {
           }
           this.scheduleStorageImageHydration();
         } catch (error) {
+          if (editor.isDestroyed || this.editingTask?.record_id !== task.record_id
+            || this.taskRichDescriptionAdapter?.getEditor() !== editor) return;
           this.replaceDocRichUploadPlaceholder(editor, uploadId, {
             type: 'paragraph',
             content: [{ type: 'text', text: 'Image upload failed.' }],
           });
           this.error = error?.message || 'Could not upload pasted image.';
+        } finally {
+          this.taskRichDescriptionUploadIds = this.taskRichDescriptionUploadIds.filter(id => id !== uploadId);
         }
       })();
       return true;

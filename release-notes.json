@@ -2776,6 +2776,13 @@
       "notes": [
         "Long task descriptions now grow with their content and scroll with the task pane. A compact editing header and fewer nested borders leave more space for the brief and comments."
       ]
+    },
+    {
+      "buildNumber": 2200,
+      "label": "Rich task descriptions and references",
+      "notes": [
+        "Task descriptions use Tiptap with Markdown headings, lists, links and clickable record references. Formatting, mention insertion and paste preserve the full-height task reading surface."
+      ]
     }
   ]
 }

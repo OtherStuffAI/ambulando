@@ -3539,18 +3539,17 @@
                     </div>
                     <div>
                       <div
-                        class="task-mention-composer"
-                        x-show="$store.chat.taskDescriptionEditing"
-                        contenteditable="true"
-                        role="textbox"
-                        aria-multiline="true"
-                        data-placeholder="Add a description..."
-                        x-init="$store.chat.initMentionComposer($el, 'task-description')"
-                        x-effect="$store.chat.syncMentionComposerFromModel($el, 'task-description', $store.chat.editingTask?.description || '')"
-                        @input="$store.chat.syncMentionComposerModel($event.currentTarget); $store.chat.handleMentionInput($event.currentTarget, $event)"
-                        @keydown="$store.chat.handleMentionKeydown($event)"
-                        @paste="$store.chat.handleMentionComposerPaste($event, 'task-description')"
-                      ></div>
+                        x-effect="if (!$store.chat.taskDescriptionEditing || !$store.chat.isTaskDetailEditing()) $store.chat.destroyTaskRichDescriptionEditor()"
+                      >
+                        <template x-if="$store.chat.taskDescriptionEditing && $store.chat.isTaskDetailEditing()">
+                          <div
+                            class="task-rich-editor chat-post-markdown"
+                            x-init="$nextTick(() => $store.chat.mountTaskRichDescriptionEditor($el))"
+                            x-effect="$store.chat.editingTask?.record_id; $store.chat.editingTask?.description; $nextTick(() => $store.chat.mountTaskRichDescriptionEditor($el))"
+                            @input="$store.chat.handleMentionInput($event.target.closest('.ProseMirror'), $event)"
+                          ></div>
+                        </template>
+                      </div>
                       <div
                         class="task-desc-preview chat-post-markdown"
                         x-show="!$store.chat.taskDescriptionEditing"
