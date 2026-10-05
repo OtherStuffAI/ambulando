@@ -1,5 +1,5 @@
 import { personalAttentionVersion } from './personal-attention.js';
-import { canonicalClientId, checkpointRevision, DEVICE_CACHE_OWNER_KEY, assertDeviceLease } from './pg-device-checkpoints.js';
+import { canonicalClientId, checkpointRevision, DEVICE_CACHE_OWNER_KEY, assertDeviceLease, createDeviceCacheId } from './pg-device-checkpoints.js';
 import { publishContextAuthority, clearContextAuthority, mapContextRow } from './context-cache.js';
 import { resolvePgReaderActorId } from './pg-reader-identity.js';
 import { inboundFeedReaderRow } from './translators/feed-reader.js';
@@ -585,7 +585,7 @@ export async function resetPgRecordAuthority(store, { preserveViews = false, exp
     const obsoleteDevices = [...(priorState?.obsoleteDevices || []), ...(priorState?.device ? [priorState.device] : []),
       ...(ownerState?.device ? [ownerState.device] : [])];
     const replacement = { cursor: null, resetting: true, localGeneration, obsoleteDevices,
-      ...(deviceScope ? { device: { scope: deviceScope, clientId: crypto.randomUUID(), registered: false, revision: '0', pendingAck: null } } : {}) };
+      ...(deviceScope ? { device: { scope: deviceScope, clientId: createDeviceCacheId(), registered: false, revision: '0', pendingAck: null } } : {}) };
     await db.sync_state.put({ key: DEVICE_CACHE_OWNER_KEY, value: { cursorKey, scope: deviceScope,
       clientId: replacement.device?.clientId || null, canonicalCount: preserveViews ? await db.pg_record_rows.count() : 0 } });
     const prefix = `${cursorKey}:staged:`;

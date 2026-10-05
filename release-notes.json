@@ -2762,6 +2762,13 @@
         "Each browser cache now resumes independently on supporting Towers. Tower saves only sync positions that this cache has committed locally.",
         "Pending edits survive upgrade and recovery. Interrupted acknowledgements retry safely, with older Tower support retained."
       ]
+    },
+    {
+      "buildNumber": 2198,
+      "label": "Checkpoint recovery compatibility",
+      "notes": [
+        "Native and FIPS caches retain cryptographic device identities where secure-origin UUID helpers are unavailable. Repeated access-denied reconnects keep the replacement cache identity stable."
+      ]
     }
   ]
 }

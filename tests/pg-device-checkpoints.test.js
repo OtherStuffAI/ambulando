@@ -289,3 +289,19 @@ it('coordinates fallback leases between tabs and does not release someone elseâ€
   await expect(commitDeviceLease({ type: 'release', token: b })).rejects.toThrow('lease lost');
   await commitDeviceLease({ type: 'release', token: a }); expect(await commitDeviceLease({ type: 'acquire', token: b })).toBe(true);
 });
+
+it('keeps a revoked replacement ID stable across repeated denied reconnects', async () => {
+  const h = harness(); await h.run(); h.remote.page.mockRejectedValue(failure('workspace_membership_required', 403));
+  await expect(h.run()).rejects.toThrow('workspace_membership_required'); const replacement = (await state()).device.clientId;
+  h.ports.client = async () => { throw failure('workspace_membership_required', 403); };
+  await expect(h.run()).rejects.toThrow('workspace_membership_required'); await expect(h.run()).rejects.toThrow('workspace_membership_required');
+  expect((await state()).device.clientId).toBe(replacement);
+});
+
+it('generates a random canonical nonzero v4 cache UUID without secure-origin randomUUID', async () => {
+  const { createDeviceCacheId, canonicalClientId } = await import('../src/pg-device-checkpoints.js');
+  const random = { getRandomValues: crypto.getRandomValues.bind(crypto) };
+  const first = createDeviceCacheId(random), second = createDeviceCacheId(random);
+  expect(canonicalClientId(first)).toBe(true); expect(first).not.toBe(second);
+  expect(first[14]).toBe('4'); expect('89ab').toContain(first[19]);
+});

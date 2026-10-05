@@ -5,6 +5,15 @@ export const canonicalClientId = value => typeof value === 'string'
   && value !== '00000000-0000-0000-0000-000000000000';
 export const checkpointRevision = value => typeof value === 'string' && /^\d+$/.test(value);
 export const DEVICE_CACHE_OWNER_KEY = 'record-device-cache-owner';
+export function createDeviceCacheId(random = globalThis.crypto) {
+  // getRandomValues is also available in native HTTP/FIPS contexts where
+  // randomUUID is restricted to secure origins.
+  const bytes = random.getRandomValues(new Uint8Array(16));
+  bytes[6] = (bytes[6] & 15) | 64;
+  bytes[8] = (bytes[8] & 63) | 128;
+  const hex = Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
 export function deviceCheckpointScope(context) {
   return JSON.stringify([context.baseUrl, context.appNpub, context.workspaceId, context.sessionNpub]);
 }
@@ -193,6 +202,10 @@ export async function syncDeviceRecords({ context, options, readState, materiali
         && (!payload.identity?.workspace_id || payload.identity.workspace_id === context.workspaceId);
       const reset = error.status === 409 && ['reset_required', 'history_pruned', 'client_expired', 'client_not_registered', 'page_token_invalid'].includes(code);
       if (!revoked && !reset) throw error;
+      // Repeated denied polls have no authority left to discard. Keep the
+      // replacement ID stable instead of accumulating registrations/recovery
+      // metadata while membership remains revoked.
+      if (revoked && !state.device.registered && !state.cursor) throw error;
       await replace(false);
       if (revoked || ++resets > 2) throw error;
     }
@@ -230,7 +243,7 @@ export async function assertDeviceLease(db, token) {
 // IndexedDB lease then serializes the same physical cache across tabs. Fencing
 // at EVERY bounded commit rejects a paused owner's late network responses.
 export async function withWorkerDeviceLease(materialize, assertCurrent, run) {
-  const token = crypto.randomUUID();
+  const token = createDeviceCacheId();
   while (true) {
     assertCurrent();
     if (await materialize({ device_lock: { type: 'acquire', token } })) break;
