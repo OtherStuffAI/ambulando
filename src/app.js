@@ -1030,7 +1030,7 @@ export function initApp() {
     taskViewMode: typeof window !== 'undefined' && window.innerWidth <= 768 ? 'list' : 'kanban',
     taskSortMode: 'manual',
     taskBoardSortPreferences: {},
-    collapsedSections: {},
+    collapsedSections: { new: true },
     taskBoardScopeSetupInFlight: false,
     newTaskTitle: '',
     showWriteContextModal: false,

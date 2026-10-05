@@ -2710,6 +2710,20 @@
       "notes": [
         "L1, L2, L3 and All show the current display depth in either tree view. Hidden selections keep their details while focus moves to a visible ancestor; manual changes show Custom when no preset matches."
       ]
+    },
+    {
+      "buildNumber": 2191,
+      "label": "Collapsed task backlog",
+      "notes": [
+        "The task board New column is now Backlog and starts collapsed on every visit. Expand it when needed; task states and other column preferences are preserved."
+      ]
+    },
+    {
+      "buildNumber": 2192,
+      "label": "Backlog across task views",
+      "notes": [
+        "Backlog starts collapsed when switching task boards or between list and kanban views. Expand it for the current view; saved expansion never overrides the collapsed starting state."
+      ]
     }
   ]
 }

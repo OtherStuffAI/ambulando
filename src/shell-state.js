@@ -371,6 +371,10 @@ export function createShellState(options = {}) {
     lockedView: null,
     get navSection() { return this._navSection; },
     set navSection(section) {
+      // Backlog expansion lasts only for the current visit to Tasks.
+      if (section === 'tasks' && section !== this._navSection) {
+        this.collapsedSections = { ...this.collapsedSections, new: true };
+      }
       if (section !== this._navSection) this.lockedView = null;
       if(section!=='agents')disposePipelineViewer(this);
       this._navSection = section;

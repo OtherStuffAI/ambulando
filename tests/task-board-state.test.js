@@ -1581,6 +1581,7 @@ describe('computeBoardColumns', () => {
     const cols = computeBoardColumns([], [], []);
     const stateNames = cols.map((c) => c.state);
     expect(stateNames).toEqual(['new', 'ready', 'in_progress', 'blocked', 'review', 'done']);
+    expect(cols.map((c) => c.label)).toEqual(['Backlog', 'Ready', 'In Progress', 'Blocked', 'Review', 'Done']);
     expect(stateNames).not.toContain('definition');
     expect(cols.map(({ state, color }) => [state, color])).toEqual([
       ['new', '#9ca3af'],
@@ -2087,5 +2088,36 @@ describe('sidebar scope picker covers all active scopes', () => {
       ''
     );
     expect(filtered).toEqual(all);
+  });
+});
+
+
+describe('Backlog collapse preferences', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it.each([null, '{}', '{"new":false,"done":true,"ready":false}', 'invalid'])('defaults Backlog closed with stored preferences %s', (raw) => {
+    vi.stubGlobal('window', { localStorage: { getItem: vi.fn(() => raw) } });
+    const store = { currentWorkspaceSlug: 'workspace-a' };
+    const collapsed = taskBoardStateMixin.readStoredCollapsedSections.call(store);
+    expect(collapsed.new).toBe(true);
+    if (raw?.includes('done')) expect(collapsed).toEqual({ new: true, done: true, ready: false });
+    expect(window.localStorage.getItem).toHaveBeenCalledWith('coworker:workspace-a:collapsed-sections');
+  });
+
+  it('allows explicit expansion, preserves other preferences, and closes again after reload', () => {
+    const storage = new Map([['coworker:collapsed-sections', '{"done":true}']]);
+    vi.stubGlobal('window', { localStorage: {
+      getItem: (key) => storage.get(key) || null,
+      setItem: (key, value) => storage.set(key, value),
+      removeItem: (key) => storage.delete(key),
+    } });
+    const store = {};
+    Object.defineProperties(store, Object.getOwnPropertyDescriptors(taskBoardStateMixin));
+    store.collapsedSections = store.readStoredCollapsedSections();
+    store.toggleSectionCollapse('new');
+    expect(store.isSectionCollapsed('new')).toBe(false);
+    expect(store.isSectionCollapsed('done')).toBe(true);
+    expect(JSON.parse(storage.get('coworker:collapsed-sections'))).toEqual({ done: true });
+    expect(store.readStoredCollapsedSections()).toEqual({ done: true, new: true });
   });
 });

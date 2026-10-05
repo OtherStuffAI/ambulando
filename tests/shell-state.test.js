@@ -926,3 +926,20 @@ describe('Drive reference route normalization', () => {
     } finally { globalThis.window = original; }
   });
 });
+
+
+describe('Backlog on task view entry', () => {
+  it('collapses on entry and re-entry while keeping explicit expansion during the visit', () => {
+    const shell = createShellState();
+    shell.navSection = 'chat';
+    shell.collapsedSections = { new: false, done: true, ready: false };
+    shell.navSection = 'tasks';
+    expect(shell.collapsedSections).toEqual({ new: true, done: true, ready: false });
+    shell.collapsedSections.new = false;
+    shell.navSection = 'tasks';
+    expect(shell.collapsedSections.new).toBe(false);
+    shell.navSection = 'chat';
+    shell.navSection = 'tasks';
+    expect(shell.collapsedSections).toEqual({ new: true, done: true, ready: false });
+  });
+});

@@ -1064,7 +1064,7 @@ export function computeBoardColumns(activeTasks, doneTasks, summaryTasks, option
   }
   const states = TASK_BOARD_STATES;
   const labels = {
-    new: 'New',
+    new: 'Backlog',
     ready: 'Ready',
     in_progress: 'In Progress',
     blocked: 'Blocked',
@@ -1776,6 +1776,7 @@ export const taskBoardStateMixin = {
   },
 
   toggleTaskViewMode() {
+    this.collapsedSections = { ...this.collapsedSections, new: true };
     this.taskViewMode = this.taskViewMode === 'kanban' ? 'list' : 'kanban';
     this.syncRoute();
   },
@@ -1980,18 +1981,18 @@ export const taskBoardStateMixin = {
   },
 
   readStoredCollapsedSections() {
-    if (typeof window === 'undefined') return {};
+    if (typeof window === 'undefined') return { new: true };
     const slug = this.currentWorkspaceSlug;
     const key = slug
       ? `coworker:${slug}:collapsed-sections`
       : 'coworker:collapsed-sections';
     try {
       const raw = window.localStorage.getItem(key);
-      if (!raw) return {};
+      if (!raw) return { new: true };
       const parsed = JSON.parse(raw);
-      return typeof parsed === 'object' && parsed !== null ? parsed : {};
+      return typeof parsed === 'object' && parsed !== null ? { ...parsed, new: true } : { new: true };
     } catch {
-      return {};
+      return { new: true };
     }
   },
 
@@ -2060,6 +2061,9 @@ export const taskBoardStateMixin = {
       && this.selectedDocument?.record_id
       ? this.selectedDocument
       : null;
+    if (nextBoardId !== previousBoardId) {
+      this.collapsedSections = { ...this.collapsedSections, new: true };
+    }
     this.taskVisibleCount = 50;
     this.selectedBoardId = nextBoardId;
     this.syncSelectedChannelForPgBoard(nextBoardId);
