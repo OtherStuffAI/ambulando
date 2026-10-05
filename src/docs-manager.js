@@ -1,3 +1,4 @@
+import { visibleWikiIntegrityText } from './docs/editor/wiki-visible-text.js';
 import { bindWikiState } from './docs/wiki-links.js';
 import { prosemirrorToFlightDeckContentModel } from './docs/editor/prosemirror-to-flightdeck.js';
 import { wikiManagerMixin } from './docs/wiki-manager.js';
@@ -1440,14 +1441,7 @@ export const docsManagerMixin = {
   getVisibleDocRichEditorText() {
     const editors = [...(this.docRichEditorMountEl?.querySelectorAll?.('.ProseMirror') || [])];
     return editors
-      .map((element) => {
-        if (!element?.querySelector?.('[data-wiki-title]')) return String(element?.innerText || element?.textContent || '').trim();
-        const clone = element.cloneNode(true);
-        // Dynamic current titles are presentation; the integrity guard compares
-        // against the saved label so a rename cannot look like lost draft text.
-        for (const link of clone.querySelectorAll('[data-wiki-title]')) link.textContent = link.dataset.wikiTitle;
-        return String(clone.textContent || '').trim();
-      })
+      .map(visibleWikiIntegrityText)
       .sort((left, right) => right.length - left.length)[0] || '';
   },
 

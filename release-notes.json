@@ -2822,6 +2822,21 @@
         "Reassign or clear a task with one atomic update. Former assignees lose assignment attention while unread comment mentions and read positions remain intact.",
         "Repair cached assignment summaries to follow Tower\u2019s canonical primary assignee."
       ]
+    },
+    {
+      "buildNumber": 2210,
+      "label": "Safer wiki drafts and multiline documents",
+      "notes": [
+        "Preserve paragraph boundaries when checking documents with renamed wiki links.",
+        "Home and All docs retain unsaved drafts, and pending page creation refuses stale insertion ranges instead of overwriting later edits."
+      ]
+    },
+    {
+      "buildNumber": 2211,
+      "label": "Protect drafts during wiki navigation",
+      "notes": [
+        "Stay on the current page if typing changes a draft while Home or All docs is preserving it. Retry navigation after the draft settles."
+      ]
     }
   ]
 }

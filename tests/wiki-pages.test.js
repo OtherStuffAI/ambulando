@@ -23,7 +23,7 @@ function store() {
     documents: structuredClone(pages), selectedChannel: channel, selectedChannelId: 'channel', channels: [channel], isTowerPgMode: true,
     selectedDocument: { record_id: 'origin', pg_channel_id: 'channel', scope_id: 'scope' }, selectedDocId: 'origin',
     navSection: 'docs', docsHomeVisit: 0, docEditAccessState: 'editing',
-    openDoc: vi.fn(), persistSelectedDocDraft: vi.fn(), refreshDocuments: vi.fn(), closeDocEditor: vi.fn(), syncRoute: vi.fn(),
+    openDoc: vi.fn(), persistSelectedDocDraft: vi.fn().mockResolvedValue({ document_id: 'origin' }), refreshDocuments: vi.fn(), closeDocEditor: vi.fn(), syncRoute: vi.fn(),
     createDocument: vi.fn(async (title) => ({ record_id: 'new-page', title, pg_channel_id: 'channel' })),
     syncDocRichEditorContentModel: vi.fn(), saveSelectedDocItem: vi.fn(async () => { value.docEditDraftDirty = false; return value.selectedDocument; }),
   };
@@ -114,4 +114,50 @@ describe('channel wiki pages', () => {
     const opening = s.openChannelDocsHome(); await s.openChannelAllDocs(); finish(); await opening;
     expect(s.openDoc).not.toHaveBeenCalled(); expect(s.docsShowAll).toBe(true);
   });
+  it('All docs and unavailable Home preserve drafts before closing, and refuse navigation on persistence failure', async () => {
+    const s = store(); s.docEditDraftDirty = true;
+    let finish;
+    s.persistSelectedDocDraft.mockImplementation(() => new Promise((resolve) => { finish = resolve; }));
+    const opening = s.openChannelAllDocs();
+    expect(s.closeDocEditor).not.toHaveBeenCalled();
+    finish({ document_id: 'origin' }); expect(await opening).toBe(true);
+    expect(s.closeDocEditor).toHaveBeenCalled();
+    s.closeDocEditor.mockClear(); s.persistSelectedDocDraft.mockRejectedValue(new Error('Storage failed'));
+    expect(await s.openChannelAllDocs()).toBe(false);
+    expect(s.closeDocEditor).not.toHaveBeenCalled();
+    s.documents = []; await s.openChannelDocsHome();
+    expect(s.closeDocEditor).not.toHaveBeenCalled(); expect(s.error).toContain('Storage failed');
+    s.documents = structuredClone(pages);
+    s.persistSelectedDocDraft.mockResolvedValue(null);
+    expect(await s.followDocWikiLink('page-a')).toBe(false);
+  });
+  it('never inserts a stale picker range after edits made while creation is pending', async () => {
+    const s = store(); let finish;
+    s.createDocument.mockImplementation(() => new Promise((resolve) => { finish = resolve; }));
+    const insert = vi.fn();
+    const editor = { isDestroyed: false, state: { doc: {} }, setEditable: vi.fn(), chain: () => ({ focus() { return this; }, insertContentAt: insert, run() {} }) };
+    const creating = s.createDocWikiPage('New', { from: 1, to: 5 }, editor);
+    expect(editor.setEditable).toHaveBeenCalledWith(false);
+    // Programmatic/mapped updates can still arrive while native entry is paused.
+    editor.state.doc = { changed: true };
+    finish({ record_id: 'created', title: 'New' });
+    expect(await creating).toBe(false);
+    expect(insert).not.toHaveBeenCalled(); expect(s.openDoc).not.toHaveBeenCalled();
+    expect(s.error).toContain('originating page changed');
+    expect(editor.setEditable).toHaveBeenLastCalledWith(true);
+  });
+
+  it('does not close or jump over edits made while a navigation checkpoint is pending', async () => {
+    const s = store(); s.docEditDraftDirty = true; s.docEditorContent = 'Before';
+    let finish;
+    s.persistSelectedDocDraft.mockImplementation(() => new Promise((resolve) => { finish = resolve; }));
+    const navigating = s.openChannelAllDocs();
+    s.docEditorContent = 'New typing during checkpoint';
+    finish({ document_id: 'origin' });
+    expect(await navigating).toBe(false);
+    expect(s.closeDocEditor).not.toHaveBeenCalled();
+    expect(s.error).toContain('draft changed');
+    expect(s.docEditorContent).toBe('New typing during checkpoint');
+  });
+
 });

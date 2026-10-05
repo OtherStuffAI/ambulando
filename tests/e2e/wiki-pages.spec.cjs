@@ -30,7 +30,7 @@ async function seed(page, content = 'Notebook') {
     s.scheduleDocAutosave = () => {};
     s.releaseSelectedDocLeaseWhenSafe = async () => true;
     s.releaseLockManagedCheckout = async () => true;
-    s.persistSelectedDocDraft = async () => { s.__preserved = s.docRichEditorAdapter?.getContentModel()?.content; };
+    s.persistSelectedDocDraft = async () => { s.__preserved = s.docRichEditorAdapter?.getContentModel()?.content; return { document_id: s.selectedDocId }; };
     s.restoreSelectedDocDraft = async () => null;
     s.__events = [];
     s.createDocument = async (title, options) => {
@@ -122,4 +122,23 @@ test('mobile Home and All docs controls preserve channel and home fallback', asy
   await nav.getByRole('button', { name: 'Home', exact: true }).click();
   await expect(page.locator('.docs-editor-v3')).toHaveCount(0);
   await expect(nav).toContainText('Home page unavailable');
+});
+
+test('wiki integrity text preserves real browser paragraph separators across title changes', async ({ page }) => {
+  await seed(page, 'Plant list appears in ordinary prose.\n\n[Saved label](wiki:wiki-target)\n\nThird paragraph\n\nLast paragraph');
+  const result = await page.evaluate(() => {
+    const s = window.Alpine.store('chat');
+    const editor = document.querySelector('.doc-rich-editor .ProseMirror');
+    const before = editor.innerText;
+    const labelOffset = before.lastIndexOf('Plant list');
+    const expected = before.slice(0, labelOffset) + 'Saved label' + before.slice(labelOffset + 'Plant list'.length);
+    const normalized = s.getVisibleDocRichEditorText();
+    s.documents = s.documents.map((doc) => doc.record_id === 'wiki-target' ? { ...doc, title: 'A much longer renamed page' } : doc);
+    s.docRichEditorAdapter.refreshWikiLinks();
+    return { before, expected, normalized, renamed: s.getVisibleDocRichEditorText() };
+  });
+  expect(result.before).toContain('\n\n');
+  expect(result.normalized).toBe(result.expected);
+  expect(result.renamed).toBe(result.expected);
+  expect(result.normalized).toContain('Plant list appears in ordinary prose.');
 });

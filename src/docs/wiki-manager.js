@@ -14,13 +14,25 @@ export const wikiManagerMixin = {
   resolveDocWikiLink(attrs) {
     return resolveWikiPage(this.documents, this.selectedDocument?.pg_channel_id || this.selectedChannelId, attrs);
   },
+  async preserveWikiNavigationDraft() {
+    if (!this.docEditDraftDirty) return true;
+    const originId = this.selectedDocId;
+    const title = this.docEditorTitle;
+    const content = this.docEditorContent;
+    const editorDoc = this.docRichEditorAdapter?.editor?.state.doc;
+    try {
+      if (!await this.persistSelectedDocDraft({ immediate: true })) throw new Error('Draft persistence did not complete.');
+      if (this.selectedDocId !== originId || this.docEditorTitle !== title || this.docEditorContent !== content
+        || this.docRichEditorAdapter?.editor?.state.doc !== editorDoc) {
+        throw new Error('Your draft changed while being preserved. Try navigation again.');
+      }
+      return true;
+    } catch (error) { this.error = `Could not preserve your draft: ${error.message}`; return false; }
+  },
   async followDocWikiLink(documentId, options = {}) {
     const target = this.resolveDocWikiLink({ documentId }).page;
     if (!target) { this.error = 'Page deleted or unavailable.'; return false; }
-    if (this.docEditDraftDirty) {
-      try { await this.persistSelectedDocDraft({ immediate: true }); }
-      catch (error) { this.error = `Could not preserve your draft: ${error.message}`; return false; }
-    }
+    if (!await this.preserveWikiNavigationDraft()) return false;
     this.openDoc(target.record_id, options);
     return true;
   },
@@ -28,6 +40,7 @@ export const wikiManagerMixin = {
     if (this.wikiCreateBusy) return false;
     const origin = this.selectedDocument;
     if (!origin?.pg_channel_id || !title.trim()) { this.error = 'Select a channel document and name the page.'; return false; }
+    const originalEditorDoc = editor.state?.doc;
     this.wikiCreateBusy = true;
     this.error = null;
     try {
@@ -35,14 +48,14 @@ export const wikiManagerMixin = {
         const editable = await this.enterSelectedDocEditMode();
         if (editable === false) throw new Error(this.docEditAccessMessage || 'Could not edit the originating page.');
       }
-      if (this.selectedDocId !== origin.record_id || editor.isDestroyed) throw new Error('The originating page changed. Try again there.');
+      if (this.selectedDocId !== origin.record_id || editor.isDestroyed || editor.state?.doc !== originalEditorDoc) throw new Error('The originating page changed. Choose the link again there.');
       editor.setEditable?.(false);
       const found = this.resolveDocWikiLink({ title });
       if (found.state === 'ambiguous') throw new Error('Several pages have this title. Choose a specific page from the picker.');
       let target = found.page;
       if (!target) target = await this.createDocument(title.trim(), { scopeId: origin.scope_id, channelId: origin.pg_channel_id, open: false, throwOnError: true });
       if (!target || target.sync_status === 'failed') throw new Error(this.error || 'Could not create page.');
-      if (this.selectedDocId !== origin.record_id || editor.isDestroyed) throw new Error('Page created, but the originating page changed. Choose it from the picker to link it.');
+      if (this.selectedDocId !== origin.record_id || editor.isDestroyed || editor.state?.doc !== originalEditorDoc) throw new Error('Page created, but the originating page changed. Choose it from the picker to link it.');
       editor.chain().focus().insertContentAt(range, { type: 'fdWikiLink', attrs: { documentId: target.record_id, title: target.title } }).run();
       this.syncDocRichEditorContentModel();
       this.docEditDraftDirty = true;
@@ -89,16 +102,18 @@ export const wikiManagerMixin = {
     catch (error) { this.error = error.message || 'Could not load channel pages.'; return false; }
     if (visit !== this.docsHomeVisit || channelId !== this.selectedChannelId || this.navSection !== 'docs' || this.docsShowAll) return false;
     const home = resolveWikiPage(this.documents, channelId, { documentId: homeId }).page;
-    if (!home) { this.closeDocEditor?.({ syncRoute: options.syncRoute !== false }); return false; }
+    if (!home) { await this.openChannelAllDocs(options); return false; }
     return this.followDocWikiLink(home.record_id, options);
   },
-  async openChannelAllDocs() {
+  async openChannelAllDocs(options = {}) {
     this.docsHomeVisit++;
+    if (!await this.preserveWikiNavigationDraft()) return false;
     this.docsShowAll = true;
     this.closeDocEditor({ syncRoute: false });
     this.currentFolderId = null;
     this.docFilter = '';
     this.navSection = 'docs';
-    this.syncRoute?.();
+    if (options.syncRoute !== false) this.syncRoute?.();
+    return true;
   },
 };
