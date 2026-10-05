@@ -2746,6 +2746,22 @@
         "Red attention marks unread chats, assigned or mentioned task activity, and mentioned document activity. Routine task and document updates stay visible and neutral.",
         "Thread and task attachments stay with their parent. Standalone Deck files remain neutral. Existing read positions are preserved."
       ]
+    },
+    {
+      "buildNumber": 2196,
+      "label": "Clearer task records",
+      "notes": [
+        "Task records have a compact header, a distinct readable description and a wider desktop comments panel. Predecessors follow the description; scope stays in workspace navigation.",
+        "Comments remain newest first, with the existing Task and Comments tabs on mobile."
+      ]
+    },
+    {
+      "buildNumber": 2197,
+      "label": "Independent device sync checkpoints",
+      "notes": [
+        "Each browser cache now resumes independently on supporting Towers. Tower saves only sync positions that this cache has committed locally.",
+        "Pending edits survive upgrade and recovery. Interrupted acknowledgements retry safely, with older Tower support retained."
+      ]
     }
   ]
 }

@@ -3368,28 +3368,7 @@
                 </div>
               </div>
 
-              <nav class="mobile-detail-switcher task-detail-mobile-switcher" aria-label="Task detail sections">
-                <button
-                  type="button"
-                  class="mobile-detail-switcher-btn"
-                  :class="{ 'mobile-detail-switcher-btn-active': $store.chat.taskDetailMobilePane !== 'comments' }"
-                  :aria-selected="$store.chat.taskDetailMobilePane !== 'comments'"
-                  @click="$store.chat.taskDetailMobilePane = 'details'"
-                >Details</button>
-                <button
-                  type="button"
-                  class="mobile-detail-switcher-btn"
-                  :class="{ 'mobile-detail-switcher-btn-active': $store.chat.taskDetailMobilePane === 'comments' }"
-                  :aria-selected="$store.chat.taskDetailMobilePane === 'comments'"
-                  @click="$store.chat.taskDetailMobilePane = 'comments'"
-                >Comments</button>
-              </nav>
-
-              <div
-                class="task-detail-body"
-                :class="{ 'task-detail-body-mobile-comments': $store.chat.taskDetailMobilePane === 'comments' }"
-              >
-                <div class="task-detail-main">
+              <div class="task-record-heading">
                   <!-- Title -->
                   <div class="task-detail-record-header">
                     <div class="task-detail-title-row" x-show="!$store.chat.isTaskDetailEditing()">
@@ -3418,15 +3397,6 @@
                       </span>
                       <span class="task-detail-meta-pill" :class="{ 'task-detail-meta-muted': $store.chat.getTaskAssigneeNpubs($store.chat.editingTask).length === 0 }">
                         <span x-text="$store.chat.getTaskAssigneeLabel($store.chat.editingTask)"></span>
-                      </span>
-                      <span class="task-detail-meta-pill">
-                        <span
-                          class="scope-level-badge"
-                          :data-level="$store.chat.getTaskScopeLevel($store.chat.editingTask)"
-                          x-show="$store.chat.getTaskScopeLevel($store.chat.editingTask)"
-                          x-text="$store.chat.scopeLevelLabel($store.chat.getTaskScopeLevel($store.chat.editingTask))"
-                        ></span>
-                        <span x-text="$store.chat.getTaskScopeLabel($store.chat.editingTask)"></span>
                       </span>
                       <template x-for="tag in $store.chat.getTaskTags($store.chat.editingTask)" :key="`detail-meta-${tag}`">
                         <span class="task-detail-meta-pill task-detail-tag-pill" x-text="tag"></span>
@@ -3478,34 +3448,6 @@
                         <button type="button" class="task-quick-date-link" :disabled="!$store.chat.isTaskDetailEditing()" @click="$store.chat.quickSetTaskState('archive')">Archive</button>
                       </span>
                     </div>
-                    <div class="task-field">
-                      <label class="task-field-label">Scheduled</label>
-                      <input type="date" x-model="$store.chat.editingTask.scheduled_for" @change="$store.chat.handleEditingTaskDraftChanged()" :disabled="!$store.chat.isTaskDetailEditing()" />
-                      <span class="task-quick-date-links">
-                        <button type="button" class="task-quick-date-link" :disabled="!$store.chat.isTaskDetailEditing()" @click="$store.chat.setTaskDueToday()">Today</button>
-                        <span class="task-quick-date-sep">|</span>
-                        <button type="button" class="task-quick-date-link" :disabled="!$store.chat.isTaskDetailEditing()" @click="$store.chat.setTaskDueThisWeek()">This Week</button>
-                      </span>
-                    </div>
-                    <div class="task-field">
-                      <label class="task-field-label">Priority</label>
-                      <select x-model="$store.chat.editingTask.priority" @change="$store.chat.handleEditingTaskDraftChanged()" :disabled="!$store.chat.isTaskDetailEditing()">
-                        <option value="sand">Sand</option>
-                        <option value="pebble">Pebble</option>
-                        <option value="rock">Rock</option>
-                      </select>
-                    </div>
-                    <div class="task-field">
-                      <label class="task-field-label">Tags</label>
-                      <input type="text" x-model="$store.chat.editingTask.tags" @input="$store.chat.handleEditingTaskDraftChanged()" :readonly="!$store.chat.isTaskDetailEditing()" placeholder="comma,separated" />
-                      <template x-if="$store.chat.getTaskTags($store.chat.editingTask).length > 0">
-                        <div class="task-detail-tags">
-                          <template x-for="tag in $store.chat.getTaskTags($store.chat.editingTask)" :key="`detail-${tag}`">
-                            <span class="task-detail-tag" x-text="tag"></span>
-                          </template>
-                        </div>
-                      </template>
-                    </div>
                   </div>
 
                   <div class="task-field task-field-wide" x-show="$store.chat.isTaskDetailEditing()">
@@ -3554,49 +3496,66 @@
                     </ul>
                   </div>
 
-                  <!-- Scope -->
-                  <div class="task-field" x-show="$store.chat.isTaskDetailEditing()" x-data="{ scopeIdx: 0 }" @click.outside="$store.chat.closeScopePicker()">
-                    <label class="task-field-label">Scope</label>
-                    <template x-if="$store.chat.editingTask.scope_id && !$store.chat.showScopePicker">
-                      <div class="scope-picker-selected">
-                        <span class="scope-level-badge" :data-level="$store.chat.scopesMap.get($store.chat.editingTask.scope_id)?.level" x-text="$store.chat.scopeLevelLabel($store.chat.scopesMap.get($store.chat.editingTask.scope_id)?.level)"></span>
-                        <span x-text="$store.chat.getScopeBreadcrumb($store.chat.editingTask.scope_id)"></span>
-                        <button type="button" class="scope-clear-btn" x-show="$store.chat.isTaskDetailEditing()" @click="$store.chat.clearTaskScope()" :disabled="$store.chat.taskScopeCascadePending" title="Remove scope">x</button>
-                      </div>
-                    </template>
-                    <div class="scope-typeahead-wrapper">
-                      <input
-                        type="text"
-                        x-show="$store.chat.isTaskDetailEditing()"
-                        x-model="$store.chat.scopePickerQuery"
-                        placeholder="Search scopes..."
-                        @focus="$store.chat.openScopePicker(); scopeIdx = 0"
-                        @keydown.escape="$store.chat.closeScopePicker()"
-                        @keydown.arrow-down.prevent="scopeIdx = Math.min(scopeIdx + 1, $store.chat.scopePickerFlat.length - 1)"
-                        @keydown.arrow-up.prevent="scopeIdx = Math.max(scopeIdx - 1, 0)"
-                        @keydown.enter.prevent="if ($store.chat.scopePickerFlat[scopeIdx]) $store.chat.selectScopeForTask($store.chat.scopePickerFlat[scopeIdx].record_id)"
-                      />
-                      <ul class="scope-typeahead-results" x-show="$store.chat.isTaskDetailEditing() && $store.chat.showScopePicker && $store.chat.scopePickerFlat.length > 0" x-cloak>
-                        <template x-for="(item, idx) in $store.chat.scopePickerFlat" :key="item.record_id">
-                          <li
-                            class="scope-typeahead-option"
-                            :class="{ 'scope-typeahead-active': idx === scopeIdx }"
-                            @click="$store.chat.selectScopeForTask(item.record_id)"
-                            @mouseenter="scopeIdx = idx"
-                          >
-                            <span class="scope-level-badge" :data-level="item.level" x-text="$store.chat.scopeLevelLabel(item.level)"></span>
-                            <span x-text="item.title"></span>
-                            <span class="scope-typeahead-breadcrumb" x-show="item.breadcrumb" x-text="item.breadcrumb"></span>
-                          </li>
-                        </template>
-                      </ul>
-                      <div class="scope-typeahead-empty" x-show="$store.chat.isTaskDetailEditing() && $store.chat.showScopePicker && $store.chat.scopePickerFlat.length === 0">
-                        No scopes found.
-                      </div>
+              </div>
+              <nav class="mobile-detail-switcher task-detail-mobile-switcher" aria-label="Task detail sections">
+                <button
+                  type="button"
+                  class="mobile-detail-switcher-btn"
+                  :class="{ 'mobile-detail-switcher-btn-active': $store.chat.taskDetailMobilePane !== 'comments' }"
+                  :aria-selected="$store.chat.taskDetailMobilePane !== 'comments'"
+                  @click="$store.chat.taskDetailMobilePane = 'details'"
+                >Task</button>
+                <button
+                  type="button"
+                  class="mobile-detail-switcher-btn"
+                  :class="{ 'mobile-detail-switcher-btn-active': $store.chat.taskDetailMobilePane === 'comments' }"
+                  :aria-selected="$store.chat.taskDetailMobilePane === 'comments'"
+                  @click="$store.chat.taskDetailMobilePane = 'comments'"
+                >Comments</button>
+              </nav>
+
+              <div
+                class="task-detail-body"
+                :class="{ 'task-detail-body-mobile-comments': $store.chat.taskDetailMobilePane === 'comments' }"
+              >
+                <div class="task-detail-main">
+                  <!-- Description -->
+                  <div
+                    class="task-field task-field-wide task-description-section"
+                    x-show="$store.chat.isTaskDetailEditing() || $store.chat.editingTask.description"
+                  >
+                    <div class="task-field-label-row">
+                      <label class="task-field-label">Description</label>
+                      <a
+                        class="task-desc-toggle"
+                        x-show="!$store.chat.isTowerPgMode && $store.chat.isTaskDetailEditing() && $store.chat.taskDescriptionEditing && $store.chat.editingTask.description"
+                        @click.prevent="$store.chat.taskDescriptionEditing = false"
+                      >Preview</a>
+                      <a
+                        class="task-desc-toggle"
+                        x-show="!$store.chat.isTowerPgMode && $store.chat.isTaskDetailEditing() && !$store.chat.taskDescriptionEditing"
+                        @click.prevent="$store.chat.taskDescriptionEditing = true"
+                      >Edit</a>
                     </div>
-                    <div class="task-inline-status" x-show="$store.chat.taskScopeCascadePending || $store.chat.taskScopeCascadeMessage">
-                      <span class="task-inline-spinner" x-show="$store.chat.taskScopeCascadePending" aria-hidden="true"></span>
-                      <span x-text="$store.chat.taskScopeCascadePending ? 'Updating subtasks and permissions…' : $store.chat.taskScopeCascadeMessage"></span>
+                    <div>
+                      <div
+                        class="task-mention-composer"
+                        x-show="$store.chat.taskDescriptionEditing"
+                        contenteditable="true"
+                        role="textbox"
+                        aria-multiline="true"
+                        data-placeholder="Add a description..."
+                        x-init="$store.chat.initMentionComposer($el, 'task-description')"
+                        x-effect="$store.chat.syncMentionComposerFromModel($el, 'task-description', $store.chat.editingTask?.description || '')"
+                        @input="$store.chat.syncMentionComposerModel($event.currentTarget); $store.chat.handleMentionInput($event.currentTarget, $event)"
+                        @keydown="$store.chat.handleMentionKeydown($event)"
+                        @paste="$store.chat.handleMentionComposerPaste($event, 'task-description')"
+                      ></div>
+                      <div
+                        class="task-desc-preview chat-post-markdown"
+                        x-show="!$store.chat.taskDescriptionEditing"
+                        x-html="$store.chat.renderMarkdown($store.chat.editingTask.description)"
+                      ></div>
                     </div>
                   </div>
 
@@ -3667,6 +3626,40 @@
                   </div>
 
                   <!-- Flow linkage -->
+                  <details class="task-secondary-details" x-show="$store.chat.isTaskDetailEditing()">
+                    <summary>Task details</summary>
+                    <div class="task-detail-fields">
+                    <div class="task-field">
+                      <label class="task-field-label">Scheduled</label>
+                      <input type="date" x-model="$store.chat.editingTask.scheduled_for" @change="$store.chat.handleEditingTaskDraftChanged()" :disabled="!$store.chat.isTaskDetailEditing()" />
+                      <span class="task-quick-date-links">
+                        <button type="button" class="task-quick-date-link" :disabled="!$store.chat.isTaskDetailEditing()" @click="$store.chat.setTaskDueToday()">Today</button>
+                        <span class="task-quick-date-sep">|</span>
+                        <button type="button" class="task-quick-date-link" :disabled="!$store.chat.isTaskDetailEditing()" @click="$store.chat.setTaskDueThisWeek()">This Week</button>
+                      </span>
+                    </div>
+                    <div class="task-field">
+                      <label class="task-field-label">Priority</label>
+                      <select x-model="$store.chat.editingTask.priority" @change="$store.chat.handleEditingTaskDraftChanged()" :disabled="!$store.chat.isTaskDetailEditing()">
+                        <option value="sand">Sand</option>
+                        <option value="pebble">Pebble</option>
+                        <option value="rock">Rock</option>
+                      </select>
+                    </div>
+                    <div class="task-field">
+                      <label class="task-field-label">Tags</label>
+                      <input type="text" x-model="$store.chat.editingTask.tags" @input="$store.chat.handleEditingTaskDraftChanged()" :readonly="!$store.chat.isTaskDetailEditing()" placeholder="comma,separated" />
+                      <template x-if="$store.chat.getTaskTags($store.chat.editingTask).length > 0">
+                        <div class="task-detail-tags">
+                          <template x-for="tag in $store.chat.getTaskTags($store.chat.editingTask)" :key="`detail-${tag}`">
+                            <span class="task-detail-tag" x-text="tag"></span>
+                          </template>
+                        </div>
+                      </template>
+                    </div>
+                    </div>
+                  </details>
+
                   <div
                     class="task-field task-field-wide"
                     x-show="false"
@@ -3745,46 +3738,6 @@
                     </template>
                   </div>
 
-                  <!-- Description -->
-                  <div
-                    class="task-field task-field-wide task-description-section"
-                    x-show="$store.chat.isTaskDetailEditing() || $store.chat.editingTask.description"
-                  >
-                    <div class="task-field-label-row">
-                      <label class="task-field-label">Description</label>
-                      <a
-                        class="task-desc-toggle"
-                        x-show="!$store.chat.isTowerPgMode && $store.chat.isTaskDetailEditing() && $store.chat.taskDescriptionEditing && $store.chat.editingTask.description"
-                        @click.prevent="$store.chat.taskDescriptionEditing = false"
-                      >Preview</a>
-                      <a
-                        class="task-desc-toggle"
-                        x-show="!$store.chat.isTowerPgMode && $store.chat.isTaskDetailEditing() && !$store.chat.taskDescriptionEditing"
-                        @click.prevent="$store.chat.taskDescriptionEditing = true"
-                      >Edit</a>
-                    </div>
-                    <div>
-                      <div
-                        class="task-mention-composer"
-                        x-show="$store.chat.taskDescriptionEditing"
-                        contenteditable="true"
-                        role="textbox"
-                        aria-multiline="true"
-                        data-placeholder="Add a description..."
-                        x-init="$store.chat.initMentionComposer($el, 'task-description')"
-                        x-effect="$store.chat.syncMentionComposerFromModel($el, 'task-description', $store.chat.editingTask?.description || '')"
-                        @input="$store.chat.syncMentionComposerModel($event.currentTarget); $store.chat.handleMentionInput($event.currentTarget, $event)"
-                        @keydown="$store.chat.handleMentionKeydown($event)"
-                        @paste="$store.chat.handleMentionComposerPaste($event, 'task-description')"
-                      ></div>
-                      <div
-                        class="task-desc-preview chat-post-markdown"
-                        x-show="!$store.chat.taskDescriptionEditing"
-                        x-html="$store.chat.renderMarkdown($store.chat.editingTask.description)"
-                      ></div>
-                    </div>
-                  </div>
-
                   <!-- Subtasks -->
                   <div
                     class="subtask-list-field"
@@ -3851,7 +3804,7 @@
                 <div id="task-comments-panel" class="task-comments-section">
                   <div class="task-comments-header">
                     <div class="task-comments-header-copy">
-                      <label class="task-field-label">Activity</label>
+                      <label class="task-field-label">Comments</label>
                       <span x-text="$store.chat.taskComments.length === 1 ? '1 comment' : `${$store.chat.taskComments.length} comments`"></span>
                     </div>
                     <div class="task-comments-header-actions">

@@ -40,6 +40,8 @@ import {
   getTowerPgWorkspaceScopes,
   getTowerPgWorkspaceSync,
   getTowerPgRecordSync,
+  getTowerPgService,
+  towerPgRecordClient,
   getTowerPgResourceViewStates,
   downloadStorageObject,
 } from './api.js';
@@ -1562,15 +1564,24 @@ function mapPgSyncGroup(group = {}, workspaceOwnerNpub = '') {
 }
 
 export async function hydrateTowerPgSyncBundle(store, bundle = {}, deps = {}) {
+  if (bundle.device_lock) return (await import('./pg-device-checkpoints.js')).commitDeviceLease(bundle.device_lock);
   if (bundle.thread_history_page) return materializeThreadHistoryPage(store, bundle.thread_history_page);
-  if (bundle.protocol_version === 1) {
-    const { applyPgRecordChanges, resetPgRecordAuthority, reconcilePgRecordConflicts, rebuildPgRecordSummaries } = await import('./pg-record-delta.js');
+  if (bundle.device_action) {
+    const { commitDeviceMetadata } = await import('./pg-device-checkpoints.js');
+    const { recordDeltaCursorKey } = await import('./pg-record-delta.js');
+    return commitDeviceMetadata(recordDeltaCursorKey(store), { ...bundle.device_action, deviceLease: bundle.local_apply_options?.deviceLease });
+  }
+  if ([1, 2].includes(bundle.protocol_version)) {
+    const { applyPgRecordChanges, resetPgRecordAuthority, reconcilePgRecordConflicts, rebuildPgRecordSummaries, retireSnapshotOmissions } = await import('./pg-record-delta.js');
+    if (bundle.resume_snapshot_retirement) return retireSnapshotOmissions(store, bundle.local_apply_options);
     if (bundle.rebuild_summaries) return rebuildPgRecordSummaries(store);
     if (bundle.reconcile_commands) return reconcilePgRecordConflicts(store, { acceptRemoteKey: bundle.accept_remote_key || null });
     if (bundle.reference_directory) {
       const context = resolveTowerPgWorkspaceContext(store);
       const db = getWorkspaceDb();
-      await db.transaction('rw', db.workspace_members, db.groups, async () => {
+      const { assertDeviceLease } = await import('./pg-device-checkpoints.js');
+      await db.transaction('rw', db.workspace_members, db.groups, db.sync_state, async () => {
+        await assertDeviceLease(db, bundle.local_apply_options?.deviceLease);
         const members = (bundle.members || []).map(row => mapPgWorkspaceMemberToLocal(row, context)).filter(Boolean);
         const groups = (bundle.groups || []).map(row => mapPgSyncGroup(row, context.workspaceOwnerNpub));
         if (members.length) await db.workspace_members.bulkPut(members);
@@ -1829,8 +1840,55 @@ async function syncTowerPgRecordWorkspace(store, options, deps) {
   const context = resolveTowerPgWorkspaceContext(store);
   const { recordDeltaCursorKey, PG_RECORD_DELTA_FAMILIES } = await import('./pg-record-delta.js');
   assertTowerPgWorkspaceCurrent(store, context);
+  const { discoverRecordProtocol, syncDeviceRecords, withDeviceCacheLock, withWorkerDeviceLease } = await import('./pg-device-checkpoints.js');
+  // Existing v1-only injected ports do not imply a discovery capability.
+  const protocol = deps.getTowerPgRecordSync && !deps.getTowerPgService ? 1
+    : await discoverRecordProtocol(context, deps.getTowerPgService || getTowerPgService);
+  assertTowerPgWorkspaceCurrent(store, context);
+  const deviceMaterialize = bundle => (deps.hydrateTowerPgSyncBundle || hydrateTowerPgSyncBundle)(store, bundle, deps);
+  const runDevice = lease => syncDeviceRecords({
+    context, options, cursorKey: recordDeltaCursorKey(store),
+    readState: deps.getSyncState || getSyncState,
+    materialize: bundle => deviceMaterialize({ ...bundle, local_apply_options: { ...bundle.local_apply_options, ...(lease?.token ? { deviceLease: lease.token } : {}) } }),
+    assertHeld: lease?.assertHeld,
+    readPage: deps.getTowerPgRecordSync || getTowerPgRecordSync,
+    client: deps.towerPgRecordClient || towerPgRecordClient,
+    assertCurrent: () => assertTowerPgWorkspaceCurrent(store, context),
+    preparePage: async (page, state) => {
+      if (state.viewBaselineInitialized) return;
+      await (deps.getTowerPgResourceViewStates || getTowerPgResourceViewStates)(context.workspaceId, {
+        baseUrl: context.baseUrl, appNpub: context.appNpub, limit: 1, useWorkspaceKey: false,
+      });
+      const canReadDirectory = store.currentWorkspace?.pgMe?.permissions?.includes('workspace.read') === true;
+      if (Array.isArray(page.actors) && !canReadDirectory) return;
+      const readDirectory = async (read, field) => {
+        try { return (await read(context.workspaceId, { baseUrl: context.baseUrl, appNpub: context.appNpub, limit: 200 }))[field] || []; }
+        catch (error) { if (error.status === 403) return []; throw error; }
+      };
+      const members = await readDirectory(deps.getTowerPgWorkspaceMembers || getTowerPgWorkspaceMembers, 'members');
+      const groups = await readDirectory(deps.getTowerPgWorkspaceGroups || getTowerPgWorkspaceGroups, 'groups');
+      for (let offset = 0; offset < Math.max(members.length, groups.length); offset += 200) {
+        assertTowerPgWorkspaceCurrent(store, context);
+        await (deps.hydrateTowerPgSyncBundle || hydrateTowerPgSyncBundle)(store, { protocol_version: 2,
+          local_apply_options: { deviceLease: lease?.token },
+          reference_directory: true, members: members.slice(offset, offset + 200), groups: groups.slice(offset, offset + 200) }, deps);
+      }
+    },
+  });
+  if (protocol === 2) {
+    const locks = deps.deviceLocks || globalThis.navigator?.locks;
+    return locks?.request ? withDeviceCacheLock(store.workspaceDbKey || context.workspaceId, () => runDevice(), locks)
+      : withWorkerDeviceLease(deviceMaterialize, () => assertTowerPgWorkspaceCurrent(store, context), runDevice);
+  }
   const read = deps.getTowerPgRecordSync || getTowerPgRecordSync;
-  const state = await (deps.getSyncState || getSyncState)(recordDeltaCursorKey(store));
+  let state = await (deps.getSyncState || getSyncState)(recordDeltaCursorKey(store));
+  if (state?.device) {
+    // A rolled-back server cannot consume a v2 token. Replace its generation
+    // through a v1 snapshot while retaining current views and local intent.
+    await (deps.hydrateTowerPgSyncBundle || hydrateTowerPgSyncBundle)(store, { protocol_version: 1, reset_authority: true,
+      local_apply_options: { preserveViews: true, expectedCursor: state.cursor, expectedGeneration: Number(state.localGeneration || 0) } }, deps);
+    state = await (deps.getSyncState || getSyncState)(recordDeltaCursorKey(store));
+  }
   let cursor = state?.cursor || null;
   let applied = 0;
   let localGeneration = Number(state?.localGeneration || 0);

@@ -836,3 +836,34 @@ describe('api sync auth and owner-write detection', () => {
     });
   });
 });
+
+it('signs exact v2 registration, page, acknowledgement, read and retirement requests', async () => {
+  const previousFetch = globalThis.fetch;
+  workspaceSecret = new Uint8Array(32).fill(7);
+  createNip98AuthHeaderMock.mockClear(); createNip98AuthHeaderForSecretMock.mockClear();
+  const requests = [];
+  globalThis.fetch = vi.fn(async (url, options) => { requests.push({ url, ...options }); return { ok: true, status: 200, json: async () => ({}), text: async () => '' }; });
+  try {
+    const api = await import('../src/api.js');
+    const baseUrl = 'http://localhost:3100', workspace = 'workspace', client = '10000000-0000-4000-8000-000000000001';
+    const common = { baseUrl, appNpub: 'app' };
+    await api.towerPgRecordClient(workspace, client, { ...common, operation: 'register' });
+    await api.getTowerPgRecordSync(workspace, { ...common, protocolVersion: 2, clientId: client, cursor: 'local', limit: 200 });
+    await api.towerPgRecordClient(workspace, client, { ...common, operation: 'ack', cursor: 'next', expectedRevision: '9007199254740993' });
+    await api.towerPgRecordClient(workspace, client, { ...common, operation: 'read' });
+    await api.towerPgRecordClient(workspace, client, { ...common, operation: 'retire' });
+    expect(requests.map(r => r.method)).toEqual(['POST', 'GET', 'POST', 'GET', 'DELETE']);
+    expect(requests[0].body).toBe('');
+    expect(requests[1].url).toContain(`protocol_version=2&limit=200&client_id=${client}&cursor=local`);
+    expect(requests[2].body).toBe('{"cursor":"next","expected_revision":"9007199254740993"}');
+    expect(requests[2].url).toContain(`/clients/${client}/ack?protocol_version=2`);
+    for (let i = 0; i < requests.length; i++) {
+      const [signedUrl, signedMethod, signedBody] = createNip98AuthHeaderMock.mock.calls[i];
+      expect(signedUrl).toBe(requests[i].url); expect(signedMethod).toBe(requests[i].method);
+      const serialized = signedBody == null ? undefined : typeof signedBody === 'string' ? signedBody : JSON.stringify(signedBody);
+      expect(serialized).toBe(requests[i].body);
+    }
+    expect(createNip98AuthHeaderForSecretMock).not.toHaveBeenCalled();
+    await expect(api.getTowerPgRecordSync(workspace, { ...common, protocolVersion: 2, clientId: client })).rejects.toThrow('local cursor');
+  } finally { globalThis.fetch = previousFetch; workspaceSecret = null; }
+});

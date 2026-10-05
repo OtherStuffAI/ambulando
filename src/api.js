@@ -313,6 +313,7 @@ async function signedTowerPgFetch(pathOrUrl, {
   authTimeoutMs,
   timeoutMs = DEFAULT_FETCH_TIMEOUT_MS,
   useWorkspaceKey = true,
+  rawBody = false,
 } = {}) {
   const requestUrl = resolveTowerPgUrl(pathOrUrl, baseUrl);
   const headers = {
@@ -325,7 +326,7 @@ async function signedTowerPgFetch(pathOrUrl, {
   return fetch(requestUrl, {
     method,
     headers,
-    body: body !== undefined ? JSON.stringify(body) : undefined,
+    body: body !== undefined ? (rawBody ? body : JSON.stringify(body)) : undefined,
     signal: createFetchTimeoutSignal(timeoutMs),
   });
 }
@@ -853,13 +854,25 @@ export async function getTowerPgWorkspaceScopes(workspaceId, { baseUrl = _baseUr
   return json(resp, { requestUrl: finalUrl, method: 'GET', prefix: 'Tower PG API' });
 }
 
-export async function getTowerPgRecordSync(workspaceId, { baseUrl = _baseUrl, appNpub = FLIGHT_DECK_PG_APP_NPUB, cursor = null, limit = 200, timeoutMs = 30_000 } = {}) {
-  const params = new URLSearchParams({ protocol_version: '1', limit: String(Math.min(200, Math.max(1, limit))) });
+export async function getTowerPgRecordSync(workspaceId, { baseUrl = _baseUrl, appNpub = FLIGHT_DECK_PG_APP_NPUB, cursor = null, limit = 200, timeoutMs = 30_000, protocolVersion = 1, clientId = null } = {}) {
+  if (protocolVersion === 2 && (!clientId || !cursor)) throw new Error('Device record sync requires client and local cursor');
+  const params = new URLSearchParams({ protocol_version: String(protocolVersion), limit: String(Math.min(200, Math.max(1, limit))) });
+  if (protocolVersion === 2) params.set('client_id', clientId);
   if (cursor) params.set('cursor', cursor);
   const requestPath = `/api/v4/flightdeck-pg/workspaces/${encodeURIComponent(workspaceId)}/record-sync?${params}`;
   const requestUrl = resolveTowerPgUrl(requestPath, baseUrl);
-  const resp = await signedTowerPgFetch(requestPath, { baseUrl, appNpub, timeoutMs });
+  const resp = await signedTowerPgFetch(requestPath, { baseUrl, appNpub, timeoutMs, useWorkspaceKey: protocolVersion !== 2 });
   return json(resp, { requestUrl, method: 'GET', prefix: 'Tower PG record sync' });
+}
+
+export async function towerPgRecordClient(workspaceId, clientId, { operation = 'read', cursor, expectedRevision, baseUrl = _baseUrl, appNpub = FLIGHT_DECK_PG_APP_NPUB, timeoutMs = 30_000 } = {}) {
+  if (!['read', 'register', 'ack', 'retire'].includes(operation)) throw new Error('Invalid checkpoint operation');
+  const method = { read: 'GET', register: 'POST', ack: 'POST', retire: 'DELETE' }[operation];
+  const body = operation === 'register' ? '' : operation === 'ack' ? { cursor, expected_revision: expectedRevision } : undefined;
+  const path = `/api/v4/flightdeck-pg/workspaces/${encodeURIComponent(workspaceId)}/record-sync/clients/${encodeURIComponent(clientId)}${operation === 'ack' ? '/ack' : ''}?protocol_version=2`;
+  const requestUrl = resolveTowerPgUrl(path, baseUrl);
+  const response = await signedTowerPgFetch(path, { method, body, rawBody: operation === 'register', baseUrl, appNpub, timeoutMs, useWorkspaceKey: false });
+  return json(response, { requestUrl, method, prefix: 'Tower PG device checkpoint' });
 }
 
 export async function getTowerPgWorkspaceSync(workspaceId, { baseUrl = _baseUrl, appNpub = FLIGHT_DECK_PG_APP_NPUB, cursor = null, limit = 500, timeoutMs = 30_000 } = {}) {
@@ -991,7 +1004,7 @@ export async function getTowerPgChannelThreads(workspaceId, channelId, { baseUrl
   return json(resp, { requestUrl, method: 'GET', prefix: 'Tower PG API' });
 }
 
-export async function getTowerPgResourceViewStates(workspaceId, { baseUrl = _baseUrl, appNpub = FLIGHT_DECK_PG_APP_NPUB, resourceType = null, channelId = null, limit = 200, cursor = null } = {}) {
+export async function getTowerPgResourceViewStates(workspaceId, { baseUrl = _baseUrl, appNpub = FLIGHT_DECK_PG_APP_NPUB, resourceType = null, channelId = null, limit = 200, cursor = null, useWorkspaceKey = true } = {}) {
   const encodedWorkspaceId = encodeURIComponent(String(workspaceId || '').trim());
   if (!encodedWorkspaceId) throw new Error('Tower PG workspace id is required');
   const params = new URLSearchParams();
@@ -1001,7 +1014,7 @@ export async function getTowerPgResourceViewStates(workspaceId, { baseUrl = _bas
   if (cursor) params.set('cursor', String(cursor));
   const requestPath = `/api/v4/flightdeck-pg/workspaces/${encodedWorkspaceId}/resource-view-states?${params.toString()}`;
   const requestUrl = resolveTowerPgUrl(requestPath, baseUrl);
-  const resp = await signedTowerPgFetch(requestPath, { baseUrl, appNpub });
+  const resp = await signedTowerPgFetch(requestPath, { baseUrl, appNpub, useWorkspaceKey });
   return json(resp, { requestUrl, method: 'GET', prefix: 'Tower PG API' });
 }
 

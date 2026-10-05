@@ -9,6 +9,9 @@ function readProjectFile(relativePath) {
 }
 
 function taskPanelFixture(options = {}) {
+  const source = readProjectFile('index.html');
+  const navStart = source.indexOf('<nav class="mobile-detail-switcher task-detail-mobile-switcher"');
+  const mobileTabs = source.slice(navStart, source.indexOf('</nav>', navStart) + 6);
   const css = readProjectFile('src/styles.css');
   const sectionClass = options.sectionClass || 'tasks-section chat-task-inline-section';
   const descriptionRepeat = options.descriptionRepeat || 48;
@@ -37,6 +40,7 @@ function taskPanelFixture(options = {}) {
             <div class="content-scroll-area">
               <section class="${sectionClass}">
               <div class="task-detail-panel">
+                ${mobileTabs}
                 <div class="task-detail-body">
                   <div class="task-detail-main">
                     <h1 class="task-detail-title-display">Task detail</h1>
@@ -53,6 +57,7 @@ function taskPanelFixture(options = {}) {
                       </div>
                       <button class="thread-resize-btn task-comments-fullscreen-btn" type="button" aria-label="Open activity fullscreen">Open</button>
                     </div>
+                    <div class="task-comment-input-area"><div class="task-comment-composer" contenteditable="true" role="textbox" aria-label="Comment"></div><button type="button">Post comment</button></div>
                     <div class="task-comments-list">
                       ${commentRows}
                     </div>
@@ -87,6 +92,9 @@ function taskPanelFixture(options = {}) {
           </div>
         </main>
         <script>
+          document.querySelectorAll('.task-detail-mobile-switcher button').forEach((button, index) => {
+            button.addEventListener('click', () => document.querySelector('.task-detail-body').classList.toggle('task-detail-body-mobile-comments', index === 1));
+          });
           const backdrop = document.querySelector('.task-comments-fullscreen-backdrop');
           document.querySelector('.task-comments-fullscreen-btn').addEventListener('click', () => {
             backdrop.style.display = 'flex';
@@ -118,8 +126,8 @@ test('task activity header exposes only the fullscreen comment reader control', 
   await page.setContent(taskPanelFixture());
 
   const normal = await panelMetrics(page);
-  expect(normal.commentsShare).toBeGreaterThan(0.38);
-  expect(normal.commentsShare).toBeLessThan(0.42);
+  expect(normal.commentsShare).toBeGreaterThan(0.53);
+  expect(normal.commentsShare).toBeLessThan(0.57);
   await expect(page.locator('.task-comments-panel-rail')).toHaveCount(0);
   await expect(page.locator('.task-comments-resize-btn')).toHaveCount(0);
   await expect(page.locator('.task-comments-fullscreen-btn')).toHaveCount(1);
@@ -215,3 +223,22 @@ test('long task descriptions and comments stay within their panels', async ({ pa
   expect(metrics.descriptionScrollWidth).toBeLessThanOrEqual(metrics.descriptionClientWidth + 1);
   expect(metrics.commentScrollWidth).toBeLessThanOrEqual(metrics.commentClientWidth + 1);
 });
+
+for (const width of [390, 320]) {
+  test(`mobile Task / Comments tabs retain one usable panel at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 820 });
+    await page.setContent(taskPanelFixture());
+    await expect(page.locator('.task-detail-main')).toBeVisible();
+    await expect(page.locator('.task-comments-section')).toBeHidden();
+    await page.getByRole('button', { name: 'Comments', exact: true }).click();
+    await expect(page.locator('.task-detail-main')).toBeHidden();
+    await expect(page.locator('.task-comments-section')).toBeVisible();
+    await page.getByRole('textbox', { name: 'Comment', exact: true }).fill('Mobile comment');
+    await expect(page.getByRole('textbox', { name: 'Comment', exact: true })).toHaveText('Mobile comment');
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
+    expect(overflow).toBe(false);
+    await page.getByRole('button', { name: 'Task', exact: true }).click();
+    await expect(page.locator('.task-detail-main')).toBeVisible();
+    await expect(page.locator('.task-comments-section')).toBeHidden();
+  });
+}

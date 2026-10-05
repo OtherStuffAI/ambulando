@@ -46,6 +46,20 @@ describe('task comments panel fullscreen affordance', () => {
     expect(commentsIndex).toBeGreaterThan(mainIndex);
   });
 
+  it('places a scope-free heading above the brief and predecessors after its description', () => {
+    const html = readProjectFile('index.html');
+    const record = html.slice(html.indexOf('class="task-detail-panel"'), html.indexOf('id="task-comments-panel"'));
+    expect(record.indexOf('task-record-heading')).toBeLessThan(record.indexOf('task-detail-body"'));
+    expect(record.indexOf('task-description-section')).toBeLessThan(record.indexOf('>Predecessors</label>'));
+    expect(record).not.toContain('>Scope</label>');
+    expect(record).not.toContain('getTaskScopeLabel');
+    expect(record).toContain('>Task</button>');
+    expect(record).toContain('>Comments</button>');
+    expect(record).toContain('handleEditingTaskDraftChanged()');
+    expect(record).toContain('assignEditingTask(person.npub)');
+    expect(record).toContain('handleMentionComposerPaste');
+  });
+
   it('defines fullscreen store state and detail lifecycle reset', () => {
     const appSource = readProjectFile('src/app.js');
     const taskDetailSource = readProjectFile('src/task-detail-manager.js');
@@ -99,7 +113,7 @@ describe('task comments panel fullscreen affordance', () => {
     expect(headerRule).toMatch(/z-index\s*:\s*31/);
 
     const bodyRule = extractRule(css, '\n.task-detail-body');
-    expect(bodyRule).toMatch(/grid-template-columns\s*:\s*minmax\(0,\s*3fr\)\s*minmax\(0,\s*2fr\)/);
+    expect(bodyRule).toMatch(/grid-template-columns\s*:\s*minmax\(0,\s*9fr\)\s*minmax\(0,\s*11fr\)/);
     expect(css).not.toContain('task-detail-body-comments-expanded');
     expect(css).not.toContain('task-comments-resize-btn');
     expect(css).not.toContain('task-detail-activity-sidebar');

@@ -258,12 +258,10 @@ describe('Drive boundaries', () => {
       available: true,
       capabilities: Object.freeze({
         connect: true,
-        connect: true,
         fetch: true,
         save: false,
         WebSocket: true,
       }),
-      connect: vi.fn(),
       connect: vi.fn(async ({ endpoint }) => ({ version: 1, endpoint })),
       fetch: nativeFetch,
       save,
@@ -289,8 +287,7 @@ describe('Drive boundaries', () => {
     const transport = {
       version: 1,
       available: true,
-      capabilities: { connect: true, connect: true, fetch: true },
-      connect: vi.fn(),
+      capabilities: { connect: true, fetch: true },
       connect: vi.fn(async ({ endpoint }) => ({ version: 1, endpoint })),
       fetch: browserFetch,
     };

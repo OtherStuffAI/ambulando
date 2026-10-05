@@ -1,5 +1,5 @@
 import { personalAttentionVersion } from './personal-attention.js';
-import { canonicalClientId, checkpointRevision } from './pg-device-checkpoints.js';
+import { canonicalClientId, checkpointRevision, DEVICE_CACHE_OWNER_KEY, assertDeviceLease } from './pg-device-checkpoints.js';
 import { publishContextAuthority, clearContextAuthority, mapContextRow } from './context-cache.js';
 import { resolvePgReaderActorId } from './pg-reader-identity.js';
 import { inboundFeedReaderRow } from './translators/feed-reader.js';
@@ -209,9 +209,14 @@ async function applyRecordPage(store, page, options = {}) {
   const cursorKey = recordDeltaCursorKey(store);
   return db.transaction('rw', db.tables, async () => {
     const state = (await db.sync_state.get(cursorKey))?.value || { cursor: null };
+    await assertDeviceLease(db, options.deviceLease);
     if (!options.reconcileOnly && page.protocol_version === 2 && (!state.device
       || page.client_id !== state.device.clientId || options.deviceScope !== state.device.scope
       || options.authorityEpoch !== state.device.authorityEpoch)) throw new Error('Device page cache identity changed');
+    if (!options.reconcileOnly && page.protocol_version === 2) {
+      const owner = (await db.sync_state.get(DEVICE_CACHE_OWNER_KEY))?.value;
+      if (owner?.clientId !== state.device.clientId || owner.scope !== state.device.scope) throw new Error('Device authoritative owner changed');
+    }
     if (Object.hasOwn(options, 'expectedGeneration') && Number(state.localGeneration || 0) !== options.expectedGeneration) throw new Error('Record-delta authority generation changed before page commit');
     if (Object.hasOwn(options, 'expectedCursor') && state.cursor !== options.expectedCursor) {
       if (state.cursor === page.next_cursor) return { applied: 0, cursor: state.cursor, hasMore: page.has_more, replay: true };
@@ -463,6 +468,8 @@ async function applyRecordPage(store, page, options = {}) {
       if (retirementPending) nextState.snapshotRetirement.pendingAck = intent;
     }
     if (!options.reconcileOnly) await db.sync_state.put({ key: cursorKey, value: nextState });
+    if (!options.reconcileOnly && page.protocol_version === 2) await db.sync_state.put({ key: DEVICE_CACHE_OWNER_KEY,
+      value: { cursorKey, scope: state.device.scope, clientId: state.device.clientId, canonicalCount: await db.pg_record_rows.count() } });
     return { applied, localGeneration: Number(state.localGeneration || 0), cursor: page.next_cursor, retirementPending, hasMore: page.has_more, fullSnapshot: page.mode === 'snapshot', protocolVersion: 1, needsSummaryBackfill: Boolean(state.snapshotComplete && state.attentionPolicyVersion !== 1 && page.mode === 'delta' && !page.has_more) };
   });
 }
@@ -470,12 +477,17 @@ async function applyRecordPage(store, page, options = {}) {
 // A resumable omission walk. Only a completed snapshot plus terminal handover
 // authorizes it; ordinary deltas never enter this path. A reset invalidates each
 // checkpoint through the same authority generation compare-and-swap as pages.
-async function retireSnapshotOmissions(store, options) {
+export async function retireSnapshotOmissions(store, options) {
   const db = getWorkspaceDb(), cursorKey = recordDeltaCursorKey(store);
   const tables = [...new Set(Object.values(FAMILY).map(([name]) => name).filter(name => !name.startsWith('context_'))), 'pg_record_rows', 'pg_actors', 'pg_resource_attention', 'pg_attention_counts'];
   while (true) {
     const done = await db.transaction('rw', db.tables, async () => {
       const state = (await db.sync_state.get(cursorKey))?.value;
+      await assertDeviceLease(db, options.deviceLease);
+      if (state?.device) {
+        const owner = (await db.sync_state.get(DEVICE_CACHE_OWNER_KEY))?.value;
+        if (owner?.clientId !== state.device.clientId || owner.scope !== state.device.scope) throw new Error('Device owner changed during retirement');
+      }
       if (Object.hasOwn(options, 'expectedGeneration') && Number(state?.localGeneration || 0) !== options.expectedGeneration)
         throw new Error('Record-delta authority generation changed during retirement');
       const checkpoint = state?.snapshotRetirement;
@@ -487,6 +499,8 @@ async function retireSnapshotOmissions(store, options) {
         await db.sync_state.put({ key: cursorKey, value: { ...state, cursor: checkpoint.nextCursor,
           ...(state.device ? { device: { ...state.device, pendingAck: checkpoint.pendingAck || state.device.pendingAck } } : {}),
           snapshotRetirement: null, snapshotReconciliationPending: false, converged: true } });
+        if (state.device) await db.sync_state.put({ key: DEVICE_CACHE_OWNER_KEY,
+          value: { cursorKey, scope: state.device.scope, clientId: state.device.clientId, canonicalCount: await db.pg_record_rows.count() } });
         return true;
       }
       const table = db.table(tableName);
@@ -545,6 +559,8 @@ async function retireSnapshotOmissions(store, options) {
         ...checkpoint, tableIndex: rows.length ? checkpoint.tableIndex : checkpoint.tableIndex + 1,
         after: rows.length ? (rows.at(-1).key || rows.at(-1).actor_id || rows.at(-1).record_id) : null,
       } } });
+      if (state.device) await db.sync_state.put({ key: DEVICE_CACHE_OWNER_KEY,
+        value: { cursorKey, scope: state.device.scope, clientId: state.device.clientId, canonicalCount: await db.pg_record_rows.count() } });
       return false;
     });
     if (done) return;
@@ -553,19 +569,25 @@ async function retireSnapshotOmissions(store, options) {
   }
 }
 
-export async function resetPgRecordAuthority(store, { preserveViews = false, expectedCursor, expectedGeneration, deviceScope = null } = {}) {
+export async function resetPgRecordAuthority(store, { preserveViews = false, expectedCursor, expectedGeneration, deviceScope = null, deviceLease } = {}) {
   const db = getWorkspaceDb();
   const cursorKey = recordDeltaCursorKey(store);
   // Cursor expiry/epoch changes invalidate the download, not cached visibility.
   // Definitive revocation hides authority and retains recoverable local intent.
   return db.transaction('rw', db.tables, async () => {
     const priorState = (await db.sync_state.get(cursorKey))?.value;
+    await assertDeviceLease(db, deviceLease);
+    const owner = (await db.sync_state.get(DEVICE_CACHE_OWNER_KEY))?.value;
+    const ownerState = owner?.cursorKey && owner.cursorKey !== cursorKey ? (await db.sync_state.get(owner.cursorKey))?.value : null;
     if (expectedGeneration !== undefined && Number(priorState?.localGeneration || 0) !== expectedGeneration
       || expectedCursor !== undefined && (priorState?.cursor || null) !== expectedCursor) throw new Error('Record-delta authority changed before reset');
     const localGeneration = Number(priorState?.localGeneration || 0) + 1;
-    const obsoleteDevices = [...(priorState?.obsoleteDevices || []), ...(priorState?.device ? [priorState.device] : [])];
+    const obsoleteDevices = [...(priorState?.obsoleteDevices || []), ...(priorState?.device ? [priorState.device] : []),
+      ...(ownerState?.device ? [ownerState.device] : [])];
     const replacement = { cursor: null, resetting: true, localGeneration, obsoleteDevices,
       ...(deviceScope ? { device: { scope: deviceScope, clientId: crypto.randomUUID(), registered: false, revision: '0', pendingAck: null } } : {}) };
+    await db.sync_state.put({ key: DEVICE_CACHE_OWNER_KEY, value: { cursorKey, scope: deviceScope,
+      clientId: replacement.device?.clientId || null, canonicalCount: preserveViews ? await db.pg_record_rows.count() : 0 } });
     const prefix = `${cursorKey}:staged:`;
     await db.sync_state.where('key').between(prefix, `${prefix}\uffff`, true, true).delete();
     await clearContextAuthority(db);

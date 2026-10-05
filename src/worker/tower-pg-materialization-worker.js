@@ -63,6 +63,6 @@ self.addEventListener('message', (event) => {
   };
   // Bounded targeted transcript transactions can take the next IDB turn while
   // the snapshot retirement walk yields. Reset/version guards run at commit.
-  if (message.bundle?.thread_history_page) void run();
+  if (message.bundle?.thread_history_page || message.bundle?.device_lock) void run();
   else materializationQueue = materializationQueue.then(run);
 });

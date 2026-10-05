@@ -22,4 +22,4 @@ Coverage includes canonical image/PDF projection, genuine document routing,
 backend lookup, download failures and late-load handling. The synthetic browser
 pass exercises Deck card clicks, signed storage requests, image rendering,
 filenames, downloads, errors, Escape and focus restoration on desktop and mobile.
-It does not attest a private backend's ACLs or Pete's live workspace data.
+It does not attest a private backend's ACLs or a user's live workspace data.
