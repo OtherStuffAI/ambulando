@@ -2790,6 +2790,38 @@
       "notes": [
         "Click ordinary task description text to focus the Markdown editor immediately, or use Edit description from the keyboard, including empty descriptions. Links keep navigating and Save/Discard remain explicit."
       ]
+    },
+    {
+      "buildNumber": 2202,
+      "label": "Channel wiki pages and notebook home",
+      "notes": [
+        "Link channel pages with the [[ picker, create linked pages, and keep links working after renames.",
+        "Set a shared channel Docs home page and switch between Home and All docs on desktop and mobile."
+      ]
+    },
+    {
+      "buildNumber": 2207,
+      "label": "Wiki navigation and shared home pages",
+      "notes": [
+        "Use channel wiki links with keyboard or mouse, follow renamed pages, and create linked pages without losing the original draft.",
+        "Choose a shared Docs home page, return to All docs, and navigate safely on mobile and with browser Back."
+      ]
+    },
+    {
+      "buildNumber": 2208,
+      "label": "Channel notebooks and consistent task ownership",
+      "notes": [
+        "Create and follow channel wiki pages, preserve document drafts, and use shared Home and All docs navigation.",
+        "Task ownership now follows the canonical primary assignee, including explicit unassignment, when rebuilding browser task and attention caches."
+      ]
+    },
+    {
+      "buildNumber": 2209,
+      "label": "One assignee per task",
+      "notes": [
+        "Reassign or clear a task with one atomic update. Former assignees lose assignment attention while unread comment mentions and read positions remain intact.",
+        "Repair cached assignment summaries to follow Tower\u2019s canonical primary assignee."
+      ]
     }
   ]
 }

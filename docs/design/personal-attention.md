@@ -59,3 +59,14 @@ and recompute removed comment mentions; it must not initialize every row to an
 empty attention map and discard historical unread mentions. A local Tower
 activation does not update a remote record backend. Device checkpoints remain a
 separate protocol and are unchanged by this client change.
+
+## Single task assignee
+
+Tower replaces primary metadata and relation rows in the same transaction.
+Explicit primary metadata, including null, takes precedence over any old cached
+relation row. A missing primary with multiple identities is unresolved and does
+not grant assignment attention. Independent comment mentions keep their original
+positions. The `summary-backfill-assignment-v2` pass repairs existing task
+assignee/index fields and attention in bounded transactions, preserving pending
+commands, device cursors and user viewed watermarks. Server repair and unresolved
+history are described in Tower's `docs/task-single-assignee.md`.

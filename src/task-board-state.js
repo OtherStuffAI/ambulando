@@ -80,14 +80,10 @@ const TASK_FILTER_TAG_LIMIT = 5;
 const TASK_CARD_TAG_LIMIT = 3;
 
 export function normalizeTaskAssigneeNpubs(value = null) {
-  const raw = Array.isArray(value)
-    ? value
-    : Array.isArray(value?.assigned_to_npubs)
-      ? value.assigned_to_npubs
-      : [value?.assigned_to_npub ?? value];
-  return [...new Set(raw
-    .map((npub) => String(npub || '').trim())
-    .filter(Boolean))];
+  const raw = Array.isArray(value) ? value
+    : value && typeof value === 'object' && Object.prototype.hasOwnProperty.call(value, 'assigned_to_npub')
+      ? [value.assigned_to_npub] : Array.isArray(value?.assigned_to_npubs) ? value.assigned_to_npubs : typeof value === 'object' ? [] : [value];
+  return [...new Set(raw.map(npub => String(npub || '').trim()).filter(Boolean))].slice(0, 1);
 }
 
 function parseChatRecordLinkId(id, messages = []) {

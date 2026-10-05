@@ -380,8 +380,10 @@ function normalizePgTaskAssignmentNpubs(task = {}, actorNpubByActorId = new Map(
   const metadata = task?.metadata && typeof task.metadata === 'object' && !Array.isArray(task.metadata)
     ? task.metadata
     : {};
-  const directAssignee = trimText(task?.assigned_to_npub || metadata.assigned_to_npub);
-  if (directAssignee) return [directAssignee];
+  if (Object.prototype.hasOwnProperty.call(task, 'assigned_to_npub') || Object.prototype.hasOwnProperty.call(metadata, 'assigned_to_npub')) {
+    const primary = Object.prototype.hasOwnProperty.call(task, 'assigned_to_npub') ? task.assigned_to_npub : metadata.assigned_to_npub;
+    return trimText(primary) ? [trimText(primary)] : [];
+  }
   const assignments = normalizePgTaskAssignmentRows(task);
   const npubs = [];
   const seen = new Set();
@@ -393,7 +395,7 @@ function normalizePgTaskAssignmentNpubs(task = {}, actorNpubByActorId = new Map(
     seen.add(npub);
     npubs.push(npub);
   }
-  return npubs;
+  return npubs.length === 1 ? npubs : [];
 }
 
 function normalizeActorEntry(entry = {}) {

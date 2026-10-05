@@ -343,7 +343,7 @@ export function prepareTowerWorkspaceCommand(store, name, input = {}) {
     if (!generic) return null;
     const localRow = input.task || input.document || input.comment || input.message || input.file || input.folder || input.audioNote;
     const previousRow = input.previousTask || input.previousDocument || input.previous || input.parentMessage || input.threadRow;
-    const optimisticWriter = optimisticWriterFor(input);
+    const optimisticWriter = name === 'task.assignments.sync' ? upsertTask : optimisticWriterFor(input);
     const reconcile = async (accepted) => {
       if (!accepted || !optimisticWriter) return accepted;
       const localId = String(localRow?.record_id || '').trim();

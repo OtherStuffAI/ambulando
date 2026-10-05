@@ -1404,7 +1404,7 @@ describe('computeFilteredTasks', () => {
     { record_id: 't1', title: 'Fix login bug', description: '', tags: 'bug', assigned_to_npubs: ['npub1me'] },
     { record_id: 't2', title: 'Add dashboard', description: '', tags: 'feature', assigned_to_npubs: ['npub1other'] },
     { record_id: 't3', title: 'Refactor auth', description: '', tags: 'refactor', assigned_to_npubs: [] },
-    { record_id: 't4', title: 'Write docs', description: '', tags: 'docs', assigned_to_npubs: ['npub1other', 'npub1me'] },
+    { record_id: 't4', title: 'Write docs', description: '', tags: 'docs', assigned_to_npub: 'npub1me', assigned_to_npubs: ['npub1other', 'npub1me'] },
   ];
 
   it('filters by assignee npub when provided', () => {

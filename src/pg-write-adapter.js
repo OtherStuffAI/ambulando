@@ -10,7 +10,6 @@ import {
   archiveTowerPgThread,
   createTowerPgDocComment,
   createTowerPgTaskComment,
-  assignTowerPgTask,
   deleteTowerPgDocComment,
   deleteTowerPgDoc,
   deleteTowerPgMessage,
@@ -27,7 +26,6 @@ import {
   updateTowerPgTask,
   updateTowerPgTaskState,
   updateTowerPgThread,
-  unassignTowerPgTask,
 } from './api.js';
 import {
   mapPgAudioNoteToLocal,
@@ -156,7 +154,9 @@ function pgTaskMetadata(task = {}) {
   base.parent_task_id = task.parent_task_id || null;
   base.tags = typeof task.tags === 'string' ? task.tags : '';
   base.scheduled_for = task.scheduled_for || null;
-  base.assigned_to_npub = normalizeTaskAssigneeNpubs(task)[0] || null;
+  const assignees = normalizeTaskAssigneeNpubs(task);
+  if (assignees.length > 1) throw new Error('Tasks accept zero or one assignee');
+  base.assigned_to_npub = assignees[0] || null;
   delete base.assigned_to_npubs;
   base.predecessor_task_ids = Array.isArray(task.predecessor_task_ids)
     ? task.predecessor_task_ids
@@ -187,18 +187,11 @@ function isMetadataTaskPatch(patch = {}) {
 }
 
 function normalizeTaskAssigneeNpubs(task = {}) {
-  const raw = Array.isArray(task)
-    ? task
-    : Array.isArray(task?.assigned_to_npubs)
-      ? task.assigned_to_npubs
-      : trimText(task?.assigned_to_npub)
-        ? [task.assigned_to_npub]
-        : typeof task === 'string'
-          ? [task]
-          : [];
-  return [...new Set(raw
-    .map((npub) => trimText(npub))
-    .filter(Boolean))];
+  const raw = Array.isArray(task) ? task
+    : Object.prototype.hasOwnProperty.call(task || {}, 'assigned_to_npub') ? [task.assigned_to_npub]
+      : Array.isArray(task?.assigned_to_npubs) ? task.assigned_to_npubs
+        : typeof task === 'string' ? [task] : [];
+  return [...new Set(raw.map(npub => trimText(npub)).filter(Boolean))];
 }
 
 function withAssignedNpubs(task = {}, npubs = []) {
@@ -245,11 +238,7 @@ export async function createTowerPgTaskFromLocal(store, task) {
     metadata: pgTaskMetadata(task),
     mentions,
   }, pgRequestOptions(context));
-  const accepted = withAssignedNpubs(
-    mapPgTaskToLocal(result.task, { workspaceOwnerNpub: context.workspaceOwnerNpub }),
-    normalizeTaskAssigneeNpubs(task),
-  );
-  await syncTowerPgTaskAssignments(store, accepted.record_id, [], normalizeTaskAssigneeNpubs(task), context);
+  const accepted = mapPgTaskToLocal(result.task, { workspaceOwnerNpub: context.workspaceOwnerNpub });
   return accepted;
 }
 
@@ -456,8 +445,8 @@ export async function updateTowerPgTaskFromLocal(store, task, previousTask = nul
       state: task.state,
     }, pgRequestOptions(context));
     acceptedTask = mapPgTaskToLocal(result.task, { workspaceOwnerNpub: context.workspaceOwnerNpub });
-    if (onlyState) {
-      return withAssignedNpubs(acceptedTask, normalizeTaskAssigneeNpubs(task));
+    if (onlyState && !assignmentPatch) {
+      return acceptedTask;
     }
   }
   const patchBody = {
@@ -481,36 +470,18 @@ export async function updateTowerPgTaskFromLocal(store, task, previousTask = nul
   } else if (!acceptedTask) {
     acceptedTask = previousTask || task;
   }
-  if (assignmentPatch) {
-    await syncTowerPgTaskAssignments(
-      store,
-      task.record_id,
-      normalizeTaskAssigneeNpubs(previousTask),
-      normalizeTaskAssigneeNpubs(task),
-      context,
-    );
-  }
-  return withAssignedNpubs(acceptedTask, normalizeTaskAssigneeNpubs(task));
+
+  return acceptedTask;
 }
 
 export async function syncTowerPgTaskAssignments(store, taskId, previousNpubs = [], nextNpubs = [], contextOverride = null) {
   const context = contextOverride || resolveTowerPgWorkspaceContext(store);
   if (!context.workspaceId || !taskId) throw new Error('Tower PG task assignments are not ready');
-  const previous = new Set(normalizeTaskAssigneeNpubs(previousNpubs));
-  const next = new Set(normalizeTaskAssigneeNpubs(nextNpubs));
-  const actorIdFor = (npub) => String(store?.getPgWorkspaceMemberActorId?.(npub) || '').trim();
-  for (const npub of previous) {
-    if (next.has(npub)) continue;
-    const actorId = actorIdFor(npub);
-    if (!actorId) throw new Error(`Tower PG actor is unavailable for ${npub}`);
-    await unassignTowerPgTask(context.workspaceId, taskId, actorId, pgRequestOptions(context));
-  }
-  for (const npub of next) {
-    if (previous.has(npub)) continue;
-    const actorId = actorIdFor(npub);
-    if (!actorId) throw new Error(`Tower PG actor is unavailable for ${npub}`);
-    await assignTowerPgTask(context.workspaceId, taskId, actorId, pgRequestOptions(context));
-  }
+  const next = normalizeTaskAssigneeNpubs(nextNpubs);
+  if (next.length > 1) throw new Error('Tasks accept zero or one assignee');
+  const result = await updateTowerPgTask(context.workspaceId, taskId,
+    { assigned_to_npub: next[0] || null }, pgRequestOptions(context));
+  return mapPgTaskToLocal(result.task, { workspaceOwnerNpub: context.workspaceOwnerNpub });
 }
 
 export async function deleteTowerPgTaskFromLocal(store, task) {
@@ -533,7 +504,7 @@ export async function moveTowerPgTaskFromLocal(store, task, destinationChannelId
   }, pgRequestOptions(context));
   return withAssignedNpubs(
     mapPgTaskToLocal(result.task, { workspaceOwnerNpub: context.workspaceOwnerNpub }),
-    normalizeTaskAssigneeNpubs(result.task?.assignments?.map((assignment) => assignment.actor_npub) || task),
+    normalizeTaskAssigneeNpubs(result.task),
   );
 }
 

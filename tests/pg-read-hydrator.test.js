@@ -910,8 +910,8 @@ describe('PG read hydrator', () => {
       workspaceOwnerNpub: 'npub1owner',
     })).toMatchObject({
       record_id: 'task-assigned-shapes',
-      assigned_to_npubs: ['npub1agent', 'npub1other'],
-      assigned_to_npub: 'npub1agent',
+      assigned_to_npubs: [],
+      assigned_to_npub: null,
     });
   });
 
@@ -936,8 +936,8 @@ describe('PG read hydrator', () => {
       ]),
     })).toMatchObject({
       record_id: 'task-assigned-by-actor-id',
-      assigned_to_npubs: ['npub1agent', 'npub1other'],
-      assigned_to_npub: 'npub1agent',
+      assigned_to_npubs: [],
+      assigned_to_npub: null,
     });
   });
 

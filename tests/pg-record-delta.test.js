@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import fixture from './fixtures/flightdeck-record-delta-v1.json';
 import { openWorkspaceDb } from '../src/db.js';
-import { applyPgRecordChanges, resetPgRecordAuthority, recordDeltaCursorKey } from '../src/pg-record-delta.js';
+import { applyPgRecordChanges, resetPgRecordAuthority, recordDeltaCursorKey, rebuildPgRecordSummaries } from '../src/pg-record-delta.js';
 const workspaceId=fixture.one_message_delta.changes[0].workspace_id;
 const store={workspaceId,workspaceOwnerNpub:'npub1owner',backendUrl:'http://localhost:3000',session:{npub:'npub1viewer'},currentWorkspace:{workspaceId,workspaceOwnerNpub:'npub1owner',pgBackendMode:true}};
 let db;
@@ -257,7 +257,9 @@ it('retains earlier actor identities when an independent assignment rematerializ
   await applyPgRecordChanges(store,{...page([task,{...assignment,id:`${task.id}:${a.actor_id}`,row:{...assignment.row,task_id:task.id}}],'first-assignee'),actors:[a]});
   const next={...assignment,id:`${task.id}:${b.actor_id}`,version:'999',row:{...assignment.row,task_id:task.id,actor_id:b.actor_id}};
   await applyPgRecordChanges(store,{...page([next],'second-assignee'),actors:[b]});
-  expect((await db.tasks.get(task.id)).assigned_to_npubs.sort()).toEqual([a.npub,b.npub].sort());
+  expect((await db.tasks.get(task.id)).assigned_to_npubs).toEqual([]);
+  expect((await db.pg_actors.get(a.actor_id)).npub).toBe(a.npub);
+  expect((await db.pg_actors.get(b.actor_id)).npub).toBe(b.npub);
 });
 
 it('retains full effective membership for metadata deltas and invalidates changed lineage', async () => {
@@ -492,4 +494,27 @@ it('clears qualifying attention with a cross-device receipt below the latest neu
   await applyPgRecordChanges(reader, page([change(11, 11)], 'mention'));
   expect((await db.pg_resource_attention.get(`task:${task.id}`)).unread).toBe(1);
   expect((await db.pg_attention_counts.get('section:tasks')).count).toBe(1);
+});
+
+it('repairs an existing assignment projection without moving the cursor, receipts or pending drafts', async () => {
+  const original=fixture.canonical_upserts.changes.find(c=>c.family==='task');
+  const task={...original,row:{...original.row,metadata:{assigned_to_npub:'npub1new'},activity_version:8,
+    attention:{policy_version:1,last_activity_actor_id:'author',mention_activity_versions:{}}}};
+  store.currentPgActorId='former';store.currentViewerNpub='npub1former';
+  await applyPgRecordChanges(store,page([task],'kept-cursor'));
+  await db.tasks.update(task.id,{assigned_to_npub:'npub1former',assigned_to_npubs:['npub1former','npub1new']});
+  await db.resource_view_states.put({record_id:`task:${task.id}`,resource_type:'task',resource_id:task.id,viewed_activity_version:4,sync_status:'synced'});
+  await db.pg_resource_attention.put({record_id:`task:${task.id}`,resource_type:'task',resource_id:task.id,unread:1});
+  const cursor=(await db.sync_state.get(recordDeltaCursorKey(store))).value.cursor;
+  const receipt=await db.resource_view_states.get(`task:${task.id}`);
+  await rebuildPgRecordSummaries(store);
+  expect((await db.tasks.get(task.id)).assigned_to_npubs).toEqual(['npub1new']);
+  expect((await db.tasks.get(task.id)).cache_assignees).toEqual(['npub1new']);
+  expect((await db.pg_resource_attention.get(`task:${task.id}`)).unread).toBe(0);
+  expect((await db.sync_state.get(recordDeltaCursorKey(store))).value.cursor).toBe(cursor);
+  expect(await db.resource_view_states.get(`task:${task.id}`)).toMatchObject(receipt);
+  await db.sync_state.delete(`${recordDeltaCursorKey(store)}:summary-backfill-assignment-v2`);
+  await db.tasks.update(task.id,{assigned_to_npub:'npub1draft',assigned_to_npubs:['npub1draft'],sync_status:'pending'});
+  await rebuildPgRecordSummaries(store);
+  expect((await db.tasks.get(task.id)).assigned_to_npubs).toEqual(['npub1draft']);
 });

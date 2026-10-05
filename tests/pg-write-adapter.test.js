@@ -18,6 +18,7 @@ import {
   moveTowerPgDocFromLocal,
   moveTowerPgTaskFromLocal,
   resolveTowerPgTaskChannel,
+  syncTowerPgTaskAssignments,
   updateTowerPgDocCommentFromLocal,
   updateTowerPgDocFromLocal,
   updateTowerPgFileFromLocal,
@@ -190,9 +191,7 @@ describe('PG write adapter', () => {
         predecessor_task_ids: ['task-prev'],
       }),
     }), { baseUrl: 'https://tower.example', appNpub: 'flightdeck_pg' });
-    expect(api.assignTowerPgTask).toHaveBeenCalledWith('workspace-1', 'task-quick', 'actor-agent', {
-      baseUrl: 'https://tower.example', appNpub: 'flightdeck_pg',
-    });
+    expect(api.assignTowerPgTask).not.toHaveBeenCalled();
   });
 
   it('passes PG thread context when creating a Tower PG task', async () => {
@@ -537,9 +536,7 @@ describe('PG write adapter', () => {
       }),
     }), { baseUrl: 'https://tower.example', appNpub: 'flightdeck_pg' });
     expect(api.updateTowerPgTask.mock.calls[0][2].metadata.assigned_to_npub).toBeNull();
-    expect(api.unassignTowerPgTask).toHaveBeenCalledWith('workspace-1', 'task-1', 'actor-agent', {
-      baseUrl: 'https://tower.example', appNpub: 'flightdeck_pg',
-    });
+    expect(api.unassignTowerPgTask).not.toHaveBeenCalled();
     expect(task).toMatchObject({ record_id: 'task-1', state: 'archive', version: 3, scheduled_for: '2026-06-22' });
   });
 
@@ -579,9 +576,7 @@ describe('PG write adapter', () => {
       row_version: 1,
       metadata: expect.objectContaining({ assigned_to_npub: 'npub1agent' }),
     }), { baseUrl: 'https://tower.example', appNpub: 'flightdeck_pg' });
-    expect(api.assignTowerPgTask).toHaveBeenCalledWith('workspace-1', 'task-1', 'actor-agent', {
-      baseUrl: 'https://tower.example', appNpub: 'flightdeck_pg',
-    });
+    expect(api.assignTowerPgTask).not.toHaveBeenCalled();
     expect(task).toMatchObject({
       assigned_to_npub: 'npub1agent',
       assigned_to_npubs: ['npub1agent'],
@@ -608,7 +603,7 @@ describe('PG write adapter', () => {
     expect(accepted.assigned_to_npubs).toEqual(['npub1agent']);
   });
 
-  it('saves description mentions before the new typed assignment in one awaited sequence', async () => {
+  it('saves description mentions and assignment together in one task write', async () => {
     const api = await import('../src/api.js');
     const order = [];
     api.updateTowerPgTask.mockImplementation(async (_workspaceId, _taskId, body) => {
@@ -627,10 +622,11 @@ describe('PG write adapter', () => {
     expect(api.updateTowerPgTask.mock.calls[0][2].mentions).toEqual([
       { type: 'agent', npub: 'npub1agent', label: 'Agent' },
     ]);
-    expect(order).toEqual(['task', 'assignment']);
+    expect(order).toEqual(['task']);
+    expect(api.updateTowerPgTask.mock.calls[0][2].metadata.assigned_to_npub).toBe('npub1agent');
   });
 
-  it('requires a typed workspace actor to clear a PG task assignment', async () => {
+  it('clears a PG task assignment without needing the former actor in the local cache', async () => {
     const api = await import('../src/api.js');
     api.updateTowerPgTask.mockResolvedValue({
       task: {
@@ -662,7 +658,7 @@ describe('PG write adapter', () => {
       pg_backend: true,
       sync_status: 'synced',
       assigned_to_npubs: ['npub1agent'],
-    }, { assigned_to_npubs: [] })).rejects.toThrow('Tower PG actor is unavailable for npub1agent');
+    }, { assigned_to_npubs: [] })).resolves.toMatchObject({ assigned_to_npub: null, assigned_to_npubs: [] });
 
     expect(api.updateTowerPgTask).toHaveBeenCalledWith('workspace-1', 'task-1', expect.objectContaining({
       metadata: expect.objectContaining({ assigned_to_npub: null }),
@@ -703,6 +699,17 @@ describe('PG write adapter', () => {
     }), { baseUrl: 'https://tower.example', appNpub: 'flightdeck_pg' });
   });
 
+  it('uses one canonical replacement command and rejects multiple assignees before transport', async () => {
+    const api = await import('../src/api.js');
+    api.updateTowerPgTask.mockResolvedValue({task:{id:'task-1',assigned_to_npub:'npub1new',metadata:{assigned_to_npub:'npub1new'}}});
+    const row = await syncTowerPgTaskAssignments(store(), 'task-1', ['npub1old'], ['npub1new']);
+    expect(api.updateTowerPgTask).toHaveBeenCalledTimes(1);
+    expect(api.updateTowerPgTask.mock.calls[0][2]).toEqual({assigned_to_npub:'npub1new'});
+    expect(row.assigned_to_npubs).toEqual(['npub1new']);
+    expect(api.assignTowerPgTask).not.toHaveBeenCalled();expect(api.unassignTowerPgTask).not.toHaveBeenCalled();
+    await expect(syncTowerPgTaskAssignments(store(),'task-1',[],['npub1a','npub1b'])).rejects.toThrow('zero or one');
+    expect(api.updateTowerPgTask).toHaveBeenCalledTimes(1);
+  });
   it('deletes Tower PG tasks through the typed delete endpoint', async () => {
     const api = await import('../src/api.js');
     api.deleteTowerPgTask.mockResolvedValue({

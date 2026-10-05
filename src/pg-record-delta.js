@@ -470,7 +470,7 @@ async function applyRecordPage(store, page, options = {}) {
     if (!options.reconcileOnly) await db.sync_state.put({ key: cursorKey, value: nextState });
     if (!options.reconcileOnly && page.protocol_version === 2) await db.sync_state.put({ key: DEVICE_CACHE_OWNER_KEY,
       value: { cursorKey, scope: state.device.scope, clientId: state.device.clientId, canonicalCount: await db.pg_record_rows.count() } });
-    return { applied, localGeneration: Number(state.localGeneration || 0), cursor: page.next_cursor, retirementPending, hasMore: page.has_more, fullSnapshot: page.mode === 'snapshot', protocolVersion: 1, needsSummaryBackfill: Boolean(state.snapshotComplete && state.attentionPolicyVersion !== 1 && page.mode === 'delta' && !page.has_more) };
+    return { applied, localGeneration: Number(state.localGeneration || 0), cursor: page.next_cursor, retirementPending, hasMore: page.has_more, fullSnapshot: page.mode === 'snapshot', protocolVersion: 1, needsSummaryBackfill: Boolean(state.snapshotComplete && state.assignmentPolicyVersion !== 1 && page.mode === 'delta' && !page.has_more) };
   });
 }
 
@@ -592,7 +592,7 @@ export async function resetPgRecordAuthority(store, { preserveViews = false, exp
     await db.sync_state.where('key').between(prefix, `${prefix}\uffff`, true, true).delete();
     await clearContextAuthority(db);
     if (preserveViews) {
-      await db.sync_state.delete(`${cursorKey}:summary-backfill-attention-v1`);
+      await db.sync_state.delete(`${cursorKey}:summary-backfill-assignment-v2`);
       await db.sync_state.put({ key: cursorKey, value: replacement });
       return { localGeneration };
     }
@@ -616,7 +616,7 @@ export async function resetPgRecordAuthority(store, { preserveViews = false, exp
     await db.pg_resource_attention.clear(); await db.pg_attention_counts.clear();
     await db.workspace_members.clear(); await db.groups.clear();
     await db.sync_state.put({ key: cursorKey, value: replacement });
-    await db.sync_state.delete(`${cursorKey}:summary-backfill-attention-v1`);
+    await db.sync_state.delete(`${cursorKey}:summary-backfill-assignment-v2`);
     return { localGeneration };
   });
 }
@@ -681,7 +681,7 @@ async function reconcileConflictBatch(store, { acceptRemoteKey = null, after = n
 }
 
 export async function rebuildPgRecordSummaries(store, { batchSize = 32 } = {}) {
-  const db = getWorkspaceDb(), key = `${recordDeltaCursorKey(store)}:summary-backfill-attention-v1`;
+  const db = getWorkspaceDb(), key = `${recordDeltaCursorKey(store)}:summary-backfill-assignment-v2`;
   let after = (await db.sync_state.get(key))?.value?.after || null;
   let processed = 0;
   while (true) {
@@ -690,6 +690,15 @@ export async function rebuildPgRecordSummaries(store, { batchSize = 32 } = {}) {
       const rows = await (after ? db.pg_record_rows.where(':id').above(after) : db.pg_record_rows.toCollection()).limit(Math.min(32,batchSize)).toArray();
       count = rows.length;
       const members = await db.workspace_members.toArray();
+      const actorNpubByActorId = new Map(members.map(member => [member.actor_id, member.npub]));
+      for (const raw of rows.filter(raw => raw.family === 'task' && raw.operation === 'upsert')) {
+        const prior = await db.tasks.get(raw.id);
+        if (!prior || pending(prior) || await db.pending_writes.where('record_id').equals(raw.id).count()) continue;
+        const assignments = await db.pg_record_rows.where('[family+parent_id]').equals(['task_assignment', raw.id]).toArray();
+        const mapped = mapPgTaskToLocal({ ...raw.row, assignments: assignments.filter(a => a.operation === 'upsert' && !a.row.deleted_at).map(a => a.row) }, { actorNpubByActorId });
+        const fields = { assigned_to_npub: mapped.assigned_to_npub, assigned_to_npubs: mapped.assigned_to_npubs };
+        if (!sameLogicalValue({ assigned_to_npub: prior.assigned_to_npub, assigned_to_npubs: prior.assigned_to_npubs }, fields)) await db.tasks.update(raw.id, fields);
+      }
       await updateResourceAttentions(db, rows.filter(raw => ['task','thread','doc'].includes(raw.family))
         .map(raw => [raw.family === 'doc' ? 'document' : raw.family, raw.id]), store, members);
       await refreshChannelSummaries(db,rows.filter(r=>['thread','message'].includes(r.family)).map(r=>r.channel_id));
@@ -697,7 +706,7 @@ export async function rebuildPgRecordSummaries(store, { batchSize = 32 } = {}) {
       await db.sync_state.put({key,value:{after,complete:!rows.length}});
       if (!rows.length) {
         const state=await db.sync_state.get(recordDeltaCursorKey(store));
-        if(state) await db.sync_state.put({...state,value:{...state.value,summariesRebuilt:true,attentionPolicyVersion:1}});
+        if(state) await db.sync_state.put({...state,value:{...state.value,summariesRebuilt:true,attentionPolicyVersion:1,assignmentPolicyVersion:1}});
       }
     });
     processed += count;

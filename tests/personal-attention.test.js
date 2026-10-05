@@ -23,6 +23,12 @@ describe('personal attention policy', () => {
     expect(hasPersonalUnreadAttention(task(6, true), state(6), options)).toBe(false);
     expect(hasPersonalUnreadAttention(task(7, true), state(6), options)).toBe(true);
   });
+  it('uses the explicit primary and explicit clear over stale former-assignee relations', () => {
+    const stale = { ...task(8), assigned_to_npub: 'npub1other', assignments: [{actor_id:actor,actor_npub:'npub1viewer'}] };
+    expect(hasPersonalUnreadAttention(stale,state(4),options)).toBe(false);
+    expect(hasPersonalUnreadAttention({...stale,assigned_to_npub:null},state(4),options)).toBe(false);
+    expect(hasPersonalUnreadAttention({...stale,pg_attention:{...stale.pg_attention,mention_activity_versions:{[actor]:7}}},state(4),options)).toBe(true);
+  });
   it('does not resurrect read comment mentions on unassignment or unrelated comments', () => {
     expect(hasPersonalUnreadAttention(task(8, false, { viewer: 4 }), state(4), options)).toBe(false);
     expect(hasPersonalUnreadAttention(task(9, false, { viewer: 9 }), state(4), options)).toBe(true);

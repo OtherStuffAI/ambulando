@@ -14,10 +14,17 @@ export function mentionsViewer(mentions, viewer) {
 }
 
 export function isTaskAssignedToViewer(row, viewer) {
-  const assignments = Array.isArray(row?.assignments) ? row.assignments : [];
-  if (assignments.some(a => !a.deleted_at && a.actor_id === viewer.actorId && viewer.actorId)) return true;
-  const npubs = row?.assigned_to_npubs || [row?.assigned_to_npub || metadata(row).assigned_to_npub];
-  return Boolean(viewer.npub && npubs.includes(viewer.npub));
+  // An explicit canonical primary (including null) overrides stale row caches.
+  const meta = metadata(row);
+  if (Object.prototype.hasOwnProperty.call(row || {}, 'assigned_to_npub') || Object.prototype.hasOwnProperty.call(meta, 'assigned_to_npub')) {
+    const primary = Object.prototype.hasOwnProperty.call(row || {}, 'assigned_to_npub') ? row.assigned_to_npub : meta.assigned_to_npub;
+    return Boolean(viewer.npub && primary === viewer.npub);
+  }
+  const assignments = (Array.isArray(row?.assignments) ? row.assignments : []).filter(a => !a.deleted_at);
+  if (assignments.length === 1) return Boolean(viewer.actorId && assignments[0].actor_id === viewer.actorId
+    || viewer.npub && assignments[0].actor_npub === viewer.npub);
+  const npubs = row?.assigned_to_npubs || [];
+  return Boolean(npubs.length === 1 && viewer.npub && npubs[0] === viewer.npub);
 }
 
 export function personalAttentionVersion(row = {}, state = {}, options = {}) {
