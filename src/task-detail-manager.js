@@ -117,7 +117,7 @@ export const taskDetailManagerMixin = {
     this.predecessorTaskQuery = '';
     this.showPredecessorTaskPicker = false;
     this.showTaskDetail = true;
-    this.taskDescriptionEditing = isTowerPgBackendMode();
+    this.taskDescriptionEditing = false;
     this.newSubtaskTitle = '';
     this.newTaskCommentBody = '';
     if (this.editingTask && isTowerPgBackendMode()) {

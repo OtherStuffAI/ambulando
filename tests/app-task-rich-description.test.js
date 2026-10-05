@@ -2,7 +2,7 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { getTaskById, openWorkspaceDb, upsertTask } from '../src/db.js';
 const { storeMock, updateTask } = vi.hoisted(() => ({ storeMock: vi.fn(), updateTask: vi.fn() }));
-vi.mock('alpinejs', () => ({ default: { store: storeMock, start: vi.fn() } }));
+vi.mock('alpinejs', () => ({ default: { store: storeMock, start: vi.fn(), nextTick: callback => callback() } }));
 vi.mock('../src/pg-write-adapter.js', async original => ({ ...(await original()), updateTowerPgTaskFromLocal: updateTask }));
 afterEach(() => { storeMock.mockClear(); updateTask.mockReset(); });
 
@@ -16,17 +16,27 @@ it('saves a native Tiptap task edit through the PG path and reopens Markdown ref
   initApp();
   const store = storeMock.mock.calls.find(([name]) => name === 'chat')[1];
   Object.assign(store, {
-    session: { npub: 'npub1fixture' }, tasks: [task], editingTask: { ...task }, taskEditOriginal: { ...task }, activeTaskId: task.record_id,
-    taskDetailMode: 'edit', taskDescriptionEditing: true,
+    session: { npub: 'npub1fixture' }, tasks: [task],
+    selectPgChannelContext: vi.fn(), startWorkspaceLiveQueries: vi.fn(), recomputeTowerPgUnreadProjection: vi.fn(), loadTaskComments: vi.fn(), markTaskRead: vi.fn(), syncRoute: vi.fn(), resolveChatProfile: vi.fn(),
     ownerNpub: task.owner_npub, currentWorkspaceOwnerNpub: task.owner_npub,
     selectedWorkspaceKey: 'workspace', backendUrl: 'http://127.0.0.1:3100',
     knownWorkspaces: [{ workspaceKey: 'workspace', workspaceId: 'workspace', workspaceOwnerNpub: task.owner_npub, directHttpsUrl: 'http://127.0.0.1:3100', appNpub: 'flightdeck_pg', pgBackendMode: true }],
     handleEditingTaskDraftChanged: vi.fn(), scheduleStorageImageHydration: vi.fn(),
   });
   updateTask.mockImplementation(async (_store, updated) => ({ ...updated, version: 2, sync_status: 'synced' }));
+  const section = document.createElement('div');
+  section.className = 'task-description-section';
   const element = document.createElement('div');
-  document.body.append(element);
+  element.className = 'task-rich-editor';
+  section.append(element);
+  document.body.append(section);
   try {
+    store.openTaskDetail(task.record_id);
+    await store.applySelectedTask(task);
+    expect(store.taskDescriptionEditing).toBe(false);
+    store.handleEditingTaskDraftChanged.mockClear();
+    expect(await store.editTaskDescription({ type: 'keydown', target: section, currentTarget: section })).toBe(true);
+    expect(document.activeElement).toBe(element.querySelector('.ProseMirror'));
     await Promise.all([store.mountTaskRichDescriptionEditor(element), store.mountTaskRichDescriptionEditor(element)]);
     expect(element.querySelectorAll('.ProseMirror')).toHaveLength(1);
     expect(element.querySelectorAll('[role="toolbar"]')).toHaveLength(1);
@@ -53,7 +63,8 @@ it('saves a native Tiptap task edit through the PG path and reopens Markdown ref
     expect(saved.description).toContain('Revised');
     expect(saved.description).toContain('@[Dependency](mention:task:dependency)');
     expect(saved.description).toContain('https://example.com/guide');
-    await store.mountTaskRichDescriptionEditor(element);
+    store.openTaskDetail(task.record_id);
+    expect(await store.editTaskDescription({ type: 'keydown', target: section, currentTarget: section })).toBe(true);
     expect(element.querySelector('h1').textContent).toContain('Revised');
     expect(element.querySelector('a[data-mention-id="dependency"]')).not.toBeNull();
     expect(element.querySelector('li').textContent).toBe('A useful list');
@@ -70,5 +81,55 @@ it('saves a native Tiptap task edit through the PG path and reopens Markdown ref
     expect(store.editingTask.description).toBe('Preserve the other task');
     expect(element.querySelector('[role="toolbar"]')).toBeNull();
     expect(store.taskRichDescriptionAdapter).toBeNull();
-  } finally { store.destroyTaskRichDescriptionEditor(); element.remove(); }
+  } finally { store.destroyTaskRichDescriptionEditor(); section.remove(); }
+});
+
+it('opens an empty task, types a description, saves and reopens it, and honours failed edit entry', async () => {
+  const db = openWorkspaceDb('npub1empty-task-workspace');
+  await db.open();
+  await Promise.all(db.tables.map(table => table.clear()));
+  const task = { record_id: 'empty-task', title: 'Empty brief', description: '', state: 'in_progress', priority: 'sand', version: 1, record_state: 'active', sync_status: 'synced', pg_backend: true, pg_record_type: 'task', pg_channel_id: 'channel', owner_npub: 'npub1empty-task-workspace' };
+  await upsertTask(task);
+  const { initApp } = await import('../src/app.js');
+  initApp();
+  const store = storeMock.mock.calls.find(([name]) => name === 'chat')[1];
+  Object.assign(store, {
+    session: { npub: 'npub1fixture' }, tasks: [task],
+    selectPgChannelContext: vi.fn(), startWorkspaceLiveQueries: vi.fn(), recomputeTowerPgUnreadProjection: vi.fn(),
+    loadTaskComments: vi.fn(), markTaskRead: vi.fn(), syncRoute: vi.fn(), resolveChatProfile: vi.fn(), scheduleStorageImageHydration: vi.fn(),
+    ownerNpub: task.owner_npub, currentWorkspaceOwnerNpub: task.owner_npub,
+    selectedWorkspaceKey: 'workspace', backendUrl: 'http://127.0.0.1:3100',
+    knownWorkspaces: [{ workspaceKey: 'workspace', workspaceId: 'workspace', workspaceOwnerNpub: task.owner_npub, directHttpsUrl: 'http://127.0.0.1:3100', appNpub: 'flightdeck_pg', pgBackendMode: true }],
+  });
+  updateTask.mockImplementation(async (_store, updated) => ({ ...updated, version: 2, sync_status: 'synced' }));
+  const section = document.createElement('div');
+  section.className = 'task-description-section';
+  const element = document.createElement('div'); element.className = 'task-rich-editor';
+  section.append(element); document.body.append(section);
+  const event = { type: 'keydown', target: section, currentTarget: section };
+  try {
+    store.openTaskDetail(task.record_id);
+    await store.applySelectedTask(task);
+    expect(await store.editTaskDescription(event)).toBe(true);
+    expect(store.taskDraftDirty).toBe(false);
+    store.taskRichDescriptionAdapter.getEditor().commands.insertContent('First empty task character');
+    expect(store.taskDraftDirty).toBe(true);
+    await store.saveEditingTask();
+    expect(updateTask).toHaveBeenCalledTimes(1);
+    expect((await getTaskById(task.record_id)).description).toBe('First empty task character');
+    store.openTaskDetail(task.record_id);
+    expect(await store.editTaskDescription(event)).toBe(true);
+    expect(element.querySelector('.ProseMirror').textContent).toBe('First empty task character');
+    store.openTaskDetail(task.record_id);
+    store.session = null;
+    expect(await store.editTaskDescription(event)).toBe(false);
+    store.session = { npub: 'npub1fixture' };
+    // A view-only entry must go through the existing edit/checkout operation.
+    store.taskDetailMode = 'view';
+    store.enterTaskDetailEditMode = vi.fn(async () => false);
+    expect(await store.editTaskDescription(event)).toBe(false);
+    expect(store.enterTaskDetailEditMode).toHaveBeenCalledTimes(1);
+    expect(store.taskDescriptionEditing).toBe(false);
+    expect(store.taskRichDescriptionAdapter).toBeNull();
+  } finally { store.destroyTaskRichDescriptionEditor(); section.remove(); await store.clearTaskLocalDraft(task.record_id); }
 });

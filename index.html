@@ -3522,20 +3522,22 @@
                   <!-- Description -->
                   <div
                     class="task-field task-field-wide task-description-section"
-                    x-show="$store.chat.isTaskDetailEditing() || $store.chat.editingTask.description"
                   >
                     <div class="task-field-label-row">
                       <label class="task-field-label">Description</label>
+                      <button
+                        type="button"
+                        class="task-desc-toggle"
+                        x-show="!$store.chat.taskDescriptionEditing"
+                        :disabled="!$store.chat.canEnterTaskDescriptionEdit() || $store.chat.taskDescriptionEntryPending"
+                        @click="$store.chat.editTaskDescription($event)"
+                      >Edit description</button>
                       <a
                         class="task-desc-toggle"
                         x-show="!$store.chat.isTowerPgMode && $store.chat.isTaskDetailEditing() && $store.chat.taskDescriptionEditing && $store.chat.editingTask.description"
                         @click.prevent="$store.chat.taskDescriptionEditing = false"
                       >Preview</a>
-                      <a
-                        class="task-desc-toggle"
-                        x-show="!$store.chat.isTowerPgMode && $store.chat.isTaskDetailEditing() && !$store.chat.taskDescriptionEditing"
-                        @click.prevent="$store.chat.taskDescriptionEditing = true"
-                      >Edit</a>
+
                     </div>
                     <div>
                       <div
@@ -3552,8 +3554,11 @@
                       </div>
                       <div
                         class="task-desc-preview chat-post-markdown"
+                        tabindex="-1"
+                        :title="$store.chat.canEnterTaskDescriptionEdit() ? 'Click text to edit description' : ''"
                         x-show="!$store.chat.taskDescriptionEditing"
-                        x-html="$store.chat.renderMarkdown($store.chat.editingTask.description)"
+                        @click="$store.chat.editTaskDescription($event)"
+                        x-html="$store.chat.editingTask.description ? $store.chat.renderMarkdown($store.chat.editingTask.description) : '<p class=&quot;task-description-empty&quot;>Add a description</p>'"
                       ></div>
                     </div>
                   </div>

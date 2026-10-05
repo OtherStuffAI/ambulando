@@ -1080,6 +1080,7 @@ export function initApp() {
     editingScheduleGroupQuery: '',
     showTaskDetail: false,
     taskDescriptionEditing: false,
+    taskDescriptionEntryPending: false,
     _dragTaskId: null,
     _taskWasDragged: false,
     _dragDocBrowserItem: null,
@@ -5115,6 +5116,7 @@ export function initApp() {
         if (
           Array.isArray(pendingWrites)
           && String(normalized?.sync_status || '').trim() === 'pending'
+          && !isTaskBlockedByPendingSave(normalized, pendingWrites, taskFamilyHash('task'))
           && !hasPendingRecordWrite(pendingWrites, normalized?.record_id, taskFamilyHash('task'))
         ) {
           normalized = markTaskEditSyncedAfterAcceptedFlush(normalized, pendingWrites, taskFamilyHash('task')) || normalized;
@@ -5231,7 +5233,6 @@ export function initApp() {
       this.predecessorTaskQuery = '';
       this.showPredecessorTaskPicker = false;
       this.showTaskDetail = Boolean(selectedTask);
-      this.taskDescriptionEditing = !this.editingTask?.description;
     },
 
     formatScheduleDays(days = []) {
@@ -5910,6 +5911,80 @@ export function initApp() {
       this.taskRichDescriptionRecordId = '';
     },
 
+    canEnterTaskDescriptionEdit() {
+      return Boolean(this.editingTask?.record_id && this.session?.npub
+        && !this.editingTask.read_only && !this.taskDetailSaving
+        && !this.taskDetailCheckoutPending);
+    },
+
+    async editTaskDescription(event) {
+      const target = event?.target;
+      if (target?.closest?.('a, input, [data-mention-type]')) return false;
+      const selection = target?.ownerDocument?.getSelection();
+      if (event?.type === 'click' && selection && !selection.isCollapsed
+        && event.currentTarget?.contains(selection.anchorNode)) return false;
+      if (!this.canEnterTaskDescriptionEdit() || this.taskDescriptionEntryPending) return false;
+      const recordId = this.editingTask.record_id;
+      const document = target?.ownerDocument;
+      const previewTop = event?.currentTarget?.getBoundingClientRect().top;
+      const keys = [];
+      event?.currentTarget?.focus?.({ preventScroll: true });
+      // Keep immediate typing while Alpine and the lazy editor mount resolve.
+      const capture = (keyEvent) => {
+        if (this.editingTask?.record_id !== recordId) return;
+        if (keyEvent.target?.closest?.('input, textarea, [contenteditable=true]')) return;
+        if (keyEvent.ctrlKey || keyEvent.metaKey || keyEvent.altKey || keyEvent.isComposing) return;
+        if (keyEvent.key.length === 1 || ['Enter', 'Backspace'].includes(keyEvent.key)) {
+          keyEvent.preventDefault();
+          keys.push(keyEvent.key);
+        }
+      };
+      this.taskDescriptionEntryPending = true;
+      document?.addEventListener('keydown', capture, true);
+      try {
+        const task = this.tasks.find(row => row.record_id === recordId);
+        if (isTaskBlockedByPendingSave(task, await getPendingWrites(), taskFamilyHash('task'))) {
+          this.error = 'This task has a pending save. Sync before editing it again.';
+          return false;
+        }
+        if (this.editingTask?.record_id !== recordId || !this.canEnterTaskDescriptionEdit()) return false;
+        if (!this.isTaskDetailEditing() && !await this.enterTaskDetailEditMode()) return false;
+        if (this.editingTask?.record_id !== recordId) return false;
+        this.taskDescriptionEditing = true;
+        await new Promise(resolve => Alpine.nextTick(resolve));
+        const element = document?.querySelector('.task-description-section .task-rich-editor');
+        await this.mountTaskRichDescriptionEditor(element);
+        const editor = this.taskRichDescriptionAdapter?.getEditor();
+        if (!editor || this.editingTask?.record_id !== recordId) return false;
+        let position = 'end';
+        if (event?.type === 'click' && Number.isFinite(previewTop)) {
+          const coords = editor.view.posAtCoords({
+            left: event.clientX,
+            top: event.clientY + editor.view.dom.getBoundingClientRect().top - previewTop,
+          });
+          if (coords) position = coords.pos;
+        }
+        editor.commands.focus(position, { scrollIntoView: false });
+        // focus() schedules DOM focus; synchronously focus before releasing keys.
+        editor.view.dom.focus({ preventScroll: true });
+        for (const key of keys) {
+          if (key === 'Enter') editor.commands.enter();
+          else if (key === 'Backspace') editor.commands.keyboardShortcut('Backspace');
+          else editor.commands.insertContent(key);
+        }
+        return true;
+      } catch (error) {
+        if (this.editingTask?.record_id === recordId) {
+          this.taskDescriptionEditing = false;
+          this.error = error?.userMessage || error?.message || 'Could not edit task description.';
+        }
+        return false;
+      } finally {
+        document?.removeEventListener('keydown', capture, true);
+        this.taskDescriptionEntryPending = false;
+      }
+    },
+
     async mountTaskRichDescriptionEditor(element = null) {
       if (!element || !this.editingTask?.record_id || !this.isTaskDetailEditing() || !this.taskDescriptionEditing) return;
       if (
@@ -5936,6 +6011,7 @@ export function initApp() {
       const editorMount = element.ownerDocument.createElement('div');
       element.append(editorMount);
       this.taskRichDescriptionModel = this.editingTask.description || '';
+      let editorContent = null;
       this.taskRichDescriptionAdapter = createTaskDescriptionEditor({
         element: editorMount,
         description: this.taskRichDescriptionModel,
@@ -5952,12 +6028,16 @@ export function initApp() {
         },
         onUpdate: (contentModel) => {
           if (this.editingTask?.record_id !== recordId || !this.isTaskDetailEditing()) return;
+          // Focus can assign internal block IDs without changing Markdown.
+          if (contentModel?.content === editorContent) return;
+          editorContent = contentModel?.content || '';
           this.taskRichDescriptionModel = contentModel?.content || '';
           this.editingTask.description = this.taskRichDescriptionModel;
           this.handleEditingTaskDraftChanged();
           this.scheduleStorageImageHydration?.();
         },
       });
+      editorContent = this.taskRichDescriptionAdapter.getContentModel().content;
       const editor = this.taskRichDescriptionAdapter.getEditor();
       this.taskRichDescriptionToolbar = createDailyNoteTiptapToolbar(editor);
       this.taskRichDescriptionToolbar.element.setAttribute('aria-label', 'Task description formatting');
@@ -6563,7 +6643,7 @@ export function initApp() {
     },
 
     async enterTaskDetailEditMode() {
-      if (!this.editingTask || !this.session?.npub || this.taskDetailCheckoutPending) return false;
+      if (!this.canEnterTaskDescriptionEdit()) return false;
       const task = this.tasks.find(t => t.record_id === this.editingTask.record_id);
       if (!task) return false;
       const pendingWrites = await getPendingWrites();
@@ -6592,6 +6672,7 @@ export function initApp() {
             checkoutPolicyConfig,
           });
         }
+        if (this.editingTask?.record_id !== taskForEdit.record_id) return false;
         this.taskEditOriginal = toRaw(taskForEdit);
         this.editingTask = toRaw(taskForEdit);
         this.editingTask.predecessor_task_ids = normalizePredecessorTaskIds(this.editingTask.predecessor_task_ids || [], this.editingTask.record_id);

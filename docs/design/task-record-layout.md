@@ -30,3 +30,23 @@ comment ordering, offline and edit-lease unit tests.
 `tests/app-task-rich-description.test.js` exercises a native editor edit through
 the PG save path and reopens persisted Markdown with references intact. These
 fixtures do not establish live Tower authorization or cross-client delivery.
+
+Descriptions open as readable Markdown previews, including an empty-description
+placeholder. Clicking ordinary text enters Tiptap and focuses the caret; the
+Edit description button provides keyboard entry. Link/reference clicks and text
+selection retain their reading/navigation behavior. Entry checks sign-in,
+read-only, save/checkout progress and rejected/conflicted pending saves. View-mode
+entry uses the existing task edit operation; PG retains local drafts with explicit
+Save/Discard. Immediate typing during the lazy mount is retained, and focus-only
+internal block-ID updates do not mark the description dirty.
+
+The selected-task live materialization must preserve description editing state.
+It previously reset populated descriptions to preview while PG hid the toggle,
+leaving no edit entry. `tests/e2e/task-description-entry.spec.cjs` selects a local
+workspace database, opens tasks through `openTaskDetail`, applies the selected-task
+refresh and clicks/types without assigning edit flags. It covers empty/populated
+entry, keyboard focus, links/selection, blocked states and mobile tabs at 320/390px.
+The app editor tests exercise PG Save/reopen with persisted descriptions and
+references. The browser spec can use served runtime assets with
+`FLIGHTDECK_ENTRY_LIVE=1`; its seeded data and blocked transport do not establish
+authenticated Tower authorization or cross-client delivery.

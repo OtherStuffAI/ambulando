@@ -2783,6 +2783,13 @@
       "notes": [
         "Task descriptions use Tiptap with Markdown headings, lists, links and clickable record references. Formatting, mention insertion and paste preserve the full-height task reading surface."
       ]
+    },
+    {
+      "buildNumber": 2201,
+      "label": "Click to edit task descriptions",
+      "notes": [
+        "Click ordinary task description text to focus the Markdown editor immediately, or use Edit description from the keyboard, including empty descriptions. Links keep navigating and Save/Discard remain explicit."
+      ]
     }
   ]
 }
