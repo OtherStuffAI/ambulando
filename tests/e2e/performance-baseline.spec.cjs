@@ -455,3 +455,62 @@ test('preserves editing and navigation during reconnect, retries and lazy asset 
   await expect(composer).toHaveText('draft survives retry and keeps typing');
   expect(await page.evaluate(() => window.Alpine.store('chat').startupSyncProgress.error)).toBeNull();
 });
+
+
+test('Backlog renders collapsed and expands in kanban and list, including reload', async ({ page }) => {
+  test.setTimeout(30000);
+  await blockExternalRequests(page);
+  await page.goto('/');
+  await waitForStore(page);
+  await seedWorkspace(page, { documentCount: 10, historySize: 10, taskCount: 20 });
+  await page.evaluate(() => {
+    const store = window.Alpine.store('chat');
+    store.navSection = 'tasks';
+    store.showTaskDetail = false;
+    store.selectedBoardId = null;
+    store.activeThreadId = null;
+    store.tasks = store.tasks.map(task => ({ ...task, tags: '', assignee_npub: '', assignee_npubs: [] }));
+    store.taskViewMode = 'kanban';
+  });
+  const column = page.locator('.kanban-col-new');
+  await expect(column.locator('.kanban-column-title')).toHaveText('Backlog');
+  await expect(column.locator('.kanban-column-body')).toBeHidden();
+  await column.locator('.kanban-column-header').click();
+  await expect(column.locator('.kanban-column-body')).toBeVisible();
+  await page.evaluate(() => window.Alpine.store('chat').toggleTaskViewMode());
+  const group = page.locator('.task-list-group').filter({ has: page.locator('.task-list-group-new') });
+  await expect(group.locator('.task-list-group-label')).toHaveText('Backlog');
+  await expect(group.locator('.task-list-rows')).toBeHidden();
+  await group.locator('.task-list-group-header').click();
+  await expect(group.locator('.task-list-rows')).toBeVisible();
+  await page.reload();
+  await waitForStore(page);
+  expect(await page.evaluate(() => window.Alpine.store('chat').isSectionCollapsed('new'))).toBe(true);
+});
+
+
+test('Backlog resets on Tasks re-entry while allowing expansion during the visit', async ({ page }) => {
+  test.setTimeout(30000);
+  await blockExternalRequests(page);
+  await page.goto('/');
+  await waitForStore(page);
+  await seedWorkspace(page, { documentCount: 10, historySize: 10, taskCount: 20 });
+  const evidence = await page.evaluate(() => {
+    const store = window.Alpine.store('chat');
+    store.tasks = store.tasks.map(task => ({ ...task, tags: '', assignee_npub: '', assignee_npubs: [] }));
+    store.collapsedSections = { new: false, done: true };
+    store.openTaskDetail('task-0', { captureOrigin: false, syncRoute: false });
+    const entryClosed = store.isSectionCollapsed('new');
+    store.toggleSectionCollapse('new');
+    const explicitlyExpanded = !store.isSectionCollapsed('new');
+    store.navSection = 'tasks';
+    const stillExpanded = !store.isSectionCollapsed('new');
+    store.navSection = 'chat';
+    store.openTaskDetail('task-1', { captureOrigin: false, syncRoute: false });
+    return { entryClosed, explicitlyExpanded, stillExpanded,
+      reentryClosed: store.isSectionCollapsed('new'), doneClosed: store.isSectionCollapsed('done'),
+      backlogLabel: store.boardColumns.find(column => column.state === 'new').label };
+  });
+  expect(evidence).toEqual({ entryClosed: true, explicitlyExpanded: true, stillExpanded: true,
+    reentryClosed: true, doneClosed: true, backlogLabel: 'Backlog' });
+});

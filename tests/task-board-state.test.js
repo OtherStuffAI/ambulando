@@ -941,8 +941,10 @@ describe('computeBoardScopedTasks', () => {
       syncRoute() {},
     });
 
+    store.collapsedSections = { new: false, done: true };
     store.selectBoard('scope-ops');
 
+    expect(store.collapsedSections).toEqual({ new: true, done: true });
     expect(store.selectedBoardId).toBe('scope-ops');
     expect(store.selectedChannelId).toBeNull();
     expect(store.focusScopeTitle).toBe('Ops');
@@ -2119,5 +2121,19 @@ describe('Backlog collapse preferences', () => {
     expect(store.isSectionCollapsed('done')).toBe(true);
     expect(JSON.parse(storage.get('coworker:collapsed-sections'))).toEqual({ done: true });
     expect(store.readStoredCollapsedSections()).toEqual({ done: true, new: true });
+  });
+});
+
+
+describe('Backlog on a fresh task surface', () => {
+  it('collapses when switching list and kanban while preserving other columns', () => {
+    const store = { taskViewMode: 'kanban', collapsedSections: { new: false, done: true }, syncRoute: vi.fn() };
+    taskBoardStateMixin.toggleTaskViewMode.call(store);
+    expect(store.taskViewMode).toBe('list');
+    expect(store.collapsedSections).toEqual({ new: true, done: true });
+    store.collapsedSections.new = false;
+    taskBoardStateMixin.toggleTaskViewMode.call(store);
+    expect(store.taskViewMode).toBe('kanban');
+    expect(store.collapsedSections).toEqual({ new: true, done: true });
   });
 });
