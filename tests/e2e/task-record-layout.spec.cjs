@@ -86,3 +86,111 @@ for (const width of [1280, 390]) {
     await page.screenshot({ path: `tmp/docs/handoffs/task-record-read-${width}.png`, fullPage: true });
   });
 }
+
+// Exercise the actual PG editing path with a document-sized brief rather than
+// relying on the short read-mode fixture above.
+for (const mode of ['edit', 'view']) {
+  for (const width of [1280, 390, 320]) {
+    test(`long PG description owns no nested scroll in ${mode} mode at ${width}px`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 900 });
+      await openFixture(page);
+      await page.evaluate((mode) => {
+        const store = window.Alpine.store('chat');
+        store.editingTask.title = 'Flight Deck: adopt durable per-device sync checkpoints';
+        store.editingTask.description = [
+          '# Durable device checkpoints',
+          'Flight Deck must adopt independent device checkpoints so each browser cache resumes after its own last committed position. Preserve pending edits, permissions and older-server support. Coordinate with @[Layout reviewer](mention:person:npub1fixture).',
+          ...Array.from({ length: 14 }, (_, i) => `## Implementation requirement ${i + 1}\n\nThe browser must commit the complete materialization before acknowledging its position. Interrupted requests must recover safely without dropping local edits or replaying incomplete state. Coordinate the worker, transport and local persistence while preserving existing behavior.\n\nValidate cold bootstrap, incremental recovery and concurrent changes with realistic records and meaningful assertions.`),
+          '## Final acceptance\n\nThe whole description remains accessible, and dependency and subtask controls follow it.',
+        ].join('\n\n');
+        store.editingTask.assigned_to_npubs = ['npub1fixture'];
+        store.getSenderName = () => 'Layout reviewer';
+        store.taskDetailMode = mode;
+        store.taskDescriptionEditing = mode === 'edit';
+      }, mode);
+      const panel = page.locator('.task-detail-panel');
+      const main = panel.locator('.task-detail-main');
+      const scrollOwner = width > 768 ? main : panel.locator('.task-detail-body');
+      const surface = panel.locator(mode === 'edit' ? '.task-mention-composer' : '.task-desc-preview');
+      await expect(surface).toBeVisible();
+      if (mode === 'edit') {
+        await expect(surface).toHaveAttribute('contenteditable', 'true');
+        await expect(panel.locator('.task-detail-fields select').first()).toHaveValue('in_progress');
+        await panel.locator('.task-detail-fields select').first().selectOption('review');
+        expect(await page.evaluate(() => window.Alpine.store('chat').editingTask.state)).toBe('review');
+        await expect(panel.locator('.task-assignee-selected')).toContainText('Layout reviewer');
+        const assigneeFits = await panel.locator('.task-assignee-field > input').evaluate(node => {
+          const heading = node.closest('.task-record-heading').getBoundingClientRect();
+          const input = node.getBoundingClientRect();
+          return input.bottom <= heading.bottom + 1 && input.right <= heading.right + 1;
+        });
+        expect(assigneeFits).toBe(true);
+      } else {
+        await expect(surface.locator('h1')).toHaveText('Durable device checkpoints');
+        await expect(surface.locator('h2')).toHaveCount(15);
+      }
+      if (mode === 'edit' && width === 1280) {
+        await expect(surface.locator('[data-mention-token]')).toContainText('Layout reviewer');
+        await surface.evaluate(node => {
+          node.focus();
+          const selection = getSelection();
+          const range = document.createRange();
+          range.selectNodeContents(node);
+          range.collapse(false);
+          selection.removeAllRanges();
+          selection.addRange(range);
+          const clipboardData = new DataTransfer();
+          clipboardData.setData('text/plain', '\nPasted acceptance paragraph.');
+          node.dispatchEvent(new ClipboardEvent('paste', { clipboardData, bubbles: true, cancelable: true }));
+        });
+        await expect.poll(() => page.evaluate(() => window.Alpine.store('chat').editingTask.description)).toContain('Pasted acceptance paragraph.');
+        await expect(surface.locator('[data-mention-token]')).toContainText('Layout reviewer');
+        await scrollOwner.evaluate(node => { node.scrollTop = 0; });
+      }
+      const geometry = await surface.evaluate(node => {
+        const pane = innerWidth > 768 ? node.closest('.task-detail-main') : node.closest('.task-detail-body');
+        const section = node.closest('.task-description-section');
+        return {
+          height: node.getBoundingClientRect().height,
+          clientHeight: node.clientHeight, scrollHeight: node.scrollHeight,
+          overflow: getComputedStyle(node).overflowY,
+          paneHeight: pane.clientHeight, paneScrollHeight: pane.scrollHeight,
+          border: getComputedStyle(node).borderTopWidth,
+          sectionBorder: getComputedStyle(section).borderTopWidth,
+          headerHeight: document.querySelector('.task-record-heading').getBoundingClientRect().height,
+        };
+      });
+      expect(geometry.height).toBeGreaterThan(geometry.paneHeight * 2);
+      expect(geometry.scrollHeight - geometry.clientHeight).toBeLessThanOrEqual(2);
+      expect(geometry.overflow).toBe('visible');
+      expect(geometry.paneScrollHeight).toBeGreaterThan(geometry.paneHeight * 2);
+      expect(geometry.border).toBe('0px');
+      expect(geometry.sectionBorder).toBe('0px');
+      expect(geometry.headerHeight).toBeLessThan(width > 768 ? 165 : 220);
+      console.log('TASK_RECORD_GEOMETRY', JSON.stringify({ mode, width, ...geometry }));
+      const box = await scrollOwner.boundingBox();
+      await page.mouse.move(box.x + box.width / 2, box.y + 80);
+      await page.mouse.wheel(0, 550);
+      await expect.poll(() => scrollOwner.evaluate(node => node.scrollTop)).toBeGreaterThan(100);
+      expect(await surface.evaluate(node => node.scrollTop)).toBe(0);
+      // Wheel over secondary content also belongs to the same pane.
+      await scrollOwner.evaluate(node => { node.scrollTop = node.scrollHeight; });
+      await expect(panel.locator(mode === 'edit' ? '.subtask-list-field' : '.task-predecessor-link')).toBeVisible();
+      const before = await scrollOwner.evaluate(node => node.scrollTop);
+      await page.mouse.move(box.x + box.width / 2, box.y + box.height - 35);
+      await page.mouse.wheel(0, -300);
+      await expect.poll(() => scrollOwner.evaluate(node => node.scrollTop)).toBeLessThan(before - 50);
+      await scrollOwner.evaluate(node => { node.scrollTop = 0; });
+      await page.screenshot({ path: `tmp/docs/handoffs/task-record-long-${mode}-${width}.png`, fullPage: true });
+      if (width < 769) {
+        await panel.getByRole('button', { name: 'Comments', exact: true }).click();
+        await expect(main).toBeHidden();
+        await expect(panel.locator('.task-comments-section')).toBeVisible();
+        await panel.getByRole('button', { name: 'Task', exact: true }).click();
+        await expect(surface).toBeVisible();
+      }
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+      await expect(panel.locator('label').filter({ hasText: /^Scope$/ })).toHaveCount(0);
+    });
+  }
+}

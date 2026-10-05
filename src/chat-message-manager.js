@@ -900,6 +900,13 @@ export const chatMessageManagerMixin = {
 
   autosizeComposer(textarea, options = {}) {
     if (!textarea || typeof window === 'undefined') return;
+    // Descriptions are document surfaces. Their pane scrolls, so applying the
+    // chat composer line cap here creates a nested scrolling edit window.
+    if (textarea.dataset?.chatComposer === 'task-description') {
+      textarea.style.height = 'auto';
+      textarea.style.overflowY = 'visible';
+      return;
+    }
     if (options.resetManualSize === true) {
       textarea.style.height = 'auto';
       textarea.style.overflowY = 'hidden';

@@ -1184,6 +1184,25 @@ describe('scroll and composer methods', () => {
     expect(() => fn(null)).not.toThrow();
   });
 
+  it('lets task descriptions grow and shrink with content instead of capping lines', () => {
+    const { fn } = bindMethod('autosizeComposer');
+    const composer = {
+      dataset: { chatComposer: 'task-description' },
+      scrollHeight: 2400,
+      style: { height: '118px', overflowY: 'auto' },
+    };
+    vi.stubGlobal('window', {});
+    try {
+      fn(composer);
+      expect(composer.style).toEqual({ height: 'auto', overflowY: 'visible' });
+      composer.scrollHeight = 80;
+      fn(composer, { resetManualSize: true });
+      expect(composer.style).toEqual({ height: 'auto', overflowY: 'visible' });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('autosizeComposer keeps empty composers at the one-line minimum', () => {
     const { fn } = bindMethod('autosizeComposer');
     const textarea = {

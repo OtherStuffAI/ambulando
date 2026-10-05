@@ -2769,6 +2769,13 @@
       "notes": [
         "Native and FIPS caches retain cryptographic device identities where secure-origin UUID helpers are unavailable. Repeated access-denied reconnects keep the replacement cache identity stable."
       ]
+    },
+    {
+      "buildNumber": 2199,
+      "label": "Comfortable task description editing",
+      "notes": [
+        "Long task descriptions now grow with their content and scroll with the task pane. A compact editing header and fewer nested borders leave more space for the brief and comments."
+      ]
     }
   ]
 }

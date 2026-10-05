@@ -3428,7 +3428,7 @@
 
                   <!-- State row -->
                   <div class="task-detail-fields" x-show="$store.chat.isTaskDetailEditing()">
-                    <div class="task-field">
+                    <div class="task-field task-status-field">
                       <label class="task-field-label">Status</label>
                       <select x-model="$store.chat.editingTask.state" @change="$store.chat.handleEditingTaskDraftChanged()" :disabled="!$store.chat.isTaskDetailEditing()">
                         <option value="new">New</option>
@@ -3450,7 +3450,7 @@
                     </div>
                   </div>
 
-                  <div class="task-field task-field-wide" x-show="$store.chat.isTaskDetailEditing()">
+                  <div class="task-field task-field-wide task-assignee-field" x-show="$store.chat.isTaskDetailEditing()">
                     <label class="task-field-label">Assigned</label>
                     <template x-if="$store.chat.getPrimaryTaskAssigneeNpub($store.chat.editingTask)">
                       <div class="new-channel-resolved-profile task-assignee-selected">
