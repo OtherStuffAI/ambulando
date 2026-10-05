@@ -1,3 +1,4 @@
+import { hasPersonalUnreadAttention } from './personal-attention.js';
 /**
  * Unread indicators mixin for the Alpine chat store.
  *
@@ -41,10 +42,6 @@ import {
   resourceViewStateId,
 } from './resource-view-state.js';
 import { recordFamilyHash } from './translators/chat.js';
-import {
-  isTaskActivityAuthoredByViewer,
-  latestTaskActivity,
-} from './task-attention-actor.js';
 import { matchesTaskBoardScope } from './task-board-scopes.js';
 
 // ---------------------------------------------------------------------------
@@ -93,13 +90,6 @@ function taskCommentsFor(comments = [], taskId = '') {
   ));
 }
 
-function hasHydratedTaskAttentionActivity(task, latestActivity, state) {
-  if (!task || !latestActivity) return false;
-  const taskActivityVersion = Number(task.activity_version || 0);
-  const stateActivityVersion = Number(state?.activity_version || 0);
-  return stateActivityVersion <= 0
-    || taskActivityVersion >= stateActivityVersion;
-}
 
 function usesTowerResourceViewState(store) {
   return isTowerPgBackendMode()
@@ -130,7 +120,7 @@ export function collectUnreadViewResources(states = [], resourceTypes = []) {
     .filter((state) => (
       allowedTypes.has(String(state?.resource_type || '').trim())
       && String(state?.resource_id || '').trim()
-      && Number(state.activity_version || 0) > Number(state.viewed_activity_version || 0)
+      && Number((state.attention_policy_version === 1 ? state.attention_activity_version : state.activity_version) || 0) > Number(state.viewed_activity_version || 0)
     ))
     .map((state) => ({
       resource_type: String(state.resource_type).trim(),
@@ -401,7 +391,7 @@ export function computeUnreadDocumentMap(documents, comments, cursorMap, viewerN
 
   const result = {};
   for (const doc of Array.isArray(documents) ? documents : []) {
-    if (!doc?.record_id || doc.record_state === 'deleted') continue;
+    if (!doc?.record_id || doc.record_state === 'deleted' || doc.pg_record_type === 'file') continue;
     const docKey = `docs:item:${doc.record_id}`;
     const docReadUntil = cursorMap[docKey] || null;
     let effectiveReadUntil = pickEffectiveReadUntil(navReadUntil, docReadUntil);
@@ -714,36 +704,21 @@ export const unreadStoreMixin = {
     const taskItems = {};
     const docItems = {};
     const channels = {};
-    const tasksById = new Map((Array.isArray(this.tasks) ? this.tasks : [])
-      .filter((task) => task?.record_id)
-      .map((task) => [task.record_id, task]));
-    const comments = Array.isArray(this.autopilotOverviewComments)
-      ? this.autopilotOverviewComments
-      : (Array.isArray(this.taskComments) ? this.taskComments : []);
+    const tasksById = new Map((this.tasks || []).map(row => [row.record_id, row]));
+    const docsById = new Map((this.documents || []).map(row => [row.record_id, row]));
+    const comments = this.autopilotOverviewComments || this.taskComments || [];
     for (const state of states) {
-      const unread = Number(state.activity_version || 0) > Number(state.viewed_activity_version || 0);
-      if (!unread) continue;
-      let createsAttention = state.resource_type !== 'task';
+      const row = state.resource_type === 'task' ? tasksById.get(state.resource_id)
+        : state.resource_type === 'document' ? docsById.get(state.resource_id) : state;
+      const options = { resourceType: state.resource_type,
+        viewerActorId: this.currentPgActorId, viewerNpub: this.currentViewerNpub || this.session?.npub,
+        workspaceMembers: this.pgWorkspaceMembers,
+        comments: comments.filter(comment => comment.target_record_id === state.resource_id) };
+      if (!hasPersonalUnreadAttention(row || {}, state, options)) continue;
       if (state.resource_type === 'thread') threadItems[state.resource_id] = true;
-      if (state.resource_type === 'task') {
-        const task = tasksById.get(state.resource_id);
-        const latestActivity = task
-          ? latestTaskActivity(task, taskCommentsFor(comments, state.resource_id))
-          : null;
-        const selfAuthored = latestActivity && isTaskActivityAuthoredByViewer(latestActivity.row, {
-          kind: latestActivity.kind,
-          viewState: state,
-          viewerActorId: this.currentPgActorId,
-          viewerNpub: this.currentViewerNpub || this.session?.npub,
-          workspaceMembers: this.pgWorkspaceMembers,
-        });
-        if (!selfAuthored && hasHydratedTaskAttentionActivity(task, latestActivity, state)) {
-          taskItems[state.resource_id] = true;
-          createsAttention = true;
-        }
-      }
+      if (state.resource_type === 'task') taskItems[state.resource_id] = true;
       if (state.resource_type === 'document') docItems[state.resource_id] = true;
-      if (createsAttention && state.channel_id) channels[state.channel_id] = true;
+      if (state.channel_id) channels[state.channel_id] = true;
     }
     this._unreadThreadItems = threadItems;
     this._unreadTaskItems = taskItems;

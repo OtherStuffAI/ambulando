@@ -410,7 +410,7 @@ export async function upsertResourceViewState(row) {
     };
     await wsDb().resource_view_states.put(merged);
     const attention = await wsDb().pg_resource_attention.get(recordId);
-    if (attention?.unread && merged.viewed_activity_version >= attention.activity_version) {
+    if (attention?.unread && merged.viewed_activity_version >= (attention.attention_activity_version ?? attention.activity_version)) {
       await wsDb().pg_resource_attention.update(recordId, { unread: 0, viewed_activity_version: merged.viewed_activity_version });
       const section = incoming.resource_type === 'thread' ? 'chat' : incoming.resource_type === 'task' ? 'tasks' : 'docs';
       for (const key of [`section:${section}`, ...(attention.channel_id ? [`channel:${attention.channel_id}`] : [])]) {

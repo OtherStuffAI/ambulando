@@ -186,8 +186,8 @@ it('rebuilds summaries in bounded resumable batches and matches existing unread 
   const old={...store,tasks:local,pgWorkspaceMembers:await db.workspace_members.toArray(),currentViewerNpub:'npub1viewer'};
   unreadStoreMixin.applyTowerPgResourceViewStates.call(old,local.map(task=>({resource_type:'task',resource_id:task.record_id,channel_id:task.pg_channel_id,activity_version:2,viewed_activity_version:0})));
   const projection=await getPgAttentionProjection({...store,tasks:local});
-  expect(projection.values['section:tasks']).toBe(Object.keys(old._unreadTaskItems).length);
-  expect(projection.values['section:tasks']).toBe(225);
+  expect(projection.values['section:tasks'] || 0).toBe(Object.keys(old._unreadTaskItems).length);
+  expect(projection.values['section:tasks'] || 0).toBe(0);
 });
 
 it('hydrates actor references before canonical rows on a fresh negotiated workspace',async()=>{
@@ -450,4 +450,46 @@ it('limits Feed omission authority to advertised snapshot families and still hon
   await applyPgRecordChanges(reader, { ...page([{ ...change, version: '3' }], 'feed-returned-again'), families });
   await resetPgRecordAuthority(reader);
   expect(await db.feed_subscriptions.count()).toBe(0);
+});
+
+it('reprojects an existing cache from canonical attention without moving its cursor or read position', async () => {
+  const task = fixture.canonical_upserts.changes.find(row => row.family === 'task');
+  const reader = { ...store, currentPgActorId: 'viewer' };
+  const canonical = { ...task, version: '100', row: { ...task.row, activity_version: 9,
+    attention: { policy_version: 1, mention_activity_versions: { viewer: 5 }, body_activity_version: 0 },
+    metadata: { ...task.row.metadata, assigned_to_npub: null } } };
+  await applyPgRecordChanges(reader, page([canonical], 'cache'));
+  await db.resource_view_states.put({ record_id: `task:${task.id}`, resource_type: 'task', resource_id: task.id,
+    viewer_actor_id: 'viewer', viewed_activity_version: 5, activity_version: 9 });
+  await db.pg_resource_attention.put({ record_id: `task:${task.id}`, resource_type: 'task', resource_id: task.id,
+    channel_id: task.channel_id, activity_version: 9, unread: 1 });
+  await db.pg_attention_counts.bulkPut([{ key: 'section:tasks', count: 1 }, { key: `channel:${task.channel_id}`, count: 1 }]);
+  const { rebuildPgRecordSummaries } = await import('../src/pg-record-delta.js');
+  await rebuildPgRecordSummaries(reader);
+  expect((await db.pg_resource_attention.get(`task:${task.id}`)).unread).toBe(0);
+  expect((await db.pg_attention_counts.get('section:tasks')).count).toBe(0);
+  expect((await db.resource_view_states.get(`task:${task.id}`)).viewed_activity_version).toBe(5);
+  expect((await db.sync_state.get(recordDeltaCursorKey(reader))).value.cursor).toBe('cache');
+  await db.close(); await db.open();
+  await rebuildPgRecordSummaries(reader);
+  expect((await db.pg_resource_attention.get(`task:${task.id}`)).unread).toBe(0);
+});
+
+it('clears qualifying attention with a cross-device receipt below the latest neutral activity and rearms only for a new mention', async () => {
+  const task = fixture.canonical_upserts.changes.find(row => row.family === 'task');
+  const receipt = fixture.canonical_upserts.changes.find(row => row.family === 'resource_view_state');
+  const reader = { ...store, currentPgActorId: 'viewer' };
+  const change = (version, mentionVersion) => ({ ...task, version: String(version), row: { ...task.row,
+    activity_version: version, metadata: {}, attention: { policy_version: 1, mention_activity_versions: { viewer: mentionVersion } } } });
+  await applyPgRecordChanges(reader, page([change(9, 5)], 'first'));
+  expect((await db.pg_resource_attention.get(`task:${task.id}`)).unread).toBe(1);
+  const view = { ...receipt, id: `viewer:task:${task.id}`, version: '101', row: { ...receipt.row,
+    resource_type: 'task', resource_id: task.id, viewer_actor_id: 'viewer', viewed_activity_version: 5, activity_version: 9 } };
+  await applyPgRecordChanges(reader, page([view], 'read'));
+  expect((await db.pg_resource_attention.get(`task:${task.id}`)).unread).toBe(0);
+  await applyPgRecordChanges(reader, page([change(10, 5)], 'neutral'));
+  expect((await db.pg_resource_attention.get(`task:${task.id}`)).unread).toBe(0);
+  await applyPgRecordChanges(reader, page([change(11, 11)], 'mention'));
+  expect((await db.pg_resource_attention.get(`task:${task.id}`)).unread).toBe(1);
+  expect((await db.pg_attention_counts.get('section:tasks')).count).toBe(1);
 });

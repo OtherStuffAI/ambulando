@@ -1,3 +1,4 @@
+import { standaloneDeckFiles } from './personal-attention.js';
 import {
   getPgChannelScopeId,
   parsePgTaskBoardId,
@@ -12,7 +13,6 @@ import {
 } from './agent-activity.js';
 import {
   isTaskActivityAuthoredByViewer,
-  latestTaskActivity,
 } from './task-attention-actor.js';
 import {
   resolveHorizontalSwipe,
@@ -220,7 +220,8 @@ function isFileBackedDocument(row = {}) {
 }
 
 function isDocumentBodyStorageRow(row = {}) {
-  return normalizeString(row.source_type) === 'document'
+  return !isFileBackedDocument(row)
+    && normalizeString(row.source_type) === 'document'
     && normalizeString(row.kind) === 'document';
 }
 
@@ -475,11 +476,6 @@ export function buildAutopilotOverviewTasks({
     }
     const commentsForTask = taskComments.get(task.record_id) || [];
     const actorOptions = { viewerActorId, viewerNpub, workspaceMembers };
-    const latestRawActivity = latestTaskActivity(task, commentsForTask);
-    const latestActivityIsSelfAuthored = isTaskActivityAuthoredByViewer(latestRawActivity.row, {
-      ...actorOptions,
-      kind: latestRawActivity.kind,
-    });
     const attentionComments = commentsForTask.filter((comment) => !isTaskActivityAuthoredByViewer(comment, {
       ...actorOptions,
       kind: 'comment',
@@ -515,7 +511,7 @@ export function buildAutopilotOverviewTasks({
         task.state,
         latestComment?.body,
       ].filter(Boolean).join(' '),
-      isUnread: unreadTaskMap?.[task.record_id] === true && !latestActivityIsSelfAuthored,
+      isUnread: unreadTaskMap?.[task.record_id] === true,
       context: {
         scopeId: recordScopeId(task) || null,
         channelId: task.pg_channel_id || task.channel_id || null,
@@ -645,13 +641,14 @@ export function buildAutopilotOverviewFiles(rows = [], {
   const diagnostics = [];
   const filtered = [];
   let hiddenMissingContext = 0;
-  for (const row of Array.isArray(rows) ? rows : []) {
+  for (const row of standaloneDeckFiles(Array.isArray(rows) ? rows : [])) {
     if (isDocumentBodyStorageRow(row)) continue;
     const match = rowMatchesContext(row, context, scopesMap);
     if (match.matches) {
       filtered.push({
         ...row,
         ...getOverviewFileSourceContract(row),
+        isUnread: false,
         activityAt: row.updated_at || row.created_at || row.uploaded_at || '',
         reason: row.updated_at ? 'Edited file' : 'Uploaded file',
       });
@@ -714,10 +711,11 @@ export function buildAutopilotOverviewInbox({ threads = [], files = [], document
       inboxKind: 'chat',
       inboxActivityAt: row.latestMessageUpdatedAt || '',
     })).map((row) => ({ ...row, isWorking: isInboxRowWorking(row, workingResourceKeys) })),
-    ...(Array.isArray(files) ? files : []).map((row) => ({
+    ...standaloneDeckFiles(Array.isArray(files) ? files : []).map((row) => ({
       ...row,
       ...getOverviewFileSourceContract(row),
       inboxKind: 'file',
+      isUnread: false,
       inboxActivityAt: row.activityAt || row.updated_at || row.created_at || row.uploaded_at || '',
       isWorking: false,
     })),
@@ -1935,6 +1933,10 @@ export const autopilotOverviewManagerMixin = {
 
   openAutopilotOverviewDocument(row = {}) {
     if (!row?.recordId) return;
+    const source = (this.documents || []).find((doc) => doc.record_id === row.recordId);
+    if (isFileBackedDocument(source || row)) {
+      return this.openFilePreview({ ...(source || row), object_id: source?.pg_storage_object_id || row.pg_storage_object_id });
+    }
     this.openDoc(row.recordId, {
       commentId: row.hrefTarget?.focusId || null,
       showComments: Boolean(row.count),

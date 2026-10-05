@@ -9569,19 +9569,27 @@ export function initApp() {
       this.clearChatFileDrafts('thread');
     },
 
+    focusChatImagePreviewClose() {
+      (this.$nextTick || Alpine.nextTick)(() => document.querySelector('[data-chat-image-preview-close]')?.focus());
+    },
+
     openChatImagePreview(draft, trigger = null) {
       const src = String(draft?.preview_url || '');
       if (!src) return;
+      this.closeChatImagePreview({ restoreFocus: false });
       this.chatImagePreviewReturnFocus = trigger || (typeof document !== 'undefined' ? document.activeElement : null);
       this.chatImagePreviewModal = { open: true, src, alt: draft.filename || 'Image preview' };
-      this.$nextTick?.(() => document.querySelector('[data-chat-image-preview-close]')?.focus());
+      this.focusChatImagePreviewClose();
     },
 
     closeChatImagePreview(options = {}) {
       const returnFocus = this.chatImagePreviewReturnFocus;
+      this.filePreviewRequestId = Number(this.filePreviewRequestId || 0) + 1;
+      if (this.chatImagePreviewModal.ownedUrl) URL.revokeObjectURL(this.chatImagePreviewModal.src);
+      this.filePreviewBlob = null;
       this.chatImagePreviewModal = { open: false, src: '', alt: '' };
       this.chatImagePreviewReturnFocus = null;
-      if (options.restoreFocus !== false) this.$nextTick?.(() => returnFocus?.focus?.());
+      if (options.restoreFocus !== false) (this.$nextTick || Alpine.nextTick)(() => returnFocus?.focus?.());
     },
 
     formatAttachmentSize(sizeBytes) {

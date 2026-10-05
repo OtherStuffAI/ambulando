@@ -82,8 +82,8 @@ describe('Tower resource view state', () => {
       { resource_type: 'document', resource_id: 'doc-a', channel_id: 'channel-b', activity_version: 4, viewed_activity_version: 3 },
     ]);
     expect(store._unreadThreadItems).toEqual({ 'thread-a': true });
-    expect(store._unreadDocItems).toEqual({ 'doc-a': true });
-    expect(store._unreadChannels).toEqual({ 'channel-a': true, 'channel-b': true });
+    expect(store._unreadDocItems).toEqual({});
+    expect(store._unreadChannels).toEqual({ 'channel-a': true });
     expect(Object.getOwnPropertyDescriptor(unreadStoreMixin, 'unreadDeck').get.call(store)).toBe(true);
   });
 

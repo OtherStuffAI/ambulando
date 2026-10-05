@@ -245,11 +245,17 @@ function baseRow({
   updated_at = '',
   preview = '',
   archived = false,
+  workspace_id = '',
+  backend_url = '',
+  pg_record_type = '',
 }) {
   const objectId = normalizeString(object_id);
   return {
     id: `${source_type}:${source_record_id || 'record'}:${objectId}`,
     object_id: objectId,
+    workspace_id,
+    backend_url,
+    pg_record_type,
     kind,
     name: normalizeString(name) || objectId || 'File',
     source_type,
@@ -376,6 +382,31 @@ export function buildFileBrowserRows(store = {}) {
 
   for (const document of documents) {
     const scopeId = getRecordScopeId(document);
+    if (document.pg_record_type === 'file' || document.pg_storage_object_id) {
+      const objectId = document.pg_storage_object_id || uniqueStorageRefs(document.content)[0]?.objectId;
+      if (objectId) rows.push(baseRow({
+        object_id: objectId,
+        kind: kindFromContentType(document.content_storage_content_type),
+        name: document.title,
+        source_type: 'document',
+        pg_record_type: 'file',
+        source_label: document.title,
+        source_record_id: document.record_id,
+        scope_id: scopeId,
+        channel_id: document.pg_channel_id,
+        thread_id: document.pg_thread_id,
+        source_target_type: document.pg_task_id ? 'task' : null,
+        source_target_record_id: document.pg_task_id || null,
+        folder_id: document.pg_folder_id,
+        workspace_id: document.pg_workspace_id,
+        backend_url: document.pg_backend_url,
+        content_type: document.content_storage_content_type,
+        size_bytes: document.content_size_bytes,
+        updated_at: document.updated_at,
+        archived: document.record_state === 'archived',
+      }));
+      continue;
+    }
     if (document.content_storage_object_id) {
       rows.push(baseRow({
         object_id: document.content_storage_object_id,
@@ -1201,11 +1232,11 @@ export const filesManagerMixin = {
     return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
   },
 
-  async downloadStorageObjectAsFile(objectId, fileName = '', fallbackKind = '') {
+  async downloadStorageObjectAsFile(objectId, fileName = '', fallbackKind = '', options = {}) {
     const normalizedObjectId = normalizeString(objectId);
     if (!normalizedObjectId || typeof document === 'undefined') return;
     try {
-      const blob = await downloadStorageObjectBlob(normalizedObjectId);
+      const blob = options.blob || await downloadStorageObjectBlob(normalizedObjectId, { backendUrl: options.backendUrl });
       const href = URL.createObjectURL(blob);
       const anchor = document.createElement('a');
       anchor.href = href;
@@ -1218,7 +1249,9 @@ export const filesManagerMixin = {
       anchor.click();
       anchor.remove();
       window.setTimeout(() => URL.revokeObjectURL(href), 1000);
+      return true;
     } catch (error) {
+      if (options.throwOnError) throw error;
       this.error = error?.message || 'Could not download file.';
     }
   },
@@ -1226,7 +1259,11 @@ export const filesManagerMixin = {
   async downloadFileBrowserRow(row = {}) {
     const objectId = normalizeString(row.object_id);
     if (!objectId) return;
-    await this.downloadStorageObjectAsFile(objectId, row.name || objectId, row.kind || 'file');
+    try {
+      await this.downloadStorageObjectAsFile(objectId, row.name || objectId, row.kind || 'file', { backendUrl: this.getFilePreviewBackendUrl(row) });
+    } catch (error) {
+      this.error = error?.message || 'Could not download file.';
+    }
   },
 
   fileDownloadName(row = {}) {
@@ -1556,9 +1593,83 @@ export const filesManagerMixin = {
     }
   },
 
+  trapFilePreviewFocus(event) {
+    const controls = [...event.currentTarget.querySelectorAll('button:not([disabled])')].filter((button) => button.getClientRects().length);
+    const first = controls[0];
+    const last = controls[controls.length - 1];
+    if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+    else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+  },
+
+  getFilePreviewBackendUrl(row = {}) {
+    const source = (this.documents || []).find((doc) => doc.record_id === row.source_record_id);
+    const explicit = normalizeString(row.backend_url || row.pg_backend_url || source?.pg_backend_url);
+    if (explicit) return explicit;
+    const workspaceId = normalizeString(row.workspace_id || row.pg_workspace_id || source?.pg_workspace_id);
+    const current = this.currentWorkspace;
+    const matches = (this.knownWorkspaces || []).filter((entry) => entry.workspaceId === workspaceId);
+    if (workspaceId && current?.workspaceId !== workspaceId && matches.length > 1) {
+      throw new Error('File workspace backend is ambiguous. Select its workspace and try again.');
+    }
+    const workspace = !workspaceId || current?.workspaceId === workspaceId ? current : matches[0];
+    if (workspaceId && !workspace) throw new Error('File workspace is unavailable. Select its workspace and try again.');
+    const backendUrl = this.getWorkspaceStorageBackendUrl?.(workspace)
+      || workspace?.directHttpsUrl || workspace?.backendUrl
+      || ((!workspaceId || workspace === current) ? this.currentWorkspaceBackendUrl || this.backendUrl : '');
+    if (!backendUrl) throw new Error('File storage backend is unavailable.');
+    return backendUrl;
+  },
+
+  async openFilePreview(row = {}, trigger = null) {
+    const objectId = normalizeString(row.object_id || row.pg_storage_object_id);
+    this.closeChatImagePreview({ restoreFocus: false });
+    const requestId = Number(this.filePreviewRequestId || 0) + 1;
+    this.filePreviewRequestId = requestId;
+    const filename = row.name || row.title || objectId || 'File';
+    this.chatImagePreviewReturnFocus = trigger || (typeof document !== 'undefined' ? document.activeElement : null);
+    this.chatImagePreviewModal = { open: true, src: '', alt: filename, filename, objectId, loading: true, error: '', kind: row.kind || kindFromContentType(row.content_type || row.content_storage_content_type), backendUrl: '', downloading: false };
+    this.focusChatImagePreviewClose?.();
+    try {
+      if (!objectId) throw new Error('This file has no storage object.');
+      const backendUrl = this.getFilePreviewBackendUrl(row);
+      this.chatImagePreviewModal.backendUrl = backendUrl;
+      const blob = await downloadStorageObjectBlob(objectId, { backendUrl });
+      if (this.filePreviewRequestId !== requestId || !this.chatImagePreviewModal.open) return;
+      if (!(blob instanceof Blob) || !blob.size) throw new Error('No file data returned.');
+      const kind = blob.type.startsWith('image/') ? 'image' : this.chatImagePreviewModal.kind;
+      const src = kind === 'image' ? URL.createObjectURL(blob) : '';
+      this.filePreviewBlob = blob;
+      this.chatImagePreviewModal = { ...this.chatImagePreviewModal, src, kind, ownedUrl: Boolean(src), loading: false };
+    } catch (error) {
+      if (this.filePreviewRequestId === requestId && this.chatImagePreviewModal.open) {
+        this.chatImagePreviewModal = { ...this.chatImagePreviewModal, loading: false, error: error?.message || 'Could not load file.' };
+      }
+    }
+  },
+
+  async saveFilePreviewLocally() {
+    const preview = this.chatImagePreviewModal;
+    if (!preview?.objectId || preview.loading || preview.downloading) return;
+    const requestId = this.filePreviewRequestId;
+    preview.downloading = true;
+    try {
+      await this.downloadStorageObjectAsFile(preview.objectId, preview.filename, preview.kind, {
+        backendUrl: preview.backendUrl, blob: this.filePreviewBlob, throwOnError: true,
+      });
+    } catch (error) {
+      if (this.filePreviewRequestId === requestId) preview.error = error?.message || 'Could not save file locally.';
+    } finally {
+      if (this.filePreviewRequestId === requestId) preview.downloading = false;
+    }
+  },
+
   async openFileBrowserSource(row = {}) {
     const sourceType = normalizeString(row.source_target_type || row.source_type);
     const sourceRecordId = row.source_target_record_id || row.source_record_id;
+    const source = (this.documents || []).find((doc) => doc.record_id === sourceRecordId);
+    if (source?.pg_record_type === 'file' || source?.pg_storage_object_id) {
+      return this.openFilePreview({ ...source, ...row, object_id: row.object_id || source.pg_storage_object_id });
+    }
     if (sourceType === 'document' && sourceRecordId) {
       this.navigateTo('docs');
       this.openDoc(sourceRecordId);

@@ -24690,3 +24690,8 @@ html.wingman-iphone-webview .chat-channel-tab-scroll * {
 .context-tree-levels button { padding:8px 10px; min-height:36px; border:1px solid var(--border,#dce2ec); border-radius:6px; background:var(--surface,#fff); color:inherit; cursor:pointer; }
 .context-tree-levels button[aria-pressed=true] { color:#2563eb; border-color:#2563eb; font-weight:600; }
 .context-tree-levels output { min-width:42px; color:var(--text-muted,#64748b); }
+
+.file-preview-filename { max-width: 100%; overflow-wrap: anywhere; font-weight: 600; }
+.chat-image-preview-modal > .btn-secondary { margin-top: 0.75rem; }
+.chat-image-preview-modal:has(.file-preview-filename:not([style*="display: none"])) img { max-height: calc(92vh - 10rem); }
+.chat-image-preview-modal { overflow-y: auto; }

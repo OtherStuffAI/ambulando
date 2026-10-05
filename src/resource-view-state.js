@@ -26,6 +26,7 @@ export function mapTowerResourceViewState(state = {}, options = {}) {
     scope_id: String(state.scope_id || '').trim() || null,
     channel_id: String(state.channel_id || '').trim() || null,
     activity_version: version(state.activity_version),
+    ...(state.attention_policy_version === 1 ? { attention_policy_version: 1, attention_activity_version: version(state.attention_activity_version) } : {}),
     viewed_activity_version: version(state.viewed_activity_version),
     row_version: version(state.row_version),
     updated_at: String(state.updated_at || new Date().toISOString()),

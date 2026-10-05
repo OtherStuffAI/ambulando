@@ -29,7 +29,7 @@ import {
   isConvertibleTextFile,
   resolveFileUploadContentType,
 } from '../src/files-manager.js';
-import { downloadStorageObject, updateTowerPgDoc } from '../src/api.js';
+import { downloadStorageObjectBlob, downloadStorageObject, updateTowerPgDoc } from '../src/api.js';
 import { upsertDocument, upsertFileFolder } from '../src/db.js';
 import { createTowerPgFileFolderFromLocal, updateTowerPgFileFromLocal } from '../src/pg-write-adapter.js';
 import { recordFamilyHash } from '../src/translators/chat.js';
@@ -37,6 +37,84 @@ import { recordFamilyHash } from '../src/translators/chat.js';
 describe('files manager', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  it('projects canonical Tower images and PDFs once with metadata instead of internal document bodies', () => {
+    const rows = buildFileBrowserRows({ documents: [
+      { record_id: 'image', pg_record_type: 'file', pg_storage_object_id: 'image-object', title: 'bird.png', content: '[bird.png](storage://image-object)', content_storage_content_type: 'image/png', pg_workspace_id: 'workspace-a', content_size_bytes: 20 },
+      { record_id: 'pdf', pg_record_type: 'file', pg_storage_object_id: 'pdf-object', title: 'report.pdf', content_storage_content_type: 'application/pdf' },
+    ] });
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toMatchObject({ object_id: 'image-object', kind: 'image', pg_record_type: 'file', content_type: 'image/png', workspace_id: 'workspace-a', size_bytes: 20 });
+    expect(rows[1]).toMatchObject({ object_id: 'pdf-object', pg_record_type: 'file', name: 'report.pdf' });
+  });
+
+  it('uses the file workspace backend and refuses unknown or ambiguous workspaces', () => {
+    const store = Object.assign(Object.create(filesManagerMixin), {
+      currentWorkspace: { workspaceId: 'current', directHttpsUrl: 'https://current.example' },
+      knownWorkspaces: [{ workspaceId: 'remote', directHttpsUrl: 'https://remote.example' }],
+      backendUrl: 'https://current.example',
+    });
+    expect(store.getFilePreviewBackendUrl({ workspace_id: 'remote' })).toBe('https://remote.example');
+    expect(store.getFilePreviewBackendUrl({})).toBe('https://current.example');
+    expect(() => store.getFilePreviewBackendUrl({ workspace_id: 'missing' })).toThrow('workspace is unavailable');
+    store.knownWorkspaces.push({ workspaceId: 'remote', directHttpsUrl: 'https://different.example' });
+    expect(() => store.getFilePreviewBackendUrl({ workspace_id: 'remote' })).toThrow('ambiguous');
+    expect(store.getFilePreviewBackendUrl({ workspace_id: 'remote', backend_url: 'https://pinned.example' })).toBe('https://pinned.example');
+  });
+
+  it('loads an authenticated image preview without navigating to its source and saves its original bytes/name', async () => {
+    const blob = new Blob(['image'], { type: 'image/png' });
+    downloadStorageObjectBlob.mockResolvedValue(blob);
+    const store = Object.assign(Object.create(filesManagerMixin), {
+      backendUrl: 'https://storage.example', chatImagePreviewModal: { open: false },
+      closeChatImagePreview: vi.fn(), openDoc: vi.fn(), navigateTo: vi.fn(),
+      downloadStorageObjectAsFile: vi.fn(async () => true),
+    });
+    await store.openFilePreview({ object_id: 'image-object', name: 'bird.png', source_type: 'document', source_record_id: 'parent-doc' });
+    expect(downloadStorageObjectBlob).toHaveBeenCalledWith('image-object', { backendUrl: 'https://storage.example' });
+    expect(store.chatImagePreviewModal).toMatchObject({ open: true, kind: 'image', filename: 'bird.png', loading: false, ownedUrl: true });
+    expect(store.openDoc).not.toHaveBeenCalled();
+    expect(store.navigateTo).not.toHaveBeenCalled();
+    await store.saveFilePreviewLocally();
+    expect(store.downloadStorageObjectAsFile).toHaveBeenCalledWith('image-object', 'bird.png', 'image', { backendUrl: 'https://storage.example', blob, throwOnError: true });
+    URL.revokeObjectURL(store.chatImagePreviewModal.src);
+  });
+
+  it('opens file view, reports download failure, and ignores a late load after close', async () => {
+    const store = Object.assign(Object.create(filesManagerMixin), {
+      backendUrl: 'https://storage.example', chatImagePreviewModal: { open: false }, closeChatImagePreview: vi.fn(),
+      downloadStorageObjectAsFile: vi.fn(async () => { throw new Error('Save denied'); }),
+    });
+    downloadStorageObjectBlob.mockResolvedValue(new Blob(['pdf'], { type: 'application/pdf' }));
+    await store.openFilePreview({ object_id: 'pdf', name: 'report.pdf' });
+    expect(store.chatImagePreviewModal).toMatchObject({ src: '', loading: false, filename: 'report.pdf' });
+    await store.saveFilePreviewLocally();
+    expect(store.chatImagePreviewModal).toMatchObject({ error: 'Save denied', downloading: false });
+    downloadStorageObjectBlob.mockRejectedValueOnce(new Error('Storage denied'));
+    await store.openFilePreview({ object_id: 'unavailable' });
+    expect(store.chatImagePreviewModal).toMatchObject({ loading: false, error: 'Storage denied' });
+    let finish;
+    downloadStorageObjectBlob.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    const pending = store.openFilePreview({ object_id: 'slow', kind: 'image' });
+    expect(store.chatImagePreviewModal.loading).toBe(true);
+    store.filePreviewRequestId += 1;
+    store.chatImagePreviewModal = { open: false };
+    finish(new Blob(['image'], { type: 'image/png' }));
+    await pending;
+    expect(store.chatImagePreviewModal).toEqual({ open: false });
+  });
+
+  it('opens canonical file sources as previews while retaining genuine document source navigation', async () => {
+    const store = Object.assign(Object.create(filesManagerMixin), {
+      documents: [{ record_id: 'file', pg_record_type: 'file', pg_storage_object_id: 'image-object' }],
+      openFilePreview: vi.fn(), openDoc: vi.fn(), navigateTo: vi.fn(),
+    });
+    await store.openFileBrowserSource({ source_type: 'document', source_record_id: 'file', object_id: 'image-object' });
+    expect(store.openFilePreview).toHaveBeenCalledOnce();
+    expect(store.openDoc).not.toHaveBeenCalled();
+    await store.openFileBrowserSource({ source_type: 'document', source_record_id: 'doc' });
+    expect(store.openDoc).toHaveBeenCalledWith('doc');
   });
 
   it('reuses the file projection across unrelated reactive changes', () => {

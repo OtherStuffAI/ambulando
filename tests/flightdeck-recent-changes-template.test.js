@@ -54,7 +54,7 @@ describe('flight deck summary template', () => {
     expect(html).toContain('@click="if ($store.chat.shouldOpenDeckCard($event)) $store.chat.openAutopilotOverviewThread(thread)"');
     expect(html).toContain('@click="if ($store.chat.shouldOpenDeckCard($event)) $store.chat.openAutopilotOverviewTask(task)"');
     expect(html).toContain('@click="if ($store.chat.shouldOpenDeckCard($event)) $store.chat.openAutopilotOverviewDocument(doc)"');
-    expect(html).toContain('@click="$store.chat.openFileBrowserSource(file)"');
+    expect(html).toContain('@click="$store.chat.openFilePreview(file, $event.currentTarget)"');
   });
 
   it('binds the Inbox pastel treatment to each supported resource unread flag', () => {

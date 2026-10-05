@@ -154,9 +154,14 @@
     @click.self="$store.chat.closeChatImagePreview()"
     @keydown.escape.window="$store.chat.chatImagePreviewModal.open && $store.chat.closeChatImagePreview()"
   >
-    <section class="chat-image-preview-modal" role="dialog" aria-modal="true" aria-label="Image preview">
+    <section class="chat-image-preview-modal" role="dialog" aria-modal="true" :aria-label="$store.chat.chatImagePreviewModal.filename || 'Image preview'" @keydown.tab="$store.chat.trapFilePreviewFocus($event)">
       <button type="button" class="chat-image-preview-close" data-chat-image-preview-close aria-label="Close image preview" @click="$store.chat.closeChatImagePreview()">&times;</button>
-      <img :src="$store.chat.chatImagePreviewModal.src" :alt="$store.chat.chatImagePreviewModal.alt" />
+      <p class="file-preview-filename" x-show="$store.chat.chatImagePreviewModal.filename" x-text="$store.chat.chatImagePreviewModal.filename"></p>
+      <p role="status" x-show="$store.chat.chatImagePreviewModal.loading">Loading file…</p>
+      <p role="alert" x-show="$store.chat.chatImagePreviewModal.error" x-text="$store.chat.chatImagePreviewModal.error"></p>
+      <template x-if="$store.chat.chatImagePreviewModal.src"><img :src="$store.chat.chatImagePreviewModal.src" :alt="$store.chat.chatImagePreviewModal.alt" @error="$store.chat.chatImagePreviewModal.error = 'Could not display image. You can still save it locally.'" /></template>
+      <p x-show="$store.chat.chatImagePreviewModal.objectId && !$store.chat.chatImagePreviewModal.loading && !$store.chat.chatImagePreviewModal.src && !$store.chat.chatImagePreviewModal.error">This file is ready to save locally.</p>
+      <button type="button" class="btn-secondary" x-show="$store.chat.chatImagePreviewModal.objectId" :disabled="!$store.chat.chatImagePreviewModal.backendUrl || $store.chat.chatImagePreviewModal.loading || $store.chat.chatImagePreviewModal.downloading" @click="$store.chat.saveFilePreviewLocally()" x-text="$store.chat.chatImagePreviewModal.downloading ? 'Saving…' : 'Save locally'"></button>
     </section>
   </div>
   <div
@@ -2257,8 +2262,8 @@
                       </div>
                     </template>
                     <template x-if="item.inboxKind === 'file'">
-                      <button type="button" class="attention-card flightdeck-summary-card flightdeck-summary-card-file" @click="$store.chat.openFileBrowserSource(item)" :aria-label="item.sourceAriaLabel">
-                        <span class="attention-card-icon" aria-hidden="true" x-html="$store.chat.getAttentionIconSvg('doc')"></span><span class="attention-card-content"><span class="inbox-card-heading"><span class="attention-card-kicker" :title="`${item.sourceTypeLabel} · ${item.source_label || 'Files'}`" x-text="`${item.sourceTypeLabel} · ${item.source_label || 'Files'}`"></span><span class="attention-card-time" x-text="$store.chat.formatRelativeTime(item.inboxActivityAt)"></span></span><span class="attention-card-title" x-text="item.name"></span><span class="attention-card-subtitle" x-text="item.reason"></span></span><span class="attention-card-meta"><span class="attention-card-action" x-text="item.sourceActionLabel"></span></span>
+                      <button type="button" class="attention-card flightdeck-summary-card flightdeck-summary-card-file" @click="$store.chat.openFilePreview(item, $event.currentTarget)" :aria-label="'Preview ' + item.name">
+                        <span class="attention-card-icon" aria-hidden="true" x-html="$store.chat.getAttentionIconSvg('doc')"></span><span class="attention-card-content"><span class="inbox-card-heading"><span class="attention-card-kicker" :title="`${item.sourceTypeLabel} · ${item.source_label || 'Files'}`" x-text="`${item.sourceTypeLabel} · ${item.source_label || 'Files'}`"></span><span class="attention-card-time" x-text="$store.chat.formatRelativeTime(item.inboxActivityAt)"></span></span><span class="attention-card-title" x-text="item.name"></span><span class="attention-card-subtitle" x-text="item.reason"></span></span><span class="attention-card-meta"><span class="attention-card-action" x-text="item.kind === 'image' ? 'View image' : 'View file'"></span></span>
                       </button>
                     </template>
                   </div>
@@ -2562,7 +2567,7 @@
                   <div id="flightdeck-summary-files-body" x-show="!$store.chat.isSummaryPanelCollapsed('files')" x-cloak>
                   <div class="attention-card-list flightdeck-summary-card-list" x-show="$store.chat.autopilotOverviewFiles.length > 0">
                     <template x-for="file in $store.chat.pagedAutopilotOverviewFiles" :key="file.id">
-                      <button type="button" class="attention-card flightdeck-summary-card flightdeck-summary-card-file" @click="$store.chat.openFileBrowserSource(file)" :aria-label="file.sourceAriaLabel">
+                      <button type="button" class="attention-card flightdeck-summary-card flightdeck-summary-card-file" @click="$store.chat.openFilePreview(file, $event.currentTarget)" :aria-label="'Preview ' + file.name">
                         <span class="attention-card-icon" aria-hidden="true" x-html="$store.chat.getAttentionIconSvg('doc')"></span>
                         <span class="attention-card-content">
                           <span class="attention-card-kicker" x-text="`${file.sourceTypeLabel} · ${file.source_label || 'Files'}`"></span>
@@ -2574,7 +2579,7 @@
                             <span x-text="$store.chat.fileUpdatedLabel(file)"></span>
                             <span x-text="file.object_id"></span>
                           </span>
-                          <span class="attention-card-action" x-text="file.sourceActionLabel"></span>
+                          <span class="attention-card-action" x-text="file.kind === 'image' ? 'View image' : 'View file'"></span>
                         </span>
                       </button>
                     </template>

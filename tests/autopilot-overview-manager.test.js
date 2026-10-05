@@ -231,7 +231,7 @@ describe('autopilot overview manager', () => {
     expect(rows.find((row) => row.id === 'thread-a')?.latestMessage).toBe('Newest reply');
   });
 
-  it('keeps task attachment labels, actions, and destinations consistent in Inbox', () => {
+  it('hides task attachments from Inbox while preserving their parent action contract', () => {
     const [row] = buildAutopilotOverviewInbox({
       files: [{
         object_id: 'file-task-1',
@@ -242,8 +242,8 @@ describe('autopilot overview manager', () => {
       }],
     });
 
-    expect(row).toMatchObject({
-      inboxKind: 'file',
+    expect(row).toBeUndefined();
+    expect(getOverviewFileSourceContract({ source_type: 'task' })).toMatchObject({
       sourceDestinationType: 'task',
       sourceTypeLabel: 'Task attachment',
       sourceActionLabel: 'Open task',
@@ -270,9 +270,9 @@ describe('autopilot overview manager', () => {
       html.indexOf('class="settings-field-help inbox-no-results"'),
     );
 
-    expect(inboxFileCard).toContain(':aria-label="item.sourceAriaLabel"');
+    expect(inboxFileCard).toContain(':aria-label="\'Preview \' + item.name"');
     expect(inboxFileCard).toContain('item.sourceTypeLabel');
-    expect(inboxFileCard).toContain('x-text="item.sourceActionLabel"');
+    expect(inboxFileCard).toContain('openFilePreview(item, $event.currentTarget)');
     expect(inboxFileCard).not.toContain('Open file');
   });
 
@@ -329,10 +329,7 @@ describe('autopilot overview manager', () => {
 
     expect(doneRows).toHaveLength(0);
     expect(inbox.filter((row) => row.inboxKind === 'task' && row.recordId === 'task-review')).toHaveLength(0);
-    expect(inbox.find((row) => row.object_id === 'older-attachment')).toEqual(expect.objectContaining({
-      sourceDestinationType: 'task',
-      sourceActionLabel: 'Open task',
-    }));
+    expect(inbox.find((row) => row.object_id === 'older-attachment')).toBeUndefined();
     expect(inbox.filter((row) => row.isUnread)).toEqual([]);
 
     const activeStates = ['new', 'ready', 'in_progress', 'review', 'blocked'];
@@ -360,7 +357,7 @@ describe('autopilot overview manager', () => {
     expect(doneColumn?.tasks).toEqual([acceptedDoneTask]);
   });
 
-  it('keeps self-authored task comments out of Inbox attention while preserving different-actor attention', () => {
+  it('uses projected attention consistently even when the latest displayed activity is self-authored', () => {
     const task = {
       record_id: 'task-review', title: 'Review actor attention', state: 'review',
       updated_at: '2026-08-26T00:10:00.000Z', pg_updated_by_actor_id: 'actor-viewer',
@@ -380,11 +377,11 @@ describe('autopilot overview manager', () => {
     const [selfRow] = buildAutopilotOverviewTasks(options);
     expect(selfRow).toMatchObject({
       recordId: 'task-review', taskState: 'review', reason: 'Task updated', count: 0,
-      activityAt: '2026-08-26T00:10:00.000Z', isUnread: false,
+      activityAt: '2026-08-26T00:10:00.000Z', isUnread: true,
     });
     expect(selfRow.hrefTarget.focusId).toBeNull();
     expect(buildAutopilotOverviewInbox({ tasks: [selfRow] })).toEqual([
-      expect.objectContaining({ inboxKind: 'task', recordId: 'task-review', isUnread: false }),
+      expect.objectContaining({ inboxKind: 'task', recordId: 'task-review', isUnread: true }),
     ]);
 
     const [otherRow] = buildAutopilotOverviewTasks({
@@ -1573,6 +1570,15 @@ describe('autopilot overview manager', () => {
     expect(store.openThread).toHaveBeenCalledTimes(1);
     expect(store.openThread).toHaveBeenCalledWith('root-b', { syncRoute: false });
     expect(store.syncRoute).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps canonical PDFs in overview files and routes stale file document cards to preview', () => {
+    const rows = buildAutopilotOverviewFiles([{ object_id: 'pdf', kind: 'document', pg_record_type: 'file', source_type: 'document' }]);
+    expect(rows).toHaveLength(1);
+    const store = { ...autopilotOverviewManagerMixin, documents: [{ record_id: 'file', pg_record_type: 'file', pg_storage_object_id: 'image-object' }], openFilePreview: vi.fn(), openDoc: vi.fn() };
+    store.openAutopilotOverviewDocument({ recordId: 'file' });
+    expect(store.openFilePreview).toHaveBeenCalledWith(expect.objectContaining({ object_id: 'image-object' }));
+    expect(store.openDoc).not.toHaveBeenCalled();
   });
 
   it('opens overview tasks and documents in their specific detail views', () => {

@@ -2724,6 +2724,28 @@
       "notes": [
         "Backlog starts collapsed when switching task boards or between list and kanban views. Expand it for the current view; saved expansion never overrides the collapsed starting state."
       ]
+    },
+    {
+      "buildNumber": 2193,
+      "label": "Deck attachment previews",
+      "notes": [
+        "Deck images open in a preview modal. Files offer Save locally instead of opening as internal documents."
+      ]
+    },
+    {
+      "buildNumber": 2194,
+      "label": "Preview keyboard focus",
+      "notes": [
+        "Attachment previews focus the close control and restore keyboard focus when dismissed."
+      ]
+    },
+    {
+      "buildNumber": 2195,
+      "label": "Personal unread attention",
+      "notes": [
+        "Red attention marks unread chats, assigned or mentioned task activity, and mentioned document activity. Routine task and document updates stay visible and neutral.",
+        "Thread and task attachments stay with their parent. Standalone Deck files remain neutral. Existing read positions are preserved."
+      ]
     }
   ]
 }

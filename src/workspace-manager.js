@@ -1408,6 +1408,7 @@ export const workspaceManagerMixin = {
     this.workspaceSelectionError = '';
     const previousWorkspaceKey = this.currentWorkspaceKey;
     const nextWorkspaceKey = workspace.workspaceKey || workspace.workspaceOwnerNpub;
+    if (previousWorkspaceKey !== nextWorkspaceKey && this.chatImagePreviewModal?.objectId) this.closeChatImagePreview?.({ restoreFocus: false });
     const shouldOpenWorkspaceHome = Boolean(options.openWorkspaceHome);
     const loadedWorkspaceKey = String(this.localWorkspaceCoreLoadedForKey || '').trim();
     const hasRuntimeData = Boolean(

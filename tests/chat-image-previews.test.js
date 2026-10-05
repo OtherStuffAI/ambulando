@@ -5,14 +5,15 @@ import { hydrateMentionComposer, serializeMentionComposer } from '../src/mention
 import { renderMarkdownToHtml } from '../src/markdown.js';
 import { storageAttachmentsFromMarkdown } from '../src/chat-attachments.js';
 
-const { alpineStartMock, alpineStoreMock } = vi.hoisted(() => ({
+const { alpineStartMock, alpineStoreMock, alpineNextTickMock } = vi.hoisted(() => ({
+  alpineNextTickMock: vi.fn(callback => callback?.()),
   alpineStartMock: vi.fn(),
   alpineStoreMock: vi.fn(),
 }));
 const NativeURL = globalThis.URL;
 
 vi.mock('alpinejs', () => ({
-  default: { store: alpineStoreMock, start: alpineStartMock },
+  default: { store: alpineStoreMock, start: alpineStartMock, nextTick: alpineNextTickMock },
 }));
 
 async function createStore() {
@@ -306,6 +307,31 @@ describe('chat composer image previews', () => {
 
     expect(store.chatImagePreviewModal.open).toBe(false);
     expect(focus).toHaveBeenCalledOnce();
+  });
+
+  it('uses Alpine nextTick when the store has no injected nextTick helper', async () => {
+    const store = await createStore();
+    delete store.$nextTick;
+    const close = document.createElement('button');
+    close.dataset.chatImagePreviewClose = '';
+    const trigger = document.createElement('button');
+    document.body.append(close, trigger);
+    store.openChatImagePreview({ preview_url: 'blob:preview', filename: 'preview.png' }, trigger);
+    expect(document.activeElement).toBe(close);
+    store.closeChatImagePreview();
+    expect(document.activeElement).toBe(trigger);
+    expect(alpineNextTickMock).toHaveBeenCalled();
+  });
+
+  it('revokes loaded file image URLs and invalidates pending loads when closing', async () => {
+    const store = await createStore();
+    store.chatImagePreviewModal = { open: true, src: 'blob:loaded-file', ownedUrl: true };
+    store.filePreviewBlob = new Blob(['image']);
+    store.filePreviewRequestId = 10;
+    store.closeChatImagePreview();
+    expect(NativeURL.revokeObjectURL).toHaveBeenCalledWith('blob:loaded-file');
+    expect(store.filePreviewRequestId).toBe(11);
+    expect(store.filePreviewBlob).toBeNull();
   });
 
   it('removes one image without disturbing siblings and revokes its object URL', async () => {

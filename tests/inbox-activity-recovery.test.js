@@ -238,7 +238,7 @@ it('retains the live Feed subscription through Inbox type, page and scope transi
   } finally { store.stopWorkspaceLiveQueries(); store.stopSharedLiveQueries(); }
 });
 
-it('keeps comment-driven task search and scoped comment/chat files in their original card families', async () => {
+it('keeps comment-driven task search while hiding parent attachments from Deck file cards', async () => {
   const task = await db.tasks.toCollection().first();
   const original = fixture.canonical_upserts.changes.find(change => change.family === 'task_comment');
   await applyPgRecordChanges(transport, { ...fixture.one_message_delta, next_cursor: 'comment-search', changes: [{
@@ -250,10 +250,10 @@ it('keeps comment-driven task search and scoped comment/chat files in their orig
   const search = { ...input('task', task.scope_id), deckInboxSearchQuery: 'Distinctive review phrase' };
   expect((await queryInboxSource(search, owner, 'tasks')).rows.some(row => row.record_id === task.record_id)).toBe(true);
   const files = await queryInboxSource(input('file', task.scope_id), owner, 'comments');
-  expect(files.rows.some(row => row.record_id === comment.record_id)).toBe(true);
+  expect(files.rows.some(row => row.record_id === comment.record_id)).toBe(false);
   const message = (await db.chat_messages.toArray()).find(row => row.pg_record_type === 'message');
   await db.chat_messages.update(message.record_id, { body: '[Chat evidence](storage://chat-evidence)' });
-  expect((await queryInboxSource(input('file', task.scope_id), owner, 'chat_messages')).rows.some(row => row.record_id === message.record_id)).toBe(true);
+  expect((await queryInboxSource(input('file', task.scope_id), owner, 'chat_messages')).rows.some(row => row.record_id === message.record_id)).toBe(false);
 });
 
 

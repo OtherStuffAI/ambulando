@@ -384,6 +384,7 @@ function normalizePgTaskAssignmentNpubs(task = {}, actorNpubByActorId = new Map(
   const npubs = [];
   const seen = new Set();
   for (const assignment of assignments) {
+    if (assignment.deleted_at || assignment.record_state === 'deleted') continue;
     const npub = getPgAssignmentDirectNpub(assignment)
       || trimText(actorNpubByActorId?.get?.(getPgAssignmentActorId(assignment)));
     if (!npub || seen.has(npub)) continue;
@@ -707,6 +708,7 @@ export function mapPgTaskToLocal(task, {
   const assignedToNpubs = normalizePgTaskAssignmentNpubs(task, actorNpubByActorId);
   return {
     record_id: trimText(task?.id || task?.record_id),
+    pg_attention: task?.attention || null,
     activity_version: activityVersion(task?.activity_version),
     owner_npub: trimText(workspaceOwnerNpub),
     title: trimText(task?.title) || 'Untitled task',
@@ -895,6 +897,7 @@ export function mapPgDocToLocal(doc, { workspaceOwnerNpub } = {}) {
   const canonicalRowVersion = rowVersion(canonicalVersion.row_version || doc?.row_version || doc?.version);
   return {
     record_id: recordId,
+    pg_attention: doc?.attention || null,
     activity_version: activityVersion(doc?.activity_version),
     owner_npub: trimText(workspaceOwnerNpub),
     title: trimText(doc?.title) || 'Untitled document',
@@ -1081,6 +1084,7 @@ export function mapPgFileToLocalDocument(file, { workspaceOwnerNpub } = {}) {
     pg_workspace_id: trimText(file?.workspace_id),
     pg_channel_id: trimText(file?.channel_id),
     pg_thread_id: pgMetadataThreadId(file),
+    pg_task_id: trimText(file?.task_id || file?.metadata?.task_id || file?.metadata?.pg_task_id) || null,
     pg_folder_id: trimText(file?.folder_id),
     pg_storage_object_id: storageObjectId || null,
     pg_object_route: trimText(file?.object?.route),

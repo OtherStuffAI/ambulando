@@ -43,6 +43,7 @@ describe('resource view-state Dexie materialization', () => {
         directHttpsUrl: 'https://tower.example',
         appNpub: 'npub1app',
       },
+      currentViewerNpub: 'npub1viewer',
       tasks: [{ record_id: 'task-a', state: 'done', activity_version: 7 }],
       _unreadThreadItems: {},
       _unreadTaskItems: { 'task-a': true },
@@ -70,7 +71,8 @@ describe('resource view-state Dexie materialization', () => {
 
   it('suppresses matching-actor task updates but keeps different-actor updates unread', () => {
     const matchingStore = {
-      tasks: [{ record_id: 'task-a', activity_version: 4, updated_at: '2026-01-01T00:02:00.000Z', pg_updated_by_actor_id: 'actor-viewer' }],
+      currentViewerNpub: 'npub1viewer',
+      tasks: [{ record_id: 'task-a', assigned_to_npub: 'npub1viewer', activity_version: 4, updated_at: '2026-01-01T00:02:00.000Z', pg_updated_by_actor_id: 'actor-viewer' }],
       taskComments: [],
       _unreadThreadItems: {}, _unreadTaskItems: {}, _unreadDocItems: {}, _unreadChannels: {},
     };
@@ -81,7 +83,8 @@ describe('resource view-state Dexie materialization', () => {
 
     const differentStore = {
       ...matchingStore,
-      tasks: [{ record_id: 'task-a', activity_version: 4, updated_at: '2026-01-01T00:02:00.000Z', pg_updated_by_actor_id: 'actor-other' }],
+      currentViewerNpub: 'npub1viewer',
+      tasks: [{ record_id: 'task-a', assigned_to_npub: 'npub1viewer', activity_version: 4, updated_at: '2026-01-01T00:02:00.000Z', pg_updated_by_actor_id: 'actor-other' }],
     };
     unreadStoreMixin.applyTowerPgResourceViewStates.call(differentStore, [state()]);
     expect(differentStore._unreadTaskItems).toEqual({ 'task-a': true });
@@ -91,9 +94,11 @@ describe('resource view-state Dexie materialization', () => {
 
   it('suppresses matching-actor task comments but keeps different-actor comments unread', () => {
     const store = {
-      tasks: [{ record_id: 'task-a', activity_version: 4, updated_at: '2026-01-01T00:01:00.000Z', pg_updated_by_actor_id: 'actor-other' }],
+      currentViewerNpub: 'npub1viewer',
+      tasks: [{ record_id: 'task-a', assigned_to_npub: 'npub1viewer', activity_version: 4, updated_at: '2026-01-01T00:01:00.000Z', pg_updated_by_actor_id: 'actor-other' }],
       taskComments: [{
         record_id: 'comment-a', target_record_id: 'task-a', pg_record_type: 'task_comment',
+      pg_metadata: { mentions: [{ type: 'person', actor_id: 'actor-viewer' }] },
         updated_at: '2026-01-01T00:02:00.000Z', pg_created_by_actor_id: 'actor-viewer',
       }],
       _unreadThreadItems: {}, _unreadTaskItems: {}, _unreadDocItems: {}, _unreadChannels: {},
@@ -174,6 +179,7 @@ describe('resource view-state Dexie materialization', () => {
 
     store.taskComments = [{
       record_id: 'comment-a', target_record_id: 'task-a', pg_record_type: 'task_comment',
+      pg_metadata: { mentions: [{ type: 'person', actor_id: 'actor-viewer' }] },
       updated_at: '2026-08-26T11:32:00.000Z', pg_created_by_actor_id: 'actor-viewer',
     }];
     await unreadStoreMixin.recomputeTowerPgUnreadProjection.call(store);

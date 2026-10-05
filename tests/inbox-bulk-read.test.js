@@ -13,6 +13,7 @@ function state(type, id, activityVersion = 2, viewedActivityVersion = 0, channel
     resource_id: id,
     channel_id: channelId,
     activity_version: activityVersion,
+    attention_policy_version: 1, attention_activity_version: activityVersion,
     viewed_activity_version: viewedActivityVersion,
     sync_status: 'synced',
   };

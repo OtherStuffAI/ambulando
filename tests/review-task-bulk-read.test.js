@@ -16,6 +16,7 @@ beforeEach(async () => {
 function taskChange(id, scope, activity = 7, version = '21') {
   return { ...canonical, id, version, scope_id: scope, row: {
     ...canonical.row, id, scope_id: scope, state: 'review', activity_version: activity,
+    metadata: { ...canonical.row.metadata, assigned_to_npub: 'npub1viewer' },
     updated_at: '2026-09-08T01:00:00Z',
   } };
 }
