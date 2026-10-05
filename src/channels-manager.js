@@ -3103,6 +3103,7 @@ export const channelsManagerMixin = {
     else if (changingChannel) queueMicrotask(launchBackgroundRefresh);
     else launchBackgroundRefresh();
     if (this.channelSelectionGeneration !== generation) return;
+    if (changingChannel && this.navSection === 'docs') void this.openChannelDocsHome?.();
     if (options.syncRoute !== false) this.syncRoute();
     this.ensureBackgroundSync(true);
     if (!isPgWorkspace) {

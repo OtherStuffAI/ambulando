@@ -1,3 +1,4 @@
+import { FlightDeckWikiLink, createWikiPicker } from './wiki-extension.js';
 import { Editor } from '@tiptap/core';
 import { createFlightDeckTiptapExtensions } from './prosemirror-flightdeck-schema.js';
 import { resolveDocumentProseMirrorState } from './markdown-to-prosemirror.js';
@@ -13,18 +14,20 @@ export function createTiptapEditorAdapter({
   onPaste = () => false,
   onKeydown = () => false,
   extensions,
+  wiki,
   placeholder = 'Start writing...',
 } = {}) {
   if (!element) throw new Error('Tiptap editor adapter requires a mount element.');
   const editor = new Editor({
     element,
     editable,
-    extensions: extensions || createFlightDeckTiptapExtensions({ placeholder }),
+    extensions: extensions || createFlightDeckTiptapExtensions({ placeholder }).map((extension) => extension.name === 'fdWikiLink' && wiki ? FlightDeckWikiLink.configure(wiki) : extension).concat(wiki ? [createWikiPicker(wiki)] : []),
     content: editorState || resolveDocumentProseMirrorState(document || {}),
     editorProps: {
       handlePaste: (_view, event) => onPaste(event, editor) === true,
       handleDOMEvents: {
-        pointerdown: () => {
+        pointerdown: (_view, event) => {
+          if (event.target.closest?.('[data-wiki-title]')) return false;
           onEditIntent('pointer');
           return false;
         },
@@ -45,6 +48,9 @@ export function createTiptapEditorAdapter({
 
   return {
     editor,
+    refreshWikiLinks() {
+      editor.view.dispatch(editor.state.tr.setMeta('wikiRefresh', true));
+    },
     getJSON() {
       return editor.getJSON();
     },

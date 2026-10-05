@@ -44,6 +44,12 @@ async function seedSelectedDocument(page, options = {}) {
     };
 
     store.session = { ...(store.session || {}), npub: 'npub1docsrichtest' };
+    // These synthetic editor probes do not own a Tower session. Keep signer
+    // onboarding and automatic remote saves out of the isolated browser flow.
+    store.openConnectModal = () => {};
+    store.showConnectModal = false;
+    store.scheduleDocAutosave = () => {};
+
     store.storageImageUrlCache = seedOptions.withStorageImage
       ? { 'image-object-123': 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==' }
       : {};
@@ -260,7 +266,7 @@ test('typing stays visible during delayed lease acquisition and continues in the
   expect(acquiring).toEqual({ state: 'acquiring', acquireCalls: 1, saveCalls: 0, content: 'BaseABC' });
 
   await page.evaluate(() => window.__resolveDelayedDocLease());
-  await expect(page.locator('.doc-edit-status')).toContainText('Editing · saved');
+  await expect(page.locator('.doc-edit-status')).toHaveText('Saved');
   await expect(editor).toHaveAttribute('data-delayed-lease-probe', 'same-editor');
   await expect(editor).toContainText('BaseABC');
   const editing = await page.evaluate(() => {

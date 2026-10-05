@@ -4873,6 +4873,14 @@
               </div>
             </div>
 
+            <nav class="docs-wiki-navigation" aria-label="Channel notebook" x-show="$store.chat.isTowerPgMode && $store.chat.selectedChannelId">
+              <button type="button" class="btn-secondary" @click="$store.chat.openChannelDocsHome()" :disabled="!$store.chat.channelDocsHomeId">Home</button>
+              <button type="button" class="btn-secondary" @click="$store.chat.openChannelAllDocs()">All docs</button>
+              <button type="button" class="btn-secondary" x-show="$store.chat.selectedDocId && $store.chat.canManageChannel($store.chat.selectedChannel)" :disabled="$store.chat.docsHomeSaving" @click="$store.chat.setChannelDocsHome($store.chat.selectedDocId)">Set as home</button>
+              <button type="button" class="btn-secondary" x-show="$store.chat.channelDocsHomeId && $store.chat.canManageChannel($store.chat.selectedChannel)" :disabled="$store.chat.docsHomeSaving" @click="$store.chat.setChannelDocsHome(null)">Clear home</button>
+              <span x-show="$store.chat.channelDocsHomeId && !$store.chat.channelDocsHome" class="docs-subtitle">Home page unavailable. Choose All docs.</span>
+            </nav>
+
             <div class="docs-header" x-show="!$store.chat.docsEditorOpen" x-data="{ docsControlsOpen: false }">
               <div class="docs-title-block">
                 <h2>Docs</h2>

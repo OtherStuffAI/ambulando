@@ -1,3 +1,6 @@
+import { bindWikiState } from './docs/wiki-links.js';
+import { prosemirrorToFlightDeckContentModel } from './docs/editor/prosemirror-to-flightdeck.js';
+import { wikiManagerMixin } from './docs/wiki-manager.js';
 /**
  * Document management methods extracted from app.js.
  *
@@ -244,6 +247,7 @@ function normalizedDocumentPlainText(value) {
 function proseMirrorPlainText(node = null) {
   if (!node || typeof node !== 'object') return '';
   if (node.type === 'text') return String(node.text || '');
+  if (node.type === 'fdWikiLink') return String(node.attrs?.title || '');
   if (node.type === 'hardBreak') return '\n';
   const children = Array.isArray(node.content) ? node.content : [];
   const content = children.map(proseMirrorPlainText).join('');
@@ -1436,7 +1440,14 @@ export const docsManagerMixin = {
   getVisibleDocRichEditorText() {
     const editors = [...(this.docRichEditorMountEl?.querySelectorAll?.('.ProseMirror') || [])];
     return editors
-      .map((element) => String(element?.innerText || element?.textContent || '').trim())
+      .map((element) => {
+        if (!element?.querySelector?.('[data-wiki-title]')) return String(element?.innerText || element?.textContent || '').trim();
+        const clone = element.cloneNode(true);
+        // Dynamic current titles are presentation; the integrity guard compares
+        // against the saved label so a rename cannot look like lost draft text.
+        for (const link of clone.querySelectorAll('[data-wiki-title]')) link.textContent = link.dataset.wikiTitle;
+        return String(clone.textContent || '').trim();
+      })
       .sort((left, right) => right.length - left.length)[0] || '';
   },
 
@@ -1484,7 +1495,10 @@ export const docsManagerMixin = {
   buildSelectedDocContentModel() {
     if (this.docEditorMode === 'rich') {
       const synced = this.syncDocRichEditorContentModel();
-      if (synced) return synced;
+      if (synced) {
+        const bound = bindWikiState(synced.editor_state, this.documents, this.selectedDocument?.pg_channel_id);
+        return bound === synced.editor_state ? synced : prosemirrorToFlightDeckContentModel(bound);
+      }
     }
     const editorBlocks = this.docEditorBlocks?.length > 0
       ? this.docEditorBlocks
@@ -1499,9 +1513,11 @@ export const docsManagerMixin = {
       content_blocks: editorBlocks,
       editor_state: null,
     });
-    this.docEditorProseMirrorState = editorState.editorState;
-    this.docEditorContentModel = editorState.contentModel;
-    return editorState.contentModel;
+    const bound = bindWikiState(editorState.editorState, this.documents, this.selectedDocument?.pg_channel_id);
+    const boundModel = bound === editorState.editorState ? editorState.contentModel : prosemirrorToFlightDeckContentModel(bound);
+    this.docEditorProseMirrorState = boundModel.editor_state;
+    this.docEditorContentModel = boundModel;
+    return boundModel;
   },
 
   refreshProseMirrorStateFromCompatibility() {
@@ -1512,9 +1528,11 @@ export const docsManagerMixin = {
       content_blocks: this.docEditorBlocks,
       editor_state: null,
     });
-    this.docEditorProseMirrorState = editorState.editorState;
-    this.docEditorContentModel = editorState.contentModel;
-    return editorState.contentModel;
+    const bound = bindWikiState(editorState.editorState, this.documents, this.selectedDocument?.pg_channel_id);
+    const boundModel = bound === editorState.editorState ? editorState.contentModel : prosemirrorToFlightDeckContentModel(bound);
+    this.docEditorProseMirrorState = boundModel.editor_state;
+    this.docEditorContentModel = boundModel;
+    return boundModel;
   },
 
   async mountDocRichEditor(element = null) {
@@ -1542,6 +1560,14 @@ export const docsManagerMixin = {
         document: sourceDoc,
         editorState: this.docEditorProseMirrorState,
         editable: this.isSelectedDocRichEditorEditable(),
+        wiki: {
+          pages: () => this.wikiPages,
+          isEditing: () => ['editing', 'recovery'].includes(this.docEditAccessState),
+          resolve: (attrs) => this.resolveDocWikiLink(attrs),
+          open: (id) => { void this.followDocWikiLink(id); },
+          create: (title, range, editor) => this.createDocWikiPage(title, range, editor),
+          error: (message) => { this.error = message; },
+        },
         onEditIntent: () => this.handleDocRichEditIntent(),
         onPaste: (event, editor) => this.handleDocRichPaste?.(event, editor) === true,
         onUpdate: (contentModel) => {
@@ -3782,7 +3808,7 @@ export const docsManagerMixin = {
         };
         await upsertDocument(acceptedRow);
         this.patchDocumentLocal(acceptedRow);
-        this.openDoc(accepted.record_id);
+        if (options.open !== false) this.openDoc(accepted.record_id);
         Promise.resolve()
           .then(() => this.refreshDocuments())
           .catch((refreshError) => {
@@ -3790,6 +3816,7 @@ export const docsManagerMixin = {
           });
         return acceptedRow;
       } catch (error) {
+        if (options.throwOnError) throw error;
         const localRow = this.normalizeDocumentRowGroupRefs({
           record_id: recordId,
           owner_npub: ownerNpub,
@@ -3875,12 +3902,12 @@ export const docsManagerMixin = {
     } catch (error) {
       await this.markDocRecordWriteFailed('document', row, error);
       await this.refreshDocuments();
-      this.openDoc(recordId);
+      if (options.open !== false) this.openDoc(recordId);
       return;
     }
 
     await this.refreshDocuments();
-    this.openDoc(recordId);
+    if (options.open !== false) this.openDoc(recordId);
     await this.flushAndBackgroundSync();
     return row;
   },
@@ -4821,3 +4848,6 @@ export const docsManagerMixin = {
     printWindow.print();
   },
 };
+
+// Preserve computed descriptors when composing the document manager.
+Object.defineProperties(docsManagerMixin, Object.getOwnPropertyDescriptors(wikiManagerMixin));

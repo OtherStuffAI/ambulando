@@ -1,3 +1,4 @@
+import { FlightDeckWikiLink } from './wiki-extension.js';
 import StarterKit from '@tiptap/starter-kit';
 import Link from '@tiptap/extension-link';
 import Placeholder from '@tiptap/extension-placeholder';
@@ -179,6 +180,7 @@ export function createFlightDeckTiptapExtensions(options = {}) {
     FlightDeckStorageFile,
     FlightDeckUploadPlaceholder,
     FlightDeckMention,
+    FlightDeckWikiLink,
     FlightDeckBlockIdExtension,
   ];
 }

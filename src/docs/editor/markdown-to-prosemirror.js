@@ -1,6 +1,16 @@
-import { marked } from 'marked';
+import { Marked } from 'marked';
+const marked = new Marked();
 import { normalizeDocumentBlocks } from '../../utils/state-helpers.js';
 import { createFlightDeckBlockId } from './prosemirror-constants.js';
+
+marked.use({ extensions: [{
+  name: 'fdWiki', level: 'inline',
+  start: (src) => src.indexOf('[['),
+  tokenizer(src) {
+    const match = /^\[\[([^\]\n]+)\]\]/.exec(src);
+    if (match) return { type: 'fdWiki', raw: match[0], title: match[1] };
+  },
+}] });
 
 function textNode(text, marks = []) {
   const value = String(text || '');
@@ -75,6 +85,14 @@ function inlineContent(tokens = [], inheritedMarks = []) {
   let underline = false;
   for (const token of tokens || []) {
     if (!token) continue;
+    if (token.type === 'fdWiki' || (token.type === 'link' && String(token.href).startsWith('wiki:'))) {
+      let documentId = null;
+      if (token.href) {
+        try { documentId = decodeURIComponent(token.href.slice(5)); } catch { documentId = token.href.slice(5); }
+      }
+      out.push({ type: 'fdWikiLink', attrs: { documentId, title: token.type === 'fdWiki' ? token.title : inlineContent(token.tokens || [{ type: 'text', text: token.text || '' }]).map((node) => node.text || '').join('') } });
+      continue;
+    }
     if (token.type === 'html' && /^<br\s*\/?\s*>$/i.test(token.raw)) {
       out.push({ type: 'hardBreak' });
       continue;

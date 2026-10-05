@@ -1174,6 +1174,10 @@ export function initApp() {
     docEditorRichFeatureEnabled: true,
     docEditorProseMirrorState: null,
     docEditorContentModel: null,
+    wikiCreateBusy: false,
+    docsHomeSaving: false,
+    docsHomeVisit: 0,
+    docsShowAll: false,
     docRichEditorAdapter: null,
     docRichEditorMountPromise: null,
     docRichEditorMountGeneration: 0,
@@ -2697,6 +2701,8 @@ export function initApp() {
         if (this.selectedChannelId) url.searchParams.set('channelid', this.selectedChannelId);
         if (this.activeThreadId) url.searchParams.set('threadid', this.activeThreadId);
       } else if (this.navSection === 'docs') {
+        if (this.selectedChannelId) url.searchParams.set('channelid', this.selectedChannelId);
+        if (this.docsShowAll && !this.selectedDocId) url.searchParams.set('docsview', 'all');
         if (this.currentFolderId) url.searchParams.set('folderid', this.currentFolderId);
         if (this.selectedDocType === 'document' && this.selectedDocId) {
           url.searchParams.set('docid', this.selectedDocId);
@@ -2847,6 +2853,8 @@ export function initApp() {
             this.closeWorkroomDetail({ syncRoute: false, switchView: false });
           }
         } else if (this.navSection === 'docs') {
+          this.docsHomeVisit++;
+          this.docsShowAll = route.params.docsview === 'all';
           this.selectedDocCommentId = route.params.commentid || null;
           if (route.params.docid) {
             this.openDoc(route.params.docid, {
@@ -2859,10 +2867,10 @@ export function initApp() {
           } else if (route.params.folderid) {
             this.navigateToFolder(route.params.folderid, { syncRoute: false });
           } else {
-            this.selectedDocType = null;
-            this.selectedDocId = null;
+            this.closeDocEditor?.({ syncRoute: false });
             this.currentFolderId = null;
             this.loadDocEditorFromSelection();
+            if (!this.docsShowAll) void this.openChannelDocsHome?.({ syncRoute: false });
           }
         } else if (this.navSection === 'reports') {
           this.selectedReportId = route.params.reportid || this.selectedReport?.record_id || null;
@@ -3294,6 +3302,9 @@ export function initApp() {
           }
         }
       }
+      if (section === 'docs' && previousSection !== 'docs' && !this.selectedDocId) {
+        void this.openChannelDocsHome?.();
+      }
       if (section === 'status') {
         this.refreshStatusRecentChanges({ force: true });
       }
@@ -3358,6 +3369,7 @@ export function initApp() {
       if (!sameListBySignature(this.documents, nextDocuments, documentRecordSignature)) {
         this.documents = nextDocuments;
       }
+      this.docRichEditorAdapter?.refreshWikiLinks?.();
       this.refreshOpenDocFromLatestDocument({ force: false });
       this.updatePageTitle();
     },
@@ -4445,6 +4457,7 @@ export function initApp() {
       } else {
         this.documents = [...this.documents, reconciledDocument];
       }
+      this.docRichEditorAdapter?.refreshWikiLinks?.();
       this.refreshOpenDocFromLatestDocument({ force: false });
     },
 

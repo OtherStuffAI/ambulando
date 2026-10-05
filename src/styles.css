@@ -24868,3 +24868,16 @@ button.task-desc-toggle:focus-visible {
 .chat-image-preview-modal > .btn-secondary { margin-top: 0.75rem; }
 .chat-image-preview-modal:has(.file-preview-filename:not([style*="display: none"])) img { max-height: calc(92vh - 10rem); }
 .chat-image-preview-modal { overflow-y: auto; }
+
+.docs-wiki-navigation { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 8px 0 16px; }
+.docs-wiki-navigation button { min-height: 44px; }
+.fd-wiki-link { color: var(--accent, #528dcc); cursor: pointer; text-decoration: underline dotted; text-underline-offset: 3px; border-radius: 2px; }
+.fd-wiki-unresolved, .fd-wiki-ambiguous, .fd-wiki-unavailable { color: var(--text-muted, #986235); }
+.fd-wiki-unresolved::after { content: ' ?'; }
+.fd-wiki-ambiguous::after { content: ' (choose page)'; }
+.fd-wiki-unavailable::after { content: ' (unavailable)'; }
+.fd-wiki-link:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; }
+.fd-wiki-picker { position: fixed; z-index: 12000; width: min(360px, calc(100vw - 16px)); max-height: 220px; overflow-y: auto; padding: 6px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); box-shadow: 0 6px 24px #0003; }
+.fd-wiki-picker[hidden] { display: none; }
+.fd-wiki-picker button { display: block; text-align: left; width: 100%; min-height: 44px; padding: 8px; border: 0; background: transparent; color: inherit; overflow-wrap: anywhere; }
+.fd-wiki-picker button[aria-selected="true"], .fd-wiki-picker button:hover { background: var(--bg-hover, #ddd); }

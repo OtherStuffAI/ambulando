@@ -1,3 +1,4 @@
+import { wikiSource } from '../wiki-links.js';
 import {
   FLIGHTDECK_PROSEMIRROR_CONTENT_FORMAT,
   PROSEMIRROR_JSON_FORMAT,
@@ -66,6 +67,7 @@ function inlineMarkdown(nodes = []) {
     });
     // Literal Markdown breaks disappear at paragraph boundaries and consecutive
     // breaks become block separators. An inline tag preserves every break.
+    if (node.type === 'fdWikiLink') return wikiSource(node.attrs);
     if (node.type === 'hardBreak') return '<br>';
     if (node.type === 'fdStorageImage' || node.type === 'image') {
       const src = node.type === 'fdStorageImage' && node.attrs?.objectId

@@ -43,6 +43,10 @@ function appendSemanticTokens(node = {}, tokens = []) {
     }
     return tokens;
   }
+  if (node.type === 'fdWikiLink') {
+    tokens.push({ kind: 'wiki', documentId: node.attrs?.documentId || null, title: node.attrs?.title || '' });
+    return tokens;
+  }
   if (node.type === 'hardBreak') {
     tokens.push({ kind: 'break' });
     return tokens;

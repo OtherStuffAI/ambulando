@@ -1,0 +1,117 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { bindWikiState, channelWikiPages, resolveWikiPage, wikiSource } from '../src/docs/wiki-links.js';
+import { markdownToProseMirrorDoc } from '../src/docs/editor/markdown-to-prosemirror.js';
+import { prosemirrorToFlightDeckContentModel } from '../src/docs/editor/prosemirror-to-flightdeck.js';
+import { validateDocumentContentModelRoundTrip } from '../src/docs/editor/document-content-integrity.js';
+import { wikiManagerMixin } from '../src/docs/wiki-manager.js';
+import { updateTowerPgChannel } from '../src/tower-command-intents.js';
+import { upsertChannel } from '../src/db.js';
+vi.mock('../src/tower-command-intents.js', () => ({ updateTowerPgChannel: vi.fn() }));
+vi.mock('../src/db.js', () => ({ upsertChannel: vi.fn() }));
+vi.mock('../src/pg-read-hydrator.js', () => ({
+  resolveTowerPgWorkspaceContext: () => ({ workspaceId: 'workspace', baseUrl: 'http://localhost:3100', appNpub: 'app', workspaceOwnerNpub: 'owner' }),
+  mapPgChannelToLocal: (row) => ({ ...row, record_id: row.id }),
+}));
+const pages = [
+  { record_id: 'page-a', title: 'Plant list', pg_channel_id: 'channel', scope_id: 'scope' },
+  { record_id: 'other', title: 'Private page', pg_channel_id: 'other-channel' },
+  { record_id: 'deleted', title: 'Deleted', pg_channel_id: 'channel', record_state: 'deleted' },
+];
+function store() {
+  const channel = { record_id: 'channel', metadata: { docs_home_document_id: 'page-a', agent_chat: { context_prompt: 'Keep' } } };
+  const value = {
+    documents: structuredClone(pages), selectedChannel: channel, selectedChannelId: 'channel', channels: [channel], isTowerPgMode: true,
+    selectedDocument: { record_id: 'origin', pg_channel_id: 'channel', scope_id: 'scope' }, selectedDocId: 'origin',
+    navSection: 'docs', docsHomeVisit: 0, docEditAccessState: 'editing',
+    openDoc: vi.fn(), persistSelectedDocDraft: vi.fn(), refreshDocuments: vi.fn(), closeDocEditor: vi.fn(), syncRoute: vi.fn(),
+    createDocument: vi.fn(async (title) => ({ record_id: 'new-page', title, pg_channel_id: 'channel' })),
+    syncDocRichEditorContentModel: vi.fn(), saveSelectedDocItem: vi.fn(async () => { value.docEditDraftDirty = false; return value.selectedDocument; }),
+  };
+  Object.defineProperties(value, Object.getOwnPropertyDescriptors(wikiManagerMixin));
+  return value;
+}
+describe('channel wiki pages', () => {
+  beforeEach(() => vi.clearAllMocks());
+  it('excludes deleted and other-channel pages and never retargets missing IDs', () => {
+    expect(channelWikiPages(pages, 'channel')).toHaveLength(1);
+    expect(resolveWikiPage(pages, 'channel', { documentId: 'deleted', title: 'Plant list' }).state).toBe('unavailable');
+    expect(resolveWikiPage(pages, 'channel', { title: 'Private page' }).state).toBe('unresolved');
+    expect(resolveWikiPage([...pages, { ...pages[0], record_id: 'duplicate' }], 'channel', { title: 'plant list' }).state).toBe('ambiguous');
+    expect(resolveWikiPage([{ ...pages[0], title: 'Renamed' }], 'channel', { documentId: 'page-a' }).title).toBe('Renamed');
+  });
+  it('roundtrips stable IDs, unresolved titles, formatting, mentions and code', () => {
+    const source = '**Notes** [[Plant list]] and [[Unknown]] plus [Old name](wiki:page-a).\n\n@[Operator](mention:person:npub1person) `[[literal]]`';
+    const state = bindWikiState(markdownToProseMirrorDoc(source), pages, 'channel');
+    let model = prosemirrorToFlightDeckContentModel(state);
+    expect(model.content).toContain('[Plant list](wiki:page-a)');
+    expect(model.content).toContain('[[Unknown]]');
+    expect(model.content).toContain('`[[literal]]`');
+    for (let i = 0; i < 3; i++) {
+      expect(validateDocumentContentModelRoundTrip(model)).toEqual({ ok: true });
+      model = prosemirrorToFlightDeckContentModel(markdownToProseMirrorDoc(model.content));
+    }
+    expect(model.content).toContain('[Old name](wiki:page-a)');
+    expect(model.content).toContain('@[Operator](mention:person:npub1person)');
+  });
+  it('escapes canonical source labels', () => {
+    const attrs = { documentId: 'page-a', title: 'A [plant] \\ note *literal* _word_ # title' };
+    const model = prosemirrorToFlightDeckContentModel(markdownToProseMirrorDoc(wikiSource(attrs)));
+    expect(model.editor_state.content[0].content[0].attrs).toEqual(attrs);
+    expect(validateDocumentContentModelRoundTrip(model).ok).toBe(true);
+  });
+  it('preserves drafts before navigation and stays put when preservation fails', async () => {
+    const s = store(); s.docEditDraftDirty = true;
+    await s.followDocWikiLink('page-a');
+    expect(s.persistSelectedDocDraft).toHaveBeenCalledWith({ immediate: true });
+    expect(s.openDoc).toHaveBeenCalledWith('page-a', {});
+    s.openDoc.mockClear(); s.persistSelectedDocDraft.mockRejectedValue(new Error('disk failed'));
+    expect(await s.followDocWikiLink('page-a')).toBe(false);
+    expect(s.openDoc).not.toHaveBeenCalled();
+    expect(s.error).toContain('disk failed');
+  });
+  it('creates in the same channel, inserts, saves origin, then opens; repeated clicks are gated', async () => {
+    const s = store(), events = [];
+    let finish;
+    s.createDocument.mockImplementation(async () => { events.push('create'); await new Promise((resolve) => { finish = resolve; }); return { record_id: 'new-page', title: 'New' }; });
+    s.saveSelectedDocItem.mockImplementation(async () => { events.push('save'); s.docEditDraftDirty = false; return s.selectedDocument; });
+    s.openDoc.mockImplementation(() => events.push('open'));
+    const editor = { isDestroyed: false, chain: () => ({ focus() { return this; }, insertContentAt(range, node) { events.push('insert'); expect(node.attrs.documentId).toBe('new-page'); return this; }, run() {} }) };
+    const work = s.createDocWikiPage('New', { from: 1, to: 5 }, editor);
+    expect(await s.createDocWikiPage('New', { from: 1, to: 5 }, editor)).toBe(false);
+    finish(); expect(await work).toBe(true);
+    expect(s.createDocument).toHaveBeenCalledWith('New', { scopeId: 'scope', channelId: 'channel', open: false, throwOnError: true });
+    expect(events).toEqual(['create', 'insert', 'save', 'open']);
+  });
+  it('retains link and draft when origin save fails, and reports create/ambiguous failures', async () => {
+    const s = store();
+    const editor = { isDestroyed: false, chain: () => ({ focus() { return this; }, insertContentAt() { return this; }, run() {} }) };
+    s.saveSelectedDocItem.mockResolvedValue(null);
+    expect(await s.createDocWikiPage('New', { from: 1, to: 5 }, editor)).toBe(false);
+    expect(s.docEditDraftDirty).toBe(true); expect(s.openDoc).not.toHaveBeenCalled(); expect(s.error).toContain('originating page');
+    s.createDocument.mockRejectedValue(new Error('No write access'));
+    expect(await s.createDocWikiPage('Denied', { from: 1, to: 5 }, editor)).toBe(false); expect(s.error).toBe('No write access');
+    s.documents.push({ ...pages[0], record_id: 'duplicate' });
+    expect(await s.createDocWikiPage('Plant list', {}, editor)).toBe(false); expect(s.error).toContain('Several pages');
+  });
+  it('writes narrow authoritative home metadata, replaces, clears and surfaces denial', async () => {
+    const s = store();
+    updateTowerPgChannel.mockImplementation(async (_store, _workspace, id, patch) => ({ channel: { id, metadata: { ...s.selectedChannel.metadata, ...patch.metadata } } }));
+    expect(await s.setChannelDocsHome('page-a')).toBe(true);
+    expect(updateTowerPgChannel.mock.calls[0][3]).toEqual({ metadata: { docs_home_document_id: 'page-a' } });
+    expect(upsertChannel.mock.calls[0][0].metadata.agent_chat.context_prompt).toBe('Keep');
+    s.documents.push({ record_id: 'replacement', title: 'Replacement', pg_channel_id: 'channel' });
+    expect(await s.setChannelDocsHome('replacement')).toBe(true);
+    expect(await s.setChannelDocsHome(null)).toBe(true);
+    expect(updateTowerPgChannel.mock.calls[2][3]).toEqual({ metadata: { docs_home_document_id: null } });
+    updateTowerPgChannel.mockRejectedValue(new Error('Forbidden'));
+    expect(await s.setChannelDocsHome('page-a')).toBe(false); expect(s.error).toBe('Forbidden');
+  });
+  it('defaults to available home, falls back for deleted home and cancels late home after All docs', async () => {
+    const s = store(); await s.openChannelDocsHome(); expect(s.openDoc).toHaveBeenCalledWith('page-a', {});
+    s.openDoc.mockClear(); s.documents[0].record_state = 'deleted'; await s.openChannelDocsHome(); expect(s.closeDocEditor).toHaveBeenCalled(); expect(s.openDoc).not.toHaveBeenCalled();
+    s.documents[0].record_state = 'active';
+    let finish; s.refreshDocuments.mockImplementation(() => new Promise((resolve) => { finish = resolve; }));
+    const opening = s.openChannelDocsHome(); await s.openChannelAllDocs(); finish(); await opening;
+    expect(s.openDoc).not.toHaveBeenCalled(); expect(s.docsShowAll).toBe(true);
+  });
+});
