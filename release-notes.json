@@ -2674,6 +2674,28 @@
       "label": "Logout retention verified release",
       "notes": [],
       "noUserVisibleChanges": true
+    },
+    {
+      "buildNumber": 2186,
+      "label": "Readable context trees",
+      "notes": [
+        "Context trees now open in a collapsible Outline with wrapping labels, hierarchy guides and component/reference counts.",
+        "Switch to Visual for vertically stacked branches at a readable zoom. Selection, collapsed branches, search and keyboard navigation work across both views."
+      ]
+    },
+    {
+      "buildNumber": 2187,
+      "label": "Context tree keyboard access",
+      "notes": [
+        "Large Outline trees remain reachable by keyboard after scrolling beyond the focused row. Wrapping row heights are measured as the visible window changes."
+      ]
+    },
+    {
+      "buildNumber": 2188,
+      "label": "Stable context tree view switching",
+      "notes": [
+        "Switching from Visual to a deeply scrolled Outline now applies the new layout before scrolling, keeping the selected branch visible and avoiding sideways overflow."
+      ]
     }
   ]
 }

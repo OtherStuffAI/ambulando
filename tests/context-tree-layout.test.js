@@ -11,14 +11,14 @@ describe('automatic Context Tree forest layout', () => {
     const byId = new Map(tree.nodes.map(n => [n.id, n]));
     for (const edge of tree.edges) {
       const parent = byId.get(edge.parentId), child = byId.get(edge.id);
-      expect(edge.x1).toBe(parent.x + parent.width / 2); expect(edge.y1).toBe(parent.y + parent.height);
-      expect(edge.x2).toBe(child.x + child.width / 2); expect(edge.y2).toBe(child.y);
-      expect(child.y).toBeGreaterThan(parent.y + parent.height);
+      expect(edge.x1).toBe(parent.x + parent.width); expect(edge.y1).toBe(parent.y + parent.height / 2);
+      expect(edge.x2).toBe(child.x); expect(edge.y2).toBe(child.y + child.height / 2);
+      expect(child.x).toBeGreaterThan(parent.x + parent.width);
     }
     for (const a of tree.nodes) for (const b of tree.nodes) if (a.id !== b.id) {
       expect(a.x + a.width <= b.x || b.x + b.width <= a.x || a.y + a.height <= b.y || b.y + b.height <= a.y).toBe(true);
     }
-    expect(byId.get('b').x).toBeGreaterThan(byId.get('z').x + byId.get('z').width);
+    expect(byId.get('b').y).toBeGreaterThan(byId.get('z').y + byId.get('z').height);
   });
   it('collapses descendants only and supports multiple parentless trees', () => {
     const tree = layoutContextTree([row('a'), row('a1', 'a'), row('a2', 'a1'), row('b'), row('b1', 'b')], ['a']);
@@ -34,7 +34,9 @@ describe('automatic Context Tree forest layout', () => {
     const wide = layoutContextTree([row('root'), ...Array.from({ length: 4000 }, (_, i) => row(`c${i}`, 'root', i))]);
     expect(wide.nodes).toHaveLength(4001);
     const children = wide.nodes.slice(1);
-    for (let i = 1; i < children.length; i++) expect(children[i].x).toBeGreaterThanOrEqual(children[i - 1].x + children[i - 1].width);
+    for (let i = 1; i < children.length; i++) expect(children[i].y).toBeGreaterThanOrEqual(children[i - 1].y + children[i - 1].height);
+    expect(wide.width).toBeLessThan(600);
+    expect(fitContextTree(wide, 390, 300).scale).toBeGreaterThanOrEqual(0.65);
     console.log('context layout 12000-deep + 4000-wide elapsed ms', Math.round(performance.now() - start));
   });
   it('ignores deleted, missing-parent and cycle-only records without inventing roots', () => {

@@ -24655,3 +24655,33 @@ html.wingman-iphone-webview .chat-channel-tab-scroll * {
 .scope-access-type { font-size: .65rem; border: 1px solid var(--border); border-radius: 4px; padding: .1rem .3rem; }
 .scope-access-role-help { color: var(--text-muted); }
 @media(max-width:600px) { .scope-access-add { flex-wrap: wrap; } .scope-access-picker { flex-basis: 100%; } .scope-access-add > select { flex: 1; } }
+
+/* Readable hierarchy views share the same rows, selection and disclosures. */
+.context-tree-view-switch { display:flex; padding:3px; gap:3px; border:1px solid var(--border,#dce2ec); border-radius:9px; background:var(--surface-muted,#f8fafc); }
+.context-tree-view-switch button { border:0; border-radius:6px; padding:8px 14px; font-size:13px; color:var(--text-muted,#64748b); background:transparent; cursor:pointer; }
+.context-tree-view-switch button[aria-pressed=true] { color:#2563eb; background:var(--surface,#fff); box-shadow:0 1px 4px #14233b18; font-weight:600; }
+.context-tree-node-title { display:flex; align-items:center; gap:8px; text-align:left; font-size:14px; line-height:1.45; }
+.context-tree-label { flex:1; min-width:0; overflow-wrap:anywhere; }
+.context-tree-component-icon { color:var(--text-muted,#64748b); font-size:17px; flex-shrink:0; }
+.context-tree-counts { display:flex; gap:5px; flex-shrink:0; font-size:10px; color:var(--text-muted,#64748b); }
+.context-tree-counts > span { padding:2px 5px; border-radius:5px; background:var(--surface-muted,#f1f5f9); }
+.context-tree-node:hover { border-color:#94a3b8; background:var(--surface-muted,#f8fafc); }
+.context-tree-node:focus-within { outline:2px solid #2563eb; outline-offset:-2px; }
+.context-tree-node-selected, .context-tree-node-selected:hover { background:#2563eb0a; border-color:#2563eb; }
+.context-tree-node-toggle { font-size:20px; flex-shrink:0; }
+.context-tree-outline { overflow-y:auto; overflow-x:hidden; touch-action:pan-y; background-image:none; background-color:var(--surface,#fff); scrollbar-gutter:stable; overscroll-behavior:contain; }
+.context-tree-outline .context-tree-edges { display:none !important; }
+.context-tree-outline .context-tree-world { position:relative; padding:10px 8px; }
+.context-tree-outline .context-tree-node { position:relative; min-height:48px; margin-left:var(--context-indent); border:0; border-radius:7px; box-shadow:none; }
+.context-tree-outline .context-tree-node::before { content:''; position:absolute; top:0; bottom:0; left:calc(-1 * var(--context-indent)); width:var(--context-indent); pointer-events:none; background:repeating-linear-gradient(to right,transparent 0,transparent 17px,var(--border,#dce2ec) 17px,var(--border,#dce2ec) 18px); opacity:.6; }
+.context-tree-outline .context-tree-node-title { padding:10px 34px 10px 32px; border-radius:7px; overflow:visible; }
+.context-tree-outline .context-tree-node-toggle { position:absolute; left:0; top:7px; width:28px; height:34px; border:0; border-radius:5px; }
+.context-tree-outline .context-tree-node-toggle:hover { background:#2563eb12; color:#2563eb; }
+.context-tree-outline .context-tree-node-add { right:3px; top:12px; bottom:auto; opacity:0; }
+.context-tree-outline .context-tree-node:is(:hover,:focus-within) .context-tree-node-add { opacity:1; }
+.context-tree-outline .context-tree-node-selected { box-shadow:inset 3px 0 #2563eb; }
+@media (max-width:700px) {
+ .context-tree-outline .context-tree-node-add { opacity:1; }
+ .context-tree-outline .context-tree-counts { flex-direction:column; gap:2px; }
+ .context-tree-view-switch button { min-height:36px; }
+}

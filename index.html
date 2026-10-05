@@ -1734,33 +1734,39 @@
                   <li x-show="!nodeResults.length" role="status">No matching components.</li>
                 </ul>
               </div>
+              <div class="context-tree-view-switch" role="group" aria-label="Context tree layout">
+                <button type="button" :aria-pressed="viewMode === 'outline'" @click="setView('outline')">Outline</button>
+                <button type="button" :aria-pressed="viewMode === 'visual'" @click="setView('visual')">Visual</button>
+              </div>
               <div class="context-tree-tools" role="group" aria-label="Tree view controls">
                 <button type="button" x-show="canManage" :disabled="busy" @click="startCreate()">Add top-level component</button>
-                <button type="button" @click="zoom(1 / 1.25)" aria-label="Zoom out">−</button>
-                <output aria-label="Zoom level" x-text="Math.round(scale * 100) + '%'"></output>
-                <button type="button" @click="zoom(1.25)" aria-label="Zoom in">+</button>
-                <button type="button" @click="fit()">Fit</button>
+                <button type="button" x-show="viewMode === 'visual'" @click="zoom(1 / 1.25)" aria-label="Zoom out">−</button>
+                <output x-show="viewMode === 'visual'" aria-label="Zoom level" x-text="Math.round(scale * 100) + '%'"></output>
+                <button type="button" x-show="viewMode === 'visual'" @click="zoom(1.25)" aria-label="Zoom in">+</button>
+                <button type="button" x-show="viewMode === 'visual'" @click="fit()" title="Fit at a readable size; pan to explore larger trees">Fit</button>
                 <button type="button" @click="loadTree()" :disabled="status === 'loading'">Reload</button>
               </div>
             </header>
             <p class="context-tree-notice" role="status" x-show="notice" x-text="notice"></p>
             <p class="context-tree-notice" role="alert" x-show="editError && !dialogOpen" x-text="editError"></p>
             <div class="context-tree-panes">
-              <div class="context-tree-canvas" x-ref="canvas" role="tree" aria-label="Scope components" :aria-busy="status === 'loading'" tabindex="0"
+              <div class="context-tree-canvas" :class="{ 'context-tree-outline': viewMode === 'outline' }" x-ref="canvas" role="tree" aria-label="Scope components" :aria-busy="status === 'loading'" :tabindex="layout.nodes.length && visibleNodes.some(node => node.id === focusedId) ? -1 : 0" @scroll="scrolled($event)"
                 @wheel="wheel($event)" @pointerdown="pointerDown($event)" @pointermove="pointerMove($event)" @pointerup="pointerUp()" @pointercancel="pointerUp()" @lostpointercapture="pointerUp()"
                 @keydown.self="if (['Home', 'Enter', 'ArrowDown'].includes($event.key) && layout.nodes.length) { $event.preventDefault(); focusNode(focusedId || layout.nodes[0].id); }">
                 <div class="context-tree-state" x-show="stateMessage" role="status" x-text="stateMessage"></div>
-                <div class="context-tree-world" :style="{ transform, width: layout.width + 'px', height: layout.height + 'px' }" x-show="components.length">
-                  <svg class="context-tree-edges" :width="layout.width" :height="layout.height" aria-hidden="true" x-html="edgeMarkup"></svg>
+                <div class="context-tree-world" :style="viewMode === 'visual' ? { transform, width: layout.width + 'px', height: layout.height + 'px' } : { transform: 'none', width: '100%', height: 'auto' }" x-show="components.length">
+                  <div :style="{ height: (viewMode === 'outline' ? outlineBefore : 0) + 'px' }" aria-hidden="true"></div>
+                  <svg x-show="viewMode === 'visual'" class="context-tree-edges" :width="layout.width" :height="layout.height" aria-hidden="true" x-html="edgeMarkup"></svg>
                   <template x-for="node in visibleNodes" :key="node.id">
-                    <div class="context-tree-node" :class="{ 'context-tree-node-selected': selectedId === node.id }" :style="{ left: node.x + 'px', top: node.y + 'px', width: node.width + 'px', height: node.height + 'px' }">
-                      <button type="button" class="context-tree-node-title" role="treeitem" :data-context-node="node.id" :tabindex="focusedId === node.id ? 0 : -1" :aria-level="node.depth + 1" :aria-selected="selectedId === node.id" :aria-expanded="node.childCount ? node.expanded : null" :title="node.title" @focus="focusedId = node.id" @click="select(node.id)" @keydown="keydown($event, node.id)" x-text="node.title"></button>
-                      <button type="button" class="context-tree-node-add" x-show="canManage" :disabled="busy" :aria-label="'Add child to ' + node.title" @click.stop="startCreate(node.id)">+</button>
-                      <button type="button" class="context-tree-node-toggle" x-show="node.childCount" tabindex="-1" :aria-label="(node.expanded ? 'Collapse ' : 'Expand ') + node.title" @click.stop="toggle(node.id)" x-text="node.expanded ? '−' : '+'"></button>
+                    <div class="context-tree-node" :class="{ 'context-tree-node-selected': selectedId === node.id }" :data-context-row="node.id" :style="nodeStyle(node)">
+                      <button type="button" class="context-tree-node-title" role="treeitem" :data-context-node="node.id" :tabindex="focusedId === node.id ? 0 : -1" :aria-level="node.depth + 1" :aria-posinset="node.position" :aria-setsize="node.siblingCount" :aria-label="node.title" :aria-description="node.childCount + ' direct children, ' + (referenceCounts[node.id] || 0) + ' direct references'" :aria-selected="selectedId === node.id" :aria-expanded="node.childCount ? node.expanded : null" :title="node.title" @focus="focusedId = node.id" @click="select(node.id)" @keydown="keydown($event, node.id)"><span class="context-tree-component-icon" aria-hidden="true" x-text="node.childCount ? '▤' : '◇'"></span><span class="context-tree-label" x-text="node.title"></span><span class="context-tree-counts" aria-hidden="true"><span x-show="node.childCount" :title="node.childCount + ' direct children'" x-text="node.childCount"></span><span x-show="referenceCounts[node.id]" :title="(referenceCounts[node.id] || 0) + ' direct references'" x-text="'↗ ' + (referenceCounts[node.id] || 0)"></span></span></button>
+                      <button type="button" class="context-tree-node-add" tabindex="-1" x-show="canManage" :disabled="busy" :aria-label="'Add child to ' + node.title" @click.stop="startCreate(node.id)">+</button>
+                      <button type="button" class="context-tree-node-toggle" x-show="node.childCount" tabindex="-1" :aria-expanded="node.expanded" :aria-label="(node.expanded ? 'Collapse ' : 'Expand ') + node.title" @click.stop="toggle(node.id)" x-text="node.expanded ? '⌄' : '›'"></button>
                     </div>
                   </template>
+                  <div :style="{ height: (viewMode === 'outline' ? outlineAfter : 0) + 'px' }" aria-hidden="true"></div>
                 </div>
-                <p class="context-tree-hint">Pan the canvas or scroll. Ctrl/⌘ + scroll to zoom. Arrow keys navigate; Enter selects.</p>
+                <p class="context-tree-hint" x-show="viewMode === 'visual'">Pan or scroll to explore. Ctrl/⌘ + scroll to zoom. Arrow keys navigate; Enter selects.</p>
               </div>
               <aside class="context-tree-panel" aria-label="Component references" :aria-busy="refsLoading">
                 <template x-if="!selected"><p class="context-tree-placeholder">Select a component to see its direct references.</p></template>

@@ -1,11 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createContextTreeView, contextArtifactOrigin, disposeContextTreeView, resumeContextTreeView } from '../src/context-tree-view.js';
 const component = (id, parent_id = null) => ({ id, title: id, parent_id, row_version: 1 });
-function harness() {
+function harness(extra = {}) {
   let next;
   const unsubscribe = vi.fn(), cached = new Map(), db = { transaction: async (...args) => args.at(-1)(), context_references: { get: async id => cached.get(id) }, context_reference_resolutions: { get: async id => cached.get(id) } }, service = { ensureLoaded: vi.fn(async () => ({})) };
   const store = { getTowerSyncService: () => service, handleMentionNavigate: vi.fn() };
-  const view = createContextTreeView({ store, getDb: () => db, isDbReady: () => true,
+  const view = createContextTreeView({ ...extra, store, getDb: () => db, isDbReady: () => true,
     observe: () => ({ subscribe(observer) { next = observer.next; return { unsubscribe }; } }) });
   view.init(); view.sync('workspace', 'scope', 'key');
   const emit = (components = [component('root'), component('child', 'root')], references = [], status = 'complete') => { for (const row of references) cached.set(row.id, {workspace_id:'workspace',scope_id:'scope',...row}); next({ components, references, status }); };
@@ -123,4 +123,46 @@ it('resumes on the same workspace after sync-service/lifecycle suspension', asyn
   Object.assign(h.store, { currentWorkspace: {workspaceId:'workspace'}, pgContextScope:{record_id:'scope',title:'Scope'}, workspaceDbKey:'key', isLoggedIn:true, isTowerPgMode:true });
   resumeContextTreeView(h.store); await tick(); h.emit();
   expect(h.view.status).toBe('complete'); expect(h.view.layout.nodes).toHaveLength(2);
+});
+
+it('defaults to Outline, safely persists only the view, and shares selection/collapse without transport', async () => {
+  const storage = { getItem: vi.fn(() => 'invalid'), setItem: vi.fn() };
+  const h = harness({ storage }); h.emit(); h.view.select('child'); h.view.toggle('root'); await tick();
+  expect(h.view.viewMode).toBe('outline');
+  h.service.ensureLoaded.mockClear();
+  h.view.setView('visual'); expect(h.view.selectedId).toBe('child'); expect(h.view.collapsed).toEqual(['root']);
+  expect(h.view.scale).toBeGreaterThanOrEqual(0.65);
+  h.view.setView('outline'); expect(h.view.collapsed).toEqual(['root']); expect(h.view.selectedId).toBe('child');
+  expect(storage.setItem).toHaveBeenLastCalledWith('flightdeck.context-tree.view', 'outline');
+  expect(h.service.ensureLoaded).not.toHaveBeenCalled();
+  expect(harness({ storage: { getItem: () => 'visual' } }).view.viewMode).toBe('visual');
+  const blocked = harness({ storage: { getItem() { throw Error('blocked'); }, setItem() { throw Error('blocked'); } } });
+  expect(blocked.view.viewMode).toBe('outline'); expect(() => blocked.view.setView('visual')).not.toThrow();
+});
+it('reveals hidden search matches in both views and bounds a large outline without altering rows', () => {
+  const h = harness();
+  const rows = [component('root'), ...Array.from({length:4000}, (_,i) => ({...component('child-'+i,'root'),sort_order:i}))];
+  h.emit(rows);
+  expect(h.view.visibleNodes.length).toBeLessThan(40);
+  for (const mode of ['outline','visual']) {
+    h.view.setView(mode); h.view.toggle('root'); h.view.nodeSearch = 'child-3999';
+    h.view.chooseNode(h.view.nodeResults[0]);
+    expect(h.view.selectedId).toBe('child-3999'); expect(h.view.collapsed).toEqual([]);
+    expect(h.view.visibleNodes.some(n=>n.id==='child-3999')).toBe(true);
+  }
+  expect(h.view.components).toEqual(rows);
+});
+
+it('defers native Outline scrolling until the switched DOM geometry is committed', () => {
+  const h = harness(), pending = [];
+  h.emit([component('root'), ...Array.from({length:2000}, (_,i) => ({...component('child-'+i,'root'),sort_order:i}))]);
+  const canvas = { scrollTop:0, querySelectorAll:()=>[] };
+  h.view.$refs = { canvas }; h.view.$nextTick = fn => pending.push(fn);
+  h.view.setView('visual'); pending.splice(0).forEach(fn=>fn());
+  h.view.focusedId = 'child-1999'; h.view.setView('outline');
+  expect(h.view.outlineScroll).toBeGreaterThan(90000);
+  expect(canvas.scrollTop).toBe(0);
+  pending.splice(0).forEach(fn=>fn());
+  expect(canvas.scrollTop).toBe(h.view.outlineScroll);
+  expect(h.view.visibleNodes.some(n=>n.id==='child-1999')).toBe(true);
 });

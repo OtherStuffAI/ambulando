@@ -1,5 +1,5 @@
 // Pure, iterative forest layout. Persisted parent pointers are the only hierarchy.
-export function layoutContextTree(components, collapsed = [], { nodeWidth = 200, nodeHeight = 64, siblingGap = 28, levelGap = 48 } = {}) {
+export function layoutContextTree(components, collapsed = [], { nodeWidth = 240, nodeHeight = 80, siblingGap = 16, levelGap = 48 } = {}) {
   const closed = new Set(collapsed);
   const rows = new Map(components.filter(row => !row.deleted_at).map(row => [row.id, row]));
   const children = new Map();
@@ -11,36 +11,55 @@ export function layoutContextTree(components, collapsed = [], { nodeWidth = 200,
   const compare = (a, b) => (Number(a.sort_order) || 0) - (Number(b.sort_order) || 0) || a.id.localeCompare(b.id);
   for (const list of children.values()) list.sort(compare);
   const roots = children.get(null) || [];
-  const order = [], visited = new Set(), stack = roots.slice().reverse().map(row => ({ row, depth: 0 }));
+  const order = [], visited = new Set(), stack = roots.map((row, i) => ({ row, depth: 0, position: i + 1, siblingCount: roots.length })).reverse();
   while (stack.length) {
     const item = stack.pop();
     if (visited.has(item.row.id)) continue;
     visited.add(item.row.id); order.push(item);
-    if (!closed.has(item.row.id)) for (const row of (children.get(item.row.id) || []).slice().reverse()) stack.push({ row, depth: item.depth + 1 });
+    if (!closed.has(item.row.id)) {
+      const list = children.get(item.row.id) || [];
+      for (let i = list.length - 1; i >= 0; i--) stack.push({ row: list[i], depth: item.depth + 1, position: i + 1, siblingCount: list.length });
+    }
   }
+  // Reserve room for icons/counts/disclosure and wrap long words too. A
+  // conservative character budget keeps visual labels inside their cards.
+  const heights = new Map();
+  const charactersPerLine = Math.max(8, Math.floor((nodeWidth - 96) / 9));
+  for (const { row } of order) {
+    let lines = 1, used = 0;
+    for (const word of String(row.title || '').split(/\s+/)) {
+      if (used && used + 1 + word.length > charactersPerLine) { lines++; used = 0; }
+      lines += Math.floor(Math.max(0, word.length - 1) / charactersPerLine);
+      used += (used ? 1 : 0) + (word.length % charactersPerLine || charactersPerLine);
+    }
+    heights.set(row.id, Math.max(nodeHeight, lines * 21 + 24));
+  }
+  // Subtree height stacks siblings vertically; breadth never increases chart width.
   const spans = new Map();
   for (let i = order.length - 1; i >= 0; i--) {
     const { row } = order[i];
     const visible = closed.has(row.id) ? [] : children.get(row.id) || [];
-    spans.set(row.id, Math.max(nodeWidth, visible.reduce((sum, child) => sum + (spans.get(child.id) || 0), 0) + Math.max(0, visible.length - 1) * siblingGap));
+    spans.set(row.id, Math.max(heights.get(row.id), visible.reduce((sum, child) => sum + (spans.get(child.id) || 0), 0) + Math.max(0, visible.length - 1) * siblingGap));
   }
   const starts = new Map(); let cursor = 24;
-  for (const root of roots) { starts.set(root.id, cursor); cursor += (spans.get(root.id) || nodeWidth) + siblingGap * 2; }
+  for (const root of roots) { starts.set(root.id, cursor); cursor += (spans.get(root.id) || nodeHeight) + siblingGap * 2; }
   const nodes = [], edges = [], positions = new Map();
-  for (const { row, depth } of order) {
-    const start = starts.get(row.id), span = spans.get(row.id);
-    const node = { id: row.id, title: row.title, parentId: row.parent_id, depth, x: start + (span - nodeWidth) / 2, y: 24 + depth * (nodeHeight + levelGap), width: nodeWidth, height: nodeHeight,
+  let width = 48;
+  for (const { row, depth, position, siblingCount } of order) {
+    const start = starts.get(row.id);
+    const node = { id: row.id, title: row.title, parentId: row.parent_id, depth, position, siblingCount,
+      x: 24 + depth * (nodeWidth + levelGap), y: start, width: nodeWidth, height: heights.get(row.id),
       childCount: (children.get(row.id) || []).length, expanded: !closed.has(row.id) };
-    nodes.push(node); positions.set(node.id, node);
+    nodes.push(node); positions.set(node.id, node); width = Math.max(width, node.x + nodeWidth + 24);
     const parent = positions.get(row.parent_id);
     if (parent) {
-      const x1 = parent.x + nodeWidth / 2, y1 = parent.y + nodeHeight, x2 = node.x + nodeWidth / 2, y2 = node.y;
-      edges.push({ id: row.id, parentId: parent.id, x1, y1, x2, y2, path: `M ${x1} ${y1} V ${(y1 + y2) / 2} H ${x2} V ${y2}` });
+      const x1 = parent.x + nodeWidth, y1 = parent.y + parent.height / 2, x2 = node.x, y2 = node.y + node.height / 2;
+      edges.push({ id: row.id, parentId: parent.id, x1, y1, x2, y2, path: `M ${x1} ${y1} H ${(x1 + x2) / 2} V ${y2} H ${x2}` });
     }
     let offset = start;
     if (node.expanded) for (const child of children.get(row.id) || []) { starts.set(child.id, offset); offset += spans.get(child.id) + siblingGap; }
   }
-  return { nodes, edges, width: Math.max(48, cursor - siblingGap * 2 + 24), height: nodes.length ? nodes.reduce((max, node) => Math.max(max, node.y), 0) + nodeHeight + 24 : 48 };
+  return { nodes, edges, width, height: Math.max(48, cursor - siblingGap * 2 + 24) };
 }
 
 export function contextPath(components, id) {
@@ -64,7 +83,7 @@ export function contextSearchChoices(components, query = '', allowedIds = null, 
   return matches;
 }
 
-export function fitContextTree(layout, width, height) {
-  const scale = Math.min(1, Math.max(Number.EPSILON, Math.min((width - 32) / layout.width, (height - 32) / layout.height)));
-  return { scale, x: (width - layout.width * scale) / 2, y: (height - layout.height * scale) / 2 };
+export function fitContextTree(layout, width, height, minimumScale = 0.85) {
+  const scale = Math.min(1, Math.max(minimumScale, Math.min((width - 32) / layout.width, (height - 32) / layout.height)));
+  return { scale, x: Math.max(8, (width - layout.width * scale) / 2), y: Math.max(8, (height - layout.height * scale) / 2) };
 }

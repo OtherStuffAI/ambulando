@@ -69,14 +69,15 @@ async function start(page, baseURL, viewport) {
 }
 test.afterEach(async ({ page }) => { await page.evaluate(() => { window.fixture?.view.cancelEdit(); return window.fixture?.cleanup(); }).catch(() => {}); expect(page.wp4Errors || []).toEqual([]); });
 
-for(const [name,viewport] of [['desktop',{width:1440,height:900}],['mobile',{width:390,height:844}]]) {
+for(const [name,viewport,mode] of [['desktop',{width:1440,height:900},'Outline'],['mobile',{width:390,height:844},'Outline'],['desktop-visual',{width:1440,height:900},'Visual'],['mobile-visual',{width:390,height:844},'Visual']]) {
  test(`${name} manager creates root/child, renames, moves subtree, links current records and preserves content on deletion`,async({page,baseURL})=>{
   const errors=[];page.on('pageerror',e=>errors.push(e.message));await start(page,baseURL,viewport);
+  await page.getByRole('button',{name:mode,exact:true}).click();
   await page.getByRole('button',{name:'Add top-level component',exact:true}).click();
   await page.getByRole('textbox',{name:'Component name',exact:true}).fill('New root');await page.getByRole('button',{name:'Save component',exact:true}).click();
   await expect(page.getByRole('treeitem',{name:'New root',exact:true})).toBeVisible();
   await page.getByRole('button',{name:'Add child to New root',exact:true}).click();await page.getByRole('textbox',{name:'Component name',exact:true}).fill('New child');await page.getByRole('button',{name:'Save component',exact:true}).click();
-  await page.getByRole('treeitem',{name:'New root',exact:true}).click();await page.getByRole('button',{name:'Rename or move',exact:true}).click();
+  const find=page.getByRole('combobox',{name:'Find component',exact:true});await find.fill('New root');await page.getByRole('button',{name:'New root New root',exact:true}).click();await page.getByRole('button',{name:'Rename or move',exact:true}).click();
   const parent=page.getByRole('combobox',{name:'Component parent',exact:true});await parent.fill('New');await expect(page.locator('#context-parent-results')).not.toContainText('New root');await expect(page.locator('#context-parent-results')).not.toContainText('New child');
   await parent.fill('Operations');await page.getByRole('option',{name:'Operations Top level'}).click();await page.getByRole('textbox',{name:'Component name',exact:true}).fill('Moved root');await page.getByRole('button',{name:'Save component',exact:true}).click();
   await expect.poll(()=>page.evaluate(async()=>{const rows=await window.fixture.db.context_components.toArray(),root=rows.find(r=>r.title==='Moved root'),child=rows.find(r=>r.title==='New child');return root.parent_id==='ops'&&child.parent_id===root.id})).toBe(true);
