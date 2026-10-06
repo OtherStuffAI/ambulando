@@ -1,10 +1,25 @@
 // @vitest-environment jsdom
-import { afterEach, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, expect, it, vi } from 'vitest';
 import { getTaskById, openWorkspaceDb, upsertTask } from '../src/db.js';
 const { storeMock, updateTask } = vi.hoisted(() => ({ storeMock: vi.fn(), updateTask: vi.fn() }));
 vi.mock('alpinejs', () => ({ default: { store: storeMock, start: vi.fn(), nextTick: callback => callback() } }));
 vi.mock('../src/pg-write-adapter.js', async original => ({ ...(await original()), updateTowerPgTaskFromLocal: updateTask }));
 afterEach(() => { storeMock.mockClear(); updateTask.mockReset(); });
+// jsdom has no layout engine. Native selection geometry is exercised by the
+// browser specs; provide the missing Range API for Tiptap's selection observer.
+const rangeGeometry = ['getClientRects', 'getBoundingClientRect'];
+const originalRangeGeometry = new Map(rangeGeometry.map(key => [key, Object.getOwnPropertyDescriptor(Range.prototype, key)]));
+beforeAll(() => {
+  if (!Range.prototype.getClientRects) Range.prototype.getClientRects = () => [];
+  if (!Range.prototype.getBoundingClientRect) Range.prototype.getBoundingClientRect = () => new DOMRect();
+});
+afterAll(() => {
+  for (const [key, descriptor] of originalRangeGeometry) {
+    if (descriptor) Object.defineProperty(Range.prototype, key, descriptor);
+    else delete Range.prototype[key];
+  }
+});
+
 
 it('saves a native Tiptap task edit through the PG path and reopens Markdown references intact', async () => {
   const db = openWorkspaceDb('npub1rich-task-workspace');
