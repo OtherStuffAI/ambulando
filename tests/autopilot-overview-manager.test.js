@@ -922,6 +922,8 @@ describe('autopilot overview manager', () => {
       ['openThread', 'root-a', {
         syncRoute: false,
         preserveChannelContext: true,
+        saveDraft: false,
+        scrollToLatest: undefined,
       }],
       ['syncRoute'],
     ]);

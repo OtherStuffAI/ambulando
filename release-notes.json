@@ -2978,6 +2978,20 @@
       "notes": [
         "Restore native scrolling through long mobile documents and keep recovery drafts visible in a compact summary with expandable details and safe actions."
       ]
+    },
+    {
+      "buildNumber": 2235,
+      "label": "Open linked chat threads",
+      "notes": [
+        "Open linked threads across channels and scopes, including links inside the Inbox conversation modal, with browser history and visible loading errors."
+      ]
+    },
+    {
+      "buildNumber": 2236,
+      "label": "Keep drafts when following threads",
+      "notes": [
+        "Keep each conversation draft in its own channel when following a linked thread or using browser Back and Forward."
+      ]
     }
   ]
 }

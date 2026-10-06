@@ -1100,6 +1100,8 @@ export const autopilotOverviewManagerMixin = {
     if (!this.deckThreadReturnContext || options.captureReturnContext !== false) {
       this.deckThreadReturnContext = this.captureDeckReturnContext();
     }
+    // Save under the outgoing channel before switching the modal destination.
+    this.saveChatComposerDraft?.('thread');
     this.deckThreadChannelId = normalizedChannelId;
     this.deckThreadChannelRecord = null;
     this.deckThreadChannelState = 'loading';
@@ -1123,6 +1125,8 @@ export const autopilotOverviewManagerMixin = {
     this.openThread(normalizedThreadId, {
       syncRoute: false,
       preserveChannelContext: true,
+      saveDraft: false,
+      scrollToLatest: options.scrollToLatest,
     });
     void (this.resolveDeckThreadChannel || autopilotOverviewManagerMixin.resolveDeckThreadChannel)
       .call(this, normalizedChannelId);

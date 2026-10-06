@@ -4436,6 +4436,8 @@
                 <p>Your first message starts this thread in <strong x-text="'#' + ($store.chat.getChannelLabel($store.chat.activeThreadChannel) || 'channel')"></strong>.</p>
               </div>
               <div class="thread-replies" data-thread-replies x-show="!$store.chat.deckThreadComposerOpen">
+                <p x-show="$store.chat.linkedThreadOpening" role="status">Opening linked conversation…</p>
+                <p x-show="$store.chat.linkedThreadOpenError" x-text="$store.chat.linkedThreadOpenError" role="alert"></p>
                 <p x-show="($store.chat.threadHistoryLoading && !$store.chat.threadHasLocalContent) || $store.chat.threadHistoryLoadAll" role="status">Loading conversation history…</p>
                 <p x-show="$store.chat.threadHistoryLoading && $store.chat.threadHasLocalContent && !$store.chat.threadHistoryLoadAll" role="status">Refreshing conversation…</p>
                 <p x-show="$store.chat.threadHistoryError" x-text="$store.chat.threadHistoryError" role="alert"></p>

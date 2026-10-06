@@ -532,24 +532,13 @@ describe('channel mention lookup', () => {
     expect(target.closest).toHaveBeenCalledWith('.mention-link, [data-deck-card-action]');
   });
 
-  it('navigates copied chat references to the source channel and thread', async () => {
+  it('dispatches copied chat references through linked-thread resolution', async () => {
     const store = await createStore();
-    store.navSection = 'docs';
-    store.mobileNavOpen = true;
-    store.startWorkspaceLiveQueries = vi.fn();
-    store.selectChannel = vi.fn().mockResolvedValue(undefined);
-    store.openThread = vi.fn();
-    store.syncRoute = vi.fn();
-
-    store.handleMentionNavigate('chat', 'channel-ops#msg-1');
-    await Promise.resolve();
-    await Promise.resolve();
-
-    expect(store.navSection).toBe('chat');
-    expect(store.mobileNavOpen).toBe(false);
-    expect(store.selectChannel).toHaveBeenCalledWith('channel-ops', { syncRoute: false });
-    expect(store.openThread).toHaveBeenCalledWith('msg-1', { scrollToLatest: false, syncRoute: false });
-    expect(store.syncRoute).toHaveBeenCalledTimes(1);
+    store.openLinkedThread = vi.fn().mockResolvedValue(true);
+    await store.handleMentionNavigate('chat', 'channel-ops#msg-1');
+    expect(store.openLinkedThread).toHaveBeenCalledWith('channel-ops#msg-1');
+    await store.handleMentionNavigate('message', 'source-message');
+    expect(store.openLinkedThread).toHaveBeenCalledWith('source-message');
   });
 
   it('navigates copied folder and report references', async () => {
