@@ -25,6 +25,8 @@ function store() {
     navSection: 'docs', docsHomeVisit: 0, docEditAccessState: 'editing',
     openDoc: vi.fn(), persistSelectedDocDraft: vi.fn().mockResolvedValue({ document_id: 'origin' }), refreshDocuments: vi.fn(), closeDocEditor: vi.fn(), syncRoute: vi.fn(),
     createDocument: vi.fn(async (title) => ({ record_id: 'new-page', title, pg_channel_id: 'channel' })),
+    enterSelectedDocEditMode: vi.fn().mockResolvedValue(true),
+    docRichEditorAdapter: { editor: { state: { doc: {} }, commands: { focus: vi.fn() } } },
     syncDocRichEditorContentModel: vi.fn(), saveSelectedDocItem: vi.fn(async () => { value.docEditDraftDirty = false; return value.selectedDocument; }),
   };
   Object.defineProperties(value, Object.getOwnPropertyDescriptors(wikiManagerMixin));
@@ -74,13 +76,15 @@ describe('channel wiki pages', () => {
     let finish;
     s.createDocument.mockImplementation(async () => { events.push('create'); await new Promise((resolve) => { finish = resolve; }); return { record_id: 'new-page', title: 'New' }; });
     s.saveSelectedDocItem.mockImplementation(async () => { events.push('save'); s.docEditDraftDirty = false; return s.selectedDocument; });
-    s.openDoc.mockImplementation(() => events.push('open'));
+    s.openDoc.mockImplementation((id) => { s.selectedDocId = id; events.push('open'); });
     const editor = { isDestroyed: false, chain: () => ({ focus() { return this; }, insertContentAt(range, node) { events.push('insert'); expect(node.attrs.documentId).toBe('new-page'); return this; }, run() {} }) };
     const work = s.createDocWikiPage('New', { from: 1, to: 5 }, editor);
     expect(await s.createDocWikiPage('New', { from: 1, to: 5 }, editor)).toBe(false);
     finish(); expect(await work).toBe(true);
-    expect(s.createDocument).toHaveBeenCalledWith('New', { scopeId: 'scope', channelId: 'channel', open: false, throwOnError: true });
+    expect(s.createDocument).toHaveBeenCalledWith('New', { scopeId: 'scope', channelId: 'channel', open: false, initialContent: '', throwOnError: true });
     expect(events).toEqual(['create', 'insert', 'save', 'open']);
+    expect(s.enterSelectedDocEditMode).toHaveBeenCalledWith('rich');
+    expect(s.docRichEditorAdapter.editor.commands.focus).toHaveBeenCalledWith('start');
   });
   it('retains link and draft when origin save fails, and reports create/ambiguous failures', async () => {
     const s = store();
@@ -92,6 +96,25 @@ describe('channel wiki pages', () => {
     expect(await s.createDocWikiPage('Denied', { from: 1, to: 5 }, editor)).toBe(false); expect(s.error).toBe('No write access');
     s.documents.push({ ...pages[0], record_id: 'duplicate' });
     expect(await s.createDocWikiPage('Plant list', {}, editor)).toBe(false); expect(s.error).toContain('Several pages');
+  });
+  it('reuses a readable same-title page and focuses only after its editor mounts', async () => {
+    const s = store(); let finish;
+    const focus = vi.fn();
+    const editor = { isDestroyed: false, chain: () => ({ focus() { return this; }, insertContentAt() { return this; }, run() {} }) };
+    s.openDoc.mockImplementation((id) => { s.selectedDocId = id; s.docRichEditorAdapter = null; });
+    s.mountDocRichEditor = vi.fn(() => new Promise((resolve) => { finish = () => { s.docRichEditorAdapter = { editor: { commands: { focus } } }; resolve(); }; }));
+    const work = s.createDocWikiPage('Plant list', { from: 1, to: 5 }, editor);
+    await vi.waitFor(() => expect(s.mountDocRichEditor).toHaveBeenCalled());
+    expect(s.createDocument).not.toHaveBeenCalled(); expect(focus).not.toHaveBeenCalled();
+    finish(); expect(await work).toBe(true); expect(focus).toHaveBeenCalledWith('start');
+  });
+  it('reports denied target editing without focusing or bypassing access controls', async () => {
+    const s = store();
+    const editor = { isDestroyed: false, chain: () => ({ focus() { return this; }, insertContentAt() { return this; }, run() {} }) };
+    s.openDoc.mockImplementation((id) => { s.selectedDocId = id; });
+    s.enterSelectedDocEditMode.mockResolvedValue(false); s.docEditAccessMessage = 'No write access';
+    expect(await s.createDocWikiPage('New', { from: 1, to: 5 }, editor)).toBe(false);
+    expect(s.error).toBe('No write access'); expect(s.docRichEditorAdapter.editor.commands.focus).not.toHaveBeenCalled();
   });
   it('writes narrow authoritative home metadata, replaces, clears and surfaces denial', async () => {
     const s = store();

@@ -2837,6 +2837,27 @@
       "notes": [
         "Stay on the current page if typing changes a draft while Home or All docs is preserving it. Retry navigation after the draft settles."
       ]
+    },
+    {
+      "buildNumber": 2212,
+      "label": "Click wiki links and keep writing",
+      "notes": [
+        "Click or tap wiki links while editing without Ctrl/Cmd. New links create an empty titled page and open its editor ready for typing.",
+        "Drag selection stays on the current page, and late document refreshes preserve active editing."
+      ]
+    },
+    {
+      "buildNumber": 2213,
+      "label": "Native wiki click and touch flow",
+      "notes": [
+        "Open newly created wiki pages in a focused editor with ordinary clicks or taps, including pages with links present when the editor mounts."
+      ]
+    },
+    {
+      "buildNumber": 2214,
+      "label": "Bounded wiki drag tracking",
+      "notes": [],
+      "noUserVisibleChanges": true
     }
   ]
 }

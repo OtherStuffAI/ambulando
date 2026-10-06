@@ -977,6 +977,8 @@ export const docsManagerMixin = {
           // already entered edit mode and begun typing or pasting.
           if (!this.docEditDraftDirty
             && this.docEditAccessState !== 'acquiring'
+            && this.docEditAccessState !== 'editing'
+            && this.docEditAccessState !== 'recovery'
             && this.docAutosaveState !== 'saving') {
             this.loadDocEditorFromSelection(fresh);
             void this.inspectSelectedDocEditLease(fresh);

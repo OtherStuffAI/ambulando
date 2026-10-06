@@ -53,7 +53,7 @@ export const wikiManagerMixin = {
       const found = this.resolveDocWikiLink({ title });
       if (found.state === 'ambiguous') throw new Error('Several pages have this title. Choose a specific page from the picker.');
       let target = found.page;
-      if (!target) target = await this.createDocument(title.trim(), { scopeId: origin.scope_id, channelId: origin.pg_channel_id, open: false, throwOnError: true });
+      if (!target) target = await this.createDocument(title.trim(), { scopeId: origin.scope_id, channelId: origin.pg_channel_id, open: false, initialContent: '', throwOnError: true });
       if (!target || target.sync_status === 'failed') throw new Error(this.error || 'Could not create page.');
       if (this.selectedDocId !== origin.record_id || editor.isDestroyed || editor.state?.doc !== originalEditorDoc) throw new Error('Page created, but the originating page changed. Choose it from the picker to link it.');
       editor.chain().focus().insertContentAt(range, { type: 'fdWikiLink', attrs: { documentId: target.record_id, title: target.title } }).run();
@@ -62,6 +62,19 @@ export const wikiManagerMixin = {
       const saved = await this.saveSelectedDocItem({ autosave: false });
       if (!saved || this.docRecovery || this.docEditDraftDirty) throw new Error(this.error || 'The new page exists, but the originating page could not be saved. Its link and your draft are preserved; retry Save before opening it.');
       this.openDoc(target.record_id);
+      const targetId = target.record_id;
+      const editable = await this.enterSelectedDocEditMode('rich');
+      if (this.selectedDocId !== targetId) return false;
+      if (!editable) throw new Error(this.docEditAccessMessage || 'Page opened, but editing could not start. Use Edit to retry.');
+      // Alpine may still be replacing the origin editor. Await its render and
+      // the lazy Tiptap mount before directing typing into the target.
+      if (typeof window !== 'undefined') await window.Alpine?.nextTick?.();
+      await this.mountDocRichEditor?.(this.docRichEditorMountEl);
+      await this.docRichEditorMountPromise;
+      if (this.selectedDocId !== targetId) return false;
+      const targetEditor = this.docRichEditorAdapter?.editor;
+      if (!targetEditor || targetEditor.isDestroyed) throw new Error('Page opened, but its editor is not ready. Use Edit to retry.');
+      targetEditor.commands.focus('start');
       return true;
     } catch (error) {
       this.error = error.message || 'Could not create and link page.';

@@ -35,7 +35,7 @@ async function seed(page, content = 'Notebook') {
     s.__events = [];
     s.createDocument = async (title, options) => {
       s.__events.push(['create', s.selectedDocId, options.channelId]);
-      const doc = { ...s.documents[0], record_id: 'wiki-created', title, content: 'New page body' };
+      const doc = { ...s.documents[0], record_id: 'wiki-created', title, content: options.initialContent };
       s.documents = [...s.documents, doc];
       return doc;
     };
@@ -67,11 +67,15 @@ test('wiki picker keyboard, Escape, mouse, ID roundtrip, rename/delete and selec
   await expect(picker).toBeHidden();
   await page.evaluate(() => { const s = window.Alpine.store('chat'); s.documents = s.documents.map((doc) => doc.record_id === 'wiki-target' ? { ...doc, title: 'Renamed plant list' } : doc); s.docRichEditorAdapter.refreshWikiLinks(); });
   await expect(editor.locator('[data-wiki-id="wiki-target"]')).toHaveText('Renamed plant list');
-  await editor.locator('[data-wiki-id="wiki-target"]').click();
+  // A native drag must not navigate, even when it returns to its starting point.
+  const box = await editor.locator('[data-wiki-id="wiki-target"]').boundingBox();
+  await page.mouse.move(box.x + 5, box.y + 5); await page.mouse.down();
+  await page.mouse.move(box.x + box.width + 30, box.y + 5, { steps: 6 });
+  await page.mouse.move(box.x + 5, box.y + 5, { steps: 6 }); await page.mouse.up();
   expect(await page.evaluate(() => window.Alpine.store('chat').selectedDocId)).toBe('wiki-home');
   await page.evaluate(() => { const s = window.Alpine.store('chat'); s.documents = s.documents.map((doc) => doc.record_id === 'wiki-target' ? { ...doc, record_state: 'deleted' } : doc); s.docRichEditorAdapter.refreshWikiLinks(); });
   await expect(editor.locator('.fd-wiki-unavailable')).toBeVisible();
-  await editor.locator('.fd-wiki-unavailable').click({ modifiers: [process.platform === 'darwin' ? 'Meta' : 'Control'] });
+  await editor.locator('.fd-wiki-unavailable').click();
   expect(await page.evaluate(() => window.Alpine.store('chat').selectedDocId)).toBe('wiki-home');
   // Mouse choice and native rich/source roundtrip retain the selected ID.
   await editor.click(); await page.keyboard.press('End'); await page.keyboard.type(' [[Home');
@@ -87,12 +91,17 @@ test('create saves origin before navigating, browser Back retains page links and
   await editor.click(); await page.keyboard.press('End'); await page.keyboard.type(' [[New page');
   await page.getByRole('listbox').getByRole('option').filter({ hasText: 'Create' }).click();
   await expect(page.locator('.doc-title-display')).toHaveText('New page');
+  await expect(editor).toHaveAttribute('contenteditable', 'true');
+  await expect(editor).toBeFocused();
+  expect(await page.evaluate(() => window.Alpine.store('chat').selectedDocument.content)).toBe('');
+  await page.keyboard.type('Immediate target typing');
+  await expect(editor).toHaveText('Immediate target typing');
   expect(await page.evaluate(() => window.Alpine.store('chat').__events)).toEqual([['create', 'wiki-home', 'wiki-channel'], ['save', 'wiki-home']]);
   await page.goBack();
   await expect(page.locator('.doc-title-display')).toHaveText('Home page');
   await expect(page.locator('[data-wiki-id="wiki-created"]')).toBeVisible();
   await page.evaluate(() => { const s = window.Alpine.store('chat'); s.docEditDraftDirty = true; window.Alpine.raw(s.docRichEditorAdapter.editor).commands.insertContent('Unsaved draft '); });
-  await page.locator('[data-wiki-id="wiki-target"]').click({ modifiers: [process.platform === 'darwin' ? 'Meta' : 'Control'] });
+  await page.locator('[data-wiki-id="wiki-target"]').click();
   await expect(page.locator('.doc-title-display')).toHaveText('Plant list');
   expect(await page.evaluate(() => window.Alpine.store('chat').__preserved)).toContain('Unsaved draft');
   await page.goBack(); await expect(page.locator('.doc-title-display')).toHaveText('Home page');
@@ -104,8 +113,21 @@ test('title-only paste resolves unique channel page; unresolved click offers cre
   await page.evaluate(() => { const s = window.Alpine.store('chat'); s.docRichEditorAdapter.refreshWikiLinks(); });
   await expect(page.locator('[data-wiki-id="wiki-target"]')).toBeVisible();
   await expect(page.locator('.fd-wiki-unresolved')).toHaveCount(2);
-  await page.locator('.fd-wiki-unresolved').filter({ hasText: 'Missing page' }).click({ modifiers: [process.platform === 'darwin' ? 'Meta' : 'Control'] });
+  await page.locator('.fd-wiki-unresolved').filter({ hasText: 'Missing page' }).click();
   await expect(page.locator('.doc-title-display')).toHaveText('Missing page');
+});
+
+test('ordinary click creates from the rich reader through edit access and keeps the origin link', async ({ page }) => {
+  await seed(page, '[[Reader page]]');
+  await page.evaluate(() => { const s = window.Alpine.store('chat'); s.docEditAccessState = 'ready'; s.docRichEditorAdapter.setEditable(false); });
+  await page.locator('.fd-wiki-unresolved').click();
+  await expect(page.locator('.doc-title-display')).toHaveText('Reader page');
+  const editor = page.locator('.doc-rich-editor .ProseMirror');
+  await expect(editor).toBeFocused();
+  await page.keyboard.type('Reader creation typing');
+  await expect(editor).toHaveText('Reader creation typing');
+  await page.goBack();
+  await expect(page.locator('[data-wiki-id="wiki-created"]')).toBeVisible();
 });
 
 test('mobile Home and All docs controls preserve channel and home fallback', async ({ page }) => {
@@ -141,4 +163,26 @@ test('wiki integrity text preserves real browser paragraph separators across tit
   expect(result.normalized).toBe(result.expected);
   expect(result.renamed).toBe(result.expected);
   expect(result.normalized).toContain('Plant list appears in ordinary prose.');
+});
+
+// Native touch events, rather than a narrow viewport alone.
+test.describe('touch wiki navigation', () => {
+  test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+  test('tap a newly typed closed link, type immediately, Back, then tap an existing link', async ({ page }) => {
+    await seed(page, '[Plant list](wiki:wiki-target)');
+    const editor = page.locator('.doc-rich-editor .ProseMirror');
+    await editor.tap(); await page.keyboard.press('End'); await page.keyboard.type(' [[Mobile page]]');
+    await editor.locator('.fd-wiki-unresolved').tap();
+    await expect(page.locator('.doc-title-display')).toHaveText('Mobile page');
+    await expect(editor).toBeFocused();
+    await expect(editor).toHaveAttribute('contenteditable', 'true');
+    expect(await page.evaluate(() => window.Alpine.store('chat').selectedDocument.content)).toBe('');
+    await page.keyboard.type('Mobile immediate typing');
+    await expect(editor).toHaveText('Mobile immediate typing');
+    await page.goBack();
+    await expect(page.locator('.doc-title-display')).toHaveText('Home page');
+    await expect(editor.locator('[data-wiki-id="wiki-created"]')).toBeVisible();
+    await editor.locator('[data-wiki-id="wiki-target"]').tap();
+    await expect(page.locator('.doc-title-display')).toHaveText('Plant list');
+  });
 });

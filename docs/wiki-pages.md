@@ -20,14 +20,14 @@ Type `[[` in prose to open the channel-local picker. Type a title to filter, use
 Up/Down and Enter to choose, or click a result. Escape dismisses it. Results
 include a short ID to distinguish duplicate titles. **Create “name”** creates a
 page in the originating channel, inserts its link, saves the originating page,
-then opens the new page. While creation is pending, repeated actions are gated and the originating editor
+then opens the empty titled page in a focused rich editor ready for typing. While creation is pending, repeated actions are gated and the originating editor
 pauses text entry until the link is inserted or the error is reported.
 If origin save fails, the page remains created and the link/draft stay open;
 retry Save, then follow the link. Errors appear through the normal app error UI.
 
-Links have a dotted underline. Click a link in read mode to open it. While
-editing, use Ctrl/Cmd-click (or focus the link and press Enter) to navigate;
-an ordinary click preserves editor selection. The existing local document draft
+Links have a dotted underline. Click or tap a link in read or edit mode to open it. No Ctrl/Cmd modifier is
+required. Dragging retains native selection without navigating; a focused link
+also supports Enter or Space. The existing local document draft
 path preserves unsaved work before navigating. Browser Back restores the previous
 page through the existing document route and draft restoration.
 

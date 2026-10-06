@@ -20,18 +20,33 @@ export const FlightDeckWikiLink = Node.create({
         dom.dataset.wikiTitle = current.attrs.title;
         dom.dataset.wikiId = current.attrs.documentId || '';
         dom.textContent = resolved.title || current.attrs.title;
-        dom.title = resolved.state === 'available' ? 'Open page (Ctrl/Cmd-click while editing)'
+        dom.title = resolved.state === 'available' ? 'Open page'
           : resolved.state === 'unresolved' ? 'Page does not exist. Click to create.'
           : resolved.state === 'ambiguous' ? 'Several pages have this title. Use the [[ picker to choose one.' : 'Page deleted or unavailable';
         dom.setAttribute('aria-label', `${dom.textContent}: ${resolved.state}`);
       };
       let pointerOrigin = null;
-      dom.addEventListener('pointerdown', (event) => { pointerOrigin = { x: event.clientX, y: event.clientY }; });
+      let dragged = false;
+      const pointerSurface = dom.ownerDocument;
+      const stopTracking = () => {
+        pointerSurface.removeEventListener('pointermove', trackDrag);
+        pointerSurface.removeEventListener('pointerup', stopTracking);
+        pointerSurface.removeEventListener('pointercancel', cancelPointer);
+      };
+      const trackDrag = (event) => {
+        if (pointerOrigin && Math.hypot(event.clientX - pointerOrigin.x, event.clientY - pointerOrigin.y) > 5) dragged = true;
+      };
+      const cancelPointer = () => { dragged = true; stopTracking(); };
+      dom.addEventListener('pointerdown', (event) => {
+        pointerOrigin = { x: event.clientX, y: event.clientY }; dragged = false;
+        pointerSurface.addEventListener('pointermove', trackDrag);
+        pointerSurface.addEventListener('pointerup', stopTracking);
+        pointerSurface.addEventListener('pointercancel', cancelPointer);
+      });
       const activate = (event) => {
-        // A drag selection and an ordinary click in editable prose retain native
-        // editor selection. Navigation requires an explicit modifier there.
-        if (event.type === 'click' && this.options.isEditing() && !event.ctrlKey && !event.metaKey) return;
-        if (event.type === 'click' && pointerOrigin && Math.hypot(event.clientX - pointerOrigin.x, event.clientY - pointerOrigin.y) > 5) return;
+        // Follow ordinary clicks/taps, but never turn a selection drag into navigation.
+        if (event.type === 'click' && (event.button !== 0 || dragged
+          || (pointerOrigin && Math.hypot(event.clientX - pointerOrigin.x, event.clientY - pointerOrigin.y) > 5))) return;
         event.preventDefault(); event.stopPropagation();
         const resolved = this.options.resolve(current.attrs);
         if (resolved.state === 'available') this.options.open(resolved.page.record_id);
@@ -42,7 +57,7 @@ export const FlightDeckWikiLink = Node.create({
       dom.addEventListener('keydown', (event) => { if (event.key === 'Enter' || event.key === ' ') activate(event); });
       editor.on('transaction', refresh);
       refresh();
-      return { dom, ignoreMutation: () => true, update(next) { if (next.type !== node.type) return false; current = next; refresh(); return true; }, destroy() { editor.off('transaction', refresh); } };
+      return { dom, ignoreMutation: () => true, update(next) { if (next.type !== node.type) return false; current = next; refresh(); return true; }, destroy() { editor.off('transaction', refresh); stopTracking(); } };
     };
   },
   addOptions() { return { resolve: () => ({ state: 'unavailable' }), open: () => {}, create: () => {}, error: () => {}, isEditing: () => false }; },
