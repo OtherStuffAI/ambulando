@@ -2936,6 +2936,41 @@
       "notes": [
         "Open cached pages and channel Home immediately, reconcile in the background without remounting the editor, and preserve local drafts and pending-save leases when navigating."
       ]
+    },
+    {
+      "buildNumber": 2226,
+      "label": "Simpler wiki navigation",
+      "notes": [
+        "Keep wiki link targets stable during editor focus and selection changes. Find All docs and Home settings in the document menu, with Home beside collapsed Backlinks."
+      ]
+    },
+    {
+      "buildNumber": 2227,
+      "label": "Mobile document creation controls",
+      "notes": [
+        "Keep search/options and New document visible in the mobile All docs view, including empty channels."
+      ]
+    },
+    {
+      "buildNumber": 2228,
+      "label": "First-click wiki link activation",
+      "notes": [
+        "Let wiki links handle the first ordinary mouse click without the editor selecting and refocusing the link first. Preserve drag selection, keyboard navigation and touch taps."
+      ]
+    },
+    {
+      "buildNumber": 2229,
+      "label": "Wiki menu polish",
+      "notes": [
+        "Remove the duplicate All documents breadcrumb from channel pages and disable the current Home action."
+      ]
+    },
+    {
+      "buildNumber": 2230,
+      "label": "Wiki text selection",
+      "notes": [
+        "Preserve text selection when Shift-clicking a wiki link in WebKit, while ordinary clicks still navigate immediately."
+      ]
     }
   ]
 }

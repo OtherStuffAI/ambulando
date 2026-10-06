@@ -145,20 +145,26 @@ test('ordinary click creates from the rich reader through edit access and keeps 
   await expect(page.locator('[data-wiki-id="wiki-created"]')).toBeVisible();
 });
 
-test('mobile Home and All docs controls preserve channel and home fallback', async ({ page }) => {
+async function allDocsFromMenu(page) {
+  await page.getByRole('button', { name: 'More actions', exact: true }).click();
+  await page.locator('.doc-actions-popover').getByRole('button', { name: 'All docs', exact: true }).click();
+}
+
+test('mobile Home footer and existing All docs menu preserve channel and home fallback', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await seed(page);
   const nav = page.getByRole('navigation', { name: 'Channel notebook' });
-  await expect(nav).toBeVisible();
-  await nav.getByRole('button', { name: 'All docs', exact: true }).click();
-  expect(await page.evaluate(() => ({ id: window.Alpine.store('chat').selectedDocId, channel: window.Alpine.store('chat').selectedChannelId }))).toEqual({ id: null, channel: 'wiki-channel' });
-  await nav.getByRole('button', { name: 'Home', exact: true }).click();
-  await expect(page.locator('.doc-title-display')).toHaveText('Home page');
+  await expect(page.locator('.docs-wiki-navigation')).toHaveCount(0);
+  await expect(nav.getByRole('button', { name: 'Backlinks (0)' })).toHaveAttribute('aria-expanded', 'false');
+  await expect(nav.getByRole('button', { name: 'Home', exact: true })).toHaveAttribute('aria-current', 'page');
   const box = await nav.boundingBox(); expect(box.x + box.width).toBeLessThanOrEqual(390);
-  await page.evaluate(() => { const s = window.Alpine.store('chat'); s.documents = s.documents.filter((doc) => doc.record_id !== 'wiki-home'); });
+  await allDocsFromMenu(page);
+  expect(await page.evaluate(() => ({ id: Alpine.store('chat').selectedDocId, channel: Alpine.store('chat').selectedChannelId }))).toEqual({ id: null, channel: 'wiki-channel' });
+  await page.locator('.mobile-section-switcher-btn[aria-label="Docs"]').click();
+  await expect(page.locator('.doc-title-display')).toHaveText('Home page');
+  await page.evaluate(() => { const s = Alpine.store('chat'); s.openDoc('wiki-target'); s.documents = s.documents.filter(doc => doc.record_id !== 'wiki-home'); });
   await nav.getByRole('button', { name: 'Home', exact: true }).click();
   await expect(page.locator('.docs-editor-v3')).toHaveCount(0);
-  await expect(nav).toContainText('Home page unavailable');
 });
 
 test('wiki integrity text preserves real browser paragraph separators across title changes', async ({ page }) => {
@@ -166,7 +172,7 @@ test('wiki integrity text preserves real browser paragraph separators across tit
   const result = await page.evaluate(() => {
     const s = window.Alpine.store('chat');
     const editor = document.querySelector('.doc-rich-editor .ProseMirror');
-    const before = editor.innerText;
+    const before = editor.innerText.trim();
     const labelOffset = before.lastIndexOf('Plant list');
     const expected = before.slice(0, labelOffset) + 'Saved label' + before.slice(labelOffset + 'Plant list'.length);
     const normalized = s.getVisibleDocRichEditorText();
@@ -215,10 +221,9 @@ for (const mobile of [false, true]) {
       const pages = [...s.documents];
       s.refreshDocuments = async () => { s.documents = pages; };
     });
-    const nav = page.getByRole('navigation', { name: 'Channel notebook' });
     const docs = mobile ? page.locator('.mobile-section-switcher-btn[aria-label="Docs"]')
       : page.locator('li').filter({ has: page.locator('.sidebar-label', { hasText: /^Docs$/ }) });
-    await nav.getByRole('button', { name: 'All docs', exact: true }).click();
+    await allDocsFromMenu(page);
     await expect(page.locator('.docs-editor-v3')).toHaveCount(0);
     await docs.click();
     await expect(page.locator('.doc-title-display')).toHaveText('Home page');
@@ -293,7 +298,7 @@ test('Docs route restores the requested channel Home and explicit All docs after
   });
   await expect(page.locator('.doc-title-display')).toHaveText('Home page');
   expect(await page.evaluate(() => Alpine.store('chat').selectedChannelId)).toBe('wiki-channel');
-  await page.getByRole('navigation', { name: 'Channel notebook' }).getByRole('button', { name: 'All docs', exact: true }).click();
+  await allDocsFromMenu(page);
   await expect(page).toHaveURL(/docsview=all/);
   await expect(page).toHaveURL(/channelid=wiki-channel/);
   await page.evaluate(() => { const s = Alpine.store('chat'); s.selectedChannelId = 'wrong-channel'; return s.applyRouteFromLocation(); });
@@ -348,7 +353,8 @@ test('creation failure clears feedback and restores a clickable retry without di
 
 for (const mobile of [false, true]) {
   test.describe(`local existing-link latency (touch: ${mobile})`, () => {
-    test.use({ viewport: { width: mobile ? 390 : 1280, height: 844 }, hasTouch: mobile, isMobile: mobile });
+    // Transport probes must reach Playwright rather than a service worker.
+    test.use({ serviceWorkers: 'block', viewport: { width: mobile ? 390 : 1280, height: 844 }, hasTouch: mobile, isMobile: mobile });
     for (const network of ['hanging', 'unavailable']) {
       test(`cached content and durable drafts navigate with ${network} reads, saves and leases`, async ({ page }, testInfo) => {
         const pending = [];
@@ -436,3 +442,85 @@ for (const mobile of [false, true]) {
     }
   });
 }
+
+for (const focused of [false, true]) {
+  test(`first single laptop click follows wiki atom (editor focused: ${focused})`, async ({ page }) => {
+    await seed(page, 'Before [Plant list](wiki:wiki-target) after');
+    const editor = page.locator('.doc-rich-editor .ProseMirror');
+    if (focused) await editor.click({ position: { x: 3, y: 3 } });
+    else await page.locator('.doc-title-display').click();
+    const link = page.locator('[data-wiki-id="wiki-target"]');
+    await link.evaluate(el => { window.__wikiLabel = el.firstChild; });
+    const box = await link.boundingBox();
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.down();
+    await page.waitForTimeout(80);
+    expect(await link.evaluate(el => el.firstChild === window.__wikiLabel)).toBe(true);
+    await page.mouse.up();
+    await expect(page.locator('.doc-title-display')).toHaveText('Plant list', { timeout: 1500 });
+  });
+}
+
+for (const touch of [false, true]) {
+  test.describe(`notebook menu and repeated first activation (touch: ${touch})`, () => {
+    test.use({ viewport: { width: touch ? 390 : 1280, height: 844 }, hasTouch: touch, isMobile: touch });
+    test('Home replace/clear, repeated native navigation, empty list creation controls', async ({ page }) => {
+      await seed(page, '[Plant list](wiki:wiki-target)');
+      await page.evaluate(() => {
+        const s = Alpine.store('chat'); s.pgBackendMode = true;
+        s.setChannelDocsHome = async id => { s.channels = s.channels.map(c => ({ ...c, metadata: { ...c.metadata, docs_home_document_id: id } })); return true; };
+      });
+      const activate = async locator => touch ? locator.tap() : locator.click();
+      const editor = page.locator('.doc-rich-editor .ProseMirror');
+      for (let i = 0; i < 4; i++) {
+        await activate(page.locator('.doc-title-display'));
+        await activate(editor.locator('[data-wiki-id="wiki-target"]'));
+        await expect(page.locator('.doc-title-display')).toHaveText('Plant list');
+        await activate(page.locator('.doc-notebook-footer').getByRole('button', { name: 'Home', exact: true }));
+        await expect(page.locator('.doc-title-display')).toHaveText('Home page');
+      }
+      await activate(editor.locator('[data-wiki-id="wiki-target"]'));
+      const menu = page.locator('.doc-actions-popover');
+      await activate(page.getByRole('button', { name: 'More actions', exact: true }));
+      await activate(menu.getByRole('button', { name: 'Set as home', exact: true }));
+      await expect(page.locator('.doc-notebook-footer').getByRole('button', { name: 'Home', exact: true })).toHaveAttribute('aria-current', 'page');
+      await activate(page.getByRole('button', { name: 'More actions', exact: true }));
+      await expect(menu.getByRole('button', { name: 'Current home page', exact: true })).toBeDisabled();
+      await expect(page.locator('.doc-editor-breadcrumbs')).toBeHidden();
+      await activate(menu.getByRole('button', { name: 'Clear home', exact: true }));
+      await expect(page.locator('.doc-notebook-footer').getByRole('button', { name: 'Home', exact: true })).toBeDisabled();
+      await allDocsFromMenu(page);
+      await expect(page.locator('.doc-actions-popover').getByRole('button', { name: 'Set as home', exact: true })).toHaveCount(0);
+      await page.evaluate(() => { Alpine.store('chat').documents = []; });
+      await expect(page.locator('.docs-editor-v3')).toHaveCount(0);
+      if (touch) await expect(page.locator('.docs-mobile-add-btn')).toBeVisible();
+      else await expect(page.locator('.docs-new-doc-btn')).toBeVisible();
+    });
+  });
+}
+
+test('native focus and keyboard selection retain wiki label hit target before first click', async ({ page }) => {
+  await seed(page, 'Before [Plant list](wiki:wiki-target) after');
+  const link = page.locator('[data-wiki-id="wiki-target"]');
+  await link.evaluate(el => { window.__wikiLabel = el.firstChild; });
+  await page.locator('.doc-title-display').click();
+  await page.locator('.doc-rich-editor .ProseMirror').click({ position: { x: 3, y: 3 } });
+  await page.keyboard.press('End');
+  await page.keyboard.type(' Draft');
+  expect(await link.evaluate(el => el.firstChild === window.__wikiLabel)).toBe(true);
+  await link.click();
+  await expect(page.locator('.doc-title-display')).toHaveText('Plant list');
+});
+
+test('native Shift selection across a wiki link does not navigate', async ({ page }) => {
+  await seed(page, 'Before [Plant list](wiki:wiki-target) after');
+  const editor = page.locator('.doc-rich-editor .ProseMirror');
+  await editor.click();
+  await page.keyboard.press('ArrowUp');
+  await page.keyboard.press('ArrowLeft');
+  await page.keyboard.down('Shift');
+  await page.locator('[data-wiki-id="wiki-target"]').click();
+  await page.keyboard.up('Shift');
+  expect(await page.evaluate(() => Alpine.store('chat').selectedDocId)).toBe('wiki-home');
+  expect(await page.evaluate(() => window.getSelection().toString())).not.toBe('');
+});

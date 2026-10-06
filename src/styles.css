@@ -11134,6 +11134,9 @@ html.wingman-iphone-webview .chat-channel-tab-scroll * {
 }
 
 @media (max-width: 640px) {
+  .docs-mobile-header-actions { display: inline-flex; align-items: center; gap: 0.35rem; }
+  .docs-mobile-toolbar-only { display: inline-flex; }
+
   .docs-toolbar {
     grid-column: 1 / -1;
     display: none;
@@ -24869,8 +24872,6 @@ button.task-desc-toggle:focus-visible {
 .chat-image-preview-modal:has(.file-preview-filename:not([style*="display: none"])) img { max-height: calc(92vh - 10rem); }
 .chat-image-preview-modal { overflow-y: auto; }
 
-.docs-wiki-navigation { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 8px 0 16px; }
-.docs-wiki-navigation button { min-height: 44px; }
 .fd-wiki-link { color: var(--accent, #528dcc); cursor: pointer; text-decoration: underline dotted; text-underline-offset: 3px; border-radius: 2px; }
 .fd-wiki-unresolved, .fd-wiki-ambiguous, .fd-wiki-unavailable { color: var(--text-muted, #986235); }
 .fd-wiki-unresolved::after { content: ' ?'; }
@@ -24884,6 +24885,8 @@ button.task-desc-toggle:focus-visible {
 
 .doc-backlinks { order: 10; border-top: 1px solid var(--border-color, #ddd); padding: 12px 0; }
 .doc-backlinks button { min-height: 44px; }
+.doc-notebook-footer { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.doc-notebook-footer [aria-current="page"] { color: var(--accent); border-color: currentColor; }
 #doc-backlinks-list { display: flex; flex-wrap: wrap; gap: 8px; padding-top: 8px; }
 .wiki-create-status { padding: 12px; background: #eaf1ff; color: #153a75; }
 .fd-wiki-link[aria-disabled="true"] { opacity: .55; cursor: progress; }

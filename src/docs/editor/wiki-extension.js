@@ -20,7 +20,10 @@ export const FlightDeckWikiLink = Node.create({
         dom.className = `fd-wiki-link fd-wiki-${resolved.state}`;
         dom.dataset.wikiTitle = current.attrs.title;
         dom.dataset.wikiId = current.attrs.documentId || resolved.page?.record_id || '';
-        dom.textContent = resolved.title || current.attrs.title;
+        // Focus/selection transactions run between mouse-down and click. Keep the
+        // native hit target stable when its label has not changed.
+        const title = resolved.title || current.attrs.title;
+        if (dom.textContent !== title) dom.textContent = title;
         dom.title = resolved.state === 'available' ? 'Open page'
           : resolved.state === 'unresolved' ? 'Page does not exist. Click to create.'
           : resolved.state === 'ambiguous' ? 'Several pages have this title. Use the [[ picker to choose one.' : 'Page deleted or unavailable';
@@ -44,9 +47,19 @@ export const FlightDeckWikiLink = Node.create({
         pointerSurface.addEventListener('pointerup', stopTracking);
         pointerSurface.addEventListener('pointercancel', cancelPointer);
       });
+      dom.addEventListener('mousedown', (event) => {
+        if (event.button !== 0 || !event.shiftKey) return;
+        // A focusable atom steals WebKit's native text selection. Extend the
+        // editor selection from its existing anchor instead of focusing the link.
+        event.preventDefault(); event.stopPropagation();
+        const anchor = editor.state.selection.anchor;
+        const pos = getPos();
+        editor.commands.setTextSelection({ from: anchor, to: pos < anchor ? pos : pos + current.nodeSize });
+        editor.view.focus();
+      });
       const activate = (event) => {
         // Follow ordinary clicks/taps, but never turn a selection drag into navigation.
-        if (event.type === 'click' && (event.button !== 0 || dragged
+        if (event.type === 'click' && (event.button !== 0 || event.shiftKey || dragged
           || (pointerOrigin && Math.hypot(event.clientX - pointerOrigin.x, event.clientY - pointerOrigin.y) > 5))) return;
         event.preventDefault(); event.stopPropagation();
         if (this.options.isBusy()) return;
@@ -59,7 +72,12 @@ export const FlightDeckWikiLink = Node.create({
       dom.addEventListener('keydown', (event) => { if (event.key === 'Enter' || event.key === ' ') activate(event); });
       editor.on('transaction', refresh);
       refresh();
-      return { dom, ignoreMutation: () => true, update(next) { if (next.type !== node.type) return false; current = next; refresh(); return true; }, destroy() { editor.off('transaction', refresh); stopTracking(); } };
+      return { dom,
+        // The link owns activation. ProseMirror's atom mouse-down handler can
+        // select/refocus it before click, swallowing the first native activation.
+        // Leave Shift selection, keyboard movement and native drags available.
+        stopEvent: (event) => event.type === 'mousedown' && event.button === 0 && !event.shiftKey,
+        ignoreMutation: () => true, update(next) { if (next.type !== node.type) return false; current = next; refresh(); return true; }, destroy() { editor.off('transaction', refresh); stopTracking(); } };
     };
   },
   addOptions() { return { resolve: () => ({ state: 'unavailable' }), open: () => {}, create: () => {}, error: () => {}, isBusy: () => false, isEditing: () => false }; },
