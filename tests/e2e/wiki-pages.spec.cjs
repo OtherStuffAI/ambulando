@@ -1,12 +1,21 @@
 const { test, expect } = require('playwright/test');
 
-async function seed(page, content = 'Notebook') {
+async function seed(page, content = 'Notebook', durable = false) {
   await page.goto('/');
   await page.waitForFunction(() => window.Alpine?.store?.('chat'));
-  await page.evaluate(async (content) => {
+  await page.evaluate(async ({ content, durable }) => {
     const s = window.Alpine.store('chat');
+    s.__navigationOriginals = Object.fromEntries(['hydrateSelectedDocWithRetry', 'inspectSelectedDocEditLease', 'persistSelectedDocDraft', 'restoreSelectedDocDraft', 'loadDocComments'].map(name => [name, s[name]]));
     const owner = 'npub1wikibrowsertest';
     s.session = { ...(s.session || {}), npub: owner };
+    if (durable) {
+      const key = `wiki-navigation-${crypto.randomUUID()}`;
+      s.knownWorkspaces = [{ workspaceKey: key, workspaceId: key, workspaceOwnerNpub: owner, directHttpsUrl: 'http://127.0.0.1:3100', appNpub: 'flightdeck_pg', pgBackendMode: true }];
+      for (const name of ['startWorkspaceLiveQueries', 'startSharedLiveQueries', 'stopWorkspaceLiveQueries', 'ensureWorkspaceSessionKey', 'loadLocalWorkspaceCoreData', 'persistWorkspaceSettings', 'refreshWorkspaceSettings', 'refreshLegacyWorkspaceRecovery']) s[name] = async () => {};
+      await s.selectWorkspace(key, { skipPgVerification: true });
+      s.__draftDbName = `wingman-fd-ws-${key}`;
+    }
+
     s.canManageChannel = () => true;
     s.openConnectModal = () => {};
     s.showConnectModal = false;
@@ -49,7 +58,7 @@ async function seed(page, content = 'Notebook') {
     s.navSection = 'docs';
     s.openDoc('wiki-home');
     // Open is immediately editable; no manual Edit or target lease wait.
-  }, content);
+  }, { content, durable });
   await expect(page.locator('.doc-rich-editor .ProseMirror')).toBeVisible();
   // Finish the unauthenticated shell route before the seeded notebook starts.
   // Otherwise an opening during routeSyncPaused never enters browser history.
@@ -242,6 +251,7 @@ test('Docs Home cannot override an explicit page opened during its delayed refre
     const s = window.Alpine.store('chat');
     s.startWorkspaceLiveQueries = () => {}; s.ensureBackgroundSync = () => {};
     s.refreshDocuments = () => new Promise(resolve => { window.finishHomeRefresh = resolve; });
+    s.documents = s.documents.filter(doc => doc.record_id !== 'wiki-home');
     s.navigateTo('docs'); s.openDoc('wiki-target'); window.finishHomeRefresh();
   });
   await expect(page.locator('.doc-title-display')).toHaveText('Plant list');
@@ -334,3 +344,95 @@ test('creation failure clears feedback and restores a clickable retry without di
   await page.locator('.fd-wiki-unresolved').press('Enter');
   await expect(page.locator('.doc-title-display')).toHaveText('Retry page');
 });
+
+
+for (const mobile of [false, true]) {
+  test.describe(`local existing-link latency (touch: ${mobile})`, () => {
+    test.use({ viewport: { width: mobile ? 390 : 1280, height: 844 }, hasTouch: mobile, isMobile: mobile });
+    for (const network of ['hanging', 'unavailable']) {
+      test(`cached content and durable drafts navigate with ${network} reads, saves and leases`, async ({ page }, testInfo) => {
+        const pending = [];
+        let requests = 0;
+        await page.route('**/api/wiki-navigation-probe**', async route => {
+          requests++;
+          if (network === 'unavailable') return route.abort();
+          await new Promise(resolve => pending.push(resolve));
+          await route.fulfill({ contentType: 'application/json', body: '{}' }).catch(() => {});
+        });
+        try {
+          await seed(page, '[Plant list](wiki:wiki-target)', true);
+          await page.evaluate(() => {
+            const s = Alpine.store('chat');
+            s.persistSelectedDocDraft = s.__navigationOriginals.persistSelectedDocDraft;
+            s.restoreSelectedDocDraft = s.__navigationOriginals.restoreSelectedDocDraft;
+            s.hydrateSelectedDocWithRetry = s.__navigationOriginals.hydrateSelectedDocWithRetry;
+            s.loadDocComments = s.__navigationOriginals.loadDocComments;
+            s.requestTowerSyncFamily = async (family, id) => {
+              await fetch(`/api/wiki-navigation-probe?family=${family}&id=${id}`);
+              return s.documents.find(doc => doc.record_id === id);
+            };
+            s.prefetchFlightDeckDoc = (id) => s.requestTowerSyncFamily('document', id);
+            s.inspectSelectedDocEditLease = () => fetch('/api/wiki-navigation-probe?lease');
+            s.refreshDocuments = () => fetch('/api/wiki-navigation-probe?collection');
+            s.saveSelectedDocItem = () => fetch('/api/wiki-navigation-probe?save');
+            s.pgDocSavePromises = { 'wiki-home': new Promise(() => {}) };
+            s.ensureBackgroundSync = () => {};
+            s.startDocCommentsLiveQuery = () => {};
+            s.scheduleDocAutosave = () => {};
+            s.handleDocRichEditIntent = () => {};
+          });
+          const editor = page.locator('.doc-rich-editor .ProseMirror');
+          await editor.click(); await page.keyboard.press('End'); await page.keyboard.type(' Durable local draft');
+          const measure = async (locator, expected, tap = mobile) => {
+            await page.evaluate(expected => {
+              window.__navProbe = { expected, clickAt: null, visibleAt: null, pointerAt: null };
+              document.addEventListener('pointerup', () => { window.__navProbe.pointerAt = performance.now(); }, { capture: true, once: true });
+              document.addEventListener('click', () => { window.__navProbe.clickAt = performance.now(); }, { capture: true, once: true });
+              const observe = () => {
+                const el = document.querySelector('.doc-rich-editor .ProseMirror');
+                if (window.__navProbe.clickAt !== null && el?.innerText.includes(expected) && el.getBoundingClientRect().height) {
+                  window.__navProbe.visibleAt = performance.now();
+                } else requestAnimationFrame(observe);
+              };
+              requestAnimationFrame(observe);
+            }, expected);
+            if (tap) await locator.tap(); else await locator.click();
+            await page.waitForFunction(() => window.__navProbe.visibleAt !== null);
+            return page.evaluate(() => ({
+              clickToContentMs: window.__navProbe.visibleAt - window.__navProbe.clickAt,
+              pointerToContentMs: window.__navProbe.visibleAt - window.__navProbe.pointerAt,
+              stages: Alpine.store('chat').wikiNavigationTiming?.stages,
+            }));
+          };
+          const link = await measure(page.locator('[data-wiki-id="wiki-target"]'), 'Plant details');
+          expect(link.clickToContentMs).toBeLessThan(200);
+          await expect(page.locator('.doc-title-display')).toHaveText('Plant list');
+          const draft = await page.evaluate(async () => {
+            const s = Alpine.store('chat');
+            const db = await new Promise((resolve, reject) => { const req = indexedDB.open(s.__draftDbName); req.onsuccess = () => resolve(req.result); req.onerror = () => reject(req.error); });
+            const rows = await new Promise((resolve, reject) => { const req = db.transaction('document_drafts').objectStore('document_drafts').getAll(); req.onsuccess = () => resolve(req.result); req.onerror = () => reject(req.error); });
+            db.close(); return rows;
+          });
+          expect(draft.find(row => row.document_id === 'wiki-home')?.content).toContain('Durable local draft');
+          await page.getByRole('button', { name: 'Backlinks (1)', exact: true }).click();
+          const backlink = await measure(page.locator('#doc-backlinks-list').getByRole('button', { name: 'Home page' }), 'Durable local draft');
+          expect(backlink.clickToContentMs).toBeLessThan(200);
+          await page.goBack();
+          await expect(editor).toContainText('Plant details');
+          const home = await measure(page.getByRole('navigation', { name: 'Channel notebook' }).getByRole('button', { name: 'Home', exact: true }), 'Durable local draft');
+          expect(home.clickToContentMs).toBeLessThan(200);
+          // Several selection changes in one turn must not let an earlier visit win.
+          await page.evaluate(() => { const s = Alpine.store('chat'); s.openDoc('wiki-target'); s.openDoc('wiki-home'); s.openDoc('wiki-target'); });
+          await expect(editor).toContainText('Plant details');
+          await expect(editor).toHaveCount(1);
+          await expect.poll(() => requests).toBeGreaterThan(0);
+          const evidence = { mobile, network, link, backlink, home, interceptedRequests: requests, boundary: 'Native served UI; synthetic isolated workspace, real IndexedDB draft writes/restoration, delayed/aborted transport probes. No live user-data writes.' };
+          console.log('WIKI_LOCAL_NAVIGATION', JSON.stringify(evidence));
+          await testInfo.attach('wiki-local-navigation.json', { body: JSON.stringify(evidence, null, 2), contentType: 'application/json' });
+        } finally {
+          pending.forEach(resolve => resolve());
+        }
+      });
+    }
+  });
+}

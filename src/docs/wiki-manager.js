@@ -34,15 +34,28 @@ export const wikiManagerMixin = {
     if (this.wikiCreateBusy) return false;
     const target = this.resolveDocWikiLink({ documentId }).page;
     if (!target) { this.error = 'Page deleted or unavailable.'; return false; }
+    const started = performance.now();
+    this.wikiNavigationTiming = { documentId, stages: [{ stage: 'link activated', elapsedMs: 0 }] };
+    const timing = this.wikiNavigationTiming;
+    const stage = (name) => {
+      if (this.wikiNavigationTiming === timing) timing.stages.push({ stage: name, elapsedMs: performance.now() - started });
+    };
     const originId = this.selectedDocId;
     const channelId = this.selectedChannelId;
     const workspace = this.currentWorkspace;
     const visit = this.docsHomeVisit;
     if (!await this.preserveWikiNavigationDraft()) return false;
+    stage('local draft preserved');
     if (originId !== this.selectedDocId || channelId !== this.selectedChannelId || workspace !== this.currentWorkspace
       || visit !== this.docsHomeVisit || this.navSection !== 'docs') return false;
     if (this.selectedDocId === target.record_id) return true;
-    this.openDoc(target.record_id, options);
+    this.openDoc(target.record_id, { ...options, draftPreserved: true });
+    stage('local selection loaded');
+    if (typeof window !== 'undefined') {
+      await window.Alpine?.nextTick?.();
+      await this.docRichEditorMountPromise;
+      if (this.selectedDocId === target.record_id) stage('editor mounted');
+    }
     return true;
   },
   async createDocWikiPage(title, range, editor) {
@@ -133,6 +146,10 @@ export const wikiManagerMixin = {
     this.docsShowAll = false;
     const visit = ++this.docsHomeVisit;
     if (!homeId) { await this.openChannelAllDocs(options); return false; }
+    // An available Home is already in the local collection. Refresh only when
+    // resolving a missing target; openDoc reconciles the selected page later.
+    const cachedHome = resolveWikiPage(this.documents, channelId, { documentId: homeId }).page;
+    if (cachedHome) return this.followDocWikiLink(cachedHome.record_id, options);
     try { await this.refreshDocuments?.(); }
     catch (error) { this.error = error.message || 'Could not load channel pages.'; return false; }
     if (visit !== this.docsHomeVisit || channelId !== this.selectedChannelId || workspace !== this.currentWorkspace || homeId !== this.channelDocsHomeId

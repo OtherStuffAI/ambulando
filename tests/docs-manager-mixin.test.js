@@ -491,9 +491,47 @@ describe('docsManagerMixin comment drawer', () => {
 
     expect(prefetchFlightDeckDoc).toHaveBeenCalledWith('doc-1');
     expect(store.selectedDocument.content).toBe('');
-    expect(store.docEditorTitle).toBe('Fresh doc');
+    await vi.waitFor(() => expect(store.docEditorTitle).toBe('Fresh doc'));
     expect(store.docEditorContent).toBe('# Fresh');
     expect(store.docEditorBlocks).toMatchObject([{ raw: '# Fresh' }]);
+  });
+
+  it('rejects a late hydration from an earlier visit to the same page or another workspace', async () => {
+    isTowerPgBackendModeMock.mockReturnValue(true);
+    const replies = [];
+    const store = createStore({
+      documents: [{ record_id: 'a' }, { record_id: 'b' }],
+      currentWorkspace: { workspaceId: 'one' },
+      hydrateSelectedDocWithRetry: vi.fn(() => new Promise(resolve => replies.push(resolve))),
+      applySelectedDocAuthoritativeContent: vi.fn(),
+    });
+    store.openDoc('a'); store.openDoc('b'); store.openDoc('a');
+    replies[0]({ record_id: 'a', content: 'Old visit' });
+    replies[1]({ record_id: 'b', content: 'Wrong page' });
+    await Promise.resolve(); await Promise.resolve();
+    expect(store.applySelectedDocAuthoritativeContent).not.toHaveBeenCalled();
+    store.currentWorkspace = { workspaceId: 'two' };
+    replies[2]({ record_id: 'a', content: 'Wrong workspace' });
+    await Promise.resolve(); await Promise.resolve();
+    expect(store.applySelectedDocAuthoritativeContent).not.toHaveBeenCalled();
+  });
+
+  it('refreshes a clean local page in place without remounting and waits for local draft restoration', async () => {
+    isTowerPgBackendModeMock.mockReturnValue(true);
+    let restore;
+    const draftRestore = new Promise(resolve => { restore = resolve; });
+    const store = createStore({
+      documents: [{ record_id: 'a', content: 'Cached' }],
+      docDraftRestorePromise: draftRestore,
+      hydrateSelectedDocWithRetry: vi.fn(async () => ({ record_id: 'a', content: 'Fresh' })),
+      applySelectedDocAuthoritativeContent: vi.fn(),
+    });
+    store.openDoc('a');
+    await Promise.resolve();
+    expect(store.applySelectedDocAuthoritativeContent).not.toHaveBeenCalled();
+    restore();
+    await vi.waitFor(() => expect(store.applySelectedDocAuthoritativeContent).toHaveBeenCalledOnce());
+    expect(store.loadDocEditorFromSelection).toHaveBeenCalledOnce();
   });
 
   it('keeps an inline storage preview read-only while the typed body is still hydrating', async () => {
@@ -2395,6 +2433,29 @@ describe('docsManagerMixin durable recovery drafts', () => {
         document_id: record.record_id,
       });
     });
+  });
+
+  it('checkpoints a wiki draft durably while a pending save never gates selection or prematurely releases its lease', async () => {
+    const outgoingModel = richDocContentModel('Durable outgoing typing');
+    const { record, store } = createSyncedPgDocSaveStore({ currentModel: outgoingModel });
+    const next = { ...record, record_id: 'doc-next', content: 'Local target' };
+    store.documents = [record, next];
+    store.selectedChannelId = record.pg_channel_id;
+    store.navSection = 'docs'; store.docsHomeVisit = 0;
+    let finish;
+    store.pgDocSavePromises = { [record.record_id]: new Promise(resolve => { finish = resolve; }) };
+    store.hydrateSelectedDocWithRetry = vi.fn(() => new Promise(() => {}));
+    store.inspectSelectedDocEditLease = vi.fn();
+    store.loadDocEditorFromSelection = vi.fn();
+    const persist = vi.spyOn(store, 'persistSelectedDocDraft');
+    releaseTowerPgEditLeaseMock.mockClear();
+    expect(await store.followDocWikiLink(next.record_id)).toBe(true);
+    expect(store.selectedDocId).toBe(next.record_id);
+    expect(persist).toHaveBeenCalledOnce();
+    expect(await getDocumentDraft('workspace-1', record.record_id)).toMatchObject({ content: outgoingModel.content });
+    expect(releaseTowerPgEditLeaseMock).not.toHaveBeenCalled();
+    delete store.pgDocSavePromises[record.record_id]; finish();
+    await vi.waitFor(() => expect(releaseTowerPgEditLeaseMock).toHaveBeenCalledOnce());
   });
 
   it('restores a stale-base local draft as an editable recovery conflict', async () => {

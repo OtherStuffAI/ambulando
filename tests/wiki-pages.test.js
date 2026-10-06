@@ -65,7 +65,7 @@ describe('channel wiki pages', () => {
     const s = store(); s.docEditDraftDirty = true;
     await s.followDocWikiLink('page-a');
     expect(s.persistSelectedDocDraft).toHaveBeenCalledWith({ immediate: true });
-    expect(s.openDoc).toHaveBeenCalledWith('page-a', {});
+    expect(s.openDoc).toHaveBeenCalledWith('page-a', { draftPreserved: true });
     s.openDoc.mockClear(); s.persistSelectedDocDraft.mockRejectedValue(new Error('disk failed'));
     expect(await s.followDocWikiLink('page-a')).toBe(false);
     expect(s.openDoc).not.toHaveBeenCalled();
@@ -135,12 +135,23 @@ describe('channel wiki pages', () => {
     expect(await s.setChannelDocsHome('page-a')).toBe(false); expect(s.error).toBe('Forbidden');
   });
   it('defaults to available home, falls back for deleted home and cancels late home after All docs', async () => {
-    const s = store(); await s.openChannelDocsHome(); expect(s.openDoc).toHaveBeenCalledWith('page-a', {});
+    const s = store(); await s.openChannelDocsHome(); expect(s.openDoc).toHaveBeenCalledWith('page-a', { draftPreserved: true });
     s.openDoc.mockClear(); s.documents[0].record_state = 'deleted'; await s.openChannelDocsHome(); expect(s.closeDocEditor).toHaveBeenCalled(); expect(s.openDoc).not.toHaveBeenCalled();
-    s.documents[0].record_state = 'active';
+    s.documents = [];
     let finish; s.refreshDocuments.mockImplementation(() => new Promise((resolve) => { finish = resolve; }));
     const opening = s.openChannelDocsHome(); await s.openChannelAllDocs(); finish(); await opening;
     expect(s.openDoc).not.toHaveBeenCalled(); expect(s.docsShowAll).toBe(true);
+  });
+  it('opens cached Home while refresh, save and lease promises never settle', async () => {
+    const s = store();
+    s.refreshDocuments.mockImplementation(() => new Promise(() => {}));
+    s.saveSelectedDocItem.mockImplementation(() => new Promise(() => {}));
+    s.enterSelectedDocEditMode.mockImplementation(() => new Promise(() => {}));
+    expect(await s.openChannelDocsHome()).toBe(true);
+    expect(s.refreshDocuments).not.toHaveBeenCalled();
+    expect(s.saveSelectedDocItem).not.toHaveBeenCalled();
+    expect(s.enterSelectedDocEditMode).not.toHaveBeenCalled();
+    expect(s.openDoc).toHaveBeenCalledWith('page-a', { draftPreserved: true });
   });
   it('All docs and unavailable Home preserve drafts before closing, and refuse navigation on persistence failure', async () => {
     const s = store(); s.docEditDraftDirty = true;
@@ -171,7 +182,7 @@ describe('channel wiki pages', () => {
   });
 
   it.each(['channel', 'workspace', 'home', 'document'])('cancels delayed home when %s context changes', async (change) => {
-    const s = store(); s.currentWorkspace = { workspaceId: 'workspace' };
+    const s = store(); s.currentWorkspace = { workspaceId: 'workspace' }; s.documents = [];
     let finish; s.refreshDocuments.mockImplementation(() => new Promise((resolve) => { finish = resolve; }));
     const opening = s.openChannelDocsHome();
     if (change === 'channel') s.selectedChannelId = 'other-channel';

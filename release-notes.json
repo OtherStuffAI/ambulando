@@ -2929,6 +2929,13 @@
       "notes": [
         "Recognize closed wiki links while edit access is being acquired, retaining local drafts and canonical save enforcement."
       ]
+    },
+    {
+      "buildNumber": 2225,
+      "label": "Local wiki page navigation",
+      "notes": [
+        "Open cached pages and channel Home immediately, reconcile in the background without remounting the editor, and preserve local drafts and pending-save leases when navigating."
+      ]
     }
   ]
 }

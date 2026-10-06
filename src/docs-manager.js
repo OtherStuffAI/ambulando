@@ -899,6 +899,12 @@ export const docsManagerMixin = {
   openDoc(recordId, options = {}) {
     this.commentVisibleCount = this.commentPageSize || 80;
     const nextRecordId = String(recordId || '').trim();
+    const visit = Number(this.docOpenGeneration || 0) + 1;
+    this.docOpenGeneration = visit;
+    const workspace = this.currentWorkspace;
+    const isCurrent = () => this.docOpenGeneration === visit
+      && this.currentWorkspace === workspace
+      && this.selectedDocType === 'document' && this.selectedDocId === nextRecordId;
     const isNewDetailEntry = this.selectedDocType !== 'document' || !this.selectedDocId;
     if (isNewDetailEntry || options.captureOrigin === false) {
       const browserRoute = typeof window === 'undefined'
@@ -926,17 +932,14 @@ export const docsManagerMixin = {
     this.chatDocModalFullScreen = false;
     const previousRecord = this.selectedDocType === 'document' ? this.selectedDocument : null;
     const previousRecordId = String(previousRecord?.record_id || this.selectedDocId || '').trim();
+    let draftPromise = null;
     if (previousRecordId && previousRecordId !== nextRecordId) {
-      if (this.docEditDraftDirty) void this.persistSelectedDocDraft({ immediate: true });
+      if (this.docEditDraftDirty && !options.draftPreserved) draftPromise = this.persistSelectedDocDraft({ immediate: true });
       this.cancelDocLocalDraftPersistence();
       this.cancelDocAutosave();
     }
     if (previousRecord?.record_id && previousRecord.record_id !== nextRecordId) {
-      if (isTowerPgBackendMode()) {
-        void releasePgEditLeaseForRecord(this, previousRecord, 'document', { reportError: false });
-      } else {
-        void this.releaseLockManagedCheckout(previousRecord, recordFamilyHash('document'), { reportError: false });
-      }
+      void this.releaseSelectedDocLeaseWhenSafe(previousRecord, { draftPromise, reportError: false });
     }
     if (previousRecordId && previousRecordId !== nextRecordId) {
       this.stopDocCommentsLiveQuery?.();
@@ -966,37 +969,51 @@ export const docsManagerMixin = {
       [recordId]: false,
     };
     this.loadDocEditorFromSelection();
-    if (isTowerPgBackendMode() && document) void this.inspectSelectedDocEditLease(document);
-    if (isTowerPgBackendMode()) {
-      const hydrateDoc = this.hydrateSelectedDocWithRetry(recordId);
-      void Promise.resolve(hydrateDoc)
-        .then((fresh) => {
-          if (!fresh || this.selectedDocType !== 'document' || this.selectedDocId !== recordId) return;
-          // Opening a PG document starts an asynchronous authoritative hydration.
-          // Never let that late response replace a draft after the user has
-          // already entered edit mode and begun typing or pasting.
-          if (!this.docEditDraftDirty
-            && this.docEditAccessState !== 'acquiring'
-            && this.docEditAccessState !== 'editing'
-            && this.docEditAccessState !== 'recovery'
-            && this.docAutosaveState !== 'saving') {
-            this.loadDocEditorFromSelection(fresh);
-            void this.inspectSelectedDocEditLease(fresh);
-          }
-          void this.loadSelectedDocRecoveries?.();
-          this.markDocRead?.(recordId);
-        })
-        .catch((error) => {
-          console.warn('[flightdeck] PG document refresh failed after open', error);
-        });
-    }
-    this.loadDocComments(recordId, {
-      allowBackfill: options.allowCommentBackfill !== false,
-      force: true,
-    });
-    if (!isTowerPgBackendMode() && document) this.markDocRead?.(recordId);
+    const openedTitle = this.docEditorTitle;
+    const openedContent = this.docEditorContent;
+    const draftRestore = this.docDraftRestorePromise;
     if (options.syncRoute !== false) this.syncRoute();
-    if (options.ensureSync !== false) this.ensureBackgroundSync(true);
+    // Yield through Alpine's editor mount and a paint before preparing network
+    // reads/signatures. Local content never waits for lease, body or comments.
+    const reconcile = async () => {
+      if (!isCurrent()) return;
+      if (isTowerPgBackendMode() && document) void this.inspectSelectedDocEditLease(document);
+      if (isTowerPgBackendMode()) {
+        void this.hydrateSelectedDocWithRetry(recordId, { isCurrent })
+          .then(async (fresh) => {
+            await draftRestore;
+            if (!fresh || fresh.record_id !== recordId || !isCurrent()) return;
+            if (!this.docEditDraftDirty
+              && this.docEditorTitle === openedTitle && this.docEditorContent === openedContent
+              && !this.docLocalDraft
+              && this.docEditAccessState !== 'acquiring'
+              && this.docEditAccessState !== 'editing'
+              && this.docEditAccessState !== 'recovery'
+              && this.docAutosaveState !== 'saving'
+              && isDocumentContentReadyForEditor(fresh)) {
+              // Update the mounted editor in place. A cached prefetch response
+              // must not destroy and lazily remount the editor we just opened.
+              this.applySelectedDocAuthoritativeContent(fresh, { preserveSelection: true });
+            }
+            void this.loadSelectedDocRecoveries?.();
+            this.markDocRead?.(recordId);
+          })
+          .catch((error) => console.warn('[flightdeck] PG document refresh failed after open', error));
+      }
+      void this.loadDocComments(recordId, {
+        allowBackfill: options.allowCommentBackfill !== false,
+        force: true,
+      });
+      if (!isTowerPgBackendMode() && document) this.markDocRead?.(recordId);
+      if (options.ensureSync !== false) this.ensureBackgroundSync(true);
+    };
+    if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
+      void Promise.resolve(window.Alpine?.nextTick?.()).then(() => {
+        window.requestAnimationFrame(() => { setTimeout(() => { void reconcile(); }, 0); });
+      });
+    } else {
+      void reconcile();
+    }
   },
 
   async openAllDocuments() {
@@ -1009,7 +1026,7 @@ export const docsManagerMixin = {
 
   async releaseSelectedDocLeaseWhenSafe(record, options = {}) {
     if (!record?.record_id) return false;
-    await Promise.resolve(options.draftPromise).catch((error) => {
+    if (options.draftPromise) await Promise.resolve(options.draftPromise).catch((error) => {
       this.docEditAccessMessage = `Local draft could not be saved: ${error?.message || error}`;
     });
     // A PG save owns the lease until Tower has accepted or rejected it. Wait for
@@ -1224,18 +1241,24 @@ export const docsManagerMixin = {
     this.scheduleDocCommentConnectorUpdate();
     this.scheduleStorageImageHydration();
     const restoreGeneration = Number(this.docEditAccessGeneration || 0);
-    void this.restoreSelectedDocDraft(item, { generation: restoreGeneration });
+    this.docDraftRestorePromise = this.restoreSelectedDocDraft(item, { generation: restoreGeneration });
+    void this.docDraftRestorePromise.catch((error) => {
+      if (this.selectedDocId === item.record_id && this.docEditAccessGeneration === restoreGeneration) {
+        this.error = `Local draft could not be restored: ${error?.message || error}`;
+      }
+    });
   },
 
   async hydrateSelectedDocWithRetry(recordId, options = {}) {
     const targetId = String(recordId || '').trim();
     if (!targetId || !isTowerPgBackendMode()) return null;
     const delays = Array.isArray(options.delays) ? options.delays : DOCUMENT_BODY_RETRY_DELAYS_MS;
+    const isCurrent = options.isCurrent || (() => this.selectedDocType === 'document' && this.selectedDocId === targetId);
     let latest = null;
     for (let attempt = 0; attempt < delays.length; attempt += 1) {
       const delay = Number(delays[attempt]) || 0;
       if (delay > 0) await waitForDocumentRetry(delay);
-      if (this.selectedDocType !== 'document' || this.selectedDocId !== targetId) return latest;
+      if (!isCurrent()) return null;
       try {
         latest = typeof this.prefetchFlightDeckDoc === 'function'
           ? await (attempt > 0
@@ -1248,17 +1271,19 @@ export const docsManagerMixin = {
           console.warn('[flightdeck] PG document body hydration exhausted retries', error);
         }
       }
+      if (!isCurrent()) return null;
       const row = latest || this.documents.find((candidate) => candidate.record_id === targetId) || null;
       if (isDocumentContentReadyForEditor(row)) return row;
     }
     let stalled = this.documents.find((candidate) => candidate.record_id === targetId) || latest;
-    if (stalled && this.selectedDocId === targetId) {
+    if (stalled && isCurrent()) {
       const failed = {
         ...stalled,
         content_storage_status: 'error',
         content_storage_error: stalled.content_storage_error || 'Complete document body did not load after retrying.',
       };
       await upsertDocument(failed);
+      if (!isCurrent()) return null;
       this.patchDocumentLocal?.(failed);
       this.docEditAccessMessage = 'The complete Tower body could not be loaded. Edits can still be saved safely as a recovery draft.';
       stalled = failed;
