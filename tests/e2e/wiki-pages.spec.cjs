@@ -51,6 +51,11 @@ async function seed(page, content = 'Notebook') {
     await s.enterSelectedDocEditMode();
   }, content);
   await expect(page.locator('.doc-rich-editor .ProseMirror')).toBeVisible();
+  // Finish the unauthenticated shell route before the seeded notebook starts.
+  // Otherwise an opening during routeSyncPaused never enters browser history.
+  await page.waitForFunction(() => !window.Alpine.store('chat').routeSyncPaused);
+  await page.evaluate(() => window.Alpine.store('chat').syncRoute());
+  await expect(page).toHaveURL(/docid=wiki-home/);
 }
 
 test('wiki picker keyboard, Escape, mouse, ID roundtrip, rename/delete and selection safety', async ({ page }) => {
@@ -96,6 +101,7 @@ test('create saves origin before navigating, browser Back retains page links and
   expect(await page.evaluate(() => window.Alpine.store('chat').selectedDocument.content)).toBe('');
   await page.keyboard.type('Immediate target typing');
   await expect(editor).toHaveText('Immediate target typing');
+  expect(await page.evaluate(() => window.Alpine.store('chat').error)).toBeNull();
   expect(await page.evaluate(() => window.Alpine.store('chat').__events)).toEqual([['create', 'wiki-home', 'wiki-channel'], ['save', 'wiki-home']]);
   await page.goBack();
   await expect(page.locator('.doc-title-display')).toHaveText('Home page');
@@ -179,6 +185,7 @@ test.describe('touch wiki navigation', () => {
     expect(await page.evaluate(() => window.Alpine.store('chat').selectedDocument.content)).toBe('');
     await page.keyboard.type('Mobile immediate typing');
     await expect(editor).toHaveText('Mobile immediate typing');
+    expect(await page.evaluate(() => window.Alpine.store('chat').error)).toBeNull();
     await page.goBack();
     await expect(page.locator('.doc-title-display')).toHaveText('Home page');
     await expect(editor.locator('[data-wiki-id="wiki-created"]')).toBeVisible();

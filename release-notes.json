@@ -2858,6 +2858,19 @@
       "label": "Bounded wiki drag tracking",
       "notes": [],
       "noUserVisibleChanges": true
+    },
+    {
+      "buildNumber": 2215,
+      "label": "Safe rich editor focus after wiki creation",
+      "notes": [
+        "Focus the newly opened wiki editor without reactive transaction errors, so immediate typing and Back remain safe."
+      ]
+    },
+    {
+      "buildNumber": 2216,
+      "label": "Native wiki editor focus verification",
+      "notes": [],
+      "noUserVisibleChanges": true
     }
   ]
 }

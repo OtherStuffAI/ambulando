@@ -72,7 +72,8 @@ export const wikiManagerMixin = {
       await this.mountDocRichEditor?.(this.docRichEditorMountEl);
       await this.docRichEditorMountPromise;
       if (this.selectedDocId !== targetId) return false;
-      const targetEditor = this.docRichEditorAdapter?.editor;
+      const adapterEditor = this.docRichEditorAdapter?.editor;
+      const targetEditor = typeof globalThis.Alpine?.raw === 'function' ? globalThis.Alpine.raw(adapterEditor) : adapterEditor;
       if (!targetEditor || targetEditor.isDestroyed) throw new Error('Page opened, but its editor is not ready. Use Edit to retry.');
       targetEditor.commands.focus('start');
       return true;
