@@ -26,6 +26,10 @@ export function createTiptapEditorAdapter({
     editorProps: {
       handlePaste: (_view, event) => onPaste(event, editor) === true,
       handleDOMEvents: {
+        beforeinput: () => {
+          onEditIntent('input');
+          return false;
+        },
         pointerdown: (_view, event) => {
           if (event.target.closest?.('[data-wiki-title]')) return false;
           onEditIntent('pointer');

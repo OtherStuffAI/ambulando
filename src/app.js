@@ -1175,6 +1175,8 @@ export function initApp() {
     docEditorProseMirrorState: null,
     docEditorContentModel: null,
     wikiCreateBusy: false,
+    wikiCreateTimings: [],
+    docBacklinksOpen: false,
     docsHomeSaving: false,
     docsHomeVisit: 0,
     docsShowAll: false,

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { bindWikiState, channelWikiPages, resolveWikiPage, wikiSource } from '../src/docs/wiki-links.js';
+import { bindWikiState, channelWikiPages, resolveWikiPage, wikiSource, incomingWikiPages } from '../src/docs/wiki-links.js';
 import { markdownToProseMirrorDoc } from '../src/docs/editor/markdown-to-prosemirror.js';
 import { prosemirrorToFlightDeckContentModel } from '../src/docs/editor/prosemirror-to-flightdeck.js';
 import { validateDocumentContentModelRoundTrip } from '../src/docs/editor/document-content-integrity.js';
@@ -80,10 +80,14 @@ describe('channel wiki pages', () => {
     const editor = { isDestroyed: false, chain: () => ({ focus() { return this; }, insertContentAt(range, node) { events.push('insert'); expect(node.attrs.documentId).toBe('new-page'); return this; }, run() {} }) };
     const work = s.createDocWikiPage('New', { from: 1, to: 5 }, editor);
     expect(await s.createDocWikiPage('New', { from: 1, to: 5 }, editor)).toBe(false);
+    expect(await s.followDocWikiLink('page-a')).toBe(false);
+    expect(s.openDoc).not.toHaveBeenCalled();
     finish(); expect(await work).toBe(true);
     expect(s.createDocument).toHaveBeenCalledWith('New', { scopeId: 'scope', channelId: 'channel', open: false, initialContent: '', throwOnError: true });
     expect(events).toEqual(['create', 'insert', 'save', 'open']);
-    expect(s.enterSelectedDocEditMode).toHaveBeenCalledWith('rich');
+    expect(s.enterSelectedDocEditMode).not.toHaveBeenCalled();
+    expect(s.wikiCreateBusy).toBe(false);
+    expect(s.wikiCreateTimings.map(t => t.stage)).toEqual(['origin access', 'page persisted', 'origin saved', 'editor focused', 'finished']);
     expect(s.docRichEditorAdapter.editor.commands.focus).toHaveBeenCalledWith('start');
   });
   it('retains link and draft when origin save fails, and reports create/ambiguous failures', async () => {
@@ -108,12 +112,13 @@ describe('channel wiki pages', () => {
     expect(s.createDocument).not.toHaveBeenCalled(); expect(focus).not.toHaveBeenCalled();
     finish(); expect(await work).toBe(true); expect(focus).toHaveBeenCalledWith('start');
   });
-  it('reports denied target editing without focusing or bypassing access controls', async () => {
+  it('reports denied origin editing without creating or bypassing access controls', async () => {
     const s = store();
     const editor = { isDestroyed: false, chain: () => ({ focus() { return this; }, insertContentAt() { return this; }, run() {} }) };
     s.openDoc.mockImplementation((id) => { s.selectedDocId = id; });
-    s.enterSelectedDocEditMode.mockResolvedValue(false); s.docEditAccessMessage = 'No write access';
+    s.docEditAccessState = 'ready'; s.enterSelectedDocEditMode.mockResolvedValue(false); s.docEditAccessMessage = 'No write access';
     expect(await s.createDocWikiPage('New', { from: 1, to: 5 }, editor)).toBe(false);
+    expect(s.createDocument).not.toHaveBeenCalled(); expect(s.wikiCreateBusy).toBe(false);
     expect(s.error).toBe('No write access'); expect(s.docRichEditorAdapter.editor.commands.focus).not.toHaveBeenCalled();
   });
   it('writes narrow authoritative home metadata, replaces, clears and surfaces denial', async () => {
@@ -226,3 +231,22 @@ describe('channel wiki pages', () => {
   });
 
 });
+
+ describe('incoming wiki links', () => {
+  it('reads rich and canonical source, excludes history/self/other channel/code, deduplicates and follows renames', () => {
+    const target = { record_id: 'target', title: 'Renamed', pg_channel_id: 'channel' };
+    const rows = [target,
+      { record_id: 'source', title: 'Source', pg_channel_id: 'channel', content: '[Old](wiki:target) [Again](wiki:target)' },
+      { record_id: 'rich', title: 'Rich', pg_channel_id: 'channel', editor_state: markdownToProseMirrorDoc('[Old](wiki:target)') },
+      { record_id: 'title', title: 'Title', pg_channel_id: 'channel', content: '[[Renamed]]' },
+      { record_id: 'code', title: 'Code', pg_channel_id: 'channel', content: '`[[Renamed]]`' },
+      { record_id: 'outside', pg_channel_id: 'other', content: '[Old](wiki:target)' },
+      { record_id: 'deleted', pg_channel_id: 'channel', record_state: 'deleted', content: '[Old](wiki:target)' }];
+    expect(incomingWikiPages(rows, target).map(p => p.record_id)).toEqual(['rich', 'source', 'title']);
+    expect(incomingWikiPages(rows, { ...target, record_id: 'another' })).toEqual([]);
+    const duplicate = { ...target, record_id: 'duplicate' };
+    expect(incomingWikiPages([...rows, duplicate], target).map(p => p.record_id)).toEqual(['rich', 'source']);
+    rows[1].content = 'Removed';
+    expect(incomingWikiPages(rows, target).map(p => p.record_id)).toEqual(['rich', 'title']);
+  });
+ });

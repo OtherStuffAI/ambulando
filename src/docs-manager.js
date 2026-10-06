@@ -1123,6 +1123,7 @@ export const docsManagerMixin = {
   loadDocEditorFromSelection(selectedItem = undefined) {
     const item = selectedItem === undefined ? this.selectedDocument : selectedItem;
     this.docShareQuery = '';
+    this.docBacklinksOpen = false;
     this.destroyDocRichEditor?.();
     if (!item) {
       this.docEditorTitle = '';
@@ -1566,13 +1567,14 @@ export const docsManagerMixin = {
         editable: this.isSelectedDocRichEditorEditable(),
         wiki: {
           pages: () => this.wikiPages,
-          isEditing: () => ['editing', 'recovery'].includes(this.docEditAccessState),
+          isBusy: () => this.wikiCreateBusy,
+          isEditing: () => ['ready', 'acquiring', 'editing', 'recovery'].includes(this.docEditAccessState),
           resolve: (attrs) => this.resolveDocWikiLink(attrs),
           open: (id) => { void this.followDocWikiLink(id); },
           create: (title, range, editor) => this.createDocWikiPage(title, range, editor),
           error: (message) => { this.error = message; },
         },
-        onEditIntent: () => this.handleDocRichEditIntent(),
+        onEditIntent: (intent) => intent === 'input' && this.handleDocRichEditIntent(),
         onPaste: (event, editor) => this.handleDocRichPaste?.(event, editor) === true,
         onUpdate: (contentModel) => {
           this.syncDocRichEditorContentModel(contentModel);
@@ -2851,7 +2853,7 @@ export const docsManagerMixin = {
     if (nextMode !== 'preview') {
       if (isTowerPgBackendMode()) {
         const item = this.selectedDocument;
-        if (isSyncedPgRecord(item) && !getPgEditLeaseSession(this, 'document', item?.record_id)?.lease?.lease_token) return;
+        if (nextMode !== 'rich' && isSyncedPgRecord(item) && !getPgEditLeaseSession(this, 'document', item?.record_id)?.lease?.lease_token) return;
       } else {
       const session = this.getSelectedDocCheckoutSession();
       if (!isCheckoutHeld(session?.checkout)) return;

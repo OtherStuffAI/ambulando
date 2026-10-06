@@ -76,3 +76,32 @@ fresh typing or a changed workspace/document. Equal compatibility Markdown does
 not justify deleting a draft with different rich editor state. Home and All docs
 cancel delayed entry when document, channel, workspace or navigation ownership
 changes. Returning to an already open home preserves the mounted dirty editor.
+
+
+Pages mount a rich editor immediately. Focusing, selecting or following a link
+alone does not acquire a PG edit lease; actual input starts acquisition. Typing
+while access is checked remains a local draft; canonical saves still require
+Tower's lease and ACL checks. A denial preserves the draft and exposes Retry.
+Rich mode can also reopen without an Edit step; source and block modes retain
+their explicit edit-access gate.
+
+Creation immediately shows **Creating page…** and disables wiki links for click,
+touch and keyboard until success or failure. The empty target editor focuses
+without waiting for a target lease. Origin access, storage upload, create
+reconciliation/POST and origin save remain awaited canonical operations. The
+in-memory `wikiCreateTimings` records elapsed milliseconds at origin access,
+page persistence, origin save, editor focus and completion, without page text
+or identities. These timings distinguish where a slow request spends time;
+fixture timings do not establish live network latency. There is no fixed
+creation sleep. Body hydration has separate bounded retries (0/1/3/7 seconds)
+and remote autosave has a 15-second debounce; explicit creation save bypasses
+that debounce.
+
+The collapsed **Backlinks** bar at the bottom lists incoming references from
+readable, materialized pages in the current channel. It excludes the current
+page and deleted/archived sources, deduplicates source IDs and resolves unique
+title links without guessing ambiguous titles. Rich JSON and canonical Markdown
+are supported; code literals are excluded. Parsing is cached by row and content
+identity. Sources whose bodies have not yet materialized cannot contribute
+links until they load. Opening a backlink uses the same draft checkpoint and
+navigation path as a forward link. The panel resets on document changes.

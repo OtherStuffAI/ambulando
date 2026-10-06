@@ -14,9 +14,9 @@ async function seed(page, content = 'Notebook') {
     s.selectedChannelId = 'wiki-channel';
     s.selectedBoardId = '__pg_channel__:wiki-channel';
     s.documents = [
-      { record_id: 'wiki-home', title: 'Home page', content, pg_channel_id: 'wiki-channel', scope_id: 'wiki-scope', owner_npub: owner, version: 1, sync_status: 'pending', record_state: 'active' },
-      { record_id: 'wiki-target', title: 'Plant list', content: 'Plant details', pg_channel_id: 'wiki-channel', scope_id: 'wiki-scope', owner_npub: owner, version: 1, sync_status: 'pending', record_state: 'active' },
-      { record_id: 'wiki-other', title: 'Private page', content: 'Outside channel', pg_channel_id: 'another-channel', scope_id: 'wiki-scope', owner_npub: owner, version: 1, sync_status: 'pending', record_state: 'active' },
+      { record_id: 'wiki-home', title: 'Home page', content, pg_channel_id: 'wiki-channel', scope_id: 'wiki-scope', owner_npub: owner, version: 1, pg_backend: true, sync_status: 'pending', record_state: 'active' },
+      { record_id: 'wiki-target', title: 'Plant list', content: 'Plant details', pg_channel_id: 'wiki-channel', scope_id: 'wiki-scope', owner_npub: owner, version: 1, pg_backend: true, sync_status: 'pending', record_state: 'active' },
+      { record_id: 'wiki-other', title: 'Private page', content: 'Outside channel', pg_channel_id: 'another-channel', scope_id: 'wiki-scope', owner_npub: owner, version: 1, pg_backend: true, sync_status: 'pending', record_state: 'active' },
     ];
     s.hydrateSelectedDocWithRetry = async () => null;
     s.inspectSelectedDocEditLease = async () => null;
@@ -48,7 +48,7 @@ async function seed(page, content = 'Notebook') {
     };
     s.navSection = 'docs';
     s.openDoc('wiki-home');
-    await s.enterSelectedDocEditMode();
+    // Open is immediately editable; no manual Edit or target lease wait.
   }, content);
   await expect(page.locator('.doc-rich-editor .ProseMirror')).toBeVisible();
   // Finish the unauthenticated shell route before the seeded notebook starts.
@@ -289,4 +289,48 @@ test('Docs route restores the requested channel Home and explicit All docs after
   await page.evaluate(() => { const s = Alpine.store('chat'); s.selectedChannelId = 'wrong-channel'; return s.applyRouteFromLocation(); });
   await expect(page.locator('.docs-editor-v3')).toHaveCount(0);
   expect(await page.evaluate(() => ({ channel: Alpine.store('chat').selectedChannelId, all: Alpine.store('chat').docsShowAll }))).toEqual({ channel: 'wiki-channel', all: true });
+});
+
+for (const mobile of [false, true]) {
+  test(`creation feedback gates links and backlinks navigate safely (mobile: ${mobile})`, async ({ page }) => {
+    await page.setViewportSize({ width: mobile ? 390 : 1280, height: 844 });
+    await seed(page, '[[Delayed page]] [Plant list](wiki:wiki-target)');
+    await page.evaluate(() => {
+      const s = Alpine.store('chat');
+      const create = s.createDocument;
+      s.createDocument = async (...args) => { await new Promise(resolve => { window.finishWikiCreate = resolve; }); return create(...args); };
+    });
+    await page.locator('.fd-wiki-unresolved').click();
+    await expect(page.getByRole('status').filter({ hasText: 'Creating page…' })).toBeVisible();
+    await expect(page.locator('[data-wiki-id="wiki-target"]')).toHaveAttribute('aria-disabled', 'true');
+    await page.locator('[data-wiki-id="wiki-target"]').press('Enter');
+    expect(await page.evaluate(() => Alpine.store('chat').selectedDocId)).toBe('wiki-home');
+    await page.evaluate(() => window.finishWikiCreate());
+    await expect(page.locator('.doc-title-display')).toHaveText('Delayed page');
+    const backlinks = page.locator('.doc-backlinks');
+    await expect(backlinks.getByRole('button', { name: 'Backlinks (1)' })).toHaveAttribute('aria-expanded', 'false');
+    await backlinks.getByRole('button', { name: 'Backlinks (1)' }).click();
+    await page.locator('.doc-rich-editor .ProseMirror').click();
+    await page.keyboard.type('Draft from target');
+    await backlinks.getByRole('button', { name: 'Home page', exact: true }).click();
+    await expect(page.locator('.doc-title-display')).toHaveText('Home page');
+    await expect(backlinks.getByRole('button', { name: 'Backlinks (0)' })).toHaveAttribute('aria-expanded', 'false');
+    expect(await page.evaluate(() => Alpine.store('chat').wikiCreateBusy)).toBe(false);
+    console.log('wiki creation stages (fixture gate, not network)', await page.evaluate(() => Alpine.store('chat').wikiCreateTimings));
+  });
+}
+
+test('creation failure clears feedback and restores a clickable retry without discarding the origin', async ({ page }) => {
+  await seed(page, '[[Retry page]]');
+  await page.evaluate(() => {
+    const s = Alpine.store('chat'), create = s.createDocument;
+    s.createDocument = async (...args) => { s.createDocument = create; throw new Error('Creation unavailable. Click the link to retry.'); };
+  });
+  await page.locator('.fd-wiki-unresolved').click();
+  expect(await page.evaluate(() => Alpine.store('chat').error)).toContain('Click the link to retry');
+  await expect(page.locator('.fd-wiki-unresolved')).toHaveAttribute('aria-disabled', 'false');
+  await expect(page.locator('.wiki-create-status')).toBeHidden();
+  await expect(page.locator('.doc-title-display')).toHaveText('Home page');
+  await page.locator('.fd-wiki-unresolved').press('Enter');
+  await expect(page.locator('.doc-title-display')).toHaveText('Retry page');
 });

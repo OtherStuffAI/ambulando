@@ -5395,6 +5395,16 @@
                   ><span class="doc-scope-pill doc-scope-pill-title doc-scope-pill-unscoped">Unscoped</span></button>
                 </div>
 
+                <div role="status" aria-live="polite" x-show="$store.chat.wikiCreateBusy" x-cloak class="wiki-create-status">Creating page…</div>
+                <div class="doc-backlinks">
+                  <button type="button" class="btn-secondary" :aria-expanded="$store.chat.docBacklinksOpen" aria-controls="doc-backlinks-list" @click="$store.chat.docBacklinksOpen = !$store.chat.docBacklinksOpen">Backlinks (<span x-text="$store.chat.docBacklinks.length"></span>)</button>
+                  <div id="doc-backlinks-list" x-show="$store.chat.docBacklinksOpen" x-cloak>
+                    <p x-show="!$store.chat.docBacklinks.length">No incoming links from readable pages in this channel.</p>
+                    <template x-for="page in $store.chat.docBacklinks" :key="page.record_id">
+                      <button type="button" class="btn-secondary" :disabled="$store.chat.wikiCreateBusy" @click="$store.chat.followDocWikiLink(page.record_id)" x-text="page.title || 'Untitled document'"></button>
+                    </template>
+                  </div>
+                </div>
                 <div class="doc-content-block">
                   <nav class="mobile-detail-switcher doc-mobile-switcher" aria-label="Document sections">
                     <button

@@ -248,6 +248,7 @@ test('typing stays visible during delayed lease acquisition and continues in the
   await expect(editor).toBeVisible();
   await editor.click();
   await page.keyboard.press('End');
+  expect(await page.evaluate(() => Alpine.store('chat').__leaseAcquireCalls)).toBe(0);
   await page.keyboard.type('ABC');
 
   await expect(page.locator('.doc-edit-status')).toHaveText('Acquiring edit access…');
@@ -265,6 +266,8 @@ test('typing stays visible during delayed lease acquisition and continues in the
   });
   expect(acquiring).toEqual({ state: 'acquiring', acquireCalls: 1, saveCalls: 0, content: 'BaseABC' });
 
+  await page.keyboard.type(' [[Lease pending page]]');
+  await expect(editor.locator('.fd-wiki-unresolved')).toHaveText('Lease pending page');
   await page.evaluate(() => window.__resolveDelayedDocLease());
   await expect(page.locator('.doc-edit-status')).toHaveText('Saved');
   await expect(editor).toHaveAttribute('data-delayed-lease-probe', 'same-editor');
@@ -284,7 +287,7 @@ test('typing stays visible during delayed lease acquisition and continues in the
     state: 'editing',
     acquireCalls: 1,
     saveCalls: 0,
-    content: 'BaseABC',
+    content: 'BaseABC Lease pending page',
   });
   expect(editing.autosaveScheduled).toBeGreaterThanOrEqual(1);
   expect(editing.selectionFrom).toBeGreaterThan(1);

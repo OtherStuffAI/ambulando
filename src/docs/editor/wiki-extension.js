@@ -16,9 +16,10 @@ export const FlightDeckWikiLink = Node.create({
       let current = node;
       const refresh = () => {
         const resolved = this.options.resolve(current.attrs);
+        dom.setAttribute('aria-disabled', String(this.options.isBusy()));
         dom.className = `fd-wiki-link fd-wiki-${resolved.state}`;
         dom.dataset.wikiTitle = current.attrs.title;
-        dom.dataset.wikiId = current.attrs.documentId || '';
+        dom.dataset.wikiId = current.attrs.documentId || resolved.page?.record_id || '';
         dom.textContent = resolved.title || current.attrs.title;
         dom.title = resolved.state === 'available' ? 'Open page'
           : resolved.state === 'unresolved' ? 'Page does not exist. Click to create.'
@@ -48,6 +49,7 @@ export const FlightDeckWikiLink = Node.create({
         if (event.type === 'click' && (event.button !== 0 || dragged
           || (pointerOrigin && Math.hypot(event.clientX - pointerOrigin.x, event.clientY - pointerOrigin.y) > 5))) return;
         event.preventDefault(); event.stopPropagation();
+        if (this.options.isBusy()) return;
         const resolved = this.options.resolve(current.attrs);
         if (resolved.state === 'available') this.options.open(resolved.page.record_id);
         else if (resolved.state === 'unresolved') this.options.create(current.attrs.title, { from: getPos(), to: getPos() + current.nodeSize }, editor);
@@ -60,7 +62,7 @@ export const FlightDeckWikiLink = Node.create({
       return { dom, ignoreMutation: () => true, update(next) { if (next.type !== node.type) return false; current = next; refresh(); return true; }, destroy() { editor.off('transaction', refresh); stopTracking(); } };
     };
   },
-  addOptions() { return { resolve: () => ({ state: 'unavailable' }), open: () => {}, create: () => {}, error: () => {}, isEditing: () => false }; },
+  addOptions() { return { resolve: () => ({ state: 'unavailable' }), open: () => {}, create: () => {}, error: () => {}, isBusy: () => false, isEditing: () => false }; },
 });
 
 export function wikiPickerRange(state) {
@@ -72,7 +74,7 @@ export function wikiPickerRange(state) {
   return { from: $from.pos - match[0].length, to: $from.pos, query: match[1] };
 }
 
-export function createWikiPicker({ pages, resolve, create, error, isEditing }) {
+export function createWikiPicker({ pages, resolve, create, error, isEditing, isBusy = () => false }) {
   return Extension.create({
     name: 'fdWikiPicker',
     addProseMirrorPlugins() {
@@ -106,8 +108,9 @@ export function createWikiPicker({ pages, resolve, create, error, isEditing }) {
           document.body.append(el);
           let range = null, choices = [], active = 0, signature = '', dismissed = '', pending = false;
           const choose = async (index) => {
-            if (!range || pending) return;
+            if (!range || pending || isBusy()) return;
             pending = true;
+            for (const button of el.querySelectorAll('button')) button.disabled = true;
             const selectedRange = { ...range }, choice = choices[index];
             try {
               if (choice?.record_id) {

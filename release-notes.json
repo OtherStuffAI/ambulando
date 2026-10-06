@@ -2901,6 +2901,34 @@
       "notes": [
         "Retain the requested channel when restoring Home or All docs from its URL, instead of using another previously selected channel."
       ]
+    },
+    {
+      "buildNumber": 2221,
+      "label": "Immediate wiki editing and backlinks",
+      "notes": [
+        "Open pages ready for typing; acquire edit access on input and focus newly created pages without an extra lease wait.",
+        "Show Creating page feedback, disable links during creation, and find incoming page references in the collapsed Backlinks bar."
+      ]
+    },
+    {
+      "buildNumber": 2222,
+      "label": "Wiki validation and backlink lookup refinement",
+      "noUserVisibleChanges": true,
+      "notes": []
+    },
+    {
+      "buildNumber": 2223,
+      "label": "Resolved wiki link rendering",
+      "notes": [
+        "Show resolved title links consistently before the first edit and keep backlink results tied to the selected readable page."
+      ]
+    },
+    {
+      "buildNumber": 2224,
+      "label": "Wiki links during first-input access checks",
+      "notes": [
+        "Recognize closed wiki links while edit access is being acquired, retaining local drafts and canonical save enforcement."
+      ]
     }
   ]
 }

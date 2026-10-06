@@ -1,4 +1,4 @@
-import { channelWikiPages, resolveWikiPage } from './wiki-links.js';
+import { channelWikiPages, resolveWikiPage, incomingWikiPages } from './wiki-links.js';
 import { updateTowerPgChannel } from '../tower-command-intents.js';
 import { upsertChannel } from '../db.js';
 import { mapPgChannelToLocal, resolveTowerPgWorkspaceContext } from '../pg-read-hydrator.js';
@@ -11,6 +11,7 @@ export const wikiManagerMixin = {
     return resolveWikiPage(this.documents, this.selectedChannelId, { documentId: this.channelDocsHomeId }).page || null;
   },
   get wikiPages() { return channelWikiPages(this.documents, this.selectedDocument?.pg_channel_id || this.selectedChannelId); },
+  get docBacklinks() { return incomingWikiPages(this.documents, this.selectedDocument); },
   resolveDocWikiLink(attrs) {
     return resolveWikiPage(this.documents, this.selectedDocument?.pg_channel_id || this.selectedChannelId, attrs);
   },
@@ -30,6 +31,7 @@ export const wikiManagerMixin = {
     } catch (error) { this.error = `Could not preserve your draft: ${error.message}`; return false; }
   },
   async followDocWikiLink(documentId, options = {}) {
+    if (this.wikiCreateBusy) return false;
     const target = this.resolveDocWikiLink({ documentId }).page;
     if (!target) { this.error = 'Page deleted or unavailable.'; return false; }
     const originId = this.selectedDocId;
@@ -47,32 +49,39 @@ export const wikiManagerMixin = {
     if (this.wikiCreateBusy) return false;
     const origin = this.selectedDocument;
     if (!origin?.pg_channel_id || !title.trim()) { this.error = 'Select a channel document and name the page.'; return false; }
-    const originalEditorDoc = editor.state?.doc;
+    const started = performance.now();
+    this.wikiCreateTimings = [];
+    const stage = (name) => this.wikiCreateTimings.push({ stage: name, elapsedMs: Math.round(performance.now() - started) });
     this.wikiCreateBusy = true;
+    this.docRichEditorAdapter?.refreshWikiLinks?.();
+    const originalEditorDoc = editor.state?.doc;
     this.error = null;
     try {
       if (this.docEditAccessState !== 'editing' && this.docEditAccessState !== 'recovery') {
         const editable = await this.enterSelectedDocEditMode();
         if (editable === false) throw new Error(this.docEditAccessMessage || 'Could not edit the originating page.');
       }
+      stage('origin access');
       if (this.selectedDocId !== origin.record_id || editor.isDestroyed || editor.state?.doc !== originalEditorDoc) throw new Error('The originating page changed. Choose the link again there.');
       editor.setEditable?.(false);
       const found = this.resolveDocWikiLink({ title });
       if (found.state === 'ambiguous') throw new Error('Several pages have this title. Choose a specific page from the picker.');
       let target = found.page;
       if (!target) target = await this.createDocument(title.trim(), { scopeId: origin.scope_id, channelId: origin.pg_channel_id, open: false, initialContent: '', throwOnError: true });
+      stage('page persisted');
       if (!target || target.sync_status === 'failed') throw new Error(this.error || 'Could not create page.');
       if (this.selectedDocId !== origin.record_id || editor.isDestroyed || editor.state?.doc !== originalEditorDoc) throw new Error('Page created, but the originating page changed. Choose it from the picker to link it.');
       editor.chain().focus().insertContentAt(range, { type: 'fdWikiLink', attrs: { documentId: target.record_id, title: target.title } }).run();
       this.syncDocRichEditorContentModel();
       this.docEditDraftDirty = true;
       const saved = await this.saveSelectedDocItem({ autosave: false });
+      stage('origin saved');
       if (!saved || this.docRecovery || this.docEditDraftDirty) throw new Error(this.error || 'The new page exists, but the originating page could not be saved. Its link and your draft are preserved; retry Save before opening it.');
       this.openDoc(target.record_id);
       const targetId = target.record_id;
-      const editable = await this.enterSelectedDocEditMode('rich');
-      if (this.selectedDocId !== targetId) return false;
-      if (!editable) throw new Error(this.docEditAccessMessage || 'Page opened, but editing could not start. Use Edit to retry.');
+      // Opening mounts the rich editor in ready state. Acquire the target lease
+      // on actual input, rather than adding another network wait to navigation.
+      this.setDocEditorMode?.('rich');
       // Alpine may still be replacing the origin editor. Await its render and
       // the lazy Tiptap mount before directing typing into the target.
       if (typeof window !== 'undefined') await window.Alpine?.nextTick?.();
@@ -83,6 +92,7 @@ export const wikiManagerMixin = {
       const targetEditor = typeof globalThis.Alpine?.raw === 'function' ? globalThis.Alpine.raw(adapterEditor) : adapterEditor;
       if (!targetEditor || targetEditor.isDestroyed) throw new Error('Page opened, but its editor is not ready. Use Edit to retry.');
       targetEditor.commands.focus('start');
+      stage('editor focused');
       return true;
     } catch (error) {
       this.error = error.message || 'Could not create and link page.';
@@ -90,6 +100,8 @@ export const wikiManagerMixin = {
     } finally {
       if (this.selectedDocId === origin.record_id && !editor.isDestroyed) editor.setEditable?.(this.isSelectedDocRichEditorEditable?.() ?? true);
       this.wikiCreateBusy = false;
+      this.docRichEditorAdapter?.refreshWikiLinks?.();
+      stage('finished');
     }
   },
   async setChannelDocsHome(documentId = null) {

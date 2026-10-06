@@ -24881,3 +24881,9 @@ button.task-desc-toggle:focus-visible {
 .fd-wiki-picker[hidden] { display: none; }
 .fd-wiki-picker button { display: block; text-align: left; width: 100%; min-height: 44px; padding: 8px; border: 0; background: transparent; color: inherit; overflow-wrap: anywhere; }
 .fd-wiki-picker button[aria-selected="true"], .fd-wiki-picker button:hover { background: var(--bg-hover, #ddd); }
+
+.doc-backlinks { order: 10; border-top: 1px solid var(--border-color, #ddd); padding: 12px 0; }
+.doc-backlinks button { min-height: 44px; }
+#doc-backlinks-list { display: flex; flex-wrap: wrap; gap: 8px; padding-top: 8px; }
+.wiki-create-status { padding: 12px; background: #eaf1ff; color: #153a75; }
+.fd-wiki-link[aria-disabled="true"] { opacity: .55; cursor: progress; }
