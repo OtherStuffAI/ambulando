@@ -830,7 +830,7 @@ export const scopesManagerMixin = {
 
   // --- scope apply / refresh ---
 
-  async applyScopes(scopes = []) {
+  async applyScopes(scopes = [], options = {}) {
     const normalizedScopes = [];
     for (const scope of (Array.isArray(scopes) ? scopes : [])) {
       const normalized = this.normalizeScopeRowGroupRefs(scope);
@@ -840,7 +840,7 @@ export const scopesManagerMixin = {
       this.scopes = normalizedScopes;
     }
     this.scopesLoaded = true;
-    if (this.navSection === 'chat') {
+    if (!options.preserveNavigation && this.navSection === 'chat') {
       this.ensureSelectedChatChannelInScope?.({ syncRoute: false });
     }
   },

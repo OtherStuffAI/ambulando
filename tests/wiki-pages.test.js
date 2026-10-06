@@ -5,9 +5,9 @@ import { prosemirrorToFlightDeckContentModel } from '../src/docs/editor/prosemir
 import { validateDocumentContentModelRoundTrip } from '../src/docs/editor/document-content-integrity.js';
 import { wikiManagerMixin } from '../src/docs/wiki-manager.js';
 import { updateTowerPgChannel } from '../src/tower-command-intents.js';
-import { upsertChannel } from '../src/db.js';
+import { upsertChannel, getDocumentById } from '../src/db.js';
 vi.mock('../src/tower-command-intents.js', () => ({ updateTowerPgChannel: vi.fn() }));
-vi.mock('../src/db.js', () => ({ upsertChannel: vi.fn() }));
+vi.mock('../src/db.js', () => ({ upsertChannel: vi.fn(), getDocumentById: vi.fn(), getTaskById: vi.fn(), getScopeById: vi.fn(), getChannelById: vi.fn(), getDirectoryById: vi.fn(), getReportById: vi.fn() }));
 vi.mock('../src/pg-read-hydrator.js', () => ({
   resolveTowerPgWorkspaceContext: () => ({ workspaceId: 'workspace', baseUrl: 'http://localhost:3100', appNpub: 'app', workspaceOwnerNpub: 'owner' }),
   mapPgChannelToLocal: (row) => ({ ...row, record_id: row.id }),
@@ -70,6 +70,36 @@ describe('channel wiki pages', () => {
     expect(await s.followDocWikiLink('page-a')).toBe(false);
     expect(s.openDoc).not.toHaveBeenCalled();
     expect(s.error).toContain('disk failed');
+  });
+  it('follows cached wiki links from a document opened in a chat modal', async () => {
+    const s = store(); s.navSection = 'chat'; s.chatDocModalOpen = true;
+    expect(await s.followDocWikiLink('page-a')).toBe(true);
+    expect(s.openDoc).toHaveBeenCalledWith('page-a', { draftPreserved: true });
+    expect(s.navSection).toBe('chat');
+  });
+  it('opens an ID cached only in Dexie without a collection refresh', async () => {
+    const s = store(); s.documents = [];
+    getDocumentById.mockResolvedValueOnce(pages[0]);
+    expect(await s.followDocWikiLink('page-a')).toBe(true);
+    expect(s.openDoc).toHaveBeenCalledWith('page-a', { draftPreserved: true });
+    expect(s.refreshDocuments).not.toHaveBeenCalled();
+  });
+  it('loads only a missing wiki target then opens it', async () => {
+    const s = store(); s.documents = [];
+    getDocumentById.mockResolvedValueOnce(null).mockResolvedValueOnce(pages[0]);
+    s.requestTowerSyncFamily = vi.fn().mockResolvedValue(null);
+    expect(await s.followDocWikiLink('page-a')).toBe(true);
+    expect(s.requestTowerSyncFamily).toHaveBeenCalledWith('document', 'page-a', { force: true });
+    expect(s.openDoc).toHaveBeenCalled();
+  });
+  it('ignores wiki lookup after a newer ordinary reference visit', async () => {
+    const s = store(); s.documents = [];
+    let finish; getDocumentById.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    const following = s.followDocWikiLink('page-a');
+    s.internalLinkOpenRequestId++;
+    finish(pages[0]);
+    expect(await following).toBe(false);
+    expect(s.openDoc).not.toHaveBeenCalled();
   });
   it('creates in the same channel, inserts, saves origin, then opens; repeated clicks are gated', async () => {
     const s = store(), events = [];

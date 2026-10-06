@@ -26,6 +26,7 @@ import {
 import {
   fetchRecordHistory,
   getTowerPgThread,
+  getTowerPgMessage,
 } from './api.js';
 import { deleteTowerPgChannel, queueTowerPendingWrite } from './tower-command-intents.js';
 import {
@@ -66,7 +67,7 @@ import {
   deleteTowerPgThreadFromLocal,
   updateTowerPgThreadTitleFromLocal,
 } from './tower-command-intents.js';
-import { resolveTowerPgWorkspaceContext, towerPgSyncCursorKey } from './pg-read-hydrator.js';
+import { mapPgMessageToLocal, mapPgThreadToLocal, resolveTowerPgWorkspaceContext, towerPgSyncCursorKey } from './pg-read-hydrator.js';
 import { resolvePgThreadId } from './pg-record-context.js';
 import { buildSectionUrl, parseRouteLocation } from './route-helpers.js';
 import {
@@ -1695,6 +1696,7 @@ export const chatMessageManagerMixin = {
     this.linkedThreadOpenError = '';
     this.linkedThreadOpening = true;
     const context = resolveTowerPgWorkspaceContext(this);
+    const workspaceDbKey = getCurrentWorkspaceDbKey();
     const section = this.navSection;
     const sourceThreadId = this.activeThreadId;
     const sourceHistoryGeneration = this.threadHistoryGeneration;
@@ -1703,6 +1705,7 @@ export const chatMessageManagerMixin = {
     const isCurrentWorkspace = () => {
       const current = resolveTowerPgWorkspaceContext(this);
       return this.linkedThreadOpenRequestId === requestId
+        && deps.isCurrent?.() !== false
         && current.workspaceId === context.workspaceId && current.baseUrl === context.baseUrl
         && current.appNpub === context.appNpub && current.generation === context.generation
         && current.sessionNpub === context.sessionNpub;
@@ -1714,43 +1717,101 @@ export const chatMessageManagerMixin = {
         || (this.fileMessages || []).find(row => row.record_id === recordId || row.pg_thread_id === recordId)
         || await (deps.getMessageById || getMessageById)(recordId);
       if (!isCurrent() || this.selectedChannelId !== sourceChannelId) return false;
-      if (!channelId && !message && isTowerPgBackendMode()) {
-        await this.requestTowerSyncFamily?.('workspace-bootstrap', '', { force: true });
-        if (!isCurrent() || this.selectedChannelId !== sourceChannelId) return false;
-        message = await (deps.getMessageById || getMessageById)(recordId);
-        if (!isCurrent() || this.selectedChannelId !== sourceChannelId) return false;
+      if (message && (message.record_state === 'deleted' || message.deleted_at
+        || message.can_read === false || message.readable === false
+        || (message.pg_workspace_id && message.pg_workspace_id !== context.workspaceId))) {
+        throw new Error('This linked message is unavailable in the current workspace.');
+      }
+      if (channelId && message?.channel_id && channelId !== message.channel_id) {
+        throw new Error('This linked message does not belong to the referenced channel.');
       }
       channelId ||= message?.channel_id || '';
-      let threadId = message?.pg_thread_id || recordId;
+      let threadId = message?.pg_thread_id || (message?.pg_backend ? null : recordId);
       // A bare thread ID is valid even outside the rendered channel window.
       // Read only its routing metadata here; existing live queries own content.
       if (!channelId && isTowerPgBackendMode()) {
-        const result = await (deps.getTowerPgThread || getTowerPgThread)(context.workspaceId, recordId, {
-          baseUrl: context.baseUrl, appNpub: context.appNpub,
-        });
-        if (!isCurrent() || this.selectedChannelId !== sourceChannelId) return false;
-        const thread = result?.thread || result;
-        if (thread?.id !== recordId || (thread.workspace_id && thread.workspace_id !== context.workspaceId)
-          || thread.record_state === 'deleted') throw new Error('This linked thread is unavailable.');
-        channelId = thread.channel_id;
-        threadId = thread.id;
+        let result;
+        try {
+          result = await (deps.getTowerPgThread || getTowerPgThread)(context.workspaceId, recordId, {
+            baseUrl: context.baseUrl, appNpub: context.appNpub,
+          });
+        } catch (error) {
+          if (error?.status !== 404) throw error;
+          if (!isCurrent() || this.selectedChannelId !== sourceChannelId) return false;
+          const resolved = await (deps.getTowerPgMessage || getTowerPgMessage)(context.workspaceId, recordId, {
+            baseUrl: context.baseUrl, appNpub: context.appNpub,
+          });
+          if (!isCurrent() || this.selectedChannelId !== sourceChannelId) return false;
+          const remote = resolved?.message;
+          const thread = resolved?.thread;
+          if (!remote || remote.id !== recordId || remote.workspace_id !== context.workspaceId
+            || remote.deleted_at || remote.record_state === 'deleted'
+            || !resolved.channel_id || remote.channel_id !== resolved.channel_id
+            || (remote.thread_id || null) !== (resolved.thread_id || null)
+            || (thread && (thread.id !== resolved.thread_id || thread.workspace_id !== context.workspaceId
+              || thread.channel_id !== resolved.channel_id || thread.deleted_at || thread.record_state === 'deleted'))
+            || (resolved.thread_id && !thread)) throw new Error('This linked message is unavailable in the current workspace.');
+          message = mapPgMessageToLocal(remote, {
+            workspaceOwnerNpub: context.workspaceOwnerNpub,
+            threadById: new Map(thread ? [[thread.id, thread]] : []),
+          });
+          const rows = thread ? [mapPgThreadToLocal(thread, { workspaceOwnerNpub: context.workspaceOwnerNpub }), message] : [message];
+          const persist = async () => {
+            if (!isCurrent() || this.selectedChannelId !== sourceChannelId) return false;
+            for (const row of rows) {
+              await (deps.upsertMessage || upsertMessage)(row);
+              if (!isCurrent() || this.selectedChannelId !== sourceChannelId) throw new Error('Linked message visit changed.');
+            }
+            return true;
+          };
+          const persisted = deps.upsertMessage ? await persist() : await withWorkspaceMessageTransaction(workspaceDbKey, persist);
+          if (!persisted || !isCurrent() || this.selectedChannelId !== sourceChannelId) return false;
+          channelId = resolved.channel_id;
+          threadId = resolved.thread_id || null;
+        }
+        if (result) {
+          if (!isCurrent() || this.selectedChannelId !== sourceChannelId) return false;
+          const thread = result?.thread || result;
+          if (thread?.id !== recordId || (thread.workspace_id && thread.workspace_id !== context.workspaceId)
+            || thread.deleted_at || thread.record_state === 'deleted') throw new Error('This linked thread is unavailable.');
+          channelId = thread.channel_id;
+          threadId = thread.id;
+        }
       }
       if (!channelId || !recordId || message?.record_state === 'deleted') {
         throw new Error('This linked thread is unavailable in the current workspace.');
       }
+      if (deps.beforeOpen) {
+        if (await deps.beforeOpen() === false) return false;
+        if (!isCurrent() || this.selectedChannelId !== sourceChannelId) return false;
+      }
       this.error = null;
       this.mobileNavOpen = false;
-      if (section === 'status') {
-        return await this.openDeckThread(channelId, recordId, {
+      const openId = message?.parent_message_id ? (message.pg_thread_id || message.parent_message_id) : recordId;
+      if (section === 'status' && threadId) {
+        const opened = await this.openDeckThread(channelId, openId, {
           towerThreadId: threadId, captureReturnContext: !sourceThreadId, scrollToLatest: false,
         });
+        if (!isCurrentWorkspace()) return false;
+        if (opened) this.focusMessageId = recordId;
+        return opened;
       }
       selectingChannel = true;
+      if (!threadId && this.deckThreadChannelId) this.closeDeckThread?.({ syncRoute: false, fromRoute: true });
       this.navSection = 'chat';
       this.startWorkspaceLiveQueries?.();
-      await this.selectChannel?.(channelId, { syncRoute: false });
-      if (!isCurrentWorkspace() || this.navSection !== 'chat' || this.selectedChannelId !== channelId) return false;
-      this.openThread(recordId, { scrollToLatest: false, syncRoute: false });
+      const docGeneration = this.docOpenGeneration;
+      const taskGeneration = this.taskDetailOpenGeneration;
+      const selectingIsCurrent = () => isCurrentWorkspace() && this.navSection === 'chat'
+        && this.docOpenGeneration === docGeneration && this.taskDetailOpenGeneration === taskGeneration;
+      await this.selectChannel?.(channelId, { syncRoute: false, isCurrent: selectingIsCurrent });
+      if (!selectingIsCurrent() || this.selectedChannelId !== channelId) return false;
+      if (threadId) this.openThread(openId, { scrollToLatest: false, syncRoute: false });
+      else {
+        this.saveChatComposerDraft?.('thread');
+        this.activeThreadId = null;
+      }
+      this.focusMessageId = recordId;
       this.syncRoute?.();
       return true;
     } catch (error) {
@@ -1775,7 +1836,7 @@ export const chatMessageManagerMixin = {
       && message?.channel_id
       && message.channel_id !== this.selectedChannelId
     ) {
-      this.selectPgChannelContext?.(message.channel_id);
+      this.selectPgChannelContext?.(message.channel_id, { preserveDetail: true });
     }
     this.threadHistoryGeneration = (this.threadHistoryGeneration || 0) + 1;
     this.threadHistoryCursor = null;

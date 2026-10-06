@@ -94,3 +94,19 @@ it('changes native editability without reporting a content update, while real ed
     element.remove();
   }
 });
+
+it('renders document references with the same navigation metadata as chat and task references', () => {
+  const element = document.createElement('div'); document.body.append(element);
+  const adapter = createTiptapEditorAdapter({ element, document: { content: '@[Target](mention:document:target-doc) and @[Thread](mention:message:target-message) plus [Plain](mention:doc:plain-doc)' } });
+  try {
+    const doc = element.querySelector('.mention-link[data-mention-id="target-doc"]');
+    expect(doc).not.toBeNull();
+    expect(doc.dataset.mentionType).toBe('document');
+    expect(doc.getAttribute('role')).toBe('link');
+    expect(doc.getAttribute('tabindex')).toBe('0');
+    expect(element.querySelector('.mention-link[data-mention-id="target-message"]').dataset.mentionType).toBe('message');
+    expect(element.querySelector('a.mention-link[data-mention-id="plain-doc"]').dataset.mentionType).toBe('doc');
+    expect(adapter.getContentModel().content).toContain('[Plain](mention:doc:plain-doc)');
+    expect(adapter.getContentModel().content).toContain('@[Target](mention:document:target-doc)');
+  } finally { adapter.destroy(); element.remove(); }
+});

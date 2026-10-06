@@ -447,6 +447,70 @@ describe('channel mention lookup', () => {
     }]);
   });
 
+  it('rejects explicit cross-workspace route references before looking up their targets', async () => {
+    const store = await createStore();
+    Object.defineProperty(store, 'currentWorkspaceKey', { value: 'current-key', configurable: true });
+    Object.defineProperty(store, 'currentWorkspaceSlug', { value: 'current-space', configurable: true });
+    Object.defineProperty(store, 'currentWorkspace', { value: { workspaceId: 'current-id' }, configurable: true });
+    store.handleMentionNavigate = vi.fn();
+    vi.stubGlobal('window', { location: { href: 'http://localhost:41045/chat', origin: 'http://localhost:41045' } });
+    try {
+      for (const href of ['/docs?docid=target&workspacekey=other-key', '/tasks?taskid=target&workspaceid=other-id', '/other-space/docs?docid=target']) {
+        const event = { preventDefault: vi.fn() };
+        expect(store.handleInternalRouteReference(href, event)).toBe(true);
+        expect(event.preventDefault).toHaveBeenCalled();
+        expect(store.internalLinkOpenError).toContain('another workspace');
+      }
+      expect(store.handleMentionNavigate).not.toHaveBeenCalled();
+    } finally { vi.unstubAllGlobals(); }
+  });
+
+  it('routes same-workspace ordinary thread, channel, folder and scope anchors through guarded reference dispatch', async () => {
+    const store = await createStore();
+    store.handleMentionNavigate = vi.fn();
+    vi.stubGlobal('window', { location: { href: 'http://localhost:41045/chat', origin: 'http://localhost:41045' } });
+    try {
+      for (const [href, type, id] of [['/chat?channelid=channel&threadid=thread', 'chat', 'channel#thread'], ['/chat?channelid=channel', 'channel', 'channel'], ['/docs?folderid=folder', 'directory', 'folder'], ['/settings?scopeid=scope', 'scope', 'scope']]) {
+        expect(store.handleInternalRouteReference(href, { preventDefault: vi.fn() })).toBe(true);
+        expect(store.handleMentionNavigate).toHaveBeenLastCalledWith(type, id, expect.any(Object));
+      }
+    } finally { vi.unstubAllGlobals(); }
+  });
+
+  it.each(['doc', 'task'])('retains the source detail and shows contextual feedback when the %s draft checkpoint fails', async (kind) => {
+    const store = await createStore();
+    store.navSection = 'status';
+    store.deckThreadChannelId = 'source-channel';
+    store.documents = [{ record_id: 'target-doc', record_state: 'active' }];
+    store.showTaskDetail = kind === 'task';
+    store.taskDraftDirty = kind === 'task';
+    store.docEditDraftDirty = kind === 'doc';
+    store.persistTaskLocalDraft = vi.fn(async () => false);
+    store.preserveWikiNavigationDraft = vi.fn(async () => { store.error = 'Document draft checkpoint failed'; return false; });
+    store.openDoc = vi.fn();
+    store.closeTaskDetail = vi.fn();
+    store.closeDeckThread = vi.fn();
+
+    expect(await store.handleMentionNavigate('doc', 'target-doc')).toBe(false);
+    expect(store.internalLinkOpenError).toMatch(/draft/i);
+    expect(store.error).toBe(store.internalLinkOpenError);
+    expect(store.openDoc).not.toHaveBeenCalled();
+    expect(store.closeTaskDetail).not.toHaveBeenCalled();
+    expect(store.closeDeckThread).not.toHaveBeenCalled();
+    expect(store.navSection).toBe('status');
+    expect(store.internalLinkOpening).toBe(false);
+  });
+
+  it('does not publish resolved tasks if the guarded visit changes during pending-write normalization', async () => {
+    const store = await createStore();
+    store.tasks = [];
+    let current = true;
+    const applying = store.applyTasks([{ record_id: 'late-task', record_state: 'active' }], { isCurrent: () => current });
+    current = false;
+    await applying;
+    expect(store.tasks).toEqual([]);
+  });
+
   it('navigates channel mentions to the selected chat channel', async () => {
     const store = await createStore();
     store.navSection = 'tasks';
@@ -454,12 +518,13 @@ describe('channel mention lookup', () => {
     store.startWorkspaceLiveQueries = vi.fn();
     store.selectChannel = vi.fn();
 
-    store.handleMentionNavigate('channel', 'channel-ops');
+    store.channels = [{ record_id: 'channel-ops', record_state: 'active' }];
+    await store.handleMentionNavigate('channel', 'channel-ops');
 
     expect(store.navSection).toBe('chat');
     expect(store.mobileNavOpen).toBe(false);
     expect(store.startWorkspaceLiveQueries).toHaveBeenCalledTimes(1);
-    expect(store.selectChannel).toHaveBeenCalledWith('channel-ops');
+    expect(store.selectChannel).toHaveBeenCalledWith('channel-ops', expect.objectContaining({ isCurrent: expect.any(Function) }));
   });
 
   it.each(['person', 'agent'])('opens the identity card for a rendered %s mention using its canonical npub', async (type) => {
@@ -501,11 +566,12 @@ describe('channel mention lookup', () => {
   it('routes task mentions through deferred task resolution outside chat', async () => {
     const store = await createStore();
     store.navSection = 'docs';
-    store.openChatTaskModal = vi.fn(async () => true);
+    store.tasks = [{ record_id: 'task-42', record_state: 'active' }];
+    store.openTaskDetail = vi.fn();
 
-    store.handleMentionNavigate('task', 'task-42');
+    await store.handleMentionNavigate('task', 'task-42');
 
-    expect(store.openChatTaskModal).toHaveBeenCalledWith('task-42');
+    expect(store.openTaskDetail).toHaveBeenCalledWith('task-42', expect.objectContaining({ captureOrigin: false }));
   });
 
   it('does not open the enclosing Deck card when a rendered mention pill is clicked', async () => {
@@ -536,27 +602,30 @@ describe('channel mention lookup', () => {
     const store = await createStore();
     store.openLinkedThread = vi.fn().mockResolvedValue(true);
     await store.handleMentionNavigate('chat', 'channel-ops#msg-1');
-    expect(store.openLinkedThread).toHaveBeenCalledWith('channel-ops#msg-1');
+    expect(store.openLinkedThread).toHaveBeenCalledWith('channel-ops#msg-1', expect.objectContaining({ isCurrent: expect.any(Function), beforeOpen: expect.any(Function) }));
     await store.handleMentionNavigate('message', 'source-message');
-    expect(store.openLinkedThread).toHaveBeenCalledWith('source-message');
+    expect(store.openLinkedThread).toHaveBeenCalledWith('source-message', expect.objectContaining({ isCurrent: expect.any(Function) }));
   });
 
   it('navigates copied folder and report references', async () => {
     const store = await createStore();
     store.navigateToFolder = vi.fn();
     store.startWorkspaceLiveQueries = vi.fn();
-    store.openReportModalById = vi.fn();
+    store.openReportModal = vi.fn();
+    store.isStatusFamilyDisabled = vi.fn(() => false);
+    store.directories = [{ record_id: 'folder-1', record_state: 'active' }];
+    store.reports = [{ record_id: 'report-1', record_state: 'active' }];
     store.syncRoute = vi.fn();
     store.mobileNavOpen = true;
 
-    store.handleMentionNavigate('directory', 'folder-1');
-    store.handleMentionNavigate('report', 'report-1');
+    await store.handleMentionNavigate('directory', 'folder-1');
+    await store.handleMentionNavigate('report', 'report-1');
 
     expect(store.navigateToFolder).toHaveBeenCalledWith('folder-1');
     expect(store.navSection).toBe('reports');
     expect(store.mobileNavOpen).toBe(false);
     expect(store.startWorkspaceLiveQueries).toHaveBeenCalledTimes(1);
-    expect(store.openReportModalById).toHaveBeenCalledWith('report-1');
+    expect(store.openReportModal).toHaveBeenCalledWith(store.reports[0]);
     expect(store.syncRoute).toHaveBeenCalledTimes(1);
   });
 });

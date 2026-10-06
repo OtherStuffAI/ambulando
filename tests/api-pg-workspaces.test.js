@@ -1273,6 +1273,12 @@ describe('Tower PG API helpers', () => {
     expect(createNip98AuthHeaderForSecret).not.toHaveBeenCalled();
   });
 
+  it('reads a single Tower PG message through the signed typed workspace route', async () => {
+    const api = await import('../src/api.js'); api.setBaseUrl('https://tower.example');
+    await api.getTowerPgMessage('workspace-1', 'message-1', { appNpub: 'flightdeck_pg' });
+    expect(globalThis.fetch).toHaveBeenCalledWith('https://tower.example/api/v4/flightdeck-pg/workspaces/workspace-1/messages/message-1', expect.objectContaining({ method: 'GET' }));
+  });
+
   it('reads and renames Tower PG threads with browser NIP-98 auth', async () => {
     const api = await import('../src/api.js');
     api.setBaseUrl('https://tower.example');

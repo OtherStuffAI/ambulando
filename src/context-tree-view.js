@@ -353,13 +353,13 @@ export function createContextTreeView(deps = {}) {
         if (epoch !== generation || !checked) return;
         const type = normalizeRecordLinkType(row.target_type);
         if (type === 'file') {
-          await service.ensureLoaded('documents', '', { force: true });
+          await service.ensureLoaded('file', id, { force: true });
           if (epoch !== generation) return;
           const file = await db.documents.get(id);
           if (!file || file.pg_record_type !== 'file' || file.record_state !== 'active') throw new Error('Unavailable');
           store.navigateTo('files');
           await store.downloadFileBrowserRow({ object_id: file.pg_storage_object_id, name: file.title, kind: 'file' });
-        } else store.handleMentionNavigate(type, id);
+        } else await store.handleMentionNavigate(type, id);
       } catch { if (epoch === generation) this.refsError = 'Reference unavailable. Access may have changed.'; }
     },
   };

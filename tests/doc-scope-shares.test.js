@@ -18,7 +18,8 @@ vi.mock('../src/translators/record-crypto.js', () => ({
     }))),
 }));
 
-vi.mock('../src/db.js', () => ({
+vi.mock('../src/db.js', async (importOriginal) => ({
+  ...await importOriginal(),
   upsertDocument: vi.fn(async () => {}),
   upsertDirectory: vi.fn(async () => {}),
   upsertScope: vi.fn(async () => {}),

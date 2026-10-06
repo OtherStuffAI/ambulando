@@ -1,3 +1,4 @@
+import { beginInternalReferenceVisit, resolveInternalReference, rememberReferenceComposerDraft } from '../internal-reference-navigation.js';
 import { channelWikiPages, resolveWikiPage, incomingWikiPages } from './wiki-links.js';
 import { updateTowerPgChannel } from '../tower-command-intents.js';
 import { upsertChannel } from '../db.js';
@@ -32,8 +33,8 @@ export const wikiManagerMixin = {
   },
   async followDocWikiLink(documentId, options = {}) {
     if (this.wikiCreateBusy) return false;
-    const target = this.resolveDocWikiLink({ documentId }).page;
-    if (!target) { this.error = 'Page deleted or unavailable.'; return false; }
+    const navigation = beginInternalReferenceVisit(this);
+    let target = this.resolveDocWikiLink({ documentId }).page;
     const started = performance.now();
     this.wikiNavigationTiming = { documentId, stages: [{ stage: 'link activated', elapsedMs: 0 }] };
     const timing = this.wikiNavigationTiming;
@@ -41,14 +42,35 @@ export const wikiManagerMixin = {
       if (this.wikiNavigationTiming === timing) timing.stages.push({ stage: name, elapsedMs: performance.now() - started });
     };
     const originId = this.selectedDocId;
+    const section = this.navSection;
     const channelId = this.selectedChannelId;
     const workspace = this.currentWorkspace;
     const visit = this.docsHomeVisit;
+    try {
+      if (!target) {
+        this.internalLinkOpening = true;
+        this.internalLinkOpenError = '';
+        target = await resolveInternalReference(this, 'doc', documentId, { isCurrent: navigation.isCurrent });
+        if (!target || !navigation.isCurrent()) return false;
+        if (['archived', 'deleted'].includes(target.record_state) || target.archived_at || target.deleted_at) {
+          throw new Error('Page deleted or unavailable.');
+        }
+      }
+    } catch (error) {
+      if (navigation.isCurrent()) {
+        this.error = `Could not open wiki page: ${error.message}`;
+        this.internalLinkOpenError = this.error;
+      }
+      return false;
+    } finally {
+      if (this.internalLinkOpenRequestId === navigation.request) this.internalLinkOpening = false;
+    }
     if (!await this.preserveWikiNavigationDraft()) return false;
     stage('local draft preserved');
-    if (originId !== this.selectedDocId || channelId !== this.selectedChannelId || workspace !== this.currentWorkspace
-      || visit !== this.docsHomeVisit || this.navSection !== 'docs') return false;
+    if (!navigation.isCurrent() || originId !== this.selectedDocId || channelId !== this.selectedChannelId || workspace !== this.currentWorkspace
+      || visit !== this.docsHomeVisit || this.navSection !== section) return false;
     if (this.selectedDocId === target.record_id) return true;
+    rememberReferenceComposerDraft(this, 'doc', originId);
     this.openDoc(target.record_id, { ...options, draftPreserved: true });
     stage('local selection loaded');
     if (typeof window !== 'undefined') {

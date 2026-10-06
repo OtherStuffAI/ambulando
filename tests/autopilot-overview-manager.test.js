@@ -1005,10 +1005,25 @@ describe('autopilot overview manager', () => {
 
     await store.resolveDeckThreadChannel('chan-a');
 
-    expect(store.requestTowerSyncFamily).toHaveBeenCalledWith('channels', '', { force: true });
+    expect(store.requestTowerSyncFamily).toHaveBeenCalledWith('channel', 'chan-a', { force: true });
     expect(store.deckThreadChannelState).toBe('ready');
     expect(store.deckThreadChannelRecord).toBe(channel);
     expect(store.deckThreadChannelError).toBe('');
+  });
+
+  it('does not make a late target channel ready after switching workspaces', async () => {
+    const store = {
+      ...autopilotOverviewManagerMixin,
+      activeThreadId: 'root-a', deckThreadChannelId: 'chan-a', channels: [],
+      currentWorkspace: { workspaceId: 'source-workspace' },
+      requestTowerSyncFamily: vi.fn(async () => {
+        store.currentWorkspace = { workspaceId: 'other-workspace' };
+        store.channels = [{ record_id: 'chan-a', record_state: 'active' }];
+      }),
+    };
+    expect(await store.resolveDeckThreadChannel('chan-a')).toBe(false);
+    expect(store.deckThreadChannelRecord).toBeNull();
+    expect(store.requestTowerSyncFamily).toHaveBeenCalledWith('channel', 'chan-a', { force: true });
   });
 
   it('keeps a failed Deck channel refresh visible and retryable', async () => {

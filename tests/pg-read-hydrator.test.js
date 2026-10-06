@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   hydrateTowerPgChannels,
+  hydrateTowerPgChannel,
+  hydrateTowerPgFile,
   hydrateTowerPgChannelMessages,
   hydrateTowerPgThreadMessages,
   selectPgFallbackThreads,
@@ -3353,4 +3355,46 @@ describe('Context reference scope-task browsing', () => {
     await expect(hydrateTowerPgScopeTasks(target,'scope',{getTowerPgScopeTasks:vi.fn(async()=>{target.currentWorkspace={...target.currentWorkspace,workspaceId:'other'};return {tasks:[{id:'stale'}]}}),upsertTask,actorNpubByActorId:new Map()})).rejects.toThrow();
     expect(upsertTask).not.toHaveBeenCalled();
   });
+});
+
+describe('narrow internal reference hydration', () => {
+  const variants = [
+    { type: 'channel', hydrate: hydrateTowerPgChannel, read: 'getTowerPgChannel', write: 'upsertPgListedChannel', collection: 'channels', row: { id: 'target', workspace_id: 'workspace-1', scope_id: 'scope', name: 'Channel', row_version: 3 } },
+    { type: 'file', hydrate: hydrateTowerPgFile, read: 'getTowerPgFile', write: 'upsertDocument', collection: 'documents', row: { id: 'target', workspace_id: 'workspace-1', channel_id: 'channel', display_name: 'File', storage_object_id: 'object', row_version: 4 } },
+  ];
+  it.each(variants)('maps and stores only a single $type target without changing rendered collections', async variant => {
+    const target = store(); const write = vi.fn(), read = vi.fn(async () => ({ [variant.type]: variant.row }));
+    const deps = { [variant.read]: read, [variant.write]: write, getSyncState: vi.fn(async () => null), runWorkspaceSyncTransaction: async callback => callback() };
+    const row = await variant.hydrate(target, 'target', deps);
+    expect(read).toHaveBeenCalledWith('workspace-1', 'target', { baseUrl: 'https://tower.example', appNpub: 'flightdeck_pg' });
+    expect(row).toMatchObject({ record_id: 'target', pg_workspace_id: 'workspace-1', record_state: 'active' });
+    if (variant.type === 'file') expect(row).toMatchObject({ pg_record_type: 'file', pg_storage_object_id: 'object', content: '[File](storage://object)' });
+    else expect(row).toMatchObject({ title: 'Channel', scope_id: 'scope', version: 3 });
+    expect(write).toHaveBeenCalledExactlyOnceWith(row);
+    expect(target.applyChannels).not.toHaveBeenCalled(); expect(target.applyDocuments).not.toHaveBeenCalled();
+  });
+  for (const variant of variants) {
+    it.each([{ workspace_id: 'foreign' }, { deleted_at: 'today' }, { record_state: 'deleted' }, { id: 'another-target' }])(`rejects unavailable ${variant.type} rows before storage: %j`, async patch => {
+      const write = vi.fn();
+      const deps = { [variant.read]: vi.fn(async () => ({ [variant.type]: { ...variant.row, ...patch } })), [variant.write]: write,
+        getSyncState: vi.fn(async () => null), runWorkspaceSyncTransaction: async callback => callback() };
+      expect(await variant.hydrate(store(), 'target', deps)).toBeNull(); expect(write).not.toHaveBeenCalled();
+    });
+    it(`never commits a held ${variant.type} response after the workspace changes`, async () => {
+      const target = store(), write = vi.fn(); let finish;
+      const deps = { [variant.read]: vi.fn(() => new Promise(resolve => { finish = resolve; })), [variant.write]: write,
+        getSyncState: vi.fn(async () => null), runWorkspaceSyncTransaction: async callback => callback() };
+      const pending = variant.hydrate(target, 'target', deps);
+      while (!finish) await Promise.resolve();
+      target.currentWorkspace = { ...target.currentWorkspace, workspaceId: 'workspace-2' };
+      finish({ [variant.type]: variant.row });
+      await expect(pending).rejects.toThrow(/workspace/i); expect(write).not.toHaveBeenCalled();
+    });
+    it(`never commits a ${variant.type} read after authority generation changes`, async () => {
+      const write = vi.fn(), deps = { [variant.read]: vi.fn(async () => ({ [variant.type]: variant.row })), [variant.write]: write,
+        getSyncState: vi.fn().mockResolvedValueOnce({ localGeneration: 1 }).mockResolvedValueOnce({ localGeneration: 2 }), runWorkspaceSyncTransaction: async callback => callback() };
+      await expect(variant.hydrate(store(), 'target', deps)).rejects.toMatchObject({ code: 'pg_read_authority_changed' });
+      expect(write).not.toHaveBeenCalled();
+    });
+  }
 });

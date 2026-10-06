@@ -13,14 +13,11 @@ describe('chat document full-page navigation', () => {
   it('routes chat doc mentions through the hydrated full-page opener', () => {
     const source = readFileSync(new URL('../src/app.js', import.meta.url), 'utf8');
 
-    expect(source).toMatch(/if \(this\.navSection === 'chat'\) \{\s*this\.openChatDocModal\(id\);/);
-    expect(source).toContain('openChatDocModal(recordId');
-    expect(source).toContain("this.createOptimisticChatDoc(docId, options.title)");
-    expect(source).not.toContain("await hydrateTowerPgDoc(this, docId)");
-    expect(source).toContain('this.chatDocModalOpen = false');
-    expect(source).not.toContain('this.chatDocModalOpen = true');
-    expect(source).toContain('ensureSync: false');
-    expect(source).toContain('allowCommentBackfill: false');
+    expect(source).toContain('resolveInternalReference(this, linkType, recordId');
+    expect(source).toContain("this.handleMentionNavigate('doc', recordId, options)");
+    expect(source).toContain('this.openDoc(recordId,');
+    expect(source).not.toContain('this.createOptimisticChatDoc(docId, options.title)');
+
   });
 
   it('prefetches doc mention cards before click without blocking modal open', () => {
@@ -36,9 +33,9 @@ describe('chat document full-page navigation', () => {
   it('intercepts same-origin docs links in chat before they open a new window', () => {
     const source = readFileSync(new URL('../src/app.js', import.meta.url), 'utf8');
 
-    expect(source).toContain("route?.section === 'docs'");
-    expect(source).toContain('this.openChatDocModal(route.params.docid');
-    expect(source).toContain('routeUrl.origin === window.location.origin');
+    expect(source).toContain("route.section === 'docs' && params.docid");
+    expect(source).toContain('this.handleMentionNavigate(type, id, { commentId: params.commentid');
+    expect(source).toContain('url.origin !== window.location.origin');
   });
 
   it('makes the shared document opener enforce the full-page docs section', () => {
@@ -65,8 +62,7 @@ describe('chat document full-page navigation', () => {
     const end = source.indexOf('closeChatDocModal()', start);
     const methods = source.slice(start, end);
 
-    expect(methods).toContain('this.chatDocModalFullScreen = false');
-    expect(methods).toContain('this.chatDocModalOpen = false');
-    expect(methods).toContain('this.openDoc(docId');
+    expect(methods).toContain("this.handleMentionNavigate('doc', recordId, options)");
+
   });
 });

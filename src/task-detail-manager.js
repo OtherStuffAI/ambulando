@@ -1,3 +1,4 @@
+import { restoreReferenceComposerDraft } from './internal-reference-navigation.js';
 import { getCommentsByTarget, upsertComment } from './db.js';
 import { resolveTowerPgWorkspaceContext } from './pg-read-hydrator.js';
 import {
@@ -53,6 +54,7 @@ export const taskDetailManagerMixin = {
   },
 
   openTaskDetail(taskId, options = {}) {
+    this.taskDetailOpenGeneration = Number(this.taskDetailOpenGeneration || 0) + 1;
     this.commentVisibleCount = this.commentPageSize || 80;
     const isNewDetailEntry = !this.showTaskDetail;
     if (isNewDetailEntry || options.captureOrigin === false) {
@@ -85,7 +87,7 @@ export const taskDetailManagerMixin = {
     this.activeTaskId = taskId;
     const task = this.tasks.find(t => t.record_id === taskId);
     if (isTowerPgBackendMode() && task?.pg_channel_id && task.pg_channel_id !== this.selectedChannelId) {
-      this.selectPgChannelContext?.(task.pg_channel_id);
+      this.selectPgChannelContext?.(task.pg_channel_id, { preserveDetail: true });
     }
     this.destroyTaskRichDescriptionEditor?.();
     this.editingTask = task ? toRaw(task) : null;
@@ -120,6 +122,7 @@ export const taskDetailManagerMixin = {
     this.taskDescriptionEditing = false;
     this.newSubtaskTitle = '';
     this.newTaskCommentBody = '';
+    restoreReferenceComposerDraft(this, 'task', taskId);
     if (this.editingTask && isTowerPgBackendMode()) {
       void this.restoreTaskLocalDraft?.(this.editingTask).catch(() => {});
     }
@@ -130,6 +133,7 @@ export const taskDetailManagerMixin = {
   },
 
   async closeTaskDetail(options = {}) {
+    this.taskDetailOpenGeneration = Number(this.taskDetailOpenGeneration || 0) + 1;
     if (this.isTaskDetailEditing() && options.releaseCheckout !== false) {
       if (isTowerPgBackendMode()) {
         if (this.taskDraftDirty) await this.persistTaskLocalDraft?.();

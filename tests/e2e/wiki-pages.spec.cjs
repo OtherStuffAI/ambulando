@@ -2,18 +2,22 @@ const { test, expect } = require('playwright/test');
 
 async function seed(page, content = 'Notebook', durable = false) {
   await page.goto('/');
-  await page.waitForFunction(() => window.Alpine?.store?.('chat'));
+  await page.waitForFunction(() => window.Alpine?.store?.('chat')?.routeSyncPaused === false);
   await page.evaluate(async ({ content, durable }) => {
     const s = window.Alpine.store('chat');
     s.__navigationOriginals = Object.fromEntries(['hydrateSelectedDocWithRetry', 'inspectSelectedDocEditLease', 'persistSelectedDocDraft', 'restoreSelectedDocDraft', 'loadDocComments'].map(name => [name, s[name]]));
     const owner = 'npub1wikibrowsertest';
     s.session = { ...(s.session || {}), npub: owner };
     if (durable) {
+      s.bootstrapSelectedWorkspace = async () => {};
+      s.ensurePgWorkspaceAvailable = async workspace => workspace;
       const key = `wiki-navigation-${crypto.randomUUID()}`;
       s.knownWorkspaces = [{ workspaceKey: key, workspaceId: key, workspaceOwnerNpub: owner, directHttpsUrl: 'http://127.0.0.1:3100', appNpub: 'flightdeck_pg', pgBackendMode: true }];
       for (const name of ['startWorkspaceLiveQueries', 'startSharedLiveQueries', 'stopWorkspaceLiveQueries', 'ensureWorkspaceSessionKey', 'loadLocalWorkspaceCoreData', 'persistWorkspaceSettings', 'refreshWorkspaceSettings', 'refreshLegacyWorkspaceRecovery']) s[name] = async () => {};
       await s.selectWorkspace(key, { skipPgVerification: true });
+      s.selectWorkspace = async () => {};
       s.__draftDbName = `wingman-fd-ws-${key}`;
+      await s.loadLocalScopes();
     }
 
     s.canManageChannel = () => true;
@@ -524,3 +528,23 @@ test('native Shift selection across a wiki link does not navigate', async ({ pag
   expect(await page.evaluate(() => Alpine.store('chat').selectedDocId)).toBe('wiki-home');
   expect(await page.evaluate(() => window.getSelection().toString())).not.toBe('');
 });
+
+for (const width of [1120, 390]) {
+  test(`stored wiki ID opens target absent rendered list from Dexie at ${width}px`, async ({ page }) => {
+    test.setTimeout(30_000);
+    await page.setViewportSize({ width, height: 900 });
+    await seed(page, '[Stored target](wiki:wiki-target)', true);
+    await page.evaluate(async () => {
+      const s = window.Alpine.store('chat');
+      const target = JSON.parse(JSON.stringify(s.documents.find(row => row.record_id === 'wiki-target')));
+      const db = await new Promise((resolve, reject) => { const req = indexedDB.open(s.__draftDbName); req.onsuccess = () => resolve(req.result); req.onerror = () => reject(req.error); });
+      await new Promise((resolve, reject) => { const tx = db.transaction('documents', 'readwrite'); tx.objectStore('documents').put(target); tx.oncomplete = resolve; tx.onerror = () => reject(tx.error); });
+      db.close();
+      s.documents = s.documents.filter(row => row.record_id !== 'wiki-target');
+      s.requestTowerSyncFamily = async () => { throw new Error('Dexie cached wiki must not wait on Tower'); };
+    });
+    await page.locator('.tiptap [data-wiki-id="wiki-target"]').click();
+    await expect(page.locator('.doc-title-display')).toHaveText('Plant list');
+    await expect(page.locator('.tiptap')).toContainText('Plant details');
+  });
+}

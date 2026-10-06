@@ -2709,6 +2709,9 @@ export const channelsManagerMixin = {
     ].join('|'))) {
       this.channels = nextChannels;
     }
+    // A target link adds cached routing metadata without selecting a default
+    // channel or disturbing the source modal before the click is committed.
+    if (options.preserveNavigation) return;
     if (activeDeckThreadChannel) this.setDeckThreadChannelReady?.(activeDeckThreadChannel);
 
     if (deckThreadAccessLost) {
@@ -2908,6 +2911,8 @@ export const channelsManagerMixin = {
   },
 
   async selectChannel(recordId, options = {}) {
+    const callerIsCurrent = () => !options.isCurrent || options.isCurrent();
+    if (!callerIsCurrent()) return;
     const channelId = String(recordId || '').trim();
     if (options.inputEvent) {
       recordNavigationPointer(this, 'channel', channelId, options.inputEvent);
@@ -2932,7 +2937,9 @@ export const channelsManagerMixin = {
       : null;
     if (openDocument && typeof this.resetOpenDocumentForContextChange === 'function') {
       if (this.docEditDraftDirty && !await this.preserveWikiNavigationDraft?.()) return;
+      if (!callerIsCurrent()) return;
       await this.resetOpenDocumentForContextChange(openDocument, { syncRoute: false });
+      if (!callerIsCurrent()) return;
     }
     const generation = changingChannel
       ? Number(this.channelSelectionGeneration || 0) + 1
@@ -2975,7 +2982,7 @@ export const channelsManagerMixin = {
       });
       navigationTiming.browserPaintBoundary = paintResult.browserPaintBoundary;
       markNavigationTiming(navigationTiming, 'paintAt');
-      if (this.channelSelectionGeneration !== generation) return;
+      if (this.channelSelectionGeneration !== generation || !callerIsCurrent()) return;
       markNavigationTiming(navigationTiming, 'postPaintStartAt');
     }
 
@@ -2989,7 +2996,7 @@ export const channelsManagerMixin = {
       try {
         initialMessages = await this.loadChannelMessagesForSelection(channelId);
       } catch (error) {
-        if (this.channelSelectionGeneration !== generation) return;
+        if (this.channelSelectionGeneration !== generation || !callerIsCurrent()) return;
         this.pendingChannelSelectionId = '';
         this.error = error?.message || 'Could not load this channel from local storage.';
         flightDeckLog('warn', 'chat', 'selected channel local read failed', {
@@ -3007,7 +3014,7 @@ export const channelsManagerMixin = {
         readDurationMs: readEndedAt - readStartedAt,
         sinceSelectionMs: readEndedAt - selectionStartedAt,
       });
-      if (this.channelSelectionGeneration !== generation) return;
+      if (this.channelSelectionGeneration !== generation || !callerIsCurrent()) return;
     }
 
     this.selectedChannelId = channelId || recordId;
@@ -3037,9 +3044,10 @@ export const channelsManagerMixin = {
         await this.applyMessages?.(initialMessages || [], {
           scrollToLatest: options.scrollToLatest,
           selectionGeneration: generation,
+          isCurrent: callerIsCurrent,
           deferEnrichment: true,
         });
-        if (this.channelSelectionGeneration !== generation) return;
+        if (this.channelSelectionGeneration !== generation || !callerIsCurrent()) return;
         this.pendingChannelSelectionId = '';
         this.saveCurrentChatPresentation(this.getChatPresentationKey(channelId));
       }
@@ -3052,7 +3060,7 @@ export const channelsManagerMixin = {
       });
       this.startSelectedChannelLiveQuery();
       const afterRender = () => {
-        if (this.channelSelectionGeneration !== generation) return;
+        if (this.channelSelectionGeneration !== generation || !callerIsCurrent()) return;
         if (!cachedPresentation) this.pendingChannelSelectionId = '';
         traceChannelSelection(this, 'Alpine/DOM render tick', {
           channelId,
@@ -3069,7 +3077,7 @@ export const channelsManagerMixin = {
       this.pendingChatScrollToLatest = true;
     }
     const refreshRemoteState = async () => {
-      if (this.channelSelectionGeneration !== generation) return;
+      if (this.channelSelectionGeneration !== generation || !callerIsCurrent()) return;
       traceChannelSelection(this, 'deferred/background work start', {
         channelId,
         generation,
@@ -3086,7 +3094,7 @@ export const channelsManagerMixin = {
           });
         }
       }
-      if (this.channelSelectionGeneration !== generation) return;
+      if (this.channelSelectionGeneration !== generation || !callerIsCurrent()) return;
       await this.refreshDailyNotes?.();
       traceChannelSelection(this, 'deferred/background work end', {
         channelId,
@@ -3103,13 +3111,13 @@ export const channelsManagerMixin = {
     if (changingChannel && typeof this.$nextTick === 'function') this.$nextTick(launchBackgroundRefresh);
     else if (changingChannel) queueMicrotask(launchBackgroundRefresh);
     else launchBackgroundRefresh();
-    if (this.channelSelectionGeneration !== generation) return;
+    if (this.channelSelectionGeneration !== generation || !callerIsCurrent()) return;
     if (changingChannel && this.navSection === 'docs') void this.openChannelDocsHome?.();
     if (options.syncRoute !== false) this.syncRoute();
     this.ensureBackgroundSync(true);
     if (!isPgWorkspace) {
       const selectedChannelUnreadCutoff = await this.captureSelectedChannelUnreadSnapshot(channelId);
-      if (this.channelSelectionGeneration !== generation) return;
+      if (this.channelSelectionGeneration !== generation || !callerIsCurrent()) return;
       this.selectedChannelUnreadChannelId = channelId || null;
       this.selectedChannelUnreadCutoff = selectedChannelUnreadCutoff || null;
       await this.markChannelRead(channelId);

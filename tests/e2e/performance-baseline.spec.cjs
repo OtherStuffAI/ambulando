@@ -88,6 +88,10 @@ async function seedWorkspace(page, options = {}) {
       updated_at: new Date(Date.parse(now) + (index * 1_000)).toISOString(),
     }));
 
+    // Synthetic records have no backend connection; keep onboarding out of measurements.
+    store.showConnectModal = false;
+    store.showWorkspaceBootstrapModal = false;
+    store.openConnectModal = () => {};
     store.startWorkspaceLiveQueries = () => {};
     store.stopTaskCommentsLiveQuery = () => {};
     store.startTaskCommentsLiveQuery = () => {};

@@ -2992,6 +2992,36 @@
       "notes": [
         "Keep each conversation draft in its own channel when following a linked thread or using browser Back and Forward."
       ]
+    },
+    {
+      "buildNumber": 2237,
+      "label": "Compact task cards and linked records",
+      "notes": [
+        "Keep task titles and actions together, with Back on the right, a coloured status picker and compact assignment controls. Remote update notices are in the task menu.",
+        "Follow internal record links across tasks, documents and context while preserving drafts and showing navigation failures."
+      ]
+    },
+    {
+      "buildNumber": 2238,
+      "label": "Task picker keyboard interactions",
+      "notes": [
+        "Use ArrowDown to reach task assignment suggestions, and keep the compact task controls clear on narrow screens. Preserve comment drafts when following internal links."
+      ]
+    },
+    {
+      "buildNumber": 2239,
+      "label": "Reliable internal reference links",
+      "notes": [
+        "Open cached documents, tasks and conversations from links across channels, comments and detail surfaces; automatically load missing targets with visible progress and useful errors.",
+        "Preserve source drafts and destination context, and prevent older link reads from replacing a newer view or workspace."
+      ]
+    },
+    {
+      "buildNumber": 2240,
+      "label": "Reliable document body loading",
+      "notes": [
+        "Document bodies recover from deferred reads and same-version hydration. Failed editor loads show recovery controls and a readable fallback instead of a blank page."
+      ]
     }
   ]
 }

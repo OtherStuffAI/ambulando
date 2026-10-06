@@ -101,45 +101,22 @@ describe('record link UI/context helpers', () => {
     }]);
   });
 
-  it('routes directory and report links directly when the store supports them', async () => {
-    const store = {
-      navigateToFolder: vi.fn(),
-      refreshReports: vi.fn(async () => {}),
-      navigateTo: vi.fn(),
-      openReportModalById: vi.fn(),
-      syncRoute: vi.fn(),
-    };
-
-    await taskBoardStateMixin.navigateReference.call(store, { type: 'directory', id: 'dir-1' });
-    await taskBoardStateMixin.navigateReference.call(store, { type: 'report', id: 'report-1' });
-
-    expect(store.navigateToFolder).toHaveBeenCalledWith('dir-1');
-    expect(store.refreshReports).toHaveBeenCalledTimes(1);
-    expect(store.navigateTo).toHaveBeenCalledWith('status', { syncRoute: false });
-    expect(store.openReportModalById).toHaveBeenCalledWith('report-1');
-    expect(store.syncRoute).toHaveBeenCalledTimes(1);
+  it.each([
+    ['directory', 'folder-1', 'directory'],
+    ['report', 'report-1', 'report'],
+    ['message', 'uncached-message', 'chat'],
+    ['thread', 'uncached-thread', 'chat'],
+    ['chat', 'channel-1#root-1', 'chat'],
+    ['channel', 'uncached-channel', 'channel'],
+  ])('routes %s references through the target resolver without requiring rendered rows', async (type, id, normalizedType) => {
+    const store = { handleMentionNavigate: vi.fn().mockResolvedValue(true), messages: [] };
+    expect(await taskBoardStateMixin.navigateReference.call(store, { type, id })).toBe(true);
+    expect(store.handleMentionNavigate).toHaveBeenCalledWith(normalizedType, id);
   });
 
-  it('routes compound chat source links to the source thread', async () => {
-    const store = {
-      navigateTo: vi.fn(),
-      selectChannel: vi.fn(async () => {}),
-      openThread: vi.fn(),
-      syncRoute: vi.fn(),
-      startWorkspaceLiveQueries: vi.fn(),
-      mobileNavOpen: true,
-    };
-
-    await taskBoardStateMixin.navigateReference.call(store, {
-      type: 'chat',
-      id: 'channel-1#root-1',
-    });
-
-    expect(store.navigateTo).toHaveBeenCalledWith('chat', { syncRoute: false });
-    expect(store.selectChannel).toHaveBeenCalledWith('channel-1', { syncRoute: false });
-    expect(store.openThread).toHaveBeenCalledWith('root-1', { scrollToLatest: false, syncRoute: false });
-    expect(store.focusMessageId).toBe('root-1');
-    expect(store.mobileNavOpen).toBe(false);
-    expect(store.syncRoute).toHaveBeenCalled();
+  it('awaits the resolver so failures remain observable by the click surface', async () => {
+    const failure = new Error('Target unavailable');
+    const store = { handleMentionNavigate: vi.fn().mockRejectedValue(failure) };
+    await expect(taskBoardStateMixin.navigateReference.call(store, { type: 'report', id: 'missing' })).rejects.toBe(failure);
   });
 });

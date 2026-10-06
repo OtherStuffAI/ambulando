@@ -275,6 +275,7 @@
         </div>
       </div>
     </template>
+    <p class="internal-reference-feedback" role="status" x-show="$store.chat.internalLinkOpening && !$store.chat.activeThreadId && !$store.chat.showTaskDetail && !$store.chat.selectedDocId" x-cloak>Opening linked record…</p>
     <template x-if="$store.chat.error">
       <div class="error-bar" role="alert">
         <span class="error-bar-message" x-text="$store.chat.error"></span>
@@ -3266,12 +3267,27 @@
           <!-- Task detail panel -->
           <template x-if="$store.chat.showTaskDetail && $store.chat.editingTask">
             <div class="task-detail-panel">
+                <div class="internal-reference-feedback" x-show="$store.chat.internalLinkOpening || $store.chat.internalLinkOpenError" x-cloak>
+                  <p role="status" x-show="$store.chat.internalLinkOpening">Opening linked record…</p>
+                  <p class="error-text" role="alert" x-show="$store.chat.internalLinkOpenError" x-text="$store.chat.internalLinkOpenError"></p>
+                </div>
               <div class="task-detail-header">
-                <button type="button" class="task-back-btn" x-show="!$store.chat.chatTaskModalOpen" @click="$store.chat.returnFromTaskDetail()">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
-                  Back
-                </button>
-                <button type="button" class="task-back-btn task-modal-close-btn" x-show="$store.chat.chatTaskModalOpen" @click="$store.chat.closeChatTaskModal()" title="Close task" aria-label="Close task">&times;</button>
+                <div class="task-header-title">
+                  <h1 class="task-detail-title-display" x-show="!$store.chat.isTaskDetailEditing()" :class="$store.chat.getTaskTitleLengthClass($store.chat.editingTask.title)" x-text="$store.chat.editingTask.title || 'Untitled task'"></h1>
+                  <textarea
+                    class="task-detail-title"
+                    rows="1"
+                    x-show="$store.chat.isTaskDetailEditing()"
+                    x-model="$store.chat.editingTask.title"
+                    @input="$store.chat.handleEditingTaskDraftChanged()"
+                    :readonly="!$store.chat.isTaskDetailEditing()"
+                    :class="{ 'task-readonly-control': !$store.chat.isTaskDetailEditing() }"
+                    aria-label="Task title"
+                    placeholder="Task title"
+                  ></textarea>
+
+                </div>
+
                 <div class="task-detail-actions">
                   <button
                     type="button"
@@ -3290,11 +3306,6 @@
                     x-show="$store.chat.chatTaskModalOpen"
                     @click="$store.chat.openChatTaskFullPage()"
                   >Open full page</button>
-                  <span
-                    class="task-detail-mode-pill"
-                    :class="$store.chat.isTaskDetailEditing() ? 'task-detail-mode-edit' : 'task-detail-mode-view'"
-                    x-text="$store.chat.isTowerPgMode ? ($store.chat.taskDraftRemoteChanged ? 'Remote update available' : ($store.chat.taskDraftDirty ? ($store.chat.taskDraftSaveState === 'local' ? 'Saved locally' : 'Unsaved changes') : 'Ready to edit')) : ($store.chat.isTaskDetailEditing() ? 'Editing checkout' : 'View mode')"
-                  ></span>
                   <button
                     type="button"
                     class="task-copy-btn task-edit-btn"
@@ -3322,18 +3333,11 @@
                   <button
                     type="button"
                     class="task-copy-btn"
-                    x-show="$store.chat.canDoTaskWithDefaultAgent"
-                    @click="$store.chat.doTaskWithDefaultAgent()"
-                    x-text="`Do it ${$store.chat.defaultAgentLabel || 'Agent'}`"
-                  ></button>
-                  <button
-                    type="button"
-                    class="task-copy-btn"
                     @click="if ($store.chat.editingTask?.record_id) $store.chat.copyTaskLink($store.chat.editingTask.record_id)"
                     x-text="$store.chat.editingTask?.record_id && $store.chat.copiedTaskLinkId === $store.chat.editingTask.record_id ? 'Copied link' : 'Copy link'"
                   ></button>
-                  <div class="doc-actions-menu task-actions-menu" x-data="{ open: false }" @click.outside="open = false">
-                    <button type="button" class="doc-actions-toggle" title="More actions" aria-label="More actions" @click="open = !open">
+                  <div class="doc-actions-menu task-actions-menu" x-data="{ open: false }" @click.outside="open = false" @keydown.escape.stop="open = false; $refs.toggle.focus()">
+                    <button type="button" class="doc-actions-toggle" title="More actions" aria-label="More actions" x-ref="toggle" :aria-expanded="open" @click="open = !open">
                       <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
                         <circle cx="12" cy="5" r="1.8"></circle>
                         <circle cx="12" cy="12" r="1.8"></circle>
@@ -3341,6 +3345,12 @@
                       </svg>
                     </button>
                     <div class="doc-actions-popover" x-show="open" x-cloak x-transition>
+                  <span
+                    class="task-detail-mode-pill"
+                    :class="$store.chat.isTaskDetailEditing() ? 'task-detail-mode-edit' : 'task-detail-mode-view'"
+                    x-text="$store.chat.isTowerPgMode ? ($store.chat.taskDraftRemoteChanged ? 'Remote update available' : ($store.chat.taskDraftDirty ? ($store.chat.taskDraftSaveState === 'local' ? 'Saved locally' : 'Unsaved changes') : 'Ready to edit')) : ($store.chat.isTaskDetailEditing() ? 'Editing checkout' : 'View mode')"
+                  ></span>
+
 	                      <button type="button" x-show="$store.chat.isTowerPgMode" @click="$store.chat.openRecordMove('task', $store.chat.editingTask); open = false">Move to…</button>
 	                      <button type="button" x-show="$store.chat.isTowerPgMode" @click="$store.chat.openRecordTagInChat('task', $store.chat.editingTask); open = false">Tag in Chat…</button>
 	                      <button
@@ -3365,93 +3375,26 @@
                       <button type="button" class="doc-actions-delete" @click="if($store.chat.editingTask?.record_id && confirm('Delete this task?')) $store.chat.deleteTask($store.chat.editingTask.record_id); open = false">Delete task</button>
                     </div>
                   </div>
+                <button type="button" class="task-back-btn" x-show="!$store.chat.chatTaskModalOpen" @click="$store.chat.returnFromTaskDetail()">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+                  Back
+                </button>
+                <button type="button" class="task-back-btn task-modal-close-btn" x-show="$store.chat.chatTaskModalOpen" @click="$store.chat.closeChatTaskModal()" title="Close task" aria-label="Close task">&times;</button>
                 </div>
               </div>
 
               <div class="task-record-heading">
-                  <!-- Title -->
-                  <div class="task-detail-record-header">
-                    <div class="task-detail-title-row" x-show="!$store.chat.isTaskDetailEditing()">
-                      <h1
-                        class="task-detail-title-display"
-                        :class="$store.chat.getTaskTitleLengthClass($store.chat.editingTask.title)"
-                        x-text="$store.chat.editingTask.title || 'Untitled task'"
-                      ></h1>
-                      <template x-if="$store.chat.getPrimaryTaskAssigneeNpub($store.chat.editingTask)">
-                        <button type="button" class="task-detail-assignee-avatar identity-avatar-button" :title="$store.chat.getTaskAssigneeLabel($store.chat.editingTask)" @click.stop="$store.chat.openIdentityCard($event, $store.chat.getPrimaryTaskAssigneeNpub($store.chat.editingTask))">
-                          <template x-if="$store.chat.getSenderAvatar($store.chat.getPrimaryTaskAssigneeNpub($store.chat.editingTask))">
-                            <img :src="$store.chat.getSenderAvatar($store.chat.getPrimaryTaskAssigneeNpub($store.chat.editingTask))" alt="" @error="$store.chat.handleAvatarImageError($event)" />
-                          </template>
-                          <template x-if="!$store.chat.getSenderAvatar($store.chat.getPrimaryTaskAssigneeNpub($store.chat.editingTask))">
-                            <span x-text="$store.chat.getInitials($store.chat.getSenderName($store.chat.getPrimaryTaskAssigneeNpub($store.chat.editingTask)))"></span>
-                          </template>
-                        </button>
-                      </template>
-                    </div>
-                    <div class="task-detail-meta-row" x-show="!$store.chat.isTaskDetailEditing()">
-                      <span class="task-detail-meta-pill task-detail-meta-state task-status-badge" :style="{ '--task-status-color': $store.chat.stateColor($store.chat.editingTask.state || 'new') }">
-                        <span x-text="$store.chat.formatState($store.chat.editingTask.state || 'new')"></span>
-                      </span>
-                      <span class="task-detail-meta-pill">
-                        <span x-text="$store.chat.formatTaskDueDate($store.chat.editingTask.scheduled_for)"></span>
-                      </span>
-                      <span class="task-detail-meta-pill" :class="{ 'task-detail-meta-muted': $store.chat.getTaskAssigneeNpubs($store.chat.editingTask).length === 0 }">
-                        <span x-text="$store.chat.getTaskAssigneeLabel($store.chat.editingTask)"></span>
-                      </span>
-                      <template x-for="tag in $store.chat.getTaskTags($store.chat.editingTask)" :key="`detail-meta-${tag}`">
-                        <span class="task-detail-meta-pill task-detail-tag-pill" x-text="tag"></span>
-                      </template>
-                    </div>
-                    <div class="task-quick-date-links" x-show="!$store.chat.isTaskDetailEditing()">
-                      <button type="button" class="task-quick-date-link" :disabled="$store.chat.taskDetailSaving" @click="$store.chat.applyTaskDetailQuickAction('blocked')">Blocked</button>
-                      <span class="task-quick-date-sep">|</span>
-                      <button type="button" class="task-quick-date-link" :disabled="$store.chat.taskDetailSaving" @click="$store.chat.applyTaskDetailQuickAction('done')">Done</button>
-                      <span class="task-quick-date-sep">|</span>
-                      <button type="button" class="task-quick-date-link" :disabled="$store.chat.taskDetailSaving" @click="$store.chat.applyTaskDetailQuickAction('archive')">Archive</button>
-                      <span class="task-quick-date-sep">|</span>
-                      <button type="button" class="task-quick-date-link" :disabled="$store.chat.taskDetailSaving" @click="$store.chat.applyTaskDetailQuickAction('today')">Today</button>
-                      <span class="task-quick-date-sep">|</span>
-                      <button type="button" class="task-quick-date-link" :disabled="$store.chat.taskDetailSaving" @click="$store.chat.applyTaskDetailQuickAction('this_week')">This Week</button>
-                    </div>
+                <div class="task-status-picker" x-data="{ open: false, focusState(index, container) { if (container.hidden) return; const buttons = [...container.querySelectorAll('button')]; buttons[(index + buttons.length) % buttons.length]?.focus(); } }" @click.outside="open = false" @keydown.escape.stop="open = false; $refs.badge.focus()" @focusout="if (!$el.contains($event.relatedTarget)) open = false">
+                  <button type="button" x-ref="badge" class="task-detail-meta-pill task-status-badge" :style="{ '--task-status-color': $store.chat.stateColor($store.chat.editingTask.state || 'new') }" :aria-label="'Change task status: ' + $store.chat.formatState($store.chat.editingTask.state || 'new')" :aria-expanded="open" aria-haspopup="true" :disabled="$store.chat.taskDetailSaving || $store.chat.taskDetailCheckoutPending" @click="open = !open" @keydown.arrow-down.prevent="open = true; requestAnimationFrame(() => focusState(0, $refs.states))" @keydown.arrow-up.prevent="open = true; requestAnimationFrame(() => focusState(-1, $refs.states))">
+                    <span x-text="$store.chat.formatState($store.chat.editingTask.state || 'new')"></span>
+                  </button>
+                  <div class="task-state-popover" x-ref="states" :hidden="!open" x-cloak role="group" aria-label="Task states">
+                    <template x-for="(state, index) in ['new', 'ready', 'in_progress', 'blocked', 'review', 'done', 'archive']" :key="state">
+                      <button type="button" class="task-detail-meta-pill task-status-badge" :style="{ '--task-status-color': $store.chat.stateColor(state) }" :aria-pressed="$store.chat.editingTask.state === state" @keydown.arrow-down.prevent="focusState(index + 1, $refs.states)" @keydown.arrow-up.prevent="focusState(index - 1, $refs.states)" @keydown.home.prevent="focusState(0, $refs.states)" @keydown.end.prevent="focusState(-1, $refs.states)" @click="if ($store.chat.isTaskDetailEditing() || await $store.chat.enterTaskDetailEditMode()) await $store.chat.quickSetTaskState(state); open = false; $refs.badge.focus()" x-text="$store.chat.formatState(state)"></button>
+                    </template>
                   </div>
-                  <textarea
-                    class="task-detail-title"
-                    rows="1"
-                    x-show="$store.chat.isTaskDetailEditing()"
-                    x-model="$store.chat.editingTask.title"
-                    @input="$store.chat.handleEditingTaskDraftChanged()"
-                    :readonly="!$store.chat.isTaskDetailEditing()"
-                    :class="{ 'task-readonly-control': !$store.chat.isTaskDetailEditing() }"
-                    aria-label="Task title"
-                    placeholder="Task title"
-                  ></textarea>
-
-                  <!-- State row -->
-                  <div class="task-detail-fields" x-show="$store.chat.isTaskDetailEditing()">
-                    <div class="task-field task-status-field">
-                      <label class="task-field-label">Status</label>
-                      <select x-model="$store.chat.editingTask.state" @change="$store.chat.handleEditingTaskDraftChanged()" :disabled="!$store.chat.isTaskDetailEditing()">
-                        <option value="new">New</option>
-                        <option value="ready">Ready</option>
-
-                        <option value="in_progress">In Progress</option>
-                        <option value="blocked">Blocked</option>
-                        <option value="review">Review</option>
-                        <option value="done">Done</option>
-                        <option value="archive">Archive</option>
-                      </select>
-                      <span class="task-quick-date-links">
-                        <button type="button" class="task-quick-date-link" :disabled="!$store.chat.isTaskDetailEditing()" @click="$store.chat.quickSetTaskState('blocked')">Blocked</button>
-                        <span class="task-quick-date-sep">|</span>
-                        <button type="button" class="task-quick-date-link" :disabled="!$store.chat.isTaskDetailEditing()" @click="$store.chat.quickSetTaskState('done')">Done</button>
-                        <span class="task-quick-date-sep">|</span>
-                        <button type="button" class="task-quick-date-link" :disabled="!$store.chat.isTaskDetailEditing()" @click="$store.chat.quickSetTaskState('archive')">Archive</button>
-                      </span>
-                    </div>
-                  </div>
-
-                  <div class="task-field task-field-wide task-assignee-field" x-show="$store.chat.isTaskDetailEditing()">
-                    <label class="task-field-label">Assigned</label>
+                </div>
+                  <div class="task-field task-field-wide task-assignee-field" x-data="{ suggestionsOpen: false }" @click.outside="suggestionsOpen = false" @focusout="if (!$el.contains($event.relatedTarget)) suggestionsOpen = false">
                     <template x-if="$store.chat.getPrimaryTaskAssigneeNpub($store.chat.editingTask)">
                       <div class="new-channel-resolved-profile task-assignee-selected">
                         <button type="button" class="identity-avatar-button" @click.stop="$store.chat.openIdentityCard($event, $store.chat.getPrimaryTaskAssigneeNpub($store.chat.editingTask))" :title="$store.chat.getSenderName($store.chat.getPrimaryTaskAssigneeNpub($store.chat.editingTask))">
@@ -3466,20 +3409,26 @@
                           <span class="new-channel-profile-name" x-text="$store.chat.getSenderName($store.chat.getPrimaryTaskAssigneeNpub($store.chat.editingTask))"></span>
                           <small x-text="$store.chat.getSenderSecondaryLabel($store.chat.getPrimaryTaskAssigneeNpub($store.chat.editingTask))"></small>
                         </div>
-                        <button type="button" class="task-inline-clear-btn" x-show="$store.chat.isTaskDetailEditing()" @click="$store.chat.clearEditingTaskAssignee()">Clear</button>
+                        <button type="button" class="task-inline-clear-btn" aria-label="Clear task assignee" :disabled="$store.chat.taskDetailSaving || $store.chat.taskDetailCheckoutPending" @click="if ($store.chat.isTaskDetailEditing() || await $store.chat.enterTaskDetailEditMode()) await $store.chat.clearEditingTaskAssignee()">Clear</button>
                       </div>
                     </template>
                     <input
-                      x-show="$store.chat.isTaskDetailEditing()"
+                      x-show="!$store.chat.getPrimaryTaskAssigneeNpub($store.chat.editingTask)"
+                      aria-label="Assign task"
+                      x-ref="assigneeInput"
+                      :disabled="$store.chat.taskDetailSaving || $store.chat.taskDetailCheckoutPending"
+                      @focus="suggestionsOpen = true; if (!$store.chat.isTaskDetailEditing()) await $store.chat.enterTaskDetailEditMode()"
+                      @keydown.escape.stop="suggestionsOpen = false"
+                      @keydown.arrow-down.prevent="$refs.assigneeSuggestions.querySelector('button')?.focus()"
                       type="text"
                       x-model="$store.chat.taskAssigneeQuery"
-                      @input="$store.chat.handleTaskAssigneeInput($event.target.value)"
+                      @input="suggestionsOpen = true; $store.chat.handleTaskAssigneeInput($event.target.value)"
                       placeholder="Type a name or npub"
                     />
-                    <ul class="docs-share-suggestions" x-show="$store.chat.isTaskDetailEditing() && $store.chat.taskAssigneeSuggestions.length > 0">
+                    <ul class="docs-share-suggestions" x-ref="assigneeSuggestions" @keydown.escape.stop="$refs.assigneeInput.focus(); suggestionsOpen = false" x-show="suggestionsOpen && !$store.chat.getPrimaryTaskAssigneeNpub($store.chat.editingTask) && $store.chat.isTaskDetailEditing() && $store.chat.taskAssigneeSuggestions.length > 0">
                       <template x-for="person in $store.chat.taskAssigneeSuggestions" :key="`task-assignee-${person.npub}`">
                         <li>
-                          <button type="button" class="docs-share-suggestion" @click="$store.chat.assignEditingTask(person.npub)">
+                          <button type="button" class="docs-share-suggestion" @click="$store.chat.assignEditingTask(person.npub); suggestionsOpen = false">
                             <template x-if="$store.chat.canRenderAvatarImage(person.avatarUrl)">
                               <img class="new-channel-avatar" :src="person.avatarUrl" alt="" @error="$store.chat.handleAvatarImageError($event)" />
                             </template>
@@ -3495,6 +3444,13 @@
                       </template>
                     </ul>
                   </div>
+
+                <div class="task-detail-meta-row" x-show="!$store.chat.isTaskDetailEditing()">
+                  <span class="task-detail-meta-pill" x-text="$store.chat.formatTaskDueDate($store.chat.editingTask.scheduled_for)"></span>
+                  <template x-for="tag in $store.chat.getTaskTags($store.chat.editingTask)" :key="`detail-meta-${tag}`">
+                    <span class="task-detail-meta-pill task-detail-tag-pill" x-text="tag"></span>
+                  </template>
+                </div>
 
               </div>
               <nav class="mobile-detail-switcher task-detail-mobile-switcher" aria-label="Task detail sections">
@@ -4436,8 +4392,12 @@
                 <p>Your first message starts this thread in <strong x-text="'#' + ($store.chat.getChannelLabel($store.chat.activeThreadChannel) || 'channel')"></strong>.</p>
               </div>
               <div class="thread-replies" data-thread-replies x-show="!$store.chat.deckThreadComposerOpen">
-                <p x-show="$store.chat.linkedThreadOpening" role="status">Opening linked conversation…</p>
-                <p x-show="$store.chat.linkedThreadOpenError" x-text="$store.chat.linkedThreadOpenError" role="alert"></p>
+                <div class="internal-reference-feedback" x-show="$store.chat.internalLinkOpening || $store.chat.internalLinkOpenError" x-cloak>
+                  <p role="status" x-show="$store.chat.internalLinkOpening">Opening linked record…</p>
+                  <p class="error-text" role="alert" x-show="$store.chat.internalLinkOpenError" x-text="$store.chat.internalLinkOpenError"></p>
+                </div>
+                <p x-show="$store.chat.linkedThreadOpening && !$store.chat.internalLinkOpening" role="status">Opening linked conversation…</p>
+                <p x-show="$store.chat.linkedThreadOpenError && !$store.chat.internalLinkOpenError" x-text="$store.chat.linkedThreadOpenError" role="alert"></p>
                 <p x-show="($store.chat.threadHistoryLoading && !$store.chat.threadHasLocalContent) || $store.chat.threadHistoryLoadAll" role="status">Loading conversation history…</p>
                 <p x-show="$store.chat.threadHistoryLoading && $store.chat.threadHasLocalContent && !$store.chat.threadHistoryLoadAll" role="status">Refreshing conversation…</p>
                 <p x-show="$store.chat.threadHistoryError" x-text="$store.chat.threadHistoryError" role="alert"></p>
@@ -5175,6 +5135,10 @@
 
             <template x-if="$store.chat.docsEditorOpen">
               <section class="docs-editor-v3">
+                <div class="internal-reference-feedback" x-show="$store.chat.internalLinkOpening || $store.chat.internalLinkOpenError" x-cloak>
+                  <p role="status" x-show="$store.chat.internalLinkOpening">Opening linked record…</p>
+                  <p class="error-text" role="alert" x-show="$store.chat.internalLinkOpenError" x-text="$store.chat.internalLinkOpenError"></p>
+                </div>
                 <div class="doc-editor-header">
                   <div class="doc-editor-primary">
                     <button type="button" class="task-back-btn doc-back-btn" @click="$store.chat.returnFromDoc()">
@@ -5445,6 +5409,11 @@
                       <path :d="$store.chat.docCommentConnector.path"></path>
                     </svg>
                     <div class="doc-preview-surface">
+                      <div role="status" aria-live="polite" x-cloak x-show="!$store.chat.isSelectedDocContentReadyForEditor() || ['loading', 'error'].includes($store.chat.docRichEditorLoadState)">
+                        <p x-text="$store.chat.docRichEditorLoadError || ($store.chat.selectedDocument?.content_storage_status === 'error' ? 'Document body could not load. Check your connection and try again.' : 'Loading document…')"></p>
+                        <button type="button" class="btn-secondary" x-show="$store.chat.docRichEditorLoadState === 'error' || $store.chat.selectedDocument?.content_storage_status === 'error'" :disabled="$store.chat.docEditDraftDirty || $store.chat.docLocalDraft" @click="$store.chat.retrySelectedDocLoading()">Try again</button>
+                        <button type="button" class="btn-secondary" x-show="$store.chat.docRichEditorLoadState === 'error'" @click="$store.chat.docEditorMode = 'preview'">Read without editor</button>
+                      </div>
                       <template x-if="$store.chat.docEditorMode === 'rich'">
                         <div
                           class="doc-rich-editor"
@@ -5469,7 +5438,7 @@
                           >
                             <template x-if="$store.chat.docEditingBlockIndex !== index">
                               <div class="doc-block-main">
-                                <div class="doc-block" @click="$store.chat.selectDocBlockForComment(block, index); $store.chat.startDocBlockEdit(index, $event.currentTarget)">
+                                <div class="doc-block" @click="if (!$event.target.closest('a, button')) { $store.chat.selectDocBlockForComment(block, index); $store.chat.startDocBlockEdit(index, $event.currentTarget); }">
                                   <div
                                     class="doc-block-rendered"
                                     x-html="$store.chat.renderMarkdown(block.raw)"

@@ -651,7 +651,7 @@ describe('thread lifecycle', () => {
 
     fn('m1');
 
-    expect(selectPgChannelContext).toHaveBeenCalledWith('channel-1');
+    expect(selectPgChannelContext).toHaveBeenCalledWith('channel-1', { preserveDetail: true });
     expect(store.activeThreadId).toBe('m1');
   });
 

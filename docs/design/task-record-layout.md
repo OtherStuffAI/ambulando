@@ -15,6 +15,11 @@ Chat and comment composers retain their sizing and resize behavior; the shared
 composer autosizer also exempts `task-description` from chat line limits.
 Draft/save handling and edit leases retain their existing paths.
 
+The title and actions share the top row, with Back last on the right. Narrow
+layouts wrap the title above the actions. Status is a coloured button with a
+state picker (arrow keys, Home/End, Enter/Space and Escape). The assignment
+control shows either avatar/name and Clear or a compact typeahead. Remote-update
+notices live in the overflow menu; Save/Discard retain draft reconciliation.
 Status and assignee controls share a compact desktop row and wrap on mobile.
 Description/editor and subtask container borders are removed; dependencies and
 subtasks remain below the complete description. Scope data remains part of the

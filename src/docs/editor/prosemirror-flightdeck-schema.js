@@ -88,7 +88,11 @@ export const FlightDeckMention = Mark.create({
     return ['span', mergeAttributes(HTMLAttributes, {
       'data-fd-mention-type': HTMLAttributes.mentionType,
       'data-fd-mention-id': HTMLAttributes.mentionId,
-      class: 'fd-mention',
+      class: 'fd-mention mention-link',
+      'data-mention-type': HTMLAttributes.mentionType,
+      'data-mention-id': HTMLAttributes.mentionId,
+      role: 'link',
+      tabindex: '0',
     }), 0];
   },
 });
@@ -166,6 +170,16 @@ export function createFlightDeckTiptapExtensions(options = {}) {
       openOnClick: false,
       autolink: true,
       linkOnPaste: true,
+      isAllowedUri: (url, context) => /^mention:[a-z]+:[^\s]+$/i.test(url) || context.defaultValidate(url),
+    }).extend({
+      renderHTML({ HTMLAttributes }) {
+        const reference = String(HTMLAttributes.href || '').match(/^mention:([^:]+):(.+)$/);
+        if (!reference) return this.parent({ HTMLAttributes });
+        return ['a', mergeAttributes(this.options.HTMLAttributes, HTMLAttributes, {
+          href: '#', class: 'mention-link',
+          'data-mention-type': reference[1], 'data-mention-id': reference[2],
+        }), 0];
+      },
     }),
     Placeholder.configure({
       placeholder: options.placeholder || 'Start writing...',

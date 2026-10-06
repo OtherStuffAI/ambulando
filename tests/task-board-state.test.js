@@ -449,6 +449,25 @@ describe('Deck context entry', () => {
     expect(store.selectedBoardId).toBe(buildPgChannelTaskBoardId('channel-1'));
   });
 
+  it('follows a record channel synchronously without scheduling navigation that can dismiss its detail', async () => {
+    const store = {
+      navSection: 'docs', selectedDocId: 'destination-doc', showTaskDetail: true,
+      activeTaskId: 'destination-task', selectedBoardId: 'source-scope', selectedChannelId: 'source-channel',
+      selectBoard: taskBoardStateMixin.selectBoard,
+      resetOpenDocumentForContextChange: vi.fn(), closeTaskDetail: vi.fn(),
+      persistSelectedBoardId: vi.fn(), clearSelectedTasks: vi.fn(), normalizeTaskFilterTags: vi.fn(),
+    };
+    taskBoardStateMixin.selectPgChannelContext.call(store, 'target-channel', { preserveDetail: true });
+    await Promise.resolve(); await Promise.resolve();
+    expect(store.selectedChannelId).toBe('target-channel');
+    expect(store.selectedBoardId).toBe(buildPgChannelTaskBoardId('target-channel'));
+    expect(store.selectedDocId).toBe('destination-doc');
+    expect(store.activeTaskId).toBe('destination-task');
+    expect(store.showTaskDetail).toBe(true);
+    expect(store.resetOpenDocumentForContextChange).not.toHaveBeenCalled();
+    expect(store.closeTaskDetail).not.toHaveBeenCalled();
+  });
+
   it('keeps the explicit primitive context helpers route-neutral', () => {
     const store = {
       selectedBoardId: 'scope-project',

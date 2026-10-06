@@ -8,14 +8,12 @@ const indexContent = fs.readFileSync(indexPath, 'utf-8');
 const appContent = fs.readFileSync(appPath, 'utf-8');
 
 describe('task detail quick actions', () => {
-  it('renders Blocked, Done, Archive, Today, and This Week controls in view mode', () => {
-    expect(indexContent).toContain('x-show="!$store.chat.isTaskDetailEditing()"');
-    expect(indexContent).toContain("@click=\"$store.chat.applyTaskDetailQuickAction('blocked')\"");
-    expect(indexContent).toContain("@click=\"$store.chat.applyTaskDetailQuickAction('done')\"");
-    expect(indexContent).toContain("@click=\"$store.chat.applyTaskDetailQuickAction('archive')\"");
-    expect(indexContent).toContain("@click=\"$store.chat.applyTaskDetailQuickAction('today')\"");
-    expect(indexContent).toContain("@click=\"$store.chat.applyTaskDetailQuickAction('this_week')\"");
-    expect(indexContent).toContain('<option value="blocked">Blocked</option>');
+  it('offers states in the badge picker without the removed detail shortcuts', () => {
+    const detail = indexContent.slice(indexContent.indexOf('<!-- Task detail panel -->'), indexContent.indexOf('task-detail-mobile-switcher'));
+    expect(detail).toContain('Change task status: ');
+    expect(detail).toContain("['new', 'ready', 'in_progress', 'blocked', 'review', 'done', 'archive']");
+    expect(detail).not.toContain('applyTaskDetailQuickAction(');
+    expect(detail).not.toContain('<select');
     expect(indexContent).toContain('aria-label="Filter tasks by status"');
     expect(indexContent).toContain("@click=\"$store.chat.applyBulkTaskAction('blocked')\"");
   });

@@ -81,6 +81,8 @@ import { decryptRecordPayload } from './translators/record-crypto.js';
 import { hasGroupKey } from './crypto/group-keys.js';
 import { outboundComment } from './translators/comments.js';
 import {
+  hydrateTowerPgFile,
+  hydrateTowerPgChannel,
   hydrateTowerPgChannelDocumentsAndFiles,
   hydrateTowerPgChannelMessages,
   hydrateTowerPgChannelAgentActivities,
@@ -621,6 +623,8 @@ export const syncManagerMixin = {
       case 'context-delete-preview': return readTowerPgContextDeletePreview(this, options.scopeId, id);
       case 'scopes': return hydrateTowerPgScopes(this, options);
       case 'channels': return hydrateTowerPgChannels(this, options);
+      case 'channel': return hydrateTowerPgChannel(this, id, options);
+      case 'file': return hydrateTowerPgFile(this, id, options);
       case 'tasks': return hydrateTowerPgTasks(this, options);
       case 'documents': return hydrateTowerPgDocumentsAndFiles(this, options);
       case 'scope-tasks': return hydrateTowerPgScopeTasks(this, id, options);

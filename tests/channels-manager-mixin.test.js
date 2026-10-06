@@ -78,6 +78,31 @@ describe('channelsManagerMixin', () => {
     expect(store.applyMessages).not.toHaveBeenCalledWith([], expect.anything());
   });
 
+  it('does not reselect a stale reference channel after a newer document visit while its local read waits', async () => {
+    let resolveRead;
+    let current = true;
+    const store = createStore({
+      navSection: 'chat', selectedChannelId: 'channel-a', selectedBoardId: 'source-board',
+      channels: [{ record_id: 'channel-b', scope_id: 'scope-b' }],
+      currentWorkspace: { pgBackendMode: true }, messages: [],
+      loadChannelMessagesForSelection: vi.fn(() => new Promise(resolve => { resolveRead = resolve; })),
+      applyMessages: vi.fn(),
+    });
+    const selection = store.selectChannel('channel-b', { isCurrent: () => current, syncRoute: false });
+    await Promise.resolve(); await Promise.resolve(); await Promise.resolve();
+    current = false;
+    store.navSection = 'docs';
+    store.selectedChannelId = 'document-channel';
+    store.selectedBoardId = 'document-board';
+    resolveRead([{ record_id: 'b-1', channel_id: 'channel-b' }]);
+    await selection;
+    expect(store.selectedChannelId).toBe('document-channel');
+    expect(store.selectedBoardId).toBe('document-board');
+    expect(store.applyMessages).not.toHaveBeenCalled();
+    expect(store.startSelectedChannelLiveQuery).not.toHaveBeenCalled();
+    expect(store.syncRoute).not.toHaveBeenCalled();
+  });
+
   it('allows only the newest selection generation to apply during rapid switching', async () => {
     const resolvers = new Map();
     const store = createStore({

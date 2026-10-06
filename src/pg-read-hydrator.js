@@ -1,3 +1,5 @@
+import { resolveTowerPgWorkspaceContext } from './pg-workspace-context.js';
+export { resolveTowerPgWorkspaceContext } from './pg-workspace-context.js';
 import { requestTowerPgContext } from './api.js';
 import { isContextAccessDenied } from './context-tree-errors.js';
 import { materializeFeedReaderEvent } from './feed/materialize.js';
@@ -5,6 +7,8 @@ import { clampBranchEffectiveMessageIds, threadHistoryLineage, mergeThreadHistor
 import { FLIGHT_DECK_PG_APP_NPUB } from './app-identity.js';
 import { normalizeBackendUrl } from './utils/state-helpers.js';
 import {
+  getTowerPgFile,
+  getTowerPgChannel,
   getTowerPgChannelAudioNotes,
   getTowerPgChannelDocs,
   getTowerPgChannelFiles,
@@ -462,13 +466,6 @@ function uniqueNonEmpty(values = []) {
   return [...new Set(values.map((value) => trimText(value)).filter(Boolean))];
 }
 
-function descriptorLinks(workspace = {}) {
-  const descriptor = workspace.pgDescriptor && typeof workspace.pgDescriptor === 'object'
-    ? workspace.pgDescriptor
-    : {};
-  return descriptor.links && typeof descriptor.links === 'object' ? descriptor.links : {};
-}
-
 function assertTowerPgWorkspaceCurrent(store, context) {
   const current = resolveTowerPgWorkspaceContext(store);
   if (current.workspaceId !== context.workspaceId || current.baseUrl !== context.baseUrl
@@ -476,35 +473,6 @@ function assertTowerPgWorkspaceCurrent(store, context) {
     || current.generation !== context.generation) {
     throw new Error('Workspace changed while loading Tower data');
   }
-}
-
-export function resolveTowerPgWorkspaceContext(store = {}) {
-  const workspace = store.currentWorkspace || {};
-  const descriptor = workspace.pgDescriptor && typeof workspace.pgDescriptor === 'object'
-    ? workspace.pgDescriptor
-    : {};
-  const identity = descriptor.identity && typeof descriptor.identity === 'object'
-    ? descriptor.identity
-    : {};
-  const workspaceId = trimText(workspace.workspaceId || identity.workspace_id || identity.workspaceId);
-  const workspaceOwnerNpub = trimText(
-    workspace.workspaceOwnerNpub
-    || identity.workspace_owner_npub
-    || identity.workspaceOwnerNpub
-    || store.workspaceOwnerNpub
-  );
-  const baseUrl = normalizeBackendUrl(workspace.directHttpsUrl || descriptor.tower_base_url || descriptor.towerBaseUrl || store.backendUrl);
-  const appNpub = trimText(workspace.appNpub || identity.app_npub || identity.appNpub || FLIGHT_DECK_PG_APP_NPUB);
-  return {
-    workspace,
-    generation: store._workspaceSelectionGeneration || 0,
-    sessionNpub: store.session?.npub || '',
-    workspaceId,
-    workspaceOwnerNpub,
-    baseUrl,
-    appNpub,
-    links: descriptorLinks(workspace),
-  };
 }
 
 export function mapPgScopeToLocal(scope, { workspaceOwnerNpub } = {}) {
@@ -2753,6 +2721,36 @@ export async function hydrateTowerPgChannelDocumentsAndFiles(store, channelId, d
   assertTowerPgWorkspaceCurrent(store, context);
   await replaceFolders(targetChannelId, folders);
   return documents;
+}
+
+export async function hydrateTowerPgFile(store, fileId, deps = {}) {
+  const context = resolveTowerPgWorkspaceContext(store);
+  const recordId = trimText(fileId);
+  if (!context.workspaceId || !context.baseUrl || !recordId) return null;
+  const authority = await readPgAuthority(store, deps);
+  const result = await (deps.getTowerPgFile || getTowerPgFile)(context.workspaceId, recordId, { baseUrl: context.baseUrl, appNpub: context.appNpub });
+  const file = result?.file;
+  if (!file || file.id !== recordId || file.deleted_at || file.record_state === 'deleted'
+    || (file.workspace_id && file.workspace_id !== context.workspaceId)) return null;
+  const row = mapPgFileToLocalDocument(file, { workspaceOwnerNpub: context.workspaceOwnerNpub });
+  assertTowerPgWorkspaceCurrent(store, context);
+  await commitPgRead(store, context, authority, deps, () => (deps.upsertDocument || upsertDocument)(tagPgSnapshotRead(row, authority)));
+  return row;
+}
+
+export async function hydrateTowerPgChannel(store, channelId, deps = {}) {
+  const context = resolveTowerPgWorkspaceContext(store);
+  const recordId = trimText(channelId);
+  if (!context.workspaceId || !context.baseUrl || !recordId) return null;
+  const authority = await readPgAuthority(store, deps);
+  const result = await (deps.getTowerPgChannel || getTowerPgChannel)(context.workspaceId, recordId, { baseUrl: context.baseUrl, appNpub: context.appNpub });
+  const channel = result?.channel;
+  if (!channel || channel.id !== recordId || channel.deleted_at || channel.record_state === 'deleted'
+    || (channel.workspace_id && channel.workspace_id !== context.workspaceId)) return null;
+  const row = mapPgChannelToLocal(channel, { workspaceOwnerNpub: context.workspaceOwnerNpub });
+  assertTowerPgWorkspaceCurrent(store, context);
+  await commitPgRead(store, context, authority, deps, () => (deps.upsertPgListedChannel || upsertPgListedChannel)(tagPgSnapshotRead(row, authority)));
+  return row;
 }
 
 export async function hydrateTowerPgDoc(store, docId, deps = {}) {

@@ -216,3 +216,16 @@ for (const mode of ['outline', 'visual']) it(`${mode} level presets collapse eve
   expect(h.view.activeLevelPreset).toBe('Custom');
   expect(h.view.components).toEqual(rows); expect(h.view.references).toEqual(references);
 });
+
+it('loads only the referenced file after ACL recheck and preserves the file download destination', async () => {
+  const h = harness(); h.emit(); h.view.select('root'); await tick();
+  const ref = { id: 'file-ref', component_id: 'root', target_type: 'file', target: { record_id: 'file' }, row_version: 1, resolution: { status: 'available', title: 'File' } };
+  h.emit(undefined, [ref]); await tick();
+  h.db.documents = { get: vi.fn(async () => ({ record_id: 'file', pg_record_type: 'file', record_state: 'active', pg_storage_object_id: 'object', title: 'File' })) };
+  h.store.navigateTo = vi.fn(); h.store.downloadFileBrowserRow = vi.fn();
+  await h.view.openReference(ref);
+  expect(h.service.ensureLoaded).toHaveBeenCalledWith('file', 'file', { force: true });
+  expect(h.service.ensureLoaded).not.toHaveBeenCalledWith('documents', '', expect.anything());
+  expect(h.store.navigateTo).toHaveBeenCalledWith('files');
+  expect(h.store.downloadFileBrowserRow).toHaveBeenCalledWith({ object_id: 'object', name: 'File', kind: 'file' });
+});

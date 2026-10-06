@@ -75,7 +75,7 @@ import {
 // Helpers
 // ---------------------------------------------------------------------------
 
-const MENTION_NAVIGABLE_RECORD_LINK_TYPES = new Set(['doc', 'task', 'scope', 'flow', 'opportunity']);
+const MENTION_NAVIGABLE_RECORD_LINK_TYPES = new Set(['doc', 'task', 'scope', 'channel', 'chat', 'directory', 'report', 'flow', 'opportunity']);
 const TASK_FILTER_TAG_LIMIT = 5;
 const TASK_CARD_TAG_LIMIT = 3;
 
@@ -1218,35 +1218,7 @@ export const taskBoardStateMixin = {
       ? this.isNavigableRecordLink
       : taskBoardStateMixin.isNavigableRecordLink;
     if (!isNavigable.call(this, normalizedRef)) return;
-    if (normalizedRef.type === 'directory') {
-      this.navigateToFolder(normalizedRef.id);
-      return;
-    }
-    if (normalizedRef.type === 'report') {
-      await this.refreshReports?.();
-      if (typeof this.navigateTo === 'function') this.navigateTo('status', { syncRoute: false });
-      else this.navSection = 'status';
-      this.openReportModalById?.(normalizedRef.id);
-      this.syncRoute?.();
-      return;
-    }
-    if (normalizedRef.type === 'chat') {
-      const { channelId, threadId } = parseChatRecordLinkId(normalizedRef.id, this.messages || []);
-      if (!channelId || !threadId) {
-        this.error = 'Open the source chat link in the task description to load this thread.';
-        return;
-      }
-      if (typeof this.navigateTo === 'function') this.navigateTo('chat', { syncRoute: false });
-      else this.navSection = 'chat';
-      this.mobileNavOpen = false;
-      this.startWorkspaceLiveQueries?.();
-      await this.selectChannel(channelId, { syncRoute: false });
-      this.openThread(threadId, { scrollToLatest: false, syncRoute: false });
-      this.focusMessageId = threadId;
-      this.syncRoute?.();
-      return;
-    }
-    this.handleMentionNavigate(normalizedRef.type, normalizedRef.id);
+    return await this.handleMentionNavigate(normalizedRef.type, normalizedRef.id);
   },
 
   // --- board computation ---
@@ -1600,11 +1572,22 @@ export const taskBoardStateMixin = {
     }
   },
 
-  selectPgChannelContext(channelId) {
+  selectPgChannelContext(channelId, { preserveDetail = false } = {}) {
     const normalizedChannelId = String(channelId || '').trim();
     if (!normalizedChannelId) return;
     this.selectedChannelId = normalizedChannelId;
-    this.selectBoard(buildPgChannelTaskBoardId(normalizedChannelId));
+    const boardId = buildPgChannelTaskBoardId(normalizedChannelId);
+    if (preserveDetail) {
+      // Opening a record follows its context; it is not a board navigation
+      // that should close the just-opened detail after a paint.
+      this.selectedBoardId = boardId;
+      this.persistSelectedBoardId?.(boardId);
+      this.showBoardDescendantTasks = false;
+      this.clearSelectedTasks?.();
+      this.normalizeTaskFilterTags?.();
+      return;
+    }
+    return this.selectBoard(boardId);
   },
 
   selectWorkContextScope(boardId, event = null) {

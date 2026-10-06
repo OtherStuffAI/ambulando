@@ -12,7 +12,7 @@ for (const width of [1120, 390]) for (const kind of ['message', 'thread']) {
       return serveBuiltFlightDeck(route);
     });
     await page.goto('/');
-    await page.waitForFunction(() => Boolean(window.Alpine?.store?.('chat')));
+    await page.waitForFunction(() => window.Alpine?.store?.('chat')?.routeSyncPaused === false);
     await page.evaluate(async kind => {
       const s = window.Alpine.store('chat');
       s.session = { npub: 'npub1linkedthreadtest' };

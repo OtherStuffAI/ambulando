@@ -2,16 +2,32 @@ const { test, expect } = require('playwright/test');
 const { serveBuiltFlightDeck } = require('./fixtures/serve-built-flightdeck.cjs');
 
 async function openFixture(page) {
-  await page.route('**/*', route => serveBuiltFlightDeck(route));
+  await page.route('**/*', route => {
+    if (process.env.FLIGHTDECK_TASK_LIVE !== '1') return serveBuiltFlightDeck(route);
+    const url = new URL(route.request().url());
+    if (!['127.0.0.1', 'localhost'].includes(url.hostname)) return route.abort();
+    if (url.pathname.startsWith('/api/')) return route.fulfill({ status: 503, contentType: 'application/json', body: '{}' });
+    return route.continue();
+  });
   await page.goto('/');
-  await page.waitForFunction(() => Boolean(window.Alpine?.store?.('chat')));
+  await page.waitForFunction(() => window.Alpine?.store?.('chat')?.routeSyncPaused === false);
   await page.evaluate(async () => {
     const store = window.Alpine.store('chat');
     for (const key of ['startWorkspaceLiveQueries', 'stopTaskCommentsLiveQuery', 'startTaskCommentsLiveQuery', 'syncRoute', 'performSync', 'requestTowerSyncFamily', 'scheduleStorageImageHydration', 'markTaskRead']) store[key] = () => {};
     store.showWorkspaceBootstrapModal = false;
     store.backendUrl = "http://127.0.0.1:3100";
-    store.selectedWorkspaceKey = "fixture-workspace";
     store.session = { npub: 'npub1fixture' };
+    store.bootstrapSelectedWorkspace = async () => {};
+    store.ensurePgWorkspaceAvailable = async workspace => workspace;
+    store.knownWorkspaces = [{ workspaceKey: 'layout-workspace', workspaceId: 'layout-workspace', workspaceOwnerNpub: 'npub1fixture', directHttpsUrl: 'http://127.0.0.1:3100', appNpub: 'flightdeck_pg', pgBackendMode: true }];
+    for (const key of ['startSharedLiveQueries', 'stopWorkspaceLiveQueries', 'ensureWorkspaceSessionKey', 'loadLocalWorkspaceCoreData', 'persistWorkspaceSettings', 'refreshWorkspaceSettings', 'refreshLegacyWorkspaceRecovery']) store[key] = async () => {};
+    await store.selectWorkspace('layout-workspace', { skipPgVerification: true });
+    store.selectWorkspace = async () => {};
+    await store.loadLocalScopes();
+    store.openConnectModal = () => {};
+    store.showConnectModal = false;
+    store.error = null;
+    store.rememberPeople = async () => {};
     store.tasks = [{ record_id: 'layout-task', title: 'A readable task record', description: '## Expected outcome\n\nA clear brief with a working conversation.\n\n- Preserve rich descriptions\n- Keep dependencies accessible', state: 'in_progress', assigned_to_npubs: [], scope_id: 'scope-preserved', predecessor_task_ids: ['dependency'], tags: '', record_state: 'active', sync_status: 'synced', version: 1 }, { record_id: 'dependency', title: 'Agree the layout', state: 'done', tags: '', record_state: 'active', version: 1 }];
     store.loadTaskComments = async () => store.applyTaskComments([
       { record_id: 'old', body: 'Earlier update', updated_at: '2026-10-05T01:00:00Z', sender_npub: 'npub1fixture' },
@@ -76,7 +92,7 @@ for (const width of [1280, 390]) {
     });
     const panel = page.locator('.task-detail-panel');
     await expect(panel.locator('.task-detail-title-display')).toHaveText('A readable task record');
-    await expect(panel.locator('.task-detail-meta-row')).toContainText('Layout reviewer');
+    await expect(panel.locator('.task-assignee-selected')).toContainText('Layout reviewer');
     await expect(panel.locator('.task-desc-preview h2')).toHaveText('Expected outcome');
     await expect(panel.locator('.task-detail-meta-row')).not.toContainText('[object');
     if (width < 769) {
@@ -120,16 +136,11 @@ for (const mode of ['edit', 'view']) {
       await expect(surface.locator('[data-mention-type=task]')).toHaveAttribute('data-mention-id', 'dependency');
       if (mode === 'edit') {
         await expect(surface).toHaveAttribute('contenteditable', 'true');
-        await expect(panel.locator('.task-detail-fields select').first()).toHaveValue('in_progress');
-        await panel.locator('.task-detail-fields select').first().selectOption('review');
+        await panel.getByRole('button', { name: 'Change task status: In Progress' }).click();
+        await panel.getByRole('button', { name: 'Review', exact: true }).click();
         expect(await page.evaluate(() => window.Alpine.store('chat').editingTask.state)).toBe('review');
         await expect(panel.locator('.task-assignee-selected')).toContainText('Layout reviewer');
-        const assigneeFits = await panel.locator('.task-assignee-field > input').evaluate(node => {
-          const heading = node.closest('.task-record-heading').getBoundingClientRect();
-          const input = node.getBoundingClientRect();
-          return input.bottom <= heading.bottom + 1 && input.right <= heading.right + 1;
-        });
-        expect(assigneeFits).toBe(true);
+        await expect(panel.getByRole('textbox', { name: 'Assign task' })).toBeHidden();
       } else {
         await expect(surface.locator('h1')).toHaveText('Durable device checkpoints');
         await expect(surface.locator('h2')).toHaveCount(15);
@@ -215,10 +226,76 @@ for (const mode of ['edit', 'view']) {
       await expect(panel.locator('label').filter({ hasText: /^Scope$/ })).toHaveCount(0);
       await page.evaluate(() => {
         const store = window.Alpine.store('chat');
-        store.openChatTaskModal = async id => { window.taskReferenceOpened = id; };
+        store.handleMentionNavigate = async (type, id) => { window.taskReferenceOpened = id; };
       });
       await surface.locator('[data-mention-type=task]').click();
       await expect.poll(() => page.evaluate(() => window.taskReferenceOpened)).toBe('dependency');
     });
   }
+}
+
+for (const width of [1280, 390, 320]) {
+  test(`compact task card controls and keyboard picker at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await openFixture(page);
+    await page.evaluate(() => {
+      const store = window.Alpine.store('chat');
+      store.getSenderName = () => 'Layout reviewer';
+      store.taskEditOriginal = { ...store.editingTask, assigned_to_npubs: [] };
+      store.findPeopleSuggestions = () => [{ npub: 'npub1fixture', label: 'Layout reviewer', subtitle: 'Reviewer' }];
+    });
+    const panel = page.locator('.task-detail-panel');
+    const header = panel.locator('.task-detail-header');
+    const title = header.getByRole('textbox', { name: 'Task title' });
+    await expect(title).toBeVisible();
+    await title.fill('Design Unix-first local Nostr signer for Autopilot');
+    const assign = panel.getByRole('textbox', { name: 'Assign task' });
+    await expect(assign).toBeVisible();
+    expect((await assign.boundingBox()).width).toBeLessThan(260);
+    await assign.fill('Layout');
+    await expect(panel.locator('.docs-share-suggestions .docs-share-suggestion')).toBeVisible();
+    await assign.press('ArrowDown');
+    await expect(panel.locator('.docs-share-suggestions .docs-share-suggestion')).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(panel.locator('.task-assignee-selected')).toContainText('Layout reviewer');
+    await expect(assign).toBeHidden();
+    await page.screenshot({ path: `tmp/docs/handoffs/task-card-assigned-${width}.png`, fullPage: true });
+    await panel.getByRole('button', { name: 'Clear task assignee' }).click();
+    await expect(assign).toBeVisible();
+    await expect(panel.locator('.task-assignee-selected')).toHaveCount(0);
+    const badge = panel.getByRole('button', { name: 'Change task status: In Progress' });
+    await badge.focus();
+    await badge.press('ArrowDown');
+    await expect(panel.getByRole('button', { name: 'New', exact: true })).toBeFocused();
+    await page.screenshot({ path: `tmp/docs/handoffs/task-card-status-${width}.png`, fullPage: true });
+    await page.keyboard.press('ArrowDown');
+    await expect(panel.getByRole('button', { name: 'Ready', exact: true })).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(panel.getByRole('button', { name: 'Change task status: Ready' })).toBeFocused();
+    await page.keyboard.press('ArrowDown');
+    await page.keyboard.press('Escape');
+    await expect(panel.getByRole('group', { name: 'Task states' })).toBeHidden();
+    await expect(panel.locator('.task-record-heading select')).toHaveCount(0);
+    await expect(panel.getByRole('button', { name: /^Do it / })).toHaveCount(0);
+    await expect(panel.locator('.task-quick-date-link').filter({ hasText: /^(Blocked|Done|Archive)$/ })).toHaveCount(0);
+    await page.evaluate(() => { window.Alpine.store('chat').taskDraftRemoteChanged = true; });
+    await expect(header.getByText('Remote update available', { exact: true })).toBeHidden();
+    await header.getByRole('button', { name: 'More actions' }).click();
+    await expect(header.getByText('Remote update available', { exact: true })).toBeVisible();
+    await page.screenshot({ path: `tmp/docs/handoffs/task-card-overflow-${width}.png`, fullPage: true });
+    await page.keyboard.press('Escape');
+    await expect(header.getByRole('button', { name: 'More actions' })).toBeFocused();
+    await expect(header.locator('.doc-actions-popover')).toBeHidden();
+    await expect(header.getByRole('button', { name: 'Copy link', exact: true })).toBeVisible();
+    await expect(header.getByRole('button', { name: 'Save', exact: true })).toBeVisible();
+    await expect(header.getByRole('button', { name: 'Discard', exact: true })).toBeVisible();
+    const actions = await header.locator('.task-detail-actions').evaluate(node => [...node.querySelectorAll('button')].filter(button => button.getBoundingClientRect().width > 0).map(button => button.textContent.trim()));
+    expect(actions.at(-1)).toBe('Back');
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.screenshot({ path: `tmp/docs/handoffs/task-card-unassigned-${width}.png`, fullPage: true });
+    await header.getByRole('button', { name: 'Discard', exact: true }).click();
+    await expect(title).toHaveValue('A readable task record');
+    await expect(panel.getByRole('button', { name: 'Change task status: In Progress' })).toBeVisible();
+    expect(await page.evaluate(() => window.Alpine.store('chat').taskDraftRemoteChanged)).toBe(false);
+  });
 }

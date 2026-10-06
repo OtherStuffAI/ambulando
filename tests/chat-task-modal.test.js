@@ -9,9 +9,9 @@ describe('chat task full-page navigation', () => {
   it('routes task mentions and same-origin task links through the hydrated task opener', () => {
     const source = readProjectFile('src/app.js');
 
-    expect(source).toContain('void this.openChatTaskModal(id)');
-    expect(source).toContain("route?.section === 'tasks'");
-    expect(source).toContain('this.openChatTaskModal(route.params.taskid');
+    expect(source).toContain('resolveInternalReference(this, linkType, recordId');
+    expect(source).toContain("route.section === 'tasks' && params.taskid");
+    expect(source).toContain('this.handleMentionNavigate(type, id, { commentId: params.commentid');
     expect(source).toContain('openTaskLinkFromChat(this, taskId');
   });
 

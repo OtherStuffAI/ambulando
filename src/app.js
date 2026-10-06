@@ -74,6 +74,7 @@ import { wappManagementManagerMixin } from './wapp-management-manager.js';
 import { taskDetailManagerMixin } from './task-detail-manager.js';
 import { withTaskActivityAuthor } from './task-attention-actor.js';
 import { openTaskLinkFromChat } from './task-link-navigation.js';
+import { beginInternalReferenceVisit, resolveInternalReference, rememberReferenceComposerDraft } from './internal-reference-navigation.js';
 import {
   mapPgDailyNoteToLocal,
   mapPgPersonalWappToLocal,
@@ -840,6 +841,9 @@ export function initApp() {
     threadHistoryLoadAll: false,
     threadHistoryGeneration: 0,
     threadHistoryError: '',
+    internalLinkOpenRequestId: 0,
+    internalLinkOpening: false,
+    internalLinkOpenError: '',
     linkedThreadOpenError: '',
     linkedThreadOpening: false,
     threadSize: 'default',
@@ -1184,6 +1188,9 @@ export function initApp() {
     docsShowAll: false,
     docRichEditorAdapter: null,
     docRichEditorMountPromise: null,
+    docEditorBodyLoaded: false,
+    docRichEditorLoadState: '',
+    docRichEditorLoadError: '',
     docRichEditorMountGeneration: 0,
     docRichImageUploadCount: 0,
     docRichEditorMountEl: null,
@@ -2086,7 +2093,9 @@ export function initApp() {
           ? 'Draft preserved — edit access unavailable'
           : 'Edit access unavailable';
       }
-      if (!this.isSelectedDocContentReadyForEditor()) return 'Loading complete document…';
+      if (this.docRichEditorLoadState === 'error') return 'Document editor unavailable';
+      if (this.selectedDocument?.content_storage_status === 'error' && !this.isSelectedDocContentReadyForEditor()) return 'Document body unavailable';
+      if (!this.isSelectedDocContentReadyForEditor() || this.docRichEditorLoadState === 'loading') return 'Loading complete document…';
       const lease = this.docEditLeaseInfo || this.selectedDocPgLeaseSession?.inspectedLease || null;
       if (lease) {
         const holderNpub = String(lease.holder_actor_npub || lease.holder_npub || '').trim();
@@ -2553,6 +2562,7 @@ export function initApp() {
       window.addEventListener('resize', this.docConnectorResizeHandler, { passive: true });
 
       document.addEventListener('click', (e) => {
+        if (e.defaultPrevented) return;
         const storageFileCard = e.target.closest('.md-storage-file-card[data-storage-object-id]');
         if (storageFileCard) {
           e.preventDefault();
@@ -2563,30 +2573,16 @@ export function initApp() {
         }
 
         const routeLink = e.target.closest('a[href]');
-        if (routeLink && this.navSection === 'chat') {
-          const routeUrl = new URL(routeLink.href, window.location.href);
-          const route = routeUrl.origin === window.location.origin
-            ? parseRouteLocation(routeUrl.href)
-            : null;
-          if (route?.section === 'docs' && route.params?.docid) {
-            e.preventDefault();
-            this.openChatDocModal(route.params.docid, {
-              commentId: route.params.commentid || null,
-              title: routeLink.textContent?.trim() || 'Flight Deck document',
-            });
-            return;
-          }
-          if (route?.section === 'tasks' && route.params?.taskid) {
-            e.preventDefault();
-            this.openChatTaskModal(route.params.taskid, {
-              title: routeLink.textContent?.trim() || 'Flight Deck task',
-            });
-            return;
-          }
-        }
+        if (routeLink && this.handleInternalRouteReference(routeLink.href, e, routeLink.textContent?.trim(), { validateOnly: routeLink.classList.contains('mention-link') })) return;
 
         const link = e.target.closest('.mention-link');
         if (!link) return;
+        this.handleMentionLinkClick(e, link);
+      });
+      document.addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter' && e.key !== ' ') return;
+        const link = e.target.closest('.mention-link[role="link"]');
+        if (!link || link.tagName === 'A') return;
         this.handleMentionLinkClick(e, link);
       });
       document.addEventListener('pointerover', (e) => {
@@ -5132,8 +5128,9 @@ export function initApp() {
 
     // --- tasks ---
 
-    async applyTasks(tasks = []) {
+    async applyTasks(tasks = [], options = {}) {
       const pendingWrites = await getPendingWrites().catch(() => null);
+      if (options.isCurrent && !options.isCurrent()) return false;
       const normalizedTasks = [];
       for (const task of (Array.isArray(tasks) ? tasks : [])) {
         const normalizedGroups = this.normalizeTaskRowGroupRefs(task);
@@ -9037,41 +9034,135 @@ export function initApp() {
       this._mentionEndPos = -1;
     },
 
-    handleMentionNavigate(type, id) {
-      const linkType = normalizeRecordLinkType(type);
-      if (linkType === 'doc') {
-        if (this.navSection === 'chat') {
-          this.openChatDocModal(id);
-        } else {
-          this.openDoc(id);
+    handleInternalRouteReference(href, event, title = '', { validateOnly = false } = {}) {
+      if (typeof window === 'undefined') return false;
+      const url = new URL(href, window.location.href);
+      if (url.origin !== window.location.origin) return false;
+      const route = parseRouteLocation(url.href);
+      const params = route.params || {};
+      let type = ''; let id = '';
+      if (route.section === 'docs' && params.docid) { type = 'doc'; id = params.docid; }
+      else if (route.section === 'tasks' && params.taskid) { type = 'task'; id = params.taskid; }
+      else if (['chat', 'status'].includes(route.section) && params.threadid) { type = 'chat'; id = params.channelid ? `${params.channelid}#${params.threadid}` : params.threadid; }
+      else if (route.section === 'chat' && params.channelid) { type = 'channel'; id = params.channelid; }
+      else if (route.section === 'docs' && params.folderid) { type = 'directory'; id = params.folderid; }
+      else if (route.section === 'reports' && params.reportid) { type = 'report'; id = params.reportid; }
+      else if (route.section === 'settings' && params.scopeid) { type = 'scope'; id = params.scopeid; }
+      if (!type) return false;
+      event?.preventDefault?.();
+      const workspace = resolveTowerPgWorkspaceContext(this);
+      if ((params.workspacekey && params.workspacekey !== this.currentWorkspaceKey)
+        || (params.workspaceid && params.workspaceid !== workspace.workspaceId)
+        || (route.workspaceSlug && route.workspaceSlug !== this.currentWorkspaceSlug)) {
+        beginInternalReferenceVisit(this);
+        this.internalLinkOpening = false;
+        this.internalLinkOpenError = 'This link belongs to another workspace. Open it in that workspace to keep workspace data isolated.';
+        this.error = this.internalLinkOpenError;
+        return true;
+      }
+      if (validateOnly) return false;
+      void this.handleMentionNavigate(type, id, { commentId: params.commentid || null, title });
+      return true;
+    },
+
+    async prepareInternalReferenceDeparture(linkType, visit) {
+      if (this.docEditDraftDirty && !await this.preserveWikiNavigationDraft()) {
+        if (visit.isCurrent()) {
+          this.internalLinkOpenError = this.error || 'Could not preserve your document draft. Try opening the link again.';
+          this.error = this.internalLinkOpenError;
         }
-      } else if (linkType === 'task') {
-        void this.openChatTaskModal(id);
-      } else if (linkType === 'scope') {
-        this.navSection = 'settings';
-        this.settingsTab = 'scopes';
-        this.mobileNavOpen = false;
-        this.startWorkspaceLiveQueries();
-        this.syncRoute();
-        this.$nextTick(() => {
-          this.scopeNavFocus = id;
-          document.getElementById('scope-' + id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        return false;
+      }
+      if (!visit.isCurrent()) return false;
+      if (this.showTaskDetail && this.taskDraftDirty) {
+        const preserved = await this.persistTaskLocalDraft?.();
+        if (!visit.isCurrent()) return false;
+        if (!preserved && this.taskDraftDirty) {
+          this.internalLinkOpenError = 'Could not preserve your task draft. Save your draft or try opening the link again.';
+          this.error = this.internalLinkOpenError;
+          return false;
+        }
+      }
+      rememberReferenceComposerDraft(this, 'doc', this.selectedDocId);
+      rememberReferenceComposerDraft(this, 'task', this.activeTaskId);
+      // All asynchronous checkpoints finish before changing the source visit.
+      if (linkType !== 'task' && this.showTaskDetail) {
+        this.releaseCurrentPgTaskDetailLeaseBeforeSwitch?.('');
+        void this.closeTaskDetail({ syncRoute: false, releaseCheckout: false });
+      }
+      if (linkType !== 'doc' && this.selectedDocId) this.closeDocEditor({ syncRoute: false });
+      if (linkType !== 'chat' && this.deckThreadChannelId) this.closeDeckThread?.({ syncRoute: false, fromRoute: true });
+      this.saveChatComposerDraft?.('message');
+      this.saveChatComposerDraft?.('thread');
+      return true;
+    },
+
+    async handleMentionNavigate(type, id, options = {}) {
+      const linkType = normalizeRecordLinkType(type);
+      const recordId = String(id || '').trim();
+      if (!recordId) return false;
+      const visit = beginInternalReferenceVisit(this);
+      const originRoute = String(this.buildRouteUrl?.() || '').trim();
+      this.internalLinkOpening = true;
+      this.internalLinkOpenError = '';
+      this.error = null;
+      try {
+        if (linkType === 'chat') return await this.openLinkedThread(recordId, {
+          isCurrent: visit.workspaceCurrent,
+          beforeOpen: () => this.prepareInternalReferenceDeparture(linkType, visit),
         });
-      } else if (linkType === 'channel') {
-        this.navSection = 'chat';
+        if (this.isStatusFamilyDisabled?.(linkType === 'doc' ? 'document' : linkType)) {
+          throw new Error(`The ${linkType} surface is disabled in this Flight Deck build.`);
+        }
+        const row = await resolveInternalReference(this, linkType, recordId, { isCurrent: visit.isCurrent });
+        if (!row || !visit.isCurrent()) return false;
+        const destinationType = row.pg_record_type === 'file' ? 'file' : linkType;
+        if (!await this.prepareInternalReferenceDeparture(destinationType, visit)) return false;
         this.mobileNavOpen = false;
-        this.startWorkspaceLiveQueries();
-        this.selectChannel?.(id);
-      } else if (linkType === 'chat') {
-        return this.openLinkedThread(id);
-      } else if (linkType === 'directory') {
-        this.navigateToFolder?.(id);
-      } else if (linkType === 'report') {
-        this.navSection = 'reports';
-        this.mobileNavOpen = false;
-        this.startWorkspaceLiveQueries();
-        this.openReportModalById?.(id);
-        this.syncRoute?.();
+        if (linkType === 'file' || (linkType === 'doc' && row.pg_record_type === 'file')) {
+          this.navSection = 'files';
+          if (row.pg_channel_id) this.selectPgChannelContext?.(row.pg_channel_id, { preserveDetail: true });
+          this.startWorkspaceLiveQueries();
+          void this.openFilePreview(row);
+          this.syncRoute();
+        } else if (linkType === 'doc') {
+          this.openDoc(recordId, { ...documentLinkViewState(options.commentId), draftPreserved: true, captureOrigin: false, originRoute });
+        } else if (linkType === 'task') {
+          this.openTaskDetail(recordId, { captureOrigin: false, originRoute });
+        } else if (linkType === 'scope') {
+          this.navSection = 'settings';
+          this.settingsTab = 'scopes';
+          this.scopeNavFocus = recordId;
+          this.startWorkspaceLiveQueries();
+          this.syncRoute();
+          this.$nextTick(() => document.getElementById('scope-' + recordId)?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+        } else if (linkType === 'channel') {
+          this.navSection = 'chat';
+          this.startWorkspaceLiveQueries();
+          const docGeneration = this.docOpenGeneration;
+          const taskGeneration = this.taskDetailOpenGeneration;
+          await this.selectChannel?.(recordId, {
+            isCurrent: () => visit.workspaceCurrent() && this.navSection === 'chat'
+              && this.docOpenGeneration === docGeneration && this.taskDetailOpenGeneration === taskGeneration,
+          });
+        } else if (linkType === 'directory') {
+          if (row.pg_channel_id || row.channel_id) this.selectPgChannelContext?.(row.pg_channel_id || row.channel_id, { preserveDetail: true });
+          this.navigateToFolder(recordId);
+        } else if (linkType === 'report') {
+          this.navSection = 'reports';
+          this.startWorkspaceLiveQueries();
+          this.openReportModal(row);
+          this.syncRoute();
+        }
+        return true;
+      } catch (error) {
+        if (visit.isCurrent()) {
+          this.internalLinkOpenError = `Could not open linked ${linkType}: ${error?.message || String(error)}`;
+          this.error = this.internalLinkOpenError;
+        }
+        return false;
+      } finally {
+        if (this.internalLinkOpenRequestId === visit.request) this.internalLinkOpening = false;
       }
     },
 
@@ -9081,6 +9172,9 @@ export function initApp() {
       if (!type || !id) return false;
       event?.preventDefault?.();
       if (type === 'person' || type === 'agent') {
+        beginInternalReferenceVisit(this);
+        this.internalLinkOpening = false;
+        this.internalLinkOpenError = '';
         this.openIdentityCard({
           currentTarget: link,
           clientX: event?.clientX,
@@ -9163,32 +9257,7 @@ export function initApp() {
     },
 
     async openChatDocModal(recordId, options = {}) {
-      const docId = String(recordId || '').trim();
-      if (!docId) return;
-      if (isTowerPgBackendMode()) this.createOptimisticChatDoc(docId, options.title);
-      let doc = this.documents.find((item) => item.record_id === docId);
-      if (!doc) {
-        doc = await getDocumentById(docId);
-        if (doc && doc.record_state !== 'deleted') {
-          this.applyDocuments([
-            ...this.documents.filter((item) => item.record_id !== docId),
-            doc,
-          ]);
-        }
-      }
-      if (!doc || doc.record_state === 'deleted') {
-        this.error = 'Document is not available locally yet.';
-        return;
-      }
-      this.chatDocModalTitle = '';
-      this.chatDocModalFullScreen = false;
-      this.chatDocModalOpen = false;
-      const linkView = documentLinkViewState(options.commentId);
-      this.openDoc(docId, {
-        ensureSync: false,
-        allowCommentBackfill: false,
-        ...linkView,
-      });
+      return this.handleMentionNavigate('doc', recordId, options);
     },
 
     closeChatDocModal() {

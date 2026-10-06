@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { buildPgChannelTaskBoardId } from '../src/pg-record-context.js';
+import { taskBoardStateMixin } from '../src/task-board-state.js';
 import { taskDetailManagerMixin } from '../src/task-detail-manager.js';
 import {
   openTaskLinkFromChat,
@@ -31,10 +33,8 @@ function crossScopeStore(overrides = {}) {
     scheduleStorageImageHydration: vi.fn(),
     markTaskRead: vi.fn(),
     syncRoute: vi.fn(),
-    selectPgChannelContext(channelId) {
-      this.selectedChannelId = channelId;
-      this.selectedBoardId = `pg:channel:${channelId}`;
-    },
+    selectPgChannelContext: taskBoardStateMixin.selectPgChannelContext,
+    selectBoard: vi.fn(),
     async applyTasks(tasks) { this.tasks = tasks; },
     ...overrides,
   };
@@ -68,9 +68,10 @@ describe('cross-scope task link navigation', () => {
     expect(hydrateTowerPgTask).toHaveBeenCalledWith(store, task.record_id);
     expect(store.editingTask).toMatchObject({ record_id: task.record_id, pg_channel_id: 'target-channel' });
     expect(store.selectedChannelId).toBe('target-channel');
-    expect(store.selectedBoardId).toBe('pg:channel:target-channel');
+    expect(store.selectedBoardId).toBe(buildPgChannelTaskBoardId('target-channel'));
     expect(store.navSection).toBe('tasks');
     expect(store.showTaskDetail).toBe(true);
+    expect(store.selectBoard).not.toHaveBeenCalled();
   });
 
   it('hydrates a replayed task route before opening detail', async () => {
@@ -96,7 +97,7 @@ describe('cross-scope task link navigation', () => {
 
     expect(opened).toBe(true);
     expect(store.taskDetailOriginRoute).toContain('threadid=origin-thread');
-    expect(store.selectedBoardId).toBe('pg:channel:route-channel');
+    expect(store.selectedBoardId).toBe(buildPgChannelTaskBoardId('route-channel'));
   });
 
   it('shows an explicit authorization/not-found error when Tower hides the task', async () => {

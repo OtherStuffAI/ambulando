@@ -1,3 +1,4 @@
+import { restoreReferenceComposerDraft } from './internal-reference-navigation.js';
 import { visibleWikiIntegrityText } from './docs/editor/wiki-visible-text.js';
 import { bindWikiState } from './docs/wiki-links.js';
 import { prosemirrorToFlightDeckContentModel } from './docs/editor/prosemirror-to-flightdeck.js';
@@ -961,7 +962,7 @@ export const docsManagerMixin = {
     this.mobileNavOpen = false;
     const document = this.documents.find((item) => item.record_id === recordId);
     if (isTowerPgBackendMode() && document?.pg_channel_id && document.pg_channel_id !== this.selectedChannelId) {
-      this.selectPgChannelContext?.(document.pg_channel_id);
+      this.selectPgChannelContext?.(document.pg_channel_id, { preserveDetail: true });
     }
     this.currentFolderId = document?.parent_directory_id || null;
     this.docCommentBackfillAttemptsByDocId = {
@@ -969,6 +970,7 @@ export const docsManagerMixin = {
       [recordId]: false,
     };
     this.loadDocEditorFromSelection();
+    restoreReferenceComposerDraft(this, 'doc', recordId);
     const openedTitle = this.docEditorTitle;
     const openedContent = this.docEditorContent;
     const draftRestore = this.docDraftRestorePromise;
@@ -1185,6 +1187,7 @@ export const docsManagerMixin = {
       return;
     }
 
+    this.docEditorBodyLoaded = isDocumentContentReadyForEditor(item);
     this.docEditorTitle = item.title ?? '';
     this.docEditorContent = this.selectedDocType === 'document' ? (item.content ?? '') : '';
     const contentBlocks = this.selectedDocType === 'document'
@@ -1272,10 +1275,13 @@ export const docsManagerMixin = {
         }
       }
       if (!isCurrent()) return null;
-      const row = latest || this.documents.find((candidate) => candidate.record_id === targetId) || null;
-      if (isDocumentContentReadyForEditor(row)) return row;
+      const row = latest?.record_id === targetId
+        ? latest
+        : this.documents.find((candidate) => candidate.record_id === targetId) || null;
+      if (row?.record_id === targetId && isDocumentContentReadyForEditor(row)) return row;
     }
-    let stalled = this.documents.find((candidate) => candidate.record_id === targetId) || latest;
+    let stalled = this.documents.find((candidate) => candidate.record_id === targetId)
+      || (latest?.record_id === targetId ? latest : null);
     if (stalled && isCurrent()) {
       const failed = {
         ...stalled,
@@ -1289,6 +1295,17 @@ export const docsManagerMixin = {
       stalled = failed;
     }
     return stalled || null;
+  },
+
+  retrySelectedDocLoading() {
+    if (!this.selectedDocId || this.docEditDraftDirty || this.docLocalDraft) return false;
+    const recordId = this.selectedDocId;
+    if (this.docRichEditorLoadState === 'error' && this.docRichEditorMountEl) {
+      void this.mountDocRichEditor(this.docRichEditorMountEl);
+    } else {
+      this.openDoc(recordId, { syncRoute: false, ensureSync: false });
+    }
+    return true;
   },
 
   getSelectedDocWorkspaceId(item = this.selectedDocument) {
@@ -1472,6 +1489,8 @@ export const docsManagerMixin = {
     this.docRichEditorAdapter?.destroy?.();
     this.docRichEditorAdapter = null;
     this.docRichEditorMountEl = null;
+    this.docRichEditorLoadState = '';
+    this.docRichEditorLoadError = '';
   },
 
   getVisibleDocRichEditorText() {
@@ -1495,6 +1514,7 @@ export const docsManagerMixin = {
     if (!item || item.record_id !== this.selectedDocId) return false;
     const contentBlocks = normalizeDocumentBlocks(item.content_blocks, item.content);
     const editorState = createDocumentEditorState(item);
+    this.docEditorBodyLoaded = isDocumentContentReadyForEditor(item);
     this.docEditorTitle = item.title ?? '';
     this.docEditorShares = this.getEffectiveDocShares(item).map((share) => ({ ...share }));
     this.docEditorSharesDirty = false;
@@ -1580,6 +1600,8 @@ export const docsManagerMixin = {
     };
     this.docRichEditorMountEl = element;
     const mountGeneration = this.docRichEditorMountGeneration;
+    this.docRichEditorLoadState = 'loading';
+    this.docRichEditorLoadError = '';
     const mountPromise = (async () => {
       const { createTiptapEditorAdapter } = await loadTiptapEditorAdapter();
       if (this.docRichEditorMountGeneration !== mountGeneration
@@ -1607,11 +1629,18 @@ export const docsManagerMixin = {
         },
       });
       this.syncDocRichEditorContentModel();
+      this.docRichEditorLoadState = 'ready';
       this.scheduleStorageImageHydration?.();
     })();
     this.docRichEditorMountPromise = mountPromise;
     try {
       return await mountPromise;
+    } catch (error) {
+      if (this.docRichEditorMountGeneration === mountGeneration && this.docRichEditorMountEl === element) {
+        this.docRichEditorLoadState = 'error';
+        this.docRichEditorLoadError = `Document editor could not load: ${error?.message || error}`;
+      }
+      return false;
     } finally {
       if (this.docRichEditorMountPromise === mountPromise) this.docRichEditorMountPromise = null;
     }
@@ -1819,7 +1848,8 @@ export const docsManagerMixin = {
     if (!item || item.record_id !== this.docEditBaseRecordId) return false;
     const currentVersion = Number(item.version || 0);
     const baseVersion = Number(this.docEditBaseRowVersion || 0);
-    if (currentVersion <= baseVersion) return false;
+    if (currentVersion < baseVersion) return false;
+    if (currentVersion === baseVersion && (this.docEditorBodyLoaded || this.docEditBaseAvailable || this.docEditDraftDirty || this.docLocalDraft)) return false;
     if (!this.docEditDraftDirty) {
       if (!isDocumentContentReadyForEditor(item)) return false;
       return this.applySelectedDocAuthoritativeContent(item, { preserveSelection: true });

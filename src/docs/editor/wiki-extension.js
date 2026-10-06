@@ -64,7 +64,7 @@ export const FlightDeckWikiLink = Node.create({
         event.preventDefault(); event.stopPropagation();
         if (this.options.isBusy()) return;
         const resolved = this.options.resolve(current.attrs);
-        if (resolved.state === 'available') this.options.open(resolved.page.record_id);
+        if (current.attrs.documentId || resolved.state === 'available') this.options.open(current.attrs.documentId || resolved.page.record_id);
         else if (resolved.state === 'unresolved') this.options.create(current.attrs.title, { from: getPos(), to: getPos() + current.nodeSize }, editor);
         else this.options.error(dom.title);
       };

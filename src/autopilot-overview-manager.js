@@ -1,3 +1,4 @@
+import { resolveTowerPgWorkspaceContext } from './pg-workspace-context.js';
 import { standaloneDeckFiles } from './personal-attention.js';
 import {
   getPgChannelScopeId,
@@ -1155,9 +1156,17 @@ export const autopilotOverviewManagerMixin = {
     this.deckThreadChannelRequestId = requestId;
     this.deckThreadChannelState = 'loading';
     this.deckThreadChannelError = '';
-    const isCurrent = () => requestId === this.deckThreadChannelRequestId
-      && normalizedChannelId === normalizeString(this.deckThreadChannelId)
-      && Boolean(this.activeThreadId);
+    const context = resolveTowerPgWorkspaceContext(this);
+    const sourceThreadId = this.activeThreadId;
+    const sourceThreadGeneration = this.threadHistoryGeneration;
+    const isCurrent = () => {
+      const current = resolveTowerPgWorkspaceContext(this);
+      return requestId === this.deckThreadChannelRequestId
+        && normalizedChannelId === normalizeString(this.deckThreadChannelId)
+        && Boolean(this.activeThreadId) && this.activeThreadId === sourceThreadId
+        && this.threadHistoryGeneration === sourceThreadGeneration
+        && ['workspaceId', 'baseUrl', 'appNpub', 'generation', 'sessionNpub'].every(key => current[key] === context[key]);
+    };
     const findChannel = async () => (this.channels || []).find((channel) => normalizeString(channel?.record_id) === normalizedChannelId)
       || await getChannelById(normalizedChannelId).catch(() => null);
     try {
@@ -1165,7 +1174,7 @@ export const autopilotOverviewManagerMixin = {
       if (!isCurrent()) return false;
       if (channel && this.setDeckThreadChannelReady(channel)) return true;
       if (typeof this.requestTowerSyncFamily !== 'function') throw new Error('Channel refresh is unavailable.');
-      await this.requestTowerSyncFamily('channels', '', { force: true });
+      await this.requestTowerSyncFamily('channel', normalizedChannelId, { force: true });
       if (!isCurrent()) return false;
       channel = await findChannel();
       if (!isCurrent()) return false;

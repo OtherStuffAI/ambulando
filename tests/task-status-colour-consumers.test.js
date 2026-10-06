@@ -15,7 +15,7 @@ describe('task status colour consumers', () => {
   });
 
   it('uses the canonical helper for representative Board and task-detail badges', () => {
-    expect(html.match(/class=\"[^\"]*task-status-badge[^\"]*\"/g)).toHaveLength(7);
+    expect(html.match(/class=\"[^\"]*task-status-badge[^\"]*\"/g)).toHaveLength(8);
     expect(html).toContain("$store.chat.stateColor($store.chat.editingTask.state || 'new')");
     expect(html).toContain('$store.chat.stateColor(pred.state)');
     expect(html).toContain('$store.chat.stateColor(st.state)');

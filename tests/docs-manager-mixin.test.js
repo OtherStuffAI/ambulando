@@ -496,6 +496,25 @@ describe('docsManagerMixin comment drawer', () => {
     expect(store.docEditorBlocks).toMatchObject([{ raw: '# Fresh' }]);
   });
 
+  it('does not mistake a deferred sync acknowledgement for a complete document body', async () => {
+    isTowerPgBackendModeMock.mockReturnValue(true);
+    const remote = { record_id: 'deferred-doc', content: '', content_storage_object_id: 'object', content_storage_status: 'remote' };
+    const complete = { ...remote, content: 'Authoritative body', content_storage_status: 'loaded' };
+    const store = createStore({ documents: [remote], selectedDocType: 'document', selectedDocId: remote.record_id,
+      prefetchFlightDeckDoc: vi.fn().mockResolvedValueOnce({ deferred: true, family: 'document', id: remote.record_id }).mockResolvedValueOnce(complete) });
+    await expect(store.hydrateSelectedDocWithRetry(remote.record_id, { delays: [0, 0] })).resolves.toEqual(complete);
+  });
+
+  it('observes a same-version body arriving after metadata without waiting for another open', () => {
+    const complete = { record_id: 'same-version', version: 1, content: 'Hydrated body', content_storage_status: 'loaded', content_storage_object_id: 'object' };
+    const store = createStore({ documents: [complete], selectedDocType: 'document', selectedDocId: complete.record_id,
+      docEditBaseRecordId: complete.record_id, docEditBaseRowVersion: 1, docEditorBodyLoaded: false,
+      getEffectiveDocShares: () => [] });
+    expect(store.observeSelectedDocAuthoritativeVersion()).toBe(true);
+    expect(store.docEditorContent).toBe('Hydrated body');
+    expect(store.observeSelectedDocAuthoritativeVersion()).toBe(false);
+  });
+
   it('rejects a late hydration from an earlier visit to the same page or another workspace', async () => {
     isTowerPgBackendModeMock.mockReturnValue(true);
     const replies = [];
