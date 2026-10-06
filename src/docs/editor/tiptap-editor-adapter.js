@@ -62,7 +62,8 @@ export function createTiptapEditorAdapter({
       return prosemirrorToFlightDeckContentModel(editor.getJSON());
     },
     setEditable(nextEditable) {
-      editor.setEditable(Boolean(nextEditable));
+      // Access changes do not modify content or create a new recovery draft.
+      editor.setEditable(Boolean(nextEditable), false);
     },
     setContent(editorState, { emitUpdate = false, preserveSelection = false } = {}) {
       const selection = preserveSelection

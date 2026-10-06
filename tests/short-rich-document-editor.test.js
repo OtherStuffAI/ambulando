@@ -75,3 +75,22 @@ it('registers one link extension with Flight Deck link behavior', async () => {
     expect(editor.getJSON().content[0].content[0].marks).toContainEqual(expect.objectContaining({ type: 'link', attrs: expect.objectContaining({ href: 'https://example.com' }) }));
   } finally { editor.destroy(); }
 });
+
+it('changes native editability without reporting a content update, while real edits still update', () => {
+  const element = document.createElement('div');
+  document.body.append(element);
+  const updates = [];
+  const adapter = createTiptapEditorAdapter({ element, document: { content: 'Preserved draft' }, onUpdate: model => updates.push(model.content) });
+  try {
+    adapter.setEditable(false);
+    adapter.setEditable(true);
+    expect(updates).toEqual([]);
+    expect(adapter.getContentModel().content).toBe('Preserved draft');
+    adapter.editor.commands.insertContent('Edited ');
+    expect(updates).toHaveLength(1);
+    expect(updates[0]).toContain('Edited');
+  } finally {
+    adapter.destroy();
+    element.remove();
+  }
+});

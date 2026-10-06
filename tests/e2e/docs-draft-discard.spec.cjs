@@ -1,6 +1,6 @@
 const { test, expect } = require('playwright/test');
 
-test('discarding an expired-lease draft clears recovery UI and refreshes current read-only ownership', async ({ page }) => {
+test('discarding a blocked draft clears recovery UI and refreshes current ownership', async ({ page }) => {
   test.setTimeout(30_000);
   await page.goto('/');
   await page.evaluate(async () => {
@@ -11,6 +11,7 @@ test('discarding an expired-lease draft clears recovery UI and refreshes current
     }
     const store = window.Alpine?.store?.('chat');
     if (!store) throw new Error('Alpine chat store did not initialize.');
+    store.openConnectModal = () => {};
     store.showConnectModal = false;
     const now = new Date().toISOString();
     const authoritative = {
@@ -37,19 +38,6 @@ test('discarding an expired-lease draft clears recovery UI and refreshes current
     store.selectedDocId = authoritative.record_id;
     store.selectedDocType = 'document';
     store.loadDocEditorFromSelection();
-    store.docRichEditorAdapter = {
-      setContent(editorState) {
-        store.docEditorProseMirrorState = editorState;
-      },
-      setEditable() {},
-      getContentModel() {
-        return {
-          content: store.docEditorContent,
-          content_blocks: store.docEditorBlocks,
-          editor_state: store.docEditorProseMirrorState,
-        };
-      },
-    };
     store.hydrateSelectedDocWithRetry = async () => authoritative;
     store.__draftDeleted = false;
     store.clearSelectedDocDraft = async () => {
@@ -68,11 +56,10 @@ test('discarding an expired-lease draft clears recovery UI and refreshes current
       return { inspectionState: 'ready', inspectedLease: lease };
     };
     store.__retryCalls = 0;
-    store.beginSelectedDocLeaseAcquisition = async () => {
-      store.__retryCalls += 1;
-      return false;
-    };
+    store.beginSelectedDocLeaseAcquisition = async () => { store.__retryCalls += 1; return false; };
   });
+  await expect(page.locator('.doc-rich-editor .ProseMirror')).toBeVisible();
+  await page.waitForFunction(() => Boolean(window.Alpine.store('chat').docRichEditorAdapter));
   await page.evaluate(async () => {
     const store = window.Alpine.store('chat');
     store.docRichEditorAdapter.setContent({
@@ -87,13 +74,14 @@ test('discarding an expired-lease draft clears recovery UI and refreshes current
   });
 
   await expect(page.locator('.doc-edit-status')).toContainText('Draft preserved');
+  await page.locator('.doc-recovery-summary').click();
   await page.getByRole('button', { name: 'Discard local draft' }).click();
 
   await expect(page.getByRole('button', { name: 'Discard local draft' })).toBeHidden();
-  await expect(page.locator('.doc-edit-status')).toContainText('Being edited by Other editor');
+  await expect(page.locator('.doc-edit-status')).toContainText('Edit access unavailable');
   await expect(page.locator('.doc-edit-status')).not.toContainText('Draft preserved');
-  await expect(page.locator('.doc-edit-access-banner')).toContainText('Being edited by Other editor');
-  await expect(page.getByRole('button', { name: 'Retry' })).toBeVisible();
+  await expect(page.locator('.doc-edit-access-banner')).toContainText('Edit access unavailable');
+  await expect(page.locator('.doc-rich-editor .ProseMirror')).toHaveAttribute('contenteditable', 'false');
 
   const state = await page.evaluate(() => {
     const store = window.Alpine.store('chat');
@@ -104,6 +92,7 @@ test('discarding an expired-lease draft clears recovery UI and refreshes current
       recovery: store.docRecovery,
       accessState: store.docEditAccessState,
       content: store.docEditorContent,
+      holder: store.docEditLeaseInfo?.holder_actor_npub,
     };
   });
   expect(state).toEqual({
@@ -113,8 +102,8 @@ test('discarding an expired-lease draft clears recovery UI and refreshes current
     recovery: null,
     accessState: 'blocked',
     content: 'Authoritative Tower body',
+    holder: 'npub1othereditor',
   });
-
-  await page.getByRole('button', { name: 'Retry' }).click();
+  await page.getByRole('button', { name: 'Retry', exact: true }).click();
   await expect.poll(() => page.evaluate(() => window.Alpine.store('chat').__retryCalls)).toBe(1);
 });

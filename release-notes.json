@@ -2971,6 +2971,13 @@
       "notes": [
         "Preserve text selection when Shift-clicking a wiki link in WebKit, while ordinary clicks still navigate immediately."
       ]
+    },
+    {
+      "buildNumber": 2234,
+      "label": "Usable mobile Docs editing",
+      "notes": [
+        "Restore native scrolling through long mobile documents and keep recovery drafts visible in a compact summary with expandable details and safe actions."
+      ]
     }
   ]
 }

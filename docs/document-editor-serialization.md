@@ -53,3 +53,23 @@ client checks the destination channel before POST and reconciles again after an
 ambiguous timeout, network failure, or server error. If Tower already accepted
 that storage object, Flight Deck adopts the existing document instead of
 issuing a duplicate create.
+
+## Mobile editor viewport
+
+Mobile Docs uses a native vertical scroller around the editor, including title,
+recovery disclosure, long rich/source content and the notebook footer. The toolbar
+stays sticky. Avoid clipping an unbounded document body inside a flex container;
+each bounded flex ancestor needs `min-height: 0`. Keep bottom navigation and the
+Docs/Comments switcher outside the usable scrolling viewport.
+
+Recovery details and actions use a disclosure with a visible draft summary.
+Expanding it only changes presentation; it must never promote, discard or clear
+a draft. Existing dirty-state and in-flight action guards still control buttons.
+The Docs shell follows visual viewport resize events while mounted and removes
+its listener when unmounted. Viewport emulation is useful regression coverage,
+but physical-device keyboard testing remains necessary for device-specific behavior.
+
+Changing Tiptap editability must suppress its optional update emission. Lease or
+recovery access changes do not modify document content; emitting an update would
+mark the restored authoritative body dirty again after a discard. Real content
+transactions continue to update and checkpoint drafts normally.

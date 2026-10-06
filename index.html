@@ -4809,6 +4809,11 @@
         <template x-if="$store.chat.navSection === 'docs' || $store.chat.chatDocModalOpen">
           <div
             class="docs-section"
+            x-data="{
+              updateViewport() { document.documentElement.style.setProperty('--docs-visual-height', `${window.visualViewport?.height || window.innerHeight}px`); },
+              init() { this.updateViewport(); this.viewportHandler = () => this.updateViewport(); window.visualViewport?.addEventListener('resize', this.viewportHandler); },
+              destroy() { window.visualViewport?.removeEventListener('resize', this.viewportHandler); document.documentElement.style.removeProperty('--docs-visual-height'); }
+            }"
             :class="{ 'chat-doc-inline-section': $store.chat.chatDocModalOpen, 'chat-doc-modal-fullscreen': $store.chat.chatDocModalFullScreen }"
             @keydown.escape.window="$store.chat.chatDocModalOpen && $store.chat.closeChatDocModal()"
           >
@@ -5335,13 +5340,15 @@
                   </div>
                 </div>
 
-                <div
+                <details
                   class="doc-edit-access-banner"
+                  x-effect="$store.chat.selectedDocId; $el.open = false"
                   :class="`doc-edit-access-banner-${$store.chat.selectedDocEditStatusTone}`"
                   x-show="['blocked', 'conflict', 'recovery', 'recovery_available'].includes($store.chat.docEditAccessState)"
                   role="status"
                   aria-live="polite"
                 >
+                  <summary class="doc-recovery-summary"><span x-text="['recovery', 'recovery_available'].includes($store.chat.docEditAccessState) ? 'Recovery draft preserved' : 'Draft needs attention'"></span><span class="doc-recovery-summary-actions">Details &amp; actions</span></summary>
                   <div class="doc-edit-recovery-copy">
                     <span x-text="$store.chat.docEditAccessMessage || $store.chat.selectedDocEditStatusLabel"></span>
                     <span
@@ -5357,7 +5364,7 @@
                     <button type="button" x-show="$store.chat.docEditDraftDirty || $store.chat.docRecovery" @click="$store.chat.copySelectedDocDraft()">Copy draft</button>
                     <button type="button" x-show="$store.chat.docEditDraftDirty && !$store.chat.docRecovery" @click="$store.chat.discardSelectedDocDraft()">Discard local draft</button>
                   </div>
-                </div>
+                </details>
 
                 <div class="doc-title-block">
                   <div class="doc-title-main">
