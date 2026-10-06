@@ -40,3 +40,35 @@ recovery on the same selection. Service workers are blocked so asset failures
 can be intercepted reliably. These checks validate browser orchestration; they
 do not establish authenticated access or the cause of a particular historical
 browser screenshot.
+
+## Save base and recovery behavior
+
+The editor retains the canonical row version, version identity, storage object
+and body hash separately from its mutable content. A same-version body metadata
+completion may repair that base without replacing the editor buffer. A local
+draft missing its base hash can recover it only when its recorded complete-base
+content signature, storage object and row version match the fully loaded
+canonical body. Older or unverifiable bases continue through recovery handling.
+Embedded canonical metadata survives fallback from the typed body route to a
+storage download.
+
+Dirty detection compares the editor tree, including marks, links, structure and
+exact text, while ignoring only `fdBlockId` and `pmNodeId` bookkeeping. ID repair
+keeps the first unique identity for comment anchors and repairs copied IDs.
+Serialization integrity checks still reject incomplete save models. Discovery
+of a separate recovery does not change the base of an unopened canonical editor.
+
+Local drafts retain the last recovery submission signature independently of
+later editor checkpoints. Equivalent retries do not submit again; new edits
+remain eligible for preservation. Opening a recovery that matches the loaded
+saved document explains that the user can discard the recovery while keeping
+the saved document. Resolution remains an explicit user action through the
+existing Tower recovery endpoints.
+
+Undoing to canonical content deletes the previous local draft; undoing to an
+already preserved recovery checkpoints that recovery body and its metadata.
+Draft puts/deletes execute in input order against the database captured before
+an asynchronous boundary, and reads wait for those writes. Completion updates
+are guarded by editor generation and write revision so navigation cannot apply
+an old draft to another selection. Undo therefore remains durable when an older
+put is already in flight, including across a workspace switch.

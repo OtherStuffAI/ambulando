@@ -2780,7 +2780,7 @@ export async function hydrateTowerPgDoc(store, docId, deps = {}) {
   if (!doc) return null;
   const row = mapPgDocToLocal({
     ...doc,
-    canonical_version: result?.canonical_version || null,
+    canonical_version: result?.canonical_version || doc.canonical_version || null,
   }, { workspaceOwnerNpub: context.workspaceOwnerNpub });
   if (!row.record_id) return null;
   const hydrated = result?.body

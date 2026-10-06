@@ -103,6 +103,7 @@ import {
   DOCUMENT_LOCAL_DRAFT_DELAY_MS,
   DOCUMENT_REMOTE_AUTOSAVE_DELAY_MS,
   docsManagerMixin,
+  documentContentSignature,
   isDocumentContentReadyForEditor,
   mergeDocumentSaveReferences,
 } from '../src/docs-manager.js';
@@ -2154,6 +2155,273 @@ function acceptedPgDoc(version, body, title = 'Race document') {
 }
 
 describe('docsManagerMixin durable recovery drafts', () => {
+  it('does not dirty or submit a no-op editor ID normalization', async () => {
+    const model = richDocContentModel('Same body');
+    const { store, record, modelRef } = createSyncedPgDocSaveStore({
+      content: model.content, editorState: model.editor_state, draftDirty: false,
+    });
+    const repaired = structuredClone(model);
+    repaired.editor_state.content[0].attrs.fdBlockId = 'repaired-id';
+    repaired.content_blocks[0].id = 'repaired-id';
+    repaired.content_blocks[0].attrs.pmNodeId = 'repaired-id';
+    modelRef.current = repaired;
+    store.syncDocRichEditorContentModel(repaired);
+    store.scheduleDocLocalDraftPersistence = vi.fn();
+    store.scheduleDocAutosave = vi.fn();
+    store.handleDocRichEditorUpdate();
+    expect(store.docEditDraftDirty).toBe(false);
+    expect(store.scheduleDocLocalDraftPersistence).not.toHaveBeenCalled();
+    await expect(store.saveSelectedDocItem()).resolves.toMatchObject({ record_id: record.record_id });
+    expect(updateTowerPgDocMock).not.toHaveBeenCalled();
+  });
+
+  it('ignores ID-only updates while the complete canonical body is still loading', () => {
+    const previous = richDocContentModel('Inline preview');
+    const { store, record } = createSyncedPgDocSaveStore({ currentModel: previous, draftDirty: false });
+    store.documents = [{ ...record, content: 'Inline preview', content_blocks: [], editor_state: null,
+      content_storage_status: 'remote' }];
+    store.docEditBaseAvailable = false;
+    const normalized = structuredClone(previous);
+    normalized.editor_state.content[0].attrs.fdBlockId = 'normalized-preview-id';
+    store.syncDocRichEditorContentModel(normalized);
+    store.scheduleDocLocalDraftPersistence = vi.fn();
+    store.scheduleDocAutosave = vi.fn();
+    store.handleDocRichEditorUpdate(previous);
+    expect(store.docEditDraftDirty).toBe(false);
+    expect(store.docEditBaseAvailable).toBe(false);
+    expect(store.scheduleDocLocalDraftPersistence).not.toHaveBeenCalled();
+    expect(store.scheduleDocAutosave).not.toHaveBeenCalled();
+  });
+
+  it('keeps an undo warning when the durable draft cannot be cleared', async () => {
+    const model = richDocContentModel('Saved original');
+    const { store } = createSyncedPgDocSaveStore({ content: model.content,
+      editorState: model.editor_state, currentModel: model });
+    store.syncDocRichEditorContentModel(model);
+    store.clearSelectedDocDraft = vi.fn(async () => { throw new Error('disk unavailable'); });
+    store.handleDocRichEditorUpdate();
+    await expect(store.docDraftUndoPromise).resolves.toBe(false);
+    expect(store.docEditDraftDirty).toBe(true);
+    expect(store.docAutosaveState).toBe('error');
+    expect(store.docEditAccessMessage).toContain('disk unavailable');
+  });
+
+  it('does not reopen an edit that was persisted before undo returned to canonical content', async () => {
+    const canonical = richDocContentModel('Canonical body');
+    const { store, record, modelRef } = createSyncedPgDocSaveStore({ content: canonical.content,
+      editorState: canonical.editor_state, currentModel: richDocContentModel('Persisted edit') });
+    await store.persistSelectedDocDraft();
+    expect(await getDocumentDraft('workspace-1', record.record_id)).toMatchObject({ content: 'Persisted edit' });
+    store.syncDocRichEditorContentModel(modelRef.current = canonical);
+    store.handleDocRichEditorUpdate();
+    await expect(store.docDraftUndoPromise).resolves.toBe(true);
+    await store.restoreSelectedDocDraft(record, { generation: 0 });
+    expect(store.docEditorContent).toBe('Canonical body');
+    expect(store.docEditDraftDirty).toBe(false);
+    expect(await getDocumentDraft('workspace-1', record.record_id)).toBeUndefined();
+  });
+
+  it.each([false, true])('orders canonical undo after an in-flight edit and prevents resurrection on reopen (switchWorkspace=%s)', async (switchWorkspace) => {
+    const canonical = richDocContentModel('Saved original');
+    const { store, record, modelRef } = createSyncedPgDocSaveStore({ content: canonical.content,
+      editorState: canonical.editor_state, currentModel: canonical, draftDirty: false });
+    const db = openWorkspaceDb('npub1signedinactor');
+    const originalPut = db.document_drafts.put.bind(db.document_drafts);
+    let release;
+    let started;
+    const didStart = new Promise(resolve => { started = resolve; });
+    const gate = new Promise(resolve => { release = resolve; });
+    const put = vi.spyOn(db.document_drafts, 'put').mockClear().mockImplementationOnce(async row => {
+      started();
+      await gate;
+      if (!db.isOpen()) await db.open();
+      return originalPut(row);
+    });
+    modelRef.current = richDocContentModel('Edit that will be undone');
+    store.docEditDraftDirty = true;
+    const writing = store.persistSelectedDocDraft();
+    await didStart;
+    store.syncDocRichEditorContentModel(modelRef.current = canonical);
+    store.handleDocRichEditorUpdate();
+    const undoing = store.docDraftUndoPromise;
+    if (switchWorkspace) {
+      store.selectedDocId = 'other-document';
+      store.docEditAccessGeneration += 1;
+      store.currentWorkspace = { ...store.currentWorkspace, workspaceId: 'workspace-2' };
+      store.docLocalDraft = { document_id: 'other-document', content: 'Other workspace draft' };
+      await openWorkspaceDb('npub1otherworkspace').open();
+    }
+    release();
+    await writing;
+    await expect(undoing).resolves.toBe(true);
+    put.mockRestore();
+    if (switchWorkspace) {
+      expect(store.docLocalDraft).toMatchObject({ document_id: 'other-document' });
+      expect(await getDocumentDraft('workspace-1', record.record_id)).toBeUndefined();
+      await openWorkspaceDb('npub1signedinactor').open();
+    }
+    const reopened = createSyncedPgDocSaveStore({ content: canonical.content,
+      editorState: canonical.editor_state, currentModel: canonical, draftDirty: false }).store;
+    await reopened.restoreSelectedDocDraft(record, { generation: 0 });
+    expect(reopened.docEditDraftDirty).toBe(false);
+    expect(await getDocumentDraft('workspace-1', record.record_id)).toBeUndefined();
+    expect(updateTowerPgDocMock).not.toHaveBeenCalled();
+  });
+
+  it('checkpoints recovery undo after an in-flight edit and restores only the preserved body', async () => {
+    const preserved = richDocContentModel('Recovery A');
+    const { store, record, modelRef } = createSyncedPgDocSaveStore({ currentModel: preserved });
+    const recovery = { id: 'preserved-a', resolution_state: 'open' };
+    store.docRecovery = recovery;
+    store.docEditAccessState = 'recovery';
+    store.docEditBaseAvailable = false;
+    await store.persistSelectedDocDraft({ status: 'recovery',
+      recoverySubmissionSignature: JSON.stringify([record.title, preserved.content, documentContentSignature(preserved)]) });
+    const db = openWorkspaceDb('npub1signedinactor');
+    const originalPut = db.document_drafts.put.bind(db.document_drafts);
+    let release;
+    let started;
+    const didStart = new Promise(resolve => { started = resolve; });
+    const gate = new Promise(resolve => { release = resolve; });
+    const put = vi.spyOn(db.document_drafts, 'put').mockClear().mockImplementationOnce(async row => {
+      started();
+      await gate;
+      return originalPut(row);
+    });
+    modelRef.current = richDocContentModel('Recovery B undone');
+    store.docEditDraftDirty = true;
+    const writing = store.persistSelectedDocDraft();
+    await didStart;
+    store.syncDocRichEditorContentModel(modelRef.current = preserved);
+    store.handleDocRichEditorUpdate();
+    release();
+    await writing;
+    await expect(store.docDraftUndoPromise).resolves.toBe(true);
+    put.mockRestore();
+    expect(await getDocumentDraft('workspace-1', record.record_id)).toMatchObject({
+      content: 'Recovery A', recovery_id: 'preserved-a', draft_status: 'recovery',
+    });
+    const reopened = createSyncedPgDocSaveStore({ draftDirty: false }).store;
+    await reopened.restoreSelectedDocDraft(record, { generation: 0 });
+    expect(reopened.docEditorContent).toBe('Recovery A');
+    expect(reopened.docRecovery).toMatchObject({ id: 'preserved-a' });
+    expect(reopened.docEditDraftDirty).toBe(false);
+    expect(updateTowerPgDocMock).not.toHaveBeenCalled();
+  });
+
+  it('does not submit a recovery for unchanged content even when the old base is unavailable', async () => {
+    const model = richDocContentModel('Unchanged body');
+    const { store, record } = createSyncedPgDocSaveStore({ content: model.content,
+      editorState: model.editor_state, currentModel: model });
+    store.docEditBaseRowVersion = 0;
+    store.docEditBaseBodySha256Hex = null;
+    store.docEditBaseAvailable = false;
+    store.docEditAccessState = 'recovery';
+    await expect(store.saveSelectedDocItem()).resolves.toMatchObject({ record_id: record.record_id });
+    expect(updateTowerPgDocMock).not.toHaveBeenCalled();
+    expect(store.docEditDraftDirty).toBe(false);
+    expect(store.docEditAccessState).toBe('ready');
+  });
+
+  it('clears only a local unchanged draft without inventing its missing original base', async () => {
+    const model = richDocContentModel('Unchanged body');
+    const { store, record } = createSyncedPgDocSaveStore({ content: model.content,
+      editorState: model.editor_state, currentModel: model, draftDirty: false });
+    await upsertDocumentDraft({ workspace_id: 'workspace-1', document_id: record.record_id,
+      title: record.title, ...model, base_available: false, base_row_version: null, draft_status: 'dirty' });
+    store.docEditAccessGeneration = 3;
+    await store.restoreSelectedDocDraft(record, { generation: 3 });
+    expect(store.docEditDraftDirty).toBe(false);
+    expect(store.docEditConflict).toBeNull();
+    expect(await getDocumentDraft('workspace-1', record.record_id)).toBeUndefined();
+    expect(updateTowerPgDocMock).not.toHaveBeenCalled();
+  });
+
+  it('repairs same-version missing base metadata without replacing typed content', async () => {
+    const { store, record, modelRef } = createSyncedPgDocSaveStore({ currentModel: richDocContentModel('Typed edit') });
+    store.docEditBaseAvailable = false;
+    store.docEditBaseBodySha256Hex = null;
+    store.docEditorBodyLoaded = true;
+    store.observeSelectedDocAuthoritativeVersion();
+    expect(store.docEditBaseAvailable).toBe(true);
+    expect(store.docEditBaseBodySha256Hex).toBe(record.pg_canonical_body_sha256_hex);
+    expect(modelRef.current.content).toBe('Typed edit');
+    updateTowerPgDocMock.mockResolvedValueOnce(acceptedPgDoc(44, 'Typed edit'));
+    await store.saveSelectedDocItem();
+    expect(updateTowerPgDocMock.mock.calls[0][2]).toMatchObject({
+      base_available: true, row_version: 43,
+      base_body_sha256_hex: 'b'.repeat(64), lease_token: expect.any(String),
+    });
+  });
+
+  it('restores missing draft base metadata only from the same verified body', async () => {
+    const { record, store } = createSyncedPgDocSaveStore({ currentModel: richDocContentModel('Restored edit'), draftDirty: false });
+    store.docEditBaseContentSignature = documentContentSignature(record);
+    store.docEditBaseAvailable = false;
+    store.docEditBaseBodySha256Hex = null;
+    store.docEditDraftDirty = true;
+    await store.persistSelectedDocDraft();
+    store.docEditDraftDirty = false;
+    store.docEditAccessGeneration = 8;
+    store.scheduleDocAutosave = vi.fn();
+    store.beginSelectedDocLeaseAcquisition = vi.fn(async () => true);
+    await store.restoreSelectedDocDraft(record, { generation: 8 });
+    expect(store.docEditDraftDirty).toBe(true);
+    expect(store.docEditConflict).toBeFalsy();
+    expect(store.docEditBaseAvailable).toBe(true);
+    expect(store.docEditBaseBodySha256Hex).toBe(record.pg_canonical_body_sha256_hex);
+    expect(store.docEditorContent).toBe('Restored edit');
+  });
+
+  it('does not repair a restored base when its retained identity contradicts the canonical body', async () => {
+    const { record, store } = createSyncedPgDocSaveStore({ draftDirty: false });
+    await upsertDocumentDraft({ workspace_id: 'workspace-1', document_id: record.record_id,
+      title: record.title, ...richDocContentModel('Draft edit'), base_available: false,
+      base_row_version: 43, base_storage_object_id: record.pg_canonical_storage_object_id,
+      base_content_signature: documentContentSignature(record), base_body_sha256_hex: 'c'.repeat(64),
+      draft_status: 'dirty' });
+    store.scheduleDocAutosave = vi.fn();
+    await store.restoreSelectedDocDraft(record, { generation: 0 });
+    expect(store.docEditBaseAvailable).toBe(false);
+    expect(store.docEditBaseBodySha256Hex).toBe('c'.repeat(64));
+    expect(store.docEditAccessState).toBe('recovery');
+    expect(store.docEditorContent).toBe('Draft edit');
+  });
+
+  it('uses the canonical lease when a separate recovery was discovered but not opened', async () => {
+    const { store } = createSyncedPgDocSaveStore({ currentModel: richDocContentModel('Canonical edit') });
+    store.docRecovery = { id: 'old-recovery', resolution_state: 'open' };
+    updateTowerPgDocMock.mockResolvedValueOnce(acceptedPgDoc(44, 'Canonical edit'));
+    await store.saveSelectedDocItem();
+    expect(updateTowerPgDocMock.mock.calls[0][2]).toMatchObject({
+      base_available: true, lease_token: 'lease-token', base_body_sha256_hex: 'b'.repeat(64),
+    });
+  });
+
+  it.each([
+    (state) => { state.content[0].content[0].marks = [{ type: 'bold' }]; },
+    (state) => { state.content[0].content[0].marks = [{ type: 'link', attrs: { href: 'https://example.com/changed' } }]; },
+    (state) => { state.content[0].attrs.textAlign = 'center'; },
+    (state) => { state.content[0].content[0].text += ' '; },
+    (state) => { state.content = []; },
+  ])('keeps real editor changes significant in the content comparison (%#)', (change) => {
+    const model = richDocContentModel('Content');
+    const changed = structuredClone(model);
+    change(changed.editor_state);
+    expect(documentContentSignature(changed)).not.toBe(documentContentSignature(model));
+  });
+
+  it('saves a structure-only change even when Markdown is identical', async () => {
+    const model = richDocContentModel('Same text');
+    const changed = structuredClone(model);
+    changed.editor_state.content.push({ type: 'paragraph', attrs: { fdBlockId: 'empty-block' } });
+    const { store } = createSyncedPgDocSaveStore({ content: model.content, editorState: model.editor_state, currentModel: changed });
+    updateTowerPgDocMock.mockResolvedValueOnce(acceptedPgDoc(44, 'Same text'));
+    await store.saveSelectedDocItem();
+    expect(updateTowerPgDocMock).toHaveBeenCalledTimes(1);
+  });
+
+
   beforeEach(async () => {
     const wsDb = openWorkspaceDb('npub1signedinactor');
     await wsDb.open();
@@ -2571,6 +2839,13 @@ describe('docsManagerMixin durable recovery drafts', () => {
     expect(store.docEditAccessState).toBe('recovery');
     expect(store.docEditDraftDirty).toBe(false);
 
+    // Even if ID repair flags another autosave, do not resubmit the same draft.
+    store.docEditDraftDirty = true;
+    await store.persistSelectedDocDraft();
+    await store.saveSelectedDocItem({ autosave: true });
+    expect(updateTowerPgDocMock).toHaveBeenCalledTimes(1);
+    expect(store.docEditDraftDirty).toBe(false);
+
     modelRef.current = richDocContentModel('A newer local recovery edit');
     store.docEditDraftDirty = true;
     await store.persistSelectedDocDraft();
@@ -2579,6 +2854,30 @@ describe('docsManagerMixin durable recovery drafts', () => {
       recovery_id: 'recovery-no-base',
       content: modelRef.current.content,
     });
+    updateTowerPgDocMock.mockRejectedValueOnce(recoveryError);
+    await store.saveSelectedDocItem({ autosave: true });
+    expect(updateTowerPgDocMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('offers explicit discard for an identical recovery without changing the saved document', async () => {
+    const model = richDocContentModel('Saved body');
+    const { record, store } = createSyncedPgDocSaveStore({
+      content: model.content, editorState: model.editor_state, currentModel: model, draftDirty: false,
+    });
+    const recovery = { id: 'identical-recovery', resolution_state: 'open', base: null,
+      submitted_patch: { title: record.title }, head_at_creation: { row_version: 43 } };
+    const repaired = structuredClone(model);
+    repaired.editor_state.content[0].attrs.fdBlockId = 'new-internal-id';
+    getTowerPgDocRecoveryBodyMock.mockResolvedValueOnce({ recovery,
+      body: { base64_data: btoa(JSON.stringify({ content_model: repaired })) } });
+    await expect(store.openSelectedDocRecoveryDraft(recovery.id)).resolves.toBe(true);
+    expect(store.docEditDraftDirty).toBe(false);
+    expect(store.docEditAccessMessage).toContain('matches the loaded saved document');
+    expect(store.docEditAccessMessage).toContain('discard');
+    await store.saveSelectedDocItem({ autosave: true });
+    expect(updateTowerPgDocMock).not.toHaveBeenCalled();
+    expect(discardTowerPgDocRecoveryMock).not.toHaveBeenCalled();
+    expect(store.docEditAccessState).toBe('recovery');
   });
 
   it('promotes and discards recoveries through optimistic Tower actions', async () => {

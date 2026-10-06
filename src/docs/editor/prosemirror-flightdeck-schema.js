@@ -59,10 +59,21 @@ export const FlightDeckBlockIdExtension = Extension.create({
       new Plugin({
         appendTransaction: (_transactions, _oldState, newState) => {
           let tr = null;
+          const seen = new Set();
           newState.doc.descendants((node, pos, parent) => {
-            if (parent !== newState.doc || !shouldCarryBlockId(node.type.name) || node.attrs.fdBlockId) return;
+            if (!shouldCarryBlockId(node.type.name)) return;
+            const id = node.attrs.fdBlockId;
+            if (id && !seen.has(id)) {
+              seen.add(id);
+              return;
+            }
+            if (!id && parent !== newState.doc) return;
+            // Keep the first identity so existing comment anchors remain valid.
+            // Copies need fresh top-level IDs; nested duplicates have no block.
+            const nextId = parent === newState.doc ? createFlightDeckBlockId() : null;
+            if (nextId) seen.add(nextId);
             tr = tr || newState.tr;
-            tr.setNodeMarkup(pos, undefined, { ...node.attrs, fdBlockId: createFlightDeckBlockId() });
+            tr.setNodeMarkup(pos, undefined, { ...node.attrs, fdBlockId: nextId });
           });
           return tr;
         },

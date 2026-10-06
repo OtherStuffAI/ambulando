@@ -2625,6 +2625,21 @@ describe('PG read hydrator', () => {
     expect(target.applySelectedDocument).not.toHaveBeenCalled();
   });
 
+  it('retains embedded canonical metadata when full-body retrieval falls back to storage', async () => {
+    const row = await hydrateTowerPgDoc(store(), 'doc-base', {
+      getTowerPgDocBody: vi.fn(async () => { throw new Error('body route unavailable'); }),
+      getTowerPgDoc: vi.fn(async () => ({ doc: {
+        id: 'doc-base', row_version: 9, storage_object_id: 'body-base',
+        canonical_version: { row_version: 9, version_id: 'doc-base:9',
+          storage_object_id: 'body-base', body_sha256_hex: 'd'.repeat(64) },
+      } })),
+      downloadStorageObject: vi.fn(async () => new TextEncoder().encode('Complete body')),
+      upsertDocument: vi.fn(),
+    });
+    expect(row).toMatchObject({ content_storage_status: 'loaded',
+      pg_canonical_body_sha256_hex: 'd'.repeat(64), pg_canonical_version_id: 'doc-base:9' });
+  });
+
   it('hydrates the complete synthetic long body and empty editor metadata through the typed route into Dexie', async () => {
     const target = store({ selectedDocType: 'document', selectedDocId: 'doc-long' });
     const source = buildSyntheticLongDocumentFixture();

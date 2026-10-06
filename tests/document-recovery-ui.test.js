@@ -21,7 +21,7 @@ describe('document recovery UI', () => {
     expect(html).toContain(':disabled="$store.chat.docRecoveryActionState || $store.chat.docEditDraftDirty"');
     expect(html).toContain('Copy draft');
     expect(html).toContain("['editing', 'recovery'].includes($store.chat.docEditAccessState)");
-    expect(html).toContain('Draft base v');
-    expect(html).toContain('Current head v');
+    expect(html).toContain('Draft starting version v');
+    expect(html).toContain('Saved version v');
   });
 });

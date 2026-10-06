@@ -201,6 +201,23 @@ export function draftBaseMatchesHead(draft = {}, head = {}) {
     );
 }
 
+// Compare the editable model, excluding only editor bookkeeping. Keep text,
+// marks, links, structure and every other attribute exact (including whitespace).
+export function documentContentSignature(document = {}) {
+  const state = createDocumentEditorState(document).editorState;
+  const clean = (value) => {
+    if (Array.isArray(value)) return value.map(clean);
+    if (!value || typeof value !== 'object') return value;
+    return Object.fromEntries(Object.keys(value).sort().flatMap((key) => {
+      if (key === 'fdBlockId' || key === 'pmNodeId') return [];
+      const next = clean(value[key]);
+      if (key === 'attrs' && next && Object.keys(next).length === 0) return [];
+      return [[key, next]];
+    }));
+  };
+  return JSON.stringify(clean(state));
+}
+
 function decodeStoredRecoveryContent(bodyResult = {}) {
   const encoded = String(bodyResult?.body?.base64_data || '').trim();
   if (!encoded) return null;
@@ -1159,6 +1176,7 @@ export const docsManagerMixin = {
       this.docEditBaseBodySha256Hex = null;
       this.docEditBaseStorageObjectId = null;
       this.docEditBaseAvailable = false;
+      this.docEditBaseContentSignature = null;
       this.docEditConflict = null;
       this.docRecovery = null;
       this.docRecoveryActionState = '';
@@ -1211,6 +1229,7 @@ export const docsManagerMixin = {
     this.docEditBaseBodySha256Hex = baseIdentity.base_body_sha256_hex;
     this.docEditBaseStorageObjectId = baseIdentity.base_storage_object_id;
     this.docEditBaseAvailable = baseIdentity.base_available;
+    this.docEditBaseContentSignature = this.docEditorBodyLoaded ? documentContentSignature(item) : null;
     this.docEditConflict = null;
     this.docRecovery = null;
     this.docRecoveryActionState = '';
@@ -1349,6 +1368,7 @@ export const docsManagerMixin = {
       editor_state: contentModel?.editor_state || this.docEditorProseMirrorState || null,
       editor_state_format: contentModel?.editor_state_format ?? null,
       editor_state_version: contentModel?.editor_state_version ?? null,
+      base_content_signature: this.docEditBaseContentSignature || null,
       base_available: this.docEditBaseAvailable === true,
       base_row_version: Number(this.docEditBaseRowVersion || 0) || null,
       base_version_id: this.docEditBaseVersionId || null,
@@ -1358,6 +1378,7 @@ export const docsManagerMixin = {
       draft_status: options.status || (this.docEditDraftDirty ? 'dirty' : (this.docRecovery ? 'recovery' : 'dirty')),
       recovery_id: this.docRecovery?.id || this.docLocalDraft?.recovery_id || null,
       recovery: this.docRecovery || this.docLocalDraft?.recovery || null,
+      recovery_submission_signature: options.recoverySubmissionSignature || this.docLocalDraft?.recovery_submission_signature || null,
       current_head: this.docEditConflict?.currentHead || this.docLocalDraft?.current_head || null,
       last_remote_save_outcome: options.remoteOutcome || this.docLocalDraft?.last_remote_save_outcome || null,
       submitted_storage_object_id: options.submittedStorageObjectId || this.docLocalDraft?.submitted_storage_object_id || null,
@@ -1370,8 +1391,11 @@ export const docsManagerMixin = {
   async persistSelectedDocDraft(options = {}) {
     const row = this.buildSelectedDocDraftRow(options);
     if (!row) return null;
+    const revision = this.docDraftWriteRevision = Number(this.docDraftWriteRevision || 0) + 1;
+    const generation = Number(this.docEditAccessGeneration || 0);
     const persisted = await upsertDocumentDraft(row);
-    if (this.selectedDocId === row.document_id && this.getSelectedDocWorkspaceId() === row.workspace_id) {
+    if (revision === this.docDraftWriteRevision && generation === Number(this.docEditAccessGeneration || 0)
+      && this.selectedDocId === row.document_id && this.getSelectedDocWorkspaceId() === row.workspace_id) {
       this.docLocalDraft = persisted;
     }
     return persisted;
@@ -1397,8 +1421,12 @@ export const docsManagerMixin = {
     const workspaceId = this.getSelectedDocWorkspaceId(item);
     if (!workspaceId || !item?.record_id) return false;
     this.cancelDocLocalDraftPersistence();
-    await deleteDocumentDraft(workspaceId, item.record_id);
-    if (this.selectedDocId === item.record_id) this.docLocalDraft = null;
+    const revision = this.docDraftWriteRevision = Number(this.docDraftWriteRevision || 0) + 1;
+    const generation = Number(this.docEditAccessGeneration || 0);
+    const deleted = await deleteDocumentDraft(workspaceId, item.record_id);
+    if (!deleted) return false;
+    if (revision === this.docDraftWriteRevision && generation === Number(this.docEditAccessGeneration || 0)
+      && this.selectedDocId === item.record_id && workspaceId === this.getSelectedDocWorkspaceId()) this.docLocalDraft = null;
     return true;
   },
 
@@ -1409,22 +1437,32 @@ export const docsManagerMixin = {
     if (this.docEditDraftDirty) return null;
     const title = this.docEditorTitle;
     const content = this.docEditorContent;
+    const revision = Number(this.docDraftWriteRevision || 0);
     const draft = await getDocumentDraft(workspaceId, item.record_id);
-    if (!draft) return null;
+    if (!draft || revision !== Number(this.docDraftWriteRevision || 0)) return null;
     if (Number(options.generation || 0) !== Number(this.docEditAccessGeneration || 0)) return null;
     if (this.selectedDocId !== item.record_id || draft.workspace_id !== workspaceId || draft.document_id !== item.record_id) return null;
     if (workspaceId !== this.getSelectedDocWorkspaceId() || this.docEditDraftDirty
       || title !== this.docEditorTitle || content !== this.docEditorContent) return null;
 
     const head = documentEditorBaseIdentity(item);
-    const sameBase = draftBaseMatchesHead(draft, head);
-    const draftAlreadyCanonical = sameBase
-      && !draft.recovery_id
+    const recoveredBase = (draft.base_available !== true || !draft.base_body_sha256_hex)
+      && head.base_available === true
+      && Number(draft.base_row_version || 0) === Number(head.base_row_version || 0)
+      && Boolean(draft.base_storage_object_id)
+      && draft.base_storage_object_id === head.base_storage_object_id
+      && optionalIdentityMatches(draft.base_version_id, head.base_version_id)
+      && optionalIdentityMatches(draft.base_body_sha256_hex, head.base_body_sha256_hex, { lowerCase: true })
+      && draft.base_content_signature === documentContentSignature(item);
+    const sameBase = recoveredBase || draftBaseMatchesHead(draft, head);
+    const draftAlreadyCanonical = !draft.recovery_id
       && isDocumentContentReadyForEditor(item)
       && String(draft.title || item.title || 'Untitled document') === String(item.title || 'Untitled document')
       && String(draft.content || '') === String(item.content || '')
-      && (!draft.editor_state || JSON.stringify(draft.editor_state) === JSON.stringify(item.editor_state));
+      && documentContentSignature(draft) === documentContentSignature(item);
     if (draftAlreadyCanonical) {
+      this.setSelectedDocBaseIdentity(head);
+      this.docEditBaseContentSignature = documentContentSignature(item);
       this.docEditDraftDirty = false;
       this.docAutosaveState = 'saved';
       this.docEditConflict = null;
@@ -1448,15 +1486,19 @@ export const docsManagerMixin = {
     this.docEditorProseMirrorState = editorState.editorState;
     this.docEditorContentModel = editorState.contentModel;
     this.docRichEditorAdapter?.setContent?.(editorState.editorState, { emitUpdate: false, preserveSelection: false });
-    this.docLocalDraft = draft;
+    this.docLocalDraft = draft.draft_status === 'recovery' && !draft.recovery_submission_signature
+      ? { ...draft, recovery_submission_signature: JSON.stringify([this.docEditorTitle, contentModel.content, documentContentSignature(contentModel)]) }
+      : draft;
     this.docRecovery = draft.recovery || null;
     this.setSelectedDocBaseIdentity({
-      base_available: draft.base_available,
+      ...(sameBase ? head : {}),
+      base_available: recoveredBase ? true : draft.base_available,
       base_row_version: draft.base_row_version,
-      base_version_id: draft.base_version_id,
-      base_body_sha256_hex: draft.base_body_sha256_hex,
-      base_storage_object_id: draft.base_storage_object_id,
+      base_version_id: draft.base_version_id || (sameBase ? head.base_version_id : null),
+      base_body_sha256_hex: recoveredBase ? head.base_body_sha256_hex : draft.base_body_sha256_hex,
+      base_storage_object_id: draft.base_storage_object_id || (sameBase ? head.base_storage_object_id : null),
     });
+    this.docEditBaseContentSignature = draft.base_content_signature || null;
     this.docEditDraftDirty = draft.draft_status !== 'recovery';
     this.docAutosaveState = this.docEditDraftDirty ? 'pending' : 'saved';
     if (!sameBase || draft.recovery_id) {
@@ -1467,8 +1509,10 @@ export const docsManagerMixin = {
       };
       this.docEditAccessState = 'recovery';
       this.docEditAccessMessage = draft.recovery_id
-        ? 'A recovery version is preserved in Tower. Continue editing it, promote it optimistically, or discard it.'
-        : 'Tower advanced from this draft’s base. The draft is preserved locally and will save only as a recovery version.';
+        ? 'A recovery version is preserved in Tower. Continue editing it, save it as the current document, or discard it.'
+        : draft.base_available
+          ? 'The saved document changed since this draft began. Your draft is preserved locally; saving will keep it as a separate recovery draft.'
+          : 'The saved version this draft began from could not be verified. Your draft is preserved locally; saving will keep it as a separate recovery draft.';
       this.docRichEditorAdapter?.setEditable?.(true);
     } else if (this.docEditDraftDirty) {
       this.docEditAccessMessage = '';
@@ -1534,6 +1578,7 @@ export const docsManagerMixin = {
     this.docEditDraftDirty = false;
     this.docEditBaseRecordId = item.record_id;
     this.setSelectedDocBaseIdentity(documentEditorBaseIdentity(item));
+    this.docEditBaseContentSignature = this.docEditorBodyLoaded ? documentContentSignature(item) : null;
     this.docEditConflict = null;
     this.docRecovery = null;
     this.docAutosaveState = 'saved';
@@ -1624,8 +1669,9 @@ export const docsManagerMixin = {
         onEditIntent: (intent) => intent === 'input' && this.handleDocRichEditIntent(),
         onPaste: (event, editor) => this.handleDocRichPaste?.(event, editor) === true,
         onUpdate: (contentModel) => {
+          const previousModel = this.docEditorContentModel;
           this.syncDocRichEditorContentModel(contentModel);
-          this.handleDocRichEditorUpdate();
+          this.handleDocRichEditorUpdate(previousModel);
         },
       });
       this.syncDocRichEditorContentModel();
@@ -1672,7 +1718,58 @@ export const docsManagerMixin = {
     return item.content_storage_status === 'error';
   },
 
-  handleDocRichEditorUpdate() {
+  async checkpointSelectedDocUndo({ recovery = false } = {}) {
+    const item = this.selectedDocument;
+    const workspaceId = this.getSelectedDocWorkspaceId(item);
+    const generation = Number(this.docEditAccessGeneration || 0);
+    let revision = Number(this.docDraftWriteRevision || 0);
+    try {
+      const write = recovery ? this.persistSelectedDocDraft({ status: 'recovery' }) : this.clearSelectedDocDraft(item);
+      revision = Number(this.docDraftWriteRevision || 0);
+      if (!await write) throw new Error('local draft storage is unavailable');
+      if (this.selectedDocId === item?.record_id && workspaceId === this.getSelectedDocWorkspaceId()
+        && generation === Number(this.docEditAccessGeneration || 0)
+        && revision === Number(this.docDraftWriteRevision || 0)) this.docAutosaveState = 'saved';
+      return true;
+    } catch (error) {
+      if (this.selectedDocId === item?.record_id && workspaceId === this.getSelectedDocWorkspaceId()
+        && generation === Number(this.docEditAccessGeneration || 0)
+        && revision === Number(this.docDraftWriteRevision || 0)) {
+        this.docEditDraftDirty = true;
+        this.docAutosaveState = 'error';
+        this.docEditAccessMessage = `Local draft could not be updated after undo: ${error?.message || error}`;
+      }
+      return false;
+    }
+  },
+
+  handleDocRichEditorUpdate(previousModel = null) {
+    const model = this.docEditorContentModel;
+    // Even an incomplete/loading editor can normalize its IDs. Compare the
+    // previous displayed model before classifying an update as user input.
+    if (previousModel && model && previousModel.content === model.content
+      && documentContentSignature(previousModel) === documentContentSignature(model)) return;
+    const baseline = this.selectedDocument;
+    if (this.docEditAccessState === 'recovery' && this.docLocalDraft?.recovery_submission_signature
+      === JSON.stringify([this.docEditorTitle.trim() || 'Untitled document', model?.content || '', documentContentSignature(model || {})])) {
+      this.docEditDraftDirty = false;
+      this.cancelDocAutosave();
+      this.cancelDocLocalDraftPersistence();
+      this.docAutosaveState = 'saving';
+      this.docDraftUndoPromise = this.checkpointSelectedDocUndo({ recovery: true });
+      return;
+    }
+    if (this.docEditAccessState !== 'recovery' && baseline && model && isDocumentContentReadyForEditor(baseline)
+      && model.content === createDocumentEditorState(baseline).contentModel.content
+      && documentContentSignature(model) === documentContentSignature(baseline)
+      && this.docEditorTitle === baseline.title && !this.docEditorSharesDirty) {
+      this.docEditDraftDirty = false;
+      this.cancelDocAutosave();
+      this.cancelDocLocalDraftPersistence();
+      this.docAutosaveState = 'saving';
+      this.docDraftUndoPromise = this.checkpointSelectedDocUndo();
+      return;
+    }
     this.docEditDraftDirty = true;
     this.scheduleDocLocalDraftPersistence();
     if (this.docEditAccessState === 'recovery') {
@@ -1726,7 +1823,7 @@ export const docsManagerMixin = {
     if (!isDocumentContentReadyForEditor(item) && item.content_storage_status === 'error') {
       this.docEditBaseAvailable = false;
       this.docEditAccessState = 'recovery';
-      this.docEditAccessMessage = 'The complete base is unavailable. Edits stay local and save to Tower only as a non-head recovery version.';
+      this.docEditAccessMessage = 'The complete base is unavailable. Edits stay local and save to Tower only as a separate recovery draft.';
       this.docRichEditorAdapter?.setEditable?.(true);
       this.scheduleDocLocalDraftPersistence();
       return true;
@@ -1843,12 +1940,30 @@ export const docsManagerMixin = {
     return true;
   },
 
+  repairSelectedDocBaseIdentity(item = this.selectedDocument) {
+    if (!item || item.record_id !== this.docEditBaseRecordId || this.docEditBaseAvailable
+      || this.docEditAccessState === 'recovery' || this.docEditConflict) return false;
+    const identity = documentEditorBaseIdentity(item);
+    if (!identity.base_available || Number(identity.base_row_version) !== Number(this.docEditBaseRowVersion)) return false;
+    if (!optionalIdentityMatches(this.docEditBaseVersionId, identity.base_version_id)
+      || !optionalIdentityMatches(this.docEditBaseStorageObjectId, identity.base_storage_object_id)
+      || !optionalIdentityMatches(this.docEditBaseBodySha256Hex, identity.base_body_sha256_hex, { lowerCase: true })) return false;
+    if (this.docLocalDraft && (!this.docEditBaseContentSignature
+      || this.docEditBaseContentSignature !== documentContentSignature(item)
+      || !this.docEditBaseStorageObjectId
+      || this.docEditBaseStorageObjectId !== identity.base_storage_object_id)) return false;
+    this.setSelectedDocBaseIdentity(identity);
+    return true;
+  },
+
   observeSelectedDocAuthoritativeVersion() {
     const item = this.selectedDocument;
     if (!item || item.record_id !== this.docEditBaseRecordId) return false;
     const currentVersion = Number(item.version || 0);
     const baseVersion = Number(this.docEditBaseRowVersion || 0);
     if (currentVersion < baseVersion) return false;
+    // A same-version metadata completion does not replace the user's buffer.
+    this.repairSelectedDocBaseIdentity(item);
     if (currentVersion === baseVersion && (this.docEditorBodyLoaded || this.docEditBaseAvailable || this.docEditDraftDirty || this.docLocalDraft)) return false;
     if (!this.docEditDraftDirty) {
       if (!isDocumentContentReadyForEditor(item)) return false;
@@ -1861,7 +1976,7 @@ export const docsManagerMixin = {
         currentHead: documentEditorBaseIdentity(item),
       };
       this.docEditAccessState = 'recovery';
-      this.docEditAccessMessage = 'Tower has a newer head. Your editor remains available and the next save will preserve this draft as a recovery version.';
+      this.docEditAccessMessage = 'The saved document has changed. Your editor remains available; the next save will preserve this draft separately.';
       this.docRichEditorAdapter?.setEditable?.(true);
       this.scheduleDocLocalDraftPersistence();
       this.scheduleDocAutosave();
@@ -1900,12 +2015,12 @@ export const docsManagerMixin = {
     // first so Alpine cannot classify our own N+1 acknowledgement as external.
     if (isSelectedSave && selectedVersion <= acceptedVersion) {
       const submittedTitle = submittedDocument?.title || canonical.title || 'Untitled document';
-      const submittedContent = submittedDocument?.content || canonical.content || '';
       const currentTitle = this.docEditorTitle.trim() || 'Untitled document';
       const currentContentModel = this.buildSelectedDocContentModel();
       const hasFollowupChanges = currentTitle !== submittedTitle
-        || (currentContentModel.content || '') !== submittedContent;
+        || documentContentSignature(currentContentModel) !== documentContentSignature(submittedDocument || canonical);
       this.setSelectedDocBaseIdentity(canonicalIdentity);
+      this.docEditBaseContentSignature = documentContentSignature(canonical);
       this.docEditConflict = null;
       this.docRecovery = null;
       this.docEditDraftDirty = hasFollowupChanges;
@@ -4210,12 +4325,12 @@ export const docsManagerMixin = {
   async saveSelectedPgDocItem(item, ownerNpub, options = {}) {
     const autosave = options.autosave === true;
     const nextTitle = this.docEditorTitle.trim() || 'Untitled document';
+    this.repairSelectedDocBaseIdentity(item);
     const itemVersion = Number(item.version || item.row_version || 0);
     const baseVersion = Number(this.docEditBaseRowVersion || 0);
     const titleChanged = nextTitle !== (item.title ?? 'Untitled document');
     const knownStaleBase = itemVersion > baseVersion
-      || this.docEditAccessState === 'recovery'
-      || Boolean(this.docRecovery);
+      || this.docEditAccessState === 'recovery';
     if (isSyncedPgRecord(item) && baseVersion > 0 && itemVersion > baseVersion) {
       if (!this.docEditDraftDirty && !titleChanged && !this.docEditorSharesDirty) {
         if (isDocumentContentReadyForEditor(item)) {
@@ -4230,7 +4345,7 @@ export const docsManagerMixin = {
         currentHead: documentEditorBaseIdentity(item),
       };
       this.docEditAccessState = 'recovery';
-      this.docEditAccessMessage = 'Tower has a newer head. Saving will preserve this draft as a non-head recovery version.';
+      this.docEditAccessMessage = 'The saved document has changed. Saving will preserve this draft as a separate recovery draft.';
       this.docRichEditorAdapter?.setEditable?.(true);
     }
     const contentModel = this.buildSelectedDocContentModel();
@@ -4258,10 +4373,31 @@ export const docsManagerMixin = {
       }
       return null;
     }
+    if (isDocumentContentReadyForEditor(item)
+      && contentModel.content === createDocumentEditorState(item).contentModel.content
+      && documentContentSignature(contentModel) === documentContentSignature(item)
+      && !titleChanged && !this.docEditorSharesDirty) {
+      this.docEditDraftDirty = false;
+      if (!this.docRecovery && !this.docLocalDraft?.recovery_id) {
+        this.docEditConflict = null;
+        if (['recovery', 'conflict'].includes(this.docEditAccessState)) this.docEditAccessState = 'ready';
+        this.docEditAccessMessage = '';
+        this.setSelectedDocBaseIdentity(documentEditorBaseIdentity(item));
+      }
+    }
     if (!this.docEditDraftDirty && !titleChanged && !this.docEditorSharesDirty) {
       this.docAutosaveState = 'saved';
       if (!this.docRecovery) await this.clearSelectedDocDraft(item);
-      return item;
+      return this.docEditAccessState === 'recovery' ? null : item;
+    }
+    if (this.docEditAccessState === 'recovery' && this.docRecovery
+      && this.docLocalDraft?.recovery_submission_signature
+        === JSON.stringify([nextTitle, contentModel.content, documentContentSignature(contentModel)])) {
+      await this.persistSelectedDocDraft({ status: 'recovery' });
+      this.docEditDraftDirty = false;
+      this.docAutosaveState = 'saved';
+      this.error = null;
+      return null;
     }
     await this.persistSelectedDocDraft();
     const roundTrip = validateDocumentContentModelRoundTrip(contentModel);
@@ -4281,6 +4417,7 @@ export const docsManagerMixin = {
     const hasChanges = (knownStaleBase && this.docEditDraftDirty)
       || nextTitle !== (item.title ?? 'Untitled document')
       || (contentModel.content || '') !== (item.content || '')
+      || documentContentSignature(contentModel) !== documentContentSignature(item)
       || nextLinksSerialized !== currentLinksSerialized;
     if (!hasChanges) {
       this.docAutosaveState = 'saved';
@@ -4296,7 +4433,7 @@ export const docsManagerMixin = {
     const requiresCanonicalLease = isSyncedPgRecord(item) && baseAvailable && !knownStaleBase;
     if (requiresCanonicalLease && !pgLeaseToken) {
       this.docAutosaveState = 'error';
-      if (!autosave) this.error = 'Acquire a PG edit lease before saving this document.';
+      if (!autosave) this.error = 'Get edit access before saving this document. Your draft is kept locally.';
       return null;
     }
 
@@ -4420,12 +4557,14 @@ export const docsManagerMixin = {
           currentHead,
         };
         this.docEditAccessState = 'recovery';
-        this.docEditAccessMessage = 'Tower preserved this draft as a recovery version. Continue editing, promote it against the current head, or discard it.';
+        this.docEditAccessMessage = 'Tower preserved this draft as a recovery version. Continue editing, save it as the current document, or discard it.';
         this.docEditDraftDirty = false;
         this.docAutosaveState = 'saved';
+        this.error = null;
         this.docRichEditorAdapter?.setEditable?.(true);
         await this.persistSelectedDocDraft({
           status: 'recovery',
+          recoverySubmissionSignature: JSON.stringify([nextTitle, contentModel.content, documentContentSignature(contentModel)]),
           remoteOutcome: {
             status: 'recovery',
             code: payload?.code || 'document_recovery_created',
@@ -4531,11 +4670,16 @@ export const docsManagerMixin = {
       };
       this.docEditDraftDirty = false;
       this.docEditAccessState = 'recovery';
-      this.docEditAccessMessage = 'Recovery draft open. Continue editing, promote it against the current Tower head, or discard it.';
+      this.docEditAccessMessage = isDocumentContentReadyForEditor(item)
+        && this.docEditorTitle === item.title
+        && documentContentSignature(contentModel) === documentContentSignature(item)
+        ? 'This recovery matches the loaded saved document. You can discard this recovery and keep the saved document.'
+        : 'Recovery draft open. Continue editing, use it as the current document, or discard it.';
       this.docAutosaveState = 'saved';
       this.docRichEditorAdapter?.setEditable?.(true);
       await this.persistSelectedDocDraft({
         status: 'recovery',
+        recoverySubmissionSignature: JSON.stringify([this.docEditorTitle, contentModel.content, documentContentSignature(contentModel)]),
         remoteOutcome: { status: 'recovery', code: 'recovery_opened', at: new Date().toISOString() },
         submittedStorageObjectId: recovery?.submitted_body?.storage_object_id || null,
         submittedBodySha256Hex: recovery?.submitted_body?.body_sha256_hex || null,
@@ -4561,11 +4705,11 @@ export const docsManagerMixin = {
       });
       const currentHead = detail?.current_head;
       if (!currentHead?.row_version || !currentHead?.body_sha256_hex) {
-        throw new Error('Tower did not return a complete current-head identity for promotion.');
+        throw new Error('The current saved version could not be verified. The recovery remains preserved.');
       }
       await releasePgEditLeaseForRecord(this, item, 'document', { reportError: false });
       const lease = await acquirePgEditLeaseForRecord(this, { ...item, version: currentHead.row_version }, 'document');
-      if (!lease?.lease_token) throw new Error('A current document edit lease is required to promote this recovery.');
+      if (!lease?.lease_token) throw new Error('Get edit access before using this recovery as the saved document.');
       const result = await promoteTowerPgDocRecovery(context.workspaceId, item.record_id, recoveryId, {
         row_version: currentHead.row_version,
         ...(currentHead.version_id ? { base_version_id: currentHead.version_id } : {}),
@@ -4599,7 +4743,7 @@ export const docsManagerMixin = {
       this.docEditConflict = null;
       this.docEditDraftDirty = false;
       this.docEditAccessState = 'ready';
-      this.docEditAccessMessage = 'Recovery promoted to the canonical document.';
+      this.docEditAccessMessage = 'Recovery saved as the current document.';
       this.docAutosaveState = 'saved';
       this.applySelectedDocAuthoritativeContent(canonical, { preserveSelection: true });
       await releasePgEditLeaseForRecord(this, canonical, 'document', { reportError: false });
@@ -4612,9 +4756,9 @@ export const docsManagerMixin = {
           currentHead: error.payload?.current_head || null,
         };
         this.docEditAccessState = 'recovery';
-        this.docEditAccessMessage = 'Tower advanced again. The recovery is still preserved; refresh the head before promoting again.';
+        this.docEditAccessMessage = 'The saved document changed again. The recovery is still preserved; refresh before trying again.';
       } else {
-        this.error = error?.message || 'Failed to promote the recovery version.';
+        this.error = error?.message || 'Could not use the recovery as the saved document.';
       }
       return false;
     } finally {
@@ -4642,7 +4786,7 @@ export const docsManagerMixin = {
       if (isDocumentContentReadyForEditor(fresh)) this.applySelectedDocAuthoritativeContent(fresh, { preserveSelection: false });
       else this.loadDocEditorFromSelection(fresh);
       this.docEditAccessState = 'ready';
-      this.docEditAccessMessage = 'Recovery discarded. The canonical Tower document is unchanged.';
+      this.docEditAccessMessage = 'Recovery discarded. The saved document is unchanged.';
       return true;
     } catch (error) {
       this.error = error?.message || 'Failed to discard the recovery version.';

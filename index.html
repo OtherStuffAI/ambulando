@@ -5315,12 +5315,12 @@
                     <span
                       class="doc-edit-recovery-meta"
                       x-show="$store.chat.docRecovery || $store.chat.docEditConflict"
-                      x-text="`Draft base v${$store.chat.docRecovery?.base?.row_version || $store.chat.docEditConflict?.baseVersion || 'unknown'} · Current head v${$store.chat.docEditConflict?.currentHead?.row_version || $store.chat.docRecovery?.head_at_creation?.row_version || $store.chat.docEditConflict?.currentVersion || 'unknown'}${$store.chat.docRecovery?.reason_code ? ` · ${$store.chat.docRecovery.reason_code.replaceAll('_', ' ')}` : ''}`"
+                      x-text="`Draft starting version v${$store.chat.docRecovery?.base?.row_version || $store.chat.docEditConflict?.baseVersion || 'unknown'} · Saved version v${$store.chat.docEditConflict?.currentHead?.row_version || $store.chat.docRecovery?.head_at_creation?.row_version || $store.chat.docEditConflict?.currentVersion || 'unknown'}${$store.chat.docRecovery?.reason_code ? ` · ${$store.chat.docRecovery.reason_code.replaceAll('_', ' ')}` : ''}`"
                     ></span>
                   </div>
                   <div class="doc-edit-access-actions">
                     <button type="button" x-show="$store.chat.docEditAccessState === 'recovery_available'" @click="$store.chat.openSelectedDocRecoveryDraft()">Continue recovery</button>
-                    <button type="button" x-show="$store.chat.docRecovery?.resolution_state === 'open'" :disabled="$store.chat.docRecoveryActionState || $store.chat.docEditDraftDirty" title="Save current recovery edits before promoting" @click="$store.chat.promoteSelectedDocRecovery()" x-text="$store.chat.docRecoveryActionState === 'promoting' ? 'Promoting…' : 'Promote'">Promote</button>
+                    <button type="button" x-show="$store.chat.docRecovery?.resolution_state === 'open'" :disabled="$store.chat.docRecoveryActionState || $store.chat.docEditDraftDirty" title="Save current recovery edits first" @click="$store.chat.promoteSelectedDocRecovery()" x-text="$store.chat.docRecoveryActionState === 'promoting' ? 'Saving…' : 'Use recovery as document'">Use recovery as document</button>
                     <button type="button" x-show="$store.chat.docRecovery?.resolution_state === 'open'" :disabled="$store.chat.docRecoveryActionState || $store.chat.docEditDraftDirty" title="Save or copy current recovery edits before discarding" @click="$store.chat.discardSelectedDocRecovery()" x-text="$store.chat.docRecoveryActionState === 'discarding' ? 'Discarding…' : 'Discard recovery'">Discard recovery</button>
                     <button type="button" x-show="$store.chat.docEditDraftDirty || $store.chat.docRecovery" @click="$store.chat.copySelectedDocDraft()">Copy draft</button>
                     <button type="button" x-show="$store.chat.docEditDraftDirty && !$store.chat.docRecovery" @click="$store.chat.discardSelectedDocDraft()">Discard local draft</button>

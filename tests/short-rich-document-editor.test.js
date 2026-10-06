@@ -110,3 +110,21 @@ it('renders document references with the same navigation metadata as chat and ta
     expect(adapter.getContentModel().content).toContain('@[Target](mention:document:target-doc)');
   } finally { adapter.destroy(); element.remove(); }
 });
+
+it('repairs copied block IDs while retaining the first comment anchor identity', () => {
+  const element = document.createElement('div');
+  document.body.append(element);
+  const paragraph = (text) => ({ type: 'paragraph', attrs: { fdBlockId: 'original-anchor' },
+    content: [{ type: 'text', text }] });
+  const adapter = createTiptapEditorAdapter({ element, editorState: { type: 'doc', content: [paragraph('First'), paragraph('Copy')] } });
+  try {
+    adapter.setContent(adapter.getJSON());
+    const nodes = adapter.getJSON().content;
+    expect(nodes[0].attrs.fdBlockId).toBe('original-anchor');
+    expect(nodes[1].attrs.fdBlockId).toBeTruthy();
+    expect(nodes[1].attrs.fdBlockId).not.toBe('original-anchor');
+    const ids = nodes.map(node => node.attrs.fdBlockId);
+    adapter.setContent(adapter.getJSON());
+    expect(adapter.getJSON().content.map(node => node.attrs.fdBlockId)).toEqual(ids);
+  } finally { adapter.destroy(); element.remove(); }
+});

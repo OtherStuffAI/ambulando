@@ -1204,6 +1204,9 @@ export function initApp() {
     docEditBaseBodySha256Hex: null,
     docEditBaseStorageObjectId: null,
     docEditBaseAvailable: false,
+    docEditBaseContentSignature: null,
+    docDraftWriteRevision: 0,
+    docDraftUndoPromise: null,
     docEditConflict: null,
     docRecovery: null,
     docRecoveryActionState: '',
@@ -2064,6 +2067,7 @@ export function initApp() {
       if (this.docAutosaveState === 'error') return 'Save failed';
       if (this.docAutosaveState === 'pending') return 'Unsaved changes';
       if (this.docAutosaveState === 'saving') return 'Saving…';
+      if (this.docEditAccessState === 'recovery') return this.docRecovery ? 'Recovery draft preserved' : 'Draft kept locally';
       return 'Saved';
     },
 

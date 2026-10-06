@@ -820,10 +820,40 @@ export function documentDraftKey(workspaceId, documentId) {
     : '';
 }
 
+// A draft put and a later undo/delete must finish in input order, including
+// across selection changes. Capture the owning database before yielding.
+const documentDraftWrites = new Map();
+const documentDraftDbUsers = new WeakMap();
+
+async function withDocumentDraftDb(db, operation) {
+  documentDraftDbUsers.set(db, (documentDraftDbUsers.get(db) || 0) + 1);
+  try {
+    if (!db.isOpen()) await db.open();
+    return await operation();
+  } finally {
+    const users = (documentDraftDbUsers.get(db) || 1) - 1;
+    documentDraftDbUsers.set(db, users);
+    if (!users && db !== _currentWorkspaceDb) db.close();
+  }
+}
+
+function queueDocumentDraftWrite(db, draftKey, operation) {
+  const key = `${db.name}:${draftKey}`;
+  const previous = documentDraftWrites.get(key) || Promise.resolve();
+  const next = previous.catch(() => {}).then(() => withDocumentDraftDb(db, operation));
+  documentDraftWrites.set(key, next);
+  const cleanup = () => { if (documentDraftWrites.get(key) === next) documentDraftWrites.delete(key); };
+  void next.then(cleanup, cleanup);
+  return next;
+}
+
 export async function getDocumentDraft(workspaceId, documentId) {
   const draftKey = documentDraftKey(workspaceId, documentId);
-  if (!draftKey || !_currentWorkspaceDb) return null;
-  return wsDb().document_drafts.get(draftKey);
+  const db = _currentWorkspaceDb;
+  if (!draftKey || !db) return null;
+  const key = `${db.name}:${draftKey}`;
+  while (documentDraftWrites.has(key)) await documentDraftWrites.get(key);
+  return withDocumentDraftDb(db, () => db.document_drafts.get(draftKey));
 }
 
 export async function upsertDocumentDraft(draft = {}) {
@@ -838,15 +868,17 @@ export async function upsertDocumentDraft(draft = {}) {
     document_id: documentId,
     updated_at: draft.updated_at || new Date().toISOString(),
   });
-  if (!_currentWorkspaceDb) return row;
-  await wsDb().document_drafts.put(row);
+  const db = _currentWorkspaceDb;
+  if (!db) return row;
+  await queueDocumentDraftWrite(db, draftKey, () => db.document_drafts.put(row));
   return row;
 }
 
 export async function deleteDocumentDraft(workspaceId, documentId) {
   const draftKey = documentDraftKey(workspaceId, documentId);
-  if (!draftKey || !_currentWorkspaceDb) return false;
-  await wsDb().document_drafts.delete(draftKey);
+  const db = _currentWorkspaceDb;
+  if (!draftKey || !db) return false;
+  await queueDocumentDraftWrite(db, draftKey, () => db.document_drafts.delete(draftKey));
   return true;
 }
 

@@ -3043,6 +3043,22 @@
       "notes": [
         "Custom task status filters preserve each state's colour."
       ]
+    },
+    {
+      "buildNumber": 2247,
+      "label": "Reliable document saves and recovery drafts",
+      "notes": [
+        "Internal editor ID repairs no longer count as document edits. Document saves retain verified save bases and preserve real content, formatting and conflict safeguards.",
+        "Recovery status and actions are clearer, and repeating an unchanged recovery save does not create another submission."
+      ]
+    },
+    {
+      "buildNumber": 2248,
+      "label": "Safe unchanged draft restoration",
+      "notes": [
+        "An unchanged local draft can reload or save without a recovery warning even when its old save-base metadata is missing. Existing Tower recoveries still require explicit resolution.",
+        "Undoing an edit now updates the local draft safely, so reopening cannot restore an edit you already undid."
+      ]
     }
   ]
 }
