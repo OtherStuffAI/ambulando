@@ -1059,14 +1059,6 @@ export function computeBoardColumns(activeTasks, doneTasks, summaryTasks, option
     cols.push({ state: 'summary', label: 'Summary', color: stateColor('summary'), tasks: normalizedSummaryTasks });
   }
   const states = TASK_BOARD_STATES;
-  const labels = {
-    new: 'Backlog',
-    ready: 'Ready',
-    in_progress: 'In Progress',
-    blocked: 'Blocked',
-    review: 'Review',
-    done: 'Done',
-  };
   for (const state of states) {
     const tasks = state === 'done'
       ? normalizedDoneTasks
@@ -1074,7 +1066,7 @@ export function computeBoardColumns(activeTasks, doneTasks, summaryTasks, option
         task.state === state
         || (state === 'new' && !TASK_BOARD_STATES.includes(task.state))
       ));
-    cols.push({ state, label: labels[state], color: stateColor(state), tasks });
+    cols.push({ state, label: formatStateLabel(state), color: stateColor(state), tasks });
   }
   return cols;
 }

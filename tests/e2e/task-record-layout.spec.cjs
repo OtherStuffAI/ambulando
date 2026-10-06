@@ -266,7 +266,7 @@ for (const width of [1280, 390, 320]) {
     const badge = panel.getByRole('button', { name: 'Change task status: In Progress' });
     await badge.focus();
     await badge.press('ArrowDown');
-    await expect(panel.getByRole('button', { name: 'New', exact: true })).toBeFocused();
+    await expect(panel.getByRole('button', { name: 'Backlog', exact: true })).toBeFocused();
     await page.screenshot({ path: `tmp/docs/handoffs/task-card-status-${width}.png`, fullPage: true });
     await page.keyboard.press('ArrowDown');
     await expect(panel.getByRole('button', { name: 'Ready', exact: true })).toBeFocused();

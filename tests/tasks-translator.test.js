@@ -296,8 +296,9 @@ describe('task helpers', () => {
       expect(formatStateLabel('in_progress')).toBe('In Progress');
     });
 
-    it('capitalizes simple states', () => {
-      expect(formatStateLabel('new')).toBe('New');
+    it('uses Backlog presentation and preserves other simple state labels', () => {
+      expect(formatStateLabel('new')).toBe('Backlog');
+      expect(formatStateLabel(' NEW ')).toBe('Backlog');
       expect(formatStateLabel('blocked')).toBe('Blocked');
       expect(formatStateLabel('done')).toBe('Done');
     });

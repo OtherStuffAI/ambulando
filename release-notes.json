@@ -3022,6 +3022,27 @@
       "notes": [
         "Document bodies recover from deferred reads and same-version hydration. Failed editor loads show recovery controls and a readable fallback instead of a blank page."
       ]
+    },
+    {
+      "buildNumber": 2244,
+      "label": "Compact task scheduling and tags",
+      "notes": [
+        "Choose a task date from a keyboard-accessible in-app calendar and edit tag chips beside status and assignment."
+      ]
+    },
+    {
+      "buildNumber": 2245,
+      "label": "Consistent task board controls",
+      "notes": [
+        "Task board status filters and metadata match the compact task card. The new task state is displayed as Backlog throughout."
+      ]
+    },
+    {
+      "buildNumber": 2246,
+      "label": "Coloured task filter options",
+      "notes": [
+        "Custom task status filters preserve each state's colour."
+      ]
     }
   ]
 }

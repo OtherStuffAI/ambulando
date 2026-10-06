@@ -2925,20 +2925,16 @@
               @input.debounce.200ms="$store.chat.startWorkspaceLiveQueries()"
               placeholder="Search tasks..."
             />
-            <select
-              class="task-state-filter"
-              x-model="$store.chat.taskFilterState"
-              @change="$store.chat.startWorkspaceLiveQueries()"
-              aria-label="Filter tasks by status"
-            >
-              <option value="">All statuses</option>
-              <option value="new">New</option>
-              <option value="ready">Ready</option>
-              <option value="in_progress">In Progress</option>
-              <option value="blocked">Blocked</option>
-              <option value="review">Review</option>
-              <option value="done">Done</option>
-            </select>
+            <div class="task-status-picker task-board-status-filter" x-data="{ open: false, focusState(index) { const buttons = [...$refs.states.querySelectorAll('button')]; buttons[(index + buttons.length) % buttons.length]?.focus(); } }" @click.outside="open = false" @keydown.escape.prevent.stop="open = false; $refs.trigger.focus()" @focusout="if ($event.relatedTarget && !$el.contains($event.relatedTarget)) open = false">
+              <button type="button" class="task-bar-control task-state-filter" :class="{ 'task-status-badge': !!$store.chat.taskFilterState }" :style="{ '--task-status-color': $store.chat.stateColor($store.chat.taskFilterState) }" x-ref="trigger" aria-label="Filter tasks by status" aria-haspopup="true" :aria-expanded="open" @click="open = !open" @keydown.arrow-down.prevent="open = true; $nextTick(() => focusState(0))" @keydown.arrow-up.prevent="open = true; $nextTick(() => focusState(-1))">
+                <span x-text="$store.chat.taskFilterState ? $store.chat.formatState($store.chat.taskFilterState) : 'All statuses'"></span><span aria-hidden="true">⌄</span>
+              </button>
+              <div class="task-state-popover" x-ref="states" :hidden="!open" x-cloak role="group" aria-label="Task status filters">
+                <template x-for="(state, index) in ['', 'new', 'ready', 'in_progress', 'blocked', 'review', 'done']" :key="state || 'all'">
+                  <button type="button" class="task-bar-control" :class="{ 'task-status-badge': !!state }" :style="{ '--task-status-color': $store.chat.stateColor(state) }" :aria-pressed="$store.chat.taskFilterState === state" @keydown.arrow-down.prevent="focusState(index + 1)" @keydown.arrow-up.prevent="focusState(index - 1)" @keydown.home.prevent="focusState(0)" @keydown.end.prevent="focusState(-1)" @click="$store.chat.taskFilterState = state; $store.chat.startWorkspaceLiveQueries(); open = false; $refs.trigger.focus()" x-text="state ? $store.chat.formatState(state) : 'All statuses'"></button>
+                </template>
+              </div>
+            </div>
             <button
               type="button"
               class="filter-to-me-btn"
@@ -2969,6 +2965,7 @@
                       type="button"
                       class="tag-chip"
                       :class="{ 'tag-chip-active': $store.chat.taskFilterTags.includes(tag) }"
+                      :aria-pressed="$store.chat.taskFilterTags.includes(tag)"
                       @click="$store.chat.toggleTaskFilterTag(tag)"
                       :title="`${tag} (${($store.chat.allTaskTagCounts[tag] || 0)} tasks)`"
                     >
@@ -2996,6 +2993,7 @@
                         type="button"
                         class="tag-chip task-tag-cloud-chip"
                         :class="{ 'tag-chip-active': $store.chat.taskFilterTags.includes(tag) }"
+                      :aria-pressed="$store.chat.taskFilterTags.includes(tag)"
                         @click="$store.chat.toggleTaskFilterTag(tag)"
                         :title="`${tag} (${($store.chat.allTaskTagCounts[tag] || 0)} tasks)`"
                       >
@@ -3154,6 +3152,7 @@
                                 type="button"
                                 class="task-card-tag"
                                 :class="{ 'task-card-tag-active': $store.chat.taskFilterTags.includes(tag) }"
+                                :aria-pressed="$store.chat.taskFilterTags.includes(tag)"
                                 @click.stop="$store.chat.toggleTaskFilterTag(tag)"
                                 x-text="tag"
                               ></button>
@@ -3445,11 +3444,27 @@
                     </ul>
                   </div>
 
-                <div class="task-detail-meta-row" x-show="!$store.chat.isTaskDetailEditing()">
-                  <span class="task-detail-meta-pill" x-text="$store.chat.formatTaskDueDate($store.chat.editingTask.scheduled_for)"></span>
-                  <template x-for="tag in $store.chat.getTaskTags($store.chat.editingTask)" :key="`detail-meta-${tag}`">
-                    <span class="task-detail-meta-pill task-detail-tag-pill" x-text="tag"></span>
-                  </template>
+                <div class="task-date-picker" x-data="{ open: false, anchor: '', active: '', close() { this.open = false; this.$refs.trigger.focus(); }, show() { this.anchor = this.active = $store.chat.taskDateAnchor($store.chat.editingTask.scheduled_for); this.open = true; this.$nextTick(() => requestAnimationFrame(() => this.focusDay())); }, focusDay() { this.$refs.days.querySelector('[data-date=&quot;' + this.active + '&quot;]')?.focus(); }, move(step, view = 'day') { this.active = $store.chat.shiftTaskDate(this.active, view, step); this.anchor = this.active; this.$nextTick(() => requestAnimationFrame(() => this.focusDay())); } }" @click.outside="open = false" @focusout="if ($event.relatedTarget && !$el.contains($event.relatedTarget)) open = false" @keydown.escape.prevent.stop="close()">
+                  <button type="button" class="task-bar-control" x-ref="trigger" aria-label="Schedule task" aria-haspopup="dialog" :aria-expanded="open" :disabled="$store.chat.taskDetailSaving || $store.chat.taskDetailCheckoutPending" @click="open ? close() : show()" @keydown.arrow-down.prevent="show()">
+                    <span class="task-bar-icon" x-html="$store.chat.getAttentionIconSvg('calendar')"></span><span x-text="$store.chat.editingTask.scheduled_for ? $store.chat.formatTaskDueDate($store.chat.editingTask.scheduled_for) : 'No date'"></span>
+                  </button>
+                  <div class="task-bar-popover task-date-popover" x-show="open" x-cloak role="dialog" aria-label="Schedule task calendar">
+                    <div class="task-calendar-navigation"><button type="button" aria-label="Previous month" @click="anchor = active = $store.chat.shiftTaskDate(anchor, 'month', -1)">‹</button><strong aria-live="polite" x-text="$store.chat.taskDateCalendar(anchor).label"></strong><button type="button" aria-label="Next month" @click="anchor = active = $store.chat.shiftTaskDate(anchor, 'month', 1)">›</button></div>
+                    <div class="task-calendar-weekdays" aria-hidden="true"><template x-for="(day, index) in ['M','T','W','T','F','S','S']" :key="index"><span x-text="day"></span></template></div>
+                    <div class="task-calendar-days" x-ref="days" role="group" aria-label="Days" @keydown.arrow-left.prevent="move(-1)" @keydown.arrow-right.prevent="move(1)" @keydown.arrow-up.prevent="move(-7)" @keydown.arrow-down.prevent="move(7)" @keydown.page-up.prevent="move(-1, 'month')" @keydown.page-down.prevent="move(1, 'month')" @keydown.home.prevent="move(-((new Date(active + 'T00:00:00Z').getUTCDay() + 6) % 7))" @keydown.end.prevent="move(6 - ((new Date(active + 'T00:00:00Z').getUTCDay() + 6) % 7))">
+                      <template x-for="day in (open ? $store.chat.taskDateCalendar(anchor).days : [])" :key="day.dateKey"><button type="button" :data-date="day.dateKey" :aria-label="day.fullLabel" :aria-pressed="day.dateKey === $store.chat.editingTask.scheduled_for" :aria-current="day.isToday ? 'date' : null" :tabindex="day.dateKey === active ? 0 : -1" :class="{ 'outside-month': !day.inCurrentPeriod }" @focus="active = day.dateKey" @click="if (await $store.chat.setEditingTaskDate(day.dateKey)) close()" x-text="Number(day.dateKey.slice(-2))"></button></template>
+                    </div>
+                    <button type="button" class="task-calendar-clear" :disabled="!$store.chat.editingTask.scheduled_for" @click="if (await $store.chat.setEditingTaskDate(null)) close()">Clear date</button>
+                  </div>
+                </div>
+                <div class="task-tag-area task-detail-meta-row" aria-label="Task tags" x-data="{ open: false, query: '', index: 0, close() { this.open = false; this.$refs.add.focus(); }, async add(tag) { this.$refs.search.focus(); if (await $store.chat.changeEditingTaskTag(tag)) { this.query = ''; this.index = 0; this.$refs.search.focus(); } } }" @click.outside="open = false" @focusout="if ($event.relatedTarget && !$el.contains($event.relatedTarget)) open = false" @keydown.escape.prevent.stop="close()">
+                  <template x-for="tag in [...new Set($store.chat.getTaskTags($store.chat.editingTask))]" :key="tag"><span class="task-bar-tag"><span x-text="tag"></span><button type="button" :aria-label="'Remove tag ' + tag" :disabled="$store.chat.taskDetailSaving || $store.chat.taskDetailCheckoutPending" @click="await $store.chat.changeEditingTaskTag(tag, true); $refs.add.focus()">×</button></span></template>
+                  <button type="button" x-ref="add" class="task-bar-control" aria-haspopup="dialog" :aria-expanded="open" :disabled="$store.chat.taskDetailSaving || $store.chat.taskDetailCheckoutPending" @click="open = !open; if (open) $nextTick(() => requestAnimationFrame(() => $refs.search.focus()))"><span aria-hidden="true">＋</span> Add tag</button>
+                  <div class="task-bar-popover task-tag-popover" role="dialog" aria-label="Add task tags" x-show="open" x-cloak>
+                    <input type="text" x-ref="search" aria-label="Find or create tag" x-model="query" @input="index = 0" placeholder="Find or create tag" @keydown.arrow-down.prevent="index = Math.min(index + 1, $store.chat.taskTagOptions(query).length - 1)" @keydown.arrow-up.prevent="index = Math.max(0, index - 1)" @keydown.enter.prevent="if ($store.chat.taskTagOptions(query)[index]) add($store.chat.taskTagOptions(query)[index]); else if (query.trim()) add(query)" />
+                    <div class="task-tag-options"><template x-for="(tag, i) in (open ? $store.chat.taskTagOptions(query) : [])" :key="tag"><button type="button" :class="{ 'tag-option-active': index === i }" @click="add(tag)" x-text="tag"></button></template></div>
+                    <button type="button" class="task-tag-create" x-show="query.trim()" @click="add(query)">Add <span x-text="query"></span></button>
+                  </div>
                 </div>
 
               </div>
@@ -3590,32 +3605,12 @@
                     <summary>Task details</summary>
                     <div class="task-detail-fields">
                     <div class="task-field">
-                      <label class="task-field-label">Scheduled</label>
-                      <input type="date" x-model="$store.chat.editingTask.scheduled_for" @change="$store.chat.handleEditingTaskDraftChanged()" :disabled="!$store.chat.isTaskDetailEditing()" />
-                      <span class="task-quick-date-links">
-                        <button type="button" class="task-quick-date-link" :disabled="!$store.chat.isTaskDetailEditing()" @click="$store.chat.setTaskDueToday()">Today</button>
-                        <span class="task-quick-date-sep">|</span>
-                        <button type="button" class="task-quick-date-link" :disabled="!$store.chat.isTaskDetailEditing()" @click="$store.chat.setTaskDueThisWeek()">This Week</button>
-                      </span>
-                    </div>
-                    <div class="task-field">
                       <label class="task-field-label">Priority</label>
                       <select x-model="$store.chat.editingTask.priority" @change="$store.chat.handleEditingTaskDraftChanged()" :disabled="!$store.chat.isTaskDetailEditing()">
                         <option value="sand">Sand</option>
                         <option value="pebble">Pebble</option>
                         <option value="rock">Rock</option>
                       </select>
-                    </div>
-                    <div class="task-field">
-                      <label class="task-field-label">Tags</label>
-                      <input type="text" x-model="$store.chat.editingTask.tags" @input="$store.chat.handleEditingTaskDraftChanged()" :readonly="!$store.chat.isTaskDetailEditing()" placeholder="comma,separated" />
-                      <template x-if="$store.chat.getTaskTags($store.chat.editingTask).length > 0">
-                        <div class="task-detail-tags">
-                          <template x-for="tag in $store.chat.getTaskTags($store.chat.editingTask)" :key="`detail-${tag}`">
-                            <span class="task-detail-tag" x-text="tag"></span>
-                          </template>
-                        </div>
-                      </template>
                     </div>
                     </div>
                   </details>

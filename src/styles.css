@@ -24961,3 +24961,79 @@ button.task-desc-toggle:focus-visible {
   .task-detail-header .task-back-btn { padding-inline: 0.3rem; }
   .task-record-heading .task-assignee-field { flex: 0 1 14rem; max-width: 100%; }
 }
+
+/* Shared compact task controls; popups stay inside the heading on narrow screens. */
+.task-record-heading { gap: .5rem; }
+.task-bar-control, .task-record-heading .task-status-picker > button,
+.task-record-heading .task-assignee-field > input, .task-record-heading .task-assignee-selected,
+.task-bar-tag { min-height: 32px; box-sizing: border-box; border: 1px solid var(--border); border-radius: 8px; font: inherit; font-size: .8rem; line-height: 1.25; }
+.task-bar-control { display: inline-flex; align-items: center; gap: .4rem; padding: .35rem .6rem; background: var(--surface); color: var(--text); cursor: pointer; }
+.task-record-heading .task-status-picker > button { padding: .35rem .65rem; }
+.task-record-heading .task-assignee-selected { padding: 2px 6px; gap: .4rem; }
+.task-record-heading .task-assignee-field > input { padding: .35rem .6rem; background: var(--surface); }
+.task-record-heading .task-assignee-selected .new-channel-avatar { width: 24px; height: 24px; }
+.task-bar-icon { display: inline-flex; width: 15px; height: 15px; }
+.task-bar-icon svg { width: 100%; height: 100%; fill: none; stroke: currentColor; stroke-width: 1.7; }
+.task-date-picker { position: relative; }
+.task-tag-area { position: relative; display: flex; flex-wrap: wrap; gap: .35rem; min-width: 0; max-width: 100%; margin: 0; }
+.task-bar-tag { display: inline-flex; align-items: center; gap: .2rem; padding: 2px 3px 2px 8px; background: var(--surface); max-width: 100%; }
+.task-bar-tag > span { overflow-wrap: anywhere; min-width: 0; }
+.task-bar-tag button { border: 0; background: transparent; color: var(--text-muted); cursor: pointer; width: 26px; min-height: 26px; border-radius: 5px; flex-shrink: 0; font-size: 18px; }
+.task-bar-popover { position: absolute; top: calc(100% + .35rem); left: 0; z-index: 40; padding: .6rem; width: 264px; box-sizing: border-box; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); color: var(--text); box-shadow: 0 8px 24px #0f172a26; }
+.task-bar-popover button { font: inherit; color: inherit; cursor: pointer; border: 0; border-radius: 6px; background: transparent; min-height: 32px; }
+.task-calendar-navigation { display: flex; align-items: center; justify-content: space-between; font-size: .85rem; }
+.task-calendar-navigation button { width: 32px; font-size: 22px; }
+.task-calendar-weekdays, .task-calendar-days { display: grid; grid-template-columns: repeat(7, minmax(0,1fr)); gap: 2px; font-size: .8rem; text-align: center; }
+.task-calendar-weekdays { padding: .4rem 0; color: var(--text-muted); }
+.task-calendar-days button.outside-month { color: var(--text-muted); opacity: .6; }
+.task-calendar-days button[aria-current=date] { box-shadow: inset 0 0 0 1px var(--accent); font-weight: 700; }
+.task-calendar-days button[aria-pressed=true] { background: var(--accent); color: #fff; opacity: 1; }
+.task-bar-popover .task-calendar-clear { width: 100%; border-top: 1px solid var(--border); margin-top: .4rem; border-radius: 0; font-size: .8rem; }
+.task-tag-popover input { width: 100%; min-width: 0; box-sizing: border-box; border: 1px solid var(--border); border-radius: 6px; padding: .5rem; font: inherit; font-size: .8rem; background: var(--surface); color: var(--text); }
+.task-tag-options { max-height: 190px; overflow-y: auto; margin-top: .4rem; }
+.task-tag-options button, .task-tag-create { display: block; width: 100%; text-align: left; padding: .35rem .5rem; overflow-wrap: anywhere; font-size: .8rem !important; }
+.task-bar-control:hover, .task-bar-tag button:hover, .task-bar-popover button:hover, .tag-option-active { background: var(--bg-hover, #edf2f7); }
+.task-record-heading button:focus-visible, .task-record-heading input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.task-record-heading button:disabled, .task-record-heading input:disabled { opacity: .5; cursor: default; }
+@media screen and (max-width: 768px) {
+  .task-date-picker, .task-tag-area { position: static; }
+  .task-bar-popover { left: .9rem; top: 100%; width: min(264px, calc(100% - 1.8rem)); max-height: 60dvh; overflow-y: auto; }
+  .task-record-heading .task-assignee-field { flex: 0 1 auto; }
+}
+.task-record-heading .task-state-popover, .task-record-heading .docs-share-suggestions { border-radius: 10px; padding: .6rem; }
+.task-record-heading .task-state-popover .task-status-badge { border-radius: 8px; min-height: 32px; }
+.task-record-heading .task-status-picker > button:hover { filter: brightness(.97); }
+@media (min-width: 769px) { .task-tag-popover { left: auto; right: 0; } }
+
+/* Board metadata uses the same compact vocabulary as the task record. */
+.task-board-status-filter { order: 2; flex: 0 0 auto; }
+.task-board-status-filter > .task-state-filter { width: auto; min-width: 8.25rem; justify-content: space-between; }
+.task-board-status-filter .task-state-popover { z-index: 50; border-radius: 10px; padding: .6rem; }
+.task-board-status-filter button:focus-visible, .tasks-section .tag-chip:focus-visible,
+.tasks-section .task-card-tag:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.tasks-section .tag-chip, .tasks-section .task-card-tag,
+.tasks-section .badge-date, .tasks-section .badge.task-status-badge {
+  display: inline-flex; align-items: center; gap: .35rem; min-height: 32px;
+  box-sizing: border-box; border: 1px solid var(--border); border-radius: 8px;
+  padding: .35rem .6rem; font-size: .8rem; line-height: 1.25;
+}
+.tasks-section .task-card-tag, .tasks-section .tag-chip { background: var(--surface); color: var(--text); }
+.tasks-section .task-card-tags { max-width: 100%; flex-wrap: wrap; overflow: visible; gap: .35rem; }
+.tasks-section .task-card-tag { max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
+.tasks-section .badge-date { background: var(--surface); color: var(--text-muted); }
+.tasks-section .task-card-tag-active, .tasks-section .tag-chip-active { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, var(--surface)); color: var(--text); }
+.tasks-section .task-card-tag:hover, .tasks-section .tag-chip:hover { background: var(--surface-hover); }
+.tasks-section .task-search-input { min-height: 32px; border-radius: 8px; font-size: .8rem; }
+@media screen and (max-width: 640px) {
+  .tasks-section .task-filters-bar-mobile-open { flex-wrap: wrap; }
+  .task-board-status-filter { width: 100%; }
+  .task-board-status-filter > .task-state-filter { width: 100%; }
+  .task-board-status-filter .task-state-popover { width: 100%; min-width: 0; box-sizing: border-box; }
+  .tasks-section .task-tag-filters { flex-wrap: wrap; overflow: visible; }
+}
+
+.tasks-section .kanban-column-title, .tasks-section .task-list-group-label { font-weight: 600; text-transform: none; letter-spacing: 0; }
+.tasks-section .filter-to-me-btn { width: 32px; height: 32px; border: 1px solid var(--border); border-radius: 8px; padding: 3px; }
+.tasks-section .filter-to-me-active { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, var(--surface)); box-shadow: none; }
+.tasks-section .filter-to-me-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.task-bar-control.task-status-badge { background: color-mix(in srgb, var(--task-status-color, #9ca3af) 14%, var(--surface)); color: color-mix(in srgb, var(--task-status-color, #9ca3af) 50%, var(--text)); }

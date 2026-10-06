@@ -15,7 +15,12 @@ describe('task status colour consumers', () => {
   });
 
   it('uses the canonical helper for representative Board and task-detail badges', () => {
-    expect(html.match(/class=\"[^\"]*task-status-badge[^\"]*\"/g)).toHaveLength(8);
+    const badges = html.match(/<[^>]*task-status-badge[^>]*>/g) || [];
+    expect(badges.length).toBeGreaterThanOrEqual(8);
+    for (const badge of badges) {
+      expect(badge).toContain('--task-status-color');
+      expect(badge).toContain('$store.chat.stateColor(');
+    }
     expect(html).toContain("$store.chat.stateColor($store.chat.editingTask.state || 'new')");
     expect(html).toContain('$store.chat.stateColor(pred.state)');
     expect(html).toContain('$store.chat.stateColor(st.state)');

@@ -192,6 +192,7 @@ export function stateColor(state) {
 export function formatStateLabel(state) {
   if (!state) return '';
   const normalizedState = String(state).trim().toLowerCase();
+  if (normalizedState === 'new') return 'Backlog';
   if (normalizedState === 'archive' || normalizedState === 'archived') return 'Archived';
   return normalizedState
     .split(/[_\s-]+/)

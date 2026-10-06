@@ -1650,11 +1650,12 @@ describe('computeBoardColumns', () => {
     expect(cols.find((c) => c.state === 'ready').tasks).toHaveLength(0);
   });
 
-  it('keeps unknown historical states visible in the New fallback column', () => {
+  it('keeps unknown historical states visible in the Backlog fallback column', () => {
     const historical = { record_id: 'legacy', state: 'waiting_external' };
     const cols = computeBoardColumns([historical], [], []);
 
     expect(cols.find((column) => column.state === 'new').tasks).toEqual([historical]);
+    expect(cols.find((column) => column.state === 'new').label).toBe('Backlog');
   });
 
   it('places done tasks in done column', () => {

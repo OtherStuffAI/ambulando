@@ -55,3 +55,25 @@ The app editor tests exercise PG Save/reopen with persisted descriptions and
 references. The browser spec can use served runtime assets with
 `FLIGHTDECK_ENTRY_LIVE=1`; its seeded data and blocked transport do not establish
 authenticated Tower authorization or cross-client delivery.
+
+Scheduling and tags now stay in the compact heading in both read and edit modes.
+The date chip opens the existing date-key calendar as a custom month popup;
+arrows move by day/week, Home/End move to the week edges, Page Up/Down change
+month, and Escape returns focus. Selected and today cues are independent.
+Clear stores `null`; selection stores the existing date-only `YYYY-MM-DD` value.
+There are no scheduling shortcuts or visible native date inputs on this detail.
+Tag chips use the shared lowercase comma-delimited convention and deduplicate
+on edits. Add tag searches loaded workspace vocabulary or creates a typed tag.
+Both controls enter the existing edit path before mutating the draft and retain
+Save/Discard. `tests/e2e/task-date-tags.spec.cjs` covers synthetic full-page/modal
+interactions at 1280/390/320px, keyboard focus, selection/clearing, tags and
+Save/reopen/Discard. Backend commands are stubbed; this is not authenticated
+Tower acceptance.
+
+The task board uses the same rounded status, tag and date treatment. Its status
+filter is an in-app button picker with arrows, Home/End, Enter/Space and Escape.
+`formatStateLabel` supplies Backlog for persisted `new` across the board, filters,
+detail, dependencies and other task displays. Board grouping uses that shared
+formatter; wire state values and task creation labels retain their meaning.
+`tests/e2e/task-board-controls.spec.cjs` covers board/list/filter presentation and
+keyboard interactions on desktop and mobile with blocked backend requests.

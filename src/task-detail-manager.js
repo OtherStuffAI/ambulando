@@ -1,3 +1,4 @@
+import { buildTaskCalendar, normalizeDateKey, shiftCalendarDate } from './task-calendar.js';
 import { restoreReferenceComposerDraft } from './internal-reference-navigation.js';
 import { getCommentsByTarget, upsertComment } from './db.js';
 import { resolveTowerPgWorkspaceContext } from './pg-read-hydrator.js';
@@ -29,6 +30,35 @@ import { resolveTaskForDetail } from './task-link-navigation.js';
 
 export const taskDetailManagerMixin = {
   taskCommentDisplayBody,
+  taskDateCalendar(dateKey) { return buildTaskCalendar([], { anchorDateKey: dateKey }); },
+  taskDateAnchor(dateKey) { return normalizeDateKey(dateKey); },
+  shiftTaskDate(dateKey, view, step) { return shiftCalendarDate(dateKey, view, step); },
+  taskTagOptions(query = '') {
+    const selected = new Set(this.getTaskTags(this.editingTask));
+    const needle = query.trim().toLowerCase();
+    const vocabulary = [...new Set([...this.allTaskTags, ...(this.tasks || []).flatMap(task => this.getTaskTags(task))])];
+    return vocabulary.filter(tag => !selected.has(tag) && tag.toLowerCase().includes(needle)).slice(0, 12);
+  },
+  async setEditingTaskDate(dateKey) {
+    const recordId = this.editingTask?.record_id;
+    if (!recordId || this.taskDetailSaving || this.taskDetailCheckoutPending) return false;
+    if (!this.isTaskDetailEditing() && !await this.enterTaskDetailEditMode()) return false;
+    if (this.editingTask?.record_id !== recordId) return false;
+    this.editingTask.scheduled_for = dateKey || null;
+    this.handleEditingTaskDraftChanged();
+    return true;
+  },
+  async changeEditingTaskTag(tag, remove = false) {
+    const recordId = this.editingTask?.record_id;
+    if (!recordId || this.taskDetailSaving || this.taskDetailCheckoutPending) return false;
+    if (!this.isTaskDetailEditing() && !await this.enterTaskDetailEditMode()) return false;
+    if (this.editingTask?.record_id !== recordId) return false;
+    const tags = [...new Set(this.getTaskTags(this.editingTask))];
+    const additions = this.getTaskTags({ tags: tag });
+    this.editingTask.tags = (remove ? tags.filter(item => item !== tag) : [...new Set([...tags, ...additions])]).join(',');
+    this.handleEditingTaskDraftChanged();
+    return true;
+  },
   async openTaskDetailFromRoute(taskId, options = {}) {
     const task = await resolveTaskForDetail(this, taskId, options.deps || {});
     if (!task) return false;
