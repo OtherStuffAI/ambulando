@@ -1288,9 +1288,11 @@ export const docsManagerMixin = {
     const item = this.selectedDocument;
     const workspaceId = this.getSelectedDocWorkspaceId(item);
     if (!item?.record_id || !workspaceId) return null;
-    const contentModel = this.docRichEditorAdapter?.getContentModel?.()
-      || this.docEditorContentModel
-      || this.buildSelectedDocContentModel();
+    // Source and block edits must rebuild from their current input. A retained
+    // rich model belongs to the previous editor mode and can be stale.
+    const contentModel = this.docEditorMode === 'rich'
+      ? (this.docRichEditorAdapter?.getContentModel?.() || this.docEditorContentModel || this.buildSelectedDocContentModel())
+      : this.buildSelectedDocContentModel();
     const dirtyAt = this.docLocalDraft?.dirty_at || new Date().toISOString();
     return {
       ...(this.docLocalDraft || {}),
@@ -1361,10 +1363,15 @@ export const docsManagerMixin = {
     if (!item?.record_id) return null;
     const workspaceId = this.getSelectedDocWorkspaceId(item);
     if (!workspaceId) return null;
+    if (this.docEditDraftDirty) return null;
+    const title = this.docEditorTitle;
+    const content = this.docEditorContent;
     const draft = await getDocumentDraft(workspaceId, item.record_id);
     if (!draft) return null;
     if (Number(options.generation || 0) !== Number(this.docEditAccessGeneration || 0)) return null;
     if (this.selectedDocId !== item.record_id || draft.workspace_id !== workspaceId || draft.document_id !== item.record_id) return null;
+    if (workspaceId !== this.getSelectedDocWorkspaceId() || this.docEditDraftDirty
+      || title !== this.docEditorTitle || content !== this.docEditorContent) return null;
 
     const head = documentEditorBaseIdentity(item);
     const sameBase = draftBaseMatchesHead(draft, head);
@@ -1372,7 +1379,8 @@ export const docsManagerMixin = {
       && !draft.recovery_id
       && isDocumentContentReadyForEditor(item)
       && String(draft.title || item.title || 'Untitled document') === String(item.title || 'Untitled document')
-      && String(draft.content || '') === String(item.content || '');
+      && String(draft.content || '') === String(item.content || '')
+      && (!draft.editor_state || JSON.stringify(draft.editor_state) === JSON.stringify(item.editor_state));
     if (draftAlreadyCanonical) {
       this.docEditDraftDirty = false;
       this.docAutosaveState = 'saved';
@@ -1501,7 +1509,7 @@ export const docsManagerMixin = {
       : normalizeDocumentBlocks(this.selectedDocument?.content_blocks, this.selectedDocument?.content);
     const blockContent = assembleMarkdownBlocks(editorBlocks);
     const editorContent = this.docEditorMode === 'source'
-      ? (this.docEditorContent || blockContent)
+      ? (this.docEditorContent ?? '')
       : (blockContent || this.docEditorContent || this.selectedDocument?.content || '');
     const editorState = createDocumentEditorState({
       ...(this.selectedDocument || {}),

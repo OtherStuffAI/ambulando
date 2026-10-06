@@ -852,6 +852,8 @@ export function createShellState(options = {}) {
         url.searchParams.set('channelid', this.deckThreadChannelId);
         url.searchParams.set('threadid', this.activeThreadId);
       } else if (this.navSection === 'docs') {
+        if (this.selectedChannelId) url.searchParams.set('channelid', this.selectedChannelId);
+        if (this.docsShowAll) url.searchParams.set('docsview', 'all');
         if (this.currentFolderId) url.searchParams.set('folderid', this.currentFolderId);
         if (this.selectedDocType === 'document' && this.selectedDocId) {
           url.searchParams.set('docid', this.selectedDocId);
@@ -993,6 +995,16 @@ export function createShellState(options = {}) {
             this.closeWorkroomDetail({ syncRoute: false, switchView: false });
           }
         } else if (this.navSection === 'docs') {
+          const channelId = route.params.channelid || parsePgTaskBoardId(this.selectedBoardId).channelId;
+          if (channelId) {
+            const channel = (this.channels || []).find((item) => item.record_id === channelId && item.record_state !== 'deleted');
+            this.selectedChannelId = channel ? channelId : null;
+            if (channel) this.selectedBoardId = buildPgChannelTaskBoardId(channelId);
+          } else {
+            this.syncSelectedChannelForPgBoard?.(this.selectedBoardId);
+          }
+          this.docsHomeVisit = Number(this.docsHomeVisit || 0) + 1;
+          this.docsShowAll = route.params.docsview === 'all';
           this.selectedDocCommentId = route.params.commentid || null;
           if (route.params.docid) {
             this.openDoc(route.params.docid, {
@@ -1005,10 +1017,10 @@ export function createShellState(options = {}) {
           } else if (route.params.folderid) {
             this.navigateToFolder(route.params.folderid, { syncRoute: false });
           } else {
-            this.selectedDocType = null;
-            this.selectedDocId = null;
+            this.closeDocEditor?.({ syncRoute: false });
             this.currentFolderId = null;
             this.loadDocEditorFromSelection();
+            if (!this.docsShowAll) void this.openChannelDocsHome?.({ syncRoute: false });
           }
         } else if (this.navSection === 'reports') {
           this.selectedReportId = route.params.reportid || this.selectedReport?.record_id || null;
@@ -1055,6 +1067,14 @@ export function createShellState(options = {}) {
     navigateTo(section, options = {}) {
       section = normalizeEnabledFlightDeckSection(section);
       const previousSection = this.navSection;
+      const docsVisit = this.docsHomeVisit = Number(this.docsHomeVisit || 0) + 1;
+      if (previousSection === 'docs' && section !== 'docs' && this.docEditDraftDirty && !options.draftPreserved) {
+        const originId = this.selectedDocId;
+        return this.preserveWikiNavigationDraft().then((preserved) => {
+          if (!preserved || docsVisit !== this.docsHomeVisit || originId !== this.selectedDocId || this.navSection !== previousSection) return false;
+          return this.navigateTo(section, { ...options, draftPreserved: true });
+        });
+      }
       if (previousSection === 'docs' && section !== 'docs' && this.selectedDocId) {
         this.closeDocEditor?.({ syncRoute: false });
       }
@@ -1097,6 +1117,9 @@ export function createShellState(options = {}) {
             this.scheduleChatFeedScrollToBottom();
           }
         }
+      }
+      if (section === 'docs' && options.docsHome !== false) {
+        void this.openChannelDocsHome?.();
       }
       if (section === 'status' && previousSection !== 'status') {
         this.refreshStatusRecentChanges({ force: true });

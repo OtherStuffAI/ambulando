@@ -1621,10 +1621,17 @@ export const taskBoardStateMixin = {
     return this.selectWorkContextBoard(buildPgChannelTaskBoardId(normalizedChannelId));
   },
 
-  selectWorkContextBoard(boardId) {
+  async selectWorkContextBoard(boardId) {
     const normalizedBoardId = String(boardId || '').trim();
     if (!normalizedBoardId) return;
     const previousSection = this.navSection;
+    const docsVisit = this.docsHomeVisit = Number(this.docsHomeVisit || 0) + 1;
+    if (previousSection === 'docs' && this.docEditDraftDirty) {
+      const originId = this.selectedDocId;
+      const originBoardId = this.selectedBoardId;
+      if (!await this.preserveWikiNavigationDraft?.()) return false;
+      if (docsVisit !== this.docsHomeVisit || this.navSection !== previousSection || this.selectedDocId !== originId || this.selectedBoardId !== originBoardId) return false;
+    }
     if (previousSection === 'chat') {
       const previousChannelId = String(this.selectedChannelId || '').trim();
       this.saveCurrentChatPresentation?.(
@@ -1654,6 +1661,8 @@ export const taskBoardStateMixin = {
       else if (this.showTaskDetail) await this.closeTaskDetail?.({ syncRoute: false });
       if (String(this.selectedBoardId || '') !== normalizedBoardId || this.navSection !== destination) return;
       if (destination === 'status') void this.refreshStatusRecentChanges?.({ force: true });
+      if (destination === 'docs') await this.openChannelDocsHome?.({ syncRoute: false });
+      if (String(this.selectedBoardId || '') !== normalizedBoardId || this.navSection !== destination) return;
       this.syncRoute();
       this.startWorkspaceLiveQueries?.();
       this.ensureBackgroundSync?.(true);

@@ -5,7 +5,12 @@ home** to set or replace it, or **Clear home** to return to the list default.
 **Home** and **All docs** stay available above the editor and list on desktop
 and mobile. All docs here retains the channel context; the existing All documents
 control opens the workspace-wide browser. Deleted, archived or unreadable home
-pages fall back to the channel list. A channel without home retains list behavior.
+pages fall back to the channel list. A channel without home retains list behavior. Each native Docs entry opens Home,
+even when Docs is already selected or another page is open. All docs is an
+explicit route choice (`docsview=all`) that survives reload; direct document and
+folder routes retain their targets. The active shell in `src/shell-state.js`
+owns these navigation and route methods; inline `src/app.js` methods are fallback
+defaults overridden during store assembly.
 
 The shared reference is `channel.metadata.docs_home_document_id`, a document ID
 or null. Flight Deck writes only this key through the existing Tower channel
@@ -63,3 +68,11 @@ picker, selection, navigation and mobile controls using synthetic readable rows.
 Run browser tests against the configured managed Flight Deck URL with a local
 Tower. Existing document editor, comment-anchor, mention and diff tests remain
 part of the full regression suite.
+
+
+Draft checkpoints rebuild source input instead of reusing a prior rich model,
+including deliberately empty source. A pending local draft read cannot replace
+fresh typing or a changed workspace/document. Equal compatibility Markdown does
+not justify deleting a draft with different rich editor state. Home and All docs
+cancel delayed entry when document, channel, workspace or navigation ownership
+changes. Returning to an already open home preserves the mounted dirty editor.

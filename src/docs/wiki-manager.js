@@ -32,7 +32,14 @@ export const wikiManagerMixin = {
   async followDocWikiLink(documentId, options = {}) {
     const target = this.resolveDocWikiLink({ documentId }).page;
     if (!target) { this.error = 'Page deleted or unavailable.'; return false; }
+    const originId = this.selectedDocId;
+    const channelId = this.selectedChannelId;
+    const workspace = this.currentWorkspace;
+    const visit = this.docsHomeVisit;
     if (!await this.preserveWikiNavigationDraft()) return false;
+    if (originId !== this.selectedDocId || channelId !== this.selectedChannelId || workspace !== this.currentWorkspace
+      || visit !== this.docsHomeVisit || this.navSection !== 'docs') return false;
+    if (this.selectedDocId === target.record_id) return true;
     this.openDoc(target.record_id, options);
     return true;
   },
@@ -109,19 +116,26 @@ export const wikiManagerMixin = {
   async openChannelDocsHome(options = {}) {
     const channelId = this.selectedChannelId;
     const homeId = this.channelDocsHomeId;
+    const workspace = this.currentWorkspace;
+    const originId = this.selectedDocId;
     this.docsShowAll = false;
     const visit = ++this.docsHomeVisit;
-    if (!homeId) return false;
+    if (!homeId) { await this.openChannelAllDocs(options); return false; }
     try { await this.refreshDocuments?.(); }
     catch (error) { this.error = error.message || 'Could not load channel pages.'; return false; }
-    if (visit !== this.docsHomeVisit || channelId !== this.selectedChannelId || this.navSection !== 'docs' || this.docsShowAll) return false;
+    if (visit !== this.docsHomeVisit || channelId !== this.selectedChannelId || workspace !== this.currentWorkspace || homeId !== this.channelDocsHomeId
+      || originId !== this.selectedDocId || this.navSection !== 'docs' || this.docsShowAll) return false;
     const home = resolveWikiPage(this.documents, channelId, { documentId: homeId }).page;
     if (!home) { await this.openChannelAllDocs(options); return false; }
     return this.followDocWikiLink(home.record_id, options);
   },
   async openChannelAllDocs(options = {}) {
-    this.docsHomeVisit++;
+    const visit = ++this.docsHomeVisit;
+    const originId = this.selectedDocId;
+    const channelId = this.selectedChannelId;
+    const workspace = this.currentWorkspace;
     if (!await this.preserveWikiNavigationDraft()) return false;
+    if (visit !== this.docsHomeVisit || originId !== this.selectedDocId || channelId !== this.selectedChannelId || workspace !== this.currentWorkspace) return false;
     this.docsShowAll = true;
     this.closeDocEditor({ syncRoute: false });
     this.currentFolderId = null;

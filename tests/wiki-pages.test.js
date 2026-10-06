@@ -154,6 +154,48 @@ describe('channel wiki pages', () => {
     s.persistSelectedDocDraft.mockResolvedValue(null);
     expect(await s.followDocWikiLink('page-a')).toBe(false);
   });
+  it('keeps an already open home draft and uses the list for a channel with no home', async () => {
+    const s = store(); s.selectedDocId = 'page-a'; s.docEditDraftDirty = true;
+    expect(await s.openChannelDocsHome()).toBe(true);
+    expect(s.persistSelectedDocDraft).toHaveBeenCalled();
+    expect(s.openDoc).not.toHaveBeenCalled();
+    s.selectedChannel.metadata.docs_home_document_id = null;
+    await s.openChannelDocsHome();
+    expect(s.closeDocEditor).toHaveBeenCalled();
+    expect(s.docsShowAll).toBe(true);
+  });
+
+  it.each(['channel', 'workspace', 'home', 'document'])('cancels delayed home when %s context changes', async (change) => {
+    const s = store(); s.currentWorkspace = { workspaceId: 'workspace' };
+    let finish; s.refreshDocuments.mockImplementation(() => new Promise((resolve) => { finish = resolve; }));
+    const opening = s.openChannelDocsHome();
+    if (change === 'channel') s.selectedChannelId = 'other-channel';
+    if (change === 'workspace') s.currentWorkspace = { workspaceId: 'other-workspace' };
+    if (change === 'home') s.selectedChannel.metadata.docs_home_document_id = 'replacement';
+    if (change === 'document') s.selectedDocId = 'explicit-page';
+    finish(); expect(await opening).toBe(false);
+    expect(s.openDoc).not.toHaveBeenCalled();
+    expect(s.closeDocEditor).not.toHaveBeenCalled();
+  });
+
+  it('cancels a pending link checkpoint after another Home or All docs visit', async () => {
+    const s = store(); s.docEditDraftDirty = true;
+    let finish; s.persistSelectedDocDraft.mockImplementation(() => new Promise((resolve) => { finish = resolve; }));
+    const following = s.followDocWikiLink('page-a');
+    s.docsHomeVisit++;
+    finish({ document_id: 'origin' });
+    expect(await following).toBe(false);
+    expect(s.openDoc).not.toHaveBeenCalled();
+  });
+
+  it('cancels All docs after an explicit document replaces the origin during its checkpoint', async () => {
+    const s = store(); s.docEditDraftDirty = true;
+    let finish; s.persistSelectedDocDraft.mockImplementation(() => new Promise((resolve) => { finish = resolve; }));
+    const navigating = s.openChannelAllDocs(); s.selectedDocId = 'explicit-page';
+    finish({ document_id: 'origin' });
+    expect(await navigating).toBe(false); expect(s.closeDocEditor).not.toHaveBeenCalled();
+  });
+
   it('never inserts a stale picker range after edits made while creation is pending', async () => {
     const s = store(); let finish;
     s.createDocument.mockImplementation(() => new Promise((resolve) => { finish = resolve; }));

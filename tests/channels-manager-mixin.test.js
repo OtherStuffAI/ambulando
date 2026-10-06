@@ -245,3 +245,13 @@ it('hydrates the mention roster on cold PG chat entry without opening settings',
   await new Promise(resolve => setTimeout(resolve, 0));
   expect(refreshTowerPgWorkspaceMembers).toHaveBeenCalled();
 });
+
+
+it('refuses a Docs channel switch when its outgoing draft cannot be preserved', async () => {
+  const store = createStore({ navSection: 'docs', docsEditorOpen: true, selectedChannelId: 'channel-a',
+    selectedDocument: { record_id: 'origin' }, docEditDraftDirty: true,
+    resetOpenDocumentForContextChange: vi.fn(), preserveWikiNavigationDraft: vi.fn().mockResolvedValue(false) });
+  await store.selectChannel('channel-b', { syncRoute: false });
+  expect(store.selectedChannelId).toBe('channel-a');
+  expect(store.resetOpenDocumentForContextChange).not.toHaveBeenCalled();
+});

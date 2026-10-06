@@ -3250,6 +3250,14 @@ export function initApp() {
         section = enabledSection;
       }
       const previousSection = this.navSection;
+      const docsVisit = this.docsHomeVisit = Number(this.docsHomeVisit || 0) + 1;
+      if (previousSection === 'docs' && section !== 'docs' && this.docEditDraftDirty && !options.draftPreserved) {
+        const originId = this.selectedDocId;
+        return this.preserveWikiNavigationDraft().then((preserved) => {
+          if (!preserved || docsVisit !== this.docsHomeVisit || originId !== this.selectedDocId || this.navSection !== previousSection) return false;
+          return this.navigateTo(section, { ...options, draftPreserved: true });
+        });
+      }
       if (previousSection === 'docs' && section !== 'docs' && this.selectedDocId) {
         this.closeDocEditor?.({ syncRoute: false });
       }
@@ -3302,7 +3310,7 @@ export function initApp() {
           }
         }
       }
-      if (section === 'docs' && previousSection !== 'docs' && !this.selectedDocId) {
+      if (section === 'docs' && options.docsHome !== false) {
         void this.openChannelDocsHome?.();
       }
       if (section === 'status') {

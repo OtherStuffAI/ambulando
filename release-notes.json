@@ -2871,6 +2871,36 @@
       "label": "Native wiki editor focus verification",
       "notes": [],
       "noUserVisibleChanges": true
+    },
+    {
+      "buildNumber": 2217,
+      "label": "Channel Docs home and safer draft recovery",
+      "notes": [
+        "Clicking Docs opens the configured channel home even after All docs or another page.",
+        "Preserve current source edits in local drafts and prevent delayed draft recovery from replacing new typing."
+      ]
+    },
+    {
+      "buildNumber": 2218,
+      "label": "Use channel Home from native Docs navigation",
+      "notes": [
+        "Open the shared home from every Docs click and retain explicit All docs on reload through the active shell.",
+        "Keep drafts intact when revisiting Home or leaving Docs, and cancel delayed navigation after a newer page choice."
+      ]
+    },
+    {
+      "buildNumber": 2219,
+      "label": "Channel home through locked Docs context",
+      "notes": [
+        "Switching channels while keeping Docs opens the destination home or its document list, with draft preservation before leaving."
+      ]
+    },
+    {
+      "buildNumber": 2220,
+      "label": "Restore channel Docs context on reload",
+      "notes": [
+        "Retain the requested channel when restoring Home or All docs from its URL, instead of using another previously selected channel."
+      ]
     }
   ]
 }

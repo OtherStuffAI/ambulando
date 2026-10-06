@@ -193,3 +193,100 @@ test.describe('touch wiki navigation', () => {
     await expect(page.locator('.doc-title-display')).toHaveText('Plant list');
   });
 });
+
+for (const mobile of [false, true]) {
+  test(`native Docs entry returns to shared home after All docs and another page (mobile: ${mobile})`, async ({ page }) => {
+    await page.setViewportSize({ width: mobile ? 390 : 1280, height: 844 });
+    await seed(page);
+    await page.evaluate(() => {
+      const s = window.Alpine.store('chat');
+      s.startWorkspaceLiveQueries = () => {};
+      s.ensureBackgroundSync = () => {};
+      s.refreshStatusRecentChanges = () => {};
+      const pages = [...s.documents];
+      s.refreshDocuments = async () => { s.documents = pages; };
+    });
+    const nav = page.getByRole('navigation', { name: 'Channel notebook' });
+    const docs = mobile ? page.locator('.mobile-section-switcher-btn[aria-label="Docs"]')
+      : page.locator('li').filter({ has: page.locator('.sidebar-label', { hasText: /^Docs$/ }) });
+    await nav.getByRole('button', { name: 'All docs', exact: true }).click();
+    await expect(page.locator('.docs-editor-v3')).toHaveCount(0);
+    await docs.click();
+    await expect(page.locator('.doc-title-display')).toHaveText('Home page');
+    await page.evaluate(() => window.Alpine.store('chat').openDoc('wiki-target'));
+    await expect(page.locator('.doc-title-display')).toHaveText('Plant list');
+    await docs.click();
+    await expect(page.locator('.doc-title-display')).toHaveText('Home page');
+    // Another section closes the document; native Docs returns to Home again.
+    await page.evaluate(() => window.Alpine.store('chat').navigateTo('status'));
+    await docs.click();
+    await expect(page.locator('.doc-title-display')).toHaveText('Home page');
+    // An already open dirty home must retain its mounted editor and typing.
+    await page.evaluate(async () => window.Alpine.store('chat').enterSelectedDocEditMode());
+    const editor = page.locator('.doc-rich-editor .ProseMirror');
+    await editor.click(); await page.keyboard.press('End'); await page.keyboard.type(' Unsaved home typing');
+    await docs.click();
+    await expect(editor).toContainText('Unsaved home typing');
+    expect(await page.evaluate(() => window.Alpine.store('chat').__preserved)).toContain('Unsaved home typing');
+    // No-home channel clears the previous document to its explicit list fallback.
+    await page.evaluate(() => { const s = window.Alpine.store('chat'); s.channels[0].metadata.docs_home_document_id = null; });
+    await docs.click();
+    await expect(page.locator('.docs-editor-v3')).toHaveCount(0);
+    expect(await page.evaluate(() => window.Alpine.store('chat').docsShowAll)).toBe(true);
+  });
+}
+
+test('Docs Home cannot override an explicit page opened during its delayed refresh', async ({ page }) => {
+  await seed(page);
+  await page.evaluate(() => {
+    const s = window.Alpine.store('chat');
+    s.startWorkspaceLiveQueries = () => {}; s.ensureBackgroundSync = () => {};
+    s.refreshDocuments = () => new Promise(resolve => { window.finishHomeRefresh = resolve; });
+    s.navigateTo('docs'); s.openDoc('wiki-target'); window.finishHomeRefresh();
+  });
+  await expect(page.locator('.doc-title-display')).toHaveText('Plant list');
+});
+
+
+test('locked Docs channel changes open the destination home and no-home list', async ({ page }) => {
+  await seed(page);
+  await page.evaluate(() => {
+    const s = Alpine.store('chat');
+    s.pgBackendMode = true;
+    s.channels = [...s.channels,
+      { record_id: 'destination', title: 'Destination', scope_id: 'wiki-scope', metadata: { docs_home_document_id: 'destination-home' } },
+      { record_id: 'no-home', title: 'No home', scope_id: 'wiki-scope', metadata: {} }];
+    s.documents = [...s.documents, { ...s.documents[0], record_id: 'destination-home', title: 'Destination home', pg_channel_id: 'destination' }];
+    const pages = [...s.documents]; s.refreshDocuments = async () => { s.documents = pages; };
+    s.startWorkspaceLiveQueries = () => {}; s.ensureBackgroundSync = () => {};
+    s.resetOpenDocumentForContextChange = async () => { s.closeDocEditor({ syncRoute: false }); };
+    s.lockedView = 'docs'; s.navCollapsed = false; s.desktopSidebarMode = 'expanded';
+  });
+  expect(await page.evaluate(() => Alpine.store('chat').isCurrentViewLocked)).toBe(true);
+  await page.evaluate(() => Alpine.store('chat').selectWorkContextChannel('destination'));
+  await expect(page.locator('.doc-title-display')).toHaveText('Destination home');
+  await page.evaluate(() => Alpine.store('chat').selectWorkContextChannel('no-home'));
+  await expect(page.locator('.docs-editor-v3')).toHaveCount(0);
+  expect(await page.evaluate(() => Alpine.store('chat').selectedChannelId)).toBe('no-home');
+});
+
+
+test('Docs route restores the requested channel Home and explicit All docs after shell context reset', async ({ page }) => {
+  await seed(page);
+  await page.evaluate(() => {
+    const s = Alpine.store('chat'); s.pgBackendMode = true;
+    s.startWorkspaceLiveQueries = () => {}; s.ensureBackgroundSync = () => {};
+    s.channels = [...s.channels, { record_id: 'wrong-channel', title: 'Other', scope_id: 'wiki-scope', metadata: {} }];
+    s.selectedChannelId = 'wrong-channel'; s.selectedBoardId = '__pg_channel__:wrong-channel';
+    history.replaceState({}, '', '/docs?channelid=wiki-channel');
+    return s.applyRouteFromLocation();
+  });
+  await expect(page.locator('.doc-title-display')).toHaveText('Home page');
+  expect(await page.evaluate(() => Alpine.store('chat').selectedChannelId)).toBe('wiki-channel');
+  await page.getByRole('navigation', { name: 'Channel notebook' }).getByRole('button', { name: 'All docs', exact: true }).click();
+  await expect(page).toHaveURL(/docsview=all/);
+  await expect(page).toHaveURL(/channelid=wiki-channel/);
+  await page.evaluate(() => { const s = Alpine.store('chat'); s.selectedChannelId = 'wrong-channel'; return s.applyRouteFromLocation(); });
+  await expect(page.locator('.docs-editor-v3')).toHaveCount(0);
+  expect(await page.evaluate(() => ({ channel: Alpine.store('chat').selectedChannelId, all: Alpine.store('chat').docsShowAll }))).toEqual({ channel: 'wiki-channel', all: true });
+});

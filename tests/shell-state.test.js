@@ -943,3 +943,71 @@ describe('Backlog on task view entry', () => {
     expect(shell.collapsedSections).toEqual({ new: true, done: true, ready: false });
   });
 });
+
+
+describe('channel Docs shell entry', () => {
+  function buildNavigableShell() {
+    const shell = createShellState();
+    Object.assign(shell, { syncRoute: vi.fn(), startWorkspaceLiveQueries: vi.fn(), ensureBackgroundSync: vi.fn(),
+      refreshStatusRecentChanges: vi.fn(), validateSelectedBoardId: vi.fn(), normalizeTaskFilterTags: vi.fn(), cancelEditSchedule: vi.fn() });
+    return shell;
+  }
+
+  it('opens Home on repeated Docs entry after All docs or an explicit page', () => {
+    const shell = buildNavigableShell();
+    shell.navSection = 'docs'; shell.docsShowAll = true;
+    shell.openChannelDocsHome = vi.fn();
+    shell.navigateTo('docs');
+    expect(shell.openChannelDocsHome).toHaveBeenCalledOnce();
+    shell.selectedDocId = 'another-page'; shell.navigateTo('docs');
+    expect(shell.openChannelDocsHome).toHaveBeenCalledTimes(2);
+    shell.navigateTo('docs', { docsHome: false });
+    expect(shell.openChannelDocsHome).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps the current editor and section when leaving fails to preserve a draft', async () => {
+    const shell = buildNavigableShell();
+    shell.navSection = 'docs'; shell.selectedDocId = 'dirty-page'; shell.docEditDraftDirty = true;
+    shell.closeDocEditor = vi.fn(); shell.clearInactiveSectionData = vi.fn();
+    shell.preserveWikiNavigationDraft = vi.fn().mockResolvedValue(false);
+    expect(await shell.navigateTo('tasks')).toBe(false);
+    expect(shell.navSection).toBe('docs'); expect(shell.selectedDocId).toBe('dirty-page');
+    expect(shell.closeDocEditor).not.toHaveBeenCalled(); expect(shell.clearInactiveSectionData).not.toHaveBeenCalled();
+  });
+
+  it('cancels pending section navigation when another Docs entry wins', async () => {
+    const shell = buildNavigableShell(); let finish;
+    shell.navSection = 'docs'; shell.selectedDocId = 'dirty-page'; shell.docEditDraftDirty = true;
+    shell.closeDocEditor = vi.fn(); shell.openChannelDocsHome = vi.fn();
+    shell.preserveWikiNavigationDraft = () => new Promise(resolve => { finish = resolve; });
+    const leaving = shell.navigateTo('tasks'); shell.navigateTo('docs'); finish(true);
+    expect(await leaving).toBe(false); expect(shell.navSection).toBe('docs'); expect(shell.closeDocEditor).not.toHaveBeenCalled();
+  });
+
+  it('restores Home by default but retains explicit All docs and direct document routes', async () => {
+    const originalWindow = globalThis.window;
+    globalThis.window = { location: { href: 'https://flightdeck.example/be-free/docs' }, history: { state: {} } };
+    try {
+      const shell = buildNavigableShell();
+      Object.assign(shell, { knownWorkspaces: [], loadDocEditorFromSelection: vi.fn(), closeDocEditor: vi.fn(),
+        openChannelDocsHome: vi.fn(), openDoc: vi.fn(), currentFolderId: null, selectedDocId: null });
+      await shell.applyRouteFromLocation();
+      expect(shell.openChannelDocsHome).toHaveBeenCalledWith({ syncRoute: false });
+      shell.openChannelDocsHome.mockClear();
+      window.location.href = 'https://flightdeck.example/be-free/docs?docsview=all';
+      await shell.applyRouteFromLocation();
+      expect(shell.docsShowAll).toBe(true); expect(shell.openChannelDocsHome).not.toHaveBeenCalled();
+      expect(shell.buildRouteUrl()).toContain('docsview=all');
+      shell.channels = [{ record_id: 'requested-channel' }];
+      shell.selectedChannelId = 'wrong-channel';
+      window.location.href = 'https://flightdeck.example/be-free/docs?channelid=requested-channel&docsview=all';
+      await shell.applyRouteFromLocation();
+      expect(shell.selectedChannelId).toBe('requested-channel');
+      expect(shell.buildRouteUrl()).toContain('channelid=requested-channel');
+      window.location.href = 'https://flightdeck.example/be-free/docs?docid=explicit-page';
+      await shell.applyRouteFromLocation();
+      expect(shell.openDoc).toHaveBeenCalledWith('explicit-page', expect.objectContaining({ syncRoute: false }));
+      expect(shell.openChannelDocsHome).not.toHaveBeenCalled();
+    } finally { globalThis.window = originalWindow; }
+  });
+});

@@ -2931,6 +2931,7 @@ export const channelsManagerMixin = {
       ? this.selectedDocument
       : null;
     if (openDocument && typeof this.resetOpenDocumentForContextChange === 'function') {
+      if (this.docEditDraftDirty && !await this.preserveWikiNavigationDraft?.()) return;
       await this.resetOpenDocumentForContextChange(openDocument, { syncRoute: false });
     }
     const generation = changingChannel

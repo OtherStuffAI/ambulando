@@ -219,3 +219,19 @@ describe.each([false, true])('Lock into a content view (mobile: %s)', (mobile) =
     }
   });
 });
+
+
+describe('Docs context entry and draft safety', () => {
+  it('opens the destination home when keeping Docs through a channel switch', async () => {
+    const s = createStore('docs'); s.toggleCurrentViewLock(); s.openChannelDocsHome = vi.fn();
+    await s.selectWorkContextChannel('channel-new');
+    expect(s.selectedChannelId).toBe('channel-new');
+    expect(s.openChannelDocsHome).toHaveBeenCalledWith({ syncRoute: false });
+  });
+  it.each([false, true])('does not switch context on a failed document checkpoint (locked: %s)', async (locked) => {
+    const s = createStore('docs'); if (locked) s.toggleCurrentViewLock();
+    s.docEditDraftDirty = true; s.selectedDocId = 'dirty-doc'; s.preserveWikiNavigationDraft = vi.fn().mockResolvedValue(false);
+    expect(await s.selectWorkContextChannel('channel-new')).toBe(false);
+    expect(s.navSection).toBe('docs'); expect(s.selectedBoardId).toBe('scope-old'); expect(s.selectedChannelId).toBeNull();
+  });
+});

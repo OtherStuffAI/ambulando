@@ -2297,6 +2297,7 @@ describe('docsManagerMixin durable recovery drafts', () => {
     const { record, store } = createSyncedPgDocSaveStore({
       content: canonical.content,
       currentModel: canonical,
+      editorState: canonical.editor_state,
       draftDirty: false,
     });
     await upsertDocumentDraft({
@@ -2319,6 +2320,55 @@ describe('docsManagerMixin durable recovery drafts', () => {
     expect(store.docEditDraftDirty).toBe(false);
     expect(store.docAutosaveState).toBe('saved');
     expect(store.docEditConflict).toBeNull();
+  });
+
+  it('does not let a pending local draft read overwrite new typing or delete its checkpoint', async () => {
+    const { record, store, adapter } = createSyncedPgDocSaveStore({ draftDirty: false });
+    const oldModel = richDocContentModel('Older checkpoint');
+    await upsertDocumentDraft({ workspace_id: 'workspace-1', document_id: record.record_id,
+      ...oldModel, base_available: true, base_row_version: 43, draft_status: 'dirty' });
+    store.docEditAccessGeneration = 8;
+    const restoring = store.restoreSelectedDocDraft(record, { generation: 8 });
+    store.docEditorContent = 'New typing while IndexedDB is reading';
+    store.docEditDraftDirty = true;
+    expect(await restoring).toBeNull();
+    expect(store.docEditorContent).toBe('New typing while IndexedDB is reading');
+    expect(adapter.setContent).not.toHaveBeenCalled();
+    expect(await getDocumentDraft('workspace-1', record.record_id)).toMatchObject({ content: oldModel.content });
+  });
+
+  it('checkpoints source edits and intentional empty content instead of the retained rich model', async () => {
+    const { record, store } = createSyncedPgDocSaveStore();
+    store.docEditorContentModel = richDocContentModel('Stale rich content');
+    store.docEditorMode = 'source';
+    store.docEditorContent = '**New source** [Linked page](wiki:stable-page)';
+    await store.persistSelectedDocDraft({ immediate: true });
+    let draft = await getDocumentDraft('workspace-1', record.record_id);
+    expect(draft.content).toContain('New source');
+    expect(draft.content).toContain('(wiki:stable-page)');
+    expect(draft.content).not.toContain('Stale rich');
+    expect(validateDocumentContentModelRoundTrip(draft).ok).toBe(true);
+    store.docEditorContent = '';
+    await store.persistSelectedDocDraft({ immediate: true });
+    draft = await getDocumentDraft('workspace-1', record.record_id);
+    expect(draft.content).toBe('');
+    expect(draft.editor_state.content).toEqual([expect.objectContaining({ type: 'paragraph' })]);
+    expect(draft.editor_state.content[0].content).toBeUndefined();
+  });
+
+  it('retains rich draft structure when compatibility text matches the canonical head', async () => {
+    const model = richDocContentModel('Same text');
+    const { record, store } = createSyncedPgDocSaveStore({ content: model.content,
+      currentModel: model, editorState: model.editor_state, draftDirty: false });
+    const changed = structuredClone(model);
+    changed.editor_state.content[0].attrs = { ...changed.editor_state.content[0].attrs, textAlign: 'center' };
+    await upsertDocumentDraft({ workspace_id: 'workspace-1', document_id: record.record_id, title: record.title,
+      ...changed, base_available: true, base_row_version: 43, draft_status: 'dirty' });
+    store.docEditAccessGeneration = 9;
+    store.scheduleDocAutosave = vi.fn();
+    await store.restoreSelectedDocDraft(record, { generation: 9 });
+    expect(await getDocumentDraft('workspace-1', record.record_id)).toMatchObject({ editor_state: changed.editor_state });
+    expect(store.docEditDraftDirty).toBe(true);
   });
 
   it('snapshots the outgoing document draft before navigation changes selection', async () => {
