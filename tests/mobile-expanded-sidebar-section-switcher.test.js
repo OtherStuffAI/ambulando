@@ -45,20 +45,21 @@ describe('expanded left-column section switcher', () => {
       ['files', 'Files'],
       ['agents', 'Agents'],
       ['context', 'Context'],
+      ['toolbox', 'Toolbox'],
     ]) {
       expect(expandedSwitcher).toContain(`navigateTo('${section}')`);
       expect(expandedSwitcher).toContain(`$store.chat.navSection === '${section}' ? 'page' : null`);
       expect(expandedSwitcher).toMatch(new RegExp(`>${label}<\\/span>`));
     }
 
-    expect(expandedSwitcher.match(/class="expanded-sidebar-section-switcher-btn"/g)).toHaveLength(7);
+    expect(expandedSwitcher.match(/class="expanded-sidebar-section-switcher-btn"/g)).toHaveLength(8);
     expect(expandedSwitcher).not.toContain("navigateTo('settings')");
 
   });
 
   it('removes the actual expanded left-column navigation set and its layout space', () => {
     expect(sidebar).toContain('class="sidebar-nav" x-show="$store.chat.navCollapsed && !$store.chat.mobileNavOpen"');
-    expect(sidebar).toMatch(/<\/ul>\s*<button[^>]*class="toolbox-expanded-nav"[^>]*>[\s\S]*?<\/button>\s*<section\s+class="sidebar-scope-navigation"/s);
+    expect(sidebar).toMatch(/<\/ul>\s*<section\s+class="sidebar-scope-navigation"/s);
     expect(sidebar).not.toContain('sidebar-workspace-navigation-divider');
     expect(sidebar).not.toContain('mobile-expanded-section-switcher');
     expect(sidebar).not.toContain("navigateTo('settings')");

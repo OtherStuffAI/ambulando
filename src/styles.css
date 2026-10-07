@@ -4960,6 +4960,9 @@ button:disabled {
 
 .personal-wapp-editor-modal {
   width: min(92vw, 520px);
+  max-height: 88dvh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 1.25rem;
 }
 
@@ -25099,6 +25102,3 @@ button.task-desc-toggle:focus-visible {
 .toolbox-placement-list { display: grid; gap: 0.75rem; margin-top: 1rem; }
 .toolbox-placement-row { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.75rem; padding: 0.85rem; border: 1px solid #dbe4ef; border-radius: 8px; }
 .toolbox-placement-row small { display: block; color: #475569; }
-.toolbox-expanded-nav { display: flex; align-items: center; gap: 0.5rem; margin: 0.5rem; padding: 0.65rem; border: 0; border-radius: 6px; background: transparent; color: inherit; cursor: pointer; }
-.toolbox-expanded-nav.active { color: #2563eb; background: #eff6ff; }
-.toolbox-expanded-nav:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }

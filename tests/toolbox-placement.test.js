@@ -38,7 +38,7 @@ it('persists each type across recreated stores without losing settings or concur
   const settings = await getSettings();
   expect(settings.backendUrl).toBe('https://tower.invalid');
   expect(settings.appPlacements[s.appPlacementPartition]).toEqual({
-    'wapp:artifact': false, 'napplet:message-activity': false, 'wapp:other': false,
+    'wapp:artifact': { shown: false, visibility: 'everywhere' }, 'napplet:message-activity': { shown: false, visibility: 'everywhere' }, 'wapp:other': false,
   });
   expect(settings.appPlacements[restored.appPlacementPartition]['napplet:message-activity']).toBe(false);
 });
@@ -94,5 +94,42 @@ it('finishes an in-flight save only in its captured workspace partition', async 
   s.currentWorkspaceKey = 'tower/workspace-b';
   await saving;
   expect(s.visibleApps).toHaveLength(2); expect(s.appPlacementNotice).toBe('');
-  expect((await getSettings()).appPlacements[partition]['napplet:message-activity']).toBe(false);
+  expect((await getSettings()).appPlacements[partition]['napplet:message-activity'].shown).toBe(false);
+});
+
+
+it.each(['WApp', 'Napplet'])('enforces %s scope/channel restrictions across context changes and reload, while keeping entries editable', async type => {
+  const s = store();
+  s.scopes = [{ record_id: 'scope-a' }, { record_id: 'scope-b' }];
+  s.wappPublishingDestinationGroups = [{ scope_id: 'scope-a', channels: [{ channel_id: 'channel-a' }, { channel_id: 'channel-a2' }] }];
+  const app = s.toolboxApps.find(app => app.appType === type);
+  s.prepareAppPlacementEditor(app);
+  s.personalWappFormIconUrl = 'https://app.invalid/custom.png';
+  s.personalAppFormVisibility = 'scope'; s.personalAppFormScopeId = 'scope-a';
+  await s.saveAppEditorPlacement(app.placementId);
+  s.pgContextScopeId = 'scope-a'; expect(s.visibleApps.some(row => row.placementId === app.placementId)).toBe(true);
+  s.pgContextSelectedChannelId = 'channel-a2'; expect(s.visibleApps.some(row => row.placementId === app.placementId)).toBe(true);
+  s.pgContextScopeId = 'scope-b'; expect(s.visibleApps.some(row => row.placementId === app.placementId)).toBe(false);
+  expect(s.toolboxApps.some(row => row.placementId === app.placementId)).toBe(true);
+  s.personalAppFormVisibility = 'channel'; s.personalAppFormChannelId = 'channel-a';
+  await s.saveAppEditorPlacement(app.placementId);
+  s.appPlacementPreferences = (await getSettings()).appPlacements;
+  s.pgContextSelectedChannelId = 'channel-a'; expect(s.visibleApps.some(row => row.placementId === app.placementId)).toBe(true);
+  s.pgContextSelectedChannelId = 'channel-a2'; expect(s.visibleApps.some(row => row.placementId === app.placementId)).toBe(false);
+  s.pgContextSelectedChannelId = 'channel-a'; s.wappPublishingDestinationGroups = [];
+  expect(s.visibleApps.some(row => row.placementId === app.placementId)).toBe(false);
+  s.prepareAppPlacementEditor(app); expect(s.personalAppFormChannelId).toBe('channel-a');
+  s.currentPgActorId = 'other'; expect(s.appPlacement(app).visibility).toBe('everywhere');
+  s.currentPgActorId = 'alice'; s.currentWorkspaceKey = 'other'; expect(s.appPlacement(app).visibility).toBe('everywhere');
+});
+
+it('migrates legacy hidden bool on edit without losing hidden state and moves napplet ahead of WApps', async () => {
+  const s = store(); const app = s.toolboxApps.find(app => app.appType === 'Napplet');
+  await saveAppPlacement(s.appPlacementPartition, app.placementId, false);
+  s.appPlacementPreferences = (await getSettings()).appPlacements;
+  s.prepareAppPlacementEditor(app); expect(s.personalAppFormShown).toBe(false);
+  s.personalWappFormIconUrl = 'https://app.invalid/icon.png'; s.personalAppFormPosition = 1;
+  await s.saveAppEditorPlacement(app.placementId);
+  expect(s.toolboxApps[0]).toMatchObject({ placementId: app.placementId, icon_url: 'https://app.invalid/icon.png' });
+  expect(s.visibleApps.map(app => app.appType)).toEqual(['WApp']);
 });

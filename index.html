@@ -1251,7 +1251,6 @@
             <span class="sidebar-label">Jobs</span>
           </li>
         </ul>
-        <button type="button" class="toolbox-expanded-nav" x-show="(!$store.chat.mobileViewport &amp;&amp; !$store.chat.navCollapsed) || $store.chat.mobileNavOpen" title="Toolbox" aria-label="Toolbox" :class="{ active: $store.chat.navSection === 'toolbox' }" :aria-current="$store.chat.navSection === 'toolbox' ? 'page' : null" @click="$store.chat.navigateTo('toolbox')"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="18" height="14" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 12h18M10 10v4h4v-4"/></svg><span>Toolbox</span></button>
         <section
           class="sidebar-scope-navigation"
           aria-label="Workspace scopes and channels"
@@ -1553,6 +1552,7 @@
                   <span class="expanded-sidebar-section-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8" r="3"></circle><path d="M5 21a7 7 0 0 1 14 0"></path></svg></span><span>Agents</span>
                 </button>
                 <button type="button" class="expanded-sidebar-section-switcher-btn" :class="{ 'expanded-sidebar-section-switcher-btn-active': $store.chat.navSection === 'context' }" :aria-current="$store.chat.navSection === 'context' ? 'page' : null" @click="$store.chat.navigateTo('context')"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="9" y="2" width="6" height="5" rx="1"/><path d="M12 7v5M4 17v-5h16v5"/><rect x="1" y="17" width="6" height="5" rx="1"/><rect x="17" y="17" width="6" height="5" rx="1"/></svg><span>Context</span></button>
+                <button type="button" class="expanded-sidebar-section-switcher-btn" aria-label="Toolbox" :class="{ 'expanded-sidebar-section-switcher-btn-active': $store.chat.navSection === 'toolbox' }" :aria-current="$store.chat.navSection === 'toolbox' ? 'page' : null" @click="$store.chat.navigateTo('toolbox')"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="18" height="14" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 12h18M10 10v4h4v-4"/></svg><span>Toolbox</span></button>
               </nav>
               <button
                 type="button"
@@ -1915,24 +1915,37 @@
         </template>
         <section class="toolbox-page" x-show="$store.chat.navSection === 'toolbox'" x-cloak aria-labelledby="toolbox-heading" data-testid="toolbox-page">
           <div class="settings-panel">
-            <div class="settings-panel-header">
-              <div><h1 id="toolbox-heading">Toolbox</h1><p>Choose which napplets and WApps appear in your home Apps stack.</p></div>
-              <button type="button" class="btn-primary btn-compact" @click="$store.chat.openPersonalWappEditor()">Add WApp</button>
-            </div>
-            <p>Choices are saved for you in this workspace on this browser. Apps you hide here remain registered.</p>
-            <div class="toolbox-placement-list">
-              <template x-for="app in $store.chat.toolboxApps" :key="app.placementId">
-                <div class="toolbox-placement-row">
-                  <div><strong x-text="app.title"></strong><small x-text="app.appType"></small></div>
-                  <label class="settings-toggle-row">
-                    <input type="checkbox" :checked="$store.chat.isAppPlaced(app)" :disabled="!$store.chat.appPlacementPartition || $store.chat.appPlacementSaving"
-                      @change="$store.chat.setAppPlacement(app, $event.target.checked).then(() => { $event.target.checked = $store.chat.isAppPlaced(app); })"
-                      :aria-label="'Show ' + app.title + ' in Apps'" />
-                    <span>Show in Apps</span>
-                  </label>
+              <div class="settings-panel-header">
+                <div>
+                  <h1 id="toolbox-heading">Toolbox</h1>
+                  <p>Manage WApps and napplets in your Apps stack.</p>
                 </div>
-              </template>
-            </div>
+                <button type="button" class="btn-primary btn-compact" @click="$store.chat.openPersonalWappEditor()">Add WApp</button>
+              </div>
+              <div class="personal-wapps-settings-list" x-show="$store.chat.toolboxApps.length > 0">
+                <template x-for="(wapp, index) in $store.chat.toolboxApps" :key="wapp.placementId">
+                  <div class="personal-wapp-settings-row">
+                    <span class="launcher-avatar-ring">
+                      <img :src="$store.chat.getPersonalWappIconUrl(wapp)" alt="" @load="$store.chat.handlePersonalWappIconLoad($event)" @error="$store.chat.handlePersonalWappIconError($event)" />
+                      <span hidden x-text="$store.chat.getInitials(wapp.title || 'WApp')"></span>
+                    </span>
+                    <span class="personal-wapp-settings-copy">
+                      <strong x-text="wapp.title"></strong>
+                      <small x-text="wapp.launch_url || wapp.description"></small>
+                    </span>
+                    <span class="personal-wapp-settings-actions">
+                    <label class="settings-toggle-row"><input type="checkbox" :checked="$store.chat.isAppPlaced(wapp)" :disabled="!$store.chat.appPlacementPartition || $store.chat.appPlacementSaving" @change="$store.chat.setAppPlacement(wapp, $event.target.checked).then(() => { $event.target.checked = $store.chat.isAppPlaced(wapp); })" :aria-label="'Show ' + wapp.title + ' in Apps'"><span>Show in Apps</span></label>
+
+                      <button type="button" class="icon-btn" @click="$store.chat.moveToolboxApp(wapp, 'up')" :disabled="index === 0" :aria-label="'Move ' + wapp.title + ' up'">↑</button>
+                      <button type="button" class="icon-btn" @click="$store.chat.moveToolboxApp(wapp, 'down')" :disabled="index === $store.chat.toolboxApps.length - 1" :aria-label="'Move ' + wapp.title + ' down'">↓</button>
+                      <button type="button" class="btn-secondary btn-compact" @click="$store.chat.openToolboxAppEditor(wapp)">Edit</button>
+                      <button type="button" class="btn-danger btn-compact" x-show="wapp.appType === 'WApp'" @click="$store.chat.archivePersonalWapp(wapp)">Archive</button>
+                    </span>
+                  </div>
+                </template>
+              </div>
+              <p class="settings-empty-note" x-show="$store.chat.toolboxApps.length === 0">No personal WApps yet.</p>
+            <p>Launcher visibility and napplet icons are saved for you in this workspace on this browser. Hidden or restricted entries remain editable here.</p>
             <p class="settings-success" role="status" x-show="$store.chat.appPlacementNotice" x-text="$store.chat.appPlacementNotice"></p>
             <p class="error-text" role="alert" x-show="$store.chat.appPlacementError" x-text="$store.chat.appPlacementError"></p>
           </div>
@@ -2133,10 +2146,10 @@
                       @click="$store.chat.personalWappsOverlayOpen || $store.chat.visibleApps.length === 1 ? $store.chat.openApp(app) : $store.chat.openPersonalWappsOverlay()"
                       :aria-label="'Open ' + app.title">
                       <span class="launcher-avatar-ring">
-                        <template x-if="app.appType === 'WApp'">
+                        <template x-if="app.appType === 'WApp' || app.icon_url">
                           <img :src="$store.chat.getPersonalWappIconUrl(app)" alt="" @load="$store.chat.handlePersonalWappIconLoad($event)" @error="$store.chat.handlePersonalWappIconError($event)" />
                         </template>
-                        <span :hidden="app.appType === 'WApp'" x-text="app.appType === 'Napplet' ? '◴' : $store.chat.getInitials(app.title)"></span>
+                        <span :hidden="app.appType === 'WApp' || !!app.icon_url" x-text="app.appType === 'Napplet' ? '◴' : $store.chat.getInitials(app.title)"></span>
                       </span>
                       <span class="launcher-pill-copy"><strong x-text="app.title"></strong><small x-text="app.description || app.appType"></small></span>
                     </button>
@@ -8275,35 +8288,7 @@
                 <p class="error-text" x-show="$store.chat.appManagementCleanupError" x-text="$store.chat.appManagementCleanupError"></p>
               </div>
             </section>
-            <section class="settings-panel personal-wapps-settings-panel">
-              <div class="settings-panel-header">
-                <div>
-                  <h2>My WApps</h2>
-                  <p>Personal app launchers shown beside My Agents.</p>
-                </div>
-                <button type="button" class="btn-primary btn-compact" @click="$store.chat.openPersonalWappEditor()">Add WApp</button>
-              </div>
-              <div class="personal-wapps-settings-list" x-show="$store.chat.visiblePersonalWapps.length > 0">
-                <template x-for="(wapp, index) in $store.chat.visiblePersonalWapps" :key="`settings-wapp-${wapp.record_id}`">
-                  <div class="personal-wapp-settings-row">
-                    <span class="launcher-avatar-ring">
-                      <img :src="$store.chat.getPersonalWappIconUrl(wapp)" alt="" @load="$store.chat.handlePersonalWappIconLoad($event)" @error="$store.chat.handlePersonalWappIconError($event)" />
-                      <span hidden x-text="$store.chat.getInitials(wapp.title || 'WApp')"></span>
-                    </span>
-                    <span class="personal-wapp-settings-copy">
-                      <strong x-text="wapp.title"></strong>
-                      <small x-text="wapp.launch_url"></small>
-                    </span>
-                    <span class="personal-wapp-settings-actions">
-                      <button type="button" class="icon-btn" @click="$store.chat.movePersonalWapp(wapp, 'up')" :disabled="index === 0" aria-label="Move WApp up">↑</button>
-                      <button type="button" class="icon-btn" @click="$store.chat.movePersonalWapp(wapp, 'down')" :disabled="index === $store.chat.visiblePersonalWapps.length - 1" aria-label="Move WApp down">↓</button>
-                      <button type="button" class="btn-secondary btn-compact" @click="$store.chat.openPersonalWappEditor(wapp)">Edit</button>
-                      <button type="button" class="btn-danger btn-compact" @click="$store.chat.archivePersonalWapp(wapp)">Archive</button>
-                    </span>
-                  </div>
-                </template>
-              </div>
-              <p class="settings-empty-note" x-show="$store.chat.visiblePersonalWapps.length === 0">No personal WApps yet.</p>
+            <section class="settings-panel">
               <div class="wapp-publishing-admin">
                 <div class="settings-panel-header wapp-publishing-admin-heading">
                   <div>
@@ -10825,20 +10810,20 @@
         <div class="doc-modal-backdrop wapp-management-editor-backdrop" x-show="$store.chat.wappInstallEditorOpen" x-cloak @click.self="$store.chat.wappInstallEditorOpen = false"><div class="doc-modal-card wapp-management-editor-modal" role="dialog" aria-modal="true" aria-labelledby="wapp-intent-title" data-testid="wapp-activation-dialog"><header><h3 id="wapp-intent-title">Activate a managed WApp</h3><button type="button" class="icon-btn" aria-label="Close WApp activation" @click="$store.chat.wappInstallEditorOpen = false">×</button></header><div class="wapp-management-editor-body"><p class="settings-field-help">Your browser identity signs the exact Tower intent. Autopilot can only claim the selected immutable app, version, URL, Feed destination, and <code>activity.publish</code>.</p><label><span>Managed app</span><select aria-label="Managed Autopilot app" data-testid="wapp-activation-app" :value="$store.chat.wappInstallDraft?.app_id" @change="$store.chat.selectWappActivationApp($event.target.value)" :disabled="$store.chat.wappActivationLoading"><option value="" x-text="$store.chat.wappActivationLoading ? 'Discovering apps…' : 'Choose an app'"></option><template x-for="app in $store.chat.wappActivationApps" :key="app.app_id"><option :value="app.app_id" x-text="app.title"></option></template></select></label><div class="wapp-management-filter-grid"><label><span>Immutable version</span><input aria-label="Immutable app version" readonly x-model="$store.chat.wappInstallDraft.app_version" /></label><label><span>Stable installation</span><input aria-label="Stable installation identity" readonly x-model="$store.chat.wappInstallDraft.wapp_installation_id" /></label><label><span>Launch URL</span><input aria-label="Approved launch URL" readonly x-model="$store.chat.wappInstallDraft.launch_url" /></label><label><span>Approved View origin</span><input aria-label="Approved View origin" readonly x-model="$store.chat.wappInstallDraft.open_origins" /></label><label><span>Feed destination</span><select aria-label="Workspace Feed destination" data-testid="wapp-feed-destination" :value="$store.chat.wappInstallDraft?.destination_channel_id" @change="$store.chat.selectWappActivationDestination($event.target.value)"><option value="">Choose a destination</option><template x-for="group in $store.chat.wappPublishingDestinationGroups" :key="group.scope_id"><optgroup :label="group.label"><template x-for="channel in group.channels" :key="channel.channel_id"><option :value="channel.channel_id" x-text="channel.label"></option></template></optgroup></template></select></label></div><label class="settings-checkbox"><input type="checkbox" aria-label="Allow Feed-only activity publishing" x-model="$store.chat.wappInstallDraft.activity_publish" disabled /><span>Feed-only publishing (<code>activity.publish</code>); no channel or message write</span></label><p class="settings-field-help">Book of Sand View links are limited to its approved origin. No private key is requested or stored.</p><p class="error-text" role="alert" aria-live="assertive" x-show="$store.chat.wappManagementError" x-text="$store.chat.wappManagementError"></p></div><footer><button type="button" class="btn-secondary" aria-label="Cancel WApp activation" @click="$store.chat.wappInstallEditorOpen = false">Cancel</button><button type="button" class="btn-primary" aria-label="Sign and activate WApp" data-testid="confirm-wapp-activation" @click="$store.chat.createWappInstallIntent()" :disabled="$store.chat.wappInstallSaving || $store.chat.wappActivationLoading" x-text="$store.chat.wappInstallSaving ? 'Signing and activating…' : 'Approve and activate'"></button></footer></div></div>
 
         <div class="doc-modal-backdrop personal-wapp-editor-backdrop" x-show="$store.chat.personalWappEditorOpen" x-cloak @click.self="$store.chat.closePersonalWappEditor()">
-          <div class="doc-modal-card personal-wapp-editor-modal">
+          <div class="doc-modal-card personal-wapp-editor-modal" role="dialog" aria-modal="true" aria-labelledby="personal-app-editor-title" @keydown.escape="$store.chat.closePersonalWappEditor()">
             <button class="modal-close" type="button" @click="$store.chat.closePersonalWappEditor()">&times;</button>
-            <h3 x-text="$store.chat.personalWappEditingId ? 'Edit WApp' : 'Add WApp'"></h3>
+            <h3 id="personal-app-editor-title" x-text="$store.chat.personalAppEditingType === 'Napplet' ? 'Edit Message activity' : ($store.chat.personalWappEditingId ? 'Edit WApp' : 'Add WApp')"></h3>
             <label class="daily-note-field">
               <span>Title</span>
-              <input type="text" x-model="$store.chat.personalWappFormTitle" placeholder="Time Tracker" />
+              <input :readonly="$store.chat.personalAppEditingType === 'Napplet'" type="text" x-model="$store.chat.personalWappFormTitle" placeholder="Time Tracker" />
             </label>
-            <label class="daily-note-field">
+            <label class="daily-note-field" x-show="$store.chat.personalAppEditingType === 'WApp'">
               <span>Launch URL</span>
               <input type="url" x-model="$store.chat.personalWappFormLaunchUrl" placeholder="https://..." />
             </label>
             <label class="daily-note-field">
               <span>Description</span>
-              <input type="text" x-model="$store.chat.personalWappFormDescription" placeholder="Track your time for the week" />
+              <input :readonly="$store.chat.personalAppEditingType === 'Napplet'" type="text" x-model="$store.chat.personalWappFormDescription" placeholder="Track your time for the week" />
             </label>
             <label class="daily-note-field">
               <span>Icon URL</span>
@@ -10860,11 +10845,16 @@
               <p role="status" x-text="$store.chat.personalWappImageStatus"></p>
               <p class="error-text" role="alert" x-text="$store.chat.personalWappImageError"></p>
             </div>
+            <label class="daily-note-field"><span>Position in Apps</span><input type="number" min="1" aria-label="Position in Apps" x-model.number="$store.chat.personalAppFormPosition"></label>
+            <label class="settings-toggle-row"><input type="checkbox" aria-label="Show in Apps" x-model="$store.chat.personalAppFormShown"><span>Show in Apps</span></label>
+            <label class="daily-note-field"><span>Visibility</span><select aria-label="App visibility" x-model="$store.chat.personalAppFormVisibility"><option value="everywhere">Everywhere</option><option value="scope">Only a selected scope</option><option value="channel">Only a selected channel</option></select></label>
+            <label class="daily-note-field" x-show="$store.chat.personalAppFormVisibility === 'scope'"><span>Scope</span><select aria-label="App scope" x-model="$store.chat.personalAppFormScopeId"><option value="">Choose a scope</option><template x-if="$store.chat.personalAppFormScopeId && !$store.chat.appPlacementScopes.some(scope => scope.record_id === $store.chat.personalAppFormScopeId)"><option :selected="true" :value="$store.chat.personalAppFormScopeId">Unavailable scope (restricted)</option></template><template x-for="scope in $store.chat.appPlacementScopes" :key="scope.record_id"><option :selected="scope.record_id === $store.chat.personalAppFormScopeId" :value="scope.record_id" x-text="$store.chat.getScopeBreadcrumb(scope.record_id) || scope.title"></option></template></select></label>
+            <label class="daily-note-field" x-show="$store.chat.personalAppFormVisibility === 'channel'"><span>Channel</span><select aria-label="App channel" x-model="$store.chat.personalAppFormChannelId"><option value="">Choose a channel</option><template x-if="$store.chat.personalAppFormChannelId && !$store.chat.appPlacementChannelGroups.some(group => group.channels.some(channel => channel.channel_id === $store.chat.personalAppFormChannelId))"><option :selected="true" :value="$store.chat.personalAppFormChannelId">Unavailable channel (restricted)</option></template><template x-for="group in $store.chat.appPlacementChannelGroups" :key="group.scope_id"><optgroup :label="group.label"><template x-for="channel in group.channels" :key="channel.channel_id"><option :selected="channel.channel_id === $store.chat.personalAppFormChannelId" :value="channel.channel_id" x-text="channel.label"></option></template></optgroup></template></select></label>
             <p class="error-text" x-show="$store.chat.personalWappEditorError" x-text="$store.chat.personalWappEditorError"></p>
             <div class="new-doc-modal-actions">
               <button type="button" class="btn-cancel" @click="$store.chat.closePersonalWappEditor()">Cancel</button>
               <button type="button" class="btn-confirm" @click="$store.chat.savePersonalWappEditor()" :disabled="$store.chat.personalWappEditorSaving || $store.chat.personalWappImageBusy || $store.chat.personalWappImagePending">
-                <span x-show="!$store.chat.personalWappEditorSaving">Save WApp</span>
+                <span x-show="!$store.chat.personalWappEditorSaving" x-text="$store.chat.personalAppEditingType === 'Napplet' ? 'Save napplet' : 'Save WApp'"></span>
                 <span x-show="$store.chat.personalWappEditorSaving">Saving...</span>
               </button>
             </div>

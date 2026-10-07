@@ -3191,6 +3191,41 @@
       "label": "Scope creation sync investigation",
       "notes": [],
       "noUserVisibleChanges": true
+    },
+    {
+      "buildNumber": 2273,
+      "label": "Toolbox navigation and app editing",
+      "notes": [
+        "Toolbox follows the existing section navigation and replaces personal launcher settings in Setup. Edit WApps and Message activity icons, position and visibility everywhere or only in a chosen scope or channel. Hidden apps remain manageable."
+      ]
+    },
+    {
+      "buildNumber": 2274,
+      "label": "Toolbox viewer isolation checks",
+      "notes": [
+        "Personal launcher editing requires a signed-in workspace viewer and preserves visibility restrictions during workspace switches."
+      ]
+    },
+    {
+      "buildNumber": 2275,
+      "label": "Toolbox modal on small screens",
+      "notes": [
+        "App and napplet editing remains scrollable on small screens, including icon, position and visibility controls."
+      ]
+    },
+    {
+      "buildNumber": 2276,
+      "label": "Retain unavailable launcher targets",
+      "notes": [
+        "An unavailable scope or channel stays selected as a restricted target when reopening the app editor."
+      ]
+    },
+    {
+      "buildNumber": 2277,
+      "label": "Toolbox placement save feedback",
+      "notes": [
+        "A failed launcher visibility save restores the displayed checkbox to its saved state and offers an error message for retry."
+      ]
     }
   ]
 }

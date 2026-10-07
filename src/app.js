@@ -3658,7 +3658,8 @@ export function initApp() {
         .filter((wapp) =>
           wapp?.pg_backend === true
           && wapp?.pg_record_type === 'personal_wapp'
-          && (!ownerActorId || String(wapp.owner_actor_id || wapp.pg_owner_actor_id || '') === ownerActorId)
+          && (!wapp.pg_workspace_id || wapp.pg_workspace_id === this.currentWorkspace?.workspaceId)
+          && ownerActorId && String(wapp.owner_actor_id || wapp.pg_owner_actor_id || '') === ownerActorId
           && wapp.record_state !== 'archived'
           && wapp.record_state !== 'deleted'
           && wapp.status !== 'archived'
@@ -3739,6 +3740,7 @@ export function initApp() {
       this.resetPersonalWappImage();
       this.closePersonalWappsOverlay();
       this.personalWappEditorError = '';
+      this.prepareAppPlacementEditor(wapp ? { ...wapp, placementId: wapp.placementId || 'wapp:' + wapp.record_id } : null);
       this.personalWappEditingId = wapp?.record_id || '';
       this.personalWappFormTitle = wapp?.title || '';
       this.personalWappFormDescription = wapp?.description || '';
@@ -3761,6 +3763,24 @@ export function initApp() {
         this.personalWappEditorError = 'Upload or clear the selected image before saving.';
         return;
       }
+      if (!this.appPlacementPartition) {
+        this.personalWappEditorError = 'Choose a workspace and sign in before editing apps.';
+        return;
+      }
+      if (this.personalAppEditingPartition && this.personalAppEditingPartition !== this.appPlacementPartition) {
+        this.personalWappEditorError = 'Workspace or viewer changed. Reopen the app editor.';
+        return;
+      }
+      if (this.personalAppEditingType === 'Napplet') {
+        this.personalWappEditorSaving = true;
+        try {
+          await this.saveAppEditorPlacement('napplet:message-activity');
+          this.personalWappEditorSaving = false;
+          this.closePersonalWappEditor();
+        } catch (error) { this.personalWappEditorError = error.message; }
+        finally { this.personalWappEditorSaving = false; }
+        return;
+      }
       if (!isTowerPgBackendMode()) return;
       const context = resolveTowerPgWorkspaceContext(this);
       if (!context.workspaceId || !context.baseUrl) {
@@ -3777,6 +3797,9 @@ export function initApp() {
         this.personalWappEditorError = 'Launch URL must start with http:// or https://';
         return;
       }
+      const placementPartition = this.personalAppEditingPartition;
+      const placementDraft = this.appEditorPlacementDraft();
+      const placementOrder = this.toolboxApps.map(app => app.placementId);
       this.personalWappEditorSaving = true;
       this.personalWappEditorError = '';
       try {
@@ -3797,6 +3820,8 @@ export function initApp() {
             });
         const next = response?.personal_wapp;
         if (next) {
+          await this.saveAppEditorPlacement('wapp:' + (next.id || next.record_id), placementPartition, placementDraft, placementOrder);
+          if (placementPartition && placementPartition !== this.appPlacementPartition) return;
           const row = mapPgPersonalWappToLocal(next, { workspaceOwnerNpub: context.workspaceOwnerNpub });
           this.wapps = [
             ...(this.wapps || []).filter((entry) => entry.record_id !== row.record_id),

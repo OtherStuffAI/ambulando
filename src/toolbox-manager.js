@@ -7,6 +7,78 @@ export const toolboxMixin = {
   appPlacementSaving: false,
   appPlacementError: '',
   appPlacementNotice: '',
+  personalAppEditingType: 'WApp',
+  personalAppEditingPartition: '',
+  personalAppFormShown: true,
+  personalAppFormVisibility: 'everywhere',
+  personalAppFormScopeId: '',
+  personalAppFormChannelId: '',
+  personalAppFormPosition: 1,
+
+  appPlacement(entry) {
+    const value = this.appPlacementPreferences?.[this.appPlacementPartition]?.[entry?.placementId];
+    return typeof value === 'boolean' ? { shown: value, visibility: 'everywhere' } : (value || { shown: true, visibility: 'everywhere' });
+  },
+
+  get appPlacementScopes() {
+    return (this.scopes || []).filter(row => row.record_id && row.record_state !== 'deleted' && row.record_state !== 'archived' && row.status !== 'archived');
+  },
+
+  get appPlacementChannelGroups() {
+    const scopeIds = new Set(this.appPlacementScopes.map(row => row.record_id));
+    return (this.wappPublishingDestinationGroups || []).filter(group => scopeIds.has(group.scope_id));
+  },
+
+  prepareAppPlacementEditor(entry) {
+    const placement = this.appPlacement(entry);
+    this.personalAppEditingType = entry?.appType || 'WApp';
+    this.personalAppEditingPartition = this.appPlacementPartition;
+    this.personalAppFormShown = placement.shown !== false;
+    this.personalAppFormVisibility = placement.visibility || 'everywhere';
+    this.personalAppFormScopeId = placement.scopeId || '';
+    this.personalAppFormChannelId = placement.channelId || '';
+    this.personalAppFormPosition = this.toolboxApps.findIndex(app => app.placementId === entry?.placementId) + 1 || this.toolboxApps.length + 1;
+  },
+
+  appEditorPlacementDraft() {
+    return {
+      shown: this.personalAppFormShown,
+      visibility: this.personalAppFormVisibility,
+      scopeId: this.personalAppFormScopeId,
+      channelId: this.personalAppFormChannelId,
+      position: Math.max(1, Number(this.personalAppFormPosition) || 1),
+      ...(this.personalAppEditingType === 'Napplet' ? { iconUrl: this.personalWappFormIconUrl.trim() } : {}),
+    };
+  },
+
+  async saveAppEditorPlacement(entryId, partition = this.personalAppEditingPartition, draft = this.appEditorPlacementDraft(), orderedIds = this.toolboxApps.map(app => app.placementId)) {
+    if (!partition) return;
+    const ids = orderedIds.filter(id => id !== entryId);
+    ids.splice(Math.min(ids.length, draft.position - 1), 0, entryId);
+    this.appPlacementPreferences = await saveAppPlacement(partition, entryId, draft, ids);
+  },
+
+  openToolboxAppEditor(entry) {
+    this.openPersonalWappEditor(entry);
+  },
+
+  async moveToolboxApp(entry, direction) {
+    const rows = this.toolboxApps;
+    const index = rows.findIndex(app => app.placementId === entry.placementId);
+    const target = index + (direction === 'up' ? -1 : 1);
+    if (index < 0 || target < 0 || target >= rows.length) return;
+    const partition = this.appPlacementPartition;
+    const placement = this.appPlacement(entry);
+    if (!partition || this.appPlacementSaving) return;
+    this.appPlacementSaving = true;
+    try {
+      // Normalize positions before swapping; preserve existing WApp server ordering.
+      [rows[index], rows[target]] = [rows[target], rows[index]];
+      await this.savePersonalWappOrder?.(rows.filter(app => app.appType === 'WApp').map(app => app.record_id));
+      this.appPlacementPreferences = await saveAppPlacement(partition, entry.placementId, placement, rows.map(app => app.placementId));
+    } catch (error) { this.appPlacementError = error.message; }
+    finally { this.appPlacementSaving = false; }
+  },
 
   get appPlacementPartition() {
     const workspace = String(this.currentWorkspaceKey || '').trim();
@@ -24,15 +96,28 @@ export const toolboxMixin = {
       }).map(wapp => ({ ...wapp, placementId: 'wapp:' + wapp.record_id, appType: 'WApp' })),
       { placementId: 'napplet:message-activity', title: 'Message activity',
         description: 'Messages by channel and scope', appType: 'Napplet' },
-    ];
+    ].map((app, index) => {
+      const placement = this.appPlacement(app);
+      return { ...app, ...(app.appType === 'Napplet' ? { icon_url: placement.iconUrl || '' } : {}), launcherPosition: placement.position ?? index + 1 };
+    }).sort((a, b) => a.launcherPosition - b.launcherPosition);
   },
 
   isAppPlaced(entry) {
-    return this.appPlacementPreferences?.[this.appPlacementPartition]?.[entry?.placementId] !== false;
+    return this.appPlacement(entry).shown !== false;
   },
 
   get visibleApps() {
-    return this.toolboxApps.filter(entry => this.isAppPlaced(entry));
+    if (!this.appPlacementPartition) return [];
+    return this.toolboxApps.filter(entry => {
+      const placement = this.appPlacement(entry);
+      if (placement.shown === false) return false;
+      if (placement.visibility === 'everywhere' || !placement.visibility) return true;
+      if (placement.visibility === 'scope') return this.appPlacementScopes.some(scope => scope.record_id === placement.scopeId)
+        && this.pgContextScopeId === placement.scopeId;
+      if (placement.visibility === 'channel') return this.appPlacementChannelGroups.some(group => group.channels.some(channel => channel.channel_id === placement.channelId))
+        && this.pgContextSelectedChannelId === placement.channelId;
+      return false;
+    });
   },
 
   async setAppPlacement(entry, shown) {
@@ -41,7 +126,7 @@ export const toolboxMixin = {
     this.appPlacementSaving = true;
     this.appPlacementError = ''; this.appPlacementNotice = '';
     try {
-      const preferences = await saveAppPlacement(partition, entry.placementId, shown);
+      const preferences = await saveAppPlacement(partition, entry.placementId, { ...this.appPlacement(entry), shown });
       // Rendering always selects the current workspace/viewer partition.
       this.appPlacementPreferences = preferences;
       if (partition === this.appPlacementPartition) {

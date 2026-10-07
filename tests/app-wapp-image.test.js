@@ -6,7 +6,7 @@ async function store() {
   const { initApp } = await import('../src/app.js');
   initApp();
   const s = alpineStore.mock.calls.find(([name]) => name === 'chat')[1];
-  Object.assign(s, { backendUrl: 'https://tower.example', selectedWorkspaceKey: 'one', knownWorkspaces: [{ workspaceKey: 'one', workspaceId: 'workspace-1', workspaceOwnerNpub: 'npub-human', directHttpsUrl: 'https://tower.example', appNpub: 'flightdeck_pg', pgBackendMode: true }] });
+  Object.assign(s, { backendUrl: 'https://tower.example', selectedWorkspaceKey: 'one', knownWorkspaces: [{ workspaceKey: 'one', workspaceId: 'workspace-1', workspaceOwnerNpub: 'npub-human', directHttpsUrl: 'https://tower.example', appNpub: 'flightdeck_pg', pgBackendMode: true, pgMe: { actor: { actor_id: 'synthetic-reader' } } }] });
   return s;
 }
 beforeEach(() => { alpineStore.mockClear(); createWapp.mockReset(); updateWapp.mockReset(); });
