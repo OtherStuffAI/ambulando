@@ -11176,13 +11176,31 @@
     </template>
                 <button type="button" class="agent-activity-history-toggle" x-show="!$store.chat.getAgentActivityRunsLoadState($store.chat.agentActivityDetailsContext?.scope).done" @click="$store.chat.loadEarlierAgentActivityRuns($store.chat.agentActivityDetailsContext?.scope)" :disabled="Boolean($store.chat.getAgentActivityRunsLoadState($store.chat.agentActivityDetailsContext?.scope).loading)" x-text="$store.chat.getAgentActivityRunsLoadState($store.chat.agentActivityDetailsContext?.scope).error ? 'Could not load earlier runs — retry' : ($store.chat.getAgentActivityRunsLoadState($store.chat.agentActivityDetailsContext?.scope).loading ? 'Loading earlier runs…' : 'Load earlier agent runs')"></button>
   </dialog>
-  <dialog id="message-activity-modal" class="message-activity-modal" aria-labelledby="message-activity-title" data-testid="message-activity-modal"
+  <dialog id="message-activity-modal" class="message-activity-modal" :class="{ 'thread-full': $store.chat.messageActivityFull }" aria-labelledby="message-activity-title" data-testid="message-activity-modal"
     x-effect="if ($store.chat.messageActivityOpen && $store.chat.messageActivityOpenedContext !== $store.chat.messageActivityContextKey) $store.chat.closeMessageActivity()"
-    @cancel.prevent="$store.chat.closeMessageActivity()" @close="!$el.open && $store.chat.messageActivityOpen && $store.chat.closeMessageActivity()"
+    @keydown.escape="$store.chat.handleMessageActivityEscape($event)" @cancel.prevent="$store.chat.handleMessageActivityEscape($event)" @close="!$el.open && $store.chat.messageActivityOpen && $store.chat.closeMessageActivity()"
     @click.self="if ($event.offsetX < 0 || $event.offsetY < 0 || $event.offsetX > $el.clientWidth || $event.offsetY > $el.clientHeight) $store.chat.closeMessageActivity()">
     <div class="thread-header">
-      <h2 id="message-activity-title">Message activity</h2>
-      <button type="button" class="btn-secondary" @click="$store.chat.closeMessageActivity()" aria-label="Close Message activity">Close</button>
+      <div class="thread-header-copy"><h2 id="message-activity-title">Message activity</h2></div>
+      <div class="thread-header-actions">
+        <div class="thread-sequence-controls" role="group" aria-label="Napplet history">
+          <button type="button" class="thread-resize-btn" aria-label="Back in napplet history" title="Back in napplet history" :disabled="!$store.chat.messageActivityCanBack" @click="$store.chat.navigateMessageActivity('back')">←</button>
+          <button type="button" class="thread-resize-btn" aria-label="Forward in napplet history" title="Forward in napplet history" :disabled="!$store.chat.messageActivityCanForward" @click="$store.chat.navigateMessageActivity('forward')">→</button>
+        </div>
+        <div class="thread-title-menu" @click.outside="$store.chat.messageActivityMenuOpen = false" @focusout="if (!$el.contains($event.relatedTarget)) $store.chat.messageActivityMenuOpen = false">
+          <button type="button" class="thread-resize-btn" data-napplet-menu aria-label="Message activity menu" title="Message activity menu" aria-haspopup="menu" aria-controls="message-activity-menu" :aria-expanded="$store.chat.messageActivityMenuOpen" @click="$store.chat.toggleMessageActivityMenu()">•••</button>
+          <div id="message-activity-menu" class="thread-title-menu-popover" role="menu" x-show="$store.chat.messageActivityMenuOpen" x-cloak>
+            <button type="button" role="menuitem" @click="$store.chat.dismissMessageActivityMenu(); $store.chat.refreshMessageActivity()">Refresh</button>
+            <button type="button" role="menuitem" @click="$store.chat.dismissMessageActivityMenu(); $store.chat.toggleMessageActivityPresentation()" x-text="$store.chat.messageActivityFull ? 'Collapse to modal' : 'Expand to full page'"></button>
+            <button type="button" role="menuitem" @click="$store.chat.closeMessageActivity()">Close</button>
+          </div>
+        </div>
+        <button type="button" class="thread-resize-btn" :aria-label="$store.chat.messageActivityFull ? 'Collapse Message activity' : 'Expand Message activity'" :title="$store.chat.messageActivityFull ? 'Collapse to modal' : 'Expand to full page'" @click="$store.chat.toggleMessageActivityPresentation()">
+                    <svg x-show="!$store.chat.messageActivityFull" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+                    <svg x-show="$store.chat.messageActivityFull" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="14" y1="10" x2="21" y2="3"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+        </button>
+        <button type="button" class="thread-close-btn" data-napplet-close @click="$store.chat.closeMessageActivity()" aria-label="Close Message activity">&times;</button>
+      </div>
     </div>
     <iframe title="Message activity dashboard" sandbox="allow-scripts" referrerpolicy="no-referrer" :src="$store.chat.messageActivitySrc || 'about:blank'"></iframe>
   </dialog>

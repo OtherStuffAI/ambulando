@@ -7,6 +7,12 @@ const RUNTIMES = new WeakMap();
 export const messageActivityMixin = {
   messageActivityOpen: false,
   messageActivitySrc: '',
+  messageActivityFull: false,
+  messageActivityMenuOpen: false,
+  messageActivityHistory: [],
+  messageActivityHistoryIndex: -1,
+  get messageActivityCanBack() { return this.messageActivityHistoryIndex > 0; },
+  get messageActivityCanForward() { return this.messageActivityHistoryIndex < this.messageActivityHistory.length - 1; },
   messageActivityOpenedContext: '',
   get messageActivityContextKey() { return messageActivityLifecycle(messageActivityContext(this)); },
 
@@ -25,9 +31,17 @@ export const messageActivityMixin = {
     runtime.listener = event => {
       if (!current() || !validMessageActivityRequest(event, runtime.frame?.contentWindow, session)) return;
       const data = event.data;
-      if (data.type === 'close') return this.closeMessageActivity();
+      if (data.type === 'close') {
+        if (this.messageActivityMenuOpen) return this.dismissMessageActivityMenu();
+        return this.closeMessageActivity();
+      }
       if (data.type === 'ready') { runtime.ready = true; runtime.send(runtime.state); return; }
-      if (data.type === 'range') runtime.range = data.range;
+      if (data.type === 'range') {
+        if (runtime.range === data.range) return;
+        this.messageActivityHistory = [...this.messageActivityHistory.slice(0, this.messageActivityHistoryIndex + 1), data.range];
+        this.messageActivityHistoryIndex = this.messageActivityHistory.length - 1;
+        runtime.range = data.range;
+      }
       // Repeated refresh clicks while a read is active do not amplify traffic.
       if (data.type === 'refresh' && runtime.state.status === 'loading') return;
       void this.refreshMessageActivity();
@@ -38,6 +52,8 @@ export const messageActivityMixin = {
     window.addEventListener('message', runtime.listener);
     window.addEventListener('pagehide', runtime.onPageHide);
     this.messageActivityOpenedContext = runtime.context;
+    this.messageActivityHistory = ['7d'];
+    this.messageActivityHistoryIndex = 0;
     this.messageActivityOpen = true;
     // A query change forces a fresh document even when an immediate reopen
     // supersedes the pending about:blank navigation. A fragment alone would
@@ -48,13 +64,47 @@ export const messageActivityMixin = {
     const dialog = document.getElementById('message-activity-modal');
     runtime.frame = dialog?.querySelector('iframe');
     dialog?.showModal();
-    dialog?.querySelector('button')?.focus();
+    dialog?.querySelector('[data-napplet-close]')?.focus();
+    void this.refreshMessageActivity();
+  },
+
+  toggleMessageActivityPresentation() {
+    if (!this.messageActivityOpen) return;
+    this.messageActivityMenuOpen = false;
+    this.messageActivityFull = !this.messageActivityFull;
+    // Resize in place: no reparenting, dialog close, frame reload or data read.
+  },
+
+  toggleMessageActivityMenu() {
+    this.messageActivityMenuOpen = !this.messageActivityMenuOpen;
+    if (this.messageActivityMenuOpen) queueMicrotask(() => document.querySelector('#message-activity-menu button')?.focus());
+  },
+
+  dismissMessageActivityMenu() {
+    this.messageActivityMenuOpen = false;
+    document.querySelector('[data-napplet-menu]')?.focus();
+  },
+
+  handleMessageActivityEscape(event) {
+    event.preventDefault(); event.stopPropagation();
+    if (this.messageActivityMenuOpen) this.dismissMessageActivityMenu();
+    else this.closeMessageActivity();
+  },
+
+  navigateMessageActivity(direction) {
+    const runtime = RUNTIMES.get(this);
+    if (!runtime || !['back', 'forward'].includes(direction)) return;
+    if (direction === 'back' ? !this.messageActivityCanBack : !this.messageActivityCanForward) return;
+    this.messageActivityMenuOpen = false;
+    this.messageActivityHistoryIndex += direction === 'back' ? -1 : 1;
+    runtime.range = this.messageActivityHistory[this.messageActivityHistoryIndex];
     void this.refreshMessageActivity();
   },
 
   async refreshMessageActivity() {
     const runtime = RUNTIMES.get(this);
-    if (!runtime) return;
+    if (!runtime || runtime.state.status === 'loading' && runtime.request && !runtime.request.signal.aborted && runtime.state.range === runtime.range) return;
+    this.messageActivityMenuOpen = false;
     runtime.request?.abort(); runtime.subscription?.unsubscribe();
     const controller = new AbortController(), requestId = crypto.randomUUID(), range = runtime.range;
     runtime.request = controller;
@@ -92,6 +142,8 @@ export const messageActivityMixin = {
       // Destroy the frame document, including its last aggregate content.
       if (runtime.frame) runtime.frame.src = 'about:blank';
     }
+    this.messageActivityFull = false; this.messageActivityMenuOpen = false;
+    this.messageActivityHistory = []; this.messageActivityHistoryIndex = -1;
     this.messageActivityOpen = false; this.messageActivitySrc = ''; this.messageActivityOpenedContext = '';
     const dialog = document.getElementById('message-activity-modal');
     if (dialog?.open) dialog.close();

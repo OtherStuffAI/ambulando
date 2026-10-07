@@ -59,3 +59,19 @@ Installation/catalog, placement persistence, S3/relays and generic permission UI
 remain follow-up work. Production data correctness and real authenticated
 aggregate transport require manager activation/live smoke; fixtures and synthetic
 browser tests do not establish live acceptance.
+
+## Window controls
+
+The host reuses thread header controls and the full-page panel dimensions.
+Expand/collapse changes only the open dialog's CSS class: its frame, session,
+current snapshot, range, navigation history and pending read remain intact.
+Native focus containment and restoration apply in both presentations.
+
+Back/forward traverse the host's time-range history (7 days, 30 days, all time),
+never the browser's history. A new range after going back discards the forward
+branch; repeated selection does not add an entry. History resets on close or
+context invalidation. Traversal performs a newly authorized read through the
+existing service rather than displaying a cached snapshot before authorization.
+The ellipsis menu offers refresh, expand/collapse and close. Escape dismisses
+an open menu first, then closes the napplet; outside clicks and focus leaving the
+menu dismiss it. Presentation transitions never initiate an aggregate read.

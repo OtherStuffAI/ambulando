@@ -3108,6 +3108,13 @@
       "notes": [
         "Reopening Message activity always creates a fresh isolated napplet document, preventing an old frame session from surviving rapid reopening."
       ]
+    },
+    {
+      "buildNumber": 2257,
+      "label": "Napplet window controls",
+      "notes": [
+        "Message activity now has back/forward time-range history, a menu with refresh and close, and full-page expand/collapse controls that preserve the running dashboard."
+      ]
     }
   ]
 }

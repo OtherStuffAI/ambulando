@@ -10172,7 +10172,8 @@ html.wingman-iphone-webview .chat-channel-tab-scroll * {
   transition: width 0.2s ease, height 0.2s ease;
 }
 
-.chat-thread-panel.thread-full {
+.chat-thread-panel.thread-full,
+.message-activity-modal.thread-full {
   width: calc(100vw - 1.5rem);
   height: calc(100dvh - 1.5rem);
 }
@@ -25064,3 +25065,14 @@ button.task-desc-toggle:focus-visible {
 }
 .file-blossom-panel input { width: 100%; margin: 12px 0; }
 .file-blossom-panel button, .file-blossom-panel select { margin: 8px 8px 8px 0; }
+
+/* Keep all napplet controls reachable without wrapping at narrow widths. */
+.message-activity-modal .thread-header { align-items: center; }
+.message-activity-modal .thread-header-actions { flex-shrink: 0; }
+.message-activity-modal .thread-header h2 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.message-activity-modal .thread-header-actions button { min-width: 32px; min-height: 32px; }
+@media (max-width: 700px) {
+  .message-activity-modal .thread-header { gap: .25rem; padding: .5rem; }
+  .message-activity-modal .thread-header h2 { font-size: .9rem; }
+  .message-activity-modal .thread-header-actions { gap: 0; }
+}

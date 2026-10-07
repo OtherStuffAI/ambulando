@@ -142,3 +142,52 @@ test('hostile requests, denied/empty responses, close and scope/workspace/identi
     await expect(page.locator('#message-activity-modal iframe')).toHaveAttribute('src', 'about:blank');
   }
 });
+
+for (const width of [1280, 390]) {
+  test(`napplet history, menu and in-place presentation preserve the dashboard at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 }); await setup(page);
+    await page.getByTestId('message-activity-launch').click();
+    const back = page.getByRole('button', { name: 'Back in napplet history', exact: true });
+    const forward = page.getByRole('button', { name: 'Forward in napplet history', exact: true });
+    const menu = page.getByRole('button', { name: 'Message activity menu', exact: true });
+    await expect(frame(page).getByRole('heading', { name: '3 messages', exact: true })).toBeVisible();
+    await expect(back).toBeDisabled(); await expect(forward).toBeDisabled();
+    await frame(page).getByLabel('Time range').selectOption('30d');
+    await expect(frame(page).getByRole('heading', { name: '8 messages', exact: true })).toBeVisible();
+    await frame(page).getByLabel('Time range').selectOption('all');
+    await expect(frame(page).getByText(/All time →/)).toBeVisible();
+    await back.click(); await expect(frame(page).getByLabel('Time range')).toHaveValue('30d');
+    await back.click(); await expect(frame(page).getByRole('heading', { name: '3 messages', exact: true })).toBeVisible();
+    await expect(back).toBeDisabled(); await expect(forward).toBeEnabled();
+    await forward.click(); await expect(frame(page).getByLabel('Time range')).toHaveValue('30d');
+    await frame(page).getByLabel('Time range').selectOption('7d');
+    await expect(frame(page).getByRole('heading', { name: '3 messages', exact: true })).toBeVisible();
+    await expect(forward).toBeDisabled();
+    const src = await page.locator('#message-activity-modal iframe').getAttribute('src');
+    const calls = await page.evaluate(() => window.activityFixture.calls.length);
+    await frame(page).locator('body').evaluate(() => { window.presentationMarker = 'same running frame'; });
+    await page.getByRole('button', { name: 'Expand Message activity', exact: true }).click();
+    await expect(page.getByTestId('message-activity-modal')).toHaveClass(/thread-full/);
+    await expect.poll(async () => (await page.getByTestId('message-activity-modal').boundingBox()).width).toBeGreaterThan(width - 30);
+    await expect.poll(async () => (await page.getByTestId('message-activity-modal').boundingBox()).height).toBeGreaterThan(860);
+    await expect(frame(page).getByRole('heading', { name: '3 messages', exact: true })).toBeVisible();
+    await expect(back).toBeEnabled();
+    await menu.click(); await expect(page.getByRole('menuitem', { name: 'Collapse to modal' })).toBeVisible();
+    await page.keyboard.press('Escape'); await expect(menu).toBeFocused();
+    await expect(page.getByTestId('message-activity-modal')).toBeVisible();
+    await menu.click(); await page.getByRole('menuitem', { name: 'Collapse to modal' }).click();
+    await expect(page.getByTestId('message-activity-modal')).not.toHaveClass(/thread-full/);
+    expect(await page.locator('#message-activity-modal iframe').getAttribute('src')).toBe(src);
+    expect(await frame(page).locator('body').evaluate(() => window.presentationMarker)).toBe('same running frame');
+    expect(await page.evaluate(() => window.activityFixture.calls.length)).toBe(calls);
+    await menu.click(); await page.locator('#message-activity-title').click();
+    await expect(page.getByRole('menu')).not.toBeVisible();
+    await menu.click(); await page.getByRole('menuitem', { name: 'Refresh', exact: true }).click();
+    await expect(frame(page).getByRole('heading', { name: '3 messages', exact: true })).toBeVisible();
+    expect(await page.evaluate(() => window.activityFixture.calls.length)).toBe(calls + 1);
+    await menu.click(); await page.getByRole('menuitem', { name: 'Expand to full page' }).click();
+    await page.getByRole('button', { name: 'Collapse Message activity', exact: true }).click();
+    await menu.click(); await page.getByRole('menuitem', { name: 'Close', exact: true }).click();
+    await expect(page.getByTestId('message-activity-launch')).toBeFocused();
+  });
+}
