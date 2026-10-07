@@ -3178,6 +3178,13 @@
       "notes": [
         "Pause recording or automatic reporting even when the saved destination is unavailable. Delivery access failures offer explicit destination reconfiguration."
       ]
+    },
+    {
+      "buildNumber": 2271,
+      "label": "Toolbox and unified Apps",
+      "notes": [
+        "Open Toolbox from the left navigation to choose which napplets and WApps appear in Apps. Message activity joins personal WApps in one home stack; placement choices persist per workspace and viewer on this browser. Agents keep their separate stack."
+      ]
     }
   ]
 }

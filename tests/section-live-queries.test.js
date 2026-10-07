@@ -62,7 +62,7 @@ describe('section live query plan', () => {
       applyAddressBookPeople() {},
     });
 
-    expect(plan.shared).toEqual(['address-book']);
+    expect(plan.shared).toEqual(['app-placements', 'address-book']);
     expect(plan.workspace).toEqual(['ws:personal-wapps', 'ws:scopes', 'ws:channels', 'ws:groups', 'ws:daily-notes', 'ws:record-attention', 'chat:audio-notes']);
     expect(plan.detail).toEqual([
       'chat:messages:channel-1:undefined:undefined:',
@@ -279,7 +279,7 @@ describe('section live query plan', () => {
       applyAddressBookPeople() {},
     });
 
-    expect(plan.shared).toEqual(['address-book']);
+    expect(plan.shared).toEqual(['app-placements', 'address-book']);
     expect(plan.workspace).toEqual([
       'ws:personal-wapps',
       'ws:scopes',

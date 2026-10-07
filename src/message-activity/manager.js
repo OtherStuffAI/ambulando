@@ -16,12 +16,12 @@ export const messageActivityMixin = {
   messageActivityOpenedContext: '',
   get messageActivityContextKey() { return messageActivityLifecycle(messageActivityContext(this)); },
 
-  async openMessageActivity() {
+  async openMessageActivity({ opener = null } = {}) {
     this.closeMessageActivity();
     const session = crypto.randomUUID();
     const runtime = { session, context: this.messageActivityContextKey,
       range: '7d', request: null, subscription: null, ready: false, state: { status: 'loading', range: '7d' },
-      opener: document.activeElement, frame: null };
+      opener: opener || document.activeElement, frame: null };
     const current = () => RUNTIMES.get(this) === runtime && this.messageActivityOpen && this.messageActivityContextKey === runtime.context;
     runtime.send = state => {
       if (!current()) return;

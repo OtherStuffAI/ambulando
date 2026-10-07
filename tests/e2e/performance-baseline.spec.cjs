@@ -461,7 +461,7 @@ test('preserves editing and navigation during reconnect, retries and lazy asset 
   await composer.press('End');
   await composer.pressSequentially(' and keeps typing');
   await expect(composer).toHaveText('draft survives retry and keeps typing');
-  await page.locator('.thread-close-btn').click();
+  await page.getByRole('button', { name: 'Close thread', exact: true }).click();
   await page.locator('.avatar-chip').click();
   await expect(page.getByRole('button', { name: 'Retry updates', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Reload after saving drafts' })).toBeVisible();

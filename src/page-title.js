@@ -30,6 +30,8 @@ export function buildFlightDeckDocumentTitle({
   switch (nextSection) {
     case 'status':
       return buildSectionTitle('Deck', { workspaceLabel: nextWorkspaceLabel });
+    case 'toolbox':
+      return buildSectionTitle('Toolbox', { workspaceLabel: nextWorkspaceLabel });
     case 'context':
       return buildSectionTitle('Context Tree', { workspaceLabel: nextWorkspaceLabel });
     case 'tasks':

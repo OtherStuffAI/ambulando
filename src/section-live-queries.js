@@ -2,6 +2,7 @@ import { disposePipelineViewer, resumePipelineViewer } from './pipeline-viewer-v
 import { disposeContextTreeView, resumeContextTreeView } from './context-tree-view.js';
 import {
   getAddressBookPeople,
+  getSettings,
   getChannelsByOwner,
   getCommentsByOwner,
   getMessagesByChannel,
@@ -168,7 +169,7 @@ function syncBucket(store, bucket, specs) {
     const workspaceKey = store.currentWorkspaceKey;
     const generation = store._workspaceSelectionGeneration;
     const subscription = store.createLiveSubscription(spec.query, (...args) => {
-      if (spec.key !== 'address-book') {
+      if (!['address-book', 'app-placements'].includes(spec.key)) {
         if (store.currentWorkspaceKey !== workspaceKey || store._workspaceSelectionGeneration !== generation) return;
       }
       return spec.onNext(...args);
@@ -345,6 +346,12 @@ function scheduleTowerPgFilesRefresh(store, state) {
 
 function buildSharedSpecs() {
   return [
+    {
+      key: 'app-placements',
+      equals: sameLogicalValue,
+      query: async () => (await getSettings())?.appPlacements || {},
+      onNext: preferences => { this.appPlacementPreferences = preferences; },
+    },
     {
       key: 'address-book',
       query: () => getAddressBookPeople(),

@@ -58,7 +58,7 @@ describe('expanded left-column section switcher', () => {
 
   it('removes the actual expanded left-column navigation set and its layout space', () => {
     expect(sidebar).toContain('class="sidebar-nav" x-show="$store.chat.navCollapsed && !$store.chat.mobileNavOpen"');
-    expect(sidebar).toMatch(/<\/ul>\s*<section\s+class="sidebar-scope-navigation"/s);
+    expect(sidebar).toMatch(/<\/ul>\s*<button[^>]*class="toolbox-expanded-nav"[^>]*>[\s\S]*?<\/button>\s*<section\s+class="sidebar-scope-navigation"/s);
     expect(sidebar).not.toContain('sidebar-workspace-navigation-divider');
     expect(sidebar).not.toContain('mobile-expanded-section-switcher');
     expect(sidebar).not.toContain("navigateTo('settings')");

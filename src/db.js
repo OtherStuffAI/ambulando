@@ -583,6 +583,20 @@ export async function saveSettings(settings) {
   return sharedDb.app_settings.add(sanitized);
 }
 
+// Local launcher preferences share app_settings; they never enter the Tower outbox.
+// Patch one entry atomically so independent tabs/workspaces cannot lose updates.
+export async function saveAppPlacement(partition, entryId, shown) {
+  if (!partition || !entryId || typeof shown !== 'boolean') throw new Error('Invalid app placement');
+  return sharedDb.transaction('rw', sharedDb.app_settings, async () => {
+    const existing = await sharedDb.app_settings.toCollection().first();
+    const appPlacements = existing?.appPlacements || {};
+    const next = { ...appPlacements, [partition]: { ...appPlacements[partition], [entryId]: shown } };
+    if (existing) await sharedDb.app_settings.update(existing.id, { appPlacements: next });
+    else await sharedDb.app_settings.add({ appPlacements: next });
+    return next;
+  });
+}
+
 // ---------------------------------------------------------------------------
 // workspace_settings helpers — workspace DB
 // ---------------------------------------------------------------------------

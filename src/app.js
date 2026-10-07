@@ -1,3 +1,4 @@
+import { toolboxMixin } from './toolbox-manager.js';
 import { diagnosticsManagerMixin } from './diagnostics-manager.js';
 import { subscribedReaderMixin } from './feed/reader-manager.js';
 import { messageActivityMixin } from './message-activity/manager.js';
@@ -2675,6 +2676,7 @@ export function initApp() {
         switch (enabledSection) {
           case 'status': return 'flight-deck';
           case 'context': return 'context';
+          case 'toolbox': return 'toolbox';
           case 'tasks': return 'tasks';
           case 'chat': return 'chat';
           case 'docs': return 'docs';
@@ -3713,8 +3715,8 @@ export function initApp() {
     },
 
     openPersonalWappsOverlay() {
-      if (this.visiblePersonalWapps.length === 0) {
-        this.openPersonalWappEditor();
+      if (this.visibleApps.length === 0) {
+        this.navigateTo('toolbox');
         return;
       }
       this.closePersonalAgentsOverlay();
@@ -10146,6 +10148,7 @@ export function initApp() {
     notificationsManagerMixin,
     subscribedReaderMixin,
     messageActivityMixin,
+    toolboxMixin,
     wappPublishingManagerMixin,
     wappImageManagerMixin,
     wappManagementManagerMixin,

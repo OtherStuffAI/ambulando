@@ -272,7 +272,7 @@ describe('expanded sidebar scope/channel navigation', () => {
   });
 
   it('places Home below primary navigation without a dedicated divider in desktop or mobile layouts', () => {
-    expect(html).toMatch(/<span class="sidebar-label">Context<\/span>[\s\S]*<\/ul>\s*<section\s+class="sidebar-scope-navigation"/s);
+    expect(html).toMatch(/<span class="sidebar-label">Context<\/span>[\s\S]*<\/ul>\s*<button[^>]*class="toolbox-expanded-nav"[^>]*>[\s\S]*?<\/button>\s*<section\s+class="sidebar-scope-navigation"/s);
     expect(html).not.toContain('sidebar-workspace-navigation-divider');
     expect(styles).not.toContain('sidebar-workspace-navigation-divider');
   });

@@ -1232,6 +1232,12 @@
             <span class="sidebar-label">Agents</span>
           </li>
           <li :class="{ active: $store.chat.navSection === 'context' }"><button type="button" class="context-nav-button" title="Context" aria-label="Context" @click="$store.chat.navigateTo('context')"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="9" y="2" width="6" height="5" rx="1"/><path d="M12 7v5M4 17v-5h16v5"/><rect x="1" y="17" width="6" height="5" rx="1"/><rect x="17" y="17" width="6" height="5" rx="1"/></svg><span class="sidebar-label">Context</span></button></li>
+          <li x-show="!$store.chat.mobileViewport" :class="{ active: $store.chat.navSection === 'toolbox' }">
+            <button type="button" class="context-nav-button toolbox-nav-button" title="Toolbox" aria-label="Toolbox" :aria-current="$store.chat.navSection === 'toolbox' ? 'page' : null" @click="$store.chat.navigateTo('toolbox')">
+              <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="18" height="14" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 12h18M10 10v4h4v-4"/></svg>
+              <span class="sidebar-label">Toolbox</span>
+            </button>
+          </li>
           <!-- Jobs nav: hidden — stub feature (as-built remediation 04) -->
           <li x-cloak x-show="false" :class="{ active: $store.chat.navSection === 'jobs' }" @click="$store.chat.navigateTo('jobs'); $store.chat.loadJobDefinitions();">
             <span class="sidebar-icon" aria-hidden="true">
@@ -1245,6 +1251,7 @@
             <span class="sidebar-label">Jobs</span>
           </li>
         </ul>
+        <button type="button" class="toolbox-expanded-nav" x-show="(!$store.chat.mobileViewport &amp;&amp; !$store.chat.navCollapsed) || $store.chat.mobileNavOpen" title="Toolbox" aria-label="Toolbox" :class="{ active: $store.chat.navSection === 'toolbox' }" :aria-current="$store.chat.navSection === 'toolbox' ? 'page' : null" @click="$store.chat.navigateTo('toolbox')"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="18" height="14" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 12h18M10 10v4h4v-4"/></svg><span>Toolbox</span></button>
         <section
           class="sidebar-scope-navigation"
           aria-label="Workspace scopes and channels"
@@ -1785,6 +1792,7 @@
                 </button>
               </div>
               <div class="mobile-section-switcher-item"><button type="button" class="mobile-section-switcher-btn" aria-label="Context" title="Context" :class="{ 'mobile-section-switcher-btn-active': $store.chat.navSection === 'context' }" @click="$store.chat.navigateTo('context')"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="9" y="2" width="6" height="5" rx="1"/><path d="M12 7v5M4 17v-5h16v5"/><rect x="1" y="17" width="6" height="5" rx="1"/><rect x="17" y="17" width="6" height="5" rx="1"/></svg></button></div>
+              <div class="mobile-section-switcher-item"><button type="button" class="mobile-section-switcher-btn" aria-label="Toolbox" title="Toolbox" :class="{ 'mobile-section-switcher-btn-active': $store.chat.navSection === 'toolbox' }" :aria-current="$store.chat.navSection === 'toolbox' ? 'page' : null" @click="$store.chat.navigateTo('toolbox')"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="18" height="14" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 12h18M10 10v4h4v-4"/></svg></button></div>
             </nav>
           </div>
 
@@ -1905,6 +1913,31 @@
             </dialog>
           </section>
         </template>
+        <section class="toolbox-page" x-show="$store.chat.navSection === 'toolbox'" x-cloak aria-labelledby="toolbox-heading" data-testid="toolbox-page">
+          <div class="settings-panel">
+            <div class="settings-panel-header">
+              <div><h1 id="toolbox-heading">Toolbox</h1><p>Choose which napplets and WApps appear in your home Apps stack.</p></div>
+              <button type="button" class="btn-primary btn-compact" @click="$store.chat.openPersonalWappEditor()">Add WApp</button>
+            </div>
+            <p>Choices are saved for you in this workspace on this browser. Apps you hide here remain registered.</p>
+            <div class="toolbox-placement-list">
+              <template x-for="app in $store.chat.toolboxApps" :key="app.placementId">
+                <div class="toolbox-placement-row">
+                  <div><strong x-text="app.title"></strong><small x-text="app.appType"></small></div>
+                  <label class="settings-toggle-row">
+                    <input type="checkbox" :checked="$store.chat.isAppPlaced(app)" :disabled="!$store.chat.appPlacementPartition || $store.chat.appPlacementSaving"
+                      @change="$store.chat.setAppPlacement(app, $event.target.checked).then(() => { $event.target.checked = $store.chat.isAppPlaced(app); })"
+                      :aria-label="'Show ' + app.title + ' in Apps'" />
+                    <span>Show in Apps</span>
+                  </label>
+                </div>
+              </template>
+            </div>
+            <p class="settings-success" role="status" x-show="$store.chat.appPlacementNotice" x-text="$store.chat.appPlacementNotice"></p>
+            <p class="error-text" role="alert" x-show="$store.chat.appPlacementError" x-text="$store.chat.appPlacementError"></p>
+          </div>
+        </section>
+
         <template x-if="$store.chat.navSection === 'status'">
           <div class="status-section" :class="{ 'status-section-deck': $store.chat.deckInboxEnabled }">
           <div class="pg-work-context-bar" x-show="false" x-cloak>
@@ -2090,68 +2123,25 @@
                 <p x-text="$store.chat.autopilotOverviewContextLabel"></p>
               </div>
               <div class="home-launcher-cluster" aria-label="Personal launchers">
-                <section class="launcher-stack-panel message-activity-toolbox" aria-label="Toolbox" data-testid="toolbox">
-                  <h3>Toolbox</h3>
-                  <button type="button" class="launcher-pill" @click="$store.chat.openMessageActivity()" data-testid="message-activity-launch">Message activity <small>Napplet</small></button>
-                </section>
-                <section class="launcher-stack-panel wapps-stack-panel" :class="{ 'wapps-expanded': $store.chat.personalWappsOverlayOpen, 'wapps-has-stack': $store.chat.visiblePersonalWapps.length > 1, 'wapps-has-deep-stack': $store.chat.visiblePersonalWapps.length > 2 }" aria-label="My WApps" @click.outside="$store.chat.closePersonalWappsOverlay()" @keydown.escape.window="$store.chat.closePersonalWappsOverlay()">
-                  <h3>My WApps</h3>
-                  <button
-                    type="button"
-                    class="wapps-stack-hitbox"
-                    x-show="$store.chat.visiblePersonalWapps.length > 0 && !$store.chat.personalWappsOverlayOpen"
-                    x-cloak
-                    @click="$store.chat.openPersonalWappsOverlay()"
-                    aria-label="Open My WApps stack"
-                  ></button>
-                  <button
-                    type="button"
-                    class="launcher-pill launcher-pill-empty"
-                    x-show="$store.chat.visiblePersonalWapps.length === 0"
-                    @click="$store.chat.openPersonalWappEditor()"
-                  >
-                    <span class="launcher-avatar-ring">+</span>
-                    <span class="launcher-pill-copy">
-                      <strong>Add WApp</strong>
-                      <small>Personal launcher</small>
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    class="launcher-pill"
-                    x-show="$store.chat.visiblePersonalWapps.length > 0"
-                    @click="$store.chat.personalWappsOverlayOpen ? $store.chat.openPersonalWapp($store.chat.previewPersonalWapps[0]) : $store.chat.openPersonalWappsOverlay()"
-                    :aria-expanded="$store.chat.personalWappsOverlayOpen"
-                    aria-label="Open My WApps"
-                  >
-                    <span class="launcher-avatar-ring">
-                      <img :src="$store.chat.getPersonalWappIconUrl($store.chat.previewPersonalWapps[0])" alt="" @load="$store.chat.handlePersonalWappIconLoad($event)" @error="$store.chat.handlePersonalWappIconError($event)" />
-                      <span hidden x-text="$store.chat.getInitials($store.chat.previewPersonalWapps[0]?.title || 'WApp')"></span>
-                    </span>
-                    <span class="launcher-pill-copy">
-                      <strong x-text="$store.chat.previewPersonalWapps[0]?.title || 'My WApps'"></strong>
-                      <small x-text="$store.chat.previewPersonalWapps[0]?.description || 'Open personal apps'"></small>
-                    </span>
-                  </button>
-                  <template x-for="wapp in $store.chat.visiblePersonalWapps.slice(1)" :key="`home-wapp-${wapp.record_id}`">
-                    <button type="button" class="launcher-pill launcher-pill-stacked" @click="$store.chat.personalWappsOverlayOpen ? $store.chat.openPersonalWapp(wapp) : $store.chat.openPersonalWappsOverlay()" aria-label="Open My WApps">
+                <section class="launcher-stack-panel wapps-stack-panel" :class="{ 'wapps-expanded': $store.chat.personalWappsOverlayOpen, 'wapps-has-stack': $store.chat.visibleApps.length > 1, 'wapps-has-deep-stack': $store.chat.visibleApps.length > 2 }" aria-label="Apps" data-testid="apps-stack" @click.outside="$store.chat.closePersonalWappsOverlay()" @keydown.escape.window="$store.chat.closePersonalWappsOverlay()">
+                  <h3>Apps</h3>
+                  <button type="button" class="wapps-stack-hitbox" x-show="$store.chat.visibleApps.length > 1 && !$store.chat.personalWappsOverlayOpen" x-cloak @click="$store.chat.openPersonalWappsOverlay()" aria-label="Open Apps stack" :aria-expanded="$store.chat.personalWappsOverlayOpen"></button>
+                  <button type="button" class="launcher-pill launcher-pill-empty" x-show="$store.chat.visibleApps.length === 0" @click="$store.chat.navigateTo('toolbox')">Choose apps in Toolbox</button>
+                  <template x-for="(app, index) in $store.chat.visibleApps" :key="app.placementId">
+                    <button type="button" class="launcher-pill" :class="{ 'launcher-pill-stacked': index > 0 }"
+                      :data-testid="app.appType === 'Napplet' ? 'message-activity-launch' : 'app-launch'"
+                      @click="$store.chat.personalWappsOverlayOpen || $store.chat.visibleApps.length === 1 ? $store.chat.openApp(app) : $store.chat.openPersonalWappsOverlay()"
+                      :aria-label="'Open ' + app.title">
                       <span class="launcher-avatar-ring">
-                        <img :src="$store.chat.getPersonalWappIconUrl(wapp)" alt="" @load="$store.chat.handlePersonalWappIconLoad($event)" @error="$store.chat.handlePersonalWappIconError($event)" />
-                        <span hidden x-text="$store.chat.getInitials(wapp.title || 'WApp')"></span>
+                        <template x-if="app.appType === 'WApp'">
+                          <img :src="$store.chat.getPersonalWappIconUrl(app)" alt="" @load="$store.chat.handlePersonalWappIconLoad($event)" @error="$store.chat.handlePersonalWappIconError($event)" />
+                        </template>
+                        <span :hidden="app.appType === 'WApp'" x-text="app.appType === 'Napplet' ? '◴' : $store.chat.getInitials(app.title)"></span>
                       </span>
-                      <span class="launcher-pill-copy">
-                        <strong x-text="wapp.title"></strong>
-                        <small x-text="wapp.description || 'Open personal app'"></small>
-                      </span>
+                      <span class="launcher-pill-copy"><strong x-text="app.title"></strong><small x-text="app.description || app.appType"></small></span>
                     </button>
                   </template>
-                  <button type="button" class="launcher-pill launcher-pill-add" x-show="$store.chat.personalWappsOverlayOpen" x-cloak @click="$store.chat.openPersonalWappEditor()">
-                    <span class="launcher-avatar-ring">+</span>
-                    <span class="launcher-pill-copy">
-                      <strong>Add WApp</strong>
-                      <small>Personal launcher</small>
-                    </span>
-                  </button>
+                  <button type="button" class="launcher-pill launcher-pill-add" x-show="$store.chat.personalWappsOverlayOpen" x-cloak @click="$store.chat.navigateTo('toolbox'); $store.chat.closePersonalWappsOverlay()">Manage apps in Toolbox</button>
                 </section>
                 <section class="launcher-stack-panel my-agents-panel agents-stack-panel" :class="{ 'agents-expanded': $store.chat.personalAgentsOverlayOpen, 'agents-has-stack': $store.chat.visiblePersonalAgents.length > 1, 'agents-has-deep-stack': $store.chat.visiblePersonalAgents.length > 2 }" aria-label="My Agents" @click.outside="$store.chat.closePersonalAgentsOverlay()" @keydown.escape.window="$store.chat.closePersonalAgentsOverlay()">
                   <h3>My Agents</h3>

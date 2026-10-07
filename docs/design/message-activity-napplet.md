@@ -1,6 +1,8 @@
 # Message activity napplet
 
-Message activity opens from the home Toolbox in a thread-style native modal.
+Message activity opens from the unified home Apps stack in a thread-style native modal.
+The dedicated Toolbox page controls placement alongside personal WApps; see
+[Toolbox placement](toolbox-placement.md).
 Existing personal WApp launchers remain available. This bundled first-party
 napplet is a separate static document in an opaque-origin sandbox with scripts
 enabled, no same-origin access, and a CSP that denies network connections,
@@ -55,7 +57,7 @@ refresh during loading cannot amplify reads. Native dialog provides modal focus
 containment, background inertness and focus restoration; Escape inside the frame
 uses the validated close intent. Desktop and narrow screens share this lifecycle.
 
-Installation/catalog, placement persistence, S3/relays and generic permission UI
+Installation/catalog, S3/relays and generic permission UI
 remain follow-up work. Production data correctness and real authenticated
 aggregate transport require manager activation/live smoke; fixtures and synthetic
 browser tests do not establish live acceptance.

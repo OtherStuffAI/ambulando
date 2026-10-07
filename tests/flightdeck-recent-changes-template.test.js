@@ -18,7 +18,7 @@ describe('flight deck summary template', () => {
     expect(html).toContain('<h2 x-text="$store.chat.dashboardGreetingText"></h2>');
     expect(html).toContain('x-text="$store.chat.autopilotOverviewContextLabel"');
     expect(html).toContain('class="launcher-stack-panel my-agents-panel agents-stack-panel"');
-    expect(html).toContain('aria-label="My WApps"');
+    expect(html).toContain('aria-label="Apps"');
     expect(html).toContain('<h3>My Agents</h3>');
     expect(html).toContain('class="launcher-pill autopilot-agent-launcher"');
     expect(html).toContain('class="agents-stack-hitbox"');

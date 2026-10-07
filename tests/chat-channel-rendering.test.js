@@ -347,11 +347,11 @@ describe('Chat channel rendering hooks', () => {
     expect(globalBar).toContain("navigateTo('docs')");
     expect(globalBar).toContain('mobile-section-switcher-btn-active');
     expect(styles).toMatch(/\.mobile-section-switcher\s*\{[\s\S]*display:\s*none;/);
-    expect(globalBar.match(/class="mobile-section-switcher-btn"/g)).toHaveLength(7);
-    for (const section of ['Deck', 'Chat', 'Tasks', 'Docs', 'Files', 'Agents', 'Context']) {
+    expect(globalBar.match(/class="mobile-section-switcher-btn"/g)).toHaveLength(8);
+    for (const section of ['Deck', 'Chat', 'Tasks', 'Docs', 'Files', 'Agents', 'Context', 'Toolbox']) {
       expect(globalBar).toContain(`aria-label="${section}" title="${section}"`);
     }
-    expect(globalBar.match(/class="mobile-section-switcher-btn"[\s\S]*?<svg aria-hidden="true"/g)).toHaveLength(7);
+    expect(globalBar.match(/class="mobile-section-switcher-btn"[\s\S]*?<svg aria-hidden="true"/g)).toHaveLength(8);
     expect(styles).toMatch(/\.mobile-section-switcher\s*\{[\s\S]*display:\s*flex;[\s\S]*overflow-x:\s*auto;[\s\S]*overflow-y:\s*hidden;/);
     expect(styles).toMatch(/\.mobile-section-switcher-item\s*\{[^}]*flex:\s*1 0 auto;[^}]*min-width:\s*44px;/s);
     expect(styles).toMatch(/--mobile-section-switcher-height:\s*68px;/);
