@@ -3233,6 +3233,20 @@
       "notes": [
         "Rename Message activity in Toolbox. Your display title is saved for your viewer and workspace in this browser and appears in Apps and the napplet window."
       ]
+    },
+    {
+      "buildNumber": 2279,
+      "label": "Clear Blossom publication dialog",
+      "notes": [
+        "Publish file versions and attachments from a readable, responsive dialog with clear unpublished status, progress, errors and public-link copying."
+      ]
+    },
+    {
+      "buildNumber": 2280,
+      "label": "Blossom dialog keyboard and status polish",
+      "notes": [
+        "Blossom publication restores keyboard focus reliably and clears stale permission warnings after successful status checks."
+      ]
     }
   ]
 }

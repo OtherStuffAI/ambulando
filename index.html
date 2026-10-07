@@ -11138,32 +11138,44 @@
           </section>
         </div>
 
-                <section class="file-blossom-panel" x-show="$store.chat.fileBlossomOpen" x-cloak role="dialog" aria-modal="true" aria-label="Publish to Blossom">
-                  <h2>Publish to Blossom</h2>
-                  <p x-text="$store.chat.fileBlossomName"></p>
-                  <p>Publishing makes the selected bytes anonymously downloadable. The original attachment or file stays in place. Message text and names stay private. External copies cannot be recalled.</p>
-                  <label x-show="!$store.chat.fileBlossomAttachment">File version
-                    <select x-model="$store.chat.fileBlossomVersionId" :disabled="$store.chat.fileBlossomBusy">
-                      <template x-for="version in $store.chat.fileBlossomVersions" :key="version.version_id">
-                        <option :value="version.version_id" x-text="'Version ' + version.version_number + (version.available ? '' : ' (unavailable)')"></option>
-                      </template>
-                    </select>
-                  </label>
-                  <p x-show="$store.chat.fileBlossomBusy">Checking publication…</p>
-                  <p x-show="!$store.chat.fileBlossomBusy && !$store.chat.fileBlossomCanPublish">File or channel write permission is required to publish or unpublish.</p>
-                  <p role="alert" x-show="$store.chat.fileBlossomError" x-text="$store.chat.fileBlossomError"></p>
-                  <template x-if="$store.chat.selectedFileBlossomVersion">
-                    <div>
-                      <p x-text="$store.chat.selectedFileBlossomVersion.public ? 'Public on this Tower' : 'No public Blossom publication on this Tower'"></p>
-                      <p x-show="$store.chat.selectedFileBlossomVersion.published_by_you">Published by you</p>
-                      <input type="text" readonly aria-label="Public Blossom URL" x-show="$store.chat.selectedFileBlossomVersion.blossom_url" :value="$store.chat.selectedFileBlossomVersion.blossom_url || ''" @click="$event.target.select()" />
-                      <button type="button" x-show="$store.chat.selectedFileBlossomVersion.blossom_url" @click="$store.chat.copyFileBlossomUrl()">Copy public URL</button>
-                      <button type="button" :disabled="$store.chat.fileBlossomBusy || !$store.chat.fileBlossomCanPublish || !$store.chat.selectedFileBlossomVersion.available" x-show="!$store.chat.selectedFileBlossomVersion.published_by_you" @click="$store.chat.changeFileBlossom(true)" x-text="$store.chat.fileBlossomAttachment ? 'Publish attachment' : 'Publish selected version'">Publish selected version</button>
-                      <button type="button" :disabled="$store.chat.fileBlossomBusy || !$store.chat.fileBlossomCanPublish" x-show="$store.chat.selectedFileBlossomVersion.published_by_you" @click="$store.chat.changeFileBlossom(false)">Unpublish my reference</button>
-                    </div>
-                  </template>
-                  <button type="button" @click="$store.chat.closeFileBlossom()">Close</button>
-                </section>
+        <div class="modal-overlay file-blossom-overlay" x-show="$store.chat.fileBlossomOpen" x-cloak @click.self="$store.chat.closeFileBlossom()" @keydown.escape.window="if ($store.chat.fileBlossomOpen) $store.chat.closeFileBlossom()" @keydown.tab="$store.chat.trapFileBlossomFocus($event)">
+          <section class="file-blossom-panel modal" role="dialog" aria-modal="true" aria-labelledby="file-blossom-title" aria-describedby="file-blossom-privacy" :aria-busy="$store.chat.fileBlossomBusy" tabindex="-1" x-effect="if ($store.chat.fileBlossomOpen) $nextTick(() => requestAnimationFrame(() => { if ($store.chat.fileBlossomOpen) $el.focus() }))">
+            <header class="file-blossom-header">
+              <div><h2 id="file-blossom-title">Publish to Blossom</h2><p class="file-blossom-name" x-text="$store.chat.fileBlossomName"></p></div>
+              <button type="button" class="btn-cancel" @click="$store.chat.closeFileBlossom()">Close</button>
+            </header>
+            <p id="file-blossom-privacy" class="file-blossom-help">Anyone with the public link can download and copy these bytes. Your original stays in place; message text and names stay private. External copies cannot be recalled.</p>
+            <label class="file-blossom-field" x-show="!$store.chat.fileBlossomAttachment">File version
+              <select x-model="$store.chat.fileBlossomVersionId" @change="$store.chat.fileBlossomNotice = ''; $store.chat.fileBlossomError = ''" :disabled="$store.chat.fileBlossomBusy || !$store.chat.fileBlossomVersions.length">
+                <template x-for="version in $store.chat.fileBlossomVersions" :key="version.version_id">
+                  <option :value="version.version_id" x-text="'Version ' + version.version_number + (version.available ? '' : ' (unavailable)')"></option>
+                </template>
+              </select>
+            </label>
+            <p role="status" x-show="$store.chat.fileBlossomBusy" x-text="$store.chat.fileBlossomOperation === 'publish' ? 'Publishing…' : $store.chat.fileBlossomOperation === 'unpublish' ? 'Removing your publication…' : 'Checking publication…'"></p>
+            <p class="error-text" role="alert" x-show="$store.chat.fileBlossomError" x-text="$store.chat.fileBlossomError"></p>
+            <template x-if="!$store.chat.fileBlossomBusy && !$store.chat.fileBlossomError && !$store.chat.fileBlossomCanPublish"><p class="file-blossom-help">File or channel write permission is required to publish or unpublish.</p></template>
+            <template x-if="$store.chat.selectedFileBlossomVersion">
+              <div class="file-blossom-details">
+                <p class="file-blossom-status" x-text="$store.chat.selectedFileBlossomVersion.public ? 'Public on this Tower' : 'Not published'"></p>
+                <p class="file-blossom-help" x-show="$store.chat.selectedFileBlossomVersion.published_by_you">Your publication is active.</p>
+                <p class="file-blossom-help" x-show="!$store.chat.selectedFileBlossomVersion.available">Stored bytes are unavailable. Complete the upload before publishing.</p>
+                <div class="file-blossom-field" x-show="$store.chat.selectedFileBlossomVersion.public && $store.chat.selectedFileBlossomVersion.blossom_url">
+                  <label for="file-blossom-url">Public link</label>
+                  <div class="file-blossom-link">
+                    <input id="file-blossom-url" type="text" readonly aria-label="Public Blossom URL" :value="$store.chat.selectedFileBlossomVersion.blossom_url || ''" @click="$event.target.select()" />
+                    <button type="button" class="btn-cancel" @click="$store.chat.copyFileBlossomUrl()">Copy public URL</button>
+                  </div>
+                </div>
+                <div class="new-doc-modal-actions">
+                  <button type="button" class="btn-confirm" :disabled="$store.chat.fileBlossomBusy || !$store.chat.fileBlossomCanPublish || !$store.chat.selectedFileBlossomVersion.available" x-show="!$store.chat.selectedFileBlossomVersion.published_by_you" @click="$store.chat.changeFileBlossom(true)" x-text="$store.chat.fileBlossomAttachment ? 'Publish attachment' : 'Publish selected version'"></button>
+                  <button type="button" class="btn-cancel" :disabled="$store.chat.fileBlossomBusy || !$store.chat.fileBlossomCanPublish" x-show="$store.chat.selectedFileBlossomVersion.published_by_you" @click="$store.chat.changeFileBlossom(false)">Unpublish my reference</button>
+                </div>
+              </div>
+            </template>
+            <p role="status" class="file-blossom-feedback" x-show="$store.chat.fileBlossomNotice" x-text="$store.chat.fileBlossomNotice"></p>
+          </section>
+        </div>
   </main>
 
   <div class="modal-overlay" x-show="$store.chat.showAgentConnectModal" x-cloak @keydown.escape.window="$store.chat.closeAgentConnectModal()" data-testid="agent-connect-modal">

@@ -6,6 +6,7 @@ import { setTowerPgFileBlossom, setTowerPgAttachmentBlossom } from './tower-comm
 import { resolveTowerPgWorkspaceContext } from './pg-workspace-context.js';
 
 const subscriptions = new WeakMap();
+const focusOrigins = new WeakMap();
 function isCurrentContext(store, expected) {
   const current = resolveTowerPgWorkspaceContext(store);
   return expected && ['workspaceId', 'baseUrl', 'appNpub', 'sessionNpub', 'generation'].every(key => current?.[key] === expected[key]);
@@ -16,6 +17,8 @@ export const fileBlossomMixin = {
   fileBlossomBusy: false,
   fileBlossomCanPublish: false,
   fileBlossomError: '',
+  fileBlossomNotice: '',
+  fileBlossomOperation: '',
   fileBlossomVersions: [],
   fileBlossomVersionId: '',
   fileBlossomName: '',
@@ -40,6 +43,15 @@ export const fileBlossomMixin = {
   get selectedFileBlossomVersion() {
     return (this.fileBlossomVersions || []).find(version => version.version_id === this.fileBlossomVersionId) || null;
   },
+  trapFileBlossomFocus(event) {
+    if (!this.fileBlossomOpen) return;
+    const panel = event.currentTarget.querySelector('[role="dialog"]');
+    const controls = [...panel.querySelectorAll('button, input, select')].filter(el => !el.disabled && el.getClientRects().length);
+    const first = controls[0], last = controls.at(-1);
+    if (!first) { event.preventDefault(); panel.focus(); return; }
+    if (event.shiftKey && (document.activeElement === first || document.activeElement === panel)) { event.preventDefault(); last.focus(); }
+    else if (!event.shiftKey && (document.activeElement === last || document.activeElement === panel)) { event.preventDefault(); first.focus(); }
+  },
   closeFileBlossom() {
     subscriptions.get(this)?.unsubscribe();
     subscriptions.delete(this);
@@ -51,9 +63,14 @@ export const fileBlossomMixin = {
     this.fileBlossomObjectId = '';
     this.fileBlossomCanPublish = false;
     this.fileBlossomBusy = false;
+    this.fileBlossomOperation = '';
+    this.fileBlossomNotice = '';
+    focusOrigins.get(this)?.focus?.();
+    focusOrigins.delete(this);
   },
   async openFileBlossom(row) {
     this.closeFileBlossom();
+    if (typeof document !== 'undefined') focusOrigins.set(this, document.activeElement);
     this.fileBlossomOpen = true;
     this.fileBlossomError = '';
     this.fileBlossomFileId = row.source_record_id;
@@ -104,20 +121,23 @@ export const fileBlossomMixin = {
     if (!isCurrentContext(this, context)) { this.closeFileBlossom(); this.error = 'The workspace or signer changed. Open the publication panel again.'; return; }
     if (publish && (!version.available || (!version.sha256_hex && this.fileBlossomAttachment))) return;
     this.fileBlossomBusy = true;
+    this.fileBlossomOperation = publish ? 'publish' : 'unpublish';
+    this.fileBlossomNotice = '';
     this.fileBlossomError = '';
     const generation = this.fileBlossomGeneration;
     try {
       const options = { baseUrl: context.baseUrl, appNpub: context.appNpub };
       if (this.fileBlossomAttachment) await setTowerPgAttachmentBlossom(this, context.workspaceId, this.fileBlossomFileId, this.fileBlossomObjectId, publish, { link_id: version.link_id, sha256_hex: version.sha256_hex }, options);
       else await setTowerPgFileBlossom(this, context.workspaceId, this.fileBlossomFileId, version.version_id, publish, options);
+      if (this.fileBlossomGeneration === generation && isCurrentContext(this, context)) this.fileBlossomNotice = publish ? 'Publication saved. Your public link is ready to copy.' : 'Your publication reference was removed. Other publications and external copies may remain.';
     } catch (error) {
       if (this.fileBlossomGeneration === generation) this.fileBlossomError = error?.message || 'Could not change publication.';
     } finally { if (this.fileBlossomGeneration === generation) this.fileBlossomBusy = false; }
   },
   async copyFileBlossomUrl() {
     const url = this.selectedFileBlossomVersion?.blossom_url;
-    if (!url || !isCurrentContext(this, this.fileBlossomContext)) return;
-    try { await navigator.clipboard.writeText(url); this.showFileUploadNotice?.('Public Blossom URL copied.'); }
+    if (!this.selectedFileBlossomVersion?.public || !url || !isCurrentContext(this, this.fileBlossomContext)) return;
+    try { await navigator.clipboard.writeText(url); this.fileBlossomNotice = 'Public link copied.'; this.showFileUploadNotice?.('Public Blossom URL copied.'); }
     catch { this.fileBlossomError = 'Could not copy. Select and copy the URL below.'; }
   },
 };
