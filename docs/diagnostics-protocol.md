@@ -74,3 +74,33 @@ Turning recording off or changing a destination cancels previously queued report
 a subsequent manual send authorizes only that incident in the same scoped queue.
 Native evidence is frozen before preparing an attachment and cannot enrich a
 prepared attachment on retries.
+
+## Saved report destination
+
+The project scope in the report picker is separate from the diagnostics storage
+key (backend, signed-in actor, workspace). Local settings retain `scopeId`,
+`channelId` and `agentNpub` for that exact key, across dialog reopen and browser
+reload/relaunch. Scope choices and channels come from the existing workspace
+materialized collections. Selecting another scope clears an incompatible
+channel; it does not change chat navigation or choose a replacement channel.
+
+Legacy channel-only settings derive their project scope from that exact saved
+channel (`scope_id`, or the established `scope_l1_id` fallback). Derivation does
+not alter consent, revisions or queue routing. An intentional settings Save
+persists the derived scope explicitly. If the saved channel cannot be resolved,
+reporting blocks until it becomes available or the user reconfigures it.
+
+The dialog displays the saved default as scope > channel and agent. Save commits
+settings edits; Discard restores the saved default. Manual Send requires neither
+reselection nor another Save, but blocks while settings edits are unsaved.
+Automatic capture and retry continue to use committed settings even while the
+dialog contains edits. Changing a saved scope, channel or agent cancels the old
+queue and invalidates in-flight consent revisions.
+
+Missing, deleted, archived, or mismatched scope/channel/agent choices block
+before sending and at delivery checkpoints, with a reconfigure message.
+Materialized availability is checked locally; Tower still enforces live access.
+A server access rejection leaves the report queued and asks the user to check
+access/reconfigure, without selecting another destination. Existing channel
+Autopilot instructions remain authoritative. These settings do not edit prompts,
+add backend contracts, or extend the native diagnostics bridge.

@@ -2,6 +2,7 @@ import { DiagnosticsWorkerClient, DiagnosticsCapture } from './diagnostics-runti
 import { deliverDiagnosticIncident } from './diagnostics-delivery.js';
 import { emitDiagnostic } from './diagnostics-events.js';
 import { defaultDiagnosticsSettings } from './diagnostics-store.js';
+import { getPgChannelScopeId } from './pg-record-context.js';
 
 const runtimes = new WeakMap();
 
@@ -15,6 +16,7 @@ export function diagnosticsScope(store) {
 export const diagnosticsManagerMixin = {
   showDiagnosticsDialog: false,
   diagnosticsSettings: null,
+  diagnosticsSavedSettings: null,
   diagnosticsDescription: '',
   diagnosticsStatus: 'Diagnostics are off.',
   diagnosticsError: '',
@@ -28,9 +30,64 @@ export const diagnosticsManagerMixin = {
     return (this.pgWorkspaceMembers || []).filter(member => member.kind === 'agent')
       .map(member => ({ npub: member.npub, label: member.display_name || this.getSenderName?.(member.npub) || 'Agent' }));
   },
-  get diagnosticsChannelOptions() {
-    return (this.channels || []).filter(channel => channel.record_state !== 'deleted' && !channel.archived_at && channel.is_archived !== true);
+  diagnosticsRowAvailable(row) {
+    const workspaceId = this.currentWorkspace?.workspaceId || this.currentWorkspace?.workspace_id;
+    return row && (!row.workspace_id || row.workspace_id === workspaceId)
+      && !row.deleted_at && !['deleted', 'archived'].includes(row.record_state)
+      && !row.archived_at && row.is_archived !== true;
   },
+  get diagnosticsScopeOptions() {
+    return (this.scopes || []).filter(scope => this.diagnosticsRowAvailable(scope));
+  },
+  diagnosticsResolvedSettings(settings) {
+    const resolved = { ...defaultDiagnosticsSettings(), ...settings };
+    // Legacy defaults keep their exact channel. Derive only from its current
+    // workspace materialization; never use the navigation's selected scope.
+    if (!resolved.scopeId && resolved.channelId) {
+      const channel = (this.channels || []).find(row => row.record_id === resolved.channelId && this.diagnosticsRowAvailable(row));
+      resolved.scopeId = getPgChannelScopeId(channel) || '';
+    }
+    return resolved;
+  },
+  get diagnosticsChannelOptions() {
+    const scopeId = this.diagnosticsResolvedSettings(this.diagnosticsSettings).scopeId;
+    return (this.channels || []).filter(channel => this.diagnosticsRowAvailable(channel)
+      && getPgChannelScopeId(channel) === scopeId && this.diagnosticsScopeOptions.some(scope => scope.record_id === scopeId));
+  },
+  changeDiagnosticsScope(scopeId) {
+    this.diagnosticsSettings.scopeId = scopeId;
+    const channel = (this.channels || []).find(row => row.record_id === this.diagnosticsSettings.channelId);
+    if (!scopeId || getPgChannelScopeId(channel) !== scopeId || !this.diagnosticsRowAvailable(channel)) this.diagnosticsSettings.channelId = '';
+  },
+  discardDiagnosticsSettings() {
+    this.diagnosticsSettings = this.diagnosticsResolvedSettings(this.diagnosticsSavedSettings);
+    this.diagnosticsError = '';
+  },
+  get diagnosticsSettingsDirty() {
+    const saved = this.diagnosticsResolvedSettings(this.diagnosticsSavedSettings);
+    const draft = this.diagnosticsResolvedSettings(this.diagnosticsSettings);
+    return Object.keys(defaultDiagnosticsSettings()).some(field => saved[field] !== draft[field]);
+  },
+  diagnosticsDestinationError(settings) {
+    const resolved = this.diagnosticsResolvedSettings(settings);
+    if (!resolved.channelId || !resolved.agentNpub) return 'Choose a default report scope, channel and agent, then Save diagnostics settings.';
+    const channel = (this.channels || []).find(row => row.record_id === resolved.channelId && this.diagnosticsRowAvailable(row));
+    const scope = this.diagnosticsScopeOptions.find(row => row.record_id === resolved.scopeId);
+    const agent = this.diagnosticsAgentOptions.find(row => row.npub === resolved.agentNpub);
+    if (!scope || !channel || getPgChannelScopeId(channel) !== resolved.scopeId || !agent) {
+      return 'Saved report destination is unavailable. Refresh workspace access or choose an available scope, channel and agent, then Save diagnostics settings. Reports will not be rerouted.';
+    }
+    return '';
+  },
+  get diagnosticsDefaultDestination() {
+    const settings = this.diagnosticsResolvedSettings(this.diagnosticsSavedSettings);
+    if (!settings.channelId) return 'No saved report destination.';
+    const scope = this.diagnosticsScopeOptions.find(row => row.record_id === settings.scopeId);
+    const channel = (this.channels || []).find(row => row.record_id === settings.channelId && this.diagnosticsRowAvailable(row));
+    const agent = this.diagnosticsAgentOptions.find(row => row.npub === settings.agentNpub);
+    return `Saved default: ${scope?.name || scope?.title || 'Unavailable scope'} > ${channel?.name || 'Unavailable channel'} · ${agent?.label || 'Unavailable agent'}`;
+  },
+  get diagnosticsDefaultError() { return this.diagnosticsDestinationError(this.diagnosticsSavedSettings); },
 
   initDiagnosticsLifecycle() {
     if (runtimes.has(this) || typeof window === 'undefined') return;
@@ -63,7 +120,7 @@ export const diagnosticsManagerMixin = {
     runtime.native = false; runtime.enabled = false; runtime.buffer = []; runtime.generation++;
     runtime.capture.stop(); runtime.key = key;
     runtime.workspaceId = this.currentWorkspace?.workspaceId || this.currentWorkspace?.workspace_id;
-    this.diagnosticsSettings = defaultDiagnosticsSettings(); this.diagnosticsDescription = ''; this.diagnosticsError = '';
+    this.diagnosticsSavedSettings = defaultDiagnosticsSettings(); this.diagnosticsSettings = defaultDiagnosticsSettings(); this.diagnosticsDescription = ''; this.diagnosticsError = '';
     this.diagnosticsCount = 0; this.diagnosticsPending = 0; this.diagnosticsLastReport = null;
     this.diagnosticsHostStatus = 'Browser-only capture.';
     if (!key) { this.diagnosticsStatus = 'Select a signed-in Tower workspace to report a problem.'; return; }
@@ -79,7 +136,8 @@ export const diagnosticsManagerMixin = {
   },
 
   applyDiagnosticsInfo(info, preserveDraft = false) {
-    if (!preserveDraft) this.diagnosticsSettings = { ...info.settings };
+    this.diagnosticsSavedSettings = { ...defaultDiagnosticsSettings(), ...info.settings };
+    if (!preserveDraft) this.diagnosticsSettings = this.diagnosticsResolvedSettings(info.settings);
     this.diagnosticsCount = info.count ?? this.diagnosticsCount;
     this.diagnosticsPending = info.pending ?? this.diagnosticsPending;
     this.diagnosticsLastReport = info.lastReport ?? null;
@@ -101,12 +159,18 @@ export const diagnosticsManagerMixin = {
     const runtime = runtimes.get(this);
     if (!runtime?.key || diagnosticsScope(this) !== runtime.key) return;
     const key = runtime.key;
+    const settings = this.diagnosticsResolvedSettings(this.diagnosticsSettings);
+    if (settings.channelId || settings.automatic) {
+      const error = this.diagnosticsDestinationError(settings);
+      const saved = this.diagnosticsResolvedSettings(this.diagnosticsSavedSettings);
+      const pausing = (!settings.enabled || (saved.automatic && !settings.automatic && settings.enabled === saved.enabled))
+        && ['scopeId', 'channelId', 'agentNpub'].every(field => settings[field] === saved[field]);
+      if (error && !pausing) { this.diagnosticsError = error; return; }
+    }
     const generation = ++runtime.generation;
     runtime.enabled = false; runtime.capture.stop(); runtime.buffer = [];
     this.diagnosticsError = ''; this.diagnosticsBusy = true;
     try {
-      const settings = { ...this.diagnosticsSettings };
-      if (settings.automatic && (!settings.channelId || !settings.agentNpub)) throw new Error('Choose a report channel and agent before enabling automatic reports.');
       const result = await runtime.client.call('configure', key, settings);
       if (generation !== runtime.generation || diagnosticsScope(this) !== key) return;
       this.applyDiagnosticsInfo(result); runtime.enabled = result.settings.enabled;
@@ -166,6 +230,11 @@ export const diagnosticsManagerMixin = {
       await this.flushDiagnosticsEvents();
       const runtime = runtimes.get(this), key = diagnosticsScope(this);
       if (!key || runtime?.key !== key) throw new Error('Select a signed-in Tower workspace.');
+      if (this.diagnosticsSettingsDirty) throw new Error('Settings have unsaved changes. Save diagnostics settings or Discard changes before sending.');
+      const info = await runtime.client.call('info', key);
+      if (runtime.key !== key || diagnosticsScope(this) !== key) throw new Error('Diagnostics context changed. Reopen Report a problem.');
+      const destinationError = this.diagnosticsDestinationError(info.settings);
+      if (destinationError) throw new Error(destinationError);
       if (!this.diagnosticsDescription.trim()) throw new Error('Describe what happened and what you expected.');
       await runtime.client.call('queue', key, { incidentId: crypto.randomUUID(), automatic: false,
         description: this.diagnosticsDescription, manualAuthorized: true, workspaceId: runtime.workspaceId, build: this.appBuildId || 'unknown' });
@@ -187,10 +256,12 @@ export const diagnosticsManagerMixin = {
       const incident = await runtime.client.call('next', key);
       if (!incident) return;
       const agent = this.diagnosticsAgentOptions.find(agent => agent.npub === incident.agentNpub);
-      const channel = this.diagnosticsChannelOptions.find(channel => channel.record_id === incident.channelId);
-      if (!agent || !channel) throw new Error('Report destination is no longer available. Choose a current channel and agent.');
+      const destinationError = this.diagnosticsDestinationError(incident);
+      if (destinationError) throw new Error(destinationError);
       const assertCurrent = async () => {
         if ((incident.automatic && !runtime.enabled) || generation !== runtime.generation || diagnosticsScope(this) !== key) throw new Error('Diagnostics scope or consent changed.');
+        const destinationError = this.diagnosticsDestinationError(incident);
+        if (destinationError) throw new Error(destinationError);
         const consent = await runtime.client.call('info', key);
         if ((incident.automatic && !consent.settings.enabled) || (!incident.automatic && !consent.settings.enabled && !incident.manualAuthorized) || consent.revision !== incident.revision
           || generation !== runtime.generation || diagnosticsScope(this) !== key) throw new Error('Diagnostics scope or consent changed.');
@@ -210,7 +281,7 @@ export const diagnosticsManagerMixin = {
       // all tabs sharing this backend/actor/workspace.
       if (navigator.locks?.request) await navigator.locks.request(`diagnostics:${key}`, { ifAvailable: true }, lock => lock ? run() : undefined);
       else await run();
-    } catch { if (generation === runtime.generation && diagnosticsScope(this) === key) this.diagnosticsError = 'Report remains queued. Check connection, signer approval and destination access, then retry.'; }
+    } catch (error) { if (generation === runtime.generation && diagnosticsScope(this) === key) this.diagnosticsError = error.message.startsWith('Saved report destination') ? error.message : 'Report remains queued. Check connection, signer approval and destination access, or choose an available scope, channel and agent and Save diagnostics settings before retrying.'; }
     finally { runtime.sending = false; }
   },
 

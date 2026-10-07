@@ -8,7 +8,7 @@ export function createDiagnosticsDb(name = 'wingman-flightdeck-diagnostics-v1') 
   return db;
 }
 
-export const defaultDiagnosticsSettings = () => ({ enabled: false, automatic: false, channelId: '', agentNpub: '' });
+export const defaultDiagnosticsSettings = () => ({ enabled: false, automatic: false, scopeId: '', channelId: '', agentNpub: '' });
 
 export class DiagnosticsStore {
   constructor(db, now = () => Date.now()) { this.db = db; this.now = now; }
@@ -17,6 +17,7 @@ export class DiagnosticsStore {
     if (!key) throw new Error('Diagnostics scope is required');
     return this.db.transaction('rw', this.db.scopes, async () => {
       const row = await this.db.scopes.get(key) || { key, settings: defaultDiagnosticsSettings(), events: [], queue: [], groups: [], revision: 0 };
+      row.settings = { ...defaultDiagnosticsSettings(), ...row.settings };
       const now = this.now();
       row.events = boundDiagnosticEvents(row.events, now);
       row.queue = row.queue.filter(item => now - item.createdAt < DIAGNOSTICS_QUEUE_TTL);
@@ -34,9 +35,9 @@ export class DiagnosticsStore {
     return this.mutate(key, row => {
       const before = row.settings;
       row.settings = { enabled: settings.enabled === true, automatic: settings.enabled === true && settings.automatic === true,
-        channelId: String(settings.channelId || '').slice(0, 100), agentNpub: String(settings.agentNpub || '').slice(0, 100) };
+        scopeId: String(settings.scopeId || '').slice(0, 100), channelId: String(settings.channelId || '').slice(0, 100), agentNpub: String(settings.agentNpub || '').slice(0, 100) };
       row.revision++;
-      if (!row.settings.enabled || before.channelId !== row.settings.channelId || before.agentNpub !== row.settings.agentNpub) row.queue = [];
+      if (!row.settings.enabled || before.scopeId !== row.settings.scopeId || before.channelId !== row.settings.channelId || before.agentNpub !== row.settings.agentNpub) row.queue = [];
       else if (!row.settings.automatic) row.queue = row.queue.filter(item => !item.automatic);
       for (const item of row.queue) item.revision = row.revision;
       return { settings: row.settings, revision: row.revision };
@@ -74,7 +75,7 @@ export class DiagnosticsStore {
         build: input.build, workspaceId: input.workspaceId, trigger, recurrence: 1,
         description: String(input.description || '').slice(0, 4_000), events: row.settings.enabled ? [...row.events] : [],
         historyAvailable: row.settings.enabled, manualAuthorized: !input.automatic && input.manualAuthorized === true,
-        channelId: row.settings.channelId, agentNpub: row.settings.agentNpub, revision: row.revision,
+        scopeId: row.settings.scopeId, channelId: row.settings.channelId, agentNpub: row.settings.agentNpub, revision: row.revision,
         limitations: ['Evidence excludes free-form logs/messages, payloads, headers, screenshots and comprehensive OS crash dumps.'] };
       if (diagnosticBytes([...row.queue, item]) > DIAGNOSTICS_QUEUE_BYTES) throw new Error('Local report queue size limit reached');
       row.queue.push(item);

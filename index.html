@@ -448,6 +448,16 @@
           <template x-if="$store.chat.diagnosticsSettings">
             <div class="diagnostics-fields">
               <label><input type="checkbox" x-model="$store.chat.diagnosticsSettings.enabled" :disabled="$store.chat.diagnosticsBusy" /> Record local diagnostics</label>
+              <p x-text="$store.chat.diagnosticsDefaultDestination"></p>
+              <p>Choose once and Save to reuse this default for manual and automatic reports in this workspace. The channel’s existing Autopilot instructions define triage.</p>
+              <label>Report scope
+                <select aria-label="Report scope" :value="$store.chat.diagnosticsResolvedSettings($store.chat.diagnosticsSettings).scopeId" @change="$store.chat.changeDiagnosticsScope($event.target.value)" :disabled="$store.chat.diagnosticsBusy">
+                  <option value="">Choose a scope</option>
+                  <template x-for="scope in $store.chat.diagnosticsScopeOptions" :key="scope.record_id">
+                    <option :value="scope.record_id" x-text="scope.name || scope.title"></option>
+                  </template>
+                </select>
+              </label>
               <label>Report channel
                 <select aria-label="Report channel" x-model="$store.chat.diagnosticsSettings.channelId" :disabled="$store.chat.diagnosticsBusy">
                   <option value="">Choose a channel</option>
@@ -466,8 +476,11 @@
               </label>
               <label><input type="checkbox" x-model="$store.chat.diagnosticsSettings.automatic" :disabled="!$store.chat.diagnosticsSettings.enabled || $store.chat.diagnosticsBusy" /> Automatically send grouped error reports to this channel and agent</label>
               <button type="button" :disabled="$store.chat.diagnosticsBusy" @click="$store.chat.saveDiagnosticsSettings()">Save diagnostics settings</button>
+              <button type="button" x-show="$store.chat.diagnosticsSettingsDirty" :disabled="$store.chat.diagnosticsBusy" @click="$store.chat.discardDiagnosticsSettings()">Discard changes</button>
+              <p role="status" x-show="$store.chat.diagnosticsSettingsDirty">Unsaved settings changes. Save or Discard changes before sending a report.</p>
             </div>
           </template>
+          <p role="alert" x-show="$store.chat.diagnosticsDefaultError" x-text="$store.chat.diagnosticsDefaultError"></p>
           <p role="status" x-text="$store.chat.diagnosticsStatus"></p>
           <p class="diagnostics-meta" x-text="$store.chat.diagnosticsHostStatus"></p>
           <p class="diagnostics-meta" x-text="`${$store.chat.diagnosticsCount} recent events · ${$store.chat.diagnosticsPending} queued reports`"></p>
@@ -476,7 +489,7 @@
             <textarea rows="4" maxlength="4000" x-model="$store.chat.diagnosticsDescription" placeholder="Describe the problem. Do not include secrets." :disabled="$store.chat.diagnosticsBusy"></textarea>
           </label>
           <p x-show="!$store.chat.diagnosticsSettings?.enabled">Historical recording is off. You can still send your description and current report metadata; no stored activity is included.</p>
-          <p>Sending shares your description and captured evidence with the selected channel and agent. Offline reports remain queued for up to 24 hours. Turning recording off cancels queued reports; turning automatic reporting off cancels automatic reports.</p>
+          <p>Sending shares your description and captured evidence with the saved default channel and agent. Offline reports remain queued for up to 24 hours. Turning recording off cancels queued reports; turning automatic reporting off cancels automatic reports.</p>
           <p>Clear deletes local history and queued reports. Already sent messages and attachments remain subject to channel retention; remove them in that channel.</p>
           <p class="sync-error-text" role="alert" x-show="$store.chat.diagnosticsError" x-text="$store.chat.diagnosticsError"></p>
           <div class="diagnostics-actions">

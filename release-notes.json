@@ -3157,6 +3157,27 @@
       "notes": [
         "Publish existing chat images and files from chat or Files without copying bytes. Public consent uses the actual message source; status and unpublish keep each actor\u2019s publication independent."
       ]
+    },
+    {
+      "buildNumber": 2264,
+      "label": "Saved bug-report destination",
+      "notes": [
+        "Choose a default scope, channel and agent once, then reuse it for manual and automatic bug reports. Unsaved changes and unavailable destinations require explicit reconfiguration; existing saved channels retain their destination."
+      ]
+    },
+    {
+      "buildNumber": 2265,
+      "label": "Pause reporting with unavailable defaults",
+      "notes": [
+        "Turning diagnostics off remains available when its saved report destination has become unavailable."
+      ]
+    },
+    {
+      "buildNumber": 2266,
+      "label": "Saved destination consent controls",
+      "notes": [
+        "Pause recording or automatic reporting even when the saved destination is unavailable. Delivery access failures offer explicit destination reconfiguration."
+      ]
     }
   ]
 }
