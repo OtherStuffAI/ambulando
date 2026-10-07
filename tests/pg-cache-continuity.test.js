@@ -5,6 +5,7 @@ import { openWorkspaceDb, deleteWorkspaceDb } from '../src/db.js';
 import { applyPgRecordChanges, recordDeltaCursorKey, resetPgRecordAuthority } from '../src/pg-record-delta.js';
 import { hydrateTowerPgScopes, hydrateTowerPgChannels, hydrateTowerPgChannelMessages, hydrateTowerPgSyncBundle, syncTowerPgWorkspace } from '../src/pg-read-hydrator.js';
 import { TowerSyncService } from '../src/tower-sync-service.js';
+import { prepareTowerWorkspaceCommand } from '../src/tower-command-port.js';
 
 const workspaceId = fixture.one_message_delta.changes[0].workspace_id;
 const store = { session: { npub: 'npub1viewer' }, backendUrl: 'http://localhost:3100',
@@ -36,6 +37,35 @@ async function observe(run) {
 }
 
 describe('authorized cache continuity', () => {
+  it.each([false, true])('scope acknowledgement keeps the cursor; Tower reset=%s controls replacement', async towerReset => {
+    const key = recordDeltaCursorKey(store);
+    const beforeState = (await db.sync_state.get(key)).value;
+    const beforeCounts = await counts();
+    const scope = fixture.canonical_upserts.changes.find(c => c.family === 'scope');
+    const created = { ...scope, id: '11111111-1111-4111-8111-111111111111',
+      row: { ...scope.row, id: '11111111-1111-4111-8111-111111111111', name: 'New scope' } };
+    const descriptor = prepareTowerWorkspaceCommand(store, 'scope.create', {
+      args: [workspaceId, { client_record_id: created.id, name: 'New scope' }, {}], entityId: created.id,
+    });
+    await descriptor.optimistic();
+    await descriptor.reconcile({ scope: created.row });
+    expect((await db.sync_state.get(key)).value).toEqual(beforeState);
+    expect(await counts()).toEqual([beforeCounts[0] + 1, ...beforeCounts.slice(1)]);
+
+    // Model the server's epoch invalidation response, not a client full-sync
+    // request. The control returns only the new scope in an ordinary delta.
+    const read = vi.fn();
+    if (towerReset) read.mockRejectedValueOnce(reset())
+      .mockResolvedValueOnce(snapshot([...fixture.canonical_upserts.changes, created], 'replacement'));
+    read.mockResolvedValueOnce(delta(towerReset ? [] : [created], 'after-create'));
+    await observe(() => syncTowerPgWorkspace(store, {}, ports(read)));
+    expect(read.mock.calls.map(([, request]) => request.cursor)).toEqual(
+      towerReset ? ['cached', null, 'replacement'] : ['cached']);
+    expect((await db.sync_state.get(key)).value.localGeneration || 0).toBe(
+      (beforeState.localGeneration || 0) + (towerReset ? 1 : 0));
+    expect(await counts()).toEqual([beforeCounts[0] + 1, ...beforeCounts.slice(1)]);
+  });
+
   it('keeps cached and pending navigation rows when typed lists omit them', async () => {
     const before = await counts();
     await db.scopes.put({ record_id: 'local-scope', owner_npub: 'npub1owner', title: 'Local', sync_status: 'pending' });

@@ -3185,6 +3185,12 @@
       "notes": [
         "Open Toolbox from the left navigation to choose which napplets and WApps appear in Apps. Message activity joins personal WApps in one home stack; placement choices persist per workspace and viewer on this browser. Agents keep their separate stack."
       ]
+    },
+    {
+      "buildNumber": 2272,
+      "label": "Scope creation sync investigation",
+      "notes": [],
+      "noUserVisibleChanges": true
     }
   ]
 }

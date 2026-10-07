@@ -89,6 +89,70 @@ Subsequent ordinary deltas keep the cursor and do not repeat upgrade recovery.
 Tombstones still apply immediately; confirmed replacement omission and typed
 membership revocation retain their existing reconciliation behavior.
 
+## Scope creation and server authority resets
+
+Scope creation in PG mode does not request a workspace snapshot. `addScope`
+issues `scope.create` and optional `channel.create` intents. Their descriptors
+upsert optimistic and acknowledged rows without changing the record cursor or
+local authority generation. Template channel access is sent as initial grants;
+separate grant/group changes retain their access-sensitive materialization.
+Local command-conflict reconciliation uses `reconcileOnly` and cannot advance
+network cursors or authorize snapshot omission.
+
+Tower currently installs `fd_record_reset` on scope/channel INSERT, UPDATE and
+DELETE and permission-grant mutations. `flightdeck_pg_record_reset` skips
+ordinary scope/channel metadata UPDATEs, but not INSERTs. A new empty scope
+therefore rotates the workspace record epoch even without a grant write.
+The create route additionally inserts creator scope.read, scope.manage and
+channel.create grants, plus channel.create for the Admins group when present.
+Each grant INSERT also rotates the epoch. Removing only the scope INSERT
+trigger would therefore not solve this flow. The canonical capture trigger
+also journals the new scope. On the next SSE,
+background, reconnect or manual cursor pull, an old v1 cursor or v2 device
+checkpoint fails its epoch check with `409 reset_required`. Flight Deck must
+then acquire Tower's authorized replacement. Initial channel/grant writes may
+rotate that epoch again while a replacement is downloading.
+
+This is a server authority invalidation policy, not the earlier client omission
+replay bugs. The fixes in ec0bfe0 (committed build 2100), 9ed0769 (2118) and
+1ece0c0 (2123) retain replacement views, retire omissions once and bound
+commits, respectively. They are all ancestors
+of a01365d (build 2266). Later reactive-worker recovery, reconnect retention and
+device-checkpoint fixes do not remove Tower's creation triggers.
+
+`Receiving changes (page N)` counts requests in the current pull, including a
+failed reset request; `changes applied` accumulates materializer changes across
+pages. Neither count identifies a snapshot, unique records, or newly created
+records. Current record-protocol progress does not expose wire `mode` or reset
+reason, so this status is insufficient evidence to diagnose a screenshot.
+For a specific session, capture the requested cursor, response code and page
+`mode` before and after creation. A delta can legitimately contain many pages;
+a replacement can legitimately reacquire newly accessible historical records.
+
+V1 reset recovery preserves cached presentation rows until authorized handover.
+V2 device reset recovery currently replaces with `preserveViews: false`, so its
+rows must republish during replacement. This investigation does not establish
+which protocol the reported browser negotiated, and does not claim v2 cached
+navigation continuity or live-device acceptance.
+
+Synthetic coverage in `pg-cache-continuity.test.js` runs the real scope command
+reconciler against Dexie. An ordinary new-scope delta continues the saved cursor
+without replaying unrelated records; a simulated Tower reset alone changes the
+generation and produces a cursorless replacement request. Existing v1/v2 reset,
+revocation, new-authority replacement, tombstone and interruption tests remain
+necessary. These fixtures establish client causality, not the installed trigger
+function or exact request history of an individual live Tower/browser.
+
+A server-side follow-up should first reproduce an empty scope INSERT with
+registered v1/v2 readers in an isolated database, then distinguish brand-new
+scope/channel records from access changes to existing records. Do not simply
+ignore reset responses or stop grant reconciliation in Flight Deck: new access
+may include old history absent from the journal after the saved cursor, and
+revocation must remove previously authorized data. Test new-resource creation,
+existing-history grants, group/actor changes, archive/deletion, changes racing a
+snapshot and both protocols before narrowing epoch invalidation. Tower owns
+that authority decision; no shared contract change is made here.
+
 ## Workspace isolation
 
 PG selection and Dexie keys include the verified Tower service, workspace
