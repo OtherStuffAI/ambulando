@@ -68,7 +68,9 @@ it('upgrades an ownerless v25 cache without losing messages, commands, drafts or
   await old.document_drafts.put({ draft_key: 'draft', body: 'keep draft' });
   old.close();
   const upgraded = openWorkspaceDb(key); await upgraded.open();
-  expect(upgraded.verno).toBe(32);
+  expect(upgraded.verno).toBeGreaterThanOrEqual(34);
+  expect(upgraded.file_blossom_status).toBeTruthy();
+  expect(upgraded.message_activity).toBeTruthy();
   expect(upgraded.pipeline_viewer_snapshots).toBeTruthy();
   expect(upgraded.pipeline_viewer_state).toBeTruthy();
   expect(upgraded.feed_subscriptions).toBeTruthy();

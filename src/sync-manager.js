@@ -3,6 +3,7 @@ import { getTowerPgScopeAccess } from './api.js';
 import { disposeContextTreeView } from './context-tree-view.js';
 import { loadTowerPgContext, loadTowerPgContextReferences, readTowerPgContextDeletePreview } from './pg-read-hydrator.js';
 import { hydrateFeedReader } from './feed/tower.js';
+import { hydrateMessageActivity } from './message-activity/hydrate.js';
 import { hydrateDriveShares } from './drive.js';
 import { resolveTowerSigningUrl } from './tower-transport.js';
 import Dexie from 'dexie';
@@ -360,6 +361,10 @@ export const syncManagerMixin = {
     this._towerSyncService = replaceTowerSyncService(this._towerSyncService, {
       workspaceKey,
       families: {
+        'message-activity': {
+          trackFreshness: false,
+          load: (_requestKey, options) => hydrateMessageActivity(this, options.range, options),
+        },
         'feed-reader': { freshMs: 30000, load: () => hydrateFeedReader(this), materialize: r => r },
         'drive-shares': { freshMs: 30000, load: () => hydrateDriveShares(this), materialize: result => result },
         'workspace-bootstrap': {

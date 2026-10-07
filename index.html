@@ -2029,6 +2029,10 @@
                 <p x-text="$store.chat.autopilotOverviewContextLabel"></p>
               </div>
               <div class="home-launcher-cluster" aria-label="Personal launchers">
+                <section class="launcher-stack-panel message-activity-toolbox" aria-label="Toolbox" data-testid="toolbox">
+                  <h3>Toolbox</h3>
+                  <button type="button" class="launcher-pill" @click="$store.chat.openMessageActivity()" data-testid="message-activity-launch">Message activity <small>Napplet</small></button>
+                </section>
                 <section class="launcher-stack-panel wapps-stack-panel" :class="{ 'wapps-expanded': $store.chat.personalWappsOverlayOpen, 'wapps-has-stack': $store.chat.visiblePersonalWapps.length > 1, 'wapps-has-deep-stack': $store.chat.visiblePersonalWapps.length > 2 }" aria-label="My WApps" @click.outside="$store.chat.closePersonalWappsOverlay()" @keydown.escape.window="$store.chat.closePersonalWappsOverlay()">
                   <h3>My WApps</h3>
                   <button
@@ -6703,10 +6707,38 @@
                         <button type="button" class="file-action-btn" x-show="$store.chat.canEditFileBrowserRow(row)" @click="$store.chat.setFileBrowserRowArchived(row, !row.archived)" x-text="row.archived ? 'Restore' : 'Archive'"></button>
                         <button type="button" class="file-action-btn" @click="$store.chat.openFileBrowserSource(row)">Open</button>
                         <button type="button" class="file-action-btn" @click="$store.chat.downloadFileBrowserRow(row)">Download</button>
+                        <button type="button" class="file-action-btn" x-show="$store.chat.canPublishFileBrowserRow(row)" @click="$store.chat.openFileBlossom(row)">Publish to Blossom</button>
                       </div>
                     </article>
                   </template>
                 </div>
+
+                <section class="file-blossom-panel" x-show="$store.chat.fileBlossomOpen" x-cloak role="dialog" aria-modal="true" aria-label="Publish to Blossom">
+                  <h2>Publish to Blossom</h2>
+                  <p x-text="$store.chat.fileBlossomName"></p>
+                  <p>Publishing makes only the selected version’s bytes anonymously downloadable. The original file stays in place. External copies cannot be recalled.</p>
+                  <label>File version
+                    <select x-model="$store.chat.fileBlossomVersionId" :disabled="$store.chat.fileBlossomBusy">
+                      <template x-for="version in $store.chat.fileBlossomVersions" :key="version.version_id">
+                        <option :value="version.version_id" x-text="'Version ' + version.version_number + (version.available ? '' : ' (unavailable)')"></option>
+                      </template>
+                    </select>
+                  </label>
+                  <p x-show="$store.chat.fileBlossomBusy">Checking publication…</p>
+                  <p x-show="!$store.chat.fileBlossomBusy && !$store.chat.fileBlossomCanPublish">File or channel write permission is required to publish or unpublish.</p>
+                  <p role="alert" x-show="$store.chat.fileBlossomError" x-text="$store.chat.fileBlossomError"></p>
+                  <template x-if="$store.chat.selectedFileBlossomVersion">
+                    <div>
+                      <p x-text="$store.chat.selectedFileBlossomVersion.public ? 'Public on this Tower' : 'No public Blossom publication on this Tower'"></p>
+                      <p x-show="$store.chat.selectedFileBlossomVersion.published_by_you">Published by you</p>
+                      <input type="text" readonly aria-label="Public Blossom URL" x-show="$store.chat.selectedFileBlossomVersion.blossom_url" :value="$store.chat.selectedFileBlossomVersion.blossom_url || ''" @click="$event.target.select()" />
+                      <button type="button" x-show="$store.chat.selectedFileBlossomVersion.blossom_url" @click="$store.chat.copyFileBlossomUrl()">Copy public URL</button>
+                      <button type="button" :disabled="$store.chat.fileBlossomBusy || !$store.chat.fileBlossomCanPublish || !$store.chat.selectedFileBlossomVersion.available" x-show="!$store.chat.selectedFileBlossomVersion.published_by_you" @click="$store.chat.changeFileBlossom(true)">Publish selected version</button>
+                      <button type="button" :disabled="$store.chat.fileBlossomBusy || !$store.chat.fileBlossomCanPublish" x-show="$store.chat.selectedFileBlossomVersion.published_by_you" @click="$store.chat.changeFileBlossom(false)">Unpublish my reference</button>
+                    </div>
+                  </template>
+                  <button type="button" @click="$store.chat.closeFileBlossom()">Close</button>
+                </section>
 
                 <div class="files-empty" x-show="$store.chat.currentFileChildFolders.length === 0 && $store.chat.filteredFileBrowserRows.length === 0">
                   <h2 x-text="$store.chat.currentFileFolderId === '__archived__' ? 'Archived' : 'Files'"></h2>
@@ -11143,6 +11175,16 @@
       </details>
     </template>
                 <button type="button" class="agent-activity-history-toggle" x-show="!$store.chat.getAgentActivityRunsLoadState($store.chat.agentActivityDetailsContext?.scope).done" @click="$store.chat.loadEarlierAgentActivityRuns($store.chat.agentActivityDetailsContext?.scope)" :disabled="Boolean($store.chat.getAgentActivityRunsLoadState($store.chat.agentActivityDetailsContext?.scope).loading)" x-text="$store.chat.getAgentActivityRunsLoadState($store.chat.agentActivityDetailsContext?.scope).error ? 'Could not load earlier runs — retry' : ($store.chat.getAgentActivityRunsLoadState($store.chat.agentActivityDetailsContext?.scope).loading ? 'Loading earlier runs…' : 'Load earlier agent runs')"></button>
+  </dialog>
+  <dialog id="message-activity-modal" class="message-activity-modal" aria-labelledby="message-activity-title" data-testid="message-activity-modal"
+    x-effect="if ($store.chat.messageActivityOpen && $store.chat.messageActivityOpenedContext !== $store.chat.messageActivityContextKey) $store.chat.closeMessageActivity()"
+    @cancel.prevent="$store.chat.closeMessageActivity()" @close="!$el.open && $store.chat.messageActivityOpen && $store.chat.closeMessageActivity()"
+    @click.self="if ($event.offsetX < 0 || $event.offsetY < 0 || $event.offsetX > $el.clientWidth || $event.offsetY > $el.clientHeight) $store.chat.closeMessageActivity()">
+    <div class="thread-header">
+      <h2 id="message-activity-title">Message activity</h2>
+      <button type="button" class="btn-secondary" @click="$store.chat.closeMessageActivity()" aria-label="Close Message activity">Close</button>
+    </div>
+    <iframe title="Message activity dashboard" sandbox="allow-scripts" referrerpolicy="no-referrer" :src="$store.chat.messageActivitySrc || 'about:blank'"></iframe>
   </dialog>
   <script type="module" src="/src/main.js"></script>
 </body>

@@ -1,6 +1,7 @@
 import { prepareFeedCommand } from './feed/tower.js';
 import {
   addPendingWrite,
+  getWorkspaceDb,
   replaceCommentRecord,
   replaceDocumentRecord,
   replaceMessageRecord,
@@ -78,7 +79,7 @@ export const TOWER_WORKSPACE_COMMAND_CONTRACT = Object.freeze({
     'workspace-child-group.add', 'workspace-child-group.remove',
     'notification-preferences.update', 'push-subscription.upsert', 'push-subscription.revoke',
     'wapp.reorder', 'daily-scope-access.upsert', 'invocation.create',
-    'document-metadata.update', 'file-metadata.update',
+    'document-metadata.update', 'file-metadata.update', 'file-blossom.set',
     'compatibility.pending-write',
   ]),
 });
@@ -107,7 +108,9 @@ function optimisticWriterFor(input) {
 }
 
 async function reconcileTypedCommand(name, result, { owner = '', args = [] } = {}) {
-  if (['workroom.create', 'workroom.start', 'workroom.archive'].includes(name)) {
+  if (name === 'file-blossom.set') {
+    await getWorkspaceDb().file_blossom_status.put({ ...result, key: `${args[0]}:${args[1]}`, workspace_id: args[0], file_id: args[1] });
+  } else if (['workroom.create', 'workroom.start', 'workroom.archive'].includes(name)) {
     const row = mapPgWorkroomToLocal(result?.workroom || result);
     if (row.record_id) await upsertWorkroom(row);
   } else if (name === 'workroom-approval.decide') {
@@ -237,6 +240,7 @@ export function prepareTowerWorkspaceCommand(store, name, input = {}) {
     'workspace-agent.create': 'createTowerPgWorkspaceAgent',
     'document-metadata.update': 'updateTowerPgDoc',
     'file-metadata.update': 'updateTowerPgFile',
+    'file-blossom.set': 'setTowerPgFileBlossom',
   }[name];
   if (typedApiCommandName) {
     const args = Array.isArray(input.args) ? input.args : [];

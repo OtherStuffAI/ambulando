@@ -10156,7 +10156,8 @@ html.wingman-iphone-webview .chat-channel-tab-scroll * {
   backdrop-filter: blur(10px);
 }
 
-.chat-thread-panel {
+.chat-thread-panel,
+.message-activity-modal {
   width: min(66.666vw, 1120px);
   max-width: calc(100vw - 1.5rem);
   height: min(860px, calc(100dvh - 1.5rem));
@@ -10175,6 +10176,14 @@ html.wingman-iphone-webview .chat-channel-tab-scroll * {
   width: calc(100vw - 1.5rem);
   height: calc(100dvh - 1.5rem);
 }
+
+.message-activity-modal { padding: 0; margin: auto; color: var(--text); }
+.message-activity-modal:not([open]) { display: none; }
+.message-activity-modal::backdrop { background: rgba(15, 23, 42, 0.42); backdrop-filter: blur(10px); }
+.message-activity-modal iframe { flex: 1; width: 100%; min-height: 0; border: 0; background: var(--surface); }
+.message-activity-modal h2 { margin: 0; font-size: 1.1rem; }
+.message-activity-toolbox small { margin-left: .5rem; font-size: .75rem; }
+@media (max-width: 700px) { .message-activity-modal { width: calc(100vw - 1.5rem); } }
 
 .thread-header {
   display: flex;
@@ -25037,3 +25046,21 @@ button.task-desc-toggle:focus-visible {
 .tasks-section .filter-to-me-active { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, var(--surface)); box-shadow: none; }
 .tasks-section .filter-to-me-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .task-bar-control.task-status-badge { background: color-mix(in srgb, var(--task-status-color, #9ca3af) 14%, var(--surface)); color: color-mix(in srgb, var(--task-status-color, #9ca3af) 50%, var(--text)); }
+
+.file-blossom-panel {
+  position: fixed;
+  z-index: 1100;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(560px, calc(100vw - 32px));
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+  padding: 24px;
+  border: 1px solid var(--border-color, #555);
+  border-radius: 12px;
+  background: var(--bg-secondary, #202329);
+  box-shadow: 0 8px 60px #0009;
+}
+.file-blossom-panel input { width: 100%; margin: 12px 0; }
+.file-blossom-panel button, .file-blossom-panel select { margin: 8px 8px 8px 0; }

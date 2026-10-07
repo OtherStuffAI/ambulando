@@ -16,6 +16,7 @@ export class TowerSyncService {
     this.onStateChange = typeof onStateChange === 'function' ? onStateChange : null;
     this.fallbackTimer = null;
     this.disposed = false;
+    this.readAbortController = new AbortController();
     this.started = false;
     this.inFlight = new Map();
     this.commandGenerations = new Map();
@@ -95,7 +96,7 @@ export class TowerSyncService {
         ? await registration.materialize(payload, { id: recordKey, options })
         : payload;
       this.assertActive();
-      this.familyFreshAt.set(freshnessKey, Date.now());
+      if (registration?.trackFreshness !== false) this.familyFreshAt.set(freshnessKey, Date.now());
       return result;
     });
   }
@@ -232,6 +233,7 @@ export class TowerSyncService {
   dispose(reason = 'dispose') {
     if (this.disposed) return;
     this.disposed = true;
+    this.readAbortController.abort();
     this.clearFallbackTimer();
     this.ports.disconnectSSE?.({ reason });
     this.ports.stopFlushTimer?.();

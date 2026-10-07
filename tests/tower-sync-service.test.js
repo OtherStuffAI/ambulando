@@ -2,6 +2,18 @@ import { describe, expect, it, vi } from 'vitest';
 import { replaceTowerSyncService, TowerSyncService } from '../src/tower-sync-service.js';
 
 describe('TowerSyncService ownership', () => {
+  it('does not retain freshness entries for one-shot authority snapshots', async () => {
+    const load = vi.fn(async () => ({ complete: true }));
+    const service = new TowerSyncService({ workspaceKey: 'workspace-a', families: {
+      'message-activity': { trackFreshness: false, load },
+    } });
+    for (let index = 0; index < 50; index++) {
+      await service.ensureLoaded('message-activity', `7d:request-${index}`);
+    }
+    expect(load).toHaveBeenCalledTimes(50);
+    expect(service.familyFreshAt.size).toBe(0);
+    expect(service.inFlight.size).toBe(0);
+  });
   it('keeps one SSE owner and one fallback timer per workspace', () => {
     vi.useFakeTimers();
     const connectSSE = vi.fn();

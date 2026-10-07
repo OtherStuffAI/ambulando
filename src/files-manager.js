@@ -1,3 +1,4 @@
+import { fileBlossomMixin } from './file-blossom.js';
 import {
   completeStorageObject,
   downloadStorageObject,
@@ -1705,3 +1706,5 @@ export const filesManagerMixin = {
     this.navigateTo('files');
   },
 };
+
+Object.defineProperties(filesManagerMixin, Object.getOwnPropertyDescriptors(fileBlossomMixin));

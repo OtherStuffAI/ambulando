@@ -132,3 +132,5 @@ export const unlinkTowerPgContextReference = (store, input, mutationId) => issue
 export const deleteTowerPgContextSubtree = (store, input, mutationId) => issue(store, 'context.delete', input, mutationId);
 
 export const putTowerPgScopeAccess = (store, ...args) => issueTypedApi(store, 'scope-access.put', args, args[1]);
+
+export const setTowerPgFileBlossom = (store, ...args) => issue(store, 'file-blossom.set', { args, entityId: `${args[1]}:${args[2]}` }, crypto.randomUUID());

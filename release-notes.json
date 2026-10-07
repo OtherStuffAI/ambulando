@@ -3066,6 +3066,48 @@
       "notes": [
         "Refreshing a previously verified workspace now loads saved data when Tower times out or is temporarily unavailable. Access denials and signer changes still require verification."
       ]
+    },
+    {
+      "buildNumber": 2250,
+      "label": "Message activity napplet",
+      "notes": [
+        "Open Message activity from Toolbox to see complete Tower-backed message totals by scope and channel for 7 days, 30 days or all time. The isolated read-only dashboard supports refresh and safe workspace switching."
+      ]
+    },
+    {
+      "buildNumber": 2251,
+      "label": "Publish file versions to Blossom",
+      "notes": [
+        "Files can explicitly publish a selected version to an anonymous Blossom URL, copy its link, and remove your own publication reference. Original files and permissions stay in place; other publications and external copies may remain."
+      ]
+    },
+    {
+      "buildNumber": 2253,
+      "label": "Message activity UTC snapshots",
+      "notes": [
+        "Message activity shows explicit UTC snapshot bounds and keeps its modal isolated from chat navigation."
+      ]
+    },
+    {
+      "buildNumber": 2254,
+      "label": "Message activity lifecycle safeguards",
+      "notes": [
+        "Message activity safely reopens its modal and rejects incomplete or canceled snapshots before displaying counts."
+      ]
+    },
+    {
+      "buildNumber": 2255,
+      "label": "Blossom publication lifecycle safeguards",
+      "notes": [
+        "Publish only the selected file version, retain independently public duplicate bytes, and reject publication actions after the workspace, signer or backend changes."
+      ]
+    },
+    {
+      "buildNumber": 2256,
+      "label": "Fresh Message activity sessions",
+      "notes": [
+        "Reopening Message activity always creates a fresh isolated napplet document, preventing an old frame session from surviving rapid reopening."
+      ]
     }
   ]
 }

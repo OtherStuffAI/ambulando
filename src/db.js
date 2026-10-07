@@ -313,6 +313,9 @@ function createWorkspaceDb(workspaceDbKey) {
   });
   // Autopilot-local viewer projections are never Tower record families.
   db.version(32).stores(PIPELINE_VIEWER_STORES);
+  db.version(33).stores({ file_blossom_status: '&key, workspace_id, file_id' });
+  // Read-only authority snapshots, partitioned by viewer/workspace/range.
+  db.version(34).stores({ message_activity: '&key, context, range' });
   const commentFields = activityIndexFields;
   db.documents.hook('creating', (_key, row) => { Object.assign(row, commentFields(row)); });
   db.documents.hook('updating', (changes, _key, row) => commentFields({ ...row, ...changes }));

@@ -27,6 +27,29 @@ beforeEach(() => {
 });
 afterEach(() => { importTowerTransports([]); vi.unstubAllGlobals(); });
 
+it('routes Message activity through the pinned Tower endpoint with cancellation and no public fallback', async () => {
+  const controller = new AbortController();
+  await api.getTowerPgMessageActivity('workspace/encoded', '30d', { appNpub: 'app', signal: controller.signal });
+  const [url, options] = native.fetch.mock.calls[0];
+  expect(url).toBe(`${endpoint}/api/v4/flightdeck-pg/workspaces/workspace%2Fencoded/message-activity?range=30d`);
+  expect(JSON.parse(options.headers.Authorization)).toMatchObject({ url, method: 'GET' });
+  expect(options.headers['x-flightdeck-pg-app-npub']).toBe('app');
+  controller.abort(); expect(options.signal.aborted).toBe(true);
+  expect(globalThis.fetch).not.toHaveBeenCalled();
+});
+
+it('rejects invalid Message activity ranges and cancellation during signing before sending', async () => {
+  await expect(api.getTowerPgMessageActivity('workspace', 'invalid')).rejects.toThrow('Invalid');
+  expect(native.fetch).not.toHaveBeenCalled(); expect(createNip98AuthHeader).not.toHaveBeenCalled();
+  const controller = new AbortController();
+  let release;
+  createNip98AuthHeader.mockImplementationOnce(() => new Promise(resolve => { release = resolve; }));
+  const pending = api.getTowerPgMessageActivity('workspace', 'all', { signal: controller.signal });
+  await vi.waitFor(() => expect(release).toBeTypeOf('function'));
+  controller.abort(); release('signed');
+  await expect(pending).rejects.toThrow(); expect(native.fetch).not.toHaveBeenCalled();
+});
+
 it('signs actual endpoint, method and payload for PG reads, sync and writes', async () => {
   await api.getTowerPgWorkspaceDescriptor('workspace', { appNpub: 'app' });
   await api.getTowerPgWorkspaceSync('workspace', { cursor: 'saved-cursor', appNpub: 'app' });

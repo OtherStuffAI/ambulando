@@ -314,7 +314,9 @@ async function signedTowerPgFetch(pathOrUrl, {
   timeoutMs = DEFAULT_FETCH_TIMEOUT_MS,
   useWorkspaceKey = true,
   rawBody = false,
+  signal,
 } = {}) {
+  signal?.throwIfAborted();
   const requestUrl = resolveTowerPgUrl(pathOrUrl, baseUrl);
   const headers = {
     Authorization: await createApiAuthHeader(requestUrl, method, body ?? null, { authTimeoutMs, useWorkspaceKey }),
@@ -322,13 +324,33 @@ async function signedTowerPgFetch(pathOrUrl, {
   const cleanAppNpub = String(appNpub || '').trim();
   if (cleanAppNpub) headers['x-flightdeck-pg-app-npub'] = cleanAppNpub;
   if (body !== undefined) headers['Content-Type'] = 'application/json';
+  signal?.throwIfAborted();
+  const timeoutSignal = createFetchTimeoutSignal(timeoutMs);
+  const combined = signal && timeoutSignal ? combineTowerRequestSignals(signal, timeoutSignal) : signal || timeoutSignal;
 
   return fetch(requestUrl, {
     method,
     headers,
     body: body !== undefined ? (rawBody ? body : JSON.stringify(body)) : undefined,
-    signal: createFetchTimeoutSignal(timeoutMs),
+    signal: combined,
   });
+}
+
+function combineTowerRequestSignals(...signals) {
+  if (typeof AbortSignal.any === 'function') return AbortSignal.any(signals);
+  const controller = new AbortController();
+  for (const signal of signals) {
+    if (signal.aborted) controller.abort(signal.reason);
+    else signal.addEventListener('abort', () => controller.abort(signal.reason), { once: true });
+  }
+  return controller.signal;
+}
+
+export async function getTowerPgMessageActivity(workspaceId, range, { baseUrl = _baseUrl, appNpub = FLIGHT_DECK_PG_APP_NPUB, signal } = {}) {
+  if (!workspaceId || !['7d', '30d', 'all'].includes(range)) throw new Error('Invalid message activity request');
+  const path = `/api/v4/flightdeck-pg/workspaces/${encodeURIComponent(workspaceId)}/message-activity?range=${range}`;
+  const resp = await signedTowerPgFetch(path, { baseUrl, appNpub, signal });
+  return json(resp, { requestUrl: resolveTowerPgUrl(path, baseUrl), method: 'GET', prefix: 'Tower PG API' });
 }
 
 function responseShape(payload) {
@@ -2729,4 +2751,17 @@ export async function getTowerPgScopeAccess(workspaceId, scopeId, {baseUrl = _ba
 export async function putTowerPgScopeAccess(workspaceId, scopeId, body, {baseUrl = _baseUrl, appNpub = FLIGHT_DECK_PG_APP_NPUB} = {}) {
   const path = `/api/v4/flightdeck-pg/workspaces/${encodeURIComponent(workspaceId)}/scopes/${encodeURIComponent(scopeId)}/grants`;
   return json(await signedTowerPgFetch(path,{method:'PUT',body,baseUrl,appNpub}),{requestUrl:resolveTowerPgUrl(path,baseUrl),method:'PUT',prefix:'Tower PG API'});
+}
+
+export async function getTowerPgFileBlossom(workspaceId, fileId, { baseUrl = _baseUrl, appNpub = FLIGHT_DECK_PG_APP_NPUB } = {}) {
+  const path = `/api/v4/flightdeck-pg/workspaces/${encodeURIComponent(workspaceId)}/files/${encodeURIComponent(fileId)}/blossom`;
+  const resp = await signedTowerPgFetch(path, { baseUrl, appNpub });
+  return json(resp, { requestUrl: resolveTowerPgUrl(path, baseUrl), method: 'GET', prefix: 'Tower PG API' });
+}
+
+export async function setTowerPgFileBlossom(workspaceId, fileId, versionId, publish, { baseUrl = _baseUrl, appNpub = FLIGHT_DECK_PG_APP_NPUB } = {}) {
+  const path = `/api/v4/flightdeck-pg/workspaces/${encodeURIComponent(workspaceId)}/files/${encodeURIComponent(fileId)}/versions/${encodeURIComponent(versionId)}/blossom`;
+  const method = publish ? 'PUT' : 'DELETE';
+  const resp = await signedTowerPgFetch(path, { baseUrl, appNpub, method, ...(publish ? { body: {} } : {}) });
+  return json(resp, { requestUrl: resolveTowerPgUrl(path, baseUrl), method, prefix: 'Tower PG API' });
 }

@@ -163,7 +163,7 @@ async function seedWorkspace(page, options = {}) {
     threadId: THREAD_ID,
   });
 
-  await expect(page.locator('.chat-thread-panel')).toBeVisible();
+  await expect(page.locator('div.chat-thread-panel')).toBeVisible();
   await expect(page.locator('.thread-input-bar [data-chat-composer="thread"]')).toHaveAttribute('contenteditable', 'true');
 }
 
