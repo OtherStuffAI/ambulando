@@ -4,6 +4,7 @@ import { openWorkspaceDb, getWorkspaceDb } from '../src/db.js';
 import { TowerSyncService } from '../src/tower-sync-service.js';
 import { hydrateOrgData } from '../src/org-data/tower.js';
 import { orgDataContext, orgDataPartition, normalizeOrgData, projectOrgData, sandboxBundle } from '../src/org-data/projection.js';
+import { sameOrgDataAuthority } from '../src/org-data/manager.js';
 import { validOrgDataRequest } from '../src/org-data/bridge.js';
 const id='11111111-1111-4111-8111-111111111111';
 const makeStore=()=>({session:{npub:'reader'},signingNpub:'reader',workspaceDbKey:'org-tests',selectedBoardId:'scope',currentWorkspace:{workspaceId:'workspace',workspaceOwnerNpub:'owner',directHttpsUrl:'http://localhost:3100',appNpub:'app',towerServiceNpub:'tower',workspaceServiceNpub:'service'}});
@@ -30,4 +31,22 @@ it('bridge rejects foreign senders, arbitrary requests and credentials but allow
  for(const d of [{type:'fetch',url:'https://evil'},{type:'write',path:'../../admin',method:'POST',body:{}},{type:'ready',key:'private'},{type:'view',view:'foreign'}])expect(validOrgDataRequest(event(d),frame,session)).toBe(false);
  expect(validOrgDataRequest({...event({type:'ready'}),source:{}},frame,session)).toBe(false);
  const html=sandboxBundle('<script>fetch("https://evil")</script>','s');expect(html.indexOf('connect-src')).toBeLessThan(html.indexOf('fetch('));expect(html).toContain("frame-src 'none'");
+});
+
+it('failed reads erase the persisted previously broader projection',async()=>{
+ const store=makeStore(),db=getWorkspaceDb();await hydrateOrgData(store,{requestId:'before'},{read:async()=>payload()});
+ await expect(hydrateOrgData(store,{requestId:'after'},{read:async()=>{throw Object.assign(new Error('unavailable'),{status:500})}})).rejects.toThrow('unavailable');expect(await db.org_data.count()).toBe(0);
+});
+it('bridge publication byte bound accommodates escaped HTML and rejects oversized serialized JSON',()=>{
+ const frame={},session='s',event=body=>({source:frame,origin:'null',data:{version:1,session,type:'write',path:'napplets/bundles',method:'POST',body}});
+ expect(validOrgDataRequest(event({html:'\u0001'.repeat(524288),trusted_code_acknowledged:true}),frame,session)).toBe(true);
+ expect(validOrgDataRequest(event({html:'x'.repeat(6*524288+16384)}),frame,session)).toBe(false);
+});
+
+it('draft authority comparison retains ordinary value conflicts and rejects narrowed datasets/capabilities',()=>{
+ const before=projectOrgData(normalizeOrgData(payload(),orgDataContext(makeStore()),'r'));
+ const changed=structuredClone(before);changed.records.people[0].values.name='Concurrent edit';changed.records.people[0].revision++;
+ expect(sameOrgDataAuthority(before,changed)).toBe(true);
+ changed.capabilities.write=false;expect(sameOrgDataAuthority(before,changed)).toBe(false);
+ const narrowed=structuredClone(before);narrowed.types=[];narrowed.records={};expect(sameOrgDataAuthority(before,narrowed)).toBe(false);
 });

@@ -18,6 +18,10 @@ export async function hydrateOrgData(store, options = {}, deps = {}) {
     current();
     await db.transaction('rw', db.org_data, async () => { current(); await db.org_data.put(row); current(); });
     return { complete: true };
+  } catch (error) {
+    // Failed reauthorization cannot leave a broader persisted read projection.
+    try { current(); await db.org_data.delete(orgDataPartition(c)); } catch { /* superseded/context disposed */ }
+    throw error;
   } finally { for (const s of signals) s.removeEventListener('abort', abort); }
 }
 export function prepareOrgDataCommand(store, input) {

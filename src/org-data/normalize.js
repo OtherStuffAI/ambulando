@@ -35,7 +35,8 @@ export function normalizeOrgSnapshot(payload, c, requestId) {
   const identities = {};
   for (const [id, npub] of Object.entries(payload.identities || {})) { if (!uuid.test(id) || typeof npub !== 'string' || !/^npub1[023456789acdefghjklmnpqrstuvwxyz]{58}$/.test(npub)) fail(); identities[id] = npub; }
   const changes = (payload.changes || []).map(r => ({ id: r.id, operation: r.operation, target_id: r.target_id, created_at: r.created_at }));
-  return { identities, changes, request_id: requestId, types, records, capabilities: capabilities(payload.capabilities), installations };
+  const bundles = (payload.bundles || []).map(({key,version,title,capabilities,sha256}) => ({key,version,title,capabilities,sha256}));
+  return { bundles, identities, changes, request_id: requestId, types, records, capabilities: capabilities(payload.capabilities), installations };
 }
 function capabilities(c) { return { read: c?.read === true, write: c?.write === true, schema: c?.schema === true, publish: c?.publish === true, install: c?.install === true }; }
 

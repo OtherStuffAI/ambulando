@@ -10,7 +10,7 @@ TowerSyncService owns the typed snapshot read and mutations. A dedicated worker
 validates the complete identity-bound snapshot and removes undeclared fields.
 The result persists in the workspace Dexie `org_data` projection, partitioned by
 backend/service, app, workspace, owner and viewer. liveQuery supplies Alpine and
-the host bridge. There is no independent UI polling or napplet network access.
+the host bridge. There is no independent UI polling. Bundled code uses the host for data; published JavaScript is trusted privileged code, not network-isolated.
 SSE emits payload-free org-data invalidations; the existing background fallback
 also reauthorizes an open host. Loading/error never renders an old snapshot as
 current. Superseded requests, disposed services and context changes cannot commit
@@ -29,10 +29,13 @@ invalidation takes priority over retaining a draft in a different workspace.
 The frame is an opaque-origin `allow-scripts` sandbox. Native form submissions
 are disabled. Generated forms validate locally and send named write commands
 from button/Enter handlers; they do not need `allow-forms`. Writes include the
-Tower revision. Failed saves display the clear error, retain the editable draft
-and remove the previously authorised read projection. A shared-data invalidation
-during an edit leaves the draft and warns that Save checks its original revision;
-Refresh discards it and reauthorizes. It never silently overwrites a stale edit.
+Tower revision. Failed saves reauthorize before retaining an editable draft. Every shared-data
+invalidation rechecks authority even while dirty or writing. A draft survives only
+a successful read with unchanged permitted datasets, fields, references, identities
+and capabilities. Failed reads, 403 writes and narrowed access destroy the iframe
+document and populated forms, including bundles that ignore bridge state.
+Ordinary authorised conflicts retain the original revision; Refresh discards the
+draft and reauthorizes. It never silently overwrites a stale edit.
 
 Linked initial avatars ask the host to open the existing identity card or DM
 flow using only an authorised person record/member identity. External avatar
@@ -44,8 +47,16 @@ actor link never adds membership; Tower validates references and DM authority.
 Tower stores immutable workspace-scoped HTML versions/digests/capability manifests
 and revision-checked installations. The catalogue can publish, install and launch
 them without a WApp process. The host loads the installed HTML as `srcdoc` with a
-host-owned CSP prepended. Scripts/styles must be inline; no external connections,
-forms, nested frames, objects or parent access. There is no claim of NIP-5D
+host-owned CSP prepended. Scripts/styles must be inline. Resource CSP denies fetch connections, forms,
+nested frames and objects; the opaque sandbox prevents parent DOM access.
+**CSP is not network isolation:** browser tests prove inline `location.href` can
+navigate the iframe to an HTTP endpoint with record values in the URL. Requests
+can leave before any load callback; no HTML filtering or navigation policy is
+claimed to fix this residual risk. Only trusted code may be published/installed,
+using dedicated `napplet.publish` / `napplet.install` grants and explicit
+`trusted_code_acknowledged:true` for both operations. The catalogue lists the
+immutable version, declared capabilities, permitted datasets and navigation risk
+before the install acknowledgement. Built-in code remains repository-controlled. There is no claim of NIP-5D
 conformance. Installed launchers appear in Toolbox following the authorised
 catalogue read; reload can discover them from Catalogue → Static napplets.
 
@@ -66,7 +77,9 @@ message keys. Intents:
 Host responses are `type:'state'`, `status:loading|ready|error`, `view`, and an
 explicit read projection only when the bundle declares `org_data.read`.
 The host hides installed bundle content while loading or after read errors,
-so the frame cannot keep a stale authorised view visible. Loading/errors omit records; a save error can include `retainDraft:true`.
+so the frame cannot keep a stale authorised view visible. Failed reads/errors omit records and destroy the document. During reauthorization
+and after an authorised conflict, `retainDraft:true` preserves controlled forms;
+it never permits a draft to bypass the authority read.
 Write paths are restricted to bootstrap, definitions, typed records and the
 built-in catalogue's publication/install controls. A published bundle cannot
 publish, install or launch another bundle. Schema/record/profile/DM intents require the

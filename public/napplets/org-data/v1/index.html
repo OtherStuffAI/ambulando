@@ -20,7 +20,7 @@
  const write=(path,body,method='POST')=>send('write',{path,body,method});
  function render(){
    notice.textContent=state.error||'';notice.className=state.error?'error':'';
-   if(state.status==='error'&&state.retainDraft&&(draft||schema||publishing))return;
+   if(state.retainDraft&&(draft||schema||publishing))return;
    main.replaceChildren();
    if(state.status!=='ready'){el('p',state.status==='loading'?'Loading authorised organisation data…':'Refresh to retry.',main);return;}
    if(state.view==='people')people();else if(state.view==='chart')chart();else if(state.view==='holidays')holidays();else catalogue();
@@ -83,18 +83,21 @@
     button('Remove field',box,()=>{schema.fields=schema.fields.filter(x=>x!==f);renderFields()})}};renderFields();
    button('Add field',form,()=>{schema.fields.push({key:'',label:'',type:'text',required:false});renderFields()});el('button','Save type',form,{type:'submit'});form.addEventListener('napplet-submit',e=>{e.preventDefault();if(!form.reportValidity())return;write('types'+(schema.revision?'/'+schema.key:''),{key:schema.key,label:schema.label,fields:schema.fields,access:schema.access,...(schema.revision?{expected_revision:schema.revision}:{})},schema.revision?'PATCH':'POST')});button('Cancel',form,()=>{schema=null;dirty(false);render()});
  }
+ const trustText='Trusted privileged JavaScript can read all currently permitted organisation records when org_data.read is declared. CSP blocks resource fetches but iframe self-navigation can send data to external sites. Only publish or install code you trust.';
  function bundles(cap){const details=el('details',undefined,main);el('summary','Static napplets',details);
    for(const b of state.projection.installations||[])button('Open '+b.title+' (v'+b.version+')',details,()=>send('bundle',{key:b.key}));
    if(cap.publish){const publish=el('details',undefined,details);el('summary','Publish a versioned bundle',publish);const form=el('form',undefined,publish);
     const key=input('Bundle key',form),title=input('Title',form),version=input('Version',form,1,'number');key.required=true;title.required=true;version.min=1;version.required=true;
     const l=el('label','Static HTML with inline scripts and styles',form),html=el('textarea',undefined,l);html.required=true;const caps=[];for(const c of ['org_data.read','org_data.write','org_data.schema','profile.open','dm.open']){const i=input(c,form,'','checkbox');i.addEventListener('change',()=>{if(i.checked)caps.push(c);else caps.splice(caps.indexOf(c),1)})}
-    form.addEventListener('input',()=>{publishing=true;dirty(true)});el('button','Publish bundle',form,{type:'submit'});form.addEventListener('napplet-submit',e=>{e.preventDefault();write('napplets/bundles',{key:key.value,title:title.value,version:Number(version.value),bridge_version:1,capabilities:caps,html:html.value})});
+    el('p',trustText,form);const ack=input('I trust this code and acknowledge the navigation risk',form,'','checkbox');ack.required=true;
+    form.addEventListener('input',()=>{publishing=true;dirty(true)});el('button','Publish bundle',form,{type:'submit'});form.addEventListener('napplet-submit',e=>{e.preventDefault();write('napplets/bundles',{key:key.value,title:title.value,version:Number(version.value),bridge_version:1,capabilities:caps,html:html.value,trusted_code_acknowledged:ack.checked})});
    }
-   if(cap.install){const form=el('form',undefined,details),key=input('Published bundle key',form),version=input('Version to install',form,1,'number');key.required=true;version.required=true;el('button','Install bundle',form,{type:'submit'});form.addEventListener('napplet-submit',e=>{e.preventDefault();const old=state.projection.installations?.find(b=>b.key===key.value);write('napplets/installations/'+key.value,{version:Number(version.value),expected_revision:old?.revision||0})})}
+   if(cap.install){for(const bundle of state.projection.bundles||[]){const form=el('form',undefined,details);el('h2',bundle.title+' (v'+bundle.version+')',form);el('p','Declared capabilities: '+(bundle.capabilities.join(', ')||'none')+'. Permitted data: '+(bundle.capabilities.includes('org_data.read')?types().map(t=>t.label).join(', ')+' (all authorised records and fields)':'none'),form);el('p',trustText,form);const ack=input('I trust '+bundle.title+' and acknowledge the navigation risk',form,'','checkbox');ack.required=true;el('button','Install '+bundle.title,form,{type:'submit'});form.addEventListener('napplet-submit',e=>{e.preventDefault();const old=state.projection.installations?.find(b=>b.key===bundle.key);write('napplets/installations/'+bundle.key,{version:bundle.version,expected_revision:old?.revision||0,trusted_code_acknowledged:ack.checked})})}}
+
  }
- window.addEventListener('message',e=>{const d=e.data;if(e.source!==parent||d?.version!==version||d?.session!==session||d.type!=='state')return;state=d;
-   if(d.status==='loading'||d.status==='ready'){draft=null;schema=null;publishing=false;dirty(false)}
-   if(d.status==='error'&&d.retainDraft){for(const b of main.querySelectorAll('button[data-submit]'))b.disabled=false}
+ window.addEventListener('message',e=>{const d=e.data;if(e.source!==parent||d?.version!==version||d?.session!==session||d.type!=='state')return;const duplicate=d.status==='ready'&&state.status==='ready'&&d.requestId&&d.requestId===state.requestId&&d.view===state.view;state=d;if(duplicate)return;
+   if(!d.retainDraft){draft=null;schema=null;publishing=false;dirty(false)}
+   if(d.retainDraft){for(const b of main.querySelectorAll('button[data-submit]'))b.disabled=d.status==='loading'}
    render();
  });send('ready');
 })();

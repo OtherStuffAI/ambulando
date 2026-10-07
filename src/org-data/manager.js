@@ -46,14 +46,14 @@ export const orgDataMixin = {
       this.orgDataBundleVisible = state.status === 'ready';
       if (state.status !== 'ready') this.orgDataInstallations = [];
       if (runtime.bundle) state = { ...state, projection: runtime.capabilities.includes('org_data.read') ? state.projection : undefined };
-      if (runtime.ready) runtime.frame?.contentWindow?.postMessage({ version: 1, session, type: 'state', ...state }, '*');
+      if (runtime.ready) runtime.frame?.contentWindow?.postMessage({ version: 1, session: runtime.session, type: 'state', ...state }, '*');
     };
     runtime.listener = event => {
-      if (!current() || !validOrgDataRequest(event, runtime.frame?.contentWindow, session)) return;
+      if (!current() || !validOrgDataRequest(event, runtime.frame?.contentWindow, runtime.session)) return;
       const data = event.data;
       if (data.type === 'dirty') { runtime.dirty = data.dirty; return; }
       if (data.type === 'bundle') { if (runtime.bundle) return; if (!this.confirmOrgDataDiscard(runtime)) return; void this.openOrgData({ view: 'bundle:' + data.key }); return; }
-      if (data.type === 'write' && !this.orgDataWriteAllowed(data, runtime)) return;
+      if (data.type === 'write' && (runtime.authorizing || runtime.blocked || !this.orgDataWriteAllowed(data, runtime))) return;
       if (data.type === 'write') { void this.writeOrgData(data); return; }
       if (['profile','dm'].includes(data.type)) {
         if (!runtime.capabilities.includes(data.type === 'dm' ? 'dm.open' : 'profile.open')) return;
@@ -148,21 +148,23 @@ export const orgDataMixin = {
   async syncOrgData() {
     const runtime = RUNTIMES.get(this);
     if (!runtime) return;
-    if (runtime.dirty || runtime.writing) { runtime.subscription?.unsubscribe(); runtime.send({ status: 'error', view: runtime.view, retainDraft: true, error: 'Shared data changed. Save checks your revision; refresh discards the draft.' }); return; }
-    await this.refreshOrgData();
+    await this.refreshOrgData({ preserveDraft: true, error: 'Shared data changed. Save checks your revision; refresh discards the draft.' });
   },
 
-  async refreshOrgData({ preserveDraft = false } = {}) {
+  async refreshOrgData({ preserveDraft = false, error: draftError = '' } = {}) {
     const runtime = RUNTIMES.get(this);
-    if (!runtime || runtime.state.status === 'loading' && runtime.request && !runtime.request.signal.aborted && runtime.state.view === runtime.view) return;
+    if (!runtime) return;
     if (!preserveDraft && !this.confirmOrgDataDiscard(runtime)) return;
     this.orgDataMenuOpen = false;
     runtime.request?.abort(); runtime.subscription?.unsubscribe();
     const controller = new AbortController(), requestId = crypto.randomUUID(), view = runtime.view;
+    const prior = runtime.authority;
+    const retaining = preserveDraft && (runtime.dirty || runtime.writing) && !!prior && !runtime.blocked;
+    runtime.authorizing = true;
     runtime.request = controller;
     const current = () => RUNTIMES.get(this) === runtime && !controller.signal.aborted
       && this.orgDataOpen && this.orgDataContextKey === runtime.context;
-    runtime.send({ status: 'loading', view });
+    runtime.send({ status: 'loading', view, retainDraft: retaining });
     try {
       const c = orgDataContext(this), db = getWorkspaceDb();
       const service = this.getTowerSyncService();
@@ -174,29 +176,61 @@ export const orgDataMixin = {
       }).subscribe({ next: result => {
         const projection = result?.projection;
         if (!current() || !projection) return;
-        this.orgDataInstallations = projection.installations || []; this.orgDataInstallationContext = runtime.context;
-        if (view.startsWith('bundle:') && !runtime.bundle) {
-          const bundle = result.bundles?.find(b => b.key === view.slice(7));
-          if (!bundle) { runtime.send({ status: 'error', view, error: 'Installed napplet unavailable.' }); return; }
-          runtime.bundle = bundle; runtime.capabilities = bundle.capabilities;
-          this.orgDataSrcdoc = sandboxBundle(bundle.html, sessionFor(runtime));
+        const unchanged = retaining && sameOrgDataAuthority(prior, projection);
+        if (retaining && !unchanged || runtime.bundle && prior && !sameOrgDataAuthority(prior, projection)) { this.clearOrgDataDocument(runtime); runtime.bundle = null; }
+        runtime.authority = projection; runtime.authorizing = false; runtime.blocked = false;
+        if (runtime.documentCleared) {
+          runtime.documentCleared = false; runtime.ready = false; runtime.session = crypto.randomUUID();
+          this.orgDataSrcdoc = view.startsWith('bundle:') ? '<!doctype html>' : '';
+          this.orgDataSrc = view.startsWith('bundle:') ? 'about:blank' : `/napplets/org-data/v1/index.html?session=${runtime.session}#${runtime.session}`;
         }
-        runtime.send({ status: 'ready', view, projection });
-      }, error: error => { if (current()) runtime.send({ status: 'error', view, error: (error?.status === 403 ? 'Organisation data access denied.' : error?.message || 'Organisation data unavailable. Refresh to retry.') }); } });
+        this.orgDataInstallations = projection.installations || []; this.orgDataInstallationContext = runtime.context;
+        if (view.startsWith('bundle:')) {
+          const bundle = result.bundles?.find(b => b.key === view.slice(7));
+          if (!bundle) { this.clearOrgDataDocument(runtime); runtime.send({ status: 'error', view, error: 'Installed napplet unavailable.' }); return; }
+          if (!runtime.bundle || runtime.bundle.sha256 !== bundle.sha256) {
+            runtime.bundle = bundle; runtime.capabilities = bundle.capabilities;
+            this.orgDataSrcdoc = sandboxBundle(bundle.html, sessionFor(runtime));
+          }
+        }
+        runtime.send(unchanged ? { status: 'error', view, requestId, projection, retainDraft: true, error: draftError || 'Save failed. Your authorised draft is retained.' } : { status: 'ready', view, requestId, projection });
+      }, error: error => { if (current()) { this.clearOrgDataDocument(runtime); runtime.send({ status: 'error', view, error: (error?.status === 403 ? 'Organisation data access denied.' : error?.message || 'Organisation data unavailable. Refresh to retry.') }); } } });
       await service.ensureLoaded('org-data', `${view}:${requestId}`, { force: true, requestId, signal: controller.signal });
     } catch (error) {
-      if (current()) { runtime.subscription?.unsubscribe(); runtime.send({ status: 'error', view, error: (error?.status === 403 ? 'Organisation data access denied.' : error?.message || 'Organisation data unavailable. Refresh to retry.') }); }
+      if (current()) { runtime.subscription?.unsubscribe(); this.clearOrgDataDocument(runtime); runtime.send({ status: 'error', view, error: (error?.status === 403 ? 'Organisation data access denied.' : error?.message || 'Organisation data unavailable. Refresh to retry.') }); }
     }
   },
 
   async writeOrgData(data) {
     const runtime = RUNTIMES.get(this);
-    if (!runtime || runtime.writing) return;
+    if (!runtime || runtime.writing || runtime.authorizing || runtime.blocked) return;
     runtime.writing = true;
     const current = () => RUNTIMES.get(this) === runtime && this.orgDataContextKey === runtime.context;
     try { await this.getTowerSyncService().command('org-data.write', { path: data.path, method: data.method, body: data.body }); if (!current()) return; runtime.dirty = false; runtime.writing = false; await this.refreshOrgData({ preserveDraft: true }); }
-    catch (error) { if (current()) { runtime.subscription?.unsubscribe(); runtime.send({ status: 'error', view: runtime.view, retainDraft: true, error: error?.message || 'Save failed. Your draft is retained.' }); } }
+    catch (error) { if (current()) { runtime.writing = false;
+      if (error?.status === 403) { runtime.request?.abort(); runtime.subscription?.unsubscribe();
+        this.clearOrgDataDocument(runtime); runtime.send({ status: 'error', view: runtime.view, error: 'Organisation data access denied.' });
+        try { await getWorkspaceDb().org_data.delete(orgDataPartition(orgDataContext(this))); } catch { /* disposed */ }
+      }
+      else await this.refreshOrgData({ preserveDraft: true, error: error?.message || 'Save failed. Your draft is retained.' }); } }
     finally { runtime.writing = false; }
+  },
+
+  clearOrgDataDocument(runtime) {
+    runtime.blocked = true; runtime.authorizing = false; runtime.dirty = false;
+    runtime.authority = null; runtime.bundle = null; runtime.ready = false; runtime.documentCleared = true;
+    runtime.state = { status: 'error', view: runtime.view };
+    // Destroy even a bundle that ignores bridge state. Removing srcdoc is
+    // essential: it takes precedence over a navigation to about:blank.
+    if (runtime.frame) {
+      const replacement = runtime.frame.cloneNode(false);
+      replacement.removeAttribute('srcdoc'); replacement.src = 'about:blank';
+      // Removing the browsing context clears populated DOM and script state
+      // even when navigation/state handlers in published code are uncooperative.
+      runtime.frame.replaceWith(replacement); runtime.frame = replacement;
+    }
+    this.orgDataSrc = 'about:blank'; this.orgDataSrcdoc = '<!doctype html>';
+    this.orgDataBundleVisible = false; this.orgDataInstallations = [];
   },
 
   closeOrgData(force = false) {
@@ -206,9 +240,9 @@ export const orgDataMixin = {
       runtime.request?.abort(); runtime.subscription?.unsubscribe();
       window.removeEventListener('message', runtime.listener);
       window.removeEventListener('pagehide', runtime.onPageHide);
+      // Context changes/close remove the browsing context just as revocation does.
+      this.clearOrgDataDocument(runtime);
       RUNTIMES.delete(this);
-      // Destroy the frame document, including its last aggregate content.
-      if (runtime.frame) runtime.frame.src = 'about:blank';
     }
     this.orgDataFull = false; this.orgDataMenuOpen = false;
     this.orgDataHistory = []; this.orgDataHistoryIndex = -1;
@@ -221,3 +255,15 @@ export const orgDataMixin = {
 };
 
 function sessionFor(runtime) { return runtime.session; }
+
+// A draft can include options/identities from other permitted datasets. Any
+// narrowing, reference redaction, schema or capability change discards it.
+export function sameOrgDataAuthority(before, after) {
+  const signature = p => JSON.stringify({
+    types: p.types, capabilities: p.capabilities, identities: p.identities,
+    records: p.types.map(t => [t.key, (p.records[t.key] || []).map(r => [r.id,
+      t.fields.filter(f => f.type.endsWith('_ref')).map(f => [f.key, r.values[f.key]])])]),
+    installations: p.installations,
+  });
+  return signature(before) === signature(after);
+}

@@ -3289,6 +3289,35 @@
       "notes": [
         "Hide installed napplet content while reauthorizing shared data and show a host-owned retry state after access or loading errors."
       ]
+    },
+    {
+      "buildNumber": 2287,
+      "label": "Organisation data authority and trusted code",
+      "notes": [
+        "Recheck access while editing and clear populated napplets when access is revoked or narrowed.",
+        "Require explicit trusted code acknowledgement and show data capabilities and navigation risk before installing static napplets."
+      ]
+    },
+    {
+      "buildNumber": 2288,
+      "label": "Clear revoked napplet documents",
+      "notes": [
+        "Destroy inaccessible napplet documents and populated forms after permission changes, while keeping authorised conflict drafts editable."
+      ]
+    },
+    {
+      "buildNumber": 2289,
+      "label": "Stable trusted bundle review",
+      "notes": [
+        "Keep trusted bundle disclosure controls open when the napplet receives a repeated response for the same authorised snapshot."
+      ]
+    },
+    {
+      "buildNumber": 2290,
+      "label": "Dispose napplet contexts",
+      "notes": [
+        "Remove the napplet browsing context immediately on workspace changes and close, including scripts that ignore host state."
+      ]
     }
   ]
 }

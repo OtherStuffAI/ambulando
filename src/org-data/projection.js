@@ -4,7 +4,7 @@ export const orgDataLifecycle = messageActivityLifecycle;
 export const orgDataPartition = messageActivityPartition;
 import { normalizeOrgSnapshot } from './normalize.js';
 export function normalizeOrgData(payload, c, requestId) { return { ...normalizeOrgSnapshot(payload, c, requestId), key: orgDataPartition(c) }; }
-export function projectOrgData(row) { return { types: row.types, records: row.records, capabilities: row.capabilities, identities: row.identities, changes: row.changes, installations: row.installations?.map(({html,...b}) => b) };  }
+export function projectOrgData(row) { return { bundles: row.bundles, types: row.types, records: row.records, capabilities: row.capabilities, identities: row.identities, changes: row.changes, installations: row.installations?.map(({html,...b}) => b) };  }
 export const NAPPLET_CSP = "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; connect-src 'none'; frame-src 'none'; object-src 'none'; form-action 'none'; base-uri 'none'";
 export function sandboxBundle(html, session) {
   // This first CSP is host-owned; subsequent policies can only restrict it.
