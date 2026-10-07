@@ -3115,6 +3115,41 @@
       "notes": [
         "Message activity now has back/forward time-range history, a menu with refresh and close, and full-page expand/collapse controls that preserve the running dashboard."
       ]
+    },
+    {
+      "buildNumber": 2258,
+      "label": "Opt-in problem reports",
+      "notes": [
+        "Record bounded sanitized local diagnostics, report a problem from the avatar menu, and optionally send grouped errors to your chosen channel and agent. WM App can add scoped host evidence with native consent."
+      ]
+    },
+    {
+      "buildNumber": 2259,
+      "label": "Problem report consent and recovery",
+      "notes": [
+        "Problem reports recheck consent after signing, prune expired evidence across workspaces, and provide accessible channel and agent choices."
+      ]
+    },
+    {
+      "buildNumber": 2260,
+      "label": "Scoped diagnostic uploads",
+      "notes": [
+        "Diagnostic report uploads and completion use the selected workspace backend throughout delivery."
+      ]
+    },
+    {
+      "buildNumber": 2261,
+      "label": "Description-only reports and useful safe traces",
+      "notes": [
+        "Send a problem description while recording stays off. Sanitized traces retain approved built asset and operation identifiers, and prepared evidence remains stable across retries."
+      ]
+    },
+    {
+      "buildNumber": 2262,
+      "label": "Description-only delivery checkpoints",
+      "notes": [
+        "Description-only reports can save upload checkpoints and complete delivery while historical recording stays off."
+      ]
     }
   ]
 }

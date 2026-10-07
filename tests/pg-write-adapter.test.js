@@ -854,6 +854,17 @@ describe('PG write adapter', () => {
     expect(message).toMatchObject({ record_id: 'message-1', parent_message_id: null, pg_thread_id: 'thread-1' });
   });
 
+  it('rechecks diagnostic consent after instruction signing and never posts a revoked report', async () => {
+    const api = await import('../src/api.js');
+    const signatures = await import('../src/message-instruction-signatures.js');
+    const guard = vi.fn(async () => { throw new Error('Diagnostic consent revoked during signing'); });
+    await expect(createTowerPgMessageFromLocal(store(), { record_id: 'diagnostic-1', channel_id: 'channel-1', body: 'Evaluate untrusted evidence' },
+      { assertCanSend: guard })).rejects.toThrow('revoked during signing');
+    expect(signatures.buildAgentInstructionSignature).toHaveBeenCalled();
+    expect(guard).toHaveBeenCalledOnce();
+    expect(api.createTowerPgChannelMessage).not.toHaveBeenCalled();
+  });
+
   it('creates an empty child thread without posting a message', async () => {
     const api = await import('../src/api.js');
     api.createTowerPgThreadBranch.mockResolvedValue({ thread: {

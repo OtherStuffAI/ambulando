@@ -1,3 +1,4 @@
+import { emitDiagnostic } from './diagnostics-events.js';
 const REQUEST_TYPE = 'tower-pg-materializer:request';
 const RESPONSE_TYPE = 'tower-pg-materializer:response';
 
@@ -126,6 +127,7 @@ export class TowerPgMaterializationWorkerClient {
   };
 
   handleError = (event) => {
+    emitDiagnostic({ source: 'worker', level: 'error', code: 'worker', name: event?.error?.name, stack: event?.error?.stack });
     const error = event?.error instanceof Error
       ? event.error
       : new Error(event?.message || 'Tower PG materialisation worker crashed');

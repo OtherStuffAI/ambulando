@@ -1,3 +1,4 @@
+import { diagnosticsManagerMixin } from './diagnostics-manager.js';
 import { subscribedReaderMixin } from './feed/reader-manager.js';
 import { messageActivityMixin } from './message-activity/manager.js';
 import { driveManagerMixin } from './drive.js';
@@ -2280,6 +2281,7 @@ export function initApp() {
     // --- lifecycle ---
 
     async init() {
+      this.initDiagnosticsLifecycle();
       this.initDocEditLeaseLifecycle?.();
       this.initReadAloud();
       if (typeof window !== 'undefined' && !this.chatImagePreviewCleanupHandler) {
@@ -10116,6 +10118,7 @@ export function initApp() {
     storeObj,
     shellState,
     avatarStatusMixin,
+    diagnosticsManagerMixin,
     taskBoardStateMixin,
     taskDetailManagerMixin,
     workspaceManagerMixin,

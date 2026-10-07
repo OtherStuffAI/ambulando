@@ -620,6 +620,9 @@ export async function createTowerPgMessageFromLocal(store, message, options = {}
     channelId: message.channel_id,
     threadId,
   });
+  // Signing may wait for native/user approval. Diagnostics consent can be
+  // revoked while that prompt is open, so recheck immediately before delivery.
+  await options.assertCanSend?.();
   const result = await createTowerPgChannelMessage(context.workspaceId, message.channel_id, {
     body: message.body,
     message_signature: messageSignature,

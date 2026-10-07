@@ -1,3 +1,4 @@
+import { emitDiagnostic } from './diagnostics-events.js';
 const LOG_BUFFER_KEY = '__wingmanFlightDeckLogs';
 const LOG_BUFFER_LIMIT = 200;
 const TRANSACTION_FAILURE_LOGS = new WeakMap();
@@ -21,6 +22,8 @@ export function flightDeckLog(level, topic, message, details = null) {
   };
 
   appendBrowserLog(entry);
+  emitDiagnostic({ level, code: /sync|sse|reconcil/i.test(topic) ? 'sync' : /worker/i.test(topic) ? 'worker' : 'console',
+    source: /worker/i.test(topic) ? 'worker' : 'browser', operation: topic, errorCode: details?.errorCode, name: details?.errorName, stack: details?.errorStack });
 
   const prefix = `[WingmanFD:${topic}] ${message}`;
   if (level === 'error') {
@@ -45,6 +48,7 @@ export function flightDeckTrace(topic, message, details = null) {
     details: details ?? null,
   };
   appendBrowserLog(entry);
+  emitDiagnostic({ level: 'trace', source: 'browser', operation: topic, code: /sync|sse|reconcil/i.test(topic) ? 'sync' : 'console' });
   return entry;
 }
 
@@ -53,7 +57,7 @@ export function flightDeckTrace(topic, message, details = null) {
 // workspace/error emits a fresh console diagnostic, never a permanent mute.
 export function flightDeckSyncFailure(store, level, topic, message, error, details = {}) {
   const diagnostic = { ...details, error: error?.message || String(error),
-    errorName: error?.name || 'Error', workerContext: error?.materializationContext || null };
+    errorName: error?.name || 'Error', errorCode: error?.code, workerContext: error?.materializationContext || null };
   if (['pg_read_authority_changed', 'pg_read_authority_resetting'].includes(error?.code)) {
     return flightDeckTrace(topic, message, diagnostic);
   }

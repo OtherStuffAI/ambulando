@@ -1,3 +1,4 @@
+import { emitDiagnostic } from './diagnostics-events.js';
 import { exportTowerTransports } from './tower-transport.js';
 import { getExtensionPublicKey, signEventWithExtension } from './auth/nostr.js';
 import { exportDecryptedKeys, getActiveSessionNpub } from './crypto/group-keys.js';
@@ -162,6 +163,7 @@ function handleWorkerMessage(event) {
 }
 
 function handleWorkerError(event) {
+  emitDiagnostic({ source: 'worker', level: 'error', code: 'worker', name: event?.error?.name, stack: event?.error?.stack });
   const error = event?.error instanceof Error
     ? event.error
     : new Error(event?.message || 'Sync worker crashed');

@@ -429,6 +429,7 @@
             </details>
           </section>
           <button type="button" @click="$store.chat.showAgentConnect()">Agent Connect</button>
+          <button type="button" @click="$store.chat.openDiagnosticsDialog()">Report a problem</button>
           <button type="button" @click="$store.chat.copyContext()">Copy Context</button>
           <button type="button" @click="$store.chat.copyId()">Copy ID</button>
           <button type="button" @click="$store.chat.syncNow()">Full sync</button>
@@ -437,6 +438,53 @@
           <button type="button" @click="$store.chat.showAvatarMenu = false; $store.chat.navigateTo('settings')">Setup</button>
           <button type="button" @click="$store.chat.logout()">Log out</button>
         </div>
+      </div>
+      <div class="modal-backdrop diagnostics-backdrop" x-show="$store.chat.showDiagnosticsDialog" x-cloak
+        @keydown.escape.window="$store.chat.showDiagnosticsDialog = false" @click.self="$store.chat.showDiagnosticsDialog = false">
+        <section class="modal diagnostics-dialog" role="dialog" aria-modal="true" aria-labelledby="diagnostics-title">
+          <div class="modal-header"><h2 id="diagnostics-title">Report a problem</h2>
+            <button type="button" aria-label="Close report dialog" @click="$store.chat.showDiagnosticsDialog = false">×</button></div>
+          <p>Opt in to keep up to 30 minutes of sanitized activity on this device. Capture excludes message content, typed values, request bodies, secrets and screenshots.</p>
+          <template x-if="$store.chat.diagnosticsSettings">
+            <div class="diagnostics-fields">
+              <label><input type="checkbox" x-model="$store.chat.diagnosticsSettings.enabled" :disabled="$store.chat.diagnosticsBusy" /> Record local diagnostics</label>
+              <label>Report channel
+                <select aria-label="Report channel" x-model="$store.chat.diagnosticsSettings.channelId" :disabled="$store.chat.diagnosticsBusy">
+                  <option value="">Choose a channel</option>
+                  <template x-for="channel in $store.chat.diagnosticsChannelOptions" :key="channel.record_id">
+                    <option :value="channel.record_id" x-text="channel.name || channel.title || 'Channel'"></option>
+                  </template>
+                </select>
+              </label>
+              <label>Agent to evaluate reports
+                <select aria-label="Agent to evaluate reports" x-model="$store.chat.diagnosticsSettings.agentNpub" :disabled="$store.chat.diagnosticsBusy">
+                  <option value="">Choose an agent</option>
+                  <template x-for="agent in $store.chat.diagnosticsAgentOptions" :key="agent.npub">
+                    <option :value="agent.npub" x-text="agent.label"></option>
+                  </template>
+                </select>
+              </label>
+              <label><input type="checkbox" x-model="$store.chat.diagnosticsSettings.automatic" :disabled="!$store.chat.diagnosticsSettings.enabled || $store.chat.diagnosticsBusy" /> Automatically send grouped error reports to this channel and agent</label>
+              <button type="button" :disabled="$store.chat.diagnosticsBusy" @click="$store.chat.saveDiagnosticsSettings()">Save diagnostics settings</button>
+            </div>
+          </template>
+          <p role="status" x-text="$store.chat.diagnosticsStatus"></p>
+          <p class="diagnostics-meta" x-text="$store.chat.diagnosticsHostStatus"></p>
+          <p class="diagnostics-meta" x-text="`${$store.chat.diagnosticsCount} recent events · ${$store.chat.diagnosticsPending} queued reports`"></p>
+          <p class="diagnostics-meta" x-show="$store.chat.diagnosticsLastReport" x-text="$store.chat.diagnosticsLastReport ? 'Last report sent: ' + new Date($store.chat.diagnosticsLastReport.at).toLocaleString() : ''"></p>
+          <label class="diagnostics-description">What happened, and what did you expect?
+            <textarea rows="4" maxlength="4000" x-model="$store.chat.diagnosticsDescription" placeholder="Describe the problem. Do not include secrets." :disabled="$store.chat.diagnosticsBusy"></textarea>
+          </label>
+          <p x-show="!$store.chat.diagnosticsSettings?.enabled">Historical recording is off. You can still send your description and current report metadata; no stored activity is included.</p>
+          <p>Sending shares your description and captured evidence with the selected channel and agent. Offline reports remain queued for up to 24 hours. Turning recording off cancels queued reports; turning automatic reporting off cancels automatic reports.</p>
+          <p>Clear deletes local history and queued reports. Already sent messages and attachments remain subject to channel retention; remove them in that channel.</p>
+          <p class="sync-error-text" role="alert" x-show="$store.chat.diagnosticsError" x-text="$store.chat.diagnosticsError"></p>
+          <div class="diagnostics-actions">
+            <button type="button" :disabled="$store.chat.diagnosticsBusy" @click="$store.chat.clearDiagnosticsHistory()">Clear local history</button>
+            <button type="button" :disabled="$store.chat.diagnosticsBusy" @click="$store.chat.retryDiagnosticsReports()">Retry queued reports</button>
+            <button type="button" :disabled="$store.chat.diagnosticsBusy || !$store.chat.diagnosticsDescription.trim()" @click="$store.chat.queueManualDiagnosticReport()">Send report</button>
+          </div>
+        </section>
       </div>
     </header>
 

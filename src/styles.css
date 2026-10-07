@@ -25066,6 +25066,18 @@ button.task-desc-toggle:focus-visible {
 .file-blossom-panel input { width: 100%; margin: 12px 0; }
 .file-blossom-panel button, .file-blossom-panel select { margin: 8px 8px 8px 0; }
 
+.diagnostics-backdrop { position: fixed; inset: 0; z-index: 1600; background: rgb(15 23 42 / 40%); display: grid; place-items: center; padding: 1rem; }
+.diagnostics-dialog { width: min(94vw, 620px); color: var(--text); }
+.diagnostics-dialog .modal-header { display: flex; justify-content: space-between; align-items: center; }
+.diagnostics-dialog p { margin: .7rem 0; font-size: .88rem; }
+.diagnostics-fields { display: grid; gap: .65rem; }
+.diagnostics-fields label, .diagnostics-description { display: grid; gap: .3rem; font-size: .9rem; }
+.diagnostics-fields label:has(input) { display: flex; align-items: start; gap: .5rem; }
+.diagnostics-fields select, .diagnostics-description textarea { width: 100%; padding: .5rem; border: 1px solid var(--border); border-radius: .4rem; }
+.diagnostics-actions { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .8rem; }
+.diagnostics-actions button, .diagnostics-fields button { padding: .5rem .7rem; border: 1px solid var(--border); border-radius: .4rem; }
+.diagnostics-meta { color: var(--muted); }
+
 /* Keep all napplet controls reachable without wrapping at narrow widths. */
 .message-activity-modal .thread-header { align-items: center; }
 .message-activity-modal .thread-header-actions { flex-shrink: 0; }

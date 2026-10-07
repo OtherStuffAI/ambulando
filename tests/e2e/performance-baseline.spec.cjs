@@ -269,6 +269,18 @@ async function runTypingScenario(page, scenario, seedOptions) {
   const shellReadyMs = Date.now() - shellStarted;
   const seedStarted = Date.now();
   await seedWorkspace(page, seedOptions);
+  if (seedOptions.diagnosticsRecording) {
+    await page.evaluate(async () => {
+      const store = Alpine.store('chat');
+      store.knownWorkspaces = [{workspaceKey:'perf-diagnostics',workspaceId:'perf-diagnostics',pgBackendMode:true,workspaceOwnerNpub:store.session.npub,directHttpsUrl:location.origin}];
+      store.selectedWorkspaceKey = 'perf-diagnostics';
+      await store.openDiagnosticsDialog();
+      store.diagnosticsSettings.enabled = true;
+      await store.saveDiagnosticsSettings();
+      store.showDiagnosticsDialog = false;
+      if (store.diagnosticsStatus !== 'Recording · manual reports only') throw Error('Diagnostic capture did not start');
+    });
+  }
   const composerReadyMs = Date.now() - shellStarted;
   const seedAndComposerReadyMs = Date.now() - seedStarted;
   await installTypingInstrumentation(page);
@@ -306,6 +318,10 @@ test('captures heavy-state chat composer typing responsiveness baseline', async 
     historySize: Number(process.env.FLIGHTDECK_PERF_HISTORY || 800),
     taskCount: Number(process.env.FLIGHTDECK_PERF_TASKS || 2_000),
   });
+});
+
+test('captures chat typing with diagnostics recording enabled', async ({page}) => {
+  await runTypingScenario(page, 'chat-composer-diagnostics-enabled', {documentCount:200,historySize:120,taskCount:200,diagnosticsRecording:true});
 });
 
 test('captures app shell and seeded navigation timing baseline', async ({ page }) => {

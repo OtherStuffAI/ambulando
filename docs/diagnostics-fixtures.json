@@ -1,0 +1,114 @@
+{
+  "now": 1791321600000,
+  "fixtures": [
+    {
+      "input": {
+        "ts": 1791321600000,
+        "source": "browser",
+        "level": "error",
+        "code": "exception",
+        "name": "TypeError",
+        "route": "https://user:secret@app.test/api/v4/workspaces/private-id/docs/doc?token=secret#secret",
+        "stack": "TypeError: secret\n at secretFunction (https://user:secret@app.test/assets/private.js:12:3)",
+        "method": "POST",
+        "status": 500,
+        "durationMs": 12.6,
+        "body": "private chat",
+        "message": "secret"
+      },
+      "expected": {
+        "ts": 1791321600000,
+        "source": "browser",
+        "level": "error",
+        "code": "exception",
+        "name": "TypeError",
+        "route": "/api/v4/workspaces/:id/docs/:id",
+        "stack": "at <frame>:12:3",
+        "method": "POST",
+        "status": 500,
+        "durationMs": 13
+      }
+    },
+    {
+      "input": {
+        "ts": 1791321600000,
+        "source": "unknown",
+        "level": "unknown",
+        "code": "private-text",
+        "name": "privateText",
+        "route": "/assets/app.js?secret=1",
+        "status": 0,
+        "stack": "at <frame>:123:4",
+        "operation": "private-user-text",
+        "errorCode": "secret"
+      },
+      "expected": {
+        "ts": 1791321600000,
+        "source": "browser",
+        "level": "info",
+        "code": "console",
+        "route": "/assets/:id",
+        "status": 0,
+        "stack": "at <frame>:123:4"
+      }
+    },
+    {
+      "input": {
+        "ts": 1791319799999,
+        "source": "browser",
+        "level": "error",
+        "code": "exception"
+      },
+      "expected": null
+    },
+    {
+      "input": {
+        "ts": 1791321605001,
+        "source": "browser",
+        "level": "error",
+        "code": "exception"
+      },
+      "expected": null
+    },
+    {
+      "input": {
+        "ts": 1791321600000,
+        "source": "worker",
+        "level": "error",
+        "code": "sync",
+        "operation": "startup-sync",
+        "errorCode": "pg_read_authority_changed",
+        "stack": "Error: private text\n at privateFunction (https://user:secret@app.test/assets/index-Abc12345.js:45:6)\n at other (https://app.test/assets/diagnostics-worker-XyZ12345.js?token=secret:12:3)\n at private (https://app.test/private.js:1:2)"
+      },
+      "expected": {
+        "ts": 1791321600000,
+        "source": "worker",
+        "level": "error",
+        "code": "sync",
+        "operation": "startup-sync",
+        "errorCode": "pg_read_authority_changed",
+        "stack": "at index-Abc12345.js:45:6\nat diagnostics-worker-XyZ12345.js:12:3\nat <frame>:1:2"
+      }
+    },
+    {
+      "input": {
+        "ts": 1791321600000,
+        "source": "network",
+        "level": "warn",
+        "code": "request",
+        "operation": "storage",
+        "errorCode": "storage_unavailable",
+        "stack": "at sync-worker-Abc12345.js:123:4\nat <frame>:9:1"
+      },
+      "expected": {
+        "ts": 1791321600000,
+        "source": "network",
+        "level": "warn",
+        "code": "request",
+        "operation": "storage",
+        "errorCode": "storage_unavailable",
+        "stack": "at sync-worker-Abc12345.js:123:4\nat <frame>:9:1"
+      }
+    }
+  ]
+}
