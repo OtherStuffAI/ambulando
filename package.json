@@ -52,7 +52,7 @@
     "fake-indexeddb": "^6.0.0",
     "jsdom": "^29.0.1",
     "knip": "^6.35.1",
-    "playwright": "1.51.1",
+    "playwright": "1.55.1",
     "vite": "^6.2.0",
     "vitest": "^3.0.0"
   }
