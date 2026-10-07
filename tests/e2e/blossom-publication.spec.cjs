@@ -50,7 +50,7 @@ test(`${source} panel uses production API/command/Dexie paths with stubbed Tower
         { version_id: 'old-version', version_number: 1, available: true, public: published, published_by_you: published, blossom_url: published ? publicUrl : null },
       ] }) });
     }
-    if (url.pathname === '/' || url.pathname === '/__blossom-fixture') return route.fulfill({ contentType: 'text/html', body: `<html><head><style>[x-cloak]{display:none}</style></head><body x-data='${JSON.stringify({row,msg:{record_id:'chat-message',workspace_id:'publication-workspace'},attachment:{storage_object_id:'chat-storage',filename:'Image.png'}})}'><h1>Files</h1>${button}${panel}<script type="module" src="/__blossom-fixture.js"></script></body></html>` });
+    if (url.pathname === '/' || url.pathname === '/__blossom-fixture') return route.fulfill({ contentType: 'text/html', body: `<html><head><meta charset="utf-8"><style>[x-cloak]{display:none}</style></head><body x-data='${JSON.stringify({row,msg:{record_id:'chat-message',workspace_id:'publication-workspace'},attachment:{storage_object_id:'chat-storage',filename:'Image.png'}})}'><h1>Files</h1>${button}${panel}<script type="module" src="/__blossom-fixture.js"></script></body></html>` });
     return route.abort();
   });
   await page.goto(origin);
