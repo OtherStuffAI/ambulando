@@ -998,7 +998,7 @@ describe('PG workspace manager mode', () => {
     ['unauthorized', Object.assign(new Error('Unauthorized'), { status: 401 })],
     ['forbidden', Object.assign(new Error('Forbidden'), { status: 403 })],
   ])('%s verification recovery', (_label, failure) => {
-    it.each(['same selection', 'startup refresh', 'different selection', 'no selection'])(
+    it.each(['same selection', 'different selection', 'no selection'])(
       'preserves saved state and refuses activation during %s', async (scenario) => {
         const db = await import('../src/db.js');
         const keys = await import('../src/crypto/workspace-keys.js');
@@ -1054,6 +1054,39 @@ describe('PG workspace manager mode', () => {
         expect(keys.removeCachedWorkspaceKeyBlob).not.toHaveBeenCalled();
       },
     );
+  });
+
+  it.each([
+    new TypeError('Failed to fetch'),
+    new DOMException('The operation timed out', 'TimeoutError'),
+    Object.assign(new Error('Bad gateway'), { status: 502 }),
+  ])('hydrates the saved workspace on refresh after a transient failure: %s', async (failure) => {
+    const workspace = {
+      workspaceKey: 'pg:saved', workspaceOwnerNpub: 'npub1owner',
+      directHttpsUrl: 'https://tower.example', pgSessionNpub: 'npub1user', pgBackendMode: true,
+    };
+    const store = await buildStore({
+      knownWorkspaces: [workspace], selectedWorkspaceKey: workspace.workspaceKey,
+      currentWorkspaceOwnerNpub: workspace.workspaceOwnerNpub,
+      verifyPgDescriptor: vi.fn().mockRejectedValue(failure),
+      rememberVerifiedPgWorkspace: vi.fn(),
+      loadLocalWorkspaceCoreData: vi.fn().mockResolvedValue(undefined),
+    });
+    await store.selectWorkspace(workspace.workspaceKey, { refresh: false });
+    expect(store.loadLocalWorkspaceCoreData).toHaveBeenCalledWith({ syncRoute: false });
+    expect(store.startWorkspaceLiveQueries).toHaveBeenCalled();
+    expect(store.selectedWorkspaceKey).toBe(workspace.workspaceKey);
+    expect(store.superbasedError).toContain('Updates unavailable');
+    expect(store.rememberVerifiedPgWorkspace).not.toHaveBeenCalled();
+  });
+
+  it.each([401, 403])('does not restore cached access after HTTP %s on refresh', async (status) => {
+    const workspace = { workspaceKey: 'pg:saved', pgBackendMode: true, pgSessionNpub: 'npub1user' };
+    const store = await buildStore({
+      selectedWorkspaceKey: workspace.workspaceKey,
+      verifyPgWorkspaceForSelection: vi.fn().mockRejectedValue(Object.assign(new Error('Denied'), { status })),
+    });
+    await expect(store.ensurePgWorkspaceAvailable(workspace, { allowCached: true })).rejects.toThrow('Denied');
   });
 
   it('rejects a cached PG workspace scoped to a different signer before Tower calls', async () => {

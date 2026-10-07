@@ -1379,7 +1379,7 @@ export const workspaceManagerMixin = {
     if (!workspace) return;
     if (isTowerPgBackendMode() && workspace.pgBackendMode && !options.pgVerified && !options.skipPgVerification) {
       try {
-        workspace = await this.ensurePgWorkspaceAvailable(workspace);
+        workspace = await this.ensurePgWorkspaceAvailable(workspace, { allowCached: options.refresh === false });
       } catch (error) {
         if (this._workspaceSelectionRequest !== selectionGeneration) return;
         const detail = error?.message || 'Workspace access verification failed';
@@ -1671,11 +1671,24 @@ export const workspaceManagerMixin = {
     ) || null;
   },
 
-  async ensurePgWorkspaceAvailable(workspace) {
+  async ensurePgWorkspaceAvailable(workspace, { allowCached = false } = {}) {
     if (!workspace || this.isPgWorkspaceForgottenThisLoad(workspace)) return null;
     try {
       return await this.verifyPgWorkspaceForSelection(workspace);
     } catch (error) {
+      const status = Number(error?.status || 0);
+      const transient = status >= 500 || status === 408 || status === 429
+        || (!status && (error?.name === 'TypeError' || error?.name === 'AbortError'
+          || error?.name === 'TimeoutError' || /timed? out|timeout|failed to fetch|network/i.test(error?.message || '')));
+      // Refresh may reuse this signer's previously verified selection. A
+      // transport failure says nothing about membership; new selections and
+      // explicit access denials still require successful verification.
+      if (allowCached && transient && this.session?.npub
+        && workspace.pgSessionNpub === this.session.npub
+        && workspace.workspaceKey && workspace.workspaceKey === this.selectedWorkspaceKey) {
+        this.superbasedError = `Updates unavailable: ${error?.message || 'Tower is unreachable'}. Your saved workspace is still available. Retry updates when the connection recovers.`;
+        return workspace;
+      }
       if (!isDefinitiveMissingPgWorkspaceError(error)) throw error;
       await this.forgetMissingPgWorkspace(workspace, {
         error,

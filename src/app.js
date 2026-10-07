@@ -2470,7 +2470,7 @@ export function initApp() {
         }
       } else {
         if (this.session?.npub && typeof this.ensurePgWorkspaceAvailable === 'function') {
-          const verifiedWorkspace = await this.ensurePgWorkspaceAvailable(this.currentWorkspace);
+          const verifiedWorkspace = await this.ensurePgWorkspaceAvailable(this.currentWorkspace, { allowCached: true });
           if (!verifiedWorkspace) return;
         }
         await this.ensureWorkspaceSessionKey();

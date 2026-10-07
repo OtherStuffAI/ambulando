@@ -51,7 +51,7 @@ describe('PG workspace signer bootstrap', () => {
 
     await shell.bootstrapSelectedWorkspace();
 
-    expect(shell.ensurePgWorkspaceAvailable).toHaveBeenCalledWith(staleWorkspace);
+    expect(shell.ensurePgWorkspaceAvailable).toHaveBeenCalledWith(staleWorkspace, { allowCached: true });
     expect(bootstrapWorkspaceSessionKeyMock).not.toHaveBeenCalled();
     expect(registerWorkspaceKeyMock).not.toHaveBeenCalled();
   });

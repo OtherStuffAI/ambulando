@@ -3059,6 +3059,13 @@
         "An unchanged local draft can reload or save without a recovery warning even when its old save-base metadata is missing. Existing Tower recoveries still require explicit resolution.",
         "Undoing an edit now updates the local draft safely, so reopening cannot restore an edit you already undid."
       ]
+    },
+    {
+      "buildNumber": 2249,
+      "label": "Keep saved workspaces available during outages",
+      "notes": [
+        "Refreshing a previously verified workspace now loads saved data when Tower times out or is temporarily unavailable. Access denials and signer changes still require verification."
+      ]
     }
   ]
 }

@@ -622,8 +622,8 @@ export function createShellState(options = {}) {
         this.refreshKnownHostsMetadata().catch(() => {});
       }
       const towerPgMode = isTowerPgBackendMode();
-      // Retained caches require restored identity and verified workspace access.
-      // selectWorkspace opens the partition only after those checks succeed.
+      // Restore identity before opening retained caches. Refresh can reuse this
+      // signer's verified selection when Tower is temporarily unreachable.
       if (!towerPgMode) {
         if (!this.selectedWorkspaceKey && this.currentWorkspaceOwnerNpub) {
           const legacyMatch = this.knownWorkspaces.find((workspace) => workspace.workspaceOwnerNpub === this.currentWorkspaceOwnerNpub) || null;
@@ -752,7 +752,7 @@ export function createShellState(options = {}) {
       if (!this.selectedWorkspaceKey && !this.currentWorkspaceOwnerNpub) return;
       if (isTowerPgBackendMode()) {
         if (this.session?.npub && typeof this.ensurePgWorkspaceAvailable === 'function') {
-          const verifiedWorkspace = await this.ensurePgWorkspaceAvailable(this.currentWorkspace);
+          const verifiedWorkspace = await this.ensurePgWorkspaceAvailable(this.currentWorkspace, { allowCached: true });
           if (!verifiedWorkspace) return;
         }
         await this.ensureWorkspaceSessionKey();
