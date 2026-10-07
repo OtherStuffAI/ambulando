@@ -3267,6 +3267,28 @@
       "notes": [
         "Removed the duplicate global Toolbox navigation row. Open Tower Usage from the existing Apps stack; Toolbox editing and app placement remain available."
       ]
+    },
+    {
+      "buildNumber": 2284,
+      "label": "Shared organisation data and napplets",
+      "notes": [
+        "Manage shared people, teams and holiday availability through a typed Organisation Data Catalogue and connected people and chart views.",
+        "Publish and install versioned static napplets in a sandboxed native modal with history, expansion and protected pending edits."
+      ]
+    },
+    {
+      "buildNumber": 2285,
+      "label": "Stable napplet reopening",
+      "notes": [
+        "Opening an already active napplet focuses its modal and preserves the existing frame and pending edits."
+      ]
+    },
+    {
+      "buildNumber": 2286,
+      "label": "Protected installed napplet refresh",
+      "notes": [
+        "Hide installed napplet content while reauthorizing shared data and show a host-owned retry state after access or loading errors."
+      ]
     }
   ]
 }

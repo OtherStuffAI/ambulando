@@ -1,3 +1,4 @@
+import { hydrateOrgData } from './org-data/tower.js';
 import { resolveTowerPgWorkspaceContext } from './pg-read-hydrator.js';
 import { getTowerPgScopeAccess } from './api.js';
 import { disposeContextTreeView } from './context-tree-view.js';
@@ -361,6 +362,7 @@ export const syncManagerMixin = {
     this._towerSyncService = replaceTowerSyncService(this._towerSyncService, {
       workspaceKey,
       families: {
+        'org-data': { trackFreshness: false, load: (_key, options) => hydrateOrgData(this, options) },
         'message-activity': {
           trackFreshness: false,
           load: (_requestKey, options) => hydrateMessageActivity(this, options.range, options),
@@ -3208,6 +3210,7 @@ export const syncManagerMixin = {
           hydrationStartedAt,
           messageIds: events.filter((event) => event?.entity_type === 'message').map((event) => event?.entity_id).filter(Boolean),
         });
+        if (this.orgDataOpen && events.some(e => ['org_data','workspace_member','group','channel_grant','scope_access'].includes(e?.entity_type))) await this.syncOrgData?.();
         const replayBurst = events.length > PG_SSE_TARGETED_EVENT_LIMIT;
         const targetedOnlyEvents = replayBurst
           ? events.filter((event) => PG_SSE_TARGETED_ONLY_ENTITY_TYPES.has(String(event?.entity_type || '').trim()))
@@ -3473,6 +3476,7 @@ export const syncManagerMixin = {
           });
         }
         await (this.requestTowerSyncFamily?.('workspace-bootstrap') ?? this.runTowerPgWorkspaceSync());
+        if (this.orgDataOpen) await this.syncOrgData?.();
         this.markTowerReachabilityRecovered?.('background-sync-success', {
           refresh: false,
           fallbackUsable: this.sseStatus !== 'connected',

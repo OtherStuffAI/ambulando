@@ -3034,7 +3034,7 @@ export async function hydrateTowerPgWorkroom(store, workroomId, deps = {}) {
 }
 
 export async function hydrateTowerPgEventUpdates(store, events = [], deps = {}) {
-  const pgEvents = Array.isArray(events) ? events : [];
+  const pgEvents = Array.isArray(events) ? events.filter(e => e?.entity_type !== 'org_data') : [];
   const writeAgentActivity = deps.upsertAgentActivity || upsertAgentActivity;
   const writeAgentSessionHealth = deps.upsertAgentSessionHealth || upsertAgentSessionHealth;
   const mergeCommentary = deps.mergeAgentActivityCommentary || mergeAgentActivityCommentary;

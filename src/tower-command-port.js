@@ -1,3 +1,4 @@
+import { prepareOrgDataCommand } from './org-data/tower.js';
 import { prepareFeedCommand } from './feed/tower.js';
 import {
   addPendingWrite,
@@ -153,6 +154,7 @@ async function reconcileTypedCommand(name, result, { owner = '', args = [] } = {
 }
 
 export function prepareTowerWorkspaceCommand(store, name, input = {}) {
+  if (name === 'org-data.write') return prepareOrgDataCommand(store, input);
   if (['context.create', 'context.update', 'context.attach', 'context.unlink', 'context.delete'].includes(name)) {
     return {
       entityKey: `context:${input.scopeId}:${input.componentId || 'new'}`,

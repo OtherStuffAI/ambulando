@@ -11297,6 +11297,38 @@
     </div>
     <iframe :title="$store.chat.messageActivityDisplayTitle + ' dashboard'" sandbox="allow-scripts" referrerpolicy="no-referrer" :src="$store.chat.messageActivitySrc || 'about:blank'"></iframe>
   </dialog>
+  <dialog id="org-data-modal" class="message-activity-modal" :class="{ 'thread-full': $store.chat.orgDataFull }" aria-labelledby="org-data-title" data-testid="org-data-modal"
+    x-effect="if ($store.chat.orgDataOpen && $store.chat.orgDataOpenedContext !== $store.chat.orgDataContextKey) $store.chat.closeOrgData(true)"
+    @keydown.escape="$store.chat.handleOrgDataEscape($event)" @cancel.prevent="$store.chat.handleOrgDataEscape($event)" @close="!$el.open && $store.chat.orgDataOpen && $store.chat.closeOrgData()"
+    @click.self="if ($event.offsetX < 0 || $event.offsetY < 0 || $event.offsetX > $el.clientWidth || $event.offsetY > $el.clientHeight) $store.chat.closeOrgData()">
+    <div class="thread-header">
+      <div class="thread-header-copy"><h2 id="org-data-title" x-text="$store.chat.orgDataDisplayTitle"></h2></div>
+      <div class="thread-header-actions">
+        <div class="thread-sequence-controls" role="group" aria-label="Napplet history">
+          <button type="button" class="thread-resize-btn" aria-label="Back in napplet history" title="Back in napplet history" :disabled="!$store.chat.orgDataCanBack" @click="$store.chat.navigateOrgData('back')">←</button>
+          <button type="button" class="thread-resize-btn" aria-label="Forward in napplet history" title="Forward in napplet history" :disabled="!$store.chat.orgDataCanForward" @click="$store.chat.navigateOrgData('forward')">→</button>
+        </div>
+        <div class="thread-title-menu" @click.outside="$store.chat.orgDataMenuOpen = false" @focusout="if (!$el.contains($event.relatedTarget)) $store.chat.orgDataMenuOpen = false">
+          <button type="button" class="thread-resize-btn" data-napplet-menu :aria-label="$store.chat.orgDataDisplayTitle + ' menu'" :title="$store.chat.orgDataDisplayTitle + ' menu'" aria-haspopup="menu" aria-controls="org-data-menu" :aria-expanded="$store.chat.orgDataMenuOpen" @click="$store.chat.toggleOrgDataMenu()">•••</button>
+          <div id="org-data-menu" class="thread-title-menu-popover" role="menu" x-show="$store.chat.orgDataMenuOpen" x-cloak>
+            <button type="button" role="menuitem" @click="$store.chat.dismissOrgDataMenu(); $store.chat.refreshOrgData()">Refresh</button>
+            <button type="button" role="menuitem" @click="$store.chat.dismissOrgDataMenu(); $store.chat.toggleOrgDataPresentation()" x-text="$store.chat.orgDataFull ? 'Collapse to modal' : 'Expand to full page'"></button>
+            <button type="button" role="menuitem" @click="$store.chat.closeOrgData()">Close</button>
+          </div>
+        </div>
+        <button type="button" class="thread-resize-btn" :aria-label="$store.chat.orgDataFull ? 'Collapse ' + $store.chat.orgDataDisplayTitle : 'Expand ' + $store.chat.orgDataDisplayTitle" :title="$store.chat.orgDataFull ? 'Collapse to modal' : 'Expand to full page'" @click="$store.chat.toggleOrgDataPresentation()">
+                    <svg x-show="!$store.chat.orgDataFull" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+                    <svg x-show="$store.chat.orgDataFull" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="14" y1="10" x2="21" y2="3"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+        </button>
+        <button type="button" class="thread-close-btn" data-napplet-close @click="$store.chat.closeOrgData()" :aria-label="'Close ' + $store.chat.orgDataDisplayTitle">&times;</button>
+      </div>
+    </div>
+    <div x-show="$store.chat.orgDataSrcdoc && !$store.chat.orgDataBundleVisible" role="status" class="p-4">
+      <p x-text="$store.chat.orgDataHostStatus === 'loading' ? 'Loading organisation data…' : $store.chat.orgDataHostError"></p>
+      <button type="button" class="btn mt-2" x-show="$store.chat.orgDataHostStatus === 'error'" @click="$store.chat.refreshOrgData()">Refresh napplet</button>
+    </div>
+    <iframe x-show="!$store.chat.orgDataSrcdoc || $store.chat.orgDataBundleVisible" :title="$store.chat.orgDataDisplayTitle + ' dashboard'" sandbox="allow-scripts" referrerpolicy="no-referrer" :src="$store.chat.orgDataSrc || 'about:blank'" :srcdoc="$store.chat.orgDataSrcdoc || null"></iframe>
+  </dialog>
   <script type="module" src="/src/main.js"></script>
 </body>
 </html>

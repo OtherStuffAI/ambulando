@@ -1,3 +1,4 @@
+import { orgDataMixin } from './org-data/manager.js';
 import { towerUsageMixin } from './tower-usage.js';
 import { toolboxMixin } from './toolbox-manager.js';
 import { diagnosticsManagerMixin } from './diagnostics-manager.js';
@@ -10175,6 +10176,7 @@ export function initApp() {
     notificationsManagerMixin,
     subscribedReaderMixin,
     messageActivityMixin,
+    orgDataMixin,
     toolboxMixin,
     towerUsageMixin,
     wappPublishingManagerMixin,

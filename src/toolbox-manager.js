@@ -101,6 +101,8 @@ export const toolboxMixin = {
         description: 'Messages by channel and scope', appType: 'Napplet' },
       { placementId: 'napplet:tower-usage', title: 'Tower Usage',
         description: 'Stored bytes in the selected Tower workspace', appType: 'Napplet' },
+      ...[['catalogue','Organisation Data Catalogue'],['people','People'],['chart','Organisation chart'],['holidays','Holiday viewer']].map(([view,title]) => ({ placementId: 'napplet:org-data-' + view, title, description: 'Shared organisation data', appType: 'Napplet', orgDataView: view })),
+      ...(this.orgDataInstallationContext && this.orgDataInstallationContext === this.orgDataContextKey ? (this.orgDataInstallations || []) : []).map(b => ({ placementId: 'napplet:bundle-' + b.key, title: b.title, description: 'Installed static napplet · version ' + b.version, appType: 'Napplet', orgDataView: 'bundle:' + b.key })),
     ].map((app, index) => {
       const placement = this.appPlacement(app);
       return { ...app, ...(app.appType === 'Napplet' ? { icon_url: placement.iconUrl || '', title: String(placement.displayTitle || '').trim() || app.title } : {}), launcherPosition: placement.position ?? index + 1 };
@@ -158,7 +160,8 @@ export const toolboxMixin = {
       const opener = this.visibleApps.length > 1 && active?.closest('[data-testid="apps-stack"]')
         ? document.querySelector('[data-testid="apps-stack"] .wapps-stack-hitbox') : active;
       this.closePersonalWappsOverlay();
-      if (entry.placementId === 'napplet:tower-usage') this.openTowerUsage({ opener });
+      if (entry.orgDataView) this.openOrgData({ opener, view: entry.orgDataView });
+      else if (entry.placementId === 'napplet:tower-usage') this.openTowerUsage({ opener });
       else this.openMessageActivity({ opener });
     } else this.openPersonalWapp(entry);
   },

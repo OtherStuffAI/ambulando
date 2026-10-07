@@ -1,0 +1,101 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; connect-src 'none'; frame-src 'none'; object-src 'none'; form-action 'none'; base-uri 'none'">
+<title>Organisation Data</title><style>
+:root{font:14px system-ui;color:#e7e9ed;background:#171b24;color-scheme:dark}body{margin:0;padding:16px}nav{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px}button,input,select,textarea{font:inherit;border:1px solid #526078;border-radius:6px;padding:8px;background:#242c3b;color:inherit}button{cursor:pointer}button:disabled{opacity:.45;cursor:default}button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid #89bfff}label{display:flex;flex-direction:column;gap:5px;margin:10px 0}input,select,textarea{max-width:100%;box-sizing:border-box}textarea{min-height:90px;width:100%}.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.panel{border:1px solid #374258;border-radius:8px;padding:14px;margin:12px 0}.scroll{overflow:auto}table{border-collapse:collapse;min-width:100%;text-align:left}th,td{padding:9px;border-bottom:1px solid #374258;white-space:nowrap}.error{color:#ffb6b6}.muted{color:#b1bbca}.person{display:flex;align-items:center;gap:12px}.avatar{border-radius:50%;width:40px;height:40px;display:grid;place-items:center;flex-shrink:0;background:#354861}.branch{margin-left:20px;border-left:1px solid #526078;padding-left:14px}.fields{display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:6px}h1{font-size:21px}h2{font-size:18px}pre{white-space:pre-wrap;overflow-wrap:anywhere}details{margin:12px 0}@media(max-width:500px){body{padding:10px}.fields{grid-template-columns:1fr 1fr}.branch{margin-left:8px;padding-left:8px}}
+</style></head><body><nav id="nav" aria-label="Organisation views"></nav><div id="notice" role="status"></div><main id="main"></main><script>
+(() => {
+ const session=window.nappletSession||location.hash.slice(1), version=1;
+ const send=(type,extra={})=>parent.postMessage({version,session,type,...extra},'*');
+ const el=(tag,text,parentNode,attrs={})=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;for(const[k,v]of Object.entries(attrs))n.setAttribute(k,v);parentNode?.append(n);if(attrs.type==='submit'){n.type='button';n.dataset.submit='true';n.addEventListener('click',()=>{const f=n.closest('form');if(f?.reportValidity())f.dispatchEvent(new Event('napplet-submit',{cancelable:true}))})}if(tag==='form')n.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target.tagName!=='TEXTAREA'){e.preventDefault();if(n.reportValidity())n.dispatchEvent(new Event('napplet-submit',{cancelable:true}))}});return n};
+ const main=document.getElementById('main'),notice=document.getElementById('notice');
+ const views={catalogue:'Catalogue',people:'People',chart:'Organisation chart',holidays:'Holiday availability'};
+ let state={status:'loading',view:'catalogue'}, selectedType='people', recordPage=0, draft=null, schema=null, publishing=false;
+ const dirty=value=>send('dirty',{dirty:value});
+ const button=(text,p,fn)=>{const b=el('button',text,p,{type:'button'});b.addEventListener('click',fn);return b};
+ for(const [view,label]of Object.entries(views))button(label,document.getElementById('nav'),()=>send('view',{view}));
+ document.addEventListener('keydown',e=>{if(e.key==='Escape'){e.preventDefault();send('close')}});
+ const records=key=>state.projection?.records?.[key]||[];
+ const types=()=>state.projection?.types||[];
+ const fieldLabel=(key,id)=>records(key).find(r=>r.id===id)?.values.name||'Unavailable';
+ const write=(path,body,method='POST')=>send('write',{path,body,method});
+ function render(){
+   notice.textContent=state.error||'';notice.className=state.error?'error':'';
+   if(state.status==='error'&&state.retainDraft&&(draft||schema||publishing))return;
+   main.replaceChildren();
+   if(state.status!=='ready'){el('p',state.status==='loading'?'Loading authorised organisation data…':'Refresh to retry.',main);return;}
+   if(state.view==='people')people();else if(state.view==='chart')chart();else if(state.view==='holidays')holidays();else catalogue();
+ }
+ function personCard(r,p){
+   const box=el('div',undefined,p,{class:'panel person'}),v=r.values;
+   const linked=!!(v.nostr||state.projection.identities?.[v.actor]);
+   const avatar=el(linked?'button':'span',(v.name||'?').split(/\s+/).map(w=>w[0]).slice(0,2).join(''),box,{class:'avatar',...(linked?{type:'button','aria-label':'Open profile for '+v.name}:{})});
+   if(linked)avatar.addEventListener('click',()=>send('profile',{id:r.id}));
+   const text=el('div',undefined,box);el('strong',v.name,text);el('div',[v.title,v.team?fieldLabel('teams',v.team):''].filter(Boolean).join(' · '),text,{class:'muted'});
+   if(linked)button('Message',box,()=>send('dm',{id:r.id}));
+   return box;
+ }
+ function people(){el('h1','People',main);if(!records('people').length)el('p','No people yet. Add shared records in the Catalogue.',main);for(const r of records('people'))personCard(r,main)}
+ function chart(){
+   el('h1','Organisation chart',main);const people=records('people'),seen=new Set();
+   const visit=(r,p)=>{if(seen.has(r.id))return;seen.add(r.id);personCard(r,p);const children=people.filter(c=>c.values.manager===r.id);if(children.length){const branch=el('div',undefined,p,{class:'branch'});for(const c of children)visit(c,branch)}};
+   for(const r of people.filter(r=>!r.values.manager||!people.some(p=>p.id===r.values.manager)))visit(r,main);
+   for(const r of people)visit(r,main);
+   if(!people.length)el('p','Add people and manager relationships in the Catalogue.',main);
+ }
+ function holidays(){el('h1','Holiday availability',main);el('p','Shared availability only.',main,{class:'muted'});const wrap=el('div',undefined,main,{class:'scroll'}),table=el('table',undefined,wrap),head=el('tr',undefined,el('thead',undefined,table));for(const x of ['Person','Team','From','To','Status'])el('th',x,head);const body=el('tbody',undefined,table);for(const r of records('holidays')){const v=r.values,p=records('people').find(p=>p.id===v.person),row=el('tr',undefined,body);for(const x of [p?.values.name||'Unavailable',p?.values.team?fieldLabel('teams',p.values.team):'',v.start_date,v.end_date,v.status||''])el('td',x,row)}if(!records('holidays').length)el('p','No availability records yet.',main)}
+ function catalogue(){
+   el('h1','Organisation Data Catalogue',main);
+   const cap=state.projection.capabilities||{},toolbar=el('div',undefined,main,{class:'row'});
+   if(cap.schema){button('Create type',toolbar,()=>{schema={key:'',label:'',fields:[],access:{read:'members',write:'members'}};dirty(true);renderSchema()});if(!types().length)button('Set up people, teams and holidays',toolbar,()=>write('bootstrap',{}))}
+   if(!types().length)el('p','No accessible data types. A catalogue administrator can set up the default types.',main);
+   if(types().length){if(!types().some(t=>t.key===selectedType))selectedType=types()[0].key;
+    const select=el('select',undefined,toolbar,{'aria-label':'Data type'});for(const t of types()){const o=el('option',t.label,select,{value:t.key});o.selected=t.key===selectedType}select.addEventListener('change',()=>{selectedType=select.value;recordPage=0;draft=null;dirty(false);render()});
+    const t=types().find(t=>t.key===selectedType);
+    if(t.capabilities.schema)button('Edit type',toolbar,()=>{schema=structuredClone(t);dirty(true);renderSchema()});
+    if(t.capabilities.write)button('Add record',toolbar,()=>editRecord(t));
+    const wrap=el('div',undefined,main,{class:'scroll'}),table=el('table',undefined,wrap),header=el('tr',undefined,el('thead',undefined,table));for(const f of t.fields)el('th',f.label,header);el('th','Actions',header);
+    const body=el('tbody',undefined,table);const all=records(t.key);recordPage=Math.min(recordPage,Math.max(0,Math.ceil(all.length/50)-1));for(const r of all.slice(recordPage*50,(recordPage+1)*50)){const row=el('tr',undefined,body);for(const f of t.fields){const v=r.values[f.key];el('td',f.type==='record_ref'&&v?fieldLabel(f.target_type,v):String(v??''),row)}const actions=el('td',undefined,row);if(t.capabilities.write){button('Edit',actions,()=>editRecord(t,r));button('Delete',actions,()=>{if(confirm('Delete this record? Referenced records cannot be deleted.'))write('types/'+t.key+'/records/'+r.id,{expected_revision:r.revision},'DELETE')})}}
+    const pages=el('div',undefined,main,{class:'row'});button('Previous records',pages,()=>{recordPage--;render()}).disabled=recordPage===0;el('span',`Page ${recordPage+1} · ${all.length} records`,pages);button('Next records',pages,()=>{recordPage++;render()}).disabled=(recordPage+1)*50>=all.length;
+   }
+   bundles(cap);
+   if(state.projection.changes?.length){const d=el('details',undefined,main);el('summary','Recent changes',d);for(const c of state.projection.changes)el('p',c.created_at+' · '+c.operation+' · '+c.target_id,d)}
+ }
+ function input(label,p,value='',type='text'){const l=el('label',label,p),i=el('input',undefined,l,{type});i.value=value;return i}
+ function editRecord(t,r){main.replaceChildren();el('h1',(r?'Edit ':'Add ')+t.label,main);draft={type:t.key,id:r?.id,revision:r?.revision,values:structuredClone(r?.values||{})};dirty(true);const form=el('form',undefined,main);
+   for(const f of t.fields){const l=el('label',f.label+(f.required?' *':''),form);let i;
+    if(f.type==='record_ref'){i=el('select',undefined,l);el('option','Choose…',i,{value:''});for(const target of records(f.target_type)){const o=el('option',target.values.name||target.id,i,{value:target.id});o.selected=draft.values[f.key]===target.id}}
+    else if(f.type==='boolean'){i=el('select',undefined,l);for(const [v,label]of [['','Unset'],['true','Yes'],['false','No']]){const o=el('option',label,i,{value:v});o.selected=String(draft.values[f.key]??'')===v}}
+    else{i=el('input',undefined,l,{type:f.type==='number'?'number':f.type==='date'?'date':'text'});i.value=draft.values[f.key]??'';if(f.type==='number')i.step='any'}
+    i.required=!!f.required;i.addEventListener('input',()=>{const v=i.value;if(v==='')delete draft.values[f.key];else draft.values[f.key]=f.type==='number'?Number(v):f.type==='boolean'?v==='true':v;dirty(true)})
+   }
+   const save=el('button','Save record',form,{type:'submit'});form.addEventListener('napplet-submit',e=>{e.preventDefault();if(!form.reportValidity())return;save.disabled=true;write('types/'+t.key+'/records'+(r?'/'+r.id:''),{values:draft.values,...(r?{expected_revision:r.revision}:{})},r?'PATCH':'POST')});
+   button('Cancel',form,()=>{draft=null;dirty(false);render()});
+ }
+ function renderSchema(){main.replaceChildren();el('h1',schema.revision?'Edit data type':'Create data type',main);const form=el('form',undefined,main);
+   const k=input('Stable key',form,schema.key);k.required=true;k.pattern='[a-z][a-z0-9_]{0,63}';k.disabled=!!schema.revision;k.addEventListener('input',()=>schema.key=k.value);
+   const label=input('Label',form,schema.label);label.required=true;label.addEventListener('input',()=>schema.label=label.value);
+   for(const op of ['read','write']){const l=el('label',op==='read'?'Read access':'Record editing access',form),i=el('select',undefined,l);for(const [v,title]of [['members','Permitted viewers/editors'],['admins','Catalogue administrators with permission']]){const o=el('option',title,i,{value:v});o.selected=schema.access[op]===v}i.addEventListener('change',()=>schema.access[op]=i.value)}
+   const fields=el('div',undefined,form);
+   const renderFields=()=>{fields.replaceChildren();for(const f of schema.fields){const box=el('div',undefined,fields,{class:'panel'}),row=el('div',undefined,box,{class:'fields'});const key=input('Field key',row,f.key),label=input('Field label',row,f.label);key.required=true;key.pattern='[a-z][a-z0-9_]{0,63}';label.required=true;key.addEventListener('input',()=>f.key=key.value);label.addEventListener('input',()=>f.label=label.value);
+    const l=el('label','Type',row),i=el('select',undefined,l);for(const type of ['text','number','boolean','date','record_ref','actor_ref','nostr_ref','workspace_ref']){const o=el('option',type,i,{value:type});o.selected=f.type===type}i.addEventListener('change',()=>{f.type=i.value;renderFields()});
+    const required=input('Required',row,'','checkbox');required.checked=!!f.required;required.addEventListener('change',()=>f.required=required.checked);
+    if(f.type==='record_ref'){const target=input('Related type key',box,f.target_type||'');target.required=true;target.addEventListener('input',()=>f.target_type=target.value)}
+    button('Remove field',box,()=>{schema.fields=schema.fields.filter(x=>x!==f);renderFields()})}};renderFields();
+   button('Add field',form,()=>{schema.fields.push({key:'',label:'',type:'text',required:false});renderFields()});el('button','Save type',form,{type:'submit'});form.addEventListener('napplet-submit',e=>{e.preventDefault();if(!form.reportValidity())return;write('types'+(schema.revision?'/'+schema.key:''),{key:schema.key,label:schema.label,fields:schema.fields,access:schema.access,...(schema.revision?{expected_revision:schema.revision}:{})},schema.revision?'PATCH':'POST')});button('Cancel',form,()=>{schema=null;dirty(false);render()});
+ }
+ function bundles(cap){const details=el('details',undefined,main);el('summary','Static napplets',details);
+   for(const b of state.projection.installations||[])button('Open '+b.title+' (v'+b.version+')',details,()=>send('bundle',{key:b.key}));
+   if(cap.publish){const publish=el('details',undefined,details);el('summary','Publish a versioned bundle',publish);const form=el('form',undefined,publish);
+    const key=input('Bundle key',form),title=input('Title',form),version=input('Version',form,1,'number');key.required=true;title.required=true;version.min=1;version.required=true;
+    const l=el('label','Static HTML with inline scripts and styles',form),html=el('textarea',undefined,l);html.required=true;const caps=[];for(const c of ['org_data.read','org_data.write','org_data.schema','profile.open','dm.open']){const i=input(c,form,'','checkbox');i.addEventListener('change',()=>{if(i.checked)caps.push(c);else caps.splice(caps.indexOf(c),1)})}
+    form.addEventListener('input',()=>{publishing=true;dirty(true)});el('button','Publish bundle',form,{type:'submit'});form.addEventListener('napplet-submit',e=>{e.preventDefault();write('napplets/bundles',{key:key.value,title:title.value,version:Number(version.value),bridge_version:1,capabilities:caps,html:html.value})});
+   }
+   if(cap.install){const form=el('form',undefined,details),key=input('Published bundle key',form),version=input('Version to install',form,1,'number');key.required=true;version.required=true;el('button','Install bundle',form,{type:'submit'});form.addEventListener('napplet-submit',e=>{e.preventDefault();const old=state.projection.installations?.find(b=>b.key===key.value);write('napplets/installations/'+key.value,{version:Number(version.value),expected_revision:old?.revision||0})})}
+ }
+ window.addEventListener('message',e=>{const d=e.data;if(e.source!==parent||d?.version!==version||d?.session!==session||d.type!=='state')return;state=d;
+   if(d.status==='loading'||d.status==='ready'){draft=null;schema=null;publishing=false;dirty(false)}
+   if(d.status==='error'&&d.retainDraft){for(const b of main.querySelectorAll('button[data-submit]'))b.disabled=false}
+   render();
+ });send('ready');
+})();
+</script></body></html>
