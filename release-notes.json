@@ -3150,6 +3150,13 @@
       "notes": [
         "Description-only reports can save upload checkpoints and complete delivery while historical recording stays off."
       ]
+    },
+    {
+      "buildNumber": 2263,
+      "label": "Publish chat attachments directly to Blossom",
+      "notes": [
+        "Publish existing chat images and files from chat or Files without copying bytes. Public consent uses the actual message source; status and unpublish keep each actor\u2019s publication independent."
+      ]
     }
   ]
 }

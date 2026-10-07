@@ -2309,6 +2309,59 @@ describe('docsManagerMixin durable recovery drafts', () => {
     expect(updateTowerPgDocMock).not.toHaveBeenCalled();
   });
 
+  it('preserves a draft when workspace switching closes its database during open', async () => {
+    const { store, record } = createSyncedPgDocSaveStore({ currentModel: richDocContentModel('Draft during database open') });
+    const db = openWorkspaceDb('npub1signedinactor');
+    const originalOpen = db.open.bind(db);
+    db.close();
+    let started;
+    const didStart = new Promise(resolve => { started = resolve; });
+    const opening = vi.spyOn(db, 'open').mockImplementationOnce(() => {
+      const result = originalOpen();
+      started();
+      return result;
+    });
+    const writing = store.persistSelectedDocDraft();
+    await didStart;
+    store.currentWorkspace = { ...store.currentWorkspace, workspaceId: 'workspace-2' };
+    store.docEditAccessGeneration += 1;
+    await openWorkspaceDb('npub1otherworkspace').open();
+    await expect(writing).resolves.toMatchObject({ content: 'Draft during database open' });
+    opening.mockRestore();
+    await openWorkspaceDb('npub1signedinactor').open();
+    expect(await getDocumentDraft('workspace-1', record.record_id)).toMatchObject({ content: 'Draft during database open' });
+  });
+
+  it('does not apply an undo error to a newer draft revision', async () => {
+    const canonical = richDocContentModel('Saved body');
+    const { store, modelRef, record } = createSyncedPgDocSaveStore({ content: canonical.content,
+      editorState: canonical.editor_state, currentModel: canonical, draftDirty: false });
+    const db = openWorkspaceDb('npub1signedinactor');
+    let fail;
+    let started;
+    const didStart = new Promise(resolve => { started = resolve; });
+    const delayed = new Promise((_resolve, reject) => { fail = reject; });
+    const deleting = vi.spyOn(db.document_drafts, 'delete').mockImplementationOnce(() => {
+      started();
+      return delayed;
+    });
+    store.syncDocRichEditorContentModel(canonical);
+    store.handleDocRichEditorUpdate();
+    const undoing = store.docDraftUndoPromise;
+    await didStart;
+    store.syncDocRichEditorContentModel(modelRef.current = richDocContentModel('Newer edit'));
+    store.docEditDraftDirty = true;
+    store.docAutosaveState = 'pending';
+    const writing = store.persistSelectedDocDraft();
+    fail(new Error('Superseded undo failed'));
+    await expect(undoing).resolves.toBe(false);
+    await writing;
+    deleting.mockRestore();
+    expect(store.docEditAccessMessage).not.toContain('Superseded undo failed');
+    expect(store.docAutosaveState).toBe('pending');
+    expect(await getDocumentDraft('workspace-1', record.record_id)).toMatchObject({ content: 'Newer edit' });
+  });
+
   it('does not submit a recovery for unchanged content even when the old base is unavailable', async () => {
     const model = richDocContentModel('Unchanged body');
     const { store, record } = createSyncedPgDocSaveStore({ content: model.content,

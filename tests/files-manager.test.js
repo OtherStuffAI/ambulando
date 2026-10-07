@@ -49,6 +49,13 @@ describe('files manager', () => {
     expect(rows[1]).toMatchObject({ object_id: 'pdf-object', pg_record_type: 'file', name: 'report.pdf' });
   });
 
+  it('projects metadata-only chat images/files with their real message source and owning workspace', () => {
+    const rows=buildFileBrowserRows({ fileMessages:[{record_id:'message',pg_workspace_id:'workspace',channel_id:'channel',body:'![Image](storage://image)',attachments:[{storage_object_id:'image',kind:'image',filename:'photo.png',content_type:'image/png'},{storage_object_id:'file',kind:'file',filename:'notes.pdf',size_bytes:42}]}] });
+    expect(rows).toHaveLength(2);
+    expect(rows.find(r => r.object_id === 'image')).toMatchObject({object_id:'image',source_type:'chat',source_record_id:'message',workspace_id:'workspace',name:'photo.png'});
+    expect(rows.find(r => r.object_id === 'file')).toMatchObject({object_id:'file',source_record_id:'message',name:'notes.pdf',size_bytes:42});
+  });
+
   it('uses the file workspace backend and refuses unknown or ambiguous workspaces', () => {
     const store = Object.assign(Object.create(filesManagerMixin), {
       currentWorkspace: { workspaceId: 'current', directHttpsUrl: 'https://current.example' },

@@ -1,3 +1,4 @@
+import { mergeChatStorageAttachments } from './chat-attachments.js';
 import { fileBlossomMixin } from './file-blossom.js';
 import {
   completeStorageObject,
@@ -466,7 +467,12 @@ export function buildFileBrowserRows(store = {}) {
 
   for (const message of messages) {
     const channel = context.channelById.get(message.channel_id);
-    for (const ref of uniqueStorageRefs(message.body)) {
+    const attachmentRefs = mergeChatStorageAttachments(message.body, message.attachments)
+      .filter(a => ['file', 'image'].includes(a.kind) && a.storage_object_id)
+      .map(a => ({ objectId: a.storage_object_id, kind: a.kind, name: a.filename, contentType: a.content_type, sizeBytes: a.size_bytes }));
+    const refs = new Map(uniqueStorageRefs(message.body).map(ref => [ref.objectId, ref]));
+    for (const ref of attachmentRefs) refs.set(ref.objectId, { ...refs.get(ref.objectId), ...ref });
+    for (const ref of refs.values()) {
       rows.push(baseRow({
         object_id: ref.objectId,
         kind: ref.kind,
@@ -474,6 +480,8 @@ export function buildFileBrowserRows(store = {}) {
         source_type: 'chat',
         source_label: channel?.title || 'Chat',
         source_record_id: message.record_id,
+        workspace_id: message.pg_workspace_id || message.workspace_id,
+        size_bytes: ref.sizeBytes,
         scope_id: getRecordScopeId(channel),
         channel_id: message.channel_id || null,
         thread_id: message.pg_thread_id || message.parent_message_id || null,

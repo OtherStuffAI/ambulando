@@ -2765,3 +2765,13 @@ export async function setTowerPgFileBlossom(workspaceId, fileId, versionId, publ
   const resp = await signedTowerPgFetch(path, { baseUrl, appNpub, method, ...(publish ? { body: {} } : {}) });
   return json(resp, { requestUrl: resolveTowerPgUrl(path, baseUrl), method, prefix: 'Tower PG API' });
 }
+
+export async function getTowerPgAttachmentBlossom(workspaceId, messageId, storageObjectId, { baseUrl = _baseUrl, appNpub = FLIGHT_DECK_PG_APP_NPUB } = {}) {
+  const path = `/api/v4/flightdeck-pg/workspaces/${encodeURIComponent(workspaceId)}/messages/${encodeURIComponent(messageId)}/attachments/${encodeURIComponent(storageObjectId)}/blossom`;
+  return json(await signedTowerPgFetch(path, { baseUrl, appNpub }), { requestUrl: resolveTowerPgUrl(path, baseUrl), method: 'GET', prefix: 'Tower PG API' });
+}
+export async function setTowerPgAttachmentBlossom(workspaceId, messageId, storageObjectId, publish, consent, { baseUrl = _baseUrl, appNpub = FLIGHT_DECK_PG_APP_NPUB } = {}) {
+  const path = `/api/v4/flightdeck-pg/workspaces/${encodeURIComponent(workspaceId)}/messages/${encodeURIComponent(messageId)}/attachments/${encodeURIComponent(storageObjectId)}/blossom`;
+  const method = publish ? 'PUT' : 'DELETE';
+  return json(await signedTowerPgFetch(path, { baseUrl, appNpub, method, ...(publish ? { body: { public: true, expected_link_id: consent.link_id, expected_sha256: consent.sha256_hex } } : {}) }), { requestUrl: resolveTowerPgUrl(path, baseUrl), method, prefix: 'Tower PG API' });
+}

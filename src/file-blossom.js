@@ -1,7 +1,8 @@
+import { mergeChatStorageAttachments } from './chat-attachments.js';
 import { liveQuery } from 'dexie';
 import { getWorkspaceDb } from './db.js';
-import { getTowerPgFileBlossom } from './api.js';
-import { setTowerPgFileBlossom } from './tower-command-intents.js';
+import { getTowerPgFileBlossom, getTowerPgAttachmentBlossom } from './api.js';
+import { setTowerPgFileBlossom, setTowerPgAttachmentBlossom } from './tower-command-intents.js';
 import { resolveTowerPgWorkspaceContext } from './pg-workspace-context.js';
 
 const subscriptions = new WeakMap();
@@ -20,9 +21,21 @@ export const fileBlossomMixin = {
   fileBlossomName: '',
   fileBlossomFileId: '',
   fileBlossomContext: null,
+  fileBlossomAttachment: false,
+  fileBlossomObjectId: '',
 
   canPublishFileBrowserRow(row) {
-    return Boolean(this.isTowerPgMode && row?.pg_record_type === 'file' && row.source_record_id);
+    return Boolean(this.isTowerPgMode && row?.source_record_id && (row.pg_record_type === 'file' || (row.source_type === 'chat' && row.object_id)));
+  },
+  publishableMessageAttachments(message) {
+    if (!this.isTowerPgMode || !message?.record_id || message.deleted_at) return [];
+    return mergeChatStorageAttachments(message.body, message.attachments)
+      .filter(a => ['image', 'file'].includes(a.kind) && a.storage_object_id);
+  },
+  openMessageAttachmentBlossom(message, attachment) {
+    return this.openFileBlossom({ source_type: 'chat', source_record_id: message.record_id,
+      object_id: attachment.storage_object_id, name: attachment.filename || 'Attachment',
+      workspace_id: message.pg_workspace_id || message.workspace_id });
   },
   get selectedFileBlossomVersion() {
     return (this.fileBlossomVersions || []).find(version => version.version_id === this.fileBlossomVersionId) || null;
@@ -34,6 +47,8 @@ export const fileBlossomMixin = {
     this.fileBlossomOpen = false;
     this.fileBlossomContext = null;
     this.fileBlossomVersions = [];
+    this.fileBlossomAttachment = false;
+    this.fileBlossomObjectId = '';
     this.fileBlossomCanPublish = false;
     this.fileBlossomBusy = false;
   },
@@ -42,6 +57,8 @@ export const fileBlossomMixin = {
     this.fileBlossomOpen = true;
     this.fileBlossomError = '';
     this.fileBlossomFileId = row.source_record_id;
+    this.fileBlossomAttachment = row.source_type === 'chat';
+    this.fileBlossomObjectId = row.object_id || '';
     this.fileBlossomName = row.name;
     this.fileBlossomVersionId = '';
     this.fileBlossomBusy = true;
@@ -51,16 +68,22 @@ export const fileBlossomMixin = {
       if (!context?.workspaceId || (row.workspace_id && row.workspace_id !== context.workspaceId)) throw new Error('Open this file in its owning workspace.');
       const db = getWorkspaceDb();
       this.fileBlossomContext = context;
-      const key = `${context.workspaceId}:${row.source_record_id}`;
+      const attachment = this.fileBlossomAttachment;
+      let ready = false;
+      const key = attachment ? `${context.workspaceId}:message:${row.source_record_id}:${row.object_id}` : `${context.workspaceId}:${row.source_record_id}`;
       subscriptions.set(this, liveQuery(() => db.file_blossom_status.get(key)).subscribe(status => {
-        if (this.fileBlossomGeneration !== generation || !this.fileBlossomOpen || !isCurrentContext(this, context)) return;
+        if (!ready || this.fileBlossomGeneration !== generation || !this.fileBlossomOpen || !isCurrentContext(this, context)) return;
         this.fileBlossomVersions = status?.versions || [];
         this.fileBlossomCanPublish = status?.can_publish === true;
         if (!this.fileBlossomVersionId) this.fileBlossomVersionId = this.fileBlossomVersions[0]?.version_id || '';
       }));
-      const status = await getTowerPgFileBlossom(context.workspaceId, row.source_record_id, { baseUrl: context.baseUrl, appNpub: context.appNpub });
+      const options = { baseUrl: context.baseUrl, appNpub: context.appNpub };
+      const status = attachment
+        ? await getTowerPgAttachmentBlossom(context.workspaceId, row.source_record_id, row.object_id, options)
+        : await getTowerPgFileBlossom(context.workspaceId, row.source_record_id, options);
       if (this.fileBlossomGeneration !== generation || !this.fileBlossomOpen || !isCurrentContext(this, context)) return;
-      await db.file_blossom_status.put({ ...status, key, workspace_id: context.workspaceId, file_id: row.source_record_id });
+      ready = true;
+      await db.file_blossom_status.put({ ...status, ...(attachment ? { versions: [{ ...status.attachment, version_id: row.object_id }] } : {}), key, workspace_id: context.workspaceId, file_id: row.source_record_id });
     } catch (error) {
       if (this.fileBlossomGeneration === generation) this.fileBlossomError = error?.message || 'Could not read publication status.';
     } finally { if (this.fileBlossomGeneration === generation) this.fileBlossomBusy = false; }
@@ -78,18 +101,22 @@ export const fileBlossomMixin = {
       ? 'Publish this selected version’s bytes anonymously? Anyone with the URL can download or copy them.'
       : 'Remove your publication reference? Other publications and external copies can remain available.';
     if (!window.confirm(question)) return;
+    if (!isCurrentContext(this, context)) { this.closeFileBlossom(); this.error = 'The workspace or signer changed. Open the publication panel again.'; return; }
+    if (publish && (!version.available || (!version.sha256_hex && this.fileBlossomAttachment))) return;
     this.fileBlossomBusy = true;
     this.fileBlossomError = '';
     const generation = this.fileBlossomGeneration;
     try {
-      await setTowerPgFileBlossom(this, context.workspaceId, this.fileBlossomFileId, version.version_id, publish, { baseUrl: context.baseUrl, appNpub: context.appNpub });
+      const options = { baseUrl: context.baseUrl, appNpub: context.appNpub };
+      if (this.fileBlossomAttachment) await setTowerPgAttachmentBlossom(this, context.workspaceId, this.fileBlossomFileId, this.fileBlossomObjectId, publish, { link_id: version.link_id, sha256_hex: version.sha256_hex }, options);
+      else await setTowerPgFileBlossom(this, context.workspaceId, this.fileBlossomFileId, version.version_id, publish, options);
     } catch (error) {
       if (this.fileBlossomGeneration === generation) this.fileBlossomError = error?.message || 'Could not change publication.';
     } finally { if (this.fileBlossomGeneration === generation) this.fileBlossomBusy = false; }
   },
   async copyFileBlossomUrl() {
     const url = this.selectedFileBlossomVersion?.blossom_url;
-    if (!url) return;
+    if (!url || !isCurrentContext(this, this.fileBlossomContext)) return;
     try { await navigator.clipboard.writeText(url); this.showFileUploadNotice?.('Public Blossom URL copied.'); }
     catch { this.fileBlossomError = 'Could not copy. Select and copy the URL below.'; }
   },

@@ -2,10 +2,10 @@ import 'fake-indexeddb/auto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { openWorkspaceDb, closeWorkspaceDb } from '../src/db.js';
 import { fileBlossomMixin } from '../src/file-blossom.js';
-import { getTowerPgFileBlossom } from '../src/api.js';
-import { setTowerPgFileBlossom } from '../src/tower-command-intents.js';
-vi.mock('../src/api.js', () => ({ getTowerPgFileBlossom: vi.fn() }));
-vi.mock('../src/tower-command-intents.js', () => ({ setTowerPgFileBlossom: vi.fn() }));
+import { getTowerPgFileBlossom, getTowerPgAttachmentBlossom } from '../src/api.js';
+import { setTowerPgFileBlossom, setTowerPgAttachmentBlossom } from '../src/tower-command-intents.js';
+vi.mock('../src/api.js', () => ({ getTowerPgFileBlossom: vi.fn(), getTowerPgAttachmentBlossom: vi.fn() }));
+vi.mock('../src/tower-command-intents.js', () => ({ setTowerPgFileBlossom: vi.fn(), setTowerPgAttachmentBlossom: vi.fn() }));
 vi.mock('../src/pg-workspace-context.js', () => ({ resolveTowerPgWorkspaceContext: store => store.context }));
 let db, store;
 const row = { pg_record_type: 'file', source_record_id: 'file', name: 'Podcast', workspace_id: 'workspace' };
@@ -59,5 +59,36 @@ describe('Files publication panel', () => {
     expect(store.fileBlossomBusy).toBe(true);
     pending[1](status); await second;
     expect(store.fileBlossomBusy).toBe(false);
+  });
+});
+
+describe('message attachment publication panel', () => {
+  const attachmentRow = { source_type: 'chat', source_record_id: 'message', object_id: 'object', name: 'Image', workspace_id: 'workspace' };
+  const attachment = { storage_object_id: 'object', link_id: 'source-link', sha256_hex: 'a'.repeat(64), available: true, public: false, published_by_you: false };
+  it('supports chat-sourced Files rows and sends exact observed link and hash consent', async () => {
+    getTowerPgAttachmentBlossom.mockResolvedValue({ can_publish: true, attachment });
+    expect(store.canPublishFileBrowserRow(attachmentRow)).toBe(true);
+    await store.openFileBlossom(attachmentRow); await vi.waitFor(() => expect(store.fileBlossomCanPublish).toBe(true));
+    expect((await db.file_blossom_status.get('workspace:message:message:object')).versions[0].link_id).toBe('source-link');
+    await store.changeFileBlossom(true);
+    expect(setTowerPgFileBlossom).not.toHaveBeenCalled();
+    expect(setTowerPgAttachmentBlossom).toHaveBeenCalledWith(store, 'workspace', 'message', 'object', true, { link_id: 'source-link', sha256_hex: 'a'.repeat(64) }, { baseUrl: 'https://tower.test', appNpub: 'npub1app' });
+  });
+  it('discovers inline images and attachment-only files without duplicate buttons', () => {
+    const message = { record_id: 'message', body: '![Image](storage://object)', attachments: [{ kind: 'image', storage_object_id: 'object' }, { kind: 'file', storage_object_id: 'other' }] };
+    expect(store.publishableMessageAttachments(message).map(a => a.storage_object_id)).toEqual(['object', 'other']);
+    store.isTowerPgMode=false; expect(store.publishableMessageAttachments(message)).toEqual([]);
+  });
+  it('does not enable stale cached authority when a fresh read fails', async () => {
+    await db.file_blossom_status.put({ key: 'workspace:message:message:object', can_publish: true, versions: [attachment] });
+    getTowerPgAttachmentBlossom.mockRejectedValue(new Error('source removed'));
+    await store.openFileBlossom(attachmentRow); await store.changeFileBlossom(true);
+    expect(store.fileBlossomCanPublish).toBe(false);expect(setTowerPgAttachmentBlossom).not.toHaveBeenCalled();
+  });
+  it('rechecks identity after public consent and refuses mutation on an identity change', async () => {
+    getTowerPgAttachmentBlossom.mockResolvedValue({ can_publish: true, attachment });
+    await store.openFileBlossom(attachmentRow);await vi.waitFor(() => expect(store.fileBlossomCanPublish).toBe(true));
+    window.confirm.mockImplementation(() => { store.context={...store.context,sessionNpub:'changed'};return true; });
+    await store.changeFileBlossom(true);expect(setTowerPgAttachmentBlossom).not.toHaveBeenCalled();expect(store.fileBlossomOpen).toBe(false);
   });
 });
