@@ -3772,6 +3772,7 @@ export function initApp() {
         return;
       }
       if (this.personalAppEditingType === 'Napplet') {
+        this.personalWappEditorError = '';
         this.personalWappEditorSaving = true;
         try {
           await this.saveAppEditorPlacement('napplet:message-activity');

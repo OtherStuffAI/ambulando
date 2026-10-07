@@ -104,6 +104,7 @@ it.each(['WApp', 'Napplet'])('enforces %s scope/channel restrictions across cont
   s.wappPublishingDestinationGroups = [{ scope_id: 'scope-a', channels: [{ channel_id: 'channel-a' }, { channel_id: 'channel-a2' }] }];
   const app = s.toolboxApps.find(app => app.appType === type);
   s.prepareAppPlacementEditor(app);
+  s.personalWappFormTitle = app.title;
   s.personalWappFormIconUrl = 'https://app.invalid/custom.png';
   s.personalAppFormVisibility = 'scope'; s.personalAppFormScopeId = 'scope-a';
   await s.saveAppEditorPlacement(app.placementId);
@@ -128,8 +129,26 @@ it('migrates legacy hidden bool on edit without losing hidden state and moves na
   await saveAppPlacement(s.appPlacementPartition, app.placementId, false);
   s.appPlacementPreferences = (await getSettings()).appPlacements;
   s.prepareAppPlacementEditor(app); expect(s.personalAppFormShown).toBe(false);
+  s.personalWappFormTitle = app.title;
   s.personalWappFormIconUrl = 'https://app.invalid/icon.png'; s.personalAppFormPosition = 1;
   await s.saveAppEditorPlacement(app.placementId);
   expect(s.toolboxApps[0]).toMatchObject({ placementId: app.placementId, icon_url: 'https://app.invalid/icon.png' });
   expect(s.visibleApps.map(app => app.appType)).toEqual(['WApp']);
+});
+
+ it('persists custom napplet title without changing identity, metadata or other viewers', async () => {
+  const s = store(), app = s.toolboxApps.find(app => app.appType === 'Napplet');
+  s.prepareAppPlacementEditor(app);
+  s.personalWappFormTitle = '  My activity  '; s.personalWappFormIconUrl = 'icon.png';
+  s.personalAppFormShown = false; s.personalAppFormVisibility = 'channel'; s.personalAppFormChannelId = 'channel-a';
+  await s.saveAppEditorPlacement(app.placementId);
+  const restored = store(); restored.appPlacementPreferences = (await getSettings()).appPlacements;
+  expect(restored.toolboxApps.find(app => app.appType === 'Napplet')).toMatchObject({ title: 'My activity', placementId: 'napplet:message-activity', icon_url: 'icon.png' });
+  expect(restored.appPlacement(app)).toMatchObject({ shown: false, visibility: 'channel', channelId: 'channel-a', displayTitle: 'My activity' });
+  expect(restored.messageActivityDisplayTitle).toBe('My activity');
+  restored.currentPgActorId = 'bob'; expect(restored.messageActivityDisplayTitle).toBe('Message activity');
+  restored.currentPgActorId = 'alice'; restored.currentWorkspaceKey = 'another'; expect(restored.messageActivityDisplayTitle).toBe('Message activity');
+  s.personalWappFormTitle = '  ';
+  await expect(s.saveAppEditorPlacement(app.placementId)).rejects.toThrow('Title is required');
+  expect((await getSettings()).appPlacements[s.appPlacementPartition][app.placementId].displayTitle).toBe('My activity');
 });

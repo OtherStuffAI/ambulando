@@ -3226,6 +3226,13 @@
       "notes": [
         "A failed launcher visibility save restores the displayed checkbox to its saved state and offers an error message for retry."
       ]
+    },
+    {
+      "buildNumber": 2278,
+      "label": "Custom napplet titles",
+      "notes": [
+        "Rename Message activity in Toolbox. Your display title is saved for your viewer and workspace in this browser and appears in Apps and the napplet window."
+      ]
     }
   ]
 }

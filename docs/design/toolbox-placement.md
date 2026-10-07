@@ -30,7 +30,9 @@ actor ID, or session npub when no PG actor is available. Entry IDs are namespace
 as wapp:<record-id> and napplet:message-activity. Missing entries default to shown
 everywhere. Build-2271 boolean entries remain readable and migrate to objects on
 edit without losing false/hidden state. Objects contain shown, visibility,
-scopeId, channelId, position and optional napplet iconUrl. Atomic patches preserve
+scopeId, channelId, position and optional napplet iconUrl and displayTitle. Napplet titles default to
+Message activity when no custom title exists; a custom title changes only browser
+display labels, never the stable napplet identity or runtime. Atomic patches preserve
 other settings/partitions and liveQuery publishes preferences across tabs.
 
 Preferences never enter Tower records or the sync outbox and do not roam between

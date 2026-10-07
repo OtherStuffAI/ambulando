@@ -47,12 +47,13 @@ export const toolboxMixin = {
       scopeId: this.personalAppFormScopeId,
       channelId: this.personalAppFormChannelId,
       position: Math.max(1, Number(this.personalAppFormPosition) || 1),
-      ...(this.personalAppEditingType === 'Napplet' ? { iconUrl: this.personalWappFormIconUrl.trim() } : {}),
+      ...(this.personalAppEditingType === 'Napplet' ? { iconUrl: this.personalWappFormIconUrl.trim(), displayTitle: String(this.personalWappFormTitle || '').trim() } : {}),
     };
   },
 
   async saveAppEditorPlacement(entryId, partition = this.personalAppEditingPartition, draft = this.appEditorPlacementDraft(), orderedIds = this.toolboxApps.map(app => app.placementId)) {
     if (!partition) return;
+    if (entryId === 'napplet:message-activity' && !String(draft.displayTitle || '').trim()) throw new Error('Title is required. Enter a display name.');
     const ids = orderedIds.filter(id => id !== entryId);
     ids.splice(Math.min(ids.length, draft.position - 1), 0, entryId);
     this.appPlacementPreferences = await saveAppPlacement(partition, entryId, draft, ids);
@@ -98,8 +99,12 @@ export const toolboxMixin = {
         description: 'Messages by channel and scope', appType: 'Napplet' },
     ].map((app, index) => {
       const placement = this.appPlacement(app);
-      return { ...app, ...(app.appType === 'Napplet' ? { icon_url: placement.iconUrl || '' } : {}), launcherPosition: placement.position ?? index + 1 };
+      return { ...app, ...(app.appType === 'Napplet' ? { icon_url: placement.iconUrl || '', title: String(placement.displayTitle || '').trim() || 'Message activity' } : {}), launcherPosition: placement.position ?? index + 1 };
     }).sort((a, b) => a.launcherPosition - b.launcherPosition);
+  },
+
+  get messageActivityDisplayTitle() {
+    return this.toolboxApps.find(app => app.placementId === 'napplet:message-activity')?.title || 'Message activity';
   },
 
   isAppPlaced(entry) {

@@ -156,15 +156,47 @@ for (const width of [1280, 390]) {
     await page.evaluate(() => { const s = window.Alpine.store('chat'); s.navCollapsed = true; s.mobileNavOpen = false; s.navigateTo('settings'); s.settingsTab = 'apps'; });
     await expect(page.locator('.settings-section .personal-wapp-settings-row')).toHaveCount(0);
 
+    await page.evaluate(() => window.Alpine.store('chat').navigateTo('toolbox'));
+    // Display names use local placement preferences, with the same editor and launch.
+    await row('Message activity').getByRole('button', { name: 'Edit', exact: true }).click();
+    const titleField = modal.getByRole('textbox', { name: 'Title', exact: true });
+    await expect(titleField).toBeEditable();
+    for (const blank of ['', '   ']) {
+      await titleField.fill(blank);
+      await modal.getByRole('button', { name: 'Save napplet', exact: true }).click();
+      await expect(modal.getByText('Title is required. Enter a display name.', { exact: true })).toBeVisible();
+      await expect(row('Message activity')).toBeVisible();
+    }
+    await titleField.fill('  My message dashboard  ');
+    await modal.getByRole('button', { name: 'Save napplet', exact: true }).click();
+    await expect(row('My message dashboard')).toBeVisible();
+    await row('My message dashboard').getByRole('button', { name: 'Edit', exact: true }).click();
+    await expect(modal.getByRole('heading', { name: 'Edit My message dashboard' })).toBeVisible();
+    await expect(titleField).toHaveValue('My message dashboard');
+    await modal.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await page.reload(); await seed(page); await openToolbox(page, width === 390);
+    await expect(row('My message dashboard')).toBeVisible();
+    await seed(page, 'toolbox-workspace-b'); await openToolbox(page, width === 390); await expect(row('Message activity')).toBeVisible();
+    await seed(page); await openToolbox(page, width === 390); await page.evaluate(() => { window.Alpine.store('chat').knownWorkspaces[0].pgMe.actor.actor_id = 'other'; });
+    await expect(row('Message activity')).toBeVisible();
+    await seed(page); await openToolbox(page, width === 390); await expect(row('My message dashboard')).toBeVisible();
+    // Keep WApp title editing on its existing server-backed path.
+    await row('Sample Artifacts').getByRole('button', { name: 'Edit', exact: true }).click();
+    await titleField.fill('Renamed WApp');
+    await modal.getByRole('button', { name: 'Save WApp', exact: true }).click();
+    await expect(row('Renamed WApp')).toBeVisible();
+    await row('Renamed WApp').getByRole('button', { name: 'Edit', exact: true }).click();
+    await titleField.fill('Sample Artifacts');
+    await modal.getByRole('button', { name: 'Save WApp', exact: true }).click();
     await page.evaluate(() => window.Alpine.store('chat').navigateTo('status'));
     if (width === 390) await page.getByRole('button', { name: 'Show Hello and Links', exact: true }).evaluate(button => button.click());
     await page.getByRole('button', { name: 'Open Apps stack', exact: true }).click();
     await page.getByTestId('message-activity-launch').click();
-    await expect(page.getByRole('dialog', { name: 'Message activity', exact: true })).toBeVisible();
+    await expect(page.getByRole('dialog', { name: 'My message dashboard', exact: true })).toBeVisible();
     await expect(page.locator('#message-activity-modal iframe')).toHaveAttribute('sandbox', 'allow-scripts');
     // Fixture has no authorized aggregate backend: actual sandbox shows its useful error.
     await expect(page.frameLocator('#message-activity-modal iframe').getByRole('alert')).toBeVisible();
-    await page.getByRole('button', { name: 'Close Message activity', exact: true }).click();
+    await page.getByRole('button', { name: 'Close My message dashboard', exact: true }).click();
     await expect(page.getByRole('button', { name: 'Open Apps stack', exact: true })).toBeFocused();
     await page.getByRole('button', { name: 'Open Apps stack', exact: true }).click();
     const popup = page.waitForEvent('popup');
