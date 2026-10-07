@@ -8,6 +8,7 @@ export const toolboxMixin = {
   appPlacementError: '',
   appPlacementNotice: '',
   personalAppEditingType: 'WApp',
+  personalAppEditingPlacementId: '',
   personalAppEditingPartition: '',
   personalAppFormShown: true,
   personalAppFormVisibility: 'everywhere',
@@ -32,6 +33,7 @@ export const toolboxMixin = {
   prepareAppPlacementEditor(entry) {
     const placement = this.appPlacement(entry);
     this.personalAppEditingType = entry?.appType || 'WApp';
+    this.personalAppEditingPlacementId = entry?.placementId || '';
     this.personalAppEditingPartition = this.appPlacementPartition;
     this.personalAppFormShown = placement.shown !== false;
     this.personalAppFormVisibility = placement.visibility || 'everywhere';
@@ -53,7 +55,7 @@ export const toolboxMixin = {
 
   async saveAppEditorPlacement(entryId, partition = this.personalAppEditingPartition, draft = this.appEditorPlacementDraft(), orderedIds = this.toolboxApps.map(app => app.placementId)) {
     if (!partition) return;
-    if (entryId === 'napplet:message-activity' && !String(draft.displayTitle || '').trim()) throw new Error('Title is required. Enter a display name.');
+    if (entryId.startsWith('napplet:') && !String(draft.displayTitle || '').trim()) throw new Error('Title is required. Enter a display name.');
     const ids = orderedIds.filter(id => id !== entryId);
     ids.splice(Math.min(ids.length, draft.position - 1), 0, entryId);
     this.appPlacementPreferences = await saveAppPlacement(partition, entryId, draft, ids);
@@ -97,9 +99,11 @@ export const toolboxMixin = {
       }).map(wapp => ({ ...wapp, placementId: 'wapp:' + wapp.record_id, appType: 'WApp' })),
       { placementId: 'napplet:message-activity', title: 'Message activity',
         description: 'Messages by channel and scope', appType: 'Napplet' },
+      { placementId: 'napplet:tower-usage', title: 'Tower Usage',
+        description: 'Stored bytes in the selected Tower workspace', appType: 'Napplet' },
     ].map((app, index) => {
       const placement = this.appPlacement(app);
-      return { ...app, ...(app.appType === 'Napplet' ? { icon_url: placement.iconUrl || '', title: String(placement.displayTitle || '').trim() || 'Message activity' } : {}), launcherPosition: placement.position ?? index + 1 };
+      return { ...app, ...(app.appType === 'Napplet' ? { icon_url: placement.iconUrl || '', title: String(placement.displayTitle || '').trim() || app.title } : {}), launcherPosition: placement.position ?? index + 1 };
     }).sort((a, b) => a.launcherPosition - b.launcherPosition);
   },
 
@@ -150,10 +154,12 @@ export const toolboxMixin = {
     if (entry.appType === 'Napplet') {
       // The expanded napplet pill will hide when the stack closes. Restore focus
       // to its visible stack control instead of an inaccessible hidden pill.
-      const opener = this.visibleApps.length > 1 && typeof document !== 'undefined'
-        ? document.querySelector('[data-testid="apps-stack"] .wapps-stack-hitbox') : null;
+      const active = typeof document !== 'undefined' ? document.activeElement : null;
+      const opener = this.visibleApps.length > 1 && active?.closest('[data-testid="apps-stack"]')
+        ? document.querySelector('[data-testid="apps-stack"] .wapps-stack-hitbox') : active;
       this.closePersonalWappsOverlay();
-      this.openMessageActivity({ opener });
+      if (entry.placementId === 'napplet:tower-usage') this.openTowerUsage({ opener });
+      else this.openMessageActivity({ opener });
     } else this.openPersonalWapp(entry);
   },
 };

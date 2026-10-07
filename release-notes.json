@@ -3247,6 +3247,26 @@
       "notes": [
         "Blossom publication restores keyboard focus reliably and clears stale permission warnings after successful status checks."
       ]
+    },
+    {
+      "buildNumber": 2281,
+      "label": "Tower Usage throughout Flight Deck",
+      "notes": [
+        "Open Tower Usage from the global toolbox to see selected-workspace stored bytes, logical database estimates, category coverage, refresh and collection time. Unavailable stores are labelled with reasons."
+      ]
+    },
+    {
+      "buildNumber": 2282,
+      "label": "Tower Usage validation checkpoint",
+      "notes": [],
+      "noUserVisibleChanges": true
+    },
+    {
+      "buildNumber": 2283,
+      "label": "Apps stack launcher restored",
+      "notes": [
+        "Removed the duplicate global Toolbox navigation row. Open Tower Usage from the existing Apps stack; Toolbox editing and app placement remain available."
+      ]
     }
   ]
 }

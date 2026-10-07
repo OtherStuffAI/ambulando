@@ -45,6 +45,19 @@ describe('Tower PG API helpers', () => {
     expect(createNip98AuthHeader).toHaveBeenLastCalledWith(url, 'DELETE', body, expect.objectContaining({ priority: 'high' }));
   });
 
+  it('signs the selected workspace usage URL and preserves status and cancellation', async () => {
+    const api = await import('../src/api.js');
+    const controller = new AbortController();
+    await api.getTowerPgStorageUsage('workspace/a', { baseUrl: 'https://selected.example', appNpub: 'selected-app', signal: controller.signal });
+    const [url, options] = globalThis.fetch.mock.calls[0];
+    expect(url).toBe('https://selected.example/api/v4/flightdeck-pg/workspaces/workspace%2Fa/storage-usage');
+    expect(options.headers['x-flightdeck-pg-app-npub']).toBe('selected-app');
+    globalThis.fetch.mockResolvedValueOnce({ ok: false, status: 403, text: async () => '{}' });
+    await expect(api.getTowerPgStorageUsage('workspace', { baseUrl: 'https://selected.example' })).rejects.toMatchObject({ status: 403 });
+    controller.abort();
+    await expect(api.getTowerPgStorageUsage('workspace', { baseUrl: 'https://selected.example', signal: controller.signal })).rejects.toThrow();
+  });
+
   it('calls Tower PG descriptor and me routes with browser NIP-98 auth', async () => {
     const { createNip98AuthHeader, createNip98AuthHeaderForSecret } = await import('../src/auth/nostr.js');
     const api = await import('../src/api.js');

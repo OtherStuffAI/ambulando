@@ -2775,3 +2775,10 @@ export async function setTowerPgAttachmentBlossom(workspaceId, messageId, storag
   const method = publish ? 'PUT' : 'DELETE';
   return json(await signedTowerPgFetch(path, { baseUrl, appNpub, method, ...(publish ? { body: { public: true, expected_link_id: consent.link_id, expected_sha256: consent.sha256_hex } } : {}) }), { requestUrl: resolveTowerPgUrl(path, baseUrl), method, prefix: 'Tower PG API' });
 }
+
+export async function getTowerPgStorageUsage(workspaceId, { baseUrl = _baseUrl, appNpub = FLIGHT_DECK_PG_APP_NPUB, signal } = {}) {
+  const requestPath = `/api/v4/flightdeck-pg/workspaces/${encodeURIComponent(String(workspaceId || '').trim())}/storage-usage`;
+  const requestUrl = resolveTowerPgUrl(requestPath, baseUrl);
+  const resp = await signedTowerPgFetch(requestPath, { baseUrl, appNpub, signal, useWorkspaceKey: false });
+  return json(resp, { requestUrl, method: 'GET', prefix: 'Tower PG API' });
+}

@@ -69,6 +69,7 @@ for (const width of [1280, 390]) {
     await expect(page.getByRole('checkbox', { name: /Show (Private|Archived) app in Apps/ })).toHaveCount(0);
     await napplet.uncheck(); await expect(page.getByText('Placement saved.', { exact: true })).toBeVisible();
     await wapp.uncheck();
+    await page.getByRole('checkbox', { name: 'Show Tower Usage in Apps', exact: true }).uncheck();
     await expect.poll(() => page.evaluate(() => window.Alpine.store('chat').visibleApps.length)).toBe(0);
     await page.reload(); await seed(page); await openToolbox(page, width === 390);
     await expect(napplet).not.toBeChecked(); await expect(wapp).not.toBeChecked();
@@ -78,6 +79,7 @@ for (const width of [1280, 390]) {
     await expect(napplet).not.toBeChecked(); await expect(wapp).not.toBeChecked();
     await napplet.check(); await expect(napplet).toBeEnabled();
     await wapp.check(); await expect(wapp).toBeEnabled();
+    await page.getByRole('checkbox', { name: 'Show Tower Usage in Apps', exact: true }).check();
     await page.screenshot({ path: 'tmp/docs/handoffs/toolbox-collapsed-' + width + '.png' });
     await page.evaluate(() => { const s = window.Alpine.store('chat'); if (s.mobileViewport) s.mobileNavOpen = true; else s.navCollapsed = false; });
     await expect(page.locator('.sidebar button[aria-label="Toolbox"]')).toBeHidden();
@@ -125,18 +127,18 @@ for (const width of [1280, 390]) {
     }
     await page.reload(); await seed(page); await openToolbox(page, width === 390);
     await page.evaluate(() => { const s = window.Alpine.store('chat'); s.selectedBoardId = '__pg_channel__:channel-a'; });
-    await expect.poll(() => page.evaluate(() => window.Alpine.store('chat').visibleApps.length)).toBe(2);
+    await expect.poll(() => page.evaluate(() => window.Alpine.store('chat').visibleApps.length)).toBe(3);
     await page.evaluate(() => { window.Alpine.store('chat').channels = []; });
-    await expect.poll(() => page.evaluate(() => window.Alpine.store('chat').visibleApps.length)).toBe(0);
+    await expect.poll(() => page.evaluate(() => window.Alpine.store('chat').visibleApps.length)).toBe(1);
     await row('Message activity').getByRole('button', { name: 'Edit', exact: true }).click();
     await expect(modal.getByRole('combobox', { name: 'App visibility' })).toHaveValue('channel');
     await expect(modal.getByRole('combobox', { name: 'App channel' }).locator('option:checked')).toHaveText('Unavailable channel (restricted)');
     await modal.getByRole('button', { name: 'Cancel', exact: true }).click();
     await seed(page, 'toolbox-workspace-b');
-    await expect.poll(() => page.evaluate(() => window.Alpine.store('chat').visibleApps.length)).toBe(2);
+    await expect.poll(() => page.evaluate(() => window.Alpine.store('chat').visibleApps.length)).toBe(3);
     await seed(page);
     await page.evaluate(() => { window.Alpine.store('chat').knownWorkspaces[0].pgMe.actor.actor_id = 'other'; });
-    await expect.poll(() => page.evaluate(() => window.Alpine.store('chat').visibleApps.map(app => app.title))).toEqual(['Private app', 'Message activity']);
+    await expect.poll(() => page.evaluate(() => window.Alpine.store('chat').visibleApps.map(app => app.title))).toEqual(['Private app', 'Message activity', 'Tower Usage']);
     await seed(page); await openToolbox(page, width === 390);
     for (const [title, save] of [['Sample Artifacts', 'Save WApp'], ['Message activity', 'Save napplet']]) {
       await row(title).getByRole('button', { name: 'Edit', exact: true }).click();
@@ -200,7 +202,7 @@ for (const width of [1280, 390]) {
     await expect(page.getByRole('button', { name: 'Open Apps stack', exact: true })).toBeFocused();
     await page.getByRole('button', { name: 'Open Apps stack', exact: true }).click();
     const popup = page.waitForEvent('popup');
-    await page.getByRole('button', { name: "Open Sample Artifacts", exact: true }).click();
+    await page.getByTestId('apps-stack').getByRole('button', { name: "Open Sample Artifacts", exact: true }).click();
     const appPage = await popup; await expect(appPage).toHaveURL('http://127.0.0.1:3100/synthetic-wapp');
     expect(await appPage.evaluate(() => window.opener)).toBeNull(); await appPage.close();
     // Existing hidden WApp-management x-models dereference null drafts at boot.

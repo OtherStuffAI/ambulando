@@ -25103,3 +25103,16 @@ button.task-desc-toggle:focus-visible {
 .toolbox-placement-list { display: grid; gap: 0.75rem; margin-top: 1rem; }
 .toolbox-placement-row { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.75rem; padding: 0.85rem; border: 1px solid #dbe4ef; border-radius: 8px; }
 .toolbox-placement-row small { display: block; color: #475569; }
+
+.tower-usage-overlay { z-index: 1300; }
+.tower-usage-dialog.modal { width: min(100%, 640px); color: var(--text); background: var(--surface); }
+.tower-usage-header { display: flex; justify-content: space-between; align-items: center; gap: 1rem; }
+.tower-usage-header h2 { margin: 0; }
+.tower-usage-help { color: var(--muted); font-size: .85rem; line-height: 1.5; overflow-wrap: anywhere; }
+.tower-usage-total { font-size: 1.15rem; }
+.tower-usage-categories { margin: 1rem 0; }
+.tower-usage-categories > div { padding: .65rem 0; border-top: 1px solid var(--border); }
+.tower-usage-categories dt { font-weight: 600; }
+.tower-usage-categories dd { margin: .3rem 0 0; }
+.tower-usage-dialog button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (max-width: 480px) { .tower-usage-dialog.modal { padding: 1rem; } }

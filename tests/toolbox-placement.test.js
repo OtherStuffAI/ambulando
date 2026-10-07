@@ -9,7 +9,7 @@ function store() {
   const s = { currentWorkspaceKey: 'tower/workspace-a', currentPgActorId: 'alice',
     currentViewerNpub: 'npubAlice',
     visiblePersonalWapps: [{ record_id: 'artifact', title: 'Artifacts', launch_url: 'https://app.invalid/', sort_order: 5 }],
-    closePersonalWappsOverlay: vi.fn(), openMessageActivity: vi.fn(), openPersonalWapp: vi.fn() };
+    closePersonalWappsOverlay: vi.fn(), openMessageActivity: vi.fn(), openTowerUsage: vi.fn(), openPersonalWapp: vi.fn() };
   Object.defineProperties(s, Object.getOwnPropertyDescriptors(toolboxMixin));
   return s;
 }
@@ -17,7 +17,7 @@ beforeEach(async () => { await getSharedDb().app_settings.clear(); });
 
 it('defaults existing entries to Apps, deduplicates IDs and preserves launcher fields', () => {
   const s = store(); s.visiblePersonalWapps.push(s.visiblePersonalWapps[0]);
-  expect(s.visibleApps.map(app => app.placementId)).toEqual(['wapp:artifact', 'napplet:message-activity']);
+  expect(s.visibleApps.map(app => app.placementId)).toEqual(['wapp:artifact', 'napplet:message-activity', 'napplet:tower-usage']);
   expect(s.visibleApps[0]).toMatchObject({ launch_url: 'https://app.invalid/', sort_order: 5 });
 });
 
@@ -27,10 +27,10 @@ it('persists each type across recreated stores without losing settings or concur
   await s.setAppPlacement(s.toolboxApps[0], false);
   await s.setAppPlacement(s.toolboxApps[1], false);
   const restored = store(); restored.appPlacementPreferences = (await getSettings()).appPlacements;
-  expect(restored.visibleApps).toEqual([]);
-  restored.currentWorkspaceKey = 'tower/workspace-b'; expect(restored.visibleApps).toHaveLength(2);
+  expect(restored.visibleApps.map(row => row.placementId)).toEqual(['napplet:tower-usage']);
+  restored.currentWorkspaceKey = 'tower/workspace-b'; expect(restored.visibleApps).toHaveLength(3);
   restored.currentWorkspaceKey = s.currentWorkspaceKey;
-  restored.currentPgActorId = 'bob'; expect(restored.visibleApps).toHaveLength(2);
+  restored.currentPgActorId = 'bob'; expect(restored.visibleApps).toHaveLength(3);
   await Promise.all([
     saveAppPlacement(s.appPlacementPartition, 'wapp:other', false),
     saveAppPlacement(restored.appPlacementPartition, 'napplet:message-activity', false),
@@ -63,8 +63,8 @@ it('publishes saved preferences from the shared live query after context changes
   for (const [query, next] of listeners) {
     const value = await query(); if (!Array.isArray(value)) next(value);
   }
-  expect(s.visibleApps).toHaveLength(2);
-  s.currentWorkspaceKey = 'tower/workspace-a'; expect(s.visibleApps.map(app => app.appType)).toEqual(['Napplet']);
+  expect(s.visibleApps).toHaveLength(3);
+  s.currentWorkspaceKey = 'tower/workspace-a'; expect(s.visibleApps.map(app => app.appType)).toEqual(['Napplet', 'Napplet']);
   s.stopSharedLiveQueries();
 });
 
@@ -93,7 +93,7 @@ it('finishes an in-flight save only in its captured workspace partition', async 
   const saving = s.setAppPlacement(s.toolboxApps[1], false);
   s.currentWorkspaceKey = 'tower/workspace-b';
   await saving;
-  expect(s.visibleApps).toHaveLength(2); expect(s.appPlacementNotice).toBe('');
+  expect(s.visibleApps).toHaveLength(3); expect(s.appPlacementNotice).toBe('');
   expect((await getSettings()).appPlacements[partition]['napplet:message-activity'].shown).toBe(false);
 });
 
@@ -133,7 +133,7 @@ it('migrates legacy hidden bool on edit without losing hidden state and moves na
   s.personalWappFormIconUrl = 'https://app.invalid/icon.png'; s.personalAppFormPosition = 1;
   await s.saveAppEditorPlacement(app.placementId);
   expect(s.toolboxApps[0]).toMatchObject({ placementId: app.placementId, icon_url: 'https://app.invalid/icon.png' });
-  expect(s.visibleApps.map(app => app.appType)).toEqual(['WApp']);
+  expect(s.visibleApps.map(app => app.appType)).toEqual(['WApp', 'Napplet']);
 });
 
  it('persists custom napplet title without changing identity, metadata or other viewers', async () => {
@@ -151,4 +151,21 @@ it('migrates legacy hidden bool on edit without losing hidden state and moves na
   s.personalWappFormTitle = '  ';
   await expect(s.saveAppEditorPlacement(app.placementId)).rejects.toThrow('Title is required');
   expect((await getSettings()).appPlacements[s.appPlacementPartition][app.placementId].displayTitle).toBe('My activity');
+});
+
+it('launches Tower Usage everywhere by default and keeps its editor identity separate', async () => {
+  const s = store(), app = s.toolboxApps.find(row => row.placementId === 'napplet:tower-usage');
+  expect(app.title).toBe('Tower Usage');
+  for (const scope of ['scope-a', 'scope-b', null]) {
+    s.pgContextScopeId = scope; s.openApp(app);
+  }
+  expect(s.openTowerUsage).toHaveBeenCalledTimes(3);
+  s.prepareAppPlacementEditor(app);
+  expect(s.personalAppEditingPlacementId).toBe('napplet:tower-usage');
+  s.personalWappFormTitle = 'Storage'; s.personalWappFormIconUrl = '';
+  await s.saveAppEditorPlacement(s.personalAppEditingPlacementId);
+  expect(s.toolboxApps.find(row => row.placementId === app.placementId).title).toBe('Storage');
+  expect(s.messageActivityDisplayTitle).toBe('Message activity');
+  await s.setAppPlacement(app, false); s.openApp(app);
+  expect(s.openTowerUsage).toHaveBeenCalledTimes(3);
 });

@@ -2142,7 +2142,7 @@
                   <button type="button" class="launcher-pill launcher-pill-empty" x-show="$store.chat.visibleApps.length === 0" @click="$store.chat.navigateTo('toolbox')">Choose apps in Toolbox</button>
                   <template x-for="(app, index) in $store.chat.visibleApps" :key="app.placementId">
                     <button type="button" class="launcher-pill" :class="{ 'launcher-pill-stacked': index > 0 }"
-                      :data-testid="app.appType === 'Napplet' ? 'message-activity-launch' : 'app-launch'"
+                      :data-testid="app.placementId === 'napplet:message-activity' ? 'message-activity-launch' : app.placementId === 'napplet:tower-usage' ? 'tower-usage-launch' : 'app-launch'"
                       @click="$store.chat.personalWappsOverlayOpen || $store.chat.visibleApps.length === 1 ? $store.chat.openApp(app) : $store.chat.openPersonalWappsOverlay()"
                       :aria-label="'Open ' + app.title">
                       <span class="launcher-avatar-ring">
@@ -11177,6 +11177,29 @@
           </section>
         </div>
   </main>
+
+  <div class="modal-overlay tower-usage-overlay" x-show="$store.chat.towerUsageOpen" x-cloak x-effect="$store.chat.syncTowerUsageContext()" @click.self="$store.chat.closeTowerUsage()" @keydown.escape.window="if ($store.chat.towerUsageOpen) $store.chat.closeTowerUsage()" @keydown.tab="$store.chat.trapTowerUsageFocus($event)">
+    <section class="modal tower-usage-dialog" role="dialog" aria-modal="true" aria-labelledby="tower-usage-title" :aria-busy="$store.chat.towerUsageStatus === 'loading'" tabindex="-1" x-effect="if ($store.chat.towerUsageOpen) $nextTick(() => $el.focus())" data-testid="tower-usage-dialog">
+      <header class="tower-usage-header"><h2 id="tower-usage-title" x-text="$store.chat.towerUsageDisplayTitle">Tower Usage</h2><button type="button" class="btn-cancel" @click="$store.chat.closeTowerUsage()">Close</button></header>
+      <p x-text="$store.chat.currentWorkspace?.label || $store.chat.currentWorkspace?.name || 'Selected workspace'"></p>
+      <p class="tower-usage-help">Stored data bytes. Database values are logical estimates. Unavailable measurements are excluded from the subtotal.</p>
+      <p role="status" x-show="$store.chat.towerUsageStatus === 'loading'">Collecting workspace usage…</p>
+      <p role="alert" x-show="$store.chat.towerUsageError" x-text="$store.chat.towerUsageError"></p>
+      <template x-if="$store.chat.towerUsageCurrentSnapshot">
+        <div>
+          <p class="tower-usage-total">Covered subtotal: <strong x-text="$store.chat.formatStorageBytes($store.chat.towerUsageCurrentSnapshot.total_bytes)"></strong></p>
+          <p x-show="$store.chat.towerUsageStatus === 'empty'">Measured stores contain zero bytes. Coverage remains incomplete.</p>
+          <p class="tower-usage-help" x-text="$store.chat.towerUsageCurrentSnapshot.total_description"></p>
+        </div>
+      </template>
+      <dl class="tower-usage-categories">
+        <template x-for="row in $store.chat.towerUsageRows" :key="row.id">
+          <div><dt x-text="row.label"></dt><dd><strong x-text="$store.chat.formatStorageBytes(row.bytes)"></strong><span x-show="row.measurement === 'logical_estimate'"> · Logical estimate</span><p class="tower-usage-help" x-text="row.reason"></p></dd></div>
+        </template>
+      </dl>
+      <footer><p>Collected: <time x-text="$store.chat.towerUsageCollectedLabel"></time></p><p class="tower-usage-help">Refresh requests the latest Tower snapshot. Collection is cached for up to 60 seconds.</p><button type="button" class="btn-confirm" :disabled="$store.chat.towerUsageStatus === 'loading'" @click="$store.chat.refreshTowerUsage()">Refresh usage</button></footer>
+    </section>
+  </div>
 
   <div class="modal-overlay" x-show="$store.chat.showAgentConnectModal" x-cloak @keydown.escape.window="$store.chat.closeAgentConnectModal()" data-testid="agent-connect-modal">
     <section class="modal agent-connect-modal" role="dialog" aria-modal="true" aria-labelledby="agent-connect-title" @click.stop>

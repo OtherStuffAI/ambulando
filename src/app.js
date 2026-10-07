@@ -1,3 +1,4 @@
+import { towerUsageMixin } from './tower-usage.js';
 import { toolboxMixin } from './toolbox-manager.js';
 import { diagnosticsManagerMixin } from './diagnostics-manager.js';
 import { subscribedReaderMixin } from './feed/reader-manager.js';
@@ -3775,7 +3776,7 @@ export function initApp() {
         this.personalWappEditorError = '';
         this.personalWappEditorSaving = true;
         try {
-          await this.saveAppEditorPlacement('napplet:message-activity');
+          await this.saveAppEditorPlacement(this.personalAppEditingPlacementId || 'napplet:message-activity');
           this.personalWappEditorSaving = false;
           this.closePersonalWappEditor();
         } catch (error) { this.personalWappEditorError = error.message; }
@@ -10175,6 +10176,7 @@ export function initApp() {
     subscribedReaderMixin,
     messageActivityMixin,
     toolboxMixin,
+    towerUsageMixin,
     wappPublishingManagerMixin,
     wappImageManagerMixin,
     wappManagementManagerMixin,
