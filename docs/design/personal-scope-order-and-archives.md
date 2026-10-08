@@ -11,9 +11,11 @@ uses the same actor-bound pattern with its own canonical family.
 The `scope_order` journal family and outbox wake event are private to that actor.
 Managed event audiences cannot delegate these preferences. TowerSyncService owns
 recovery and hydration; Dexie `scope_orders` and liveQuery provide the rendered
-order. Unknown scopes append in their existing order. Drag placement and Move
-Up/Down issue the same preference command. Only active normal roots participate in
-reordering; system, DM and virtual roots retain navigation but have no reorder
+order. Before the service is initialized, the sync-manager fallback dispatch uses
+the same canonical scope-order hydrator; requesting the preference alone does not
+initialize the service or bootstrap the workspace. Unknown scopes append in their
+existing order. Drag placement and Move Up/Down issue the same preference command.
+Only active normal roots participate in reordering; system, DM and virtual roots retain navigation but have no reorder
 controls and never enter the preference payload. Move boundaries use eligible
 roots rather than the full navigation tree.
 

@@ -3422,6 +3422,13 @@
       "notes": [
         "Move and drag controls now order only normal scopes, keeping system and direct-message navigation out of your personal ordering payload."
       ]
+    },
+    {
+      "buildNumber": 2311,
+      "label": "Scopes load before background sync starts",
+      "notes": [
+        "Scope Management now loads your personal scope order before the background sync service has initialized."
+      ]
     }
   ]
 }

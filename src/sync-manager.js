@@ -629,6 +629,7 @@ export const syncManagerMixin = {
 
   loadTowerSyncTarget(family, id, options = {}) {
     switch (family) {
+      case 'scope-order': return hydrateScopeOrder(this, options);
       case 'context-references': return loadTowerPgContextReferences(this, options.scopeId, id);
       case 'scope-access': { const context = resolveTowerPgWorkspaceContext(this); return getTowerPgScopeAccess(context.workspaceId, id, {baseUrl:context.baseUrl,appNpub:context.appNpub}); }
       case 'context-tree': return loadTowerPgContext(this, id, options);

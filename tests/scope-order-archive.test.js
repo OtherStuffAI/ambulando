@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { openWorkspaceDb } from '../src/db.js';
 import { applyPgRecordChanges, recordDeltaCursorKey } from '../src/pg-record-delta.js';
 import { markPgTargetArchived, filterArchivedProjection, canLoadPgTarget } from '../src/pg-archive-state.js';
@@ -7,6 +7,8 @@ import { hydrateTowerPgEventUpdates, mapPgScopeToLocal } from '../src/pg-read-hy
 import { applyPgNavigationProjection, readPgNavigationProjection } from '../src/section-live-queries.js';
 import { TowerSyncService } from '../src/tower-sync-service.js';
 import { scopesManagerMixin } from '../src/scopes-manager.js';
+import * as api from '../src/api.js';
+import { syncManagerMixin } from '../src/sync-manager.js';
 import fixture from './fixtures/flightdeck-record-delta-v1.json';
 const workspaceId=fixture.one_message_delta.changes[0].workspace_id;
 const actor='10000000-0000-4000-8000-000000000001';
@@ -19,7 +21,31 @@ function orderUi(rows, save = vi.fn()) {
 }
 let db;
 beforeEach(async()=>{db=openWorkspaceDb('scope-order-archives');await db.open();await Promise.all(db.tables.map(t=>t.clear()));});
+afterEach(() => vi.restoreAllMocks());
 describe('personal order and targeted archive materialisation',()=>{
+ it.each([false, true])('hydrates personal order through the real request dispatch (initialized service: %s) without bootstrap',async(initialized)=>{
+  const row={workspace_id:workspaceId,actor_id:actor,scope_ids:['b','a'],row_version:2};
+  const read=vi.spyOn(api,'getTowerPgScopeOrder').mockResolvedValue({scope_order:row});
+  const ui=Object.assign({requestTowerSyncFamily:syncManagerMixin.requestTowerSyncFamily,loadTowerSyncTarget:syncManagerMixin.loadTowerSyncTarget,getTowerSyncService:syncManagerMixin.getTowerSyncService},store,{
+   workspaceDbKey:'scope-order-archives',
+   currentWorkspace:{...store.currentWorkspace,pgMe:{actor:{id:actor,npub:store.session.npub}}},
+   runTowerPgWorkspaceSync:vi.fn(),connectSSEStream:vi.fn(),performSync:vi.fn(),
+  });
+  const initialize=vi.spyOn(ui,'getTowerSyncService');
+  if(initialized) ui.getTowerSyncService();
+  initialize.mockClear();
+  const fallback=vi.spyOn(ui,'loadTowerSyncTarget');
+  const result=await ui.requestTowerSyncFamily('scope-order','',{force:true});
+  expect(result).toMatchObject({...row,record_id:actor,sync_status:'synced'});
+  expect(await db.scope_orders.get(actor)).toEqual(result);
+  expect(read).toHaveBeenCalledExactlyOnceWith(workspaceId,expect.objectContaining({workspaceId,baseUrl:store.backendUrl}));
+  expect(initialize).not.toHaveBeenCalled();
+  expect(ui.runTowerPgWorkspaceSync).not.toHaveBeenCalled();
+  expect(ui.performSync).not.toHaveBeenCalled();expect(ui.connectSSEStream).not.toHaveBeenCalled();
+  if(initialized) expect(fallback).not.toHaveBeenCalled();
+  else {expect(fallback).toHaveBeenCalledExactlyOnceWith('scope-order','',{force:true});expect(ui._towerSyncService).toBeUndefined();}
+ });
+
  it('persists personal order through canonical deltas and database reopen; never writes shared scopes',async()=>{
   await db.scopes.bulkPut([{record_id:'a',title:'A'},{record_id:'b',title:'B'},{record_id:'c',title:'C'}]);
   const before=await db.scopes.toArray();
