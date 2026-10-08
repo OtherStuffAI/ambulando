@@ -260,6 +260,7 @@ function buildCoreApiClient() {
 }
 
 async function signedFetchAbsolute(requestUrl, { method = 'GET', body } = {}, options = {}) {
+  options.signal?.throwIfAborted();
   const headers = {
     Authorization: await createApiAuthHeader(requestUrl, method, body ?? null, options),
   };
@@ -267,11 +268,12 @@ async function signedFetchAbsolute(requestUrl, { method = 'GET', body } = {}, op
     headers['Content-Type'] = 'application/json';
   }
 
+  options.signal?.throwIfAborted();
   return fetchWithOperationEvidence(requestUrl, {
     method,
     headers,
     body: body !== undefined ? JSON.stringify(body) : undefined,
-    signal: createFetchTimeoutSignal(DEFAULT_FETCH_TIMEOUT_MS),
+    signal: options.signal ? combineTowerRequestSignals(options.signal, createFetchTimeoutSignal(DEFAULT_FETCH_TIMEOUT_MS)) : createFetchTimeoutSignal(DEFAULT_FETCH_TIMEOUT_MS),
   }, options.diagnosticOperation);
 }
 
@@ -1796,12 +1798,12 @@ export async function createTowerPgChannelAudioNote(workspaceId, channelId, body
   return json(resp, { requestUrl, method: 'POST', prefix: 'Tower PG API' });
 }
 
-export async function prepareTowerPgStorageObject(workspaceId, body, { baseUrl = _baseUrl, appNpub = FLIGHT_DECK_PG_APP_NPUB, diagnosticOperation } = {}) {
+export async function prepareTowerPgStorageObject(workspaceId, body, { baseUrl = _baseUrl, appNpub = FLIGHT_DECK_PG_APP_NPUB, diagnosticOperation, signal } = {}) {
   const encodedWorkspaceId = encodeURIComponent(String(workspaceId || '').trim());
   if (!encodedWorkspaceId) throw new Error('Tower PG workspace id is required');
   const requestPath = `/api/v4/flightdeck-pg/workspaces/${encodedWorkspaceId}/storage/prepare`;
   const requestUrl = resolveTowerPgUrl(requestPath, baseUrl);
-  const resp = await signedTowerPgFetch(requestPath, { method: 'POST', body, baseUrl, appNpub, diagnosticOperation });
+  const resp = await signedTowerPgFetch(requestPath, { method: 'POST', body, baseUrl, appNpub, diagnosticOperation, signal });
   return json(resp, { requestUrl, method: 'POST', prefix: 'Tower PG API' });
 }
 
@@ -2471,12 +2473,12 @@ export async function registerWorkspaceKey({ workspace_owner_npub, ws_key_npub }
 
 // --- Storage ---
 
-export async function prepareStorageObject(body) {
+export async function prepareStorageObject(body, options = {}) {
   const requestPath = '/api/v4/storage/prepare';
   const { response: resp, requestUrl } = await signedFetchWithFallbackMeta(requestPath, {
     method: 'POST',
     body,
-  });
+  }, options);
   return json(resp, { requestUrl, method: 'POST' });
 }
 
@@ -2494,6 +2496,7 @@ export async function uploadStorageObject(prepared, bytes, contentType = 'applic
 }
 
 async function performStorageUpload(prepared, bytes, contentType, options) {
+  options.signal?.throwIfAborted();
   const uploadUrl = String(prepared?.upload_url || '').trim();
   let directUploadFailure = null;
   if (uploadUrl && getTowerTransport(options.baseUrl || options.backendUrl || _baseUrl).mode !== 'fips') {
@@ -2505,7 +2508,7 @@ async function performStorageUpload(prepared, bytes, contentType, options) {
           'Content-Type': contentType,
         },
         body: bytes,
-        signal: createFetchTimeoutSignal(UPLOAD_FETCH_TIMEOUT_MS),
+        signal: options.signal ? combineTowerRequestSignals(options.signal, createFetchTimeoutSignal(UPLOAD_FETCH_TIMEOUT_MS)) : createFetchTimeoutSignal(UPLOAD_FETCH_TIMEOUT_MS),
       }, options.diagnosticOperation);
     } catch (error) {
       directUploadFailure = error instanceof Error ? error : new Error(String(error));
@@ -2528,6 +2531,7 @@ async function performStorageUpload(prepared, bytes, contentType, options) {
     }
   }
 
+  options.signal?.throwIfAborted();
   const payload = {
     base64_data: bytesToBase64(bytes),
   };
@@ -2566,9 +2570,9 @@ export async function getStorageDownloadUrl(objectId) {
   return json(resp, { requestUrl, method: 'GET' });
 }
 
-export async function getStorageObject(objectId) {
+export async function getStorageObject(objectId, options = {}) {
   const requestPath = `/api/v4/storage/${objectId}`;
-  const { response: resp, requestUrl } = await signedFetchWithFallbackMeta(requestPath);
+  const { response: resp, requestUrl } = await signedFetchWithFallbackMeta(requestPath, {}, options);
   return json(resp, { requestUrl, method: 'GET' });
 }
 

@@ -2511,7 +2511,7 @@ export const chatMessageManagerMixin = {
       ? [...(Array.isArray(retrySourceMessage.attachments) ? retrySourceMessage.attachments : [])]
       : mergeChatStorageAttachments(
         body,
-        fileDrafts.map(({ file, error, status, draft_id, preview_url, ...attachment }) => attachment),
+        fileDrafts.map(({ file, error, status, draft_id, preview_url, storage_upload, upload_inflight, ...attachment }) => attachment),
       );
     if (!pgMode) {
       channelWriteFields = await getRecordWriteFieldsForStore(this, channel, {
@@ -2772,7 +2772,7 @@ export const chatMessageManagerMixin = {
       ? [...(Array.isArray(retrySourceMessage.attachments) ? retrySourceMessage.attachments : [])]
       : mergeChatStorageAttachments(
         body,
-        fileDrafts.map(({ file, error, status, draft_id, preview_url, ...attachment }) => attachment),
+        fileDrafts.map(({ file, error, status, draft_id, preview_url, storage_upload, upload_inflight, ...attachment }) => attachment),
       );
     if (!pgMode) {
       channelWriteFields = await getRecordWriteFieldsForStore(this, channel, {

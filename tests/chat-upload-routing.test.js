@@ -21,7 +21,7 @@ function gate() {
 async function tick() {
   await new Promise((r) => setImmediate(r));
 }
-function fixture(source = candidate, { delay, fail } = {}) {
+function fixture(source = candidate, { delay, fail, accepted = true, metadataError = false, metadataHash = 'hash' } = {}) {
   const calls = [];
   const routes = [];
   const wait = gate();
@@ -48,6 +48,11 @@ function fixture(source = candidate, { delay, fail } = {}) {
       routes.push(o.baseUrl || 'https://default.example');
       if (delay === 'complete') await wait.promise;
       if (fail === 'complete') throw new Error('incomplete body');
+    },
+    getStorageObject: async (id, options) => {
+      calls.push('metadata'); routes.push(options.baseUrl);
+      if (metadataError) throw new Error('metadata unavailable');
+      return { object_id: id, completed_at: accepted ? 'now' : null, size_bytes: 1, sha256_hex: metadataHash };
     },
     resolveChatUploadToken,
     createDiagnosticOperation, finishDiagnosticOperation, emitDiagnostic,
@@ -101,6 +106,7 @@ function fixture(source = candidate, { delay, fail } = {}) {
     store[name] = method(source, name, bindings);
   return {
     store,
+    bindings,
     calls,
     routes,
     wait,
@@ -205,4 +211,146 @@ test('connection endpoint change during transfer prevents completion signing', a
   await p;
   assert.ok(!x.calls.includes('complete'));
   assert.equal(x.store.drafts[0].status, 'error');
+});
+
+test('lost completion response retry reconciles accepted object without prepare or transfer replay', async () => {
+  const x = fixture(candidate, { fail: 'complete' });
+  await x.store.uploadChatFileDraft('one');
+  await x.store.uploadChatFileDraft('one');
+  assert.deepEqual(x.calls, ['prepare', 'transfer', 'complete', 'metadata']);
+  assert.equal(x.store.drafts[0].status, 'ready');
+});
+test('uncompleted retained object retries only existing idempotent completion', async () => {
+  const x = fixture(candidate, { fail: 'complete', accepted: false });
+  await x.store.uploadChatFileDraft('one');
+  await x.store.uploadChatFileDraft('one');
+  assert.deepEqual(x.calls, ['prepare', 'transfer', 'complete', 'metadata', 'complete']);
+  assert.equal(x.store.drafts[0].storage_upload.prepared.object_id, 'object');
+});
+test('unavailable reconciliation preserves source and does not replay mutations', async () => {
+  const x = fixture(candidate, { fail: 'complete', metadataError: true });
+  await x.store.uploadChatFileDraft('one');
+  await x.store.uploadChatFileDraft('one');
+  assert.deepEqual(x.calls, ['prepare', 'transfer', 'complete', 'metadata']);
+  assert.equal(x.store.drafts[0].file, x.draft.file);
+  assert.equal(x.store.drafts[0].status, 'error');
+});
+for (const stage of ['read', 'prepare', 'transfer', 'complete']) test(`removal aborts ${stage} and suppresses late completion`, async () => {
+  const x = fixture(candidate, { delay: stage });
+  x.store.removeChatFileDraft = method(candidate, 'removeChatFileDraft', {});
+  x.store.revokeChatFileDraftPreview = () => {};
+  x.store.chatImagePreviewModal = { open: false };
+  const p = x.store.uploadChatFileDraft('one');
+  await tick();
+  const controller = x.store._chatUploadControllers.get('one');
+  x.store.removeChatFileDraft('one');
+  assert.equal(controller.signal.aborted, true);
+  x.wait.release(); await p;
+  assert.equal(x.store.drafts.length, 0);
+  assert.equal(x.store.messageInput, 'unsent ');
+  if (stage !== 'complete') assert.ok(!x.calls.includes('complete'));
+});
+
+function inlineFixture(settings = {}) {
+  const x = fixture(candidate, settings);
+  Object.assign(x.store, {
+    selectedDocId: 'doc-one', docEditAccessGeneration: 1,
+    docEditorContent: 'source', defaultPastedImageName: () => 'image.png',
+    getModelValue(key) { return this[key]; }, setModelValue(key, value) { this[key] = value; },
+    scheduleStorageImageHydration() {}, incrementInlineUploadCount() {}, decrementInlineUploadCount() {},
+    resolvePgWriteContext: () => ({ scopeId: 'scope', channelId: 'channel' }),
+    createStorageFileMarkdown: () => '[file](storage://object)',
+  });
+  for (const name of ['captureInlineUploadDestination', 'uploadInlineImageFile', 'handleInlineImagePaste', 'uploadFileIntoModel', 'insertTextIntoModel', 'replaceTokenInModel']) {
+    x.store[name] = method(candidate, name, { ...x.bindings,
+      createTowerPgFileFromLocal: async () => { x.calls.push('file-create'); return {}; },
+      upsertDocument: async () => {},
+    });
+  }
+  x.event = { target: { value: 'source', selectionStart: 6, selectionEnd: 6 }, preventDefault() {},
+    clipboardData: { items: [{ type: 'image/png', getAsFile: () => x.draft.file }] } };
+  x.options = { modelKey: 'docEditorContent', ownerNpub: 'owner' };
+  return x;
+}
+test('generic inline image pins backend through all stages', async () => {
+  const x = inlineFixture();
+  await x.store.handleInlineImagePaste(x.event, x.options);
+  assert.deepEqual(x.routes, Array(3).fill('https://selected.example'));
+  assert.ok(x.store.docEditorContent.includes('storage://object'));
+});
+for (const stage of ['read', 'prepare', 'transfer', 'complete']) test(`inline image destination switch during ${stage} never edits replacement model`, async () => {
+  const x = inlineFixture({ delay: stage });
+  const p = x.store.handleInlineImagePaste(x.event, x.options);
+  await tick();
+  x.store.selectedDocId = 'doc-two'; x.store.docEditAccessGeneration++;
+  x.store.docEditorContent = 'destination';
+  x.wait.release(); await p;
+  assert.equal(x.store.docEditorContent, 'destination');
+  assert.equal(x.store.error, undefined);
+  if (stage === 'read') assert.equal(x.calls.length, 0);
+});
+test('generic inline file workspace switch during read cannot prepare in destination', async () => {
+  const x = inlineFixture({ delay: 'read' });
+  const p = x.store.uploadFileIntoModel(x.draft.file, x.event, x.options);
+  await tick(); x.switchWorkspace(); x.store.docEditorContent = 'destination';
+  x.wait.release(); await p;
+  assert.equal(x.calls.length, 0);
+  assert.equal(x.store.docEditorContent, 'destination');
+});
+test('accepted inline file after editor switch cannot create a file under destination authority', async () => {
+  const x = inlineFixture({ delay: 'complete' });
+  const p = x.store.uploadFileIntoModel(x.draft.file, x.event, x.options);
+  await tick(); x.store.selectedDocId = 'doc-two'; x.store.docEditorContent = 'destination';
+  x.wait.release(); await p;
+  assert.deepEqual(x.calls, ['prepare', 'transfer', 'complete']);
+  assert.equal(x.store.docEditorContent, 'destination');
+});
+
+test('pending numbered inline tokens still block Send and Save', () => {
+  const contains = method(candidate, 'containsInlineImageUploadToken', {});
+  assert.equal(contains('[ Uploading image 1... ]'), true);
+  assert.equal(contains('[ Uploading file 2... ]'), true);
+  assert.equal(contains('[ Uploading file... ]'), true);
+  assert.equal(contains('finished draft'), false);
+});
+
+test('accepted metadata with different bytes never marks the source ready or replays writes', async () => {
+  const x = fixture(candidate, { fail: 'complete', metadataHash: 'different' });
+  await x.store.uploadChatFileDraft('one'); await x.store.uploadChatFileDraft('one');
+  assert.deepEqual(x.calls, ['prepare', 'transfer', 'complete', 'metadata']);
+  assert.equal(x.store.drafts[0].status, 'error');
+  assert.equal(x.store.drafts[0].file, x.draft.file);
+});
+test('retry cannot move retained storage to a changed connection', async () => {
+  const x = fixture(candidate, { fail: 'complete' });
+  await x.store.uploadChatFileDraft('one');
+  x.store.currentWorkspace.directHttpsUrl = 'https://destination.example';
+  await x.store.uploadChatFileDraft('one');
+  assert.deepEqual(x.calls, ['prepare', 'transfer', 'complete']);
+  assert.equal(x.store.drafts[0].status, 'error');
+  assert.equal(x.store.drafts[0].file, x.draft.file);
+});
+
+test('changing comment or block selection balances the pending global upload counter', async () => {
+  const x = inlineFixture({ delay: 'complete' });
+  let count = 0;
+  x.store.incrementInlineUploadCount = () => count++;
+  x.store.decrementInlineUploadCount = () => count--;
+  const p = x.store.handleInlineImagePaste(x.event, { ...x.options, uploadCounterContext: 'message' });
+  await tick(); assert.equal(count, 1);
+  x.store.docSelectedBlockId = 'next-block'; x.store.docEditorContent = 'destination';
+  x.wait.release(); await p;
+  assert.equal(count, 0); assert.equal(x.store.docEditorContent, 'destination');
+});
+test('generic new-task object replacement invalidates its owning upload', () => {
+  const x = inlineFixture(); x.store.newTask = { description: 'source' };
+  const current = x.store.captureInlineUploadDestination('newTask.description');
+  assert.equal(current(), true); x.store.newTask = { description: 'destination' };
+  assert.equal(current(), false);
+});
+test('reopening new-work modal invalidates the previous inline upload', () => {
+  const x = inlineFixture(); x.store.commandPaletteNewWorkGeneration = 1;
+  const current = x.store.captureInlineUploadDestination('commandPaletteNewWorkDescription');
+  x.store.commandPaletteNewWorkGeneration++;
+  assert.equal(current(), false);
 });

@@ -21,7 +21,7 @@ vi.mock('../src/tower-transport.js', () => ({
   getTowerTransport: (url) => ({ mode: url === 'https://selected.example' ? 'fips' : 'https' }),
 }));
 import { observeDiagnostics } from '../src/diagnostics-events.js';
-import { setBaseUrl, uploadStorageObject, completeStorageObject } from '../src/api.js';
+import { setBaseUrl, uploadStorageObject, completeStorageObject, getStorageObject } from '../src/api.js';
 
 const options = { baseUrl: 'https://selected.example' };
 const prepared = { object_id: 'fixture', upload_url: 'https://presigned.example/object' };
@@ -78,3 +78,23 @@ describe('storage upload backend routing', () => {
     expect(events.some(event=>event.level==='error')).toBe(false);
   } finally {stop();}
  });
+
+it('metadata reconciliation uses selected backend', async () => {
+  fetchMock.mockResolvedValue(new Response(JSON.stringify({ completed_at: 'now' })));
+  await getStorageObject('fixture', options);
+  expect(fetchMock.mock.calls[0][0]).toBe('https://selected.example/api/v4/storage/fixture');
+});
+it('cancelled direct transfer does not fall back to a signed upload', async () => {
+  const controller = new AbortController();
+  fetchMock.mockImplementation(async (_url, init) => {
+    controller.abort();
+    init.signal.throwIfAborted();
+  });
+  await expect(uploadStorageObject(prepared, bytes, 'image/png', { baseUrl: 'https://default.example', signal: controller.signal })).rejects.toMatchObject({ name: 'AbortError' });
+  expect(fetchMock).toHaveBeenCalledTimes(1);
+});
+it('cancelled completion never signs or submits a new request', async () => {
+  const controller = new AbortController(); controller.abort();
+  await expect(completeStorageObject('fixture', {}, { ...options, signal: controller.signal })).rejects.toMatchObject({ name: 'AbortError' });
+  expect(fetchMock).not.toHaveBeenCalled();
+});

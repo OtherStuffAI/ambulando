@@ -334,8 +334,10 @@ export function openWorkspaceDb(workspaceDbKey) {
   if (_currentWorkspaceDbKey === workspaceDbKey && _currentWorkspaceDb) {
     return _currentWorkspaceDb;
   }
+  // Draft operations retain this handle through open/commit; their finalizer
+  // closes it after navigation. Closing an opening Dexie handle rejects it.
   if (_currentWorkspaceDb) {
-    try { _currentWorkspaceDb.close(); } catch { /* already closed */ }
+    try { if (!documentDraftDbUsers.get(_currentWorkspaceDb)) _currentWorkspaceDb.close(); } catch { /* already closed */ }
   }
   _currentWorkspaceDb = createWorkspaceDb(workspaceDbKey);
   _currentWorkspaceDbKey = workspaceDbKey;
@@ -347,7 +349,7 @@ export function closeWorkspaceDb() {
   const db = _currentWorkspaceDb;
   _currentWorkspaceDb = null;
   _currentWorkspaceDbKey = null;
-  db?.close();
+  if (db && !documentDraftDbUsers.get(db)) db.close();
 }
 
 export function getWorkspaceDb() {

@@ -586,3 +586,27 @@ test('rich document paste shows an upload placeholder before the image appears',
   await expect(image).toBeVisible();
   await expect(image).toHaveAttribute('src', /^data:image\/gif;base64,/);
 });
+
+for (const failed of [false, true]) test(`late rich paste ${failed ? 'failure' : 'success'} preserves replacement editor generation`, async ({ page }) => {
+  await page.goto('/');
+  await seedSelectedDocument(page);
+  await expect(page.locator('.doc-rich-editor .ProseMirror')).toBeVisible();
+  const result = await page.evaluate(async failed => {
+    const s = window.Alpine.store('chat');
+    let settle;
+    s.uploadInlineImageFile = () => new Promise((resolve, reject) => {
+      settle = () => failed ? reject(new Error('synthetic upload failure')) : resolve({ objectId: 'synthetic-object', fileName: 'synthetic.png' });
+    });
+    const editor = window.Alpine.raw(s.docRichEditorAdapter.editor);
+    const file = new File(['synthetic'], 'synthetic.png', { type: 'image/png' });
+    s.handleDocRichPaste({ preventDefault() {}, clipboardData: { items: [{ type: 'image/png', getAsFile: () => file }] } }, editor);
+    s.docEditAccessGeneration++;
+    let synchronized = 0, autosaved = 0;
+    s.syncDocRichEditorContentModel = () => { synchronized++; };
+    s.scheduleDocAutosave = () => { autosaved++; };
+    const before = JSON.stringify(editor.getJSON()), error = s.error;
+    settle(); await new Promise(resolve => setTimeout(resolve, 25));
+    return { unchanged: before === JSON.stringify(editor.getJSON()), synchronized, autosaved, errorUnchanged: s.error === error, pending: s.docRichImageUploadCount };
+  }, failed);
+  expect(result).toEqual({ unchanged: true, synchronized: 0, autosaved: 0, errorUnchanged: true, pending: 0 });
+});

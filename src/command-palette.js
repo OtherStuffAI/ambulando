@@ -83,6 +83,7 @@ export function createCommandPaletteState() {
     showCommandPaletteNewWorkModal: false,
     commandPaletteNewWorkTitle: '',
     commandPaletteNewWorkDescription: '',
+    commandPaletteNewWorkGeneration: 0,
     commandPaletteNewWorkScopeId: '',
     commandPaletteReturnFocusTarget: null,
   };
@@ -1000,6 +1001,7 @@ export const commandPaletteMixin = {
   },
 
   openCommandPaletteNewWorkModal() {
+    this.commandPaletteNewWorkGeneration = Number(this.commandPaletteNewWorkGeneration || 0) + 1;
     this.commandPaletteNewWorkTitle = '';
     this.commandPaletteNewWorkDescription = '';
     this.commandPaletteNewWorkScopeId = this.resolveCommandPaletteNewWorkScopeId();
@@ -1008,6 +1010,7 @@ export const commandPaletteMixin = {
   },
 
   closeCommandPaletteNewWorkModal() {
+    this.commandPaletteNewWorkGeneration = Number(this.commandPaletteNewWorkGeneration || 0) + 1;
     this.showCommandPaletteNewWorkModal = false;
     this.commandPaletteNewWorkTitle = '';
     this.commandPaletteNewWorkDescription = '';

@@ -2414,6 +2414,7 @@ describe('sendMessage', () => {
         selectedChannelId: 'channel-1',
         channels: [{ record_id: 'channel-1', scope_id: 'scope-1', owner_npub: 'npub1owner' }],
         messageInput: body,
+        messageFileDrafts: [{ kind: 'file', storage_object_id: '6502a11c-575d-4dc7-9581-29a5011661c3', filename: 'Good_Stuff_65-final.txt', status: 'ready', storage_upload: { prepared: { upload_url: 'https://synthetic.example/temporary-token' } }, upload_inflight: false }],
       });
 
       expect(await fn()).toBe(true);

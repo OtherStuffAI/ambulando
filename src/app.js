@@ -238,6 +238,7 @@ import {
   getTowerPgDailyScopeAgentAccess,
   uploadStorageObject,
   completeStorageObject,
+  getStorageObject,
 } from './api.js';
 import {
   createTowerPgInvocation,
@@ -6083,10 +6084,7 @@ export function initApp() {
     },
 
     async mountTaskRichDescriptionEditor(element = null) {
-      if (!element || !this.editingTask?.record_id || !this.isTaskDetailEditing() || !this.taskDescriptionEditing) {
-          finishDiagnosticOperation(diagnosticOperation, 'cancelled', null, { stage });
-          return false;
-        }
+      if (!element || !this.editingTask?.record_id || !this.isTaskDetailEditing() || !this.taskDescriptionEditing) return false;
       if (
         this.taskRichDescriptionAdapter
         && this.taskRichDescriptionMountEl === element
@@ -9548,7 +9546,8 @@ export function initApp() {
 
     containsInlineImageUploadToken(value) {
       const text = String(value || '');
-      return text.includes('[ Uploading image... ]') || text.includes('[ Uploading file... ]');
+      return text.includes('[ Uploading image... ]') || text.includes('[ Uploading file... ]')
+        || /\[ Uploading (?:image|file) \d+\.\.\. \]/.test(text);
     },
 
     getModelValue(modelPath) {
@@ -9633,7 +9632,28 @@ export function initApp() {
         if (!workspaceId) throw new Error('Tower PG workspace id is required for file upload.');
         return prepareTowerPgStorageObject(workspaceId, body, uploadContext.options);
       }
-      return prepareStorageObject(body);
+      return prepareStorageObject(body, uploadContext.options);
+    },
+
+    captureInlineUploadDestination(modelKey, textarea = null) {
+      const uploadContext = this.captureStorageUploadContext();
+      const task = this.editingTask;
+      const newTask = this.newTask;
+      const newWorkGeneration = this.commandPaletteNewWorkGeneration;
+      const docId = this.selectedDocId;
+      const docGeneration = this.docEditAccessGeneration;
+      const blockId = this.docSelectedBlockId;
+      const commentId = this.selectedDocCommentId;
+      return () => {
+        try { uploadContext.assertCurrent(); } catch { return false; }
+        if (modelKey.startsWith('newTask.')) return this.newTask === newTask;
+        if (modelKey.startsWith('commandPaletteNewWork')) return this.commandPaletteNewWorkGeneration === newWorkGeneration;
+        if (modelKey.includes('Task') || modelKey.startsWith('editingTask')) return this.editingTask === task;
+        if (/doc/i.test(modelKey)) return this.selectedDocId === docId
+          && this.docEditAccessGeneration === docGeneration && this.docSelectedBlockId === blockId
+          && this.selectedDocCommentId === commentId;
+        return !textarea || textarea.isConnected !== false;
+      };
     },
 
     async handleInlineImagePaste(event, options = {}) {
@@ -9657,15 +9677,18 @@ export function initApp() {
         return true;
       }
 
-      const token = '[ Uploading image... ]';
+      const isCurrent = this.captureInlineUploadDestination(modelKey, event.target);
+      const token = `[ Uploading image ${this._inlineUploadSequence = Number(this._inlineUploadSequence || 0) + 1}... ]`;
       this.insertTextIntoModel(modelKey, event.target, token);
       if (options.uploadCounterContext) this.incrementInlineUploadCount(options.uploadCounterContext);
 
       try {
-        const uploaded = await this.uploadInlineImageFile(file, options);
+        const uploaded = await this.uploadInlineImageFile(file, { ...options, isDestinationCurrent: isCurrent });
+        if (!isCurrent()) return true;
         this.replaceTokenInModel(modelKey, token, uploaded.markdown, event.target);
         this.scheduleStorageImageHydration();
       } catch (error) {
+        if (!isCurrent()) return true;
         this.replaceTokenInModel(modelKey, token, '[ Upload failed ]', event.target);
         this.error = error?.message || 'Could not upload pasted image.';
       } finally {
@@ -9678,7 +9701,13 @@ export function initApp() {
       if (!file) throw new Error('Could not read pasted image.');
       const ownerNpub = String(options.ownerNpub || '').trim();
       if (!ownerNpub) throw new Error('Missing storage owner for pasted image.');
+      const uploadContext = options.uploadContext || this.captureStorageUploadContext();
+      const assertCurrent = () => {
+        uploadContext.assertCurrent();
+        if (options.isDestinationCurrent && !options.isDestinationCurrent()) throw Object.assign(new Error('Editor changed during upload.'), { code: 'upload_context_changed' });
+      };
       const bytes = new Uint8Array(await file.arrayBuffer());
+      assertCurrent();
       const fileName = this.defaultPastedImageName(file, options.fileLabel || 'inline');
       const prepared = await this.prepareStorageObjectForCurrentWorkspace(buildStoragePrepareBody({
         ownerNpub,
@@ -9687,12 +9716,15 @@ export function initApp() {
         contentType: file.type || 'image/png',
         sizeBytes: file.size || bytes.byteLength,
         fileName,
-      }));
-      await uploadStorageObject(prepared, bytes, file.type || 'image/png');
+      }), uploadContext);
+      assertCurrent();
+      await uploadStorageObject(prepared, bytes, file.type || 'image/png', uploadContext.options);
+      const sha256 = await this.sha256HexForBytes(bytes);
+      assertCurrent();
       await completeStorageObject(prepared.object_id, {
         size_bytes: bytes.byteLength,
-        sha256_hex: await this.sha256HexForBytes(bytes),
-      });
+        sha256_hex: sha256,
+      }, uploadContext.options);
       return {
         objectId: prepared.object_id,
         fileName,
@@ -9723,12 +9755,16 @@ export function initApp() {
         }
       }
 
-      const token = '[ Uploading file... ]';
+      const uploadContext = this.captureStorageUploadContext();
+      const isCurrent = this.captureInlineUploadDestination(modelKey, event?.target);
+      const token = `[ Uploading file ${this._inlineUploadSequence = Number(this._inlineUploadSequence || 0) + 1}... ]`;
       this.insertTextIntoModel(modelKey, event?.target, token);
       if (options.uploadCounterContext) this.incrementInlineUploadCount(options.uploadCounterContext);
 
       try {
         const bytes = new Uint8Array(await file.arrayBuffer());
+        uploadContext.assertCurrent();
+        if (!isCurrent()) return true;
         const fileName = String(file.name || '').trim() || this.defaultPastedImageName(file, options.fileLabel || 'file');
         const prepared = await this.prepareStorageObjectForCurrentWorkspace(buildStoragePrepareBody({
           ownerNpub,
@@ -9737,12 +9773,18 @@ export function initApp() {
           contentType: file.type || 'application/octet-stream',
           sizeBytes: file.size || bytes.byteLength,
           fileName,
-        }));
-        await uploadStorageObject(prepared, bytes, file.type || 'application/octet-stream');
+        }), uploadContext);
+        uploadContext.assertCurrent();
+        if (!isCurrent()) return true;
+        await uploadStorageObject(prepared, bytes, file.type || 'application/octet-stream', uploadContext.options);
+        const sha256 = await this.sha256HexForBytes(bytes);
+        uploadContext.assertCurrent();
+        if (!isCurrent()) return true;
         await completeStorageObject(prepared.object_id, {
           size_bytes: bytes.byteLength,
-          sha256_hex: await this.sha256HexForBytes(bytes),
-        });
+          sha256_hex: sha256,
+        }, uploadContext.options);
+        if (!isCurrent()) return true;
         if (pgContext) {
           const acceptedFile = await createTowerPgFileFromLocal(this, {
             title: fileName,
@@ -9757,8 +9799,10 @@ export function initApp() {
           await upsertDocument(acceptedFile);
           if (typeof this.patchDocumentLocal === 'function') this.patchDocumentLocal(acceptedFile);
         }
+        if (!isCurrent()) return true;
         this.replaceTokenInModel(modelKey, token, this.createStorageFileMarkdown(prepared.object_id, fileName), event?.target);
       } catch (error) {
+        if (!isCurrent()) return true;
         this.replaceTokenInModel(modelKey, token, '[ Upload failed ]', event?.target);
         this.error = error?.message || 'Could not upload file.';
       } finally {
@@ -9833,6 +9877,25 @@ export function initApp() {
       const ownerNpub = String(this.workspaceOwnerNpub || this.session?.npub || '').trim();
       const draft = this.getChatFileDrafts(context).find((item) => item.draft_id === draftId);
       if (!draft?.file || draft.upload_inflight || draft.status === 'ready') return;
+      const controller = new AbortController();
+      if (!this._chatUploadControllers) this._chatUploadControllers = new Map();
+      this._chatUploadControllers.set(draftId, controller);
+      uploadContext.options.signal = controller.signal;
+      const retained = draft.storage_upload;
+      if (retained && (retained.workspaceId !== uploadContext.workspaceId
+        || retained.baseUrl !== uploadContext.options.baseUrl || retained.ownerNpub !== ownerNpub)) {
+        this._chatUploadControllers.delete(draftId);
+        this.error = 'Return to the original workspace connection to retry this attachment.';
+        return;
+      }
+      const assertActive = () => {
+        controller.signal.throwIfAborted();
+        uploadContext.assertCurrent();
+      };
+      const patchDraft = (patch) => {
+        Object.assign(draft, patch);
+        this.setChatFileDrafts(context, this.getChatFileDrafts(context).map(item => item.draft_id === draftId ? { ...item, ...patch } : item));
+      };
       const operation = createDiagnosticOperation('upload');
       uploadContext.options.diagnosticOperation = operation;
       let stage = 'request';
@@ -9845,27 +9908,52 @@ export function initApp() {
         item.draft_id === draftId ? { ...item, status: 'uploading', error: '', upload_inflight: true } : item
       )));
       try {
-        uploadContext.assertCurrent();
+        assertActive();
         const bytes = new Uint8Array(await draft.file.arrayBuffer());
         if (!ownerNpub) throw new Error('Missing storage owner for attachment.');
-        recordStage('prepare');
-        const prepared = await this.prepareStorageObjectForCurrentWorkspace(buildStoragePrepareBody({
-          ownerNpub,
-          accessGroupIds: [],
-          contentType: draft.content_type,
-          sizeBytes: draft.size_bytes || bytes.byteLength,
-          fileName: draft.filename,
-        }), uploadContext);
-        uploadContext.assertCurrent();
-        recordStage('transfer');
-        await uploadStorageObject(prepared, bytes, draft.content_type, uploadContext.options);
+        assertActive();
+        let storage = retained;
+        if (!storage) {
+          recordStage('prepare');
+          const prepared = await this.prepareStorageObjectForCurrentWorkspace(buildStoragePrepareBody({
+            ownerNpub, accessGroupIds: [], contentType: draft.content_type,
+            sizeBytes: draft.size_bytes || bytes.byteLength, fileName: draft.filename,
+          }), uploadContext);
+          storage = { prepared, workspaceId: uploadContext.workspaceId,
+            baseUrl: uploadContext.options.baseUrl, ownerNpub, transferred: false };
+          patchDraft({ storage_upload: storage });
+        }
+        assertActive();
+        const prepared = storage.prepared;
         const sha256Hex = await this.sha256HexForBytes(bytes);
-        uploadContext.assertCurrent();
-        recordStage('completion');
-        await completeStorageObject(prepared.object_id, {
-          size_bytes: bytes.byteLength,
-          sha256_hex: sha256Hex,
-        }, uploadContext.options);
+        assertActive();
+        let completed = false;
+        if (storage.completionAttempted) {
+          recordStage('completion');
+          const accepted = await getStorageObject(prepared.object_id, uploadContext.options);
+          assertActive();
+          if (accepted.completed_at) {
+            if (accepted.object_id !== prepared.object_id || Number(accepted.size_bytes) !== bytes.byteLength
+              || accepted.sha256_hex !== sha256Hex) throw new Error('Stored attachment identity does not match the source file.');
+            completed = true;
+          }
+        }
+        if (!completed) {
+          if (!storage.transferred) {
+            recordStage('transfer');
+            await uploadStorageObject(prepared, bytes, draft.content_type, uploadContext.options);
+            storage = { ...storage, transferred: true };
+            patchDraft({ storage_upload: storage });
+          }
+          assertActive();
+          recordStage('completion');
+          storage = { ...storage, completionAttempted: true };
+          patchDraft({ storage_upload: storage });
+          await completeStorageObject(prepared.object_id, {
+            size_bytes: bytes.byteLength, sha256_hex: sha256Hex,
+          }, uploadContext.options);
+        }
+        controller.signal.throwIfAborted();
         this.setChatFileDrafts(context, this.getChatFileDrafts(context).map((item) => (
           item.draft_id === draftId
             ? { ...item, storage_object_id: prepared.object_id, status: 'ready', error: '', upload_inflight: false }
@@ -9877,13 +9965,16 @@ export function initApp() {
         ), draft);
         finishDiagnosticOperation(operation, 'succeeded', null, { stage: 'completion', durationMs: Date.now() - startedAt });
       } catch (error) {
-        finishDiagnosticOperation(operation, error?.code === 'upload_context_changed' ? 'cancelled' : 'failed', error, { stage, durationMs: Date.now() - startedAt });
+        finishDiagnosticOperation(operation, controller.signal.aborted || error?.code === 'upload_context_changed' ? 'cancelled' : 'failed', error, { stage, durationMs: Date.now() - startedAt });
+        if (controller.signal.aborted) return;
         this.setChatFileDrafts(context, this.getChatFileDrafts(context).map((item) => (
           item.draft_id === draftId
             ? { ...item, status: 'error', error: error?.message || 'Upload failed.', upload_inflight: false }
             : item
         )));
         this.resolveChatFileDraftInlineToken(draftId, context, '[ Image upload failed ]', draft);
+      } finally {
+        if (this._chatUploadControllers.get(draftId) === controller) this._chatUploadControllers.delete(draftId);
       }
     },
 
@@ -9893,6 +9984,7 @@ export function initApp() {
     },
 
     removeChatFileDraft(draftId, context = 'message') {
+      this._chatUploadControllers?.get(draftId)?.abort();
       const draft = this.getChatFileDrafts(context).find((item) => item.draft_id === draftId);
       this.resolveChatFileDraftInlineToken(draftId, context, '');
       this.revokeChatFileDraftPreview(draft);
@@ -10033,6 +10125,7 @@ export function initApp() {
       event.preventDefault();
 
       const task = this.editingTask;
+      const workspace = this.currentWorkspace;
       if (!task) return true;
       const file = imageItem.getAsFile?.();
       if (!file) {
@@ -10061,8 +10154,10 @@ export function initApp() {
             ownerNpub: task.owner_npub || this.workspaceOwnerNpub || this.session?.npub,
             accessGroupIds: task.group_ids ?? [],
             fileLabel: 'task-rich',
+            isDestinationCurrent: () => !editor.isDestroyed && this.currentWorkspace === workspace && this.editingTask === task
+              && this.taskRichDescriptionAdapter?.getEditor() === editor,
           });
-          if (editor.isDestroyed || this.editingTask?.record_id !== task.record_id
+          if (editor.isDestroyed || this.currentWorkspace !== workspace || this.editingTask !== task
             || this.taskRichDescriptionAdapter?.getEditor() !== editor) return;
           this.replaceDocRichUploadPlaceholder(editor, uploadId, {
             type: 'fdStorageImage',
@@ -10080,7 +10175,7 @@ export function initApp() {
           }
           this.scheduleStorageImageHydration();
         } catch (error) {
-          if (editor.isDestroyed || this.editingTask?.record_id !== task.record_id
+          if (editor.isDestroyed || this.currentWorkspace !== workspace || this.editingTask !== task
             || this.taskRichDescriptionAdapter?.getEditor() !== editor) return;
           this.replaceDocRichUploadPlaceholder(editor, uploadId, {
             type: 'paragraph',
@@ -10097,25 +10192,27 @@ export function initApp() {
     async handleDocSourcePaste(event) {
       const doc = this.selectedDocument;
       if (!doc) return;
+      const isCurrent = this.captureInlineUploadDestination('docEditorContent', event?.target);
       const handled = await this.handleInlineImagePaste(event, {
         modelKey: 'docEditorContent',
         ownerNpub: doc.owner_npub || this.workspaceOwnerNpub || this.session?.npub,
         accessGroupIds: doc.group_ids ?? [],
         fileLabel: 'doc',
       });
-      if (handled) this.handleDocSourceInput(this.docEditorContent);
+      if (handled && isCurrent()) this.handleDocSourceInput(this.docEditorContent);
     },
 
     async handleDocBlockPaste(event) {
       const doc = this.selectedDocument;
       if (!doc) return;
+      const isCurrent = this.captureInlineUploadDestination('docEditorContent', event?.target);
       const handled = await this.handleInlineImagePaste(event, {
         modelKey: 'docBlockBuffer',
         ownerNpub: doc.owner_npub || this.workspaceOwnerNpub || this.session?.npub,
         accessGroupIds: doc.group_ids ?? [],
         fileLabel: 'doc-block',
       });
-      if (handled) this.updateDocBlockBuffer(this.docBlockBuffer);
+      if (handled && isCurrent()) this.updateDocBlockBuffer(this.docBlockBuffer);
     },
 
     handleDocRichPaste(event, editor) {
@@ -10135,6 +10232,12 @@ export function initApp() {
       const uploadId = globalThis.crypto?.randomUUID
         ? `doc-rich-upload-${globalThis.crypto.randomUUID()}`
         : `doc-rich-upload-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      const docGeneration = this.docEditAccessGeneration;
+      const adapter = this.docRichEditorAdapter;
+      const workspace = this.currentWorkspace;
+      const isCurrent = () => !editor.isDestroyed && this.currentWorkspace === workspace
+        && this.selectedDocument?.record_id === doc.record_id && this.docEditAccessGeneration === docGeneration
+        && this.docRichEditorAdapter === adapter;
       this.docRichImageUploadCount += 1;
       editor?.chain?.()
         .focus()
@@ -10153,7 +10256,9 @@ export function initApp() {
             ownerNpub: doc.owner_npub || this.workspaceOwnerNpub || this.session?.npub,
             accessGroupIds: doc.group_ids ?? [],
             fileLabel: 'doc-rich',
+            isDestinationCurrent: isCurrent,
           });
+          if (!isCurrent()) return;
           this.replaceDocRichUploadPlaceholder(editor, uploadId, {
             type: 'fdStorageImage',
             attrs: {
@@ -10166,6 +10271,7 @@ export function initApp() {
           this.syncDocRichEditorContentModel();
           this.scheduleStorageImageHydration();
         } catch (error) {
+          if (!isCurrent()) return;
           this.replaceDocRichUploadPlaceholder(editor, uploadId, {
             type: 'paragraph',
             content: [{ type: 'text', text: 'Image upload failed.' }],
@@ -10173,6 +10279,7 @@ export function initApp() {
           this.error = error?.message || 'Could not upload pasted image.';
         } finally {
           this.docRichImageUploadCount = Math.max(0, this.docRichImageUploadCount - 1);
+          if (!isCurrent()) return;
           this.syncDocRichEditorContentModel();
           this.scheduleDocAutosave();
         }

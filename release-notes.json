@@ -3341,6 +3341,36 @@
         "Handle concurrent editor loading failures together, retain drafts and offer explicit retry. Keep recovered rename conflicts in diagnostic history while terminal failures remain visible.",
         "Keep chat attachment uploads bound to their selected workspace and transport, with safe stage diagnostics."
       ]
+    },
+    {
+      "buildNumber": 2299,
+      "label": "Safer attachment retries and editor drafts",
+      "notes": [
+        "Keep inline and rich editor uploads bound to the initiating workspace and editor. Prevent late results from changing a different draft.",
+        "Reuse prepared attachment storage after an uncertain completion response and reconcile accepted bytes before retrying. Removing attachments cancels client transfers and prevents late reattachment.",
+        "Preserve document drafts when switching workspaces during database opening, and safely ignore unmounted task editors."
+      ]
+    },
+    {
+      "buildNumber": 2300,
+      "label": "Upload validation safeguards",
+      "notes": [
+        "Keep pending inline uploads blocked from Send and Save, and apply rich image paste completion only to its owning document editor."
+      ]
+    },
+    {
+      "buildNumber": 2301,
+      "label": "Rich editor upload ownership",
+      "notes": [
+        "Preserve successful rich image paste through reactive editor adapters while rejecting results from an older document editing session."
+      ]
+    },
+    {
+      "buildNumber": 2302,
+      "label": "Upload counter and new task draft safety",
+      "notes": [
+        "Release pending upload counters after switching editors or comment blocks, and prevent old new-task uploads from changing a reopened task draft."
+      ]
     }
   ]
 }

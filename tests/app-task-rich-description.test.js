@@ -162,3 +162,10 @@ it('opens an empty task, types a description, saves and reopens it, and honours 
     expect(store.taskRichDescriptionAdapter).toBeNull();
   } finally { store.destroyTaskRichDescriptionEditor(); section.remove(); await store.clearTaskLocalDraft(task.record_id); }
 });
+
+it('ignores an unmounted task editor before starting an editor operation', async () => {
+  const { initApp } = await import('../src/app.js');
+  initApp();
+  const store = storeMock.mock.calls.find(([name]) => name === 'chat')[1];
+  await expect(store.mountTaskRichDescriptionEditor(null)).resolves.toBe(false);
+});
