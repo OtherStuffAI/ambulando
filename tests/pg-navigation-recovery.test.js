@@ -141,6 +141,12 @@ describe('detail authority review', () => {
     await applyPgNavigationProjection(s, page(true, [], [], 3));
     expect(s.pgNavigationRecoverySelection).toMatchObject({ taskId: 'task', docId: 'doc', reportId: 'report', channelId: 'channel' });
   });
+  it('clears detail models even if live-query coalescing skips the pending phase', async () => {
+    const s = client(); s.editingTask = { record_id: 'task', title: 'old authority' }; s.docEditorContent = 'old body';
+    s.reportModalReport = { title: 'old report' };
+    await applyPgNavigationProjection(s, page(false, [scope], [channel], 3));
+    expect(s.editingTask).toBeNull(); expect(s.docEditorContent).toBe(''); expect(s.reportModalReport).toBeNull();
+  });
   it('channel presence alone cannot prove its missing or denied scope', async () => {
     for (const scopes of [[], [{ ...scope, can_read: false }]]) {
       const s = client(); s.selectedBoardId = 'all'; s.validateSelectedBoardId = () => {};

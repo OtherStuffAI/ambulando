@@ -20,11 +20,12 @@ export function clearPgAuthorityPresentation(store, { preserveDrafts = true } = 
     'agentActivities', 'agentSessionHealth', 'threadResponseActivities', 'channelResponseActivities',
     'docVersionHistory', 'recordVersionHistory', 'documentSessionRows']) store[key] = [];
   for (const key of ['activeTaskId', 'selectedDocId', 'selectedDocType', 'selectedReportId',
-    'editingTask', 'taskEditOriginal', 'reportModalReport', 'scopeAccessScope', 'scopeAccessData']) store[key] = null;
+    'editingTask', 'taskEditOriginal', 'reportModalReport', 'reportDeleteConfirmReport', 'docRecovery', 'docEditConflict', 'scopeAccessScope', 'scopeAccessData']) store[key] = null;
   for (const key of ['showTaskDetail', 'chatTaskModalOpen', 'chatDocModalOpen', 'showDocShareModal',
-    'showDocCommentModal', 'recordVersionModalOpen', 'showScopeAccessModal']) store[key] = false;
+    'showDocCommentModal', 'recordVersionModalOpen', 'recordStatusModalOpen', 'showDocumentSessionsModal', 'showDocScopeModal', 'showDocMoveModal', 'showScopeAccessModal']) store[key] = false;
   for (const key of ['docEditorTitle', 'docEditorContent', 'docBlockBuffer', 'newTaskCommentBody',
-    'newDocCommentBody', 'newDocCommentReplyBody', 'chatTaskModalTitle', 'chatDocModalTitle']) store[key] = '';
+    'newDocCommentBody', 'newDocCommentReplyBody', 'chatTaskModalTitle', 'chatDocModalTitle',
+    'recordVersionLabel', 'recordStatusTargetLabel', 'recordStatusTargetId', 'docShareTargetId', 'docShareTargetType']) store[key] = '';
   store.docEditorBlocks = [];
   store.docEditorProseMirrorState = null;
   store.docEditorContentModel = null;

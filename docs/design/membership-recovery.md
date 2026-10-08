@@ -15,10 +15,14 @@ and retirement mark an incomplete replacement. An empty or partial prefix cannot
 prove that the previously selected destination was revoked.
 
 During replacement, retain routing IDs and saved composer draft intent, clear
-old selected message content and presentation caches, and fence asynchronous
+old selected message, task, document and report content, editor buffers and modal
+models, and fence asynchronous
 selection work. Do not restore cached rows or composer content to hide the reset.
 Once replacement completes, restore a destination only if current rows still
-permit reading it. Reconcile missing destinations using normal navigation.
+permit reading it and its scope is present and readable. Navigation during
+replacement updates routing intent without mounting a detail editor. Save task
+and document drafts through existing local persistence before clearing models;
+workspace switches persist them in the old partition before opening the new one. Reconcile missing destinations using normal navigation.
 Repeated interruptions must not overwrite saved intent with the empty composer.
 A missing selected scope must not broaden the task list to other scopes.
 

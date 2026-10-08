@@ -3401,6 +3401,13 @@
         "Archive scopes and channels with clear retained-content confirmation; connected and reconnecting sessions update without downloading unrelated content.",
         "Keep navigation safe while workspace access is rechecked and preserve local recovery drafts."
       ]
+    },
+    {
+      "buildNumber": 2308,
+      "label": "Archive navigation safety validation",
+      "notes": [
+        "Preserve editor drafts before switching workspaces and clear obsolete detail modals during access reconciliation."
+      ]
     }
   ]
 }

@@ -1427,6 +1427,18 @@ export const workspaceManagerMixin = {
       || (shouldOpenWorkspaceHome && hasRuntimeData && loadedWorkspaceKey !== nextWorkspaceKey)
       || (!loadedWorkspaceKey && hasRuntimeData && previousWorkspaceKey !== nextWorkspaceKey)
     );
+    if (shouldResetRuntimeData && previousWorkspaceKey && previousWorkspaceKey !== nextWorkspaceKey) {
+      try {
+        await Promise.all([
+          this.editingTask ? this.persistTaskLocalDraft?.() : null,
+          this.docEditDraftDirty ? this.persistSelectedDocDraft?.({ immediate: true }) : null,
+        ]);
+      } catch (error) {
+        this.workspaceSelectionError = `Could not preserve local drafts before switching: ${error?.message || error}`;
+        return;
+      }
+      if (this._workspaceSelectionRequest !== selectionGeneration) return;
+    }
     if (previousWorkspaceKey && previousWorkspaceKey !== nextWorkspaceKey) {
       this.disposeTowerSyncService?.('workspace-switch');
     }
@@ -1522,7 +1534,7 @@ export const workspaceManagerMixin = {
         this.hasForcedTaskFamilyBackfill = false;
         this.docCommentBackfillAttemptsByDocId = {};
         this.scopesLoaded = false;
-        clearPgAuthorityPresentation(this);
+        clearPgAuthorityPresentation(this, { preserveDrafts: false });
         this.pgNavigationRecoveryPending = false;
         this.pgNavigationRecoverySelection = null;
         this.pgNavigationGeneration = null;
