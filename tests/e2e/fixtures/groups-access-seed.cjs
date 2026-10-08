@@ -9,11 +9,11 @@ function syntheticNpub() {
 function buildGroupsAccessFixture() {
   const owner = syntheticNpub();
   const people = [
-    { actor_id: 'actor-pete', name: 'Pete Winn', role: 'owner' },
+    { actor_id: 'actor-manager', name: 'Workspace Manager', role: 'owner' },
     { actor_id: 'actor-kato', name: 'Kato', role: 'member' },
     { actor_id: 'actor-holly', name: 'Holly', role: 'member' },
     { actor_id: 'actor-brick', name: 'Brick', role: 'member', kind: 'agent' },
-    { actor_id: 'actor-rick', name: 'Rick', role: 'member', kind: 'agent' },
+    { actor_id: 'actor-editor-agent', name: 'Editor Agent', role: 'member', kind: 'agent' },
     { actor_id: 'actor-unnamed', name: '', role: 'member' },
   ].map((person) => ({ ...person, npub: syntheticNpub() }));
   const byId = Object.fromEntries(people.map((person) => [person.actor_id, person]));
@@ -35,9 +35,9 @@ function buildGroupsAccessFixture() {
     ['ch-scratch', 'Scratch Pad', ''],
   ].map(([record_id, title, scope_id]) => ({ record_id, title, scope_id, record_state: 'active' }));
   const groups = [
-    { group_id: 'group-admins', name: 'Workspace admins', group_kind: 'workspace_admin', members: ['actor-pete'] },
-    { group_id: 'group-agents', name: 'Agents', group_kind: 'custom', members: ['actor-brick', 'actor-rick'] },
-    { group_id: 'group-team', name: 'Team', group_kind: 'custom', members: ['actor-pete', 'actor-kato', 'actor-holly'], children: ['group-agents'] },
+    { group_id: 'group-admins', name: 'Workspace admins', group_kind: 'workspace_admin', members: ['actor-manager'] },
+    { group_id: 'group-agents', name: 'Agents', group_kind: 'custom', members: ['actor-brick', 'actor-editor-agent'] },
+    { group_id: 'group-team', name: 'Team', group_kind: 'custom', members: ['actor-manager', 'actor-kato', 'actor-holly'], children: ['group-agents'] },
   ];
   const membersByGroup = Object.fromEntries(groups.map((group) => [group.group_id, group.members]));
   return buildResult(groups.map((group) => {
