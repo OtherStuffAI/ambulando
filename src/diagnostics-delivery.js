@@ -2,7 +2,7 @@ import { uploadStorageObject, completeStorageObject } from './api.js';
 import { createTowerPgMessageFromLocal } from './tower-command-intents.js';
 import { buildStoragePrepareBody } from './storage-payloads.js';
 import { canonicalAgentMentionsFromSelection } from './agent-direct-chat.js';
-import { sanitizeDiagnosticEvent, boundDiagnosticEvents } from './diagnostics-schema.js';
+import { sanitizeDiagnosticEvent, boundDiagnosticEvents, DIAGNOSTICS_AFTERMATH_MS } from './diagnostics-schema.js';
 
 export function diagnosticsReportMessage(incident, agent, objectId) {
   const label = String(agent.label || 'Agent').replace(/[\[\]()\n\r]/g, '').slice(0, 80) || 'Agent';
@@ -25,8 +25,9 @@ export async function deliverDiagnosticIncident({ store, incident, agent, assert
       await assertCurrent();
       if (native?.version === 1) {
         current.host = { version: String(native.host?.version || '').slice(0, 80), platform: String(native.host?.platform || '').slice(0, 30), recovered: native.recovered === true };
-        current.hostEvents = boundDiagnosticEvents((native.events || []).slice(-2_000).map(event => sanitizeDiagnosticEvent(event)).filter(Boolean));
-        current.hostLimitations = ['WM App snapshot available; native capture is platform dependent.'];
+        const anchor = current.trigger.ts;
+        current.hostEvents = boundDiagnosticEvents((native.events || []).slice(-2_000).map(event => sanitizeDiagnosticEvent(event, Math.max(anchor, Number(event?.ts) || anchor))).filter(Boolean), anchor, anchor + DIAGNOSTICS_AFTERMATH_MS);
+        current.hostLimitations = ['WM App snapshot available; native capture is platform dependent.', ...(!current.hostEvents.length ? ['Incident-time native events unavailable; later host history is excluded.'] : [])];
         await patch({ host: current.host, hostEvents: current.hostEvents, hostLimitations: current.hostLimitations });
       }
     } catch { await assertCurrent(); }
@@ -57,9 +58,13 @@ export async function deliverDiagnosticIncident({ store, incident, agent, assert
 }
 
 function evidenceBytes(incident) {
+  const observation = event => JSON.stringify(['ts', 'source', 'level', 'code', 'name', 'route', 'method', 'status', 'durationMs', 'stack'].map(key => event[key] ?? null));
+  const browser = new Set((incident.events || []).map(observation));
+  const hostEvents = (incident.hostEvents || []).filter(event => !browser.has(observation(event)));
   const evidence = { version: 1, incidentId: incident.incidentId, createdAt: incident.createdAt, build: incident.build,
     workspaceId: incident.workspaceId, historyAvailable: incident.historyAvailable !== false, trigger: incident.trigger, recurrence: incident.recurrence,
-    events: incident.events, host: incident.host || null, hostEvents: incident.hostEvents || [],
-    limitations: [...incident.limitations, ...(incident.hostLimitations || []), ...(incident.historyAvailable === false ? ['Historical recording was off; this report includes only the explicit description and current report metadata.'] : []), ...(!incident.host ? ['Browser-only evidence: WM App diagnostics not available or consent not granted.'] : [])] };
+    context: incident.context || { operation: 'unavailable', stage: 'unavailable', category: 'unavailable', route: 'unavailable', correlation: 'unavailable', stack: 'unavailable' },
+    events: incident.events, host: incident.host || null, hostEvents, overlappingHostEvents: (incident.hostEvents || []).length - hostEvents.length,
+    limitations: [...incident.limitations, ...(incident.hostLimitations || []), ...(incident.aftermathLimited ? ['Additional aftermath was unavailable because the local queue byte cap was reached.'] : []), ...(incident.historyAvailable === false ? ['Historical recording was off; this report includes only the explicit description and current report metadata.'] : []), ...(!incident.host ? ['Browser-only evidence: WM App diagnostics not available or consent not granted.'] : [])] };
   return new TextEncoder().encode(JSON.stringify(evidence));
 }

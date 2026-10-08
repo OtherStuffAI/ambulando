@@ -14,7 +14,7 @@ describe('chat file drop upload', () => {
 
   it('uploads dropped files through chat attachment drafts', () => {
     expect(appSource).toContain('async handleChatFileDrop(event, context = \'message\')');
-    expect(appSource).toContain('async prepareStorageObjectForCurrentWorkspace(body)');
+    expect(appSource).toContain('async prepareStorageObjectForCurrentWorkspace(body, uploadContext = this.captureStorageUploadContext())');
     expect(appSource).toContain('prepareTowerPgStorageObject(workspaceId, body');
     expect(appSource).toContain('this.prepareStorageObjectForCurrentWorkspace(buildStoragePrepareBody');
     expect(appSource).toContain('uploadStorageObject(prepared, bytes');

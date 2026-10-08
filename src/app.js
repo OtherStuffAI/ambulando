@@ -1,3 +1,5 @@
+import { showEditorMountFailure } from './docs/editor/editor-mount-failure.js';
+import { createDiagnosticOperation, finishDiagnosticOperation, emitDiagnostic } from './diagnostics-events.js';
 import { orgDataMixin } from './org-data/manager.js';
 import { towerUsageMixin } from './tower-usage.js';
 import { toolboxMixin } from './toolbox-manager.js';
@@ -776,6 +778,9 @@ export function initApp() {
     dailyNoteRichEditorAdapter: null,
     dailyNoteRichEditorToolbar: null,
     dailyNoteRichEditorMountEl: null,
+    dailyNoteRichEditorMountPromise: null,
+    dailyNoteRichEditorMountGeneration: 0,
+    dailyNoteRichEditorLoadState: 'idle',
     dailyNoteVersioningOpen: false,
     dailyNoteVersionHistory: [],
     dailyNoteVersioningLoading: false,
@@ -1070,6 +1075,9 @@ export function initApp() {
     taskRichDescriptionModel: '',
     taskRichDescriptionUploadIds: [],
     taskRichDescriptionMountEl: null,
+    taskRichDescriptionMountPromise: null,
+    taskRichDescriptionMountGeneration: 0,
+    taskRichDescriptionLoadState: 'idle',
     taskRichDescriptionRecordId: '',
     taskAssigneeQuery: '',
     predecessorTaskQuery: '',
@@ -3997,9 +4005,11 @@ export function initApp() {
     },
 
     destroyDailyNoteRichEditor() {
-      if (!this.dailyNoteRichEditorAdapter) return;
+      this.dailyNoteRichEditorMountGeneration = Number(this.dailyNoteRichEditorMountGeneration || 0) + 1;
+      this.dailyNoteRichEditorMountPromise = null;
+
       this.dailyNoteRichEditorToolbar?.destroy?.();
-      this.dailyNoteRichEditorAdapter.destroy();
+      this.dailyNoteRichEditorAdapter?.destroy();
       this.dailyNoteRichEditorAdapter = null;
       this.dailyNoteRichEditorToolbar = null;
       this.dailyNoteRichEditorMountEl = null;
@@ -4008,24 +4018,50 @@ export function initApp() {
     async mountDailyNoteRichEditor(element = null) {
       if (!element || this.dailyNoteEditorMode !== 'edit') return;
       if (this.dailyNoteRichEditorAdapter && this.dailyNoteRichEditorMountEl === element) return;
+      if (this.dailyNoteRichEditorMountPromise && this.dailyNoteRichEditorMountEl === element) return this.dailyNoteRichEditorMountPromise;
       this.destroyDailyNoteRichEditor();
-      const editorMount = document.createElement('div');
-      editorMount.className = 'daily-note-rich-editor-surface doc-rich-editor';
-      element.replaceChildren(editorMount);
       this.dailyNoteRichEditorMountEl = element;
-      const { createTiptapEditorAdapter } = await loadTiptapEditorAdapter();
-      if (this.dailyNoteRichEditorMountEl !== element || this.dailyNoteEditorMode !== 'edit') return;
-      this.dailyNoteRichEditorAdapter = createTiptapEditorAdapter({
-        element: editorMount,
-        document: { content: this.dailyNoteEditorBody || '' },
-        editable: true,
-        placeholder: 'Write the plan, progress, blockers, or anything the AI should track today.',
-        onUpdate: (contentModel) => {
-          this.dailyNoteEditorBody = contentModel?.content || '';
-        },
+      const mountGeneration = this.dailyNoteRichEditorMountGeneration;
+      this.dailyNoteRichEditorLoadState = 'loading';
+      const diagnosticOperation = createDiagnosticOperation('daily-note-editor');
+      let stage = 'import';
+      const mountPromise = (async () => {
+        const editorMount = document.createElement('div');
+        editorMount.className = 'daily-note-rich-editor-surface doc-rich-editor';
+        element.replaceChildren(editorMount);
+        const { createTiptapEditorAdapter } = await loadTiptapEditorAdapter();
+        if (this.dailyNoteRichEditorMountGeneration !== mountGeneration || this.dailyNoteRichEditorMountEl !== element || this.dailyNoteEditorMode !== 'edit') {
+          finishDiagnosticOperation(diagnosticOperation, 'cancelled', null, { stage });
+          return false;
+        }
+        stage = 'factory';
+        this.dailyNoteRichEditorAdapter = createTiptapEditorAdapter({
+          element: editorMount,
+          document: { content: this.dailyNoteEditorBody || '' },
+          editable: true,
+          placeholder: 'Write the plan, progress, blockers, or anything the AI should track today.',
+          onUpdate: (contentModel) => {
+            this.dailyNoteEditorBody = contentModel?.content || '';
+          },
+        });
+        this.dailyNoteRichEditorToolbar = createDailyNoteTiptapToolbar(this.dailyNoteRichEditorAdapter.editor);
+        element.prepend(this.dailyNoteRichEditorToolbar.element);
+        this.dailyNoteRichEditorLoadState = 'ready';
+        finishDiagnosticOperation(diagnosticOperation, 'succeeded', null, { stage });
+      })().catch(error => {
+        if (this.dailyNoteRichEditorMountGeneration === mountGeneration && this.dailyNoteRichEditorMountEl === element && this.dailyNoteEditorMode === 'edit') {
+          this.dailyNoteRichEditorLoadState = 'error';
+          this.dailyNoteRichEditorAdapter?.destroy?.();
+          this.dailyNoteRichEditorAdapter = null;
+          showEditorMountFailure(element, () => this.mountDailyNoteRichEditor(element));
+          finishDiagnosticOperation(diagnosticOperation, 'failed', error, { stage });
+        } else finishDiagnosticOperation(diagnosticOperation, 'cancelled', null, { stage });
+        return false;
+      }).finally(() => {
+        if (this.dailyNoteRichEditorMountPromise === mountPromise) this.dailyNoteRichEditorMountPromise = null;
       });
-      this.dailyNoteRichEditorToolbar = createDailyNoteTiptapToolbar(this.dailyNoteRichEditorAdapter.editor);
-      element.prepend(this.dailyNoteRichEditorToolbar.element);
+      this.dailyNoteRichEditorMountPromise = mountPromise;
+      return mountPromise;
     },
 
     normalizeDailyNoteEditorItems(items = []) {
@@ -5958,6 +5994,8 @@ export function initApp() {
     },
 
     destroyTaskRichDescriptionEditor() {
+      this.taskRichDescriptionMountGeneration = Number(this.taskRichDescriptionMountGeneration || 0) + 1;
+      this.taskRichDescriptionMountPromise = null;
       this.taskRichDescriptionToolbar?.destroy();
       this.taskRichDescriptionToolbar = null;
       this.taskRichDescriptionModel = '';
@@ -6045,7 +6083,10 @@ export function initApp() {
     },
 
     async mountTaskRichDescriptionEditor(element = null) {
-      if (!element || !this.editingTask?.record_id || !this.isTaskDetailEditing() || !this.taskDescriptionEditing) return;
+      if (!element || !this.editingTask?.record_id || !this.isTaskDetailEditing() || !this.taskDescriptionEditing) {
+          finishDiagnosticOperation(diagnosticOperation, 'cancelled', null, { stage });
+          return false;
+        }
       if (
         this.taskRichDescriptionAdapter
         && this.taskRichDescriptionMountEl === element
@@ -6057,54 +6098,80 @@ export function initApp() {
         }
         return;
       }
+      if (this.taskRichDescriptionMountPromise && this.taskRichDescriptionMountEl === element && this.taskRichDescriptionRecordId === this.editingTask.record_id) return this.taskRichDescriptionMountPromise;
       this.destroyTaskRichDescriptionEditor();
       this.taskRichDescriptionMountEl = element;
       const recordId = this.editingTask.record_id;
       this.taskRichDescriptionRecordId = recordId;
-      const { createTaskDescriptionEditor } = await import('./task-description-editor.js');
-      if (this.taskRichDescriptionMountEl !== element || this.editingTask?.record_id !== recordId
-        || !this.isTaskDetailEditing() || !this.taskDescriptionEditing) return;
-      // Two Alpine effects can request a mount while the lazy import resolves.
-      if (this.taskRichDescriptionAdapter) return;
-      element.replaceChildren();
-      const editorMount = element.ownerDocument.createElement('div');
-      element.append(editorMount);
-      this.taskRichDescriptionModel = this.editingTask.description || '';
-      let editorContent = null;
-      this.taskRichDescriptionAdapter = createTaskDescriptionEditor({
-        element: editorMount,
-        description: this.taskRichDescriptionModel,
-        editable: true,
-        onPaste: (event, editor) => this.handleTaskRichPaste?.(event, editor) === true,
-        onKeydown: (event, editor) => {
-          this.handleMentionKeydown({
-            currentTarget: editor.view.dom,
-            key: event.key,
-            isComposing: event.isComposing,
-            preventDefault: () => event.preventDefault(),
-          });
-          return event.defaultPrevented;
-        },
-        onUpdate: (contentModel) => {
-          if (this.editingTask?.record_id !== recordId || !this.isTaskDetailEditing()) return;
-          // Focus can assign internal block IDs without changing Markdown.
-          if (contentModel?.content === editorContent) return;
-          editorContent = contentModel?.content || '';
-          this.taskRichDescriptionModel = contentModel?.content || '';
-          this.editingTask.description = this.taskRichDescriptionModel;
-          this.handleEditingTaskDraftChanged();
-          this.scheduleStorageImageHydration?.();
-        },
+      const mountGeneration = this.taskRichDescriptionMountGeneration;
+      this.taskRichDescriptionLoadState = 'loading';
+      const diagnosticOperation = createDiagnosticOperation('task-editor');
+      let stage = 'import';
+      const mountPromise = (async () => {
+        const { createTaskDescriptionEditor } = await import('./task-description-editor.js');
+        if (this.taskRichDescriptionMountGeneration !== mountGeneration || this.taskRichDescriptionMountEl !== element || this.editingTask?.record_id !== recordId
+          || !this.isTaskDetailEditing() || !this.taskDescriptionEditing) {
+          finishDiagnosticOperation(diagnosticOperation, 'cancelled', null, { stage });
+          return false;
+        }
+        // Two Alpine effects can request a mount while the lazy import resolves.
+        if (this.taskRichDescriptionAdapter) return;
+        element.replaceChildren();
+        const editorMount = element.ownerDocument.createElement('div');
+        element.append(editorMount);
+        this.taskRichDescriptionModel = this.editingTask.description || '';
+        let editorContent = null;
+        stage = 'factory';
+        this.taskRichDescriptionAdapter = createTaskDescriptionEditor({
+          element: editorMount,
+          description: this.taskRichDescriptionModel,
+          editable: true,
+          onPaste: (event, editor) => this.handleTaskRichPaste?.(event, editor) === true,
+          onKeydown: (event, editor) => {
+            this.handleMentionKeydown({
+              currentTarget: editor.view.dom,
+              key: event.key,
+              isComposing: event.isComposing,
+              preventDefault: () => event.preventDefault(),
+            });
+            return event.defaultPrevented;
+          },
+          onUpdate: (contentModel) => {
+            if (this.editingTask?.record_id !== recordId || !this.isTaskDetailEditing()) return;
+            // Focus can assign internal block IDs without changing Markdown.
+            if (contentModel?.content === editorContent) return;
+            editorContent = contentModel?.content || '';
+            this.taskRichDescriptionModel = contentModel?.content || '';
+            this.editingTask.description = this.taskRichDescriptionModel;
+            this.handleEditingTaskDraftChanged();
+            this.scheduleStorageImageHydration?.();
+          },
+        });
+        editorContent = this.taskRichDescriptionAdapter.getContentModel().content;
+        const editor = this.taskRichDescriptionAdapter.getEditor();
+        this.taskRichDescriptionToolbar = createDailyNoteTiptapToolbar(editor);
+        this.taskRichDescriptionToolbar.element.setAttribute('aria-label', 'Task description formatting');
+        element.prepend(this.taskRichDescriptionToolbar.element);
+        editor.view.dom.setAttribute('aria-label', 'Task description');
+        editor.view.dom.setAttribute('role', 'textbox');
+        editor.view.dom.setAttribute('aria-multiline', 'true');
+        this.scheduleStorageImageHydration?.();
+        this.taskRichDescriptionLoadState = 'ready';
+        finishDiagnosticOperation(diagnosticOperation, 'succeeded', null, { stage });
+      })().catch(error => {
+        if (this.taskRichDescriptionMountGeneration === mountGeneration && this.taskRichDescriptionMountEl === element && this.editingTask?.record_id === recordId && this.isTaskDetailEditing() && this.taskDescriptionEditing) {
+          this.taskRichDescriptionLoadState = 'error';
+          this.taskRichDescriptionAdapter?.destroy?.();
+          this.taskRichDescriptionAdapter = null;
+          showEditorMountFailure(element, () => this.mountTaskRichDescriptionEditor(element));
+          finishDiagnosticOperation(diagnosticOperation, 'failed', error, { stage });
+        } else finishDiagnosticOperation(diagnosticOperation, 'cancelled', null, { stage });
+        return false;
+      }).finally(() => {
+        if (this.taskRichDescriptionMountPromise === mountPromise) this.taskRichDescriptionMountPromise = null;
       });
-      editorContent = this.taskRichDescriptionAdapter.getContentModel().content;
-      const editor = this.taskRichDescriptionAdapter.getEditor();
-      this.taskRichDescriptionToolbar = createDailyNoteTiptapToolbar(editor);
-      this.taskRichDescriptionToolbar.element.setAttribute('aria-label', 'Task description formatting');
-      element.prepend(this.taskRichDescriptionToolbar.element);
-      editor.view.dom.setAttribute('aria-label', 'Task description');
-      editor.view.dom.setAttribute('role', 'textbox');
-      editor.view.dom.setAttribute('aria-multiline', 'true');
-      this.scheduleStorageImageHydration?.();
+      this.taskRichDescriptionMountPromise = mountPromise;
+      return mountPromise;
     },
 
     // Task creates stay optimistic. Every existing-task mutation should use
@@ -9539,14 +9606,32 @@ export function initApp() {
         .join('');
     },
 
-    async prepareStorageObjectForCurrentWorkspace(body) {
-      if (isTowerPgBackendMode() && this.currentWorkspace?.pgBackendMode) {
-        const workspaceId = String(this.currentWorkspace?.workspaceId || '').trim();
+    captureStorageUploadContext() {
+      const workspace = this.currentWorkspace;
+      const generation = this._workspaceSelectionGeneration;
+      const workspaceKey = this.currentWorkspaceKey;
+      const sessionNpub = this.session?.npub;
+      const baseUrl = workspace?.directHttpsUrl || this.currentWorkspaceBackendUrl || this.backendUrl;
+      return {
+        workspaceId: String(workspace?.workspaceId || '').trim(),
+        pg: isTowerPgBackendMode() && workspace?.pgBackendMode,
+        options: { baseUrl, backendUrl: baseUrl, appNpub: workspace?.appNpub || undefined },
+        assertCurrent: () => {
+          if (this.currentWorkspace !== workspace || this._workspaceSelectionGeneration !== generation
+            || this.currentWorkspaceKey !== workspaceKey || this.session?.npub !== sessionNpub
+            || (this.currentWorkspace?.directHttpsUrl || this.currentWorkspaceBackendUrl || this.backendUrl) !== baseUrl) {
+            throw Object.assign(new Error('Workspace changed during upload. Return to the original draft to retry.'), { code: 'upload_context_changed' });
+          }
+        },
+      };
+    },
+
+    async prepareStorageObjectForCurrentWorkspace(body, uploadContext = this.captureStorageUploadContext()) {
+      uploadContext.assertCurrent();
+      if (uploadContext.pg) {
+        const workspaceId = uploadContext.workspaceId;
         if (!workspaceId) throw new Error('Tower PG workspace id is required for file upload.');
-        return prepareTowerPgStorageObject(workspaceId, body, {
-          baseUrl: this.currentWorkspace?.directHttpsUrl || this.currentWorkspaceBackendUrl || this.backendUrl,
-          appNpub: this.currentWorkspace?.appNpub || undefined,
-        });
+        return prepareTowerPgStorageObject(workspaceId, body, uploadContext.options);
       }
       return prepareStorageObject(body);
     },
@@ -9744,40 +9829,58 @@ export function initApp() {
     },
 
     async uploadChatFileDraft(draftId, context = 'message') {
+      const uploadContext = this.captureStorageUploadContext();
+      const ownerNpub = String(this.workspaceOwnerNpub || this.session?.npub || '').trim();
       const draft = this.getChatFileDrafts(context).find((item) => item.draft_id === draftId);
-      if (!draft?.file) return;
+      if (!draft?.file || draft.upload_inflight || draft.status === 'ready') return;
+      const operation = createDiagnosticOperation('upload');
+      uploadContext.options.diagnosticOperation = operation;
+      let stage = 'request';
+      const startedAt = Date.now();
+      const recordStage = (value) => {
+        stage = value;
+        emitDiagnostic({ ...operation, source: 'browser', level: 'info', code: 'recovery', stage, outcome: 'attempt', durationMs: Date.now() - startedAt });
+      };
       this.setChatFileDrafts(context, this.getChatFileDrafts(context).map((item) => (
-        item.draft_id === draftId ? { ...item, status: 'uploading', error: '' } : item
+        item.draft_id === draftId ? { ...item, status: 'uploading', error: '', upload_inflight: true } : item
       )));
       try {
+        uploadContext.assertCurrent();
         const bytes = new Uint8Array(await draft.file.arrayBuffer());
-        const ownerNpub = String(this.workspaceOwnerNpub || this.session?.npub || '').trim();
         if (!ownerNpub) throw new Error('Missing storage owner for attachment.');
+        recordStage('prepare');
         const prepared = await this.prepareStorageObjectForCurrentWorkspace(buildStoragePrepareBody({
           ownerNpub,
           accessGroupIds: [],
           contentType: draft.content_type,
           sizeBytes: draft.size_bytes || bytes.byteLength,
           fileName: draft.filename,
-        }));
-        await uploadStorageObject(prepared, bytes, draft.content_type);
+        }), uploadContext);
+        uploadContext.assertCurrent();
+        recordStage('transfer');
+        await uploadStorageObject(prepared, bytes, draft.content_type, uploadContext.options);
+        const sha256Hex = await this.sha256HexForBytes(bytes);
+        uploadContext.assertCurrent();
+        recordStage('completion');
         await completeStorageObject(prepared.object_id, {
           size_bytes: bytes.byteLength,
-          sha256_hex: await this.sha256HexForBytes(bytes),
-        });
+          sha256_hex: sha256Hex,
+        }, uploadContext.options);
         this.setChatFileDrafts(context, this.getChatFileDrafts(context).map((item) => (
           item.draft_id === draftId
-            ? { ...item, storage_object_id: prepared.object_id, status: 'ready', error: '' }
+            ? { ...item, storage_object_id: prepared.object_id, status: 'ready', error: '', upload_inflight: false }
             : item
         )));
         this.resolveChatFileDraftInlineToken(draftId, context, this.createStorageMarkdown(
           prepared.object_id,
           draft.filename,
         ), draft);
+        finishDiagnosticOperation(operation, 'succeeded', null, { stage: 'completion', durationMs: Date.now() - startedAt });
       } catch (error) {
+        finishDiagnosticOperation(operation, error?.code === 'upload_context_changed' ? 'cancelled' : 'failed', error, { stage, durationMs: Date.now() - startedAt });
         this.setChatFileDrafts(context, this.getChatFileDrafts(context).map((item) => (
           item.draft_id === draftId
-            ? { ...item, status: 'error', error: error?.message || 'Upload failed.' }
+            ? { ...item, status: 'error', error: error?.message || 'Upload failed.', upload_inflight: false }
             : item
         )));
         this.resolveChatFileDraftInlineToken(draftId, context, '[ Image upload failed ]', draft);

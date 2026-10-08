@@ -10,6 +10,7 @@ import { getActiveSessionNpub } from './crypto/group-keys.js';
 import { getActiveWorkspaceKeyNpub, getActiveWorkspaceKeySecretForAuth } from './crypto/workspace-keys.js';
 import { buildFlightDeckSyncRequest } from './superbased/sync-request.js';
 import { FLIGHT_DECK_PG_APP_NPUB } from './app-identity.js';
+import { emitDiagnostic, markDiagnosticRequest, diagnosticOperationMetadata, createDiagnosticOperation, finishDiagnosticOperation } from './diagnostics-events.js';
 
 let _baseUrl = '';
 
@@ -266,12 +267,28 @@ async function signedFetchAbsolute(requestUrl, { method = 'GET', body } = {}, op
     headers['Content-Type'] = 'application/json';
   }
 
-  return fetch(requestUrl, {
+  return fetchWithOperationEvidence(requestUrl, {
     method,
     headers,
     body: body !== undefined ? JSON.stringify(body) : undefined,
     signal: createFetchTimeoutSignal(DEFAULT_FETCH_TIMEOUT_MS),
-  });
+  }, options.diagnosticOperation);
+}
+
+async function fetchWithOperationEvidence(requestUrl, init, context) {
+  const diagnostic = diagnosticOperationMetadata(context);
+  if (!diagnostic.correlation) return fetch(requestUrl, init);
+  const start = performance.now();
+  try {
+    const response = await fetch(requestUrl, markDiagnosticRequest(init));
+    emitDiagnostic({ ...diagnostic, source: 'network', code: 'request', level: 'info', outcome: 'attempt', stage: 'request', category: response.status === 401 ? 'auth' : 'http',
+      route: requestUrl, method: init.method || 'GET', status: response.status, durationMs: performance.now() - start });
+    return response;
+  } catch (error) {
+    emitDiagnostic({ ...diagnostic, source: 'network', code: 'request', level: 'info', outcome: 'attempt', stage: 'request', category: 'transport',
+      route: requestUrl, method: init.method || 'GET', status: 0, name: error?.name, durationMs: performance.now() - start });
+    throw error;
+  }
 }
 
 function resolveTowerPgUrl(pathOrUrl, baseUrl = _baseUrl) {
@@ -315,25 +332,43 @@ async function signedTowerPgFetch(pathOrUrl, {
   useWorkspaceKey = true,
   rawBody = false,
   signal,
+  diagnosticOperation,
 } = {}) {
-  signal?.throwIfAborted();
   const requestUrl = resolveTowerPgUrl(pathOrUrl, baseUrl);
-  const headers = {
-    Authorization: await createApiAuthHeader(requestUrl, method, body ?? null, { authTimeoutMs, useWorkspaceKey }),
-  };
-  const cleanAppNpub = String(appNpub || '').trim();
-  if (cleanAppNpub) headers['x-flightdeck-pg-app-npub'] = cleanAppNpub;
-  if (body !== undefined) headers['Content-Type'] = 'application/json';
-  signal?.throwIfAborted();
-  const timeoutSignal = createFetchTimeoutSignal(timeoutMs);
-  const combined = signal && timeoutSignal ? combineTowerRequestSignals(signal, timeoutSignal) : signal || timeoutSignal;
+  const diagnostic = diagnosticOperationMetadata(diagnosticOperation);
+  const start = performance.now();
+  let stage = 'signing';
+  try {
+    signal?.throwIfAborted();
+    const headers = {
+      Authorization: await createApiAuthHeader(requestUrl, method, body ?? null, { authTimeoutMs, useWorkspaceKey }),
+    };
+    const cleanAppNpub = String(appNpub || '').trim();
+    if (cleanAppNpub) headers['x-flightdeck-pg-app-npub'] = cleanAppNpub;
+    if (body !== undefined) headers['Content-Type'] = 'application/json';
+    signal?.throwIfAborted();
+    const timeoutSignal = createFetchTimeoutSignal(timeoutMs);
+    const combined = signal && timeoutSignal ? combineTowerRequestSignals(signal, timeoutSignal) : signal || timeoutSignal;
 
-  return fetch(requestUrl, {
-    method,
-    headers,
-    body: body !== undefined ? (rawBody ? body : JSON.stringify(body)) : undefined,
-    signal: combined,
-  });
+    stage = 'request';
+    const response = await fetch(requestUrl, markDiagnosticRequest({
+      method,
+      headers,
+      body: body !== undefined ? (rawBody ? body : JSON.stringify(body)) : undefined,
+      signal: combined,
+    }));
+    emitDiagnostic({ ...diagnostic, source: 'network', code: 'request', route: requestUrl, method, stage,
+      level: response.ok || diagnostic.correlation ? 'info' : 'error', outcome: diagnostic.correlation ? 'attempt' : response.ok ? 'succeeded' : 'failed',
+      category: response.status === 401 ? 'auth' : 'http', status: response.status, durationMs: performance.now() - start });
+    return response;
+  } catch (error) {
+    const cancelled = signal?.aborted === true;
+    emitDiagnostic({ ...diagnostic, source: 'network', code: 'request', route: requestUrl, method, stage,
+      level: diagnostic.correlation || cancelled ? 'info' : 'error', outcome: cancelled ? 'cancelled' : diagnostic.correlation ? 'attempt' : 'failed',
+      category: cancelled ? 'cancellation' : error?.code === 'auth_timeout' ? 'auth' : ['TimeoutError', 'AbortError'].includes(error?.name) ? 'timeout' : stage === 'signing' ? 'auth' : 'transport',
+      status: 0, name: error?.name, errorCode: error?.code, durationMs: performance.now() - start });
+    throw error;
+  }
 }
 
 function combineTowerRequestSignals(...signals) {
@@ -876,28 +911,28 @@ export async function getTowerPgWorkspaceScopes(workspaceId, { baseUrl = _baseUr
   return json(resp, { requestUrl: finalUrl, method: 'GET', prefix: 'Tower PG API' });
 }
 
-export async function getTowerPgRecordSync(workspaceId, { baseUrl = _baseUrl, appNpub = FLIGHT_DECK_PG_APP_NPUB, cursor = null, limit = 200, timeoutMs = 30_000, protocolVersion = 1, clientId = null } = {}) {
+export async function getTowerPgRecordSync(workspaceId, { baseUrl = _baseUrl, appNpub = FLIGHT_DECK_PG_APP_NPUB, cursor = null, limit = 200, timeoutMs = 30_000, protocolVersion = 1, clientId = null, diagnosticOperation } = {}) {
   if (protocolVersion === 2 && (!clientId || !cursor)) throw new Error('Device record sync requires client and local cursor');
   const params = new URLSearchParams({ protocol_version: String(protocolVersion), limit: String(Math.min(200, Math.max(1, limit))) });
   if (protocolVersion === 2) params.set('client_id', clientId);
   if (cursor) params.set('cursor', cursor);
   const requestPath = `/api/v4/flightdeck-pg/workspaces/${encodeURIComponent(workspaceId)}/record-sync?${params}`;
   const requestUrl = resolveTowerPgUrl(requestPath, baseUrl);
-  const resp = await signedTowerPgFetch(requestPath, { baseUrl, appNpub, timeoutMs, useWorkspaceKey: protocolVersion !== 2 });
+  const resp = await signedTowerPgFetch(requestPath, { baseUrl, appNpub, timeoutMs, diagnosticOperation, useWorkspaceKey: protocolVersion !== 2 });
   return json(resp, { requestUrl, method: 'GET', prefix: 'Tower PG record sync' });
 }
 
-export async function towerPgRecordClient(workspaceId, clientId, { operation = 'read', cursor, expectedRevision, baseUrl = _baseUrl, appNpub = FLIGHT_DECK_PG_APP_NPUB, timeoutMs = 30_000 } = {}) {
+export async function towerPgRecordClient(workspaceId, clientId, { operation = 'read', cursor, expectedRevision, baseUrl = _baseUrl, appNpub = FLIGHT_DECK_PG_APP_NPUB, timeoutMs = 30_000, diagnosticOperation } = {}) {
   if (!['read', 'register', 'ack', 'retire'].includes(operation)) throw new Error('Invalid checkpoint operation');
   const method = { read: 'GET', register: 'POST', ack: 'POST', retire: 'DELETE' }[operation];
   const body = operation === 'register' ? '' : operation === 'ack' ? { cursor, expected_revision: expectedRevision } : undefined;
   const path = `/api/v4/flightdeck-pg/workspaces/${encodeURIComponent(workspaceId)}/record-sync/clients/${encodeURIComponent(clientId)}${operation === 'ack' ? '/ack' : ''}?protocol_version=2`;
   const requestUrl = resolveTowerPgUrl(path, baseUrl);
-  const response = await signedTowerPgFetch(path, { method, body, rawBody: operation === 'register', baseUrl, appNpub, timeoutMs, useWorkspaceKey: false });
+  const response = await signedTowerPgFetch(path, { method, body, rawBody: operation === 'register', baseUrl, appNpub, timeoutMs, diagnosticOperation, useWorkspaceKey: false });
   return json(response, { requestUrl, method, prefix: 'Tower PG device checkpoint' });
 }
 
-export async function getTowerPgWorkspaceSync(workspaceId, { baseUrl = _baseUrl, appNpub = FLIGHT_DECK_PG_APP_NPUB, cursor = null, limit = 500, timeoutMs = 30_000 } = {}) {
+export async function getTowerPgWorkspaceSync(workspaceId, { baseUrl = _baseUrl, appNpub = FLIGHT_DECK_PG_APP_NPUB, cursor = null, limit = 500, timeoutMs = 30_000, diagnosticOperation } = {}) {
   const encodedWorkspaceId = encodeURIComponent(String(workspaceId || '').trim());
   if (!encodedWorkspaceId) throw new Error('Tower PG workspace id is required');
   const params = new URLSearchParams();
@@ -905,7 +940,7 @@ export async function getTowerPgWorkspaceSync(workspaceId, { baseUrl = _baseUrl,
   if (limit) params.set('limit', String(limit));
   const requestPath = `/api/v4/flightdeck-pg/workspaces/${encodedWorkspaceId}/sync${params.size > 0 ? `?${params.toString()}` : ''}`;
   const requestUrl = resolveTowerPgUrl(requestPath, baseUrl);
-  const resp = await signedTowerPgFetch(requestPath, { baseUrl, appNpub, timeoutMs });
+  const resp = await signedTowerPgFetch(requestPath, { baseUrl, appNpub, timeoutMs, diagnosticOperation });
   return json(resp, { requestUrl, method: 'GET', prefix: 'Tower PG API' });
 }
 
@@ -1062,14 +1097,14 @@ export async function markTowerPgResourcesViewed(workspaceId, resources, { baseU
   return json(resp, { requestUrl, method: 'POST', prefix: 'Tower PG API' });
 }
 
-export async function getTowerPgThread(workspaceId, threadId, { baseUrl = _baseUrl, appNpub = FLIGHT_DECK_PG_APP_NPUB } = {}) {
+export async function getTowerPgThread(workspaceId, threadId, { baseUrl = _baseUrl, appNpub = FLIGHT_DECK_PG_APP_NPUB, diagnosticOperation } = {}) {
   const encodedWorkspaceId = encodeURIComponent(String(workspaceId || '').trim());
   const encodedThreadId = encodeURIComponent(String(threadId || '').trim());
   if (!encodedWorkspaceId) throw new Error('Tower PG workspace id is required');
   if (!encodedThreadId) throw new Error('Tower PG thread id is required');
   const requestPath = `/api/v4/flightdeck-pg/workspaces/${encodedWorkspaceId}/threads/${encodedThreadId}`;
   const requestUrl = resolveTowerPgUrl(requestPath, baseUrl);
-  const resp = await signedTowerPgFetch(requestPath, { baseUrl, appNpub });
+  const resp = await signedTowerPgFetch(requestPath, { baseUrl, appNpub, diagnosticOperation });
   return json(resp, { requestUrl, method: 'GET', prefix: 'Tower PG API' });
 }
 
@@ -1084,14 +1119,14 @@ export async function getTowerPgMessage(workspaceId, messageId, { baseUrl = _bas
   return json(resp, { requestUrl, method: 'GET', prefix: 'Tower PG API' });
 }
 
-export async function updateTowerPgThread(workspaceId, threadId, body, { baseUrl = _baseUrl, appNpub = FLIGHT_DECK_PG_APP_NPUB } = {}) {
+export async function updateTowerPgThread(workspaceId, threadId, body, { baseUrl = _baseUrl, appNpub = FLIGHT_DECK_PG_APP_NPUB, diagnosticOperation } = {}) {
   const encodedWorkspaceId = encodeURIComponent(String(workspaceId || '').trim());
   const encodedThreadId = encodeURIComponent(String(threadId || '').trim());
   if (!encodedWorkspaceId) throw new Error('Tower PG workspace id is required');
   if (!encodedThreadId) throw new Error('Tower PG thread id is required');
   const requestPath = `/api/v4/flightdeck-pg/workspaces/${encodedWorkspaceId}/threads/${encodedThreadId}`;
   const requestUrl = resolveTowerPgUrl(requestPath, baseUrl);
-  const resp = await signedTowerPgFetch(requestPath, { method: 'PATCH', body, baseUrl, appNpub });
+  const resp = await signedTowerPgFetch(requestPath, { method: 'PATCH', body, baseUrl, appNpub, diagnosticOperation });
   return json(resp, { requestUrl, method: 'PATCH', prefix: 'Tower PG API' });
 }
 
@@ -1761,12 +1796,12 @@ export async function createTowerPgChannelAudioNote(workspaceId, channelId, body
   return json(resp, { requestUrl, method: 'POST', prefix: 'Tower PG API' });
 }
 
-export async function prepareTowerPgStorageObject(workspaceId, body, { baseUrl = _baseUrl, appNpub = FLIGHT_DECK_PG_APP_NPUB } = {}) {
+export async function prepareTowerPgStorageObject(workspaceId, body, { baseUrl = _baseUrl, appNpub = FLIGHT_DECK_PG_APP_NPUB, diagnosticOperation } = {}) {
   const encodedWorkspaceId = encodeURIComponent(String(workspaceId || '').trim());
   if (!encodedWorkspaceId) throw new Error('Tower PG workspace id is required');
   const requestPath = `/api/v4/flightdeck-pg/workspaces/${encodedWorkspaceId}/storage/prepare`;
   const requestUrl = resolveTowerPgUrl(requestPath, baseUrl);
-  const resp = await signedTowerPgFetch(requestPath, { method: 'POST', body, baseUrl, appNpub });
+  const resp = await signedTowerPgFetch(requestPath, { method: 'POST', body, baseUrl, appNpub, diagnosticOperation });
   return json(resp, { requestUrl, method: 'POST', prefix: 'Tower PG API' });
 }
 
@@ -2446,29 +2481,42 @@ export async function prepareStorageObject(body) {
 }
 
 export async function uploadStorageObject(prepared, bytes, contentType = 'application/octet-stream', options = {}) {
+  const operation = diagnosticOperationMetadata(options.diagnosticOperation).correlation
+    ? options.diagnosticOperation : createDiagnosticOperation('upload');
+  try {
+    const result = await performStorageUpload(prepared, bytes, contentType, { ...options, diagnosticOperation: operation });
+    finishDiagnosticOperation(operation, result.fallback ? 'fallback' : 'succeeded', null, { stage: 'transfer' });
+    return result.value;
+  } catch (error) {
+    finishDiagnosticOperation(operation, 'failed', error, { stage: 'transfer' });
+    throw error;
+  }
+}
+
+async function performStorageUpload(prepared, bytes, contentType, options) {
   const uploadUrl = String(prepared?.upload_url || '').trim();
   let directUploadFailure = null;
-  if (uploadUrl && getTowerTransport(options.backendUrl || _baseUrl).mode !== 'fips') {
+  if (uploadUrl && getTowerTransport(options.baseUrl || options.backendUrl || _baseUrl).mode !== 'fips') {
     let directResp;
     try {
-      directResp = await fetch(uploadUrl, {
+      directResp = await fetchWithOperationEvidence(uploadUrl, {
         method: 'PUT',
         headers: {
           'Content-Type': contentType,
         },
         body: bytes,
         signal: createFetchTimeoutSignal(UPLOAD_FETCH_TIMEOUT_MS),
-      });
+      }, options.diagnosticOperation);
     } catch (error) {
       directUploadFailure = error instanceof Error ? error : new Error(String(error));
     }
 
     if (directResp?.ok) {
-      return {
+      return { value: {
         object_id: prepared.object_id,
         size_bytes: bytes.byteLength,
         content_type: contentType,
-      };
+      }, fallback: false };
     }
 
     if (directResp && !directResp.ok) {
@@ -2489,7 +2537,7 @@ export async function uploadStorageObject(prepared, bytes, contentType = 'applic
     body: payload,
   }, options);
   if (fallbackResp.ok) {
-    return json(fallbackResp, { requestUrl: fallbackUrl, method: 'PUT' });
+    return { value: await json(fallbackResp, { requestUrl: fallbackUrl, method: 'PUT' }), fallback: !!directUploadFailure };
   }
 
   const fallbackError = await buildApiError(fallbackResp, {

@@ -941,8 +941,9 @@ export const syncManagerMixin = {
     const progress = this.startupSyncProgress || {};
     if (progress.error && progress.active) return 'Retrying updates…';
     if (progress.stage === 'opening') return 'Opening workspace…';
+    if (progress.stage === 'recovery') return 'Recovering workspace updates…';
     if (progress.stage === 'receiving') return progress.page > 1 ? `Receiving changes (page ${progress.page})…` : 'Receiving changes…';
-    if (progress.stage === 'applying') return 'Applying updates…';
+    if (progress.stage === 'applying') return progress.mode === 'snapshot' ? 'Applying workspace snapshot…' : progress.mode === 'delta' ? 'Applying new changes…' : 'Applying updates…';
     if (progress.stage === 'error') return 'Update stalled';
     return 'Updating…';
   },
@@ -950,6 +951,8 @@ export const syncManagerMixin = {
   startupSyncProgressMeta() {
     const progress = this.startupSyncProgress || {};
     const details = [];
+    if (progress.mode === 'snapshot') details.push('Snapshot');
+    else if (progress.mode === 'delta') details.push('Delta');
     const page = Number(progress.page || 0);
     const applied = Number(progress.applied || 0);
     if (page > 0) details.push(`Page ${page}`);

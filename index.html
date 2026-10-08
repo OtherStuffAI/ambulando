@@ -5490,7 +5490,7 @@
                     <div class="doc-preview-surface">
                       <div role="status" aria-live="polite" x-cloak x-show="!$store.chat.isSelectedDocContentReadyForEditor() || ['loading', 'error'].includes($store.chat.docRichEditorLoadState)">
                         <p x-text="$store.chat.docRichEditorLoadError || ($store.chat.selectedDocument?.content_storage_status === 'error' ? 'Document body could not load. Check your connection and try again.' : 'Loading document…')"></p>
-                        <button type="button" class="btn-secondary" x-show="$store.chat.docRichEditorLoadState === 'error' || $store.chat.selectedDocument?.content_storage_status === 'error'" :disabled="$store.chat.docEditDraftDirty || $store.chat.docLocalDraft" @click="$store.chat.retrySelectedDocLoading()">Try again</button>
+                        <button type="button" class="btn-secondary" x-show="$store.chat.docRichEditorLoadState === 'error' || $store.chat.selectedDocument?.content_storage_status === 'error'" :disabled="$store.chat.docRichEditorLoadState !== 'error' && ($store.chat.docEditDraftDirty || $store.chat.docLocalDraft)" @click="$store.chat.retrySelectedDocLoading()">Try again</button>
                         <button type="button" class="btn-secondary" x-show="$store.chat.docRichEditorLoadState === 'error'" @click="$store.chat.docEditorMode = 'preview'">Read without editor</button>
                       </div>
                       <template x-if="$store.chat.docEditorMode === 'rich'">

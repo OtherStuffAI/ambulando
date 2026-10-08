@@ -3332,6 +3332,15 @@
       "notes": [
         "Tower Usage keeps menu focus and restores the Apps launcher after native close. Desktop and mobile share the standard napplet sizing and keyboard controls."
       ]
+    },
+    {
+      "buildNumber": 2298,
+      "label": "Reliable diagnostics and editor recovery",
+      "notes": [
+        "Preserve incident-time diagnostic evidence through delayed delivery and repetitive traces, with redacted operation and sync progress metadata.",
+        "Handle concurrent editor loading failures together, retain drafts and offer explicit retry. Keep recovered rename conflicts in diagnostic history while terminal failures remain visible.",
+        "Keep chat attachment uploads bound to their selected workspace and transport, with safe stage diagnostics."
+      ]
     }
   ]
 }

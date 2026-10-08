@@ -75,6 +75,51 @@ a subsequent manual send authorizes only that incident in the same scoped queue.
 Native evidence is frozen before preparing an attachment and cannot enrich a
 prepared attachment on retries.
 
+## Browser incident evidence and operation outcomes
+
+Browser capture retains errors before warnings/recovery and repetitive traces
+within the existing count/byte caps. Its bounded main-thread batch gives errors
+priority too. A queued incident freezes history against the trigger timestamp;
+append stores at most 15 seconds of aftermath. Finalization hours later never
+imports current history or re-filters the original evidence against delivery
+time. The queue still expires after 24 hours and uses the same consent revisions,
+workspace key, byte cap and idempotent attachment/message checkpoints. If optional
+aftermath cannot fit, capture continues and the report declares that limitation.
+
+Optional browser metadata uses fixed operation, stage, category, outcome,
+snapshot/delta mode and recovery-reason enums; page/applied/protocol numbers and
+cursor-present/has-more booleans never contain cursor values. Correlations are
+new random `d-` tokens for each operation, never record/request identifiers.
+Approved built chunk basenames and numeric locations can identify a resource or
+frame; arbitrary filenames/functions/messages are excluded. Report context marks
+unknown operation, stage, category, route, correlation, asset and location as
+unavailable. A resource completion does not prove HTTP status or MIME.
+
+Routes match static endpoint templates by position, including
+`/api/v4/flightdeck-pg/workspaces/:id/record-sync`,
+`/api/v4/flightdeck-pg/workspaces/:id/record-sync/clients/:id` and its `/ack`
+suffix. An identifier spelled like a static endpoint word remains `:id`.
+Unknown routes become `/:unknown`; query, fragment, body and auth data never
+enter evidence. Signed PG requests own their capture for HTTP and native
+transport; the generic fetch wrapper avoids duplicating those requests.
+
+Only a verified owning operation defers incident promotion. Thread rename keeps
+its existing single stale-version refresh/retry and records a final recovered
+or failed outcome. Cursor sync retains protocol fallback, checkpoint conflict
+and required reset attempts as history, with terminal failures still incidents.
+Explicit caller cancellation is history; timeouts and unclassified failures
+remain errors. There is no general HTTP-status suppression, new auth retry or
+mutation replay policy. Independent operations use independent correlations.
+Stackless errors without a correlation/frame only deduplicate identical
+observations; recurrence is an observation count, never a proven cause count.
+
+Native v1 consent/bridge methods and sanitizer are unchanged. Optional browser
+fields may be absent from host capture. Only host events in the incident window
+are attached; later history is excluded and missing incident-time host evidence
+is explicit. Identical browser/host observations appear once with an overlap
+count; different events remain separate. No historical incident attribution is
+established by these client corrections.
+
 ## Saved report destination
 
 The project scope in the report picker is separate from the diagnostics storage

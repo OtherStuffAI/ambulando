@@ -123,8 +123,8 @@ device-checkpoint fixes do not remove Tower's creation triggers.
 `Receiving changes (page N)` counts requests in the current pull, including a
 failed reset request; `changes applied` accumulates materializer changes across
 pages. Neither count identifies a snapshot, unique records, or newly created
-records. Current record-protocol progress does not expose wire `mode` or reset
-reason, so this status is insufficient evidence to diagnose a screenshot.
+records. At investigation time record-protocol progress did not expose wire `mode` or
+reset reason, so that status was insufficient evidence to diagnose a screenshot.
 For a specific session, capture the requested cursor, response code and page
 `mode` before and after creation. A delta can legitimately contain many pages;
 a replacement can legitimately reacquire newly accessible historical records.
@@ -476,3 +476,29 @@ IndexedDB databases, including all cursors, queues and drafts.
 
 This change targets logout/login. It does not fix or diagnose bulk resync on
 reopening without logout, and does not change Tower cursor/reset semantics.
+
+
+## Incident-time progress evidence
+
+Record v1/v2 orchestration now supplies wire `mode` only after receiving a page,
+plus stage, request-page number, accumulated applied changes, cursor presence,
+protocol version, has-more and bounded recovery reason. Before a response, mode
+is explicitly unavailable. Browser diagnostics store these fixed fields with a
+new per-pull correlation and elapsed duration. Request/ack attempts are history;
+the cursor owner emits the final successful/recovered/failed outcome. Fallback,
+checkpoint revision recovery and authority reset handling retain their existing
+policy; no cursor token, client ID, payload or ACL identity enters evidence.
+
+The avatar distinguishes applying a snapshot from applying delta changes. Page
+counts still count requests, including reset failures, and applied counts are
+changes rather than unique records. There is no invented completion percentage
+for an unknown total. Cached UI remains governed by the existing continuity and
+authority policy, without a new blocking overlay or destructive recovery.
+
+Controlled native-browser coverage acknowledges a new channel from a settled
+cache and executes a 20-page delta catch-up. The acknowledgement retains cursor
+and generation; all pull requests keep a cursor, caches and pending intent stay
+present, and page mode remains delta. This isolates client behavior; it does not
+remove or bypass the installed Tower creation/grant epoch reset policy. Real
+new-resource creation may still require an authorized replacement. Historical
+channel/long-sync incidents remain unclassified without matched wire evidence.

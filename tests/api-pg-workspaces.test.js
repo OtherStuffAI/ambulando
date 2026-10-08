@@ -1,4 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { observeDiagnostics, createDiagnosticOperation } from '../src/diagnostics-events.js';
+import { sanitizeDiagnosticEvent } from '../src/diagnostics-schema.js';
 
 vi.mock('../src/auth/nostr.js', () => ({
   createNip98AuthHeader: vi.fn(async (requestUrl, method) => `NIP98 ${method} ${requestUrl}`),
@@ -16,6 +18,26 @@ vi.mock('../src/crypto/group-keys.js', () => ({
 
 describe('Tower PG API helpers', () => {
   const originalFetch = globalThis.fetch;
+
+  it('retains owned conflict attempts but promotes independent HTTP and transport failures', async () => {
+    const api=await import('../src/api.js');
+    const events=[];
+    const stop=observeDiagnostics(input=>events.push(sanitizeDiagnosticEvent({...input,ts:Date.now()})));
+    const diagnosticOperation=createDiagnosticOperation('thread-rename');
+    globalThis.fetch.mockResolvedValueOnce({ok:false,status:409,text:async()=>JSON.stringify({code:'stale_row_version'})});
+    await expect(api.updateTowerPgThread('SECRET','SECRET',{title:'SECRET'},{baseUrl:'https://tower.example',diagnosticOperation})).rejects.toMatchObject({status:409});
+    expect(events.at(-1)).toMatchObject({outcome:'attempt',level:'info',route:'/api/v4/flightdeck-pg/workspaces/:id/threads/:id',status:409});
+    for(const status of [401,404,409]) {
+      globalThis.fetch.mockResolvedValueOnce({ok:false,status,text:async()=>''});
+      await expect(api.getTowerPgRecordSync('SECRET',{baseUrl:'https://tower.example',cursor:'SECRET'})).rejects.toMatchObject({status});
+      expect(events.at(-1)).toMatchObject({outcome:'failed',level:'error',status});
+    }
+    globalThis.fetch.mockRejectedValueOnce(new TypeError('SECRET'));
+    await expect(api.getTowerPgRecordSync('SECRET',{baseUrl:'https://tower.example'})).rejects.toThrow();
+    expect(events.at(-1)).toMatchObject({outcome:'failed',level:'error',status:0,category:'transport'});
+    expect(JSON.stringify(events)).not.toContain('SECRET');
+    stop();
+  });
 
   beforeEach(() => {
     globalThis.fetch = vi.fn(async (requestUrl) => ({

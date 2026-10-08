@@ -49,6 +49,18 @@ export class DiagnosticsStore {
       if (!row.settings.enabled) return [];
       const safe = events.slice(0, 100).map(event => sanitizeDiagnosticEvent(event, now)).filter(Boolean);
       row.events = boundDiagnosticEvents([...row.events, ...safe], now);
+      // Freeze aftermath as it arrives, even when delivery/finalization sleeps
+      // beyond the rolling buffer window. Prepared attachment bytes are immutable.
+      for (const item of row.queue.filter(item => !item.finalized && item.historyAvailable)) {
+        const anchor = item.trigger.ts;
+        const seen = new Set(item.events.map(event => JSON.stringify(event)));
+        const before = item.events;
+        item.events = boundDiagnosticEvents([...before, ...safe.filter(event => event.ts >= anchor && !seen.has(JSON.stringify(event)))], anchor, anchor + DIAGNOSTICS_AFTERMATH_MS);
+        if (diagnosticBytes(row.queue) > DIAGNOSTICS_QUEUE_BYTES) {
+          item.events = before;
+          item.aftermathLimited = true;
+        }
+      }
       return safe;
     });
   }
@@ -59,7 +71,11 @@ export class DiagnosticsStore {
       if (!row.settings.channelId || !row.settings.agentNpub) throw new Error('Choose a report channel and agent');
       const trigger = sanitizeDiagnosticEvent(input.trigger || { ts: now, source: 'ui', level: 'info', code: 'interaction' }, now);
       if (!trigger) throw new Error('Expired incident');
-      const fingerprint = JSON.stringify([input.build, trigger.source, trigger.code, trigger.name, trigger.route, trigger.status, trigger.stack]);
+      const fingerprint = JSON.stringify([input.build, trigger.source, trigger.code, trigger.name, trigger.route, trigger.status, trigger.stack,
+        trigger.operation, trigger.stage, trigger.category, trigger.correlation,
+        // A stackless, unclassified error has no shared-cause signature. Only
+        // identical observations deduplicate; independent times stay separate.
+        !trigger.stack && !trigger.correlation ? trigger.ts : null]);
       if (input.automatic) {
         const prior = row.groups.find(item => item.fingerprint === fingerprint && now - item.at < 10 * 60_000);
         if (prior) {
@@ -71,9 +87,12 @@ export class DiagnosticsStore {
       }
       if (row.queue.length >= 5) throw new Error('Local report queue is full');
       const item = { version: 1, incidentId: input.incidentId, createdAt: now,
+        finalized: false, aftermathLimited: false,
         readyAt: now + (input.automatic ? DIAGNOSTICS_AFTERMATH_MS : 0), automatic: input.automatic === true,
         build: input.build, workspaceId: input.workspaceId, trigger, recurrence: 1,
-        description: String(input.description || '').slice(0, 4_000), events: row.settings.enabled ? [...row.events] : [],
+        description: String(input.description || '').slice(0, 4_000), events: row.settings.enabled ? boundDiagnosticEvents(row.events, trigger.ts, trigger.ts + DIAGNOSTICS_AFTERMATH_MS) : [],
+        context: { operation: trigger.operation || 'unavailable', stage: trigger.stage || 'unavailable', category: trigger.category || 'unavailable',
+          route: trigger.route || 'unavailable', correlation: trigger.correlation || 'unavailable', stack: trigger.stack || 'unavailable', asset: trigger.asset || 'unavailable', line: trigger.line ?? 'unavailable', column: trigger.column ?? 'unavailable' },
         historyAvailable: row.settings.enabled, manualAuthorized: !input.automatic && input.manualAuthorized === true,
         scopeId: row.settings.scopeId, channelId: row.settings.channelId, agentNpub: row.settings.agentNpub, revision: row.revision,
         limitations: ['Evidence excludes free-form logs/messages, payloads, headers, screenshots and comprehensive OS crash dumps.'] };
@@ -89,8 +108,8 @@ export class DiagnosticsStore {
       const item = row.queue.find(item => item.readyAt <= now && (item.automatic ? row.settings.enabled && row.settings.automatic : row.settings.enabled || item.manualAuthorized));
       if (!item) return null;
       if (!item.finalized) {
-        const seen = new Set(item.events.map(event => JSON.stringify(event)));
-        item.events = boundDiagnosticEvents([...item.events, ...(item.historyAvailable ? row.events : []).filter(event => event.ts >= item.createdAt && !seen.has(JSON.stringify(event)))], now);
+        // append has captured bounded aftermath. Never grow the queue at read
+        // time or rebase the frozen envelope against delivery-time history.
         item.finalized = true;
       }
       return structuredClone(item);

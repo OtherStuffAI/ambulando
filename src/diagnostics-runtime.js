@@ -1,5 +1,5 @@
-import { observeDiagnostics } from './diagnostics-events.js';
-import { sanitizeDiagnosticEvent } from './diagnostics-schema.js';
+import { observeDiagnostics, isDiagnosticRequest } from './diagnostics-events.js';
+import { sanitizeDiagnosticEvent, diagnosticAsset } from './diagnostics-schema.js';
 
 export class DiagnosticsWorkerClient {
   constructor() { this.pending = new Map(); this.nextId = 1; this.worker = null; }
@@ -42,7 +42,8 @@ export class DiagnosticsCapture {
     const target = this.target;
     const listen = (name, callback) => { target.addEventListener(name, callback); this.cleanup.push(() => target.removeEventListener(name, callback)); };
     this.cleanup.push(observeDiagnostics(input => this.emit(input)));
-    listen('error', event => this.emit({ source: 'browser', level: 'error', code: event.error ? 'exception' : 'resource', name: event.error?.name, stack: event.error?.stack }));
+    listen('error', event => this.emit({ source: 'browser', level: 'error', code: event.error ? 'exception' : 'resource', name: event.error?.name, stack: event.error?.stack,
+      asset: diagnosticAsset(event.filename), line: event.lineno, column: event.colno, category: event.error ? 'exception' : 'unavailable' }));
     listen('unhandledrejection', event => this.emit({ source: 'browser', level: 'error', code: 'rejection', name: event.reason?.name, stack: event.reason?.stack }));
     listen('popstate', () => this.emit({ source: 'ui', code: 'navigation', operation: 'navigation' }));
     listen('hashchange', () => this.emit({ source: 'ui', code: 'navigation', operation: 'navigation' }));
@@ -62,6 +63,9 @@ export class DiagnosticsCapture {
     if (originalFetch) {
       const capture = this;
       const wrapped = async function (input, init) {
+        // The signed API records these at its owning operation boundary, also
+        // covering native transport. Do not duplicate/promote an attempt here.
+        if (isDiagnosticRequest(init)) return originalFetch.call(this, input, init);
         const scope = capture.enabled();
         const start = performance.now();
         const method = String(init?.method || input?.method || 'GET').toUpperCase();
@@ -80,7 +84,7 @@ export class DiagnosticsCapture {
     }
     if (target.PerformanceObserver) {
       const observer = new target.PerformanceObserver(list => {
-        for (const entry of list.getEntries()) this.emit({ source: 'network', code: 'resource', route: entry.name, durationMs: entry.duration });
+        for (const entry of list.getEntries()) this.emit({ source: 'network', code: 'resource', route: entry.name, asset: diagnosticAsset(entry.name), durationMs: entry.duration });
       });
       try { observer.observe({ type: 'resource', buffered: false }); this.cleanup.push(() => observer.disconnect()); } catch { observer.disconnect(); }
     }

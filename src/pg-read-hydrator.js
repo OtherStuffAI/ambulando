@@ -1,3 +1,4 @@
+import { createDiagnosticOperation, finishDiagnosticOperation, emitDiagnostic } from './diagnostics-events.js';
 import { resolveTowerPgWorkspaceContext } from './pg-workspace-context.js';
 export { resolveTowerPgWorkspaceContext } from './pg-workspace-context.js';
 import { requestTowerPgContext } from './api.js';
@@ -1895,12 +1896,13 @@ async function syncTowerPgRecordWorkspace(store, options, deps) {
   // authority/reset responses and the one-time upgrade repair discard download state.
   // In particular, probing a rolled-back server must never purge the cache.
   for (let pages = 1; pages <= (options.maxPages || 1000); pages++) {
-    options.onProgress?.({ stage: 'receiving', page: pages, applied, cursorPresent: Boolean(cursor) });
+    options.onProgress?.({ stage: 'receiving', page: pages, applied, cursorPresent: Boolean(cursor), mode: 'unavailable', protocolVersion: 1 });
     let page;
     try {
-      page = await read(context.workspaceId, { baseUrl: context.baseUrl, appNpub: context.appNpub, cursor, limit: options.limit || 200, timeoutMs: options.timeoutMs || 30000 });
+      page = await read(context.workspaceId, { baseUrl: context.baseUrl, appNpub: context.appNpub, diagnosticOperation: options.diagnosticOperation, cursor, limit: options.limit || 200, timeoutMs: options.timeoutMs || 30000 });
     } catch (error) {
       if (!authorityResetting && resets === 0 && [404, 406, 501].includes(error.status)) {
+        options.onProgress?.({ stage: 'recovery', recoveryReason: 'unsupported', page: pages, applied, cursorPresent: Boolean(cursor), mode: 'unavailable', protocolVersion: 1 });
         return { unsupported: true, fallbackAuthority: { expectedCursor: cursor, expectedGeneration: localGeneration } };
       }
       let payload = error.payload || {};
@@ -1913,6 +1915,7 @@ async function syncTowerPgRecordWorkspace(store, options, deps) {
         const reset = await materialize(store, { protocol_version: 1, reset_authority: true, local_apply_options: { preserveViews: !revoked, expectedCursor: cursor, expectedGeneration: localGeneration } }, deps);
         localGeneration = reset.localGeneration;
         if (revoked || ++resets > 2) throw error;
+        options.onProgress?.({ stage: 'recovery', recoveryReason: 'reset_required', page: pages, applied, cursorPresent: Boolean(cursor), mode: 'unavailable', protocolVersion: 1 });
         cursor = null;
         directoryReady = false;
         continue;
@@ -1949,7 +1952,7 @@ async function syncTowerPgRecordWorkspace(store, options, deps) {
       }
       directoryReady = true;
     }
-    options.onProgress?.({ stage: 'applying', page: pages, applied });
+    options.onProgress?.({ stage: 'applying', page: pages, applied, cursorPresent: Boolean(cursor), mode: page.mode, fullSnapshot: page.mode === 'snapshot', hasMore: page.has_more === true, protocolVersion: 1 });
     assertTowerPgWorkspaceCurrent(store, context);
     if (page.has_more && page.next_cursor === cursor) throw new Error('Tower record sync repeated its cursor');
     const result = await materialize(store, { ...page, local_apply_options: { expectedCursor: cursor, expectedGeneration: localGeneration, viewBaselineInitialized, incrementalSnapshot: true } }, deps);
@@ -1958,7 +1961,7 @@ async function syncTowerPgRecordWorkspace(store, options, deps) {
     if (!result.hasMore) {
       assertTowerPgWorkspaceCurrent(store, context);
       if (result.needsSummaryBackfill) await materialize(store, { protocol_version: 1, rebuild_summaries: true }, deps);
-      options.onProgress?.({ stage: 'complete', page: pages, applied });
+      options.onProgress?.({ stage: 'complete', page: pages, applied, cursorPresent: Boolean(cursor), mode: page.mode, fullSnapshot: page.mode === 'snapshot', hasMore: false, protocolVersion: 1 });
       return { ...result, applied, pages };
     }
     await new Promise(resolve => setTimeout(resolve, 0));
@@ -1967,6 +1970,25 @@ async function syncTowerPgRecordWorkspace(store, options, deps) {
 }
 
 export async function syncTowerPgWorkspace(store, options = {}, deps = {}) {
+  const diagnosticOperation = createDiagnosticOperation('record-sync');
+  const startedAt = Date.now();
+  let recovered = false;
+  const onProgress = update => {
+    if (update.stage === 'recovery') recovered = true;
+    emitDiagnostic({ ...update, ...diagnosticOperation, source: 'browser', code: 'sync', level: 'info', durationMs: Date.now() - startedAt });
+    options.onProgress?.(update);
+  };
+  try {
+    const result = await performTowerPgWorkspaceSync(store, { ...options, diagnosticOperation, onProgress }, deps);
+    finishDiagnosticOperation(diagnosticOperation, recovered ? 'recovered' : 'succeeded');
+    return result;
+  } catch (error) {
+    finishDiagnosticOperation(diagnosticOperation, 'failed', error);
+    throw error;
+  }
+}
+
+async function performTowerPgWorkspaceSync(store, options = {}, deps = {}) {
   const context = resolveTowerPgWorkspaceContext(store);
   if (!context.workspaceId || !context.baseUrl) return { applied: 0, cursor: null };
   // Existing injected legacy ports remain legacy-only. Production negotiates the
@@ -2003,6 +2025,7 @@ export async function syncTowerPgWorkspace(store, options = {}, deps = {}) {
       cursor,
       limit: options.limit || 500,
       timeoutMs: options.timeoutMs || 30_000,
+      diagnosticOperation: options.diagnosticOperation,
     });
     const requestDurationMs = Date.now() - requestStartedAt;
     const applyStartedAt = Date.now();

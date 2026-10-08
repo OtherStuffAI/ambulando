@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto';
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import { createDiagnosticsDb, DiagnosticsStore } from '../src/diagnostics-store.js';
-import { boundDiagnosticEvents, diagnosticBytes, diagnosticRoute, sanitizeDiagnosticEvent, DIAGNOSTICS_BYTE_LIMIT, DIAGNOSTICS_WINDOW_MS } from '../src/diagnostics-schema.js';
+import { boundDiagnosticEvents, diagnosticBytes, diagnosticRoute, sanitizeDiagnosticEvent, diagnosticAsset, DIAGNOSTICS_BYTE_LIMIT, DIAGNOSTICS_WINDOW_MS, DIAGNOSTICS_QUEUE_BYTES } from '../src/diagnostics-schema.js';
 import { diagnosticsReportMessage, deliverDiagnosticIncident } from '../src/diagnostics-delivery.js';
 import { DiagnosticsCapture } from '../src/diagnostics-runtime.js';
 import sharedFixtures from '../docs/diagnostics-fixtures.json';
@@ -101,8 +101,9 @@ describe('bounded opt-in diagnostics', () => {
     await recorder.queue('a', input);
     await recorder.queue('a', { ...input, incidentId: 'duplicate' });
     expect(await recorder.next('a')).toBeNull();
-    now += 15_001;
+    now += 14_999;
     await recorder.append('a', [event({ level: 'info', code: 'navigation', source: 'ui' })]);
+    now += 2;
     const reopened = new DiagnosticsStore(db, () => now);
     const incident = await reopened.next('a');
     expect(incident.recurrence).toBe(2);
@@ -128,6 +129,77 @@ describe('bounded opt-in diagnostics', () => {
     await recorder.queue('a', { incidentId: 'new' });
     await recorder.configure('a', { ...settings, channelId: 'different' });
     expect((await recorder.info('a')).pending).toBe(0);
+  });
+});
+
+describe('incident-time reliability', () => {
+  it('keeps capture and frozen evidence when optional aftermath cannot fit the queue cap', async () => {
+    await recorder.configure('a',settings);
+    await recorder.queue('a',{incidentId:'full',automatic:true,trigger:event()});
+    // Controlled near-cap persisted queue, independent of event size heuristics.
+    const row=await db.scopes.get('a');
+    row.queue[0].description='x'.repeat(DIAGNOSTICS_QUEUE_BYTES-diagnosticBytes(row.queue)-8);
+    await db.scopes.put(row);
+    now+=1_000;
+    const safe=await recorder.append('a',[event({code:'rejection',stack:'at <frame>:12:3'})]);
+    expect(safe).toHaveLength(1);
+    const stored=await db.scopes.get('a');
+    expect(stored.events.some(e=>e.code==='rejection')).toBe(true);
+    expect(stored.queue[0].aftermathLimited).toBe(true);
+    expect(stored.queue[0].trigger.code).toBe('exception');
+    expect(diagnosticBytes(stored.queue)).toBeLessThanOrEqual(DIAGNOSTICS_QUEUE_BYTES);
+  });
+  it('freezes useful evidence and aftermath through a >30-minute finalization, flood and retry', async () => {
+    await recorder.configure('a', settings);
+    const original = now;
+    const failure = event({ operation: 'document-editor', stage: 'import', category: 'import' });
+    await recorder.append('a', [event({ ts: now - 100, level: 'info', code: 'navigation' }), failure]);
+    await recorder.queue('a', { incidentId: 'frozen', automatic: true, trigger: failure });
+    now += 10_000;
+    await recorder.append('a', [event({ code: 'recovery', level: 'warn' })]);
+    for (let i = 0; i < 21; i++) await recorder.append('a', Array.from({length:100}, () => event({ level:'trace', code:'console' })));
+    expect((await db.scopes.get('a')).events.some(e => e.stage === 'import')).toBe(true);
+    now += 92 * 60_000;
+    await recorder.append('a', [event({ code: 'navigation', level: 'info' })]);
+    const incident = await recorder.next('a');
+    expect(incident.trigger.ts).toBe(original);
+    expect(incident.events.some(e => e.stage === 'import')).toBe(true);
+    expect(incident.events.some(e => e.code === 'recovery')).toBe(true);
+    expect(incident.events.every(e => e.ts <= original + 15_000)).toBe(true);
+    expect(incident.context).toMatchObject({operation:'document-editor', stage:'import', route:'unavailable'});
+    expect(diagnosticBytes(incident.events)).toBeLessThanOrEqual(DIAGNOSTICS_BYTE_LIMIT);
+    await recorder.patch('a', 'frozen', incident.revision, {retry:true});
+    now += 300_000;
+    expect((await recorder.next('a')).events).toEqual(incident.events);
+    await recorder.configure('a', {...settings, enabled:false});
+    expect(await recorder.next('a')).toBeNull();
+  });
+
+  it('deduplicates identical observations without merging independent stackless TypeErrors', async () => {
+    await recorder.configure('a', settings);
+    const first = event();
+    await recorder.queue('a', {incidentId:'first', automatic:true, trigger:first});
+    expect(await recorder.queue('a', {incidentId:'overlap', automatic:true, trigger:first})).toBeNull();
+    now += 5;
+    expect(await recorder.queue('a', {incidentId:'independent', automatic:true, trigger:event()})).toBe('independent');
+    const row = await db.scopes.get('a');
+    expect(row.queue.map(i => i.recurrence)).toEqual([2,1]);
+    expect(await recorder.next('b')).toBeNull();
+  });
+
+  it('uses static positional routes, never identifier spellings, query values or bodies', () => {
+    expect(diagnosticAsset('https://user:PRIVATE@host/assets/tiptap-editor-adapter-Abc12345.js?token=PRIVATE#PRIVATE')).toBe('tiptap-editor-adapter-Abc12345.js');
+    for (const path of ['/private/index-Abc12345.js','/assets/PRIVATE.js','/assets/index-Abc12345.js/PRIVATE','/assets/private.js?chunk=index-Abc12345.js']) expect(diagnosticAsset(path)).toBeNull();
+    expect(sanitizeDiagnosticEvent(event({asset:'PRIVATE',line:NaN,column:-1,correlation:'workspace-id'}),now)).not.toHaveProperty('asset');
+
+    const root = '/api/v4/flightdeck-pg/workspaces';
+    for (const id of ['ack', 'record-sync', 'docs', 'PRIVATE', '%2Fsecret', ':id']) {
+      expect(diagnosticRoute(`${root}/${id}/record-sync/clients/${id}/ack?token=PRIVATE#PRIVATE`)).toBe(`${root}/:id/record-sync/clients/:id/ack`);
+      expect(diagnosticRoute(`${root}/${id}/threads/${id}`)).toBe(`${root}/:id/threads/:id`);
+    }
+    expect(diagnosticRoute(`${root}/private/unknown/ack`)).toBe('/:unknown');
+    const safe = sanitizeDiagnosticEvent(event({ operation:'PRIVATE',stage:'PRIVATE',category:'PRIVATE',correlation:'PRIVATE',mode:'PRIVATE',recoveryReason:'PRIVATE', page:'PRIVATE',body:'PRIVATE' }), now);
+    expect(JSON.stringify(safe)).not.toContain('PRIVATE');
   });
 });
 

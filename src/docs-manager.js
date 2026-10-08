@@ -3,6 +3,7 @@ import { visibleWikiIntegrityText } from './docs/editor/wiki-visible-text.js';
 import { bindWikiState } from './docs/wiki-links.js';
 import { prosemirrorToFlightDeckContentModel } from './docs/editor/prosemirror-to-flightdeck.js';
 import { wikiManagerMixin } from './docs/wiki-manager.js';
+import { createDiagnosticOperation, finishDiagnosticOperation } from './diagnostics-events.js';
 /**
  * Document management methods extracted from app.js.
  *
@@ -1317,11 +1318,12 @@ export const docsManagerMixin = {
   },
 
   retrySelectedDocLoading() {
-    if (!this.selectedDocId || this.docEditDraftDirty || this.docLocalDraft) return false;
+    if (!this.selectedDocId) return false;
     const recordId = this.selectedDocId;
     if (this.docRichEditorLoadState === 'error' && this.docRichEditorMountEl) {
       void this.mountDocRichEditor(this.docRichEditorMountEl);
     } else {
+      if (this.docEditDraftDirty || this.docLocalDraft) return false;
       this.openDoc(recordId, { syncRoute: false, ensureSync: false });
     }
     return true;
@@ -1647,11 +1649,17 @@ export const docsManagerMixin = {
     const mountGeneration = this.docRichEditorMountGeneration;
     this.docRichEditorLoadState = 'loading';
     this.docRichEditorLoadError = '';
+    const diagnosticOperation = createDiagnosticOperation('document-editor');
+    let stage = 'import';
     const mountPromise = (async () => {
       const { createTiptapEditorAdapter } = await loadTiptapEditorAdapter();
       if (this.docRichEditorMountGeneration !== mountGeneration
         || this.docRichEditorMountEl !== element
-        || this.docEditorMode !== 'rich') return;
+        || this.docEditorMode !== 'rich') {
+        finishDiagnosticOperation(diagnosticOperation, 'cancelled', null, { stage });
+        return false;
+      }
+      stage = 'factory';
       this.docRichEditorAdapter = createTiptapEditorAdapter({
         element,
         document: sourceDoc,
@@ -1677,19 +1685,27 @@ export const docsManagerMixin = {
       this.syncDocRichEditorContentModel();
       this.docRichEditorLoadState = 'ready';
       this.scheduleStorageImageHydration?.();
-    })();
-    this.docRichEditorMountPromise = mountPromise;
-    try {
-      return await mountPromise;
-    } catch (error) {
+      finishDiagnosticOperation(diagnosticOperation, 'succeeded', null, { stage });
+    })().catch(error => {
       if (this.docRichEditorMountGeneration === mountGeneration && this.docRichEditorMountEl === element) {
+        // A factory may return before later mount setup fails. Drop that partial
+        // adapter so explicit retry does not mistake it for a ready editor.
+        this.docRichEditorAdapter?.destroy?.();
+        this.docRichEditorAdapter = null;
         this.docRichEditorLoadState = 'error';
         this.docRichEditorLoadError = `Document editor could not load: ${error?.message || error}`;
+        finishDiagnosticOperation(diagnosticOperation, 'failed', error, { stage, category: stage });
+      } else {
+        finishDiagnosticOperation(diagnosticOperation, 'cancelled', null, { stage });
       }
       return false;
-    } finally {
+    }).finally(() => {
       if (this.docRichEditorMountPromise === mountPromise) this.docRichEditorMountPromise = null;
-    }
+    });
+    // Every consumer gets the handled outcome, including Alpine's overlapping
+    // effects. Never expose the rejecting import/factory promise.
+    this.docRichEditorMountPromise = mountPromise;
+    return mountPromise;
   },
 
   isSelectedDocRichEditorEditable() {

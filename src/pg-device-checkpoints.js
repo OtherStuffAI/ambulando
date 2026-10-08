@@ -105,7 +105,7 @@ export function recordCheckpointError(error) {
 // every mutation is dispatched to its existing worker materialisation port.
 export async function syncDeviceRecords({ context, options, readState, materialize, readPage, client, assertCurrent, cursorKey, preparePage, assertHeld = async () => {} }) {
   const scope = deviceCheckpointScope(context);
-  const transport = { baseUrl: context.baseUrl, appNpub: context.appNpub, timeoutMs: options.timeoutMs || 30000 };
+  const transport = { baseUrl: context.baseUrl, appNpub: context.appNpub, timeoutMs: options.timeoutMs || 30000, diagnosticOperation: options.diagnosticOperation };
   let state = await readState(cursorKey);
   const inspection = await materialize({ protocol_version: 2, device_action: { type: 'inspect' } });
   state = inspection.state;
@@ -149,6 +149,7 @@ export async function syncDeviceRecords({ context, options, readState, materiali
     } catch (error) {
       const { code } = recordCheckpointError(error);
       if (!['checkpoint_conflict', 'checkpoint_regression'].includes(code)) throw error;
+      options.onProgress?.({ stage: 'recovery', recoveryReason: code, applied, cursorPresent: Boolean(state.cursor), mode: 'unavailable', protocolVersion: 2 });
       // Read is diagnostic/revision evidence only. The next page MUST still
       // start at the locally committed cursor. It replaces durable ack intent.
       validateCheckpoint(await client(context.workspaceId, state.device.clientId, { ...transport, operation: 'read' }), state.device);
@@ -170,7 +171,7 @@ export async function syncDeviceRecords({ context, options, readState, materiali
         state = await readState(cursorKey);
       }
       await acknowledge();
-      options.onProgress?.({ stage: 'receiving', page: pages, applied, cursorPresent: true });
+      options.onProgress?.({ stage: 'receiving', page: pages, applied, cursorPresent: Boolean(state.cursor), mode: 'unavailable', protocolVersion: 2 });
       const requested = { cursor: state.cursor, clientId: state.device.clientId, generation: state.localGeneration };
       const page = await readPage(context.workspaceId, { ...transport, protocolVersion: 2,
         clientId: requested.clientId, cursor: requested.cursor, limit: options.limit || 200 });
@@ -180,7 +181,7 @@ export async function syncDeviceRecords({ context, options, readState, materiali
         || current.cursor !== requested.cursor || current.localGeneration !== requested.generation) throw new Error('Stale device page response');
       if (page.protocol_version !== 2 || page.client_id !== requested.clientId
         || !checkpointRevision(page.checkpoint_revision) || page.has_more && page.next_cursor === requested.cursor) throw new Error('Invalid negotiated device page');
-      options.onProgress?.({ stage: 'applying', page: pages, applied });
+      options.onProgress?.({ stage: 'applying', page: pages, applied, cursorPresent: Boolean(state.cursor), mode: page.mode, fullSnapshot: page.mode === 'snapshot', hasMore: page.has_more === true, protocolVersion: 2 });
       await preparePage?.(page, state);
       const result = await materialize({ ...page, local_apply_options: {
         expectedCursor: requested.cursor, expectedGeneration: Number(requested.generation || 0),
@@ -193,7 +194,7 @@ export async function syncDeviceRecords({ context, options, readState, materiali
       await acknowledge();
       if (!result.hasMore && !state.device.pendingAck) {
         if (result.needsSummaryBackfill) await materialize({ protocol_version: 2, rebuild_summaries: true });
-        options.onProgress?.({ stage: 'complete', page: pages, applied });
+        options.onProgress?.({ stage: 'complete', page: pages, applied, cursorPresent: Boolean(state.cursor), mode: page.mode, fullSnapshot: page.mode === 'snapshot', hasMore: false, protocolVersion: 2 });
         return { ...result, applied, pages, protocolVersion: 2, clientId: state.device.clientId, checkpointRevision: state.device.revision };
       }
     } catch (error) {
@@ -206,6 +207,7 @@ export async function syncDeviceRecords({ context, options, readState, materiali
       // replacement ID stable instead of accumulating registrations/recovery
       // metadata while membership remains revoked.
       if (revoked && !state.device.registered && !state.cursor) throw error;
+      options.onProgress?.({ stage: 'recovery', recoveryReason: code, page: pages, applied, cursorPresent: Boolean(state.cursor), mode: 'unavailable', protocolVersion: 2 });
       await replace(false);
       if (revoked || ++resets > 2) throw error;
     }

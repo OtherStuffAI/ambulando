@@ -94,7 +94,15 @@ export const diagnosticsManagerMixin = {
     const runtime = { client: new DiagnosticsWorkerClient(), key: '', generation: 0, buffer: [], sending: false, enabled: false, native: false, flushPromise: null };
     runtimes.set(this, runtime);
     runtime.capture = new DiagnosticsCapture({ enabled: () => runtime.enabled && !runtime.sending && diagnosticsScope(this) === runtime.key ? runtime.key : false,
-      record: event => { if (runtime.buffer.length < 100) runtime.buffer.push(event); } });
+      record: event => {
+        if (runtime.buffer.length >= 100) {
+          if (!['error', 'warn'].includes(event.level) && event.code !== 'recovery') return;
+          const index = runtime.buffer.findIndex(item => !['error', 'warn'].includes(item.level) && item.code !== 'recovery');
+          if (index < 0) return;
+          runtime.buffer.splice(index, 1);
+        }
+        runtime.buffer.push(event);
+      } });
     this.$watch?.('session', () => { void this.refreshDiagnosticsScope(); });
     this.$watch?.('currentWorkspace', () => { void this.refreshDiagnosticsScope(); });
     this.$watch?.('backendUrl', () => { void this.refreshDiagnosticsScope(); });

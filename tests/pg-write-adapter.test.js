@@ -1,3 +1,4 @@
+import { observeDiagnostics } from '../src/diagnostics-events.js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   createTowerPgAudioNoteFromLocal,
@@ -955,11 +956,12 @@ describe('PG write adapter', () => {
     expect(api.updateTowerPgThread).toHaveBeenCalledWith('workspace-1', 'thread-1', {
       title: 'Renamed thread',
       row_version: 3,
-    }, { baseUrl: 'https://tower.example', appNpub: 'flightdeck_pg' });
+    }, expect.objectContaining({ baseUrl: 'https://tower.example', appNpub: 'flightdeck_pg' }));
     expect(updated).toMatchObject({ record_id: 'message-1', body: 'Original message body', title: 'Renamed thread', pg_thread_version: 4 });
   });
 
   it('refreshes a stale thread row version and retries the intended title exactly once', async () => {
+    const events=[]; const stop=observeDiagnostics(event=>events.push(event));
     const api = await import('../src/api.js');
     const stale = Object.assign(new Error('Thread row_version is stale'), {
       status: 409,
@@ -991,9 +993,15 @@ describe('PG write adapter', () => {
       { title: 'Intended title', row_version: 5 },
     ]);
     expect(updated).toMatchObject({ title: 'Intended title', version: 6, pg_thread_version: 6 });
+    expect(events.some(event => event.level === 'error')).toBe(false);
+    expect(events.at(-1)).toMatchObject({operation:'thread-rename',outcome:'recovered'});
+    expect(new Set(events.map(event=>event.correlation)).size).toBe(1);
+    expect(JSON.stringify(events)).not.toMatch(/Intended title|Server title|thread-1/);
+    stop();
   });
 
   it('keeps a second stale thread-title conflict visible without another refresh or retry', async () => {
+    const events=[]; const stop=observeDiagnostics(event=>events.push(event));
     const api = await import('../src/api.js');
     const firstStale = Object.assign(new Error('First conflict'), { code: 'stale_row_version' });
     const secondStale = Object.assign(new Error('Second conflict'), { code: 'stale_row_version' });
@@ -1005,9 +1013,12 @@ describe('PG write adapter', () => {
     }, 'Intended title')).rejects.toBe(secondStale);
     expect(api.getTowerPgThread).toHaveBeenCalledOnce();
     expect(api.updateTowerPgThread).toHaveBeenCalledTimes(2);
+    expect(events.at(-1)).toMatchObject({outcome:'failed',level:'error',errorCode:'stale_row_version'});
+    stop();
   });
 
   it('keeps unrelated thread-title failures visible without refreshing or retrying', async () => {
+    const events=[]; const stop=observeDiagnostics(event=>events.push(event));
     const api = await import('../src/api.js');
     const failure = Object.assign(new Error('Permission denied'), { status: 403, code: 'forbidden' });
     api.updateTowerPgThread.mockRejectedValueOnce(failure);
@@ -1017,6 +1028,8 @@ describe('PG write adapter', () => {
     }, 'Intended title')).rejects.toBe(failure);
     expect(api.getTowerPgThread).not.toHaveBeenCalled();
     expect(api.updateTowerPgThread).toHaveBeenCalledOnce();
+    expect(events.at(-1)).toMatchObject({outcome:'failed',level:'error',status:403});
+    stop();
   });
 
   it('creates Tower PG messages with the local client record id in metadata', async () => {

@@ -49,6 +49,7 @@ import { buildAgentInstructionSignature } from './message-instruction-signatures
 import { mergeChatStorageAttachments } from './chat-attachments.js';
 import { canonicalTaskAgentMentions } from './task-agent-mentions.js';
 import { canonicalDocumentAgentMentions } from './document-agent-mentions.js';
+import { createDiagnosticOperation, finishDiagnosticOperation, emitDiagnostic } from './diagnostics-events.js';
 
 function trimText(value) {
   return String(value ?? '').trim();
@@ -686,21 +687,33 @@ export async function updateTowerPgThreadTitleFromLocal(store, threadRow, title)
   const threadId = trimText(threadRow?.pg_thread_id || threadRow?.record_id);
   if (!threadId) throw new Error('Thread id is required');
   const intendedTitle = trimText(title);
+  const diagnosticOperation = createDiagnosticOperation('thread-rename');
+  const requestOptions = { ...pgRequestOptions(context), diagnosticOperation };
   const updateTitle = (rowVersion) => updateTowerPgThread(context.workspaceId, threadId, {
     title: intendedTitle,
     ...(Number(rowVersion) > 0 ? { row_version: Number(rowVersion) } : {}),
-  }, pgRequestOptions(context));
+  }, requestOptions);
   let result;
+  let recovered = false;
   try {
-    result = await updateTitle(threadRow?.pg_thread_version || threadRow?.version);
-  } catch (error) {
-    if (!isStalePgRowVersionError(error)) throw error;
-    const refreshed = await getTowerPgThread(context.workspaceId, threadId, pgRequestOptions(context));
-    const refreshedVersion = Number(refreshed?.thread?.row_version || refreshed?.thread?.version);
-    if (!Number.isInteger(refreshedVersion) || refreshedVersion < 1) {
-      throw new Error('Tower PG thread refresh did not return a row version.');
+    try {
+      result = await updateTitle(threadRow?.pg_thread_version || threadRow?.version);
+    } catch (error) {
+      if (!isStalePgRowVersionError(error)) throw error;
+      emitDiagnostic({ ...diagnosticOperation, source: 'browser', code: 'recovery', level: 'info', stage: 'refresh',
+        outcome: 'attempt', errorCode: 'stale_row_version', status: error.status });
+      const refreshed = await getTowerPgThread(context.workspaceId, threadId, requestOptions);
+      const refreshedVersion = Number(refreshed?.thread?.row_version || refreshed?.thread?.version);
+      if (!Number.isInteger(refreshedVersion) || refreshedVersion < 1) {
+        throw new Error('Tower PG thread refresh did not return a row version.');
+      }
+      result = await updateTitle(refreshedVersion);
+      recovered = true;
     }
-    result = await updateTitle(refreshedVersion);
+    finishDiagnosticOperation(diagnosticOperation, recovered ? 'recovered' : 'succeeded');
+  } catch (error) {
+    finishDiagnosticOperation(diagnosticOperation, 'failed', error);
+    throw error;
   }
   const acceptedVersion = Number(result.thread?.row_version || threadRow?.pg_thread_version || threadRow?.version || 1);
   return {
