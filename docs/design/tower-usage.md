@@ -15,7 +15,14 @@ bounded collector and cache. No collection runs from rendering or closed dialogs
 The dialog's response is keyed by endpoint, workspace UUID, app, viewer and
 workspace-selection generation. Switching invalidates displayed bytes immediately,
 then refreshes an open dialog; late responses cannot replace the new workspace.
-Closing aborts the request and restores focus. The dialog traps keyboard focus.
+Closing aborts the request and restores focus. The native dialog provides keyboard focus containment and background inertness.
+It shares the Message activity and Org Data thread header, modal/full-page sizing,
+expand/collapse and ellipsis refresh/expand/close controls. Escape dismisses the
+menu first, then closes; backdrop click and native close also clean up requests.
+Pagehide closes the dialog. Reopening an active popup focuses it without fetching.
+Presentation changes preserve the snapshot and pending request without a new read.
+Back/forward controls are disabled: usage has one view and no meaningful history.
+Close resets presentation and menu state.
 
 Tower checks membership and `workspace.manage` before every read, including cache
 hits. Workspace-wide aggregates can include private scopes, so channel-only access

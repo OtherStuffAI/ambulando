@@ -65,3 +65,27 @@ it('aborts and discards work when closed', async () => {
   s.closeTowerUsage(); expect(signal.aborted).toBe(true); finish(snapshot()); await work;
   expect(s.towerUsageCurrentSnapshot).toBeNull();
 });
+
+it('resizes without collecting and resets presentation on close', async () => {
+  const s = store(); getTowerPgStorageUsage.mockResolvedValue(snapshot());
+  await s.openTowerUsage(); const current = s.towerUsageCurrentSnapshot;
+  s.toggleTowerUsagePresentation(); expect(s.towerUsageFull).toBe(true);
+  expect(s.towerUsageCurrentSnapshot).toBe(current);
+  await s.openTowerUsage(); expect(getTowerPgStorageUsage).toHaveBeenCalledTimes(1);
+  s.towerUsageMenuOpen = true; const event = { preventDefault: vi.fn(), stopPropagation: vi.fn() };
+  // DOM focus behavior is covered through the Apps launcher browser test.
+  s.dismissTowerUsageMenu = () => { s.towerUsageMenuOpen = false; };
+  s.handleTowerUsageEscape(event); expect(s.towerUsageOpen).toBe(true);
+  s.handleTowerUsageEscape(event); expect(s.towerUsageOpen).toBe(false);
+  expect(s.towerUsageFull).toBe(false); expect(s.towerUsageMenuOpen).toBe(false);
+});
+it('does not amplify a pending read or collect while closed', async () => {
+  const s = store(); let finish;
+  await s.refreshTowerUsage(); expect(getTowerPgStorageUsage).not.toHaveBeenCalled();
+  getTowerPgStorageUsage.mockImplementation(() => new Promise(resolve => { finish = resolve; }));
+  const work = s.openTowerUsage(); await s.refreshTowerUsage();
+  expect(getTowerPgStorageUsage).toHaveBeenCalledTimes(1);
+  s.toggleTowerUsagePresentation(); finish(snapshot()); await work;
+  expect(s.towerUsageCurrentSnapshot.total_bytes).toBe(2048);
+  s.closeTowerUsage();
+});

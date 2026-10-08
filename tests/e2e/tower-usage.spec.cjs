@@ -11,10 +11,12 @@ function snapshot(workspaceId, bytes = 1024) {
     ] };
 }
 async function seed(page, workspaceId = 'usage-workspace-a') {
-  await page.waitForFunction(() => Boolean(window.Alpine?.store('chat')));
+  // Let initial settings/auth recovery finish before selecting the synthetic workspace.
+  await page.waitForFunction(() => Boolean(window.Alpine?.store('chat')) && window.Alpine.store('chat').routeSyncPaused === false);
   await page.evaluate(async workspaceId => {
     const s = window.Alpine.store('chat');
     s.showConnectModal = false; s.showWorkspaceBootstrapModal = false;
+    s.stopBackgroundSync(); s.scheduleBackgroundSync = () => {}; s.syncRoute = () => {};
     s.startWorkspaceLiveQueries = () => {}; s.ensureBackgroundSync = () => {}; s.refreshStatusRecentChanges = () => {};
     s.scheduleStorageImageHydration = () => {};
     // Keep unrelated section hydration out of this command-read fixture.
@@ -86,6 +88,33 @@ for (const width of [1280, 390]) {
     await expect(dialog.locator('time')).not.toHaveText('Not collected');
     await page.waitForTimeout(250); expect(requests).toHaveLength(1);
     await dialog.getByRole('button', { name: 'Refresh usage' }).click(); await expect.poll(() => requests.length).toBe(2);
+    // Native modality and shared controls, including no fabricated history.
+    expect(await dialog.evaluate(el => el.tagName === 'DIALOG' && el.matches(':modal'))).toBe(true);
+    await expect(dialog.getByRole('button', { name: 'Back in napplet history' })).toBeDisabled();
+    await expect(dialog.getByRole('button', { name: 'Forward in napplet history' })).toBeDisabled();
+    const modalWidth = await dialog.evaluate(el => el.getBoundingClientRect().width);
+    const beforeExpand = requests.length;
+    await dialog.getByRole('button', { name: 'Expand Tower Usage', exact: true }).click(); await expect(dialog).toHaveClass(/thread-full/);
+    await page.waitForTimeout(250);
+    await expect.poll(() => dialog.evaluate(el => el.getBoundingClientRect().width)).toBeCloseTo(width - 24, 0);
+    if (width === 1280) expect(modalWidth).toBeCloseTo(width * 2 / 3, 0);
+    expect(requests.length).toBe(beforeExpand);
+    await dialog.getByRole('button', { name: 'Tower Usage menu', exact: true }).click(); await expect(dialog.getByRole('menuitem', { name: 'Refresh', exact: true })).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(dialog.getByRole('menu')).toBeHidden();
+    await expect(dialog.getByRole('button', { name: 'Tower Usage menu', exact: true })).toBeFocused();
+    await expect(dialog).toBeVisible();
+    await dialog.getByRole('button', { name: 'Tower Usage menu', exact: true }).click(); await dialog.getByRole('menuitem', { name: 'Collapse to modal' }).click();
+    await expect(dialog).not.toHaveClass(/thread-full/);
+    await dialog.getByRole('button', { name: 'Tower Usage menu', exact: true }).click(); await dialog.getByRole('menuitem', { name: 'Refresh', exact: true }).click();
+    await expect.poll(() => requests.length).toBe(beforeExpand + 1);
+    await expect(dialog.getByRole('menu')).toBeHidden();
+    await dialog.getByRole('button', { name: 'Tower Usage menu', exact: true }).click();
+    await dialog.getByRole('button', { name: 'Close Tower Usage', exact: true }).focus();
+    await expect(dialog.getByRole('menu')).toBeHidden();
+    await dialog.getByRole('button', { name: 'Tower Usage menu', exact: true }).click();
+    await dialog.locator('.tower-usage-total').click();
+    await expect(dialog.getByRole('menu')).toBeHidden();
     // A delayed old-workspace reply must never become visible after switching.
     blockNext = true; release = null; await dialog.getByRole('button', { name: 'Refresh usage' }).click();
     await expect.poll(() => typeof release).toBe('function');
@@ -99,11 +128,32 @@ for (const width of [1280, 390]) {
     await expect(dialog.getByRole('alert')).toContainText('unavailable');
     // Focus is trapped, Escape closes and focus returns to the Apps stack.
     await dialog.getByRole('button', { name: 'Refresh usage' }).focus(); await page.keyboard.press('Tab');
-    await expect(dialog.getByRole('button', { name: 'Close', exact: true })).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(dialog.getByRole('button', { name: 'Tower Usage menu', exact: true })).toBeFocused();
     await page.keyboard.press('Escape'); await expect(dialog).toBeHidden(); await expect(stack).toBeFocused();
-    mkdirSync('tmp/docs/handoffs/tower-usage', { recursive: true });
+    mkdirSync('tmp/docs/handoffs/tower-usage-popup', { recursive: true });
     status = 200; await stack.click(); await launch.click(); await expect(dialog.getByText('8 KiB', { exact: true })).toBeVisible();
-    await page.screenshot({ path: `tmp/docs/handoffs/tower-usage/usage-${width}.png` });
+    await dialog.locator('.tower-usage-content').evaluate(el => { el.scrollTop = 0; });
+    await page.screenshot({ path: `tmp/docs/handoffs/tower-usage-popup/usage-${width}.png` });
+    await dialog.getByRole('button', { name: 'Expand Tower Usage', exact: true }).click(); await page.waitForTimeout(250);
+    await page.screenshot({ path: `tmp/docs/handoffs/tower-usage-popup/usage-full-${width}.png` });
+    await dialog.getByRole('button', { name: 'Tower Usage menu', exact: true }).click(); await dialog.getByRole('menuitem', { name: 'Close', exact: true }).click();
+    await expect(dialog).toBeHidden(); await expect(stack).toBeFocused();
+    await stack.click(); await launch.click();
+    await expect(dialog).not.toHaveClass(/thread-full/);
+    await dialog.getByRole('button', { name: 'Close Tower Usage', exact: true }).click();
+    await expect(stack).toBeFocused();
+    await stack.click(); await launch.click();
+    await dialog.evaluate(el => el.close());
+    await expect.poll(() => page.evaluate(() => window.Alpine.store('chat').towerUsageOpen)).toBe(false);
+    await expect(stack).toBeFocused();
+    await stack.click(); await launch.click();
+    await page.mouse.click(2, 2);
+    await expect(dialog).toBeHidden(); await expect(stack).toBeFocused();
+    await stack.click(); await launch.click();
+    await page.evaluate(() => window.dispatchEvent(new Event('pagehide')));
+    await expect(dialog).toBeHidden();
+    await expect.poll(() => page.evaluate(() => window.Alpine.store('chat').towerUsageSnapshot)).toBeNull();
     const unexpected = errors.filter(message => !/^Cannot read properties of null \(reading '(delegate_actor_id|expires_at|app_ids|installation_ids|scope_ids|channel_ids|open_origins|autopilot_origins|activity_publish|app_version|wapp_installation_id|launch_url)'\)$/.test(message)
       && message !== 'No Nostr session available for NIP-98 auth.');
     expect(unexpected).toEqual([]);

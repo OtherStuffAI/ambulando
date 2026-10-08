@@ -3318,6 +3318,20 @@
       "notes": [
         "Remove the napplet browsing context immediately on workspace changes and close, including scripts that ignore host state."
       ]
+    },
+    {
+      "buildNumber": 2291,
+      "label": "Consistent Tower Usage popup",
+      "notes": [
+        "Tower Usage now uses the standard napplet modal with menu, expand/collapse, close and native keyboard focus controls. History buttons remain disabled for its single usage view."
+      ]
+    },
+    {
+      "buildNumber": 2297,
+      "label": "Tower Usage keyboard and lifecycle parity",
+      "notes": [
+        "Tower Usage keeps menu focus and restores the Apps launcher after native close. Desktop and mobile share the standard napplet sizing and keyboard controls."
+      ]
     }
   ]
 }

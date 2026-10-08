@@ -11178,9 +11178,33 @@
         </div>
   </main>
 
-  <div class="modal-overlay tower-usage-overlay" x-show="$store.chat.towerUsageOpen" x-cloak x-effect="$store.chat.syncTowerUsageContext()" @click.self="$store.chat.closeTowerUsage()" @keydown.escape.window="if ($store.chat.towerUsageOpen) $store.chat.closeTowerUsage()" @keydown.tab="$store.chat.trapTowerUsageFocus($event)">
-    <section class="modal tower-usage-dialog" role="dialog" aria-modal="true" aria-labelledby="tower-usage-title" :aria-busy="$store.chat.towerUsageStatus === 'loading'" tabindex="-1" x-effect="if ($store.chat.towerUsageOpen) $nextTick(() => $el.focus())" data-testid="tower-usage-dialog">
-      <header class="tower-usage-header"><h2 id="tower-usage-title" x-text="$store.chat.towerUsageDisplayTitle">Tower Usage</h2><button type="button" class="btn-cancel" @click="$store.chat.closeTowerUsage()">Close</button></header>
+  <dialog id="tower-usage-modal" class="message-activity-modal tower-usage-dialog" :class="{ 'thread-full': $store.chat.towerUsageFull }" aria-labelledby="tower-usage-title" :aria-busy="$store.chat.towerUsageStatus === 'loading'" data-testid="tower-usage-dialog"
+    x-effect="$store.chat.syncTowerUsageContext()"
+    @keydown.escape="$store.chat.handleTowerUsageEscape($event)" @cancel.prevent="$store.chat.handleTowerUsageEscape($event)" @close="!$el.open && $store.chat.towerUsageOpen && $store.chat.closeTowerUsage()"
+    @click.self="if ($event.offsetX < 0 || $event.offsetY < 0 || $event.offsetX > $el.clientWidth || $event.offsetY > $el.clientHeight) $store.chat.closeTowerUsage()">
+    <div class="thread-header">
+      <div class="thread-header-copy"><h2 id="tower-usage-title" x-text="$store.chat.towerUsageDisplayTitle"></h2></div>
+      <div class="thread-header-actions">
+        <div class="thread-sequence-controls" role="group" aria-label="Napplet history">
+          <button type="button" class="thread-resize-btn" aria-label="Back in napplet history" title="Back in napplet history" disabled>←</button>
+          <button type="button" class="thread-resize-btn" aria-label="Forward in napplet history" title="Forward in napplet history" disabled>→</button>
+        </div>
+        <div class="thread-title-menu" @click.outside="$store.chat.towerUsageMenuOpen = false" @focusout="if (!$el.contains($event.relatedTarget)) $store.chat.towerUsageMenuOpen = false">
+          <button type="button" class="thread-resize-btn" data-napplet-menu :aria-label="$store.chat.towerUsageDisplayTitle + ' menu'" :title="$store.chat.towerUsageDisplayTitle + ' menu'" aria-haspopup="menu" aria-controls="tower-usage-menu" :aria-expanded="$store.chat.towerUsageMenuOpen" @click="$store.chat.toggleTowerUsageMenu()">•••</button>
+          <div id="tower-usage-menu" class="thread-title-menu-popover" role="menu" x-show="$store.chat.towerUsageMenuOpen" x-cloak>
+            <button type="button" role="menuitem" :disabled="$store.chat.towerUsageStatus === 'loading'" @click="$store.chat.dismissTowerUsageMenu(); $store.chat.refreshTowerUsage()">Refresh</button>
+            <button type="button" role="menuitem" @click="$store.chat.dismissTowerUsageMenu(); $store.chat.toggleTowerUsagePresentation()" x-text="$store.chat.towerUsageFull ? 'Collapse to modal' : 'Expand to full page'"></button>
+            <button type="button" role="menuitem" @click="$store.chat.closeTowerUsage()">Close</button>
+          </div>
+        </div>
+        <button type="button" class="thread-resize-btn" :aria-label="$store.chat.towerUsageFull ? 'Collapse ' + $store.chat.towerUsageDisplayTitle : 'Expand ' + $store.chat.towerUsageDisplayTitle" :title="$store.chat.towerUsageFull ? 'Collapse to modal' : 'Expand to full page'" @click="$store.chat.toggleTowerUsagePresentation()">
+                    <svg x-show="!$store.chat.towerUsageFull" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+                    <svg x-show="$store.chat.towerUsageFull" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="14" y1="10" x2="21" y2="3"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+        </button>
+        <button type="button" class="thread-close-btn" data-napplet-close @click="$store.chat.closeTowerUsage()" :aria-label="'Close ' + $store.chat.towerUsageDisplayTitle">&times;</button>
+      </div>
+    </div>
+    <div class="tower-usage-content">
       <p x-text="$store.chat.currentWorkspace?.label || $store.chat.currentWorkspace?.name || 'Selected workspace'"></p>
       <p class="tower-usage-help">Stored data bytes. Database values are logical estimates. Unavailable measurements are excluded from the subtotal.</p>
       <p role="status" x-show="$store.chat.towerUsageStatus === 'loading'">Collecting workspace usage…</p>
@@ -11198,8 +11222,8 @@
         </template>
       </dl>
       <footer><p>Collected: <time x-text="$store.chat.towerUsageCollectedLabel"></time></p><p class="tower-usage-help">Refresh requests the latest Tower snapshot. Collection is cached for up to 60 seconds.</p><button type="button" class="btn-confirm" :disabled="$store.chat.towerUsageStatus === 'loading'" @click="$store.chat.refreshTowerUsage()">Refresh usage</button></footer>
-    </section>
-  </div>
+    </div>
+  </dialog>
 
   <div class="modal-overlay" x-show="$store.chat.showAgentConnectModal" x-cloak @keydown.escape.window="$store.chat.closeAgentConnectModal()" data-testid="agent-connect-modal">
     <section class="modal agent-connect-modal" role="dialog" aria-modal="true" aria-labelledby="agent-connect-title" @click.stop>

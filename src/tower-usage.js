@@ -49,6 +49,9 @@ export function normalizeStorageUsage(payload, workspaceId) {
 
 export const towerUsageMixin = {
   towerUsageOpen: false,
+  towerUsageFull: false,
+  towerUsageMenuOpen: false,
+  _towerUsagePageHide: null,
   towerUsageStatus: 'idle',
   towerUsageSnapshot: null,
   towerUsageError: '',
@@ -71,33 +74,70 @@ export const towerUsageMixin = {
     return value ? new Date(value).toLocaleString() : 'Not collected';
   },
   openTowerUsage({ opener } = {}) {
+    const dialog = typeof document !== 'undefined' ? document.getElementById('tower-usage-modal') : null;
+    if (this.towerUsageOpen) {
+      dialog?.querySelector('[data-napplet-close]')?.focus();
+      return;
+    }
     this._towerUsageOpener = opener || (typeof document !== 'undefined' ? document.activeElement : null);
     this.towerUsageOpen = true;
+    this._towerUsagePageHide = () => this.closeTowerUsage();
+    if (typeof window !== 'undefined') window.addEventListener('pagehide', this._towerUsagePageHide);
+    dialog?.showModal();
+    dialog?.querySelector('[data-napplet-close]')?.focus();
     return this.refreshTowerUsage();
+  },
+  toggleTowerUsagePresentation() {
+    if (!this.towerUsageOpen) return;
+    this.towerUsageMenuOpen = false;
+    this.towerUsageFull = !this.towerUsageFull;
+  },
+  toggleTowerUsageMenu() {
+    this.towerUsageMenuOpen = !this.towerUsageMenuOpen;
+    if (this.towerUsageMenuOpen) window.Alpine.nextTick(() => requestAnimationFrame(() => {
+      if (this.towerUsageOpen && this.towerUsageMenuOpen) document.querySelector('#tower-usage-menu button:not([disabled])')?.focus();
+    }));
+  },
+  dismissTowerUsageMenu() {
+    this.towerUsageMenuOpen = false;
+    document.querySelector('#tower-usage-modal [data-napplet-menu]')?.focus();
+  },
+  handleTowerUsageEscape(event) {
+    event.preventDefault(); event.stopPropagation();
+    if (this.towerUsageMenuOpen) this.dismissTowerUsageMenu();
+    else this.closeTowerUsage();
   },
   closeTowerUsage() {
     this.towerUsageOpen = false;
+    this.towerUsageFull = false;
+    this.towerUsageMenuOpen = false;
     this._towerUsageRequest++;
     this._towerUsageAbort?.abort();
     this._towerUsageAbort = null;
     this.towerUsageSnapshot = null;
+    this.towerUsageStatus = 'idle';
+    this.towerUsageError = '';
+    if (typeof window !== 'undefined' && this._towerUsagePageHide) window.removeEventListener('pagehide', this._towerUsagePageHide);
+    this._towerUsagePageHide = null;
+    const dialog = typeof document !== 'undefined' ? document.getElementById('tower-usage-modal') : null;
+    if (dialog?.open) dialog.close();
     const opener = this._towerUsageOpener;
-    if (opener?.isConnected) opener.focus();
+    if (opener?.isConnected) {
+      opener.focus();
+      // Native close can finish its own focus restoration after the close event.
+      if (typeof window !== 'undefined') requestAnimationFrame(() => {
+        if (!this.towerUsageOpen && opener.isConnected) opener.focus();
+      });
+    }
     this._towerUsageOpener = null;
-  },
-  trapTowerUsageFocus(event) {
-    if (event.key !== 'Tab') return;
-    const controls = [...event.currentTarget.querySelectorAll('button:not([disabled])')];
-    const first = controls[0], last = controls.at(-1);
-    if (!first) return;
-    if (event.shiftKey && (document.activeElement === first || !controls.includes(document.activeElement))) { event.preventDefault(); last.focus(); }
-    else if (!event.shiftKey && (document.activeElement === last || !controls.includes(document.activeElement))) { event.preventDefault(); first.focus(); }
   },
   syncTowerUsageContext() {
     if (this.towerUsageOpen && this.towerUsageContext !== this.towerUsageCurrentContext) return this.refreshTowerUsage();
   },
   async refreshTowerUsage() {
     const key = this.towerUsageCurrentContext;
+    if (!this.towerUsageOpen || (this.towerUsageStatus === 'loading' && this.towerUsageContext === key && this._towerUsageAbort)) return;
+    this.towerUsageMenuOpen = false;
     const request = ++this._towerUsageRequest;
     this._towerUsageAbort?.abort();
     const controller = new AbortController();
