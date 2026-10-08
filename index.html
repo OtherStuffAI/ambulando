@@ -2848,7 +2848,7 @@
         <!-- ═══ TASKS SECTION ═══ -->
         <div
           class="chat-task-page-backdrop"
-          x-show="$store.chat.chatTaskModalOpen"
+          x-show="$store.chat.chatTaskModalOpen && !$store.chat.pgNavigationRecoveryPending"
           x-cloak
           @click="$store.chat.closeChatTaskModal()"
         ></div>
@@ -4843,7 +4843,7 @@
 
         <div
           class="chat-doc-page-backdrop"
-          x-show="$store.chat.chatDocModalOpen"
+          x-show="$store.chat.chatDocModalOpen && !$store.chat.pgNavigationRecoveryPending"
           x-cloak
           @click="$store.chat.closeChatDocModal()"
         ></div>
@@ -10136,7 +10136,7 @@
               <button class="modal-close" type="button" @click="$store.chat.closeReportModal()">&times;</button>
             </div>
             <div class="report-fullscreen-body">
-              <template x-if="$store.chat.reportModalReport">
+              <template x-if="!$store.chat.pgNavigationRecoveryPending && $store.chat.reportModalReport">
                 <article class="flightdeck-report-card report-fullscreen-card" :class="$store.chat.getFlightDeckReportCardClass($store.chat.reportModalReport)">
                   <div class="flightdeck-report-header">
                     <div>

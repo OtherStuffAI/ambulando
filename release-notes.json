@@ -3408,6 +3408,13 @@
       "notes": [
         "Preserve editor drafts before switching workspaces and clear obsolete detail modals during access reconciliation."
       ]
+    },
+    {
+      "buildNumber": 2309,
+      "label": "Safe archive detail presentation",
+      "notes": [
+        "Hide obsolete task and document backdrops while workspace authority is being reconciled."
+      ]
     }
   ]
 }
