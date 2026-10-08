@@ -2837,6 +2837,6 @@ export async function getTowerPgStorageUsage(workspaceId, { baseUrl = _baseUrl, 
 
 export async function orgDataRequest(workspaceId, suffix, { baseUrl = _baseUrl, appNpub = FLIGHT_DECK_PG_APP_NPUB, signal, method = 'GET', body } = {}) {
   const path = `/api/v4/flightdeck-pg/workspaces/${encodeURIComponent(workspaceId)}/org-data/${suffix}`;
-  const resp = await signedTowerPgFetch(path, { baseUrl, appNpub, signal, method, useWorkspaceKey: false, ...(body === undefined ? {} : { body: JSON.stringify(body), headers: { 'Content-Type': 'application/json' } }) });
+  const resp = await signedTowerPgFetch(path, { baseUrl, appNpub, signal, method, useWorkspaceKey: false, ...(body === undefined ? {} : { body }) });
   return json(resp, { requestUrl: resolveTowerPgUrl(path, baseUrl), method, prefix: 'Organisation data' });
 }

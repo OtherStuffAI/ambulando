@@ -90,3 +90,27 @@ The Tower API contract and broker-backed agent CLI are documented in Tower's
 `docs/contract/org-data-v1.md` and OpenAPI. Browser fixtures are synthetic local
 contract evidence; manager activation and authenticated human/agent smoke are
 required before claiming live acceptance.
+
+People now offers Add person and Edit person through the same revision-aware
+form as Catalogue. Settings → Groups & Members → Members exposes direct
+organisation-data read/write/schema grants. Reload permissions discovers actors
+through the existing manager API without reading organisation records. Saving
+compares the complete previously read direct org-data grants, preserves publication
+and installation grants, and leaves inherited group access unchanged. A 409
+requires reload; server denial, including agent self-elevation denial, is shown.
+Permission rows disappear on workspace/authority-context changes.
+
+The host displays loading and denied/error states outside the frame, including
+for built-ins whose document was torn down. A completed read must have persisted
+its matching request ID; a stalled read has a 45-second error/retry boundary.
+Browser coverage keeps the production sync registration and API/command adapters,
+intercepting only the local Tower HTTP boundary to exercise add/edit, reuse and
+revocation recovery. This does not substitute for authenticated human live smoke.
+A committed hydration request is delivered once. Duplicate liveQuery emissions
+of that request do not render a second ready state and erase a newly opened form;
+new reads retain their own request IDs and authority checks.
+The frame is shown only after the current document's session-bound ready
+handshake. During an immediate reopen a browser may still hold the prior
+iframe document while its new navigation starts; that stale document must not
+accept user input. Missing document readiness also has a bounded error/retry
+state. Screenshot evidence alone does not establish which loading stage failed.

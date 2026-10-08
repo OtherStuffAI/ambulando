@@ -108,3 +108,15 @@ it('keeps mesh workspace locators anchored to the logical Tower without rewritin
   expect(descriptor.metadata.text).toBe(endpoint);
   expect((await api.listTowerPgWorkspaces()).workspaces[0].tower_base_url).toBe(logicalTower);
 });
+
+it('org data signs and sends one JSON object for records and permission CAS', async () => {
+  for (const [path, body] of [
+    ['types/people/records', { values: { name: 'Alex' } }],
+    ['permissions', { actor_id: 'actor', permissions: ['org_data.read'], expected_permissions: [] }],
+  ]) {
+    await api.orgDataRequest('workspace', path, { method: 'POST', body });
+    const [url, options] = native.fetch.mock.calls.at(-1);
+    expect(JSON.parse(options.body)).toEqual(body);
+    expect(JSON.parse(options.headers.Authorization)).toMatchObject({ url, method: 'POST', body });
+  }
+});

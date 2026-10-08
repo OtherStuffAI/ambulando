@@ -33,3 +33,12 @@ export function prepareOrgDataCommand(store, input) {
     return result;
   } };
 }
+
+export async function readOrgDataPermissions(store, options = {}) {
+  const c = orgDataContext(store), context = orgDataLifecycle(c), service = store._towerSyncService;
+  const current = () => { service?.assertActive(); options.signal?.throwIfAborted();
+    if (orgDataLifecycle(orgDataContext(store)) !== context) throw new Error('Workspace changed'); };
+  current();
+  const result = await orgDataRequest(c.workspaceId, 'permissions', { baseUrl: c.baseUrl, appNpub: c.appNpub, signal: options.signal });
+  current(); return result;
+}

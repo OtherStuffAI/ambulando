@@ -3,10 +3,13 @@ test.setTimeout(45000);
 
 // Synthetic local fixtures exercise TowerSyncService -> Dexie -> liveQuery ->
 // Alpine and sandbox controls. Real SQL/auth contract coverage is in Tower.
-async function setup(page) {
+async function setup(page, production = false) {
+ // The shared source runtime must not hot-reload a fixture mid-flow when
+ // another task edits an unrelated module. Tower invalidations are HTTP/SSE.
+ await page.routeWebSocket('**', socket => socket.close());
  await page.route('**/*',r=>{const u=new URL(r.request().url());if(!['localhost','127.0.0.1'].includes(u.hostname))return r.abort();if(u.pathname.startsWith('/api/'))return r.fulfill({status:503,body:'{}'});return r.continue()});
- await page.goto('/');await page.waitForFunction(()=>!!window.Alpine?.store('chat'));
- await page.evaluate(async()=>{
+ await page.goto('/',{waitUntil:'domcontentloaded'});await page.waitForFunction(()=>!!window.Alpine?.store('chat'));
+ await page.evaluate(async production=>{
   const {openWorkspaceDb}=await import('/src/db.js');const {hydrateOrgData}=await import('/src/org-data/tower.js');const {TowerSyncService}=await import('/src/tower-sync-service.js');
   const s=window.Alpine.store('chat');s.stopBackgroundSync();s.ensureBackgroundSync=()=>{};s.scheduleBackgroundSync=()=>{};s.showConnectModal=false;s.showWorkspaceBootstrapModal=false;s.startWorkspaceLiveQueries=()=>{};s.syncRoute=()=>{};
   s.session={npub:'synthetic-reader'};s.backendUrl='http://127.0.0.1:3100';s.workspaceDbKey='synthetic-org';s.selectedWorkspaceKey='synthetic-org';s.selectedBoardId='__all__';s.navSection='status';
@@ -17,15 +20,31 @@ async function setup(page) {
   const types=[{key:'people',label:'People',fields:[{...fields('name'),required:true},fields('title'),fields('team','record_ref','teams'),fields('manager','record_ref','people'),fields('nostr','nostr_ref')]},{key:'teams',label:'Teams',fields:[fields('name')]},{key:'holidays',label:'Holidays',fields:[fields('person','record_ref','people'),fields('start_date','date'),fields('end_date','date'),fields('status')]}].map(t=>({...t,revision:1,access:{read:'members',write:'members'},capabilities:{read:true,write:true,schema:true}}));
   const records=[{id:person,type_key:'people',revision:1,values:{name:'Alex',title:'Engineer',team,nostr:'npub1synthetic'}},{id:team,type_key:'teams',revision:1,values:{name:'Engineering'}},{id:holiday,type_key:'holidays',revision:1,values:{person,start_date:'2026-12-01',end_date:'2026-12-03',status:'Away'}}];
   const payload={identity:{workspace_id:'workspace',workspace_owner_npub:'owner',tower_service_npub:'tower',workspace_service_npub:'service',app_npub:'app'},workspace_id:'workspace',complete:true,types,records,capabilities:{read:true,write:true,schema:true,publish:true,install:true},installations:[],bundles:[]};
-  window.orgFixture={payload,calls:0,mode:'ready',pending:[],writes:[],profiles:[],dms:[]};
+  window.orgFixture={payload,defaultTypes:structuredClone(types),calls:0,mode:'ready',pending:[],writes:[],profiles:[],dms:[]};
   s.openIdentityCard=(_event,npub)=>window.orgFixture.profiles.push(npub);s.createBotDm=npub=>window.orgFixture.dms.push(npub);
   const read=async()=>{const f=window.orgFixture;f.calls++;if(f.mode==='delay')await new Promise(r=>f.pending.push(r));if(f.mode==='failed-read')throw Object.assign(new Error('Service unavailable'),{status:500});if(['denied','conflict-denied'].includes(f.mode))throw Object.assign(new Error('Organisation data access denied'),{status:403});return structuredClone(f.payload)};
+  if(production){
+   const pubkey='1'.repeat(64);localStorage.setItem('nostr_secure_auth_recovery_v1',JSON.stringify({method:'extension',pubkey,createdAt:Date.now(),expiresAt:Date.now()+600000}));
+   window.nostr={getPublicKey:async()=>pubkey,signEvent:async event=>({...event,pubkey,id:'2'.repeat(64),sig:'3'.repeat(128)})};
+   return;
+  }
   const service=new TowerSyncService({workspaceKey:'synthetic-org',families:{'org-data':{trackFreshness:false,load:(_key,options)=>hydrateOrgData(s,options,{read})}},ports:{prepareCommand:(_name,input)=>({execute:async()=>{
    const f=window.orgFixture;f.writes.push(input);if(f.mode==='write-delay')await new Promise(r=>f.writePending=r);if(f.mode==='write-denied')throw Object.assign(new Error('denied'),{status:403});if(['conflict','conflict-denied'].includes(f.mode))throw new Error('revision_conflict');
    if(input.path==='napplets/bundles'){const b=input.body;const sha=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(b.html));f.bundle={...b,sha256:Array.from(new Uint8Array(sha)).map(n=>n.toString(16).padStart(2,'0')).join('')};f.payload.bundles=[f.bundle];return {bundle:f.bundle}}
    if(input.path.startsWith('napplets/installations/')){f.payload.installations=[{...f.bundle,revision:1}];return {}}
    const id=input.path.split('/').at(-1),row=f.payload.records.find(r=>r.id===id);if(row){row.values=input.body.values;row.revision++}return {record:row};
   }})}});s._towerSyncService=service;s.getTowerSyncService=()=>service;
+ }, production);
+ if(production)await page.route("**/api/v4/flightdeck-pg/workspaces/*/org-data/**",async route=>{
+  const req=route.request(),path=new URL(req.url()).pathname.split('/org-data/')[1];
+  const mode=await page.evaluate(()=>window.orgFixture.mode);
+  if(mode==='denied')return route.fulfill({status:403,json:{code:'org_data_read_required'}});
+  if(mode==='failed-read')return route.fulfill({status:503,json:{code:'unavailable'}});
+  if(req.method()!=='GET'){
+   const body=req.postDataJSON();expect(typeof body).toBe('object');
+   await page.evaluate(({path,body,method})=>{const f=window.orgFixture;f.writes.push({path,body,method});if(path==='bootstrap'){f.payload.types=f.defaultTypes;return}const id=path.split('/').at(-1),row=f.payload.records.find(r=>r.id===id);if(row){row.values=body.values;row.revision++}else f.payload.records.push({id:crypto.randomUUID(),type_key:'people',revision:1,values:body.values})},{path,body,method:req.method()});
+  }
+  const payload=await page.evaluate(()=>window.orgFixture.payload);await route.fulfill({json:payload});
  });
 }
 const frame=page=>page.frameLocator('#org-data-modal iframe');
@@ -43,9 +62,9 @@ for(const width of [1280,390])test(`shared records and modal/menu/history/expand
  await frame(page).getByRole('button',{name:'People',exact:true}).click();await expect(frame(page).getByText('Alex Updated',{exact:true})).toBeVisible();
  await frame(page).getByRole('button',{name:'Organisation chart',exact:true}).click();await expect(frame(page).getByText('Alex Updated',{exact:true})).toBeVisible();
  await page.getByRole('button',{name:'Back in napplet history'}).click();await expect(frame(page).getByRole('heading',{name:'People',exact:true})).toBeVisible();
- await frame(page).getByRole('button',{name:'Holiday availability',exact:true}).click();await expect(frame(page).getByRole('cell',{name:'Alex Updated',exact:true})).toBeVisible();await expect(page.getByRole('button',{name:'Forward in napplet history'})).toBeDisabled();
- await frame(page).getByRole('button',{name:'People',exact:true}).click();await frame(page).getByRole('button',{name:'Open profile for Alex Updated'}).click();await expect(page.locator('#org-data-modal')).toBeHidden();expect(await page.evaluate(()=>window.orgFixture.profiles)).toEqual(['npub1synthetic']);
- await page.evaluate(()=>window.Alpine.store('chat').openOrgData({view:'people'}));await frame(page).getByRole('button',{name:'Message',exact:true}).click();expect(await page.evaluate(()=>window.orgFixture.dms)).toEqual(['npub1synthetic']);
+ await frame(page).getByRole('button',{name:'Holiday availability',exact:true}).click();await expect(frame(page).getByRole('heading',{name:'Holiday availability',exact:true})).toBeVisible();await expect(frame(page).getByRole('cell',{name:'Alex Updated',exact:true})).toBeVisible();await expect(page.getByRole('button',{name:'Forward in napplet history'})).toBeDisabled();
+ await frame(page).getByRole('button',{name:'People',exact:true}).click();await expect(frame(page).getByRole('heading',{name:'People',exact:true})).toBeVisible();await frame(page).getByRole('button',{name:'Open profile for Alex Updated'}).click();await expect(page.locator('#org-data-modal')).toBeHidden();expect(await page.evaluate(()=>window.orgFixture.profiles)).toEqual(['npub1synthetic']);
+ await page.evaluate(()=>window.Alpine.store('chat').openOrgData({view:'people'}));await frame(page).getByRole('button',{name:'Message',exact:true}).click();await expect.poll(()=>page.evaluate(()=>window.orgFixture.dms)).toEqual(['npub1synthetic']);
  await open(page);await expect(frame(page).getByRole('cell',{name:'Alex Updated',exact:true})).toBeVisible();
  await page.evaluate(()=>{window.orgFixture.mode='denied';window.Alpine.store('chat').refreshOrgData()});await expect(page.locator('#org-data-modal').getByText('Organisation data access denied.',{exact:true})).toBeVisible();await expect(frame(page).getByText('Alex Updated',{exact:true})).toHaveCount(0);
 });
@@ -101,4 +120,29 @@ test('revocation invalidation rechecks authority during an in-flight save',async
  await page.evaluate(()=>window.orgFixture.mode='write-delay');await frame(page).getByRole('button',{name:'Save record'}).click();await page.waitForFunction(()=>!!window.orgFixture.writePending);
  await page.evaluate(()=>{window.orgFixture.mode='denied';window.Alpine.store('chat').syncOrgData()});await expect(page.locator('#org-data-modal').getByText('Organisation data access denied.',{exact:true})).toBeVisible();await expect(frame(page).locator('input')).toHaveCount(0);
  await page.evaluate(()=>window.orgFixture.writePending());await expect(frame(page).locator('input')).toHaveCount(0);
+});
+
+test('production host loads, creates and edits People shared by chart and catalogue, then retries denied reads',async({page})=>{
+ await setup(page,true);await page.evaluate(()=>window.Alpine.store('chat').openOrgData({view:'people'}));
+ await expect(frame(page).getByRole('heading',{name:'People',exact:true})).toBeVisible();
+ await frame(page).getByRole('button',{name:'Add person',exact:true}).click();
+ await frame(page).getByLabel('name *',{exact:true}).fill('Draft survives duplicate hydration');
+ await page.evaluate(async()=>{const {getWorkspaceDb}=await import('/src/db.js');const db=getWorkspaceDb();const row=(await db.org_data.toArray())[0];await db.org_data.put(row)});
+ await expect(frame(page).getByLabel('name *',{exact:true})).toHaveValue('Draft survives duplicate hydration');
+ await frame(page).getByLabel('name *',{exact:true}).fill('Production Person');await frame(page).getByRole('button',{name:'Save record'}).click();
+ await expect(frame(page).getByText('Production Person',{exact:true})).toBeVisible();
+ await frame(page).getByRole('button',{name:'Edit person',exact:true}).last().click();await frame(page).getByLabel('name *',{exact:true}).fill('Production Edited');await frame(page).getByRole('button',{name:'Save record'}).click();
+ await expect(frame(page).getByText('Production Edited',{exact:true})).toBeVisible();
+ await frame(page).getByRole('button',{name:'Organisation chart',exact:true}).click();await expect(frame(page).getByRole('heading',{name:'Organisation chart',exact:true})).toBeVisible();await expect(frame(page).getByText('Production Edited',{exact:true})).toBeVisible();
+ await frame(page).getByRole('button',{name:'Catalogue',exact:true}).click();await expect(frame(page).getByRole('cell',{name:'Production Edited',exact:true})).toBeVisible();
+ expect(await page.evaluate(()=>window.orgFixture.writes.map(w=>[w.method,w.body.expected_revision]))).toEqual([['POST',undefined],['PATCH',1]]);
+ await page.evaluate(()=>{window.orgFixture.mode='denied';window.Alpine.store('chat').refreshOrgData()});await expect(page.getByText('Organisation data access denied.',{exact:true})).toBeVisible();
+ await page.evaluate(()=>window.orgFixture.mode='ready');await page.getByRole('button',{name:'Refresh napplet',exact:true}).click();await expect(frame(page).getByRole('cell',{name:'Production Edited',exact:true})).toBeVisible();
+});
+
+test('production People offers setup for an empty catalogue and recovers read errors',async({page})=>{
+ await setup(page,true);await page.evaluate(()=>{window.orgFixture.payload.types=[];window.orgFixture.payload.records=[];window.Alpine.store('chat').openOrgData({view:'people'})});
+ await frame(page).getByRole('button',{name:'Set up people, teams and holidays',exact:true}).click();await expect(frame(page).getByRole('button',{name:'Add person',exact:true})).toBeVisible();
+ await page.evaluate(()=>{window.orgFixture.mode='failed-read';window.Alpine.store('chat').refreshOrgData()});await expect(page.locator('#org-data-modal').getByRole('status')).toContainText('unavailable');
+ await page.evaluate(()=>window.orgFixture.mode='ready');await page.getByRole('button',{name:'Refresh napplet',exact:true}).click();await expect(frame(page).getByRole('button',{name:'Add person',exact:true})).toBeVisible();
 });

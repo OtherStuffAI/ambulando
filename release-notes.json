@@ -3371,6 +3371,27 @@
       "notes": [
         "Release pending upload counters after switching editors or comment blocks, and prevent old new-task uploads from changing a reopened task draft."
       ]
+    },
+    {
+      "buildNumber": 2303,
+      "label": "Organisation data editing and narrow access",
+      "notes": [
+        "Add and edit people directly in People, recover loading and denied states, and grant narrow organisation data permissions in Groups & Members."
+      ]
+    },
+    {
+      "buildNumber": 2304,
+      "label": "Organisation data loading and permission sync",
+      "notes": [
+        "Keep people drafts stable during repeated hydration, bound stalled loads with retry, and manage narrow actor grants through workspace sync."
+      ]
+    },
+    {
+      "buildNumber": 2305,
+      "label": "Session-ready organisation data frames",
+      "notes": [
+        "Show a napplet only after its current document and authorised snapshot are ready, preventing stale clicks during reopen and navigation."
+      ]
     }
   ]
 }

@@ -3,12 +3,20 @@ import { getWorkspaceDb } from '../db.js';
 import { orgDataContext, orgDataLifecycle, orgDataPartition, projectOrgData, sandboxBundle } from '../org-data/projection.js';
 import { validOrgDataRequest } from './bridge.js';
 
+import { orgDataPermissionsMixin } from './permissions.js';
+
 const RUNTIMES = new WeakMap();
 export const orgDataMixin = {
+  ...orgDataPermissionsMixin,
+  get orgDataPermissionRows() {
+    return this.orgDataPermissionsContext === this.orgDataContextKey ? this.orgDataPermissionMembers : [];
+  },
   orgDataOpen: false,
   orgDataSrc: '',
   orgDataSrcdoc: '',
   orgDataBundleVisible: false,
+  orgDataFrameReady: false,
+  orgDataRetainDraft: false,
   orgDataHostStatus: 'loading',
   orgDataHostError: '',
   orgDataInstallationContext: '',
@@ -43,7 +51,8 @@ export const orgDataMixin = {
       runtime.state = state;
       this.orgDataHostStatus = state.status;
       this.orgDataHostError = state.error || '';
-      this.orgDataBundleVisible = state.status === 'ready';
+      this.orgDataBundleVisible = state.status === 'ready' && runtime.ready;
+      this.orgDataRetainDraft = state.retainDraft === true && runtime.ready;
       if (state.status !== 'ready') this.orgDataInstallations = [];
       if (runtime.bundle) state = { ...state, projection: runtime.capabilities.includes('org_data.read') ? state.projection : undefined };
       if (runtime.ready) runtime.frame?.contentWindow?.postMessage({ version: 1, session: runtime.session, type: 'state', ...state }, '*');
@@ -65,7 +74,7 @@ export const orgDataMixin = {
         if (this.orgDataMenuOpen) return this.dismissOrgDataMenu();
         return this.closeOrgData();
       }
-      if (data.type === 'ready') { runtime.ready = true; runtime.send(runtime.state); return; }
+      if (data.type === 'ready') { runtime.ready = true; this.orgDataFrameReady = true; clearTimeout(runtime.readyTimeout); runtime.send(runtime.state); return; }
       if (data.type === 'view') {
         if (runtime.view === data.view || !this.confirmOrgDataDiscard(runtime)) return;
         this.orgDataHistory = [...this.orgDataHistory.slice(0, this.orgDataHistoryIndex + 1), data.view];
@@ -90,6 +99,7 @@ export const orgDataMixin = {
     // retain the old script's session in a same-document navigation.
     this.orgDataSrcdoc = '';
     this.orgDataSrc = view.startsWith('bundle:') ? 'about:blank' : `/napplets/org-data/v1/index.html?session=${session}#${session}`;
+    this.armOrgDataReadyTimeout(runtime);
     await new Promise(resolve => queueMicrotask(resolve));
     if (!current()) return;
     const dialog = document.getElementById('org-data-modal');
@@ -97,6 +107,15 @@ export const orgDataMixin = {
     dialog?.showModal();
     dialog?.querySelector('[data-napplet-close]')?.focus();
     void this.refreshOrgData();
+  },
+
+  armOrgDataReadyTimeout(runtime) {
+    clearTimeout(runtime.readyTimeout);
+    runtime.readyTimeout = setTimeout(() => {
+      if (RUNTIMES.get(this) !== runtime || !this.orgDataOpen || runtime.ready || runtime.state.status === 'loading') return;
+      this.clearOrgDataDocument(runtime);
+      runtime.send({ status: 'error', view: runtime.view, error: 'Organisation data frame did not become ready. Refresh to retry.' });
+    }, 45000);
   },
 
   toggleOrgDataPresentation() {
@@ -175,7 +194,11 @@ export const orgDataMixin = {
         return { projection: projectOrgData(row), bundles: row.installations };
       }).subscribe({ next: result => {
         const projection = result?.projection;
-        if (!current() || !projection) return;
+        if (!current() || !projection || runtime.deliveredRequestId === requestId) return;
+        // liveQuery can emit the same committed request twice when its initial
+        // read overlaps the transaction. Re-sending ready would erase a form
+        // opened between those emissions. Every reauthorization has a new ID.
+        runtime.deliveredRequestId = requestId;
         const unchanged = retaining && sameOrgDataAuthority(prior, projection);
         if (retaining && !unchanged || runtime.bundle && prior && !sameOrgDataAuthority(prior, projection)) { this.clearOrgDataDocument(runtime); runtime.bundle = null; }
         runtime.authority = projection; runtime.authorizing = false; runtime.blocked = false;
@@ -184,6 +207,7 @@ export const orgDataMixin = {
           this.orgDataSrcdoc = view.startsWith('bundle:') ? '<!doctype html>' : '';
           this.orgDataSrc = view.startsWith('bundle:') ? 'about:blank' : `/napplets/org-data/v1/index.html?session=${runtime.session}#${runtime.session}`;
         }
+        if (!runtime.ready) this.armOrgDataReadyTimeout(runtime);
         this.orgDataInstallations = projection.installations || []; this.orgDataInstallationContext = runtime.context;
         if (view.startsWith('bundle:')) {
           const bundle = result.bundles?.find(b => b.key === view.slice(7));
@@ -195,9 +219,19 @@ export const orgDataMixin = {
         }
         runtime.send(unchanged ? { status: 'error', view, requestId, projection, retainDraft: true, error: draftError || 'Save failed. Your authorised draft is retained.' } : { status: 'ready', view, requestId, projection });
       }, error: error => { if (current()) { this.clearOrgDataDocument(runtime); runtime.send({ status: 'error', view, error: (error?.status === 403 ? 'Organisation data access denied.' : error?.message || 'Organisation data unavailable. Refresh to retry.') }); } } });
-      await service.ensureLoaded('org-data', `${view}:${requestId}`, { force: true, requestId, signal: controller.signal });
+      let timeout;
+      try {
+        await Promise.race([
+          service.ensureLoaded('org-data', `${view}:${requestId}`, { force: true, requestId, signal: controller.signal }),
+          new Promise((_, reject) => { timeout = setTimeout(() => reject(new Error('Organisation data loading timed out. Refresh to retry.')), 45000); }),
+        ]);
+        if (current()) {
+          const row = await db.org_data.get(orgDataPartition(c));
+          if (!row || row.request_id !== requestId) throw new Error('Organisation data was not loaded. Refresh to retry.');
+        }
+      } finally { clearTimeout(timeout); }
     } catch (error) {
-      if (current()) { runtime.subscription?.unsubscribe(); this.clearOrgDataDocument(runtime); runtime.send({ status: 'error', view, error: (error?.status === 403 ? 'Organisation data access denied.' : error?.message || 'Organisation data unavailable. Refresh to retry.') }); }
+      if (current()) { runtime.subscription?.unsubscribe(); this.clearOrgDataDocument(runtime); runtime.send({ status: 'error', view, error: (error?.status === 403 ? 'Organisation data access denied.' : error?.message || 'Organisation data unavailable. Refresh to retry.') }); controller.abort(); }
     }
   },
 
@@ -217,6 +251,7 @@ export const orgDataMixin = {
   },
 
   clearOrgDataDocument(runtime) {
+    clearTimeout(runtime.readyTimeout); this.orgDataFrameReady = false; this.orgDataRetainDraft = false;
     runtime.blocked = true; runtime.authorizing = false; runtime.dirty = false;
     runtime.authority = null; runtime.bundle = null; runtime.ready = false; runtime.documentCleared = true;
     runtime.state = { status: 'error', view: runtime.view };

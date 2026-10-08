@@ -1,4 +1,4 @@
-import { hydrateOrgData } from './org-data/tower.js';
+import { hydrateOrgData, readOrgDataPermissions } from './org-data/tower.js';
 import { resolveTowerPgWorkspaceContext } from './pg-read-hydrator.js';
 import { getTowerPgScopeAccess } from './api.js';
 import { disposeContextTreeView } from './context-tree-view.js';
@@ -362,6 +362,7 @@ export const syncManagerMixin = {
     this._towerSyncService = replaceTowerSyncService(this._towerSyncService, {
       workspaceKey,
       families: {
+        'org-data-permissions': { trackFreshness: false, load: (_key, options) => readOrgDataPermissions(this, options) },
         'org-data': { trackFreshness: false, load: (_key, options) => hydrateOrgData(this, options) },
         'message-activity': {
           trackFreshness: false,

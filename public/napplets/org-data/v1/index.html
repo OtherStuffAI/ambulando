@@ -22,7 +22,7 @@
    notice.textContent=state.error||'';notice.className=state.error?'error':'';
    if(state.retainDraft&&(draft||schema||publishing))return;
    main.replaceChildren();
-   if(state.status!=='ready'){el('p',state.status==='loading'?'Loading authorised organisation data…':'Refresh to retry.',main);return;}
+   if(state.status!=='ready'){el('p',state.status==='loading'?'Loading authorised organisation data…':'Organisation data is unavailable.',main);if(state.status==='error')button('Retry',main,()=>send('refresh'));return;}
    if(state.view==='people')people();else if(state.view==='chart')chart();else if(state.view==='holidays')holidays();else catalogue();
  }
  function personCard(r,p){
@@ -34,7 +34,7 @@
    if(linked)button('Message',box,()=>send('dm',{id:r.id}));
    return box;
  }
- function people(){el('h1','People',main);if(!records('people').length)el('p','No people yet. Add shared records in the Catalogue.',main);for(const r of records('people'))personCard(r,main)}
+ function people(){el('h1','People',main);const t=types().find(t=>t.key==='people');if(t?.capabilities.write)button('Add person',main,()=>editRecord(t));if(!t&&state.projection.capabilities.schema)button('Set up people, teams and holidays',main,()=>write('bootstrap',{}));if(!records('people').length)el('p','No people yet.',main);for(const r of records('people')){const box=personCard(r,main);if(t?.capabilities.write)button('Edit person',box,()=>editRecord(t,r))}}
  function chart(){
    el('h1','Organisation chart',main);const people=records('people'),seen=new Set();
    const visit=(r,p)=>{if(seen.has(r.id))return;seen.add(r.id);personCard(r,p);const children=people.filter(c=>c.values.manager===r.id);if(children.length){const branch=el('div',undefined,p,{class:'branch'});for(const c of children)visit(c,branch)}};

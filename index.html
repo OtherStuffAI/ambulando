@@ -9411,6 +9411,24 @@
           </div>
 
           <div class="settings-tab-content" x-show="$store.chat.canAdminWorkspace && $store.chat.settingsTab === 'sharing'">
+            <section class="settings-panel" x-show="$store.chat.isTowerPgMode" aria-label="Organisation data permissions">
+              <h3>Organisation data permissions</h3>
+              <p>Grant direct access to shared organisation data for workspace members and agents. Group grants still apply; removing a direct grant does not remove inherited access.</p>
+              <button type="button" class="btn" @click="$store.chat.loadOrgDataPermissions()" :disabled="$store.chat.orgDataPermissionsBusy">Reload permissions</button>
+              <p role="status" x-show="$store.chat.orgDataPermissionsBusy">Loading or saving permissions…</p>
+              <p role="alert" x-text="$store.chat.orgDataPermissionsError"></p>
+              <p role="status" x-text="$store.chat.orgDataPermissionsNotice"></p>
+              <template x-for="member in $store.chat.orgDataPermissionRows" :key="member.id">
+                <fieldset :disabled="$store.chat.orgDataPermissionsBusy" class="settings-panel">
+                  <legend x-text="member.display_name || member.npub"></legend>
+                  <template x-for="permission in $store.chat.orgDataEditorPermissions" :key="permission">
+                    <label><input type="checkbox" :value="permission" x-model="member.selected"><span x-text="permission"></span></label>
+                  </template>
+                  <button type="button" class="btn" @click="$store.chat.saveOrgDataPermissions(member)">Save direct permissions</button>
+                </fieldset>
+              </template>
+            </section>
+
           <section class="settings-panel" x-show="$store.chat.isTowerPgMode">
             <div class="groups-header">
               <div>
@@ -11347,11 +11365,11 @@
         <button type="button" class="thread-close-btn" data-napplet-close @click="$store.chat.closeOrgData()" :aria-label="'Close ' + $store.chat.orgDataDisplayTitle">&times;</button>
       </div>
     </div>
-    <div x-show="$store.chat.orgDataSrcdoc && !$store.chat.orgDataBundleVisible" role="status" class="p-4">
-      <p x-text="$store.chat.orgDataHostStatus === 'loading' ? 'Loading organisation data…' : $store.chat.orgDataHostError"></p>
+    <div x-show="($store.chat.orgDataHostStatus !== 'ready' || !$store.chat.orgDataFrameReady) && !$store.chat.orgDataBundleVisible" role="status" class="p-4">
+      <p x-text="$store.chat.orgDataHostStatus === 'error' ? $store.chat.orgDataHostError : 'Loading organisation data…'"></p>
       <button type="button" class="btn mt-2" x-show="$store.chat.orgDataHostStatus === 'error'" @click="$store.chat.refreshOrgData()">Refresh napplet</button>
     </div>
-    <iframe x-show="!$store.chat.orgDataSrcdoc || $store.chat.orgDataBundleVisible" :title="$store.chat.orgDataDisplayTitle + ' dashboard'" sandbox="allow-scripts" referrerpolicy="no-referrer" :src="$store.chat.orgDataSrc || 'about:blank'" :srcdoc="$store.chat.orgDataSrcdoc || null"></iframe>
+    <iframe x-show="$store.chat.orgDataFrameReady && ($store.chat.orgDataBundleVisible || $store.chat.orgDataRetainDraft)" :title="$store.chat.orgDataDisplayTitle + ' dashboard'" sandbox="allow-scripts" referrerpolicy="no-referrer" :src="$store.chat.orgDataSrc || 'about:blank'" :srcdoc="$store.chat.orgDataSrcdoc || null"></iframe>
   </dialog>
   <script type="module" src="/src/main.js"></script>
 </body>
