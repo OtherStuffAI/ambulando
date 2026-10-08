@@ -12,7 +12,10 @@ The `scope_order` journal family and outbox wake event are private to that actor
 Managed event audiences cannot delegate these preferences. TowerSyncService owns
 recovery and hydration; Dexie `scope_orders` and liveQuery provide the rendered
 order. Unknown scopes append in their existing order. Drag placement and Move
-Up/Down issue the same preference command.
+Up/Down issue the same preference command. Only active normal roots participate in
+reordering; system, DM and virtual roots retain navigation but have no reorder
+controls and never enter the preference payload. Move boundaries use eligible
+roots rather than the full navigation tree.
 
 Scope/channel archives retain tasks, documents, messages, files and grants.
 Archiving a scope archives its channels in one transaction. Existing capture

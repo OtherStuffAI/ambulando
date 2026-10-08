@@ -3,7 +3,7 @@ import { openWorkspaceDb } from '../src/db.js';
 import { applyPgRecordChanges, recordDeltaCursorKey } from '../src/pg-record-delta.js';
 import { markPgTargetArchived, filterArchivedProjection, canLoadPgTarget } from '../src/pg-archive-state.js';
 import { sortScopesPersonally, mapScopeOrder } from '../src/scope-order.js';
-import { hydrateTowerPgEventUpdates } from '../src/pg-read-hydrator.js';
+import { hydrateTowerPgEventUpdates, mapPgScopeToLocal } from '../src/pg-read-hydrator.js';
 import { applyPgNavigationProjection, readPgNavigationProjection } from '../src/section-live-queries.js';
 import { TowerSyncService } from '../src/tower-sync-service.js';
 import { scopesManagerMixin } from '../src/scopes-manager.js';
@@ -12,6 +12,11 @@ const workspaceId=fixture.one_message_delta.changes[0].workspace_id;
 const actor='10000000-0000-4000-8000-000000000001';
 const store={workspaceId,workspaceOwnerNpub:'npub1owner',backendUrl:'http://127.0.0.1:3100',session:{npub:'npub1viewer'},currentWorkspace:{workspaceId,workspaceOwnerNpub:'npub1owner',pgBackendMode:true}};
 const page=(changes,cursor)=>({...fixture.one_message_delta,families:[...fixture.one_message_delta.families,'scope_order'],changes,next_cursor:cursor,has_more:false});
+function orderUi(rows, save = vi.fn()) {
+ const ui = Object.defineProperties({}, Object.getOwnPropertyDescriptors(scopesManagerMixin));
+ Object.assign(ui, {isTowerPgMode:true, scopeTree:rows, savePersonalScopeOrder:save});
+ return ui;
+}
 let db;
 beforeEach(async()=>{db=openWorkspaceDb('scope-order-archives');await db.open();await Promise.all(db.tables.map(t=>t.clear()));});
 describe('personal order and targeted archive materialisation',()=>{
@@ -53,9 +58,26 @@ describe('personal order and targeted archive materialisation',()=>{
   expect(await filterArchivedProjection(row)).toBeNull();expect(await filterArchivedProjection({rows:[row,{record_id:'safe',channel_id:'other'}],hasMore:false})).toEqual({rows:[{record_id:'safe',channel_id:'other'}],hasMore:false});expect(row.body).toBe('retain');
  });
  it('keyboard movement sends a preference command without shared metadata or content writes',async()=>{
-  const save=vi.fn();const ui={scopeTree:[{record_id:'a'},{record_id:'b'}],savePersonalScopeOrder:save};
+  const save=vi.fn();const ui=orderUi([{record_id:'a'},{record_id:'b'}],save);
   await scopesManagerMixin.moveScope.call(ui,'a',-1);expect(save).not.toHaveBeenCalled();
   await scopesManagerMixin.moveScope.call(ui,'a',1);expect(save).toHaveBeenCalledWith(['b','a']);
+ });
+ it('moves and drops only normal translated roots while preserving special navigation',async()=>{
+  const rows=['system','scope','dm','scope','scope'].map((kind,index)=>mapPgScopeToLocal({id:`scope-${index}`,kind,title:`Root ${index}`,workspace_id:workspaceId}));
+  rows.splice(3,0,{record_id:'virtual',virtual:true},{record_id:'deleted',record_state:'deleted'},{record_id:'archived',archived_at:'2026-10-08'});
+  const save=vi.fn(),ui=orderUi(rows,save),before=[...rows];
+  expect(ui.personalOrderScopes.map(row=>row.record_id)).toEqual(['scope-1','scope-3','scope-4']);
+  expect(ui.canMoveScope('scope-1',-1)).toBe(false);expect(ui.canMoveScope('scope-4',1)).toBe(false);
+  for(const row of rows.filter(row=>!ui.isPersonalOrderScope(row))) {
+   expect(ui.canReorderScope(row)).toBe(false);await ui.moveScope(row.record_id,1);
+   ui.startScopeDrag(row.record_id,{preventDefault:vi.fn()});expect(ui.draggedScopeId).toBeFalsy();
+   ui.draggedScopeId=row.record_id;await ui.dropScopeBefore('scope-1');
+   ui.draggedScopeId='scope-4';await ui.dropScopeBefore(row.record_id);
+  }
+  expect(save).not.toHaveBeenCalled();
+  await ui.moveScope('scope-1',1);expect(save).toHaveBeenLastCalledWith(['scope-3','scope-1','scope-4']);
+  ui.startScopeDrag('scope-4');await ui.dropScopeBefore('scope-1');
+  expect(save).toHaveBeenLastCalledWith(['scope-4','scope-1','scope-3']);expect(ui.scopeTree).toEqual(before);
  });
  it('archive and preference wake events request journal recovery without list/content hydration',async()=>{
   const readChannels=vi.fn(),readMessages=vi.fn();
@@ -73,7 +95,7 @@ describe('personal order and targeted archive materialisation',()=>{
   expect(await canLoadPgTarget('scope',c.id)).toBe(true);
  });
  it('drag placement and personal projection never apply another actor preference',async()=>{
-  const save=vi.fn(),ui={scopeTree:[{record_id:'a'},{record_id:'b'},{record_id:'c'}],draggedScopeId:'c',savePersonalScopeOrder:save};
+  const save=vi.fn(),ui=orderUi([{record_id:'a'},{record_id:'b'},{record_id:'c'}],save);ui.draggedScopeId='c';
   await scopesManagerMixin.dropScopeBefore.call(ui,'a',{preventDefault:vi.fn()});expect(save).toHaveBeenCalledWith(['c','a','b']);
   const getter=Object.getOwnPropertyDescriptor(scopesManagerMixin,'personallyOrderedScopes').get;
   const own={scopes:ui.scopeTree,session:{npub:'viewer'},currentWorkspace:{workspaceId:'w',pgMe:{actor:{id:'me',npub:'viewer'}}},personalScopeOrder:{actor_id:'other',workspace_id:'w',scope_ids:['c','b','a']}};

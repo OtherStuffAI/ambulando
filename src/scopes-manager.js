@@ -263,27 +263,47 @@ export const scopesManagerMixin = {
     return sortScopesPersonally(this.scopes || [], valid ? order.scope_ids : []);
   },
 
+  get personalOrderScopes() {
+    return (this.scopeTree || []).filter(scope => this.isPersonalOrderScope(scope));
+  },
+  isPersonalOrderScope(scope) {
+    return Boolean(scope?.record_id && !scope.virtual && !scope.system_key
+      && !['system', 'dm'].includes(scope.pg_kind || scope.kind) && !isDmScope(scope)
+      && !['deleted', 'archived'].includes(scope.record_state) && !scope.archived_at && !scope.pg_archived_at);
+  },
+  canReorderScope(scope) {
+    return Boolean(this.isTowerPgMode && this.isPersonalOrderScope(scope));
+  },
+  canMoveScope(scopeId, direction) {
+    if (!this.isTowerPgMode || this.scopeOrderSaving || ![-1, 1].includes(direction)) return false;
+    const index = this.personalOrderScopes.findIndex(row => row.record_id === scopeId);
+    return index >= 0 && index + direction >= 0 && index + direction < this.personalOrderScopes.length;
+  },
   startScopeDrag(scopeId, event) {
-    if (!this.isTowerPgMode || this.scopeOrderSaving) return;
+    if (!this.isTowerPgMode || this.scopeOrderSaving || !this.personalOrderScopes.some(row => row.record_id === scopeId)) { event?.preventDefault(); return; }
     this.draggedScopeId = scopeId;
     if (event?.dataTransfer) { event.dataTransfer.effectAllowed = 'move'; event.dataTransfer.setData('text/plain', scopeId); }
   },
   async dropScopeBefore(scopeId, event) {
     event?.preventDefault();
     const source = this.draggedScopeId; this.draggedScopeId = null;
-    if (!source || source === scopeId) return;
-    const ids = this.scopeTree.map(row => row.record_id).filter(id => id !== source);
+    if (!this.isTowerPgMode || this.scopeOrderSaving || !source || source === scopeId
+      || !this.personalOrderScopes.some(row => row.record_id === source)) return;
+    const ids = this.personalOrderScopes.map(row => row.record_id).filter(id => id !== source);
     const index = ids.indexOf(scopeId); if (index < 0) return;
     ids.splice(index, 0, source); await this.savePersonalScopeOrder(ids);
   },
   async moveScope(scopeId, direction) {
-    const ids = this.scopeTree.map(row => row.record_id), index = ids.indexOf(scopeId), target = index + direction;
+    if (!this.canMoveScope(scopeId, direction)) return;
+    const ids = this.personalOrderScopes.map(row => row.record_id), index = ids.indexOf(scopeId), target = index + direction;
     if (index < 0 || target < 0 || target >= ids.length || ![-1, 1].includes(direction)) return;
     [ids[index], ids[target]] = [ids[target], ids[index]];
     await this.savePersonalScopeOrder(ids);
   },
   async savePersonalScopeOrder(ids) {
     if (!this.isTowerPgMode || this.scopeOrderSaving) return;
+    const eligible = new Set(this.personalOrderScopes.map(row => row.record_id));
+    ids = [...new Set(ids.filter(id => eligible.has(id)))];
     this.scopeOrderSaving = true; this.scopeOrderError = '';
     try {
       const context = resolveTowerPgWorkspaceContext(this);

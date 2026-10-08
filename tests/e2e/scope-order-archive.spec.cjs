@@ -71,3 +71,36 @@ window.boot=async(fixture,key)=>{
     expect(requests).toEqual([{index:0,cursor:'seed',stage:'order'},{index:1,cursor:'seed',stage:'order'},{index:0,cursor:'order',stage:'archive'},{index:1,cursor:'order',stage:'archive'},{index:2,cursor:'seed',stage:'archive'}]);
   } finally { await Promise.all(contexts.map(context=>context.close())); }
 });
+
+test('mixed normal, system and DM navigation exposes only eligible move controls', async ({ page }) => {
+  test.setTimeout(30000);
+  const { serveBuiltFlightDeck } = require('./fixtures/serve-built-flightdeck.cjs');
+  const { buildGroupsAccessFixture, seedGroupsAccess } = require('./fixtures/groups-access-seed.cjs');
+  await page.route('**/*', route => serveBuiltFlightDeck(route));
+  await page.goto('/');
+  await seedGroupsAccess(page, buildGroupsAccessFixture());
+  await page.evaluate(() => {
+    const s = Alpine.store('chat');
+    s.scopes = [['system', 'System'], ['scope', 'Alpha'], ['dm', 'DMs'], ['scope', 'Beta']].map(([pg_kind,title],i) => ({record_id:`mixed-${i}`,title,pg_kind,level:'l1',parent_id:null,record_state:'active'}));
+    s.personalScopeOrder = null;
+    s.savePersonalScopeOrder = async ids => { window.savedScopeIds = ids; };
+    s.navSection = 'settings'; s.settingsTab = 'scopes';
+  });
+  await expect(page.locator('#scope-mixed-0')).toBeVisible();
+  await expect(page.locator('#scope-mixed-2')).toBeVisible();
+  for (const id of ['mixed-0','mixed-2']) {
+    const card = page.locator(`#scope-${id}`);
+    expect(await card.evaluate(element => element.draggable)).toBe(false);
+    await card.getByRole('button', {name:'Scope actions',exact:true}).click();
+    await expect(card.getByRole('button',{name:/Move scope/})).toHaveCount(0);
+    await card.getByRole('button', {name:'Scope actions',exact:true}).click();
+  }
+  const alpha = page.locator('#scope-mixed-1');
+  expect(await alpha.evaluate(element => element.draggable)).toBe(true);
+  await alpha.getByRole('button',{name:'Scope actions',exact:true}).click();
+  await expect(alpha.getByRole('button',{name:'Move scope Alpha up',exact:true})).toBeDisabled();
+  await alpha.getByRole('button',{name:'Move scope Alpha down',exact:true}).click();
+  expect(await page.evaluate(() => window.savedScopeIds)).toEqual(['mixed-3','mixed-1']);
+  await page.evaluate(async () => { const s=Alpine.store('chat');s.startScopeDrag('mixed-3');await s.dropScopeBefore('mixed-1'); });
+  expect(await page.evaluate(() => window.savedScopeIds)).toEqual(['mixed-3','mixed-1']);
+});

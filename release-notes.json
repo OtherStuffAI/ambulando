@@ -3415,6 +3415,13 @@
       "notes": [
         "Hide obsolete task and document backdrops while workspace authority is being reconciled."
       ]
+    },
+    {
+      "buildNumber": 2310,
+      "label": "Personal scope ordering correction",
+      "notes": [
+        "Move and drag controls now order only normal scopes, keeping system and direct-message navigation out of your personal ordering payload."
+      ]
     }
   ]
 }
