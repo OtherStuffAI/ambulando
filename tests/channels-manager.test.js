@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
+// Alpine's store reactivity; stored objects come back as proxies.
+import { reactive } from '@vue/reactivity';
 
 vi.mock('../src/backend-mode.js', () => ({
   isTowerPgBackendMode: vi.fn(() => true),
@@ -85,6 +87,7 @@ import {
   describePgPermissionDenied,
   findExistingNamedChannel,
   permissionsForPgChannelCapacity,
+  planPgChannelBulkGrantChange,
   scopeChannelAccessRows,
 } from '../src/channels-manager.js';
 import { DM_SCOPE_ID, buildDmChannelDescription } from '../src/dm-scope.js';
@@ -612,7 +615,7 @@ describe('channels-manager pure utilities', () => {
     }, { baseUrl: 'https://tower.example', appNpub: 'flightdeck-app' });
   });
 
-  it('defaults bulk channel grants to the agents group and selected channel', () => {
+  it('starts bulk channel grants empty with nothing preselected', () => {
     const store = createPgGrantStore({
       selectedChannelId: 'channel-2',
       channels: [
@@ -626,31 +629,151 @@ describe('channels-manager pure utilities', () => {
         { group_id: 'group-agents', name: 'Agents' },
       ],
       getChannelLabel: (channel) => channel.title,
-    });
-
-    store.resetChannelBulkGrantDraft();
-
-    expect(store.channelBulkGrantPrincipalType).toBe('group');
-    expect(store.channelBulkGrantGroupId).toBe('group-agents');
-    expect(store.channelBulkGrantCapacity).toBe('contributor');
-    expect(store.channelBulkGrantSelectedChannelIds).toEqual(['channel-2']);
-    expect(store.pgChannelBulkGrantChannelOptions.map((channel) => channel.id)).toEqual(['channel-1', 'channel-2']);
-  });
-
-  it('can initialize bulk channel grants with all channels selected for setup', () => {
-    const store = createPgGrantStore({
-      selectedChannelId: 'channel-2',
-      channels: [
-        { record_id: 'channel-1', title: 'General', scope_id: 'scope-a', record_state: 'active' },
-        { record_id: 'channel-2', title: 'Implementation', scope_id: 'scope-a', record_state: 'active' },
-      ],
-      currentWorkspaceGroups: [{ group_id: 'group-agents', name: 'Agents' }],
-      getChannelLabel: (channel) => channel.title,
+      channelBulkGrantSelectedChannelIds: ['channel-1'],
+      channelBulkGrantPreview: { status: 'ready', rows: [] },
     });
 
     store.resetChannelBulkGrantDraft({ selectAll: true });
 
-    expect(store.channelBulkGrantSelectedChannelIds).toEqual(['channel-1', 'channel-2']);
+    expect(store.channelBulkGrantPrincipalType).toBe('group');
+    expect(store.channelBulkGrantGroupId).toBe('');
+    expect(store.channelBulkGrantActorId).toBe('');
+    expect(store.channelBulkGrantCapacity).toBe('viewer');
+    expect(store.channelBulkGrantSelectedChannelIds).toEqual([]);
+    expect(store.channelBulkGrantPreview).toBeNull();
+    expect(store.canPreviewChannelBulkGrant).toBe(false);
+    expect(store.pgChannelBulkGrantChannelOptions.map((channel) => channel.id)).toEqual(['channel-1', 'channel-2']);
+  });
+
+  it('flags bulk updates that lower an existing standard permission', () => {
+    const grant = (capacity) => [{ principal_type: 'group', principal_id: 'group-agents', permissions: permissionsForPgChannelCapacity(capacity) }];
+    expect(planPgChannelBulkGrantChange(grant('contributor'), 'group:group-agents', 'viewer'))
+      .toEqual({ action: 'update', currentCapacity: 'contributor', reduces: true });
+    expect(planPgChannelBulkGrantChange(grant('viewer'), 'group:group-agents', 'contributor'))
+      .toEqual({ action: 'update', currentCapacity: 'viewer', reduces: false });
+    expect(planPgChannelBulkGrantChange(grant('contributor'), 'group:group-agents', 'agent'))
+      .toEqual({ action: 'update', currentCapacity: 'contributor', reduces: true });
+    expect(planPgChannelBulkGrantChange([], 'group:group-agents', 'viewer')).toEqual({ action: 'create', currentCapacity: '' });
+  });
+
+  describe('bulk channel grant preview', () => {
+    function createBulkStore(overrides = {}) {
+      return createPgGrantStore({
+        channels: [
+          { record_id: 'channel-a', title: 'A', scope_id: 'scope-a', record_state: 'active' },
+          { record_id: 'channel-b', title: 'B', scope_id: 'scope-a', record_state: 'active' },
+          { record_id: 'channel-c', title: 'C', scope_id: 'scope-a', record_state: 'active' },
+        ],
+        scopesMap: new Map([['scope-a', { record_id: 'scope-a', title: 'Flight Deck' }]]),
+        currentWorkspaceGroups: [{ group_id: 'group-agents', name: 'Agents' }],
+        getChannelLabel: (channel) => channel.title,
+        channelBulkGrantPrincipalType: 'group',
+        channelBulkGrantGroupId: 'group-agents',
+        channelBulkGrantCapacity: 'viewer',
+        channelBulkGrantSelectedChannelIds: ['channel-a', 'channel-b'],
+        channelBulkGrantPreview: null,
+        channelBulkGrantPreviewRequest: 0,
+        channelBulkGrantResults: null,
+        schedulePgChannelAccessMaterializationRefresh: vi.fn(),
+        ...overrides,
+      });
+    }
+
+    it('reaches ready on an Alpine reactive store and reports lowered access', async () => {
+      const store = reactive(createBulkStore());
+      getTowerPgChannelGrants
+        .mockResolvedValueOnce({ grants: [] })
+        .mockResolvedValueOnce({ grants: [{ principal_type: 'group', principal_id: 'group-agents', permissions: permissionsForPgChannelCapacity('contributor') }] });
+
+      await store.previewChannelBulkGrant();
+
+      expect(store.channelBulkGrantPreview.status).toBe('ready');
+      expect(store.channelBulkGrantPreview.rows.map((row) => [row.id, row.action, row.reduces])).toEqual([
+        ['channel-a', 'create', undefined],
+        ['channel-b', 'update', true],
+      ]);
+      expect(store.channelBulkGrantPreviewCounts).toMatchObject({ create: 1, update: 1, reduces: 1, writes: 2 });
+      expect(createTowerPgChannelGrant).not.toHaveBeenCalled();
+      expect(updateTowerPgChannelGrant).not.toHaveBeenCalled();
+    });
+
+    it('ignores a pending preview read after the dialog is closed and reopened', async () => {
+      const store = reactive(createBulkStore({ channelBulkGrantSelectedChannelIds: ['channel-a'] }));
+      let resolveFirst;
+      getTowerPgChannelGrants
+        .mockImplementationOnce(() => new Promise((resolve) => { resolveFirst = resolve; }))
+        .mockResolvedValueOnce({ grants: [] });
+
+      const first = store.previewChannelBulkGrant();
+      expect(store.channelBulkGrantPreview.status).toBe('loading');
+      store.closeChannelBulkGrantPreview();
+      expect(store.channelBulkGrantPreview).toBeNull();
+      store.channelBulkGrantCapacity = 'contributor';
+      await store.previewChannelBulkGrant();
+      expect(store.channelBulkGrantPreview).toMatchObject({ status: 'ready', capacity: 'contributor' });
+
+      resolveFirst({ grants: [{ principal_type: 'group', principal_id: 'group-agents', permissions: permissionsForPgChannelCapacity('viewer') }] });
+      await first;
+      expect(store.channelBulkGrantPreview).toMatchObject({ status: 'ready', capacity: 'contributor' });
+      expect(store.channelBulkGrantPreview.rows[0].action).toBe('create');
+
+      store.closeChannelBulkGrantPreview();
+      let resolveClosed;
+      getTowerPgChannelGrants.mockImplementationOnce(() => new Promise((resolve) => { resolveClosed = resolve; }));
+      const closed = store.previewChannelBulkGrant();
+      store.closeChannelBulkGrantPreview();
+      resolveClosed({ grants: [] });
+      await closed;
+      expect(store.channelBulkGrantPreview).toBeNull();
+    });
+
+    it('refuses to apply when the channel selection changed after the preview', async () => {
+      const store = createBulkStore();
+      getTowerPgChannelGrants.mockResolvedValue({ grants: [] });
+      await store.previewChannelBulkGrant();
+      expect(store.channelBulkGrantPreview.status).toBe('ready');
+      getTowerPgChannelGrants.mockClear();
+
+      store.channelBulkGrantSelectedChannelIds = ['channel-a', 'channel-b', 'channel-c'];
+      await store.confirmChannelBulkGrant();
+
+      expect(createTowerPgChannelGrant).not.toHaveBeenCalled();
+      expect(updateTowerPgChannelGrant).not.toHaveBeenCalled();
+      expect(getTowerPgChannelGrants).not.toHaveBeenCalled();
+      expect(store.channelBulkGrantPreview).toBeNull();
+      expect(store.channelGrantsError).toMatch(/changed after the preview/);
+
+      await store.previewChannelBulkGrant();
+      store.channelBulkGrantSelectedChannelIds = ['channel-a', 'channel-c'];
+      await store.confirmChannelBulkGrant();
+      expect(createTowerPgChannelGrant).not.toHaveBeenCalled();
+    });
+
+    it('refuses to apply when the principal or permission changed after the preview', async () => {
+      const store = createBulkStore({ currentWorkspaceGroups: [{ group_id: 'group-agents', name: 'Agents' }, { group_id: 'group-team', name: 'Team' }] });
+      getTowerPgChannelGrants.mockResolvedValue({ grants: [] });
+      await store.previewChannelBulkGrant();
+      store.channelBulkGrantGroupId = 'group-team';
+      await store.confirmChannelBulkGrant();
+      await store.previewChannelBulkGrant();
+      store.channelBulkGrantCapacity = 'manager';
+      await store.confirmChannelBulkGrant();
+      expect(createTowerPgChannelGrant).not.toHaveBeenCalled();
+      expect(updateTowerPgChannelGrant).not.toHaveBeenCalled();
+    });
+
+    it('applies exactly the previewed channels with the previewed rule', async () => {
+      const store = createBulkStore();
+      getTowerPgChannelGrants.mockResolvedValue({ grants: [] });
+      await store.previewChannelBulkGrant();
+      await store.confirmChannelBulkGrant();
+      expect(createTowerPgChannelGrant.mock.calls.map((call) => [call[1], call[2]])).toEqual([
+        ['channel-a', { principal_type: 'group', principal_id: 'group-agents', access_level: 'view' }],
+        ['channel-b', { principal_type: 'group', principal_id: 'group-agents', access_level: 'view' }],
+      ]);
+      expect(store.channelBulkGrantPreview).toBeNull();
+      expect(store.channelBulkGrantResultCounts).toMatchObject({ created: 2, failed: 0 });
+    });
   });
 
   it('applies a bulk grant across selected channels without rewriting custom grants', async () => {

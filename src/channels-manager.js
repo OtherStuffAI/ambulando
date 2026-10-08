@@ -683,6 +683,20 @@ export function aggregatePgChannelGrants(grants = []) {
   }));
 }
 
+// Shared by the bulk-access preview and write path so both classify a channel
+// identically: custom grants are never rewritten and matching grants are left alone.
+export function planPgChannelBulkGrantChange(grants = [], principalKey = '', capacity = '') {
+  const existing = aggregatePgChannelGrants(grants).find((grant) => grant?.key === principalKey) || null;
+  if (!existing) return { action: 'create', currentCapacity: '' };
+  if (existing.capacity === 'custom') return { action: 'custom', currentCapacity: 'custom' };
+  if (existing.capacity === capacity) return { action: 'unchanged', currentCapacity: existing.capacity };
+  // An update replaces the preset, so flag changes that take abilities away
+  // (for example Contributor -> Viewer) for the preview to call out.
+  const next = new Set(permissionsForPgChannelCapacity(capacity));
+  const reduces = (PG_CHANNEL_GRANT_CAPACITY_PRESETS[existing.capacity] || []).some((permission) => !next.has(permission));
+  return { action: 'update', currentCapacity: existing.capacity, reduces };
+}
+
 function normalizePgChannelGrantLikeAccessRow(row = {}, { inheritedScopeId = '' } = {}) {
   const normalized = normalizeNewChannelAccessRow(row);
   if (!normalized) return null;
@@ -1396,6 +1410,7 @@ export const channelsManagerMixin = {
         return {
           id: channel.record_id,
           label: this.getChannelLabel?.(channel) || channel.title || channel.name || channel.record_id,
+          scopeId,
           scopeLabel: scopeId ? (scope?.title || this.getScopeBreadcrumb?.(scopeId) || scopeId) : 'No scope',
         };
       })
@@ -1433,6 +1448,127 @@ export const channelsManagerMixin = {
       && this.channelBulkGrantSelectedCount > 0
       && this.channelBulkGrantSelectedPrincipalKey
     );
+  },
+
+  get pgChannelBulkGrantScopeGroups() {
+    const query = String(this.channelBulkGrantChannelQuery || '').trim().toLowerCase();
+    const selected = new Set(
+      (Array.isArray(this.channelBulkGrantSelectedChannelIds) ? this.channelBulkGrantSelectedChannelIds : [])
+        .map((channelId) => String(channelId || '').trim())
+    );
+    const groups = new Map();
+    for (const channel of this.pgChannelBulkGrantChannelOptions) {
+      const key = channel.scopeId || '__none__';
+      const group = groups.get(key) || { key, label: channel.scopeLabel, channels: [], total: 0, selectedCount: 0 };
+      group.total += 1;
+      if (selected.has(channel.id)) group.selectedCount += 1;
+      const matches = !query
+        || String(channel.label || '').toLowerCase().includes(query)
+        || String(channel.scopeLabel || '').toLowerCase().includes(query);
+      if (matches) group.channels.push({ ...channel, selected: selected.has(channel.id) });
+      groups.set(key, group);
+    }
+    return [...groups.values()]
+      .filter((group) => group.channels.length > 0)
+      .map((group) => ({
+        ...group,
+        visibleSelectedCount: group.channels.filter((channel) => channel.selected).length,
+      }));
+  },
+
+  get channelBulkGrantSelectedChannels() {
+    const selected = new Set(
+      (Array.isArray(this.channelBulkGrantSelectedChannelIds) ? this.channelBulkGrantSelectedChannelIds : [])
+        .map((channelId) => String(channelId || '').trim())
+    );
+    return this.pgChannelBulkGrantChannelOptions.filter((channel) => selected.has(channel.id));
+  },
+
+  get channelBulkGrantPrincipalLabel() {
+    const principalId = this.resolveChannelBulkGrantPrincipalId();
+    if (!principalId) return '';
+    if (this.channelBulkGrantPrincipalType === 'group') {
+      return this.pgChannelGrantGroupOptions.find((group) => group.groupId === principalId)?.label || principalId;
+    }
+    return this.pgChannelGrantActorOptions.find((member) => member.actorId === principalId)?.label || principalId;
+  },
+
+  get channelBulkGrantSummary() {
+    const who = this.channelBulkGrantPrincipalLabel;
+    const count = this.channelBulkGrantSelectedCount;
+    if (!who && count === 0) return 'Choose who gets access and which channels.';
+    if (!who) return 'Choose a group or person.';
+    if (count === 0) return 'Choose at least one channel.';
+    const level = this.getPgChannelGrantCapacityLabel(this.channelBulkGrantCapacity);
+    return `${who} will get ${level} access in ${count} channel${count === 1 ? '' : 's'}.`;
+  },
+
+  get channelBulkGrantPreviewCounts() {
+    const rows = Array.isArray(this.channelBulkGrantPreview?.rows) ? this.channelBulkGrantPreview.rows : [];
+    const count = (action) => rows.filter((row) => row.action === action).length;
+    return {
+      total: rows.length,
+      create: count('create'),
+      update: count('update'),
+      unchanged: count('unchanged'),
+      custom: count('custom'),
+      unknown: count('unknown'),
+      reduces: rows.filter((row) => row.action === 'update' && row.reduces).length,
+      writes: count('create') + count('update') + count('unknown'),
+    };
+  },
+
+  get channelBulkGrantResultCounts() {
+    const rows = Array.isArray(this.channelBulkGrantResults?.rows) ? this.channelBulkGrantResults.rows : [];
+    const count = (outcome) => rows.filter((row) => row.outcome === outcome).length;
+    return {
+      total: rows.length,
+      created: count('created'),
+      updated: count('updated'),
+      unchanged: count('unchanged'),
+      custom: count('custom'),
+      failed: count('failed'),
+    };
+  },
+
+  get filteredPgWorkspaceMembers() {
+    const query = String(this.pgWorkspaceMemberQuery || '').trim().toLowerCase();
+    return (this.pgWorkspaceMembers || [])
+      .filter((member) => member?.npub)
+      .map((member) => ({ member, label: member.display_name || this.getSenderName(member.npub) || member.npub }))
+      .filter(({ member, label }) => !query
+        || String(label || '').toLowerCase().includes(query)
+        || String(member.npub || '').toLowerCase().includes(query)
+        || String(member.role || '').toLowerCase().includes(query)
+        || String(member.kind || '').toLowerCase().includes(query))
+      .sort((left, right) => String(left.label).localeCompare(String(right.label)))
+      .map(({ member }) => member);
+  },
+
+  getPgWorkspaceMemberGroupNames(npub) {
+    const target = String(npub || '').trim();
+    if (!target) return [];
+    return (this.currentWorkspaceGroups || [])
+      .filter((group) => (group.member_npubs || []).includes(target))
+      .map((group) => group.name || 'Untitled group');
+  },
+
+  setSharingSection(section) {
+    const next = ['members', 'groups', 'access'].includes(section) ? section : 'members';
+    this.sharingSection = this.isTowerPgMode === false ? 'groups' : next;
+  },
+
+  focusSharingSectionTab(event, direction) {
+    const sections = ['members', 'groups', 'access'];
+    const index = sections.indexOf(this.sharingSection);
+    const nextIndex = direction === 'first'
+      ? 0
+      : direction === 'last'
+        ? sections.length - 1
+        : (index + direction + sections.length) % sections.length;
+    this.setSharingSection(sections[nextIndex]);
+    const tablist = event?.currentTarget?.closest?.('[role="tablist"]');
+    tablist?.querySelector?.(`[data-section="${sections[nextIndex]}"]`)?.focus?.();
   },
 
   get newChannelAccessPrincipalOptions() {
@@ -1718,27 +1854,20 @@ export const channelsManagerMixin = {
     this.channelGrantsNotice = '';
   },
 
-  resetChannelBulkGrantDraft(options = {}) {
-    const agentGroup = this.pgChannelGrantGroupOptions.find((group) => {
-      const label = String(group.label || '').trim().toLowerCase().replace(/\s+/g, '');
-      return label === 'agents' || label === 'aiagents' || label === 'agent';
-    });
-    const groupId = agentGroup?.groupId || this.pgChannelGrantGroupOptions[0]?.groupId || '';
-    const actorId = this.pgChannelGrantActorOptions[0]?.actorId || '';
-    this.channelBulkGrantPrincipalType = groupId ? 'group' : 'actor';
-    this.channelBulkGrantGroupId = groupId;
-    this.channelBulkGrantActorId = actorId;
-    this.channelBulkGrantCapacity = 'contributor';
+  // Bulk access starts empty: the admin explicitly picks who, the level and each
+  // channel, then confirms a preview. Nothing is preselected on their behalf.
+  resetChannelBulkGrantDraft() {
+    if (this.channelBulkGrantBusy) return;
+    this.channelBulkGrantPrincipalType = 'group';
+    this.channelBulkGrantGroupId = '';
+    this.channelBulkGrantActorId = '';
+    this.channelBulkGrantCapacity = 'viewer';
     this.channelBulkGrantProgress = '';
-    if (options.selectAll === true) {
-      this.channelBulkGrantSelectedChannelIds = this.pgChannelBulkGrantChannelOptions.map((channel) => channel.id);
-      return;
-    }
-    const selectedChannelId = String(this.selectedChannelId || '').trim();
-    const channelIds = new Set(this.pgChannelBulkGrantChannelOptions.map((channel) => channel.id));
-    this.channelBulkGrantSelectedChannelIds = selectedChannelId && channelIds.has(selectedChannelId)
-      ? [selectedChannelId]
-      : [];
+    this.channelBulkGrantChannelQuery = '';
+    this.channelBulkGrantSelectedChannelIds = [];
+    this.channelBulkGrantPreviewRequest = Number(this.channelBulkGrantPreviewRequest || 0) + 1;
+    this.channelBulkGrantPreview = null;
+    this.channelBulkGrantResults = null;
   },
 
   openChannelSettings(channelId = null) {
@@ -2021,8 +2150,144 @@ export const channelsManagerMixin = {
     this.channelBulkGrantSelectedChannelIds = this.pgChannelBulkGrantChannelOptions.map((channel) => channel.id);
   },
 
+  // Selects or clears only the channels currently visible in one scope, so a
+  // search never silently adds hidden channels to the write set.
+  setChannelBulkGrantScopeSelection(scopeKey, selected) {
+    const group = this.pgChannelBulkGrantScopeGroups.find((candidate) => candidate.key === scopeKey);
+    if (!group) return;
+    const selectedIds = new Set(
+      (Array.isArray(this.channelBulkGrantSelectedChannelIds) ? this.channelBulkGrantSelectedChannelIds : [])
+        .map((selectedId) => String(selectedId || '').trim())
+        .filter(Boolean)
+    );
+    for (const channel of group.channels) {
+      if (selected) selectedIds.add(channel.id);
+      else selectedIds.delete(channel.id);
+    }
+    const validIds = new Set(this.pgChannelBulkGrantChannelOptions.map((channel) => channel.id));
+    this.channelBulkGrantSelectedChannelIds = [...selectedIds].filter((selectedId) => validIds.has(selectedId));
+  },
+
   clearChannelBulkGrantChannels() {
     this.channelBulkGrantSelectedChannelIds = [];
+  },
+
+  get canPreviewChannelBulkGrant() {
+    return Boolean(
+      this.canManageSelectedPgChannelGrants
+      && !this.channelBulkGrantBusy
+      && this.channelBulkGrantSelectedCount > 0
+      && this.channelBulkGrantSelectedPrincipalKey
+      && this.pgChannelGrantCapacityOptions.some((option) => option.value === this.channelBulkGrantCapacity)
+    );
+  },
+
+  // Read-only preview: loads each selected channel's current grants and shows
+  // what Apply would do. No grant is written until the preview is confirmed.
+  async previewChannelBulkGrant() {
+    if (!isTowerPgBackendMode()) return;
+    if (!this.canManageSelectedPgChannelGrants) {
+      this.channelGrantsError = 'You do not have permission to manage channel access.';
+      return;
+    }
+    const principalKey = this.channelBulkGrantSelectedPrincipalKey;
+    const capacity = String(this.channelBulkGrantCapacity || '').trim();
+    const channels = this.channelBulkGrantSelectedChannels;
+    if (!principalKey) {
+      this.channelGrantsError = 'Select a user or group.';
+      return;
+    }
+    if (channels.length === 0) {
+      this.channelGrantsError = 'Select at least one channel.';
+      return;
+    }
+    this.channelGrantsError = null;
+    this.channelGrantsNotice = '';
+    // Alpine wraps stored objects in proxies, so obsolete reads are detected
+    // with a primitive request id rather than object identity.
+    const requestId = Number(this.channelBulkGrantPreviewRequest || 0) + 1;
+    this.channelBulkGrantPreviewRequest = requestId;
+    const preview = {
+      status: 'loading',
+      principalKey,
+      principalLabel: this.channelBulkGrantPrincipalLabel,
+      capacity,
+      rows: channels.map((channel) => ({ ...channel, action: 'loading', currentCapacity: '', message: '' })),
+    };
+    this.channelBulkGrantPreview = preview;
+    const { workspaceId, baseUrl, appNpub } = resolveTowerPgWorkspaceContext(this);
+    if (!workspaceId || !baseUrl) {
+      this.channelBulkGrantPreview = { ...preview, status: 'error', message: 'Flight Deck PG workspace is not connected' };
+      return;
+    }
+    const rows = new Array(channels.length);
+    let nextIndex = 0;
+    const readNext = async () => {
+      while (nextIndex < channels.length) {
+        const index = nextIndex;
+        nextIndex += 1;
+        const channel = channels[index];
+        try {
+          const result = await getTowerPgChannelGrants(workspaceId, channel.id, { baseUrl, appNpub });
+          rows[index] = { ...channel, ...planPgChannelBulkGrantChange(result?.grants || [], principalKey, capacity), message: '' };
+        } catch (error) {
+          rows[index] = {
+            ...channel,
+            action: 'unknown',
+            currentCapacity: '',
+            message: error?.code === 'permission_denied'
+              ? describePgPermissionDenied(error, 'read channel access')
+              : (error?.message || 'Could not read current access'),
+          };
+        }
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(4, channels.length) }, readNext));
+    if (this.channelBulkGrantPreviewRequest !== requestId || !this.channelBulkGrantPreview) return;
+    this.channelBulkGrantPreview = { ...preview, status: 'ready', rows };
+  },
+
+  closeChannelBulkGrantPreview() {
+    if (this.channelBulkGrantBusy) return;
+    this.channelBulkGrantPreviewRequest = Number(this.channelBulkGrantPreviewRequest || 0) + 1;
+    this.channelBulkGrantPreview = null;
+  },
+
+  async confirmChannelBulkGrant() {
+    const preview = this.channelBulkGrantPreview;
+    if (!preview || preview.status !== 'ready' || this.channelBulkGrantBusy) return;
+    // Apply writes the current selection, so it must be exactly what was reviewed.
+    const previewIds = (preview.rows || []).map((row) => row.id).sort();
+    const selectedIds = this.channelBulkGrantSelectedChannels.map((channel) => channel.id).sort();
+    const sameChannels = previewIds.length === selectedIds.length
+      && previewIds.every((channelId, index) => channelId === selectedIds[index]);
+    if (
+      preview.principalKey !== this.channelBulkGrantSelectedPrincipalKey
+      || preview.capacity !== this.channelBulkGrantCapacity
+      || !sameChannels
+    ) {
+      this.closeChannelBulkGrantPreview();
+      this.channelGrantsError = 'The access rule or channel selection changed after the preview. Review it again before applying.';
+      return;
+    }
+    await this.applyChannelBulkGrant();
+    this.closeChannelBulkGrantPreview();
+  },
+
+  // Re-previews only the failed channels with the exact rule that was applied.
+  retryFailedChannelBulkGrant() {
+    const results = this.channelBulkGrantResults;
+    const failedIds = (results?.rows || [])
+      .filter((row) => row.outcome === 'failed')
+      .map((row) => row.id);
+    if (failedIds.length === 0) return;
+    this.channelBulkGrantPrincipalType = results.principalType;
+    if (results.principalType === 'group') this.channelBulkGrantGroupId = results.principalId;
+    else this.channelBulkGrantActorId = results.principalId;
+    this.channelBulkGrantCapacity = results.capacity;
+    this.channelBulkGrantChannelQuery = '';
+    this.channelBulkGrantSelectedChannelIds = failedIds;
+    return this.previewChannelBulkGrant();
   },
 
   get selectedChannelGrantPrincipalKey() {
@@ -2307,6 +2572,9 @@ export const channelsManagerMixin = {
       customSkipped: 0,
       failed: [],
     };
+    const resultRows = [];
+    this.channelBulkGrantResults = null;
+    const principalLabel = this.channelBulkGrantPrincipalLabel;
     try {
       const { workspaceId, baseUrl, appNpub } = resolveTowerPgWorkspaceContext(this);
       if (!workspaceId || !baseUrl) throw new Error('Flight Deck PG workspace is not connected');
@@ -2316,17 +2584,18 @@ export const channelsManagerMixin = {
         this.channelBulkGrantProgress = `${index + 1} / ${targetChannels.length}: ${channel.label}`;
         try {
           const result = await getTowerPgChannelGrants(workspaceId, channel.id, { baseUrl, appNpub });
-          const rows = aggregatePgChannelGrants(result?.grants || []);
-          const existing = rows.find((grant) => grant?.key === principalKey);
-          if (existing?.capacity === 'custom') {
+          const plan = planPgChannelBulkGrantChange(result?.grants || [], principalKey, capacity);
+          if (plan.action === 'custom') {
             summary.customSkipped += 1;
+            resultRows.push({ ...channel, outcome: 'custom', message: 'Custom permissions kept' });
             continue;
           }
-          if (existing?.capacity === capacity) {
+          if (plan.action === 'unchanged') {
             summary.unchanged += 1;
+            resultRows.push({ ...channel, outcome: 'unchanged', message: 'Already set' });
             continue;
           }
-          if (existing) {
+          if (plan.action === 'update') {
             await updateTowerPgChannelGrant(this,
               workspaceId,
               channel.id,
@@ -2336,6 +2605,11 @@ export const channelsManagerMixin = {
               { baseUrl, appNpub },
             );
             summary.updated += 1;
+            resultRows.push({
+              ...channel,
+              outcome: 'updated',
+              message: `Changed from ${this.getPgChannelGrantCapacityLabel(plan.currentCapacity)}`,
+            });
             continue;
           }
           await createTowerPgChannelGrant(this, workspaceId, channel.id, {
@@ -2344,13 +2618,13 @@ export const channelsManagerMixin = {
             ...buildPgChannelGrantMutationPayload(capacity),
           }, { baseUrl, appNpub });
           summary.created += 1;
+          resultRows.push({ ...channel, outcome: 'created', message: 'Access added' });
         } catch (error) {
-          summary.failed.push({
-            channel: channel.label,
-            message: error?.code === 'permission_denied'
-              ? describePgPermissionDenied(error, 'grant channel access')
-              : (error?.message || 'Failed to grant channel access'),
-          });
+          const message = error?.code === 'permission_denied'
+            ? describePgPermissionDenied(error, 'grant channel access')
+            : (error?.message || 'Failed to grant channel access');
+          summary.failed.push({ channel: channel.label, message });
+          resultRows.push({ ...channel, outcome: 'failed', message });
         }
       }
 
@@ -2372,6 +2646,9 @@ export const channelsManagerMixin = {
     } catch (error) {
       this.channelGrantsError = error?.message || 'Failed to apply channel access.';
     } finally {
+      if (resultRows.length > 0) {
+        this.channelBulkGrantResults = { principalType, principalId, principalLabel, capacity, rows: resultRows };
+      }
       this.channelBulkGrantBusy = false;
       this.channelGrantsSaving = false;
       this.channelBulkGrantProgress = '';
@@ -3187,6 +3464,45 @@ export const channelsManagerMixin = {
     this.resetEditGroupDraft();
   },
 
+  // Group dialogs are aria-modal overlays: move focus in when they open,
+  // keep Tab inside, and return focus to the opener when they close.
+  syncGroupDialogFocus(el, open) {
+    if (!el) return;
+    if (open && !el.__groupDialogOpen) {
+      el.__groupDialogOpen = true;
+      el.__groupDialogReturnFocus = el.ownerDocument?.activeElement || null;
+      requestAnimationFrame(() => {
+        if (!el.__groupDialogOpen) return;
+        const target = [...el.querySelectorAll('input:not([disabled]), button:not([disabled])')]
+          .find((item) => item.getClientRects().length && !item.classList.contains('modal-close'));
+        (target || el).focus();
+      });
+    } else if (!open && el.__groupDialogOpen) {
+      el.__groupDialogOpen = false;
+      const target = el.__groupDialogReturnFocus;
+      el.__groupDialogReturnFocus = null;
+      if (target?.isConnected && target.getClientRects().length) target.focus();
+    }
+  },
+
+  trapGroupDialogFocus(event) {
+    const el = event.currentTarget;
+    const items = [...el.querySelectorAll('button, input, select, textarea, a[href], [tabindex="0"]')]
+      .filter((item) => !item.disabled && item.getClientRects().length);
+    if (items.length === 0) {
+      event.preventDefault();
+      return;
+    }
+    const index = items.indexOf(el.ownerDocument.activeElement);
+    if (event.shiftKey && index <= 0) {
+      event.preventDefault();
+      items[items.length - 1].focus();
+    } else if (!event.shiftKey && (index === -1 || index === items.length - 1)) {
+      event.preventDefault();
+      items[0].focus();
+    }
+  },
+
   isGroupDeletePending(groupId) {
     return this.groupDeletePendingId === groupId;
   },
@@ -3889,17 +4205,22 @@ export const channelsManagerMixin = {
 
   async addPgWorkspaceMember() {
     if (!isTowerPgBackendMode()) return;
+    this.pgWorkspaceMemberAddNotice = '';
     if (!this.canAdminWorkspace) {
-      this.error = 'Only workspace admins can add members.';
+      this.pgWorkspaceMemberAddError = 'Only workspace admins can add members.';
       return;
     }
     const memberNpub = String(this.pgWorkspaceMemberNpub || '').trim();
     if (!memberNpub || !FULL_NPUB_PATTERN.test(memberNpub)) {
-      this.error = 'Enter a full valid npub.';
+      this.pgWorkspaceMemberAddError = 'Enter a full npub (starts with npub1, 63 characters).';
+      return;
+    }
+    if ((this.pgWorkspaceMembers || []).some((member) => member?.npub === memberNpub)) {
+      this.pgWorkspaceMemberAddError = `${this.getPgWorkspaceMemberLabel(memberNpub)} is already a member.`;
       return;
     }
     this.groupEditPending = true;
-    this.error = null;
+    this.pgWorkspaceMemberAddError = '';
     try {
       const { workspaceId, baseUrl, appNpub } = resolveTowerPgWorkspaceContext(this);
       if (!workspaceId || !baseUrl) throw new Error('Flight Deck PG workspace is not connected');
@@ -3916,12 +4237,24 @@ export const channelsManagerMixin = {
         });
       }
       this.pgWorkspaceMemberNpub = '';
+      this.pgWorkspaceMemberAddNotice = 'Member added. Give them access with a group or channel access.';
       this.scheduleGroupsRefresh({ force: true, minIntervalMs: 0 }, 'PG group write');
+      Promise.resolve()
+        .then(() => this.refreshTowerPgWorkspaceMembers?.({ force: true, limit: 200 }))
+        .catch(() => {});
     } catch (error) {
-      this.error = error?.message || 'Failed to add workspace member';
+      this.pgWorkspaceMemberAddError = error?.code === 'permission_denied'
+        ? describePgPermissionDenied(error, 'add workspace members')
+        : (error?.message || 'Failed to add workspace member');
     } finally {
       this.groupEditPending = false;
     }
+  },
+
+  togglePgWorkspaceMemberAdd(open = !this.pgWorkspaceMemberAddOpen) {
+    this.pgWorkspaceMemberAddOpen = Boolean(open);
+    this.pgWorkspaceMemberAddError = '';
+    if (!this.pgWorkspaceMemberAddOpen) this.pgWorkspaceMemberNpub = '';
   },
 
   async addPgGroupMember(groupId) {

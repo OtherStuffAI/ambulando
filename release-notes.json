@@ -3429,6 +3429,14 @@
       "notes": [
         "Scope Management now loads your personal scope order before the background sync service has initialized."
       ]
+    },
+    {
+      "buildNumber": 2312,
+      "label": "Clearer members, groups and channel access",
+      "notes": [
+        "Manage members and groups in separate tabs, search the roster and choose channel access explicitly.",
+        "Review existing access and permission reductions before applying changes; keep custom grants and report each channel outcome."
+      ]
     }
   ]
 }

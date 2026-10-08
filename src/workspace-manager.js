@@ -488,6 +488,7 @@ export const workspaceManagerMixin = {
 
   async prepareWorkspaceSharingSettings(options = {}) {
     if (!this.canAdminWorkspace) return;
+    if (!this.isTowerPgMode) this.sharingSection = 'groups';
     this.groupsLoading = true;
     this.groupsLoadError = null;
     try {
@@ -501,8 +502,9 @@ export const workspaceManagerMixin = {
         this.isTowerPgMode ? (this.refreshTowerPgWorkspaceMembers?.({ force: options.force === true, limit: 200 }) ?? Promise.resolve([])) : Promise.resolve([]),
         this.isTowerPgMode ? (this.refreshChannels?.() ?? Promise.resolve([])) : Promise.resolve([]),
       ]);
+      // Channel access starts with nothing selected; admins choose every channel explicitly.
       if (this.isTowerPgMode && typeof this.resetChannelBulkGrantDraft === 'function') {
-        this.resetChannelBulkGrantDraft({ selectAll: true });
+        this.resetChannelBulkGrantDraft();
       }
     } catch (error) {
       this.groupsLoadError = error?.message || 'Failed to load groups';

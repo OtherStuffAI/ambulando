@@ -8325,6 +8325,7 @@
               </div>
               <p class="settings-success" role="status" x-show="$store.chat.wappManagementNotice" x-text="$store.chat.wappManagementNotice"></p>
               <p class="error-text" role="alert" x-show="$store.chat.wappManagementError" x-text="$store.chat.wappManagementError"></p>
+              <p class="settings-empty-note" x-show="$store.chat.canAdminWorkspace">Workspace members, groups and channel access are managed in <a href="/settings" @click.prevent="$store.chat.openSettingsTab('sharing')">Groups &amp; Members</a>.</p>
               <div class="wapp-management-section-heading"><div><h3>WApp management</h3><p>Role <code>wapp_management</code> · Tower permission <code>wapp.manage</code></p></div></div>
               <div class="wapp-management-list" x-show="$store.chat.wappDelegations.length">
                 <template x-for="delegation in $store.chat.wappDelegations" :key="delegation.id">
@@ -9420,7 +9421,39 @@
           </div>
 
           <div class="settings-tab-content" x-show="$store.chat.canAdminWorkspace && $store.chat.settingsTab === 'sharing'">
-            <section class="settings-panel" x-show="$store.chat.isTowerPgMode" aria-label="Organisation data permissions">
+          <div class="access-settings" data-testid="groups-members-access">
+            <header class="access-settings-header">
+              <h2>Groups &amp; Members</h2>
+              <p x-text="$store.chat.isTowerPgMode ? 'Add people to this workspace, organise them into groups, then choose which channels each group or person can use.' : 'Organise people into groups to share documents and records.'"></p>
+            </header>
+
+            <div class="access-section-tabs" role="tablist" aria-label="Groups and members" x-show="$store.chat.isTowerPgMode">
+              <button type="button" role="tab" id="access-tab-members" data-section="members" aria-controls="access-panel-members"
+                :aria-selected="String($store.chat.sharingSection === 'members')" :tabindex="$store.chat.sharingSection === 'members' ? 0 : -1"
+                @click="$store.chat.setSharingSection('members')"
+                @keydown.arrow-right.prevent="$store.chat.focusSharingSectionTab($event, 1)" @keydown.arrow-left.prevent="$store.chat.focusSharingSectionTab($event, -1)"
+                @keydown.home.prevent="$store.chat.focusSharingSectionTab($event, 'first')" @keydown.end.prevent="$store.chat.focusSharingSectionTab($event, 'last')">
+                <span>Members</span><span class="access-badge" x-text="($store.chat.pgWorkspaceMembers || []).length"></span>
+              </button>
+              <button type="button" role="tab" id="access-tab-groups" data-section="groups" aria-controls="access-panel-groups"
+                :aria-selected="String($store.chat.sharingSection === 'groups')" :tabindex="$store.chat.sharingSection === 'groups' ? 0 : -1"
+                @click="$store.chat.setSharingSection('groups')"
+                @keydown.arrow-right.prevent="$store.chat.focusSharingSectionTab($event, 1)" @keydown.arrow-left.prevent="$store.chat.focusSharingSectionTab($event, -1)"
+                @keydown.home.prevent="$store.chat.focusSharingSectionTab($event, 'first')" @keydown.end.prevent="$store.chat.focusSharingSectionTab($event, 'last')">
+                <span>Groups</span><span class="access-badge" x-text="$store.chat.currentWorkspaceGroups.length"></span>
+              </button>
+              <button type="button" role="tab" id="access-tab-access" data-section="access" aria-controls="access-panel-access"
+                :aria-selected="String($store.chat.sharingSection === 'access')" :tabindex="$store.chat.sharingSection === 'access' ? 0 : -1"
+                @click="$store.chat.setSharingSection('access')"
+                @keydown.arrow-right.prevent="$store.chat.focusSharingSectionTab($event, 1)" @keydown.arrow-left.prevent="$store.chat.focusSharingSectionTab($event, -1)"
+                @keydown.home.prevent="$store.chat.focusSharingSectionTab($event, 'first')" @keydown.end.prevent="$store.chat.focusSharingSectionTab($event, 'last')">
+                <span>Channel access</span>
+              </button>
+            </div>
+
+            <p class="access-alert access-alert-error" role="alert" x-show="$store.chat.groupsLoadError" x-text="$store.chat.groupsLoadError"></p>
+
+            <section class="access-panel" x-show="$store.chat.isTowerPgMode && $store.chat.sharingSection === 'members'" aria-label="Organisation data permissions">
               <h3>Organisation data permissions</h3>
               <p>Grant direct access to shared organisation data for workspace members and agents. Group grants still apply; removing a direct grant does not remove inherited access.</p>
               <button type="button" class="btn" @click="$store.chat.loadOrgDataPermissions()" :disabled="$store.chat.orgDataPermissionsBusy">Reload permissions</button>
@@ -9428,7 +9461,7 @@
               <p role="alert" x-text="$store.chat.orgDataPermissionsError"></p>
               <p role="status" x-text="$store.chat.orgDataPermissionsNotice"></p>
               <template x-for="member in $store.chat.orgDataPermissionRows" :key="member.id">
-                <fieldset :disabled="$store.chat.orgDataPermissionsBusy" class="settings-panel">
+                <fieldset :disabled="$store.chat.orgDataPermissionsBusy" class="access-panel">
                   <legend x-text="member.display_name || member.npub"></legend>
                   <template x-for="permission in $store.chat.orgDataEditorPermissions" :key="permission">
                     <label><input type="checkbox" :value="permission" x-model="member.selected"><span x-text="permission"></span></label>
@@ -9438,164 +9471,118 @@
               </template>
             </section>
 
-          <section class="settings-panel" x-show="$store.chat.isTowerPgMode">
-            <div class="groups-header">
-              <div>
-                <h2>Workspace members</h2>
-                <p class="groups-subtitle">People with access to this PG workspace.</p>
-              </div>
-            </div>
-            <div class="scope-new-grid">
-              <div class="scope-field">
-                <label class="scope-field-label">Member npub</label>
-                <input class="new-group-input" type="text" x-model="$store.chat.pgWorkspaceMemberNpub" placeholder="npub1..." :disabled="$store.chat.groupActionsLocked" />
-              </div>
-            </div>
-            <div class="settings-actions">
-              <button type="button" class="btn-confirm" @click="$store.chat.addPgWorkspaceMember()" :disabled="$store.chat.groupActionsLocked || !$store.chat.pgWorkspaceMemberNpub">Add member</button>
-            </div>
-            <p class="groups-empty" x-show="$store.chat.groupsLoading">Loading members and groups…</p>
-            <p class="groups-empty" x-show="$store.chat.groupsLoadError" x-text="$store.chat.groupsLoadError"></p>
-            <p class="groups-empty" x-show="!$store.chat.groupsLoading && !$store.chat.groupsLoadError && ($store.chat.pgWorkspaceMembers || []).length === 0">No PG members loaded.</p>
-            <div class="group-card-members" x-show="($store.chat.pgWorkspaceMembers || []).length > 0">
-              <template x-for="member in ($store.chat.pgWorkspaceMembers || [])" :key="member.actor_id || member.npub">
-                <div class="group-member-row" x-init="$store.chat.resolveChatProfile(member.npub)">
-                  <button type="button" class="identity-avatar-button" @click.stop="$store.chat.openIdentityCard($event, member.npub)" :title="$store.chat.getSenderName(member.npub)">
-                    <template x-if="$store.chat.getSenderAvatar(member.npub)">
-                      <img class="group-member-avatar" :src="$store.chat.getSenderAvatar(member.npub)" alt="" @error="$store.chat.handleAvatarImageError($event)" />
-                    </template>
-                    <template x-if="!$store.chat.getSenderAvatar(member.npub)">
-                      <span class="group-member-avatar group-member-avatar-fallback" x-text="$store.chat.getInitials($store.chat.getSenderName(member.npub))"></span>
-                    </template>
-                  </button>
-                  <div class="group-member-info">
-                    <template x-if="$store.chat.pgWorkspaceMemberProfileEditingActorId !== (member.actor_id || member.id)">
-                      <div>
-                        <span x-text="member.display_name || $store.chat.getSenderName(member.npub)"></span>
-                        <small x-text="'User · ' + $store.chat.getSenderSecondaryLabel(member.npub)"></small>
-                      </div>
-                    </template>
-                    <template x-if="$store.chat.pgWorkspaceMemberProfileEditingActorId === (member.actor_id || member.id)">
-                      <div>
-                        <input class="new-group-input" type="text" x-model="$store.chat.pgWorkspaceMemberProfileDraft" @keydown.enter.prevent="$store.chat.savePgWorkspaceMemberProfile(member)" @keydown.escape.prevent="$store.chat.cancelPgWorkspaceMemberProfileEdit()" :disabled="$store.chat.pgWorkspaceMemberProfileSaving" aria-label="Workspace member display name" />
-                        <small class="channel-access-error" x-show="$store.chat.pgWorkspaceMemberProfileError" x-text="$store.chat.pgWorkspaceMemberProfileError"></small>
-                      </div>
-                    </template>
-                  </div>
-                  <button type="button" class="btn-secondary btn-compact" x-show="$store.chat.pgWorkspaceMemberProfileEditingActorId !== (member.actor_id || member.id) && $store.chat.canEditPgWorkspaceMemberProfile(member)" @click="$store.chat.startPgWorkspaceMemberProfileEdit(member)">Edit name</button>
-                  <div class="settings-actions" x-show="$store.chat.pgWorkspaceMemberProfileEditingActorId === (member.actor_id || member.id)">
-                    <button type="button" class="btn-secondary btn-compact" @click="$store.chat.cancelPgWorkspaceMemberProfileEdit()" :disabled="$store.chat.pgWorkspaceMemberProfileSaving">Cancel</button>
-                    <button type="button" class="btn-confirm btn-compact" @click="$store.chat.savePgWorkspaceMemberProfile(member)" :disabled="$store.chat.pgWorkspaceMemberProfileSaving" x-text="$store.chat.pgWorkspaceMemberProfileSaving ? 'Saving…' : 'Save'"></button>
-                  </div>
-                </div>
-              </template>
-            </div>
-          </section>
-
-          <section class="settings-panel channel-bulk-grant-settings-panel" x-show="$store.chat.isTowerPgMode">
-            <div class="groups-header">
-              <div>
-                <h2>Channel access</h2>
-                <p class="groups-subtitle">Apply one group or user permission across multiple channels.</p>
-              </div>
-              <span class="channel-bulk-grant-count" x-text="`${$store.chat.channelBulkGrantSelectedCount} selected`"></span>
-            </div>
-
-            <div class="channel-bulk-grant-panel">
-              <div class="channel-bulk-grant-header">
+            <!-- Members -->
+            <section class="access-panel" id="access-panel-members" role="tabpanel" aria-labelledby="access-tab-members" x-show="$store.chat.isTowerPgMode && $store.chat.sharingSection === 'members'">
+              <div class="access-panel-header">
                 <div>
-                  <h5>Bulk channel permissions</h5>
-                  <p class="channel-grant-draft-help">Choose channels, then add or update the same access rule on each one.</p>
+                  <h3>Members</h3>
+                  <p>People and agents in this workspace. What each person can open is set by their groups and channel access.</p>
                 </div>
-              </div>
-              <div class="channel-grant-grid channel-bulk-grant-grid">
-                <select class="new-group-input" x-model="$store.chat.channelBulkGrantPrincipalType" :disabled="$store.chat.channelBulkGrantBusy">
-                  <option value="group">Group</option>
-                  <option value="actor">User</option>
-                </select>
-
-                <select class="new-group-input" x-show="$store.chat.channelBulkGrantPrincipalType === 'actor'" x-model="$store.chat.channelBulkGrantActorId" :disabled="$store.chat.channelBulkGrantBusy || $store.chat.pgChannelGrantActorOptions.length === 0">
-                  <option value="">Select user...</option>
-                  <template x-for="member in $store.chat.pgChannelGrantActorOptions" :key="member.actorId">
-                    <option :value="member.actorId" x-text="member.label"></option>
-                  </template>
-                </select>
-
-                <select class="new-group-input" x-show="$store.chat.channelBulkGrantPrincipalType === 'group'" x-model="$store.chat.channelBulkGrantGroupId" :disabled="$store.chat.channelBulkGrantBusy || $store.chat.pgChannelGrantGroupOptions.length === 0">
-                  <option value="">Select group...</option>
-                  <template x-for="group in $store.chat.pgChannelGrantGroupOptions" :key="group.groupId">
-                    <option :value="group.groupId" x-text="group.label"></option>
-                  </template>
-                </select>
-
-                <select class="new-group-input" x-model="$store.chat.channelBulkGrantCapacity" :disabled="$store.chat.channelBulkGrantBusy">
-                  <template x-for="capacity in $store.chat.pgChannelGrantCapacityOptions" :key="capacity.value">
-                    <option :value="capacity.value" x-text="capacity.label"></option>
-                  </template>
-                </select>
+                <button type="button" id="access-member-add-toggle" class="btn-primary btn-compact" x-show="!$store.chat.pgWorkspaceMemberAddOpen" @click="$store.chat.togglePgWorkspaceMemberAdd(true)" :disabled="$store.chat.groupActionsLocked">Add member</button>
               </div>
 
-              <div class="channel-bulk-grant-actions">
-                <button type="button" class="btn-secondary btn-compact" @click="$store.chat.selectAllChannelBulkGrantChannels()" :disabled="$store.chat.channelBulkGrantBusy || $store.chat.pgChannelBulkGrantChannelOptions.length === 0">Select all</button>
-                <button type="button" class="btn-secondary btn-compact" @click="$store.chat.clearChannelBulkGrantChannels()" :disabled="$store.chat.channelBulkGrantBusy || $store.chat.channelBulkGrantSelectedCount === 0">Clear</button>
-                <button
-                  type="button"
-                  class="btn-confirm"
-                  @click="$store.chat.applyChannelBulkGrant()"
-                  :disabled="!$store.chat.canApplyChannelBulkGrant"
-                  x-text="$store.chat.channelBulkGrantBusy ? 'Applying...' : 'Apply to selected'"
-                ></button>
+              <form class="access-card access-inline-form" x-show="$store.chat.pgWorkspaceMemberAddOpen"
+                x-effect="const open = $store.chat.pgWorkspaceMemberAddOpen; if (open !== $el.__wasOpen) { const opened = open, initial = $el.__wasOpen === undefined; $el.__wasOpen = open; if (!initial) requestAnimationFrame(() => (opened ? $el.querySelector('#access-member-npub') : document.getElementById('access-member-add-toggle'))?.focus()); }"
+                @submit.prevent="$store.chat.addPgWorkspaceMember()" @keydown.escape.prevent="$store.chat.togglePgWorkspaceMemberAdd(false)">
+                <label class="access-label" for="access-member-npub">Add a member by npub</label>
+                <div class="access-inline-row">
+                  <input id="access-member-npub" class="new-group-input" type="text" autocomplete="off" spellcheck="false" placeholder="npub1…"
+                    x-model="$store.chat.pgWorkspaceMemberNpub" @input="$store.chat.pgWorkspaceMemberAddError = ''"
+                    :aria-invalid="String(Boolean($store.chat.pgWorkspaceMemberAddError))" aria-describedby="access-member-npub-help"
+                    :disabled="$store.chat.groupActionsLocked" />
+                  <button type="submit" class="btn-primary" :disabled="$store.chat.groupActionsLocked || !$store.chat.pgWorkspaceMemberNpub" x-text="$store.chat.groupEditPending ? 'Adding…' : 'Add member'"></button>
+                  <button type="button" class="btn-secondary" @click="$store.chat.togglePgWorkspaceMemberAdd(false)" :disabled="$store.chat.groupEditPending">Cancel</button>
+                </div>
+                <p id="access-member-npub-help" class="access-help">They join as a member. Add them to a group or give channel access so they can see channels.</p>
+                <p class="access-alert access-alert-error" role="alert" x-show="$store.chat.pgWorkspaceMemberAddError" x-text="$store.chat.pgWorkspaceMemberAddError"></p>
+              </form>
+              <p class="access-alert access-alert-success" role="status" x-show="$store.chat.pgWorkspaceMemberAddNotice" x-text="$store.chat.pgWorkspaceMemberAddNotice"></p>
+
+              <div class="access-toolbar">
+                <label class="access-search">
+                  <svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+                  <span class="sr-only">Search members</span>
+                  <input type="search" class="new-group-input" placeholder="Search by name, npub or role" x-model="$store.chat.pgWorkspaceMemberQuery" />
+                </label>
+                <span class="access-muted" aria-live="polite" x-text="$store.chat.pgWorkspaceMemberQuery ? `${$store.chat.filteredPgWorkspaceMembers.length} of ${($store.chat.pgWorkspaceMembers || []).length} members` : `${($store.chat.pgWorkspaceMembers || []).length} members`"></span>
               </div>
 
-              <div class="channel-bulk-grant-list" x-show="$store.chat.pgChannelBulkGrantChannelOptions.length > 0">
-                <template x-for="channel in $store.chat.pgChannelBulkGrantChannelOptions" :key="channel.id">
-                  <label class="channel-bulk-grant-channel">
-                    <input
-                      type="checkbox"
-                      :checked="$store.chat.isChannelSelectedForBulkGrant(channel.id)"
-                      @change="$store.chat.setChannelBulkGrantSelection(channel.id, $event.target.checked)"
-                      :disabled="$store.chat.channelBulkGrantBusy"
-                    />
-                    <span>
-                      <strong x-text="channel.label"></strong>
-                      <small x-text="channel.scopeLabel"></small>
-                    </span>
-                  </label>
+              <p class="access-empty" role="status" x-show="$store.chat.groupsLoading && ($store.chat.pgWorkspaceMembers || []).length === 0">Loading members and groups…</p>
+              <p class="access-empty" x-show="!$store.chat.groupsLoading && !$store.chat.groupsLoadError && ($store.chat.pgWorkspaceMembers || []).length === 0">No members yet. Add someone by npub to get started.</p>
+              <div class="access-empty" x-show="($store.chat.pgWorkspaceMembers || []).length > 0 && $store.chat.filteredPgWorkspaceMembers.length === 0">
+                <span x-text="`No members match “${$store.chat.pgWorkspaceMemberQuery}”.`"></span>
+                <button type="button" class="btn-secondary btn-compact" @click="$store.chat.pgWorkspaceMemberQuery = ''">Clear search</button>
+              </div>
+
+              <ul class="access-member-list" aria-label="Workspace members" x-show="$store.chat.filteredPgWorkspaceMembers.length > 0">
+                <template x-for="member in $store.chat.filteredPgWorkspaceMembers" :key="member.actor_id || member.npub">
+                  <li class="access-member-row" x-init="$store.chat.resolveChatProfile(member.npub)">
+                    <button type="button" class="identity-avatar-button" @click.stop="$store.chat.openIdentityCard($event, member.npub)" :aria-label="`Open profile for ${member.display_name || $store.chat.getSenderName(member.npub)}`">
+                      <template x-if="$store.chat.getSenderAvatar(member.npub)">
+                        <img class="group-member-avatar" :src="$store.chat.getSenderAvatar(member.npub)" alt="" @error="$store.chat.handleAvatarImageError($event)" />
+                      </template>
+                      <template x-if="!$store.chat.getSenderAvatar(member.npub)">
+                        <span class="group-member-avatar group-member-avatar-fallback" x-text="$store.chat.getInitials(member.display_name || $store.chat.getSenderName(member.npub))"></span>
+                      </template>
+                    </button>
+                    <div class="access-member-main">
+                      <template x-if="$store.chat.pgWorkspaceMemberProfileEditingActorId !== (member.actor_id || member.id)">
+                        <div>
+                          <div class="access-member-identity">
+                            <span class="access-member-name" x-text="member.display_name || $store.chat.getSenderName(member.npub)"></span>
+                            <span class="access-badge access-badge-info" x-show="(member.actor_id || member.id) === $store.chat.currentPgActorId">You</span>
+                            <span class="access-badge access-badge-strong" x-show="member.role && member.role !== 'member'" x-text="String(member.role || '').charAt(0).toUpperCase() + String(member.role || '').slice(1)"></span>
+                            <span class="access-badge" x-show="member.kind === 'agent'">Agent</span>
+                          </div>
+                          <div class="access-member-meta">
+                            <code :title="member.npub" x-show="(member.display_name || $store.chat.getSenderName(member.npub)) !== $store.chat.getShortNpub(member.npub)" x-text="$store.chat.getShortNpub(member.npub)"></code>
+                            <span x-text="$store.chat.getPgWorkspaceMemberGroupNames(member.npub).length ? 'Groups: ' + $store.chat.getPgWorkspaceMemberGroupNames(member.npub).join(', ') : 'Not in any group'"></span>
+                          </div>
+                        </div>
+                      </template>
+                      <template x-if="$store.chat.pgWorkspaceMemberProfileEditingActorId === (member.actor_id || member.id)">
+                        <form class="access-inline-row" @submit.prevent="$store.chat.savePgWorkspaceMemberProfile(member)" @keydown.escape.prevent="$store.chat.cancelPgWorkspaceMemberProfileEdit()">
+                          <input class="new-group-input" type="text" x-init="$nextTick(() => $el.focus())" x-model="$store.chat.pgWorkspaceMemberProfileDraft" :disabled="$store.chat.pgWorkspaceMemberProfileSaving" aria-label="Workspace member display name" />
+                          <button type="submit" class="btn-primary btn-compact" :disabled="$store.chat.pgWorkspaceMemberProfileSaving" x-text="$store.chat.pgWorkspaceMemberProfileSaving ? 'Saving…' : 'Save'"></button>
+                          <button type="button" class="btn-secondary btn-compact" @click="$store.chat.cancelPgWorkspaceMemberProfileEdit()" :disabled="$store.chat.pgWorkspaceMemberProfileSaving">Cancel</button>
+                          <p class="access-alert access-alert-error" role="alert" x-show="$store.chat.pgWorkspaceMemberProfileError" x-text="$store.chat.pgWorkspaceMemberProfileError"></p>
+                        </form>
+                      </template>
+                    </div>
+                    <button type="button" class="btn-secondary btn-compact access-row-action"
+                      x-show="$store.chat.pgWorkspaceMemberProfileEditingActorId !== (member.actor_id || member.id) && $store.chat.canEditPgWorkspaceMemberProfile(member)"
+                      :aria-label="`Rename ${member.display_name || $store.chat.getSenderName(member.npub)}`"
+                      @click="$store.chat.startPgWorkspaceMemberProfileEdit(member)">Rename</button>
+                  </li>
                 </template>
+              </ul>
+            </section>
+
+            <!-- Groups -->
+            <section class="access-panel" id="access-panel-groups" role="tabpanel" aria-labelledby="access-tab-groups" x-show="!$store.chat.isTowerPgMode || $store.chat.sharingSection === 'groups'">
+              <div class="access-panel-header">
+                <div>
+                  <h3>Groups</h3>
+                  <p x-text="$store.chat.isTowerPgMode ? 'Bundle people so you can give them channel access together. A nested group adds all of its members to the parent group.' : 'Share targets for documents and records.'"></p>
+                </div>
+                <button type="button" class="btn-primary btn-compact" @click="$store.chat.openNewGroupModal()" :disabled="$store.chat.groupActionsLocked">New group</button>
               </div>
-              <p class="groups-empty" x-show="!$store.chat.groupsLoading && $store.chat.pgChannelBulkGrantChannelOptions.length === 0">No channels loaded yet.</p>
-              <p class="channel-grant-draft-help" x-show="$store.chat.channelBulkGrantProgress" x-text="$store.chat.channelBulkGrantProgress"></p>
-            </div>
-            <p class="settings-success" x-show="$store.chat.channelGrantsNotice" x-text="$store.chat.channelGrantsNotice"></p>
-            <p class="groups-subtitle channel-access-error" x-show="$store.chat.channelGrantsError" x-text="$store.chat.channelGrantsError"></p>
-          </section>
 
-          <section class="settings-panel">
-            <div class="groups-header">
-              <div>
-                <h2>Groups</h2>
-                <p class="groups-subtitle" x-text="$store.chat.isTowerPgMode ? 'PG principals for workspace and channel access.' : 'Share targets for documents and records.'"></p>
-              </div>
-              <button type="button" class="groups-new-btn" @click="$store.chat.openNewGroupModal()" :disabled="$store.chat.groupActionsLocked">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
-                New group
-              </button>
-            </div>
+              <p class="access-empty" role="status" x-show="$store.chat.groupsLoading">Loading groups…</p>
+              <p class="access-empty" x-show="!$store.chat.groupsLoading && !$store.chat.groupsLoadError && $store.chat.currentWorkspaceGroups.length === 0">No groups yet. Create one to start sharing.</p>
 
-            <p class="groups-empty" x-show="$store.chat.groupsLoading">Loading groups…</p>
-            <p class="groups-empty" x-show="$store.chat.groupsLoadError" x-text="$store.chat.groupsLoadError"></p>
-            <p class="groups-empty" x-show="!$store.chat.groupsLoading && !$store.chat.groupsLoadError && $store.chat.currentWorkspaceGroups.length === 0">No groups yet. Create one to start sharing.</p>
-
-            <ul class="groups-list" x-show="$store.chat.currentWorkspaceGroups.length > 0">
-              <template x-for="group in $store.chat.currentWorkspaceGroups" :key="group.group_id">
-                <li class="group-card">
-                  <div class="group-card-header">
-                    <h3 class="group-card-name" x-text="group.name || 'Untitled group'"></h3>
-                    <div class="group-card-meta">
-                      <span class="group-member-count" x-text="(group.member_npubs || []).length + ' member' + ((group.member_npubs || []).length !== 1 ? 's' : '')"></span>
+              <ul class="access-group-list" x-show="$store.chat.currentWorkspaceGroups.length > 0">
+                <template x-for="group in $store.chat.currentWorkspaceGroups" :key="group.group_id">
+                  <li class="access-card access-group-card">
+                    <div class="access-group-header">
+                      <div class="access-group-title">
+                        <h4 x-text="group.name || 'Untitled group'"></h4>
+                        <span class="access-badge access-badge-strong" x-show="group.group_kind === 'workspace_admin'">Admins</span>
+                        <span class="access-muted" x-text="(group.member_npubs || []).length + ' member' + ((group.member_npubs || []).length !== 1 ? 's' : '') + ((group.effective_member_npubs || []).length > (group.member_npubs || []).length ? ` · ${(group.effective_member_npubs || []).length} including nested` : '')"></span>
+                      </div>
                       <details class="group-actions-menu">
-                        <summary title="Group options" :class="{ 'is-disabled': $store.chat.groupActionsLocked }" @click="$store.chat.groupActionsLocked && $event.preventDefault()">
-                          <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="12" cy="19" r="1.8"/></svg>
+                        <summary :aria-label="`Options for ${group.name || 'Untitled group'}`" :class="{ 'is-disabled': $store.chat.groupActionsLocked }" @click="$store.chat.groupActionsLocked && $event.preventDefault()">
+                          <svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="12" cy="19" r="1.8"/></svg>
                         </summary>
                         <div class="group-actions-popover">
                           <button type="button" class="group-action-item" :disabled="$store.chat.groupActionsLocked" @click="$event.currentTarget.closest('details')?.removeAttribute('open'); $store.chat.openEditGroupModal(group.group_id)">Edit group</button>
@@ -9603,129 +9590,300 @@
                         </div>
                       </details>
                     </div>
-                  </div>
-                  <div class="group-card-members">
-                    <template x-for="memberNpub in (group.member_npubs || [])" :key="memberNpub">
-                      <div class="group-member-row" x-init="$store.chat.resolveChatProfile(memberNpub)">
-                        <button type="button" class="identity-avatar-button" @click.stop="$store.chat.openIdentityCard($event, memberNpub)" :title="$store.chat.getSenderName(memberNpub)">
-                          <template x-if="$store.chat.getSenderAvatar(memberNpub)">
-                            <img class="group-member-avatar" :src="$store.chat.getSenderAvatar(memberNpub)" alt="" @error="$store.chat.handleAvatarImageError($event)" />
-                          </template>
-                          <template x-if="!$store.chat.getSenderAvatar(memberNpub)">
-                            <span class="group-member-avatar group-member-avatar-fallback" x-text="$store.chat.getInitials($store.chat.getSenderName(memberNpub))"></span>
-                          </template>
-                        </button>
-                        <div class="group-member-info">
-                          <span x-text="$store.chat.getSenderName(memberNpub)"></span>
-                          <small x-text="$store.chat.getSenderIdentity(memberNpub)"></small>
+
+                    <ul class="access-chip-list" :aria-label="`Members of ${group.name || 'Untitled group'}`">
+                      <template x-for="memberNpub in (group.member_npubs || [])" :key="memberNpub">
+                        <li class="access-chip" x-init="$store.chat.resolveChatProfile(memberNpub)">
+                          <button type="button" class="identity-avatar-button" @click.stop="$store.chat.openIdentityCard($event, memberNpub)" :aria-label="`Open profile for ${$store.chat.getSenderName(memberNpub)}`">
+                            <template x-if="$store.chat.getSenderAvatar(memberNpub)">
+                              <img class="access-chip-avatar" :src="$store.chat.getSenderAvatar(memberNpub)" alt="" @error="$store.chat.handleAvatarImageError($event)" />
+                            </template>
+                            <template x-if="!$store.chat.getSenderAvatar(memberNpub)">
+                              <span class="access-chip-avatar group-member-avatar-fallback" x-text="$store.chat.getInitials($store.chat.getSenderName(memberNpub))"></span>
+                            </template>
+                          </button>
+                          <span x-text="$store.chat.getSenderName(memberNpub)" :title="$store.chat.getSenderIdentity(memberNpub)"></span>
+                        </li>
+                      </template>
+                      <li class="access-muted" x-show="(group.member_npubs || []).length === 0">No direct members</li>
+                    </ul>
+
+                    <template x-if="$store.chat.isTowerPgMode">
+                      <div class="access-group-pg">
+                        <div class="access-group-nested">
+                          <span class="access-label">Nested groups</span>
+                          <ul class="access-chip-list" x-show="(group.child_group_ids || []).length > 0">
+                            <template x-for="childGroupId in (group.child_group_ids || [])" :key="`${group.group_id}-child-${childGroupId}`">
+                              <li class="access-chip">
+                                <span x-text="$store.chat.getPgGroupLabel(childGroupId)"></span>
+                                <button type="button" class="access-chip-remove" :aria-label="`Remove nested group ${$store.chat.getPgGroupLabel(childGroupId)} from ${group.name || 'Untitled group'}`" @click="$store.chat.removePgChildGroup(group.group_id, childGroupId)" :disabled="$store.chat.groupActionsLocked">&times;</button>
+                              </li>
+                            </template>
+                          </ul>
+                          <span class="access-muted" x-show="(group.child_group_ids || []).length === 0">None</span>
+                        </div>
+                        <div class="access-group-nested" x-show="(group.effective_member_npubs || []).length > (group.member_npubs || []).length">
+                          <span class="access-label">Effective members</span>
+                          <span class="access-muted" x-text="(group.effective_member_npubs || []).map((memberNpub) => $store.chat.getSenderName(memberNpub)).join(', ')"></span>
+                        </div>
+                        <div class="access-group-add">
+                          <div class="access-inline-row">
+                            <label class="sr-only" :for="`access-group-member-${group.group_id}`" x-text="`Add a workspace member to ${group.name || 'Untitled group'}`"></label>
+                            <select class="new-group-input" :id="`access-group-member-${group.group_id}`" :value="$store.chat.pgGroupMemberDrafts[group.group_id] || ''" @change="$store.chat.handlePgGroupMemberSelection(group.group_id, $event.target.value)" :disabled="$store.chat.groupActionsLocked || $store.chat.getPgGroupMemberCandidates(group.group_id).length === 0">
+                              <option value="" x-text="$store.chat.getPgGroupMemberCandidates(group.group_id).length === 0 ? 'Everyone is already in this group' : 'Add member…'"></option>
+                              <template x-for="candidate in $store.chat.getPgGroupMemberCandidates(group.group_id)" :key="`${group.group_id}-member-${candidate.npub}`">
+                                <option :value="candidate.npub" x-text="candidate.label"></option>
+                              </template>
+                            </select>
+                            <button type="button" class="btn-secondary" @click="$store.chat.addPgGroupMember(group.group_id)" :disabled="$store.chat.groupActionsLocked || !($store.chat.pgGroupMemberDrafts[group.group_id] || '')">Add</button>
+                          </div>
+                          <div class="access-inline-row">
+                            <label class="sr-only" :for="`access-group-child-${group.group_id}`" x-text="`Nest another group inside ${group.name || 'Untitled group'}`"></label>
+                            <select class="new-group-input" :id="`access-group-child-${group.group_id}`" :value="$store.chat.pgChildGroupDrafts[group.group_id] || ''" @change="$store.chat.handlePgChildGroupSelection(group.group_id, $event.target.value)" :disabled="$store.chat.groupActionsLocked || $store.chat.getPgChildGroupCandidates(group.group_id).length === 0">
+                              <option value="">Nest a group…</option>
+                              <template x-for="candidate in $store.chat.getPgChildGroupCandidates(group.group_id)" :key="`${group.group_id}-candidate-${candidate.group_id}`">
+                                <option :value="candidate.group_id" x-text="candidate.name || 'Untitled group'"></option>
+                              </template>
+                            </select>
+                            <button type="button" class="btn-secondary" @click="$store.chat.addPgChildGroup(group.group_id)" :disabled="$store.chat.groupActionsLocked || !($store.chat.pgChildGroupDrafts[group.group_id] || '')">Nest</button>
+                          </div>
                         </div>
                       </div>
                     </template>
-	                  </div>
-	                  <template x-if="$store.chat.isTowerPgMode">
-	                    <div class="group-card-members">
-	                      <div class="scope-field">
-	                        <label class="scope-field-label">Add workspace member</label>
-	                        <div style="display: flex; gap: 0.5rem; align-items: center;">
-	                          <select class="new-group-input" :value="$store.chat.pgGroupMemberDrafts[group.group_id] || ''" @change="$store.chat.handlePgGroupMemberSelection(group.group_id, $event.target.value)" :disabled="$store.chat.groupActionsLocked || $store.chat.getPgGroupMemberCandidates(group.group_id).length === 0">
-	                            <option value="" x-text="$store.chat.getPgGroupMemberCandidates(group.group_id).length === 0 ? 'No workspace members available…' : 'Select member…'"></option>
-	                            <template x-for="candidate in $store.chat.getPgGroupMemberCandidates(group.group_id)" :key="`${group.group_id}-member-${candidate.npub}`">
-	                              <option :value="candidate.npub" x-text="candidate.label"></option>
-	                            </template>
-	                          </select>
-	                          <button type="button" class="btn-confirm" @click="$store.chat.addPgGroupMember(group.group_id)" :disabled="$store.chat.groupActionsLocked || !($store.chat.pgGroupMemberDrafts[group.group_id] || '')">Add</button>
-	                        </div>
-	                      </div>
-	                      <div class="scope-field">
-	                        <label class="scope-field-label">Nested groups</label>
-                        <div class="scope-groups-list" x-show="(group.child_group_ids || []).length > 0">
-                          <template x-for="childGroupId in (group.child_group_ids || [])" :key="`${group.group_id}-child-${childGroupId}`">
-                            <div class="scope-group-chip">
-                              <div>
-                                <span class="new-channel-profile-name" x-text="$store.chat.getPgGroupLabel(childGroupId)"></span>
-                                <small>Nested group</small>
-                              </div>
-                              <button type="button" class="task-inline-clear-btn" @click="$store.chat.removePgChildGroup(group.group_id, childGroupId)" :disabled="$store.chat.groupActionsLocked">Remove</button>
-                            </div>
-                          </template>
-                        </div>
-                        <div style="display: flex; gap: 0.5rem; align-items: center;">
-                          <select class="new-group-input" :value="$store.chat.pgChildGroupDrafts[group.group_id] || ''" @change="$store.chat.handlePgChildGroupSelection(group.group_id, $event.target.value)" :disabled="$store.chat.groupActionsLocked">
-                            <option value="">Select group…</option>
-                            <template x-for="candidate in $store.chat.getPgChildGroupCandidates(group.group_id)" :key="`${group.group_id}-candidate-${candidate.group_id}`">
-                              <option :value="candidate.group_id" x-text="candidate.name || 'Untitled group'"></option>
-                            </template>
-                          </select>
-                          <button type="button" class="btn-confirm" @click="$store.chat.addPgChildGroup(group.group_id)" :disabled="$store.chat.groupActionsLocked || !($store.chat.pgChildGroupDrafts[group.group_id] || '')">Nest</button>
-                        </div>
-                      </div>
-                      <div class="scope-field" x-show="(group.effective_member_npubs || []).length > (group.member_npubs || []).length">
-                        <label class="scope-field-label">Effective members</label>
-                        <div class="scope-groups-list">
-                          <template x-for="memberNpub in (group.effective_member_npubs || [])" :key="`${group.group_id}-effective-${memberNpub}`">
-                            <span class="scope-group-chip">
-                              <span class="new-channel-profile-name" x-text="$store.chat.getSenderName(memberNpub)"></span>
-                            </span>
-                          </template>
-                        </div>
-                      </div>
-                    </div>
-                  </template>
-                </li>
-              </template>
-            </ul>
-          </section>
+                  </li>
+                </template>
+              </ul>
 
-          <section class="settings-panel" style="margin-top: 1.5rem;">
-            <h2 x-text="$store.chat.isTowerPgMode ? 'Add member to group' : 'Invite via link'"></h2>
-            <p class="groups-subtitle" x-text="$store.chat.isTowerPgMode ? 'Add an npub to this PG workspace and group.' : 'Add someone to a group and generate a connection link they can use to join this workspace.'"></p>
+              <form class="access-card access-invite" @submit.prevent="$store.chat.generateShareLink()">
+                <div>
+                  <h4 x-text="$store.chat.isTowerPgMode ? 'Add someone new to a group' : 'Invite via link'"></h4>
+                  <p class="access-help" x-text="$store.chat.isTowerPgMode ? 'Adds their npub to this workspace and the chosen group in one step.' : 'Add someone to a group and generate a connection link they can use to join this workspace.'"></p>
+                </div>
+                <div class="access-invite-grid">
+                  <div>
+                    <label class="access-label" for="access-invite-npub">Their npub</label>
+                    <input id="access-invite-npub" class="new-group-input" type="text" autocomplete="off" spellcheck="false" x-model="$store.chat.shareInviteNpub" placeholder="npub1…" :disabled="$store.chat.shareInvitePending" />
+                  </div>
+                  <div>
+                    <label class="access-label" for="access-invite-group">Group</label>
+                    <select id="access-invite-group" class="new-group-input" x-model="$store.chat.shareInviteGroupId" :disabled="$store.chat.shareInvitePending || $store.chat.currentWorkspaceGroups.length === 0">
+                      <option value="">Select a group…</option>
+                      <template x-for="group in $store.chat.currentWorkspaceGroups" :key="group.group_id">
+                        <option :value="group.group_id" x-text="group.name || 'Untitled group'"></option>
+                      </template>
+                    </select>
+                  </div>
+                  <div class="access-invite-actions">
+                    <button type="submit" class="btn-primary"
+                      :disabled="$store.chat.shareInvitePending || !$store.chat.shareInviteNpub || !$store.chat.shareInviteGroupId"
+                      x-text="$store.chat.shareInvitePending ? ($store.chat.isTowerPgMode ? 'Adding…' : 'Generating…') : ($store.chat.isTowerPgMode ? 'Add to group' : 'Generate link')"></button>
+                    <button type="button" class="btn-secondary" x-show="$store.chat.shareInviteUrl" @click="$store.chat.resetShareInvite()">Clear</button>
+                  </div>
+                </div>
+                <p class="access-help" x-show="!$store.chat.groupsLoading && !$store.chat.groupsLoadError && $store.chat.currentWorkspaceGroups.length === 0">Create a group first.</p>
+                <p class="access-alert access-alert-error" role="alert" x-show="$store.chat.shareInviteError" x-text="$store.chat.shareInviteError"></p>
+                <p class="access-alert access-alert-success" role="status" x-show="$store.chat.isTowerPgMode && $store.chat.shareInviteUrl" x-text="$store.chat.shareInviteUrl"></p>
+                <div class="access-inline-row" x-show="!$store.chat.isTowerPgMode && $store.chat.shareInviteUrl">
+                  <label class="sr-only" for="access-invite-link">Share link</label>
+                  <input id="access-invite-link" class="new-group-input" type="text" :value="$store.chat.shareInviteUrl" readonly @click="$event.target.select()" />
+                  <button type="button" class="btn-primary" @click="$store.chat.copyShareLink()" x-text="$store.chat.shareInviteCopied ? 'Copied!' : 'Copy'"></button>
+                </div>
+              </form>
+            </section>
 
-            <label class="docs-field-label">Invitee npub</label>
-            <input class="new-group-input" type="text" x-model="$store.chat.shareInviteNpub"
-              placeholder="npub1..." :disabled="$store.chat.shareInvitePending" />
-
-            <label class="docs-field-label" style="margin-top: 0.75rem;">Group</label>
-            <select class="new-group-input" x-model="$store.chat.shareInviteGroupId" :disabled="$store.chat.shareInvitePending || $store.chat.currentWorkspaceGroups.length === 0">
-              <option value="">Select a group…</option>
-              <template x-for="group in $store.chat.currentWorkspaceGroups" :key="group.group_id">
-                <option :value="group.group_id" x-text="group.name || 'Untitled group'"></option>
-              </template>
-            </select>
-
-            <p class="groups-empty" x-show="!$store.chat.groupsLoading && !$store.chat.groupsLoadError && $store.chat.currentWorkspaceGroups.length === 0">Create a group first.</p>
-
-            <div style="margin-top: 1rem; display: flex; gap: 0.5rem; align-items: center;">
-              <button type="button" class="btn-confirm"
-                @click="$store.chat.generateShareLink()"
-                :disabled="$store.chat.shareInvitePending || !$store.chat.shareInviteNpub || !$store.chat.shareInviteGroupId"
-                x-text="$store.chat.shareInvitePending ? ($store.chat.isTowerPgMode ? 'Adding…' : 'Generating…') : ($store.chat.isTowerPgMode ? 'Add to group' : 'Generate link')"></button>
-              <button type="button" class="btn-cancel" x-show="$store.chat.shareInviteUrl"
-                @click="$store.chat.resetShareInvite()">Clear</button>
-            </div>
-
-            <p class="groups-subtitle" style="color: var(--error-color, #e53e3e); margin-top: 0.5rem;"
-              x-show="$store.chat.shareInviteError" x-text="$store.chat.shareInviteError"></p>
-
-            <div x-show="$store.chat.shareInviteUrl" style="margin-top: 1rem;">
-              <label class="docs-field-label" x-text="$store.chat.isTowerPgMode ? 'Status' : 'Share link'"></label>
-              <div style="display: flex; gap: 0.5rem; align-items: stretch;">
-                <input class="new-group-input" type="text" :value="$store.chat.shareInviteUrl" readonly
-                  style="flex: 1; font-size: 0.8rem;" @click="$event.target.select()" />
-                <button type="button" class="btn-confirm" x-show="!$store.chat.isTowerPgMode"
-                  @click="$store.chat.copyShareLink()"
-                  x-text="$store.chat.shareInviteCopied ? 'Copied!' : 'Copy'"></button>
+            <!-- Channel access -->
+            <section class="access-panel" id="access-panel-access" role="tabpanel" aria-labelledby="access-tab-access" x-show="$store.chat.isTowerPgMode && $store.chat.sharingSection === 'access'">
+              <div class="access-panel-header">
+                <div>
+                  <h3>Channel access</h3>
+                  <p>Give one group or person the same permission in several channels. You review every change before anything is saved. Access entries are added or updated; custom permissions are preserved. Choosing a lower permission than someone already has (for example Viewer for a Contributor) reduces their access in those channels. To remove access or fine-tune it, open a channel's settings. WApp management authority lives under Permissions.</p>
+                </div>
               </div>
-            </div>
-          </section>
+
+              <p class="access-alert access-alert-error" role="alert" x-show="!$store.chat.canManageSelectedPgChannelGrants">You don't have permission to manage channel access in this workspace. Ask a workspace admin.</p>
+
+              <form class="access-steps" @submit.prevent="$store.chat.previewChannelBulkGrant()">
+                <fieldset class="access-card access-step" :disabled="$store.chat.channelBulkGrantBusy || !$store.chat.canManageSelectedPgChannelGrants">
+                  <legend><span class="access-step-number" aria-hidden="true">1</span> Who gets access</legend>
+                  <div class="access-segmented" role="radiogroup" aria-label="Recipient type">
+                    <label :class="{ 'is-active': $store.chat.channelBulkGrantPrincipalType === 'group' }"><input type="radio" name="access-principal-type" value="group" x-model="$store.chat.channelBulkGrantPrincipalType" /> Group</label>
+                    <label :class="{ 'is-active': $store.chat.channelBulkGrantPrincipalType === 'actor' }"><input type="radio" name="access-principal-type" value="actor" x-model="$store.chat.channelBulkGrantPrincipalType" /> Person</label>
+                  </div>
+                  <div x-show="$store.chat.channelBulkGrantPrincipalType === 'group'">
+                    <label class="access-label" for="access-bulk-group">Group</label>
+                    <select id="access-bulk-group" class="new-group-input" x-model="$store.chat.channelBulkGrantGroupId" :disabled="$store.chat.pgChannelGrantGroupOptions.length === 0">
+                      <option value="" x-text="$store.chat.pgChannelGrantGroupOptions.length === 0 ? 'No groups yet' : 'Choose a group…'"></option>
+                      <template x-for="group in $store.chat.pgChannelGrantGroupOptions" :key="group.groupId">
+                        <option :value="group.groupId" x-text="`${group.label} (${group.subtitle})`"></option>
+                      </template>
+                    </select>
+                  </div>
+                  <div x-show="$store.chat.channelBulkGrantPrincipalType === 'actor'">
+                    <label class="access-label" for="access-bulk-actor">Person</label>
+                    <select id="access-bulk-actor" class="new-group-input" x-model="$store.chat.channelBulkGrantActorId" :disabled="$store.chat.pgChannelGrantActorOptions.length === 0">
+                      <option value="" x-text="$store.chat.pgChannelGrantActorOptions.length === 0 ? 'No members loaded' : 'Choose a person…'"></option>
+                      <template x-for="member in $store.chat.pgChannelGrantActorOptions" :key="member.actorId">
+                        <option :value="member.actorId" x-text="member.label"></option>
+                      </template>
+                    </select>
+                  </div>
+                </fieldset>
+
+                <fieldset class="access-card access-step" :disabled="$store.chat.channelBulkGrantBusy || !$store.chat.canManageSelectedPgChannelGrants">
+                  <legend><span class="access-step-number" aria-hidden="true">2</span> Permission</legend>
+                  <div class="access-capacity-grid">
+                    <template x-for="capacity in $store.chat.pgChannelGrantCapacityOptions" :key="capacity.value">
+                      <label class="access-capacity-option" :class="{ 'is-active': $store.chat.channelBulkGrantCapacity === capacity.value }">
+                        <input type="radio" name="access-bulk-capacity" :value="capacity.value" x-model="$store.chat.channelBulkGrantCapacity" />
+                        <span><strong x-text="capacity.label"></strong><small x-text="$store.chat.getPgChannelGrantCapacityDescription(capacity.value)"></small></span>
+                      </label>
+                    </template>
+                  </div>
+                </fieldset>
+
+                <fieldset class="access-card access-step" :disabled="$store.chat.channelBulkGrantBusy || !$store.chat.canManageSelectedPgChannelGrants">
+                  <legend><span class="access-step-number" aria-hidden="true">3</span> Channels</legend>
+                  <div class="access-toolbar">
+                    <label class="access-search">
+                      <svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+                      <span class="sr-only">Filter channels or scopes</span>
+                      <input type="search" class="new-group-input" placeholder="Filter channels or scopes" x-model="$store.chat.channelBulkGrantChannelQuery" />
+                    </label>
+                    <span class="access-badge" aria-live="polite" data-testid="access-selected-count" x-text="`${$store.chat.channelBulkGrantSelectedCount} of ${$store.chat.pgChannelBulkGrantChannelOptions.length} selected`"></span>
+                    <button type="button" class="btn-secondary btn-compact" @click="$store.chat.clearChannelBulkGrantChannels()" :disabled="$store.chat.channelBulkGrantSelectedCount === 0">Clear selection</button>
+                  </div>
+
+                  <p class="access-empty" role="status" x-show="$store.chat.groupsLoading && $store.chat.pgChannelBulkGrantChannelOptions.length === 0">Loading channels…</p>
+                  <p class="access-empty" x-show="!$store.chat.groupsLoading && $store.chat.pgChannelBulkGrantChannelOptions.length === 0">No channels yet.</p>
+                  <div class="access-empty" x-show="$store.chat.pgChannelBulkGrantChannelOptions.length > 0 && $store.chat.pgChannelBulkGrantScopeGroups.length === 0">
+                    <span x-text="`No channels match “${$store.chat.channelBulkGrantChannelQuery}”.`"></span>
+                    <button type="button" class="btn-secondary btn-compact" @click="$store.chat.channelBulkGrantChannelQuery = ''">Clear filter</button>
+                  </div>
+
+                  <div class="access-scope-list">
+                    <template x-for="scopeGroup in $store.chat.pgChannelBulkGrantScopeGroups" :key="scopeGroup.key">
+                      <div class="access-scope-group" role="group" :aria-label="`${scopeGroup.label} channels`">
+                        <label class="access-scope-header">
+                          <input type="checkbox"
+                            :checked="scopeGroup.visibleSelectedCount === scopeGroup.channels.length"
+                            x-effect="$el.indeterminate = scopeGroup.visibleSelectedCount > 0 && scopeGroup.visibleSelectedCount < scopeGroup.channels.length"
+                            @change="$store.chat.setChannelBulkGrantScopeSelection(scopeGroup.key, $event.target.checked)"
+                            :aria-label="`Select all ${scopeGroup.channels.length} shown channels in ${scopeGroup.label}`" />
+                          <strong x-text="scopeGroup.label"></strong>
+                          <span class="access-muted" x-text="`${scopeGroup.selectedCount} / ${scopeGroup.total} selected`"></span>
+                        </label>
+                        <div class="access-channel-grid">
+                          <template x-for="channel in scopeGroup.channels" :key="channel.id">
+                            <label class="access-channel-option" :class="{ 'is-active': channel.selected }">
+                              <input type="checkbox" :checked="channel.selected" @change="$store.chat.setChannelBulkGrantSelection(channel.id, $event.target.checked)" />
+                              <span x-text="channel.label"></span>
+                            </label>
+                          </template>
+                        </div>
+                      </div>
+                    </template>
+                  </div>
+                </fieldset>
+
+                <div class="access-action-bar">
+                  <p aria-live="polite" data-testid="access-summary" x-text="$store.chat.channelBulkGrantSummary"></p>
+                  <button type="submit" class="btn-primary" :disabled="!$store.chat.canPreviewChannelBulkGrant">Review changes</button>
+                </div>
+              </form>
+
+              <p class="access-alert access-alert-success" role="status" x-show="$store.chat.channelGrantsNotice && !$store.chat.channelBulkGrantResults" x-text="$store.chat.channelGrantsNotice"></p>
+              <p class="access-alert access-alert-error" role="alert" x-show="$store.chat.channelGrantsError && !$store.chat.channelBulkGrantResults" x-text="$store.chat.channelGrantsError"></p>
+
+              <section class="access-card access-results" data-testid="access-results" x-show="$store.chat.channelBulkGrantResults" aria-labelledby="access-results-title">
+                <div class="access-panel-header">
+                  <div>
+                    <h4 id="access-results-title" x-text="`Result: ${$store.chat.channelBulkGrantResults?.principalLabel || ''} → ${$store.chat.getPgChannelGrantCapacityLabel($store.chat.channelBulkGrantResults?.capacity)}`"></h4>
+                    <p :role="$store.chat.channelBulkGrantResultCounts.failed ? 'alert' : 'status'" :class="$store.chat.channelBulkGrantResultCounts.failed ? 'access-text-error' : 'access-text-success'"
+                      x-text="$store.chat.channelBulkGrantResultCounts.failed
+                        ? `${$store.chat.channelBulkGrantResultCounts.failed} of ${$store.chat.channelBulkGrantResultCounts.total} channels failed. The others were updated.`
+                        : `No failures: ${$store.chat.channelBulkGrantResultCounts.total} channel${$store.chat.channelBulkGrantResultCounts.total === 1 ? '' : 's'} processed.`"></p>
+                  </div>
+                  <div class="access-inline-row">
+                    <button type="button" class="btn-primary btn-compact" x-show="$store.chat.channelBulkGrantResultCounts.failed" @click="$store.chat.retryFailedChannelBulkGrant()" :disabled="$store.chat.channelBulkGrantBusy" x-text="`Retry ${$store.chat.channelBulkGrantResultCounts.failed} failed`"></button>
+                    <button type="button" class="btn-secondary btn-compact" @click="$store.chat.channelBulkGrantResults = null; $store.chat.channelGrantsNotice = ''; $store.chat.channelGrantsError = null">Dismiss</button>
+                  </div>
+                </div>
+                <ul class="access-outcome-list">
+                  <template x-for="row in ($store.chat.channelBulkGrantResults?.rows || [])" :key="row.id">
+                    <li :class="{ 'is-failed': row.outcome === 'failed' }">
+                      <span class="access-outcome-channel"><strong x-text="row.label"></strong><small x-text="row.scopeLabel"></small></span>
+                      <span class="access-badge" :class="{ 'access-badge-success': row.outcome === 'created' || row.outcome === 'updated', 'access-badge-error': row.outcome === 'failed' }"
+                        x-text="({ created: 'Added', updated: 'Changed', unchanged: 'Already set', custom: 'Custom kept', failed: 'Failed' })[row.outcome]"></span>
+                      <small class="access-outcome-message" x-text="row.message"></small>
+                    </li>
+                  </template>
+                </ul>
+              </section>
+
+              <dialog class="access-preview-dialog" data-testid="access-preview-dialog" aria-labelledby="access-preview-title"
+                x-effect="if ($store.chat.channelBulkGrantPreview) { if (!$el.open) $el.showModal(); } else if ($el.open) $el.close()"
+                @cancel.prevent="$store.chat.closeChannelBulkGrantPreview()"
+                :aria-busy="String($store.chat.channelBulkGrantPreview?.status === 'loading' || $store.chat.channelBulkGrantBusy)">
+                <template x-if="$store.chat.channelBulkGrantPreview">
+                  <div class="access-preview-body">
+                    <h3 id="access-preview-title">Review channel access</h3>
+                    <p>
+                      <strong x-text="$store.chat.channelBulkGrantPreview.principalLabel"></strong>
+                      will get <strong x-text="$store.chat.getPgChannelGrantCapacityLabel($store.chat.channelBulkGrantPreview.capacity)"></strong> access
+                      (<span x-text="$store.chat.getPgChannelGrantCapacityDescription($store.chat.channelBulkGrantPreview.capacity)"></span>)
+                      in <span x-text="`${$store.chat.channelBulkGrantPreview.rows.length} channel${$store.chat.channelBulkGrantPreview.rows.length === 1 ? '' : 's'}`"></span>.
+                    </p>
+                    <p class="access-muted" role="status" x-show="$store.chat.channelBulkGrantPreview.status === 'loading'">Checking current access…</p>
+                    <p class="access-alert access-alert-error" role="alert" x-show="$store.chat.channelBulkGrantPreview.status === 'error'" x-text="$store.chat.channelBulkGrantPreview.message"></p>
+                    <div class="access-preview-counts" x-show="$store.chat.channelBulkGrantPreview.status === 'ready'">
+                      <span class="access-badge access-badge-success" x-show="$store.chat.channelBulkGrantPreviewCounts.create" x-text="`${$store.chat.channelBulkGrantPreviewCounts.create} new`"></span>
+                      <span class="access-badge access-badge-success" x-show="$store.chat.channelBulkGrantPreviewCounts.update - $store.chat.channelBulkGrantPreviewCounts.reduces" x-text="`${$store.chat.channelBulkGrantPreviewCounts.update - $store.chat.channelBulkGrantPreviewCounts.reduces} changed`"></span>
+                      <span class="access-badge access-badge-warning" x-show="$store.chat.channelBulkGrantPreviewCounts.reduces" x-text="`${$store.chat.channelBulkGrantPreviewCounts.reduces} lowered`"></span>
+                      <span class="access-badge" x-show="$store.chat.channelBulkGrantPreviewCounts.unchanged" x-text="`${$store.chat.channelBulkGrantPreviewCounts.unchanged} already set`"></span>
+                      <span class="access-badge" x-show="$store.chat.channelBulkGrantPreviewCounts.custom" x-text="`${$store.chat.channelBulkGrantPreviewCounts.custom} custom kept`"></span>
+                      <span class="access-badge access-badge-error" x-show="$store.chat.channelBulkGrantPreviewCounts.unknown" x-text="`${$store.chat.channelBulkGrantPreviewCounts.unknown} couldn't check`"></span>
+                    </div>
+                    <ul class="access-outcome-list access-preview-list">
+                      <template x-for="row in $store.chat.channelBulkGrantPreview.rows" :key="row.id">
+                        <li :class="{ 'is-failed': row.action === 'unknown' }">
+                          <span class="access-outcome-channel"><strong x-text="row.label"></strong><small x-text="row.scopeLabel"></small></span>
+                          <span class="access-badge" :class="{ 'access-badge-success': row.action === 'create' || (row.action === 'update' && !row.reduces), 'access-badge-warning': row.action === 'update' && row.reduces, 'access-badge-error': row.action === 'unknown' }"
+                            x-text="row.action === 'loading' ? 'Checking…'
+                              : row.action === 'create' ? 'Add'
+                              : row.action === 'update' ? `${row.reduces ? 'Lower from' : 'Change from'} ${$store.chat.getPgChannelGrantCapacityLabel(row.currentCapacity)}`
+                              : row.action === 'unchanged' ? 'Already set'
+                              : row.action === 'custom' ? 'Custom kept'
+                              : 'Couldn\'t check'"></span>
+                          <small class="access-outcome-message" x-show="row.message" x-text="row.message"></small>
+                        </li>
+                      </template>
+                    </ul>
+                    <p class="access-alert access-alert-warning" role="note" x-show="$store.chat.channelBulkGrantPreview.status === 'ready' && $store.chat.channelBulkGrantPreviewCounts.reduces"
+                      x-text="`${$store.chat.channelBulkGrantPreviewCounts.reduces} channel${$store.chat.channelBulkGrantPreviewCounts.reduces === 1 ? '' : 's'} will lose abilities: the current permission is replaced by ${$store.chat.getPgChannelGrantCapacityLabel($store.chat.channelBulkGrantPreview.capacity)}.`"></p>
+                    <p class="access-help">Access entries are added or updated; custom permissions are preserved. A lower permission replaces a higher one. Channels that couldn't be checked are checked again when you apply.</p>
+                    <p class="access-muted" role="status" x-show="$store.chat.channelBulkGrantBusy" x-text="`Applying ${$store.chat.channelBulkGrantProgress}`"></p>
+                    <div class="access-dialog-actions">
+                      <button type="button" class="btn-secondary" @click="$store.chat.closeChannelBulkGrantPreview()" :disabled="$store.chat.channelBulkGrantBusy">Cancel</button>
+                      <button type="button" class="btn-primary" @click="$store.chat.confirmChannelBulkGrant()"
+                        :disabled="$store.chat.channelBulkGrantBusy || $store.chat.channelBulkGrantPreview.status !== 'ready' || $store.chat.channelBulkGrantPreviewCounts.writes === 0"
+                        x-text="$store.chat.channelBulkGrantBusy ? 'Applying…'
+                          : $store.chat.channelBulkGrantPreviewCounts.writes === 0 && $store.chat.channelBulkGrantPreview.status === 'ready' ? 'Nothing to change'
+                          : `Apply to ${$store.chat.channelBulkGrantPreviewCounts.writes} channel${$store.chat.channelBulkGrantPreviewCounts.writes === 1 ? '' : 's'}`"></button>
+                    </div>
+                  </div>
+                </template>
+              </dialog>
+            </section>
+          </div>
           </div>
           </div>
         </template>
 
         <!-- New group modal -->
-        <div class="doc-modal-backdrop" x-show="$store.chat.showNewGroupModal" x-cloak @click.self="$store.chat.closeNewGroupModal()">
-          <div class="doc-modal-card new-group-modal">
-            <button class="modal-close" type="button" @click="$store.chat.closeNewGroupModal()" :disabled="$store.chat.groupCreatePending">&times;</button>
-            <h3>New group</h3>
+        <div class="doc-modal-backdrop" x-show="$store.chat.showNewGroupModal" x-cloak @click.self="$store.chat.closeNewGroupModal()" @keydown.escape="!$store.chat.groupCreatePending && $store.chat.closeNewGroupModal()">
+          <div class="doc-modal-card new-group-modal" role="dialog" aria-modal="true" aria-labelledby="new-group-modal-title" tabindex="-1" x-effect="$store.chat.syncGroupDialogFocus($el, $store.chat.showNewGroupModal)" @keydown.tab="$store.chat.trapGroupDialogFocus($event)">
+            <button class="modal-close" type="button" aria-label="Close new group" @click="$store.chat.closeNewGroupModal()" :disabled="$store.chat.groupCreatePending">&times;</button>
+            <h3 id="new-group-modal-title">New group</h3>
             <p class="new-group-hint">Groups let you share documents and records with a set of people.</p>
 
             <label class="docs-field-label">Name</label>
@@ -9780,10 +9938,10 @@
           </div>
         </div>
 
-        <div class="doc-modal-backdrop" x-show="$store.chat.showEditGroupModal" x-cloak @click.self="$store.chat.closeEditGroupModal()">
-          <div class="doc-modal-card new-group-modal">
-            <button class="modal-close" type="button" @click="$store.chat.closeEditGroupModal()" :disabled="$store.chat.groupEditPending">&times;</button>
-            <h3>Edit group</h3>
+        <div class="doc-modal-backdrop" x-show="$store.chat.showEditGroupModal" x-cloak @click.self="$store.chat.closeEditGroupModal()" @keydown.escape="!$store.chat.groupEditPending && $store.chat.closeEditGroupModal()">
+          <div class="doc-modal-card new-group-modal" role="dialog" aria-modal="true" aria-labelledby="edit-group-modal-title" tabindex="-1" x-effect="$store.chat.syncGroupDialogFocus($el, $store.chat.showEditGroupModal)" @keydown.tab="$store.chat.trapGroupDialogFocus($event)">
+            <button class="modal-close" type="button" aria-label="Close edit group" @click="$store.chat.closeEditGroupModal()" :disabled="$store.chat.groupEditPending">&times;</button>
+            <h3 id="edit-group-modal-title">Edit group</h3>
             <p class="new-group-hint">Rename the group and manage who can use it for sharing.</p>
 
             <label class="docs-field-label">Name</label>

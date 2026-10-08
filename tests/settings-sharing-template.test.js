@@ -22,9 +22,9 @@ describe('settings sharing template', () => {
 
     expect(html).toContain('x-show="$store.chat.isTowerPgMode"');
     expect(html).toContain('x-model="$store.chat.pgWorkspaceMemberNpub"');
-    expect(html).toContain('@click="$store.chat.addPgWorkspaceMember()"');
+    expect(html).toContain('@submit.prevent="$store.chat.addPgWorkspaceMember()"');
     expect(html).toContain('@click="$store.chat.openSettingsTab(\'sharing\')"');
-    expect(html).toContain('x-show="$store.chat.groupsLoading">Loading members and groups…</p>');
+    expect(html).toContain('>Loading members and groups…</p>');
     expect(html).toContain('$store.chat.getPgGroupMemberCandidates(group.group_id)');
     expect(html).toContain('@click="$store.chat.addPgGroupMember(group.group_id)"');
     expect(html).toContain('$store.chat.getPgChildGroupCandidates(group.group_id)');
@@ -32,7 +32,8 @@ describe('settings sharing template', () => {
     expect(html).toContain('@click="$store.chat.removePgChildGroup(group.group_id, childGroupId)"');
     expect(html).toContain('group.effective_member_npubs');
     expect(html).toContain('@click="$store.chat.startPgWorkspaceMemberProfileEdit(member)"');
-    expect(html).toContain('@click="$store.chat.savePgWorkspaceMemberProfile(member)"');
-    expect(html).toContain("'User · ' + $store.chat.getSenderSecondaryLabel(member.npub)");
+    expect(html).toContain('@submit.prevent="$store.chat.savePgWorkspaceMemberProfile(member)"');
+    expect(html).toContain('x-text="$store.chat.getShortNpub(member.npub)"');
+    expect(html).toContain('$store.chat.getPgWorkspaceMemberGroupNames(member.npub)');
   });
 });

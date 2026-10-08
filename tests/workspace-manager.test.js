@@ -1152,7 +1152,7 @@ describe('prepareWorkspaceSharingSettings', () => {
     expect(store.groupsLoadError).toBeNull();
   });
 
-  it('loads PG members and channels then primes bulk channel access for all channels', async () => {
+  it('loads PG members and channels then resets bulk channel access with nothing selected', async () => {
     const refreshGroups = vi.fn().mockResolvedValue([]);
     const refreshTowerPgWorkspaceMembers = vi.fn().mockResolvedValue([]);
     const refreshChannels = vi.fn().mockResolvedValue([]);
@@ -1175,7 +1175,7 @@ describe('prepareWorkspaceSharingSettings', () => {
     });
     expect(refreshTowerPgWorkspaceMembers).toHaveBeenCalledWith({ force: true, limit: 200 });
     expect(refreshChannels).toHaveBeenCalledTimes(1);
-    expect(resetChannelBulkGrantDraft).toHaveBeenCalledWith({ selectAll: true });
+    expect(resetChannelBulkGrantDraft).toHaveBeenCalledWith();
   });
 });
 
