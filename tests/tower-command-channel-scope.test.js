@@ -39,10 +39,11 @@ vi.mock('../src/pg-read-hydrator.js', async (importOriginal) => ({
 }));
 
 import { prepareTowerWorkspaceCommand } from '../src/tower-command-port.js';
+import { openWorkspaceDb } from '../src/db.js';
 import { TowerSyncService } from '../src/tower-sync-service.js';
 
 describe('channel and scope command descriptors', () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(async () => { vi.clearAllMocks(); const db = openWorkspaceDb('channel-scope-command'); await db.open(); await db.pg_archived_targets.clear(); });
 
   it('materialises an optimistic scope and replaces its local id on acknowledgement', async () => {
     const descriptor = prepareTowerWorkspaceCommand({ workspaceOwnerNpub: 'owner' }, 'scope.create', {

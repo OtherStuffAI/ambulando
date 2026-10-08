@@ -1070,6 +1070,7 @@ export const channelsManagerMixin = {
   },
 
   ensureSelectedChatChannelInScope({ syncRoute = true } = {}) {
+    if (this.pgNavigationRecoveryPending) return this.selectedChannelId;
     const visibleChannels = Array.isArray(this.scopeFilteredChannels) ? this.scopeFilteredChannels : [];
     const selectedVisible = this.selectedChannelId
       && visibleChannels.some((channel) => channel.record_id === this.selectedChannelId);
@@ -2661,6 +2662,7 @@ export const channelsManagerMixin = {
   },
 
   async applyChannels(channels = [], options = {}) {
+    if (options.isCurrent && !options.isCurrent()) return;
     const allChannels = Array.isArray(channels) ? channels : [];
     const activeDeckThreadChannelId = this.navSection === 'status' && this.activeThreadId
       ? String(this.deckThreadChannelId || '').trim()
@@ -2730,6 +2732,7 @@ export const channelsManagerMixin = {
     }
     if (participantNpubs.size > 0) {
       await this.rememberPeople([...participantNpubs], 'chat');
+      if (options.isCurrent && !options.isCurrent()) return;
     }
 
     const selectedPgBoard = parsePgTaskBoardId(this.selectedBoardId);
@@ -2911,6 +2914,7 @@ export const channelsManagerMixin = {
   },
 
   async selectChannel(recordId, options = {}) {
+    if (this.rememberPgRecoveryDestination?.('channel', recordId)) return false;
     const callerIsCurrent = () => !options.isCurrent || options.isCurrent();
     if (!callerIsCurrent()) return;
     const channelId = String(recordId || '').trim();

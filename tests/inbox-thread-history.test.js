@@ -171,7 +171,7 @@ describe('real Inbox thread history path', () => {
     });
     await s.showMoreThreadMessages();
     expect(s.requestTowerSyncFamily).toHaveBeenCalledTimes(2);
-    expect(s.visibleThreadMessages.map(row => row.record_id)).toEqual(['ancestor-1', 'ancestor-2', 'ancestor-3', 'ancestor-4']);
+    await vi.waitFor(() => expect(s.visibleThreadMessages.map(row => row.record_id)).toEqual(['ancestor-1', 'ancestor-2', 'ancestor-3', 'ancestor-4']));
     expect(s.visibleThreadMessages.every(row => row.pg_inherited && row.read_only)).toBe(true);
     expect(s.threadHistoryCursor).toBeNull();
     expect(s.threadHistoryError).toBe('');

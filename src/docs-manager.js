@@ -916,6 +916,7 @@ export const docsManagerMixin = {
   },
 
   openDoc(recordId, options = {}) {
+    if (this.rememberPgRecoveryDestination?.('doc', recordId)) return false;
     this.commentVisibleCount = this.commentPageSize || 80;
     const nextRecordId = String(recordId || '').trim();
     const visit = Number(this.docOpenGeneration || 0) + 1;
@@ -1349,7 +1350,7 @@ export const docsManagerMixin = {
   },
 
   buildSelectedDocDraftRow(options = {}) {
-    const item = this.selectedDocument;
+    const item = options.item || this.selectedDocument;
     const workspaceId = this.getSelectedDocWorkspaceId(item);
     if (!item?.record_id || !workspaceId) return null;
     // Source and block edits must rebuild from their current input. A retained

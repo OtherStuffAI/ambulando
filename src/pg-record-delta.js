@@ -1,3 +1,5 @@
+import { markPgTargetArchived } from './pg-archive-state.js';
+import { mapScopeOrder } from './scope-order.js';
 import { personalAttentionVersion } from './personal-attention.js';
 import { canonicalClientId, checkpointRevision, DEVICE_CACHE_OWNER_KEY, assertDeviceLease, createDeviceCacheId } from './pg-device-checkpoints.js';
 import { publishContextAuthority, clearContextAuthority, mapContextRow } from './context-cache.js';
@@ -19,6 +21,7 @@ import {
 import { inboundAutopilotConnection, inboundWorkspaceAgent } from './translators/autopilot-connections.js';
 
 const FAMILY = {
+  scope_order: ['scope_orders', mapScopeOrder],
   context_component: ['context_components', mapContextRow],
   context_reference: ['context_references', mapContextRow],
   scope: ['scopes', mapPgScopeToLocal], channel: ['channels', mapPgChannelToLocal],
@@ -44,7 +47,7 @@ export function isTowerWinsLocalAssetConflict(conflict = {}) {
 }
 function validatePage(page, workspaceId) {
   if (![1, 2].includes(page?.protocol_version) || !['snapshot', 'delta'].includes(page.mode)
-    || !Array.isArray(page.families) || !PG_RECORD_DELTA_FAMILIES.filter(f => !f.startsWith('feed_') && !f.startsWith('context_')).every(f => page.families.includes(f))
+    || !Array.isArray(page.families) || !PG_RECORD_DELTA_FAMILIES.filter(f => !f.startsWith('feed_') && !f.startsWith('context_') && f !== 'scope_order').every(f => page.families.includes(f))
     || !Array.isArray(page.changes) || page.changes.length > 200
     || typeof page.next_cursor !== 'string' || !page.next_cursor || typeof page.has_more !== 'boolean') {
     throw new Error('Invalid Tower record-delta v1 page');
@@ -267,6 +270,8 @@ async function applyRecordPage(store, page, options = {}) {
       const prior = versions.get(key);
       if (prior && prior.generation === generation && BigInt(prior.version) >= BigInt(c.version) && !(options.reconcileKeys || []).includes(key)) continue;
       if (page.mode !== 'snapshot' && prior && BigInt(prior.version) > BigInt(c.version)) continue;
+      if (c.operation === 'delete' && ['scope', 'channel'].includes(c.family)) await markPgTargetArchived(c.family, c.id, db);
+      if (c.operation === 'upsert' && ['scope', 'channel'].includes(c.family)) await db.pg_archived_targets.delete(`${c.family}:${c.id}`);
       const raw = { ...c, key, generation, parent_id: c.row?.task_id || c.row?.thread_id || prior?.parent_id || null, source_message_id: c.row?.source_message_id || prior?.source_message_id || prior?.row?.source_message_id || null };
       versions.set(key, raw); changedKeys.add(key);
       if (c.family === 'task_assignment') affectedTasks.add(raw.parent_id || c.id.split(':')[0]);
@@ -289,6 +294,7 @@ async function applyRecordPage(store, page, options = {}) {
       const [tableName, mapRow] = FAMILY[raw.family];
       const table = db.table(tableName);
       let localId = raw.id;
+      if (raw.family === 'scope_order') localId = raw.row?.actor_id || raw.id;
       if (raw.family === 'resource_view_state') localId = raw.row
         ? `${raw.row.resource_type}:${raw.row.resource_id}` : raw.id.split(':').slice(1).join(':');
       if (raw.family === 'feed_subscription' || raw.family === 'feed_item_state') {

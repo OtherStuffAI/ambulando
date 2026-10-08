@@ -859,7 +859,7 @@ export function computeBoardScopedTasks(tasks, selectedBoardId, selectedBoardSco
   if (selectedBoardId === UNSCOPED_TASK_BOARD_ID) {
     return live.filter((task) => isTaskUnscoped(task, scopesMap));
   }
-  if (!selectedBoardScope) return live;
+  if (!selectedBoardScope) return selectedBoardId ? [] : live;
   return live.filter((task) => matchesTaskBoardScope(task, selectedBoardScope, scopesMap, {
     includeDescendants: showBoardDescendantTasks,
   }));
@@ -1337,6 +1337,7 @@ export const taskBoardStateMixin = {
   },
 
   get selectedBoardLabel() {
+    if (this.pgNavigationRecoveryPending && !this.taskBoards.some(board => board.id === this.selectedBoardId)) return 'Restoring workspace navigation…';
     if (this.selectedBoardId === ALL_TASK_BOARD_ID) return 'All';
     if (this.selectedBoardId === RECENT_TASK_BOARD_ID) return 'Recent';
     if (this.selectedBoardIsUnscoped) return 'Unscoped';
@@ -2159,6 +2160,7 @@ export const taskBoardStateMixin = {
   },
 
   validateSelectedBoardId() {
+    if (this.pgNavigationRecoveryPending) return;
     if (!this.selectedBoardId) {
       this.selectedBoardId = this.preferredTaskBoardId;
       this.persistSelectedBoardId(this.selectedBoardId);
@@ -2497,7 +2499,7 @@ export const taskBoardStateMixin = {
   },
 
   get scopeTree() {
-    const active = this.scopes.filter(s => s.record_state !== 'deleted');
+    const active = (this.personallyOrderedScopes || this.scopes).filter(s => s.record_state !== 'deleted');
     const buildChildren = (parentId) =>
       active
         .filter(s => (s.parent_id || null) === (parentId || null) && scopeDepth(s.level) > (parentId ? scopeDepth(this.scopesMap.get(parentId)?.level) : 0))

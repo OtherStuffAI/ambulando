@@ -839,12 +839,13 @@ describe('PG scope deletion', () => {
     const store = deletionStore();
     await store.deleteScope('scope-1');
     expect(mocks.deleteTowerPgWorkspaceScope).toHaveBeenCalledWith('workspace-1', 'scope-1', expect.any(Object));
-    expect(mocks.upsertScope).toHaveBeenCalledWith(expect.objectContaining({ record_state: 'deleted', sync_status: 'synced' }));
-    expect(mocks.deleteChannelRuntimeState).toHaveBeenCalledWith('channel-1');
-    expect(store.channels.map((channel) => channel.record_id)).toEqual(['channel-2']);
-    expect(store.scopes).toEqual([]);
+    // The service owns persistence; managers do not clear caches/outbox or
+    // assign collections from command responses. Dexie projects the archive.
+    expect(mocks.upsertScope).not.toHaveBeenCalled();
+    expect(mocks.deleteChannelRuntimeState).not.toHaveBeenCalled();
+    expect(store.channels).toHaveLength(2);
+    await store.handlePgArchivedTargets([{ family: 'scope', id: 'scope-1' }]);
     expect(store.selectedChannelId).toBeNull();
-    expect(store.messages).toEqual([]);
     expect(store.openAllScopesOverview).toHaveBeenCalledOnce();
   });
 
@@ -881,7 +882,7 @@ describe('PG scope deletion', () => {
     expect(mocks.deleteTowerPgWorkspaceScope).toHaveBeenCalledWith('workspace-1', 'scope-1', expect.any(Object));
     expect(store.scopeDeleteConfirmation).toBeNull();
     expect(store.scopeDeleteNotice).toContain('Archived scope "Scope"');
-    expect(store.openAllScopesOverview).toHaveBeenCalledOnce();
+    expect(store.openAllScopesOverview).not.toHaveBeenCalled();
   });
 
   it('keeps the in-app prompt visible and reports Tower delete errors', async () => {

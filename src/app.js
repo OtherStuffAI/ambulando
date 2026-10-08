@@ -1110,6 +1110,11 @@ export function initApp() {
     // scopes
     scopes: [],
     scopesLoaded: false,
+    personalScopeOrder: null,
+    scopeOrderSaving: false,
+    scopeOrderError: '',
+    scopeOrderNotice: '',
+    draggedScopeId: null,
     scopePickerQuery: '',
     showScopePicker: false,
     showChannelScopePicker: false,
@@ -4767,6 +4772,7 @@ export function initApp() {
     },
 
     selectReport(recordId, options = {}) {
+      if (this.rememberPgRecoveryDestination?.('report', recordId)) return false;
       if (!recordId) return;
       const report = this.scopedReports.find((item) => item.record_id === recordId)
         || this.reports.find((item) => item.record_id === recordId);
@@ -4780,6 +4786,7 @@ export function initApp() {
     },
 
     openReportModal(report) {
+      if (this.rememberPgRecoveryDestination?.('report', report?.record_id)) return false;
       if (!report) return;
       this.selectedReportId = report.record_id;
       this.reportModalReport = report;

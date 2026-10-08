@@ -244,8 +244,9 @@ describe('deleteSelectedChannel', () => {
       baseUrl: 'https://tower.example.test',
       appNpub: 'npub1app',
     });
-    expect(deleteChannelRuntimeState).toHaveBeenCalledWith('ch-settings');
-    expect(store.channels.map((channel) => channel.record_id)).toEqual(['ch-selected-later']);
+    expect(deleteChannelRuntimeState).not.toHaveBeenCalled();
+    // Dexie liveQuery updates collections; the command never purges content or pending writes.
+    expect(store.channels.map((channel) => channel.record_id)).toEqual(['ch-settings', 'ch-selected-later']);
     expect(store.showChannelSettingsModal).toBe(false);
     expect(store.channelDeleteConfirmArmed).toBe(false);
     expect(store.channelSettingsChannelId).toBe('');
@@ -323,7 +324,7 @@ describe('deleteSelectedChannel', () => {
     await fn();
 
     expect(store.refreshChannels).toHaveBeenCalledTimes(1);
-    expect(deleteChannelRuntimeState).toHaveBeenCalledWith('ch-archived');
+    expect(deleteChannelRuntimeState).not.toHaveBeenCalled();
     expect(store.channels.map((channel) => channel.record_id)).toEqual(['ch-next']);
     expect(store.showChannelSettingsModal).toBe(false);
     expect(store.channelDeleteConfirmArmed).toBe(false);

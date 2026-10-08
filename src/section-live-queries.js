@@ -1,3 +1,6 @@
+import { clearPgAuthorityPresentation, rememberPgRecoveryDestination } from './pg-authority-presentation.js';
+import { filterProjectionForArchivedTargets } from './pg-archive-state.js';
+import { resolvePgReaderActorId } from './pg-reader-identity.js';
 import { disposePipelineViewer, resumePipelineViewer } from './pipeline-viewer-view.js';
 import { disposeContextTreeView, resumeContextTreeView } from './context-tree-view.js';
 import {
@@ -168,7 +171,13 @@ function syncBucket(store, bucket, specs) {
     if (bucket.has(spec.key)) continue;
     const workspaceKey = store.currentWorkspaceKey;
     const generation = store._workspaceSelectionGeneration;
-    const subscription = store.createLiveSubscription(spec.query, (...args) => {
+    const query = currentPgWorkspaceId(store) && !['address-book', 'app-placements'].includes(spec.key) ? async () => {
+      const [value, targets] = await Promise.all([spec.query(), getWorkspaceDb().pg_archived_targets.toArray()]);
+      return filterProjectionForArchivedTargets(value, targets);
+    } : spec.query;
+    let subscription;
+    subscription = store.createLiveSubscription(query, (...args) => {
+      if (subscription && bucket.get(spec.key) !== subscription) return;
       if (!['address-book', 'app-placements'].includes(spec.key)) {
         if (store.currentWorkspaceKey !== workspaceKey || store._workspaceSelectionGeneration !== generation) return;
       }
@@ -360,12 +369,145 @@ function buildSharedSpecs() {
   ];
 }
 
+// Navigation rows and their replacement phase must come from the same Dexie
+// transaction. An empty prefix is not a completed authoritative omission.
+export async function readPgNavigationProjection(store, ownerNpub = store.workspaceOwnerNpub) {
+  const { recordDeltaCursorKey } = await import('./pg-record-delta.js');
+  const db = getWorkspaceDb();
+  return db.transaction('r', db.scopes, db.channels, db.sync_state, db.pg_archived_targets, async () => {
+    const state = (await db.sync_state.get(recordDeltaCursorKey(store)))?.value;
+    return {
+      scopes: await getScopesByOwner(ownerNpub),
+      channels: await getChannelsByOwner(ownerNpub),
+      generation: Number(state?.localGeneration || 0),
+      pending: Boolean(state?.resetting || state?.snapshotReconciliationPending || state?.snapshotRetirement),
+      resetting: state?.resetting === true,
+      archivedTargets: await db.pg_archived_targets.toArray(),
+    };
+  });
+}
+
+export function pgRecoveryRowReadable(row, scopes = []) {
+  if (!row || row.record_state === 'deleted' || row.can_read === false || row.readable === false) return false;
+  const scopeId = row.scope_id || row.pg_scope_id || row.scope_l1_id;
+  return !scopeId || scopes.some(scope => scope.record_id === scopeId && scope.record_state !== 'deleted'
+    && scope.can_read !== false && scope.readable !== false);
+}
+
+export async function applyPgNavigationProjection(store, projection) {
+  const workspaceKey = store.currentWorkspaceKey;
+  const workspaceSelectionGeneration = store._workspaceSelectionGeneration;
+  const revision = store.pgNavigationProjectionRevision = Number(store.pgNavigationProjectionRevision || 0) + 1;
+  const isCurrent = () => store.currentWorkspaceKey === workspaceKey && store._workspaceSelectionGeneration === workspaceSelectionGeneration && store.pgNavigationProjectionRevision === revision;
+  const archivedNavigation = !projection.pending && projection.archivedTargets?.length
+    ? await store.handlePgArchivedTargets?.(projection.archivedTargets) : false;
+  if (!isCurrent()) return;
+  const authorityChanged = store.pgNavigationWorkspaceKey === workspaceKey && store.pgNavigationGeneration != null
+    && store.pgNavigationGeneration !== projection.generation;
+  const channels = projection.channels.filter(row => pgRecoveryRowReadable(row, projection.scopes));
+  const changed = store.pgNavigationWorkspaceKey !== workspaceKey || store.pgNavigationGeneration !== projection.generation;
+  store.pgNavigationWorkspaceKey = workspaceKey;
+  store.pgNavigationGeneration = projection.generation;
+  store.pgNavigationRecoveryPending = projection.pending;
+  if (changed) {
+    // Cached presentation is not authority. Fence asynchronous local selection
+    // reads as well as network reads already fenced by the materializer.
+    store.chatPresentationCache?.clear?.();
+    store.channelSelectionGeneration = Number(store.channelSelectionGeneration || 0) + 1;
+    if (projection.pending || authorityChanged) {
+      const previousIntent = store.pgNavigationRecoverySelection;
+      const retainIntent = previousIntent?.workspaceKey === workspaceKey
+        && !store.selectedChannelId && !store.activeTaskId && !store.selectedDocId && !store.selectedReportId;
+      if (!retainIntent) {
+        store.pgNavigationRecoverySelection = {
+          workspaceKey, boardId: store.selectedBoardId, channelId: store.selectedChannelId,
+          threadId: store.activeThreadId, section: store.navSection,
+          taskId: store.activeTaskId, docId: store.selectedDocId, reportId: store.selectedReportId,
+        };
+        store.saveChatComposerDraft?.('message');
+        store.saveChatComposerDraft?.('thread');
+      }
+      clearPgAuthorityPresentation(store);
+      store.closeThread?.({ syncRoute: false, saveDraft: false });
+      store.activeThreadId = null;
+      store.selectedChannelId = null;
+      store.messages = [];
+      store.messageInput = '';
+      store.threadInput = '';
+      store.stopSelectedChannelLiveQuery?.();
+    }
+  }
+  if (projection.pending && !changed) clearPgAuthorityPresentation(store);
+  const omittedChannel = store.selectedChannelId && !channels.some(row => row.record_id === store.selectedChannelId
+    && row.record_state !== 'deleted' && row.can_read !== false && row.readable !== false);
+  if (omittedChannel && store.navSection === 'chat') {
+    store.chatPresentationCache?.clear?.();
+    store.channelSelectionGeneration = Number(store.channelSelectionGeneration || 0) + 1;
+    store.saveChatComposerDraft?.('message');
+    store.saveChatComposerDraft?.('thread');
+    store.closeThread?.({ syncRoute: false, saveDraft: false });
+    store.activeThreadId = null;
+    store.selectedChannelId = null;
+    store.messages = [];
+    store.messageInput = '';
+    store.threadInput = '';
+    store.stopSelectedChannelLiveQuery?.();
+  }
+  await store.applyScopes(projection.scopes, { preserveNavigation: true });
+  if (!isCurrent()) return;
+  await store.applyChannels(channels, { preserveNavigation: archivedNavigation || projection.pending || Boolean(store.pgNavigationRecoverySelection), isCurrent });
+  if (!isCurrent() || projection.pending || archivedNavigation) return;
+  const selection = store.pgNavigationRecoverySelection;
+  store.pgNavigationRecoverySelection = null;
+  store.validateSelectedBoardId?.();
+  // IDs are routing intent only. Restore neither rows nor drafts until the
+  // completed current snapshot proves that destination is still accessible.
+  if (selection?.workspaceKey === workspaceKey && selection.boardId === store.selectedBoardId
+    && (!selection.section || selection.section === store.navSection)
+    && !store.selectedChannelId && selection.channelId && channels.some(row => row.record_id === selection.channelId
+      && pgRecoveryRowReadable(row, projection.scopes))) {
+    await store.selectChannel?.(selection.channelId, { syncRoute: false, scrollToLatest: false, isCurrent });
+    if (!isCurrent()) return;
+    store.restoreChatComposerDraft?.('message');
+    if (selection.threadId && store.messages?.some(row => row.record_id === selection.threadId && row.record_state !== 'deleted')) {
+      store.openThread?.(selection.threadId, { syncRoute: false, scrollToLatest: false, saveDraft: false });
+    }
+  } else if (!store.selectedChannelId && store.navSection === 'chat') {
+    await store.applyChannels(channels, { isCurrent });
+  }
+  if (selection?.workspaceKey === workspaceKey && selection.section === store.navSection
+    && selection.boardId === store.selectedBoardId) {
+    const kind = selection.section;
+    const row = kind === 'tasks' && selection.taskId ? await getTaskById(selection.taskId)
+      : kind === 'docs' && selection.docId ? await getDocumentById(selection.docId)
+      : kind === 'reports' && selection.reportId ? await getReportById(selection.reportId) : null;
+    if (!isCurrent() || !pgRecoveryRowReadable(row, projection.scopes)) return;
+    if (kind === 'tasks') store.openTaskDetail?.(row.record_id, { syncRoute: false });
+    if (kind === 'docs') store.openDoc?.(row.record_id, { syncRoute: false });
+    if (kind === 'reports') { store.reports = [...store.reports, row]; store.selectReport?.(row.record_id, { syncRoute: false }); }
+  }
+
+}
+
 function buildWorkspaceSpecs(store) {
   const ownerNpub = String(store?.workspaceOwnerNpub || '').trim();
   const workspaceKey = currentWorkspaceKey(store);
   if (!ownerNpub) return [];
 
   const alwaysOn = [
+    ...(currentPgWorkspaceId(store) ? [{
+      key: 'ws:archived-targets', equals: sameLogicalValue,
+      query: () => getWorkspaceDb().pg_archived_targets.toArray(),
+      onNext: (rows) => { store.pgArchivedTargets = rows; },
+    },
+    {
+      key: 'ws:scope-order', equals: sameLogicalValue,
+      query: async () => {
+        const actorId = resolvePgReaderActorId(store);
+        return actorId ? await getWorkspaceDb().scope_orders.get(actorId) || null : null;
+      },
+      onNext: (row) => { store.personalScopeOrder = row; },
+    }] : []),
     {
       key: 'ws:personal-wapps',
       query: () => getWappsByOwner(ownerNpub),
@@ -374,7 +516,12 @@ function buildWorkspaceSpecs(store) {
         store.applyWapps?.(wapps);
       },
     },
-    {
+    ...(currentPgWorkspaceId(store) ? [{
+      key: 'ws:pg-navigation',
+      equals: sameLogicalValue,
+      query: () => readPgNavigationProjection(store, ownerNpub),
+      onNext: projection => store.applyPgNavigationProjection ? store.applyPgNavigationProjection(projection) : applyPgNavigationProjection(store, projection),
+    }] : [{
       key: 'ws:scopes',
       equals: sameLogicalValue,
       query: () => getScopesByOwner(ownerNpub),
@@ -385,7 +532,7 @@ function buildWorkspaceSpecs(store) {
       equals: sameLogicalValue,
       query: () => getChannelsByOwner(ownerNpub),
       onNext: (channels) => store.applyChannels(channels),
-    },
+    }]),
     {
       key: 'ws:groups',
       query: () => getGroupsByOwner(ownerNpub),
@@ -693,6 +840,7 @@ async function queryTaskBoard(store, ownerNpub) {
 }
 
 function buildDetailSpecs(store) {
+  if (store.pgNavigationRecoveryPending) return [];
   const ownerNpub = String(store?.workspaceOwnerNpub || '').trim();
   const workspaceKey = currentWorkspaceKey(store);
   if (!ownerNpub) return [];
@@ -1049,6 +1197,15 @@ export function getSectionLiveQueryPlan(store) {
 }
 
 export const sectionLiveQueryMixin = {
+  rememberPgRecoveryDestination(kind, id) { return rememberPgRecoveryDestination(this, kind, id); },
+  pgNavigationRecoveryPending: false,
+  pgNavigationRecoverySelection: null,
+  pgNavigationGeneration: null,
+  pgNavigationWorkspaceKey: '',
+  pgNavigationProjectionRevision: 0,
+  applyPgNavigationProjection(projection) {
+    return applyPgNavigationProjection(this, projection);
+  },
   startSharedLiveQueries() {
     const state = getSectionState(this);
     syncLiveQuerySet(this, state.shared, buildSharedSpecs.call(this));

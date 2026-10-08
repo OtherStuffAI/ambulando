@@ -1,3 +1,4 @@
+import { clearPgAuthorityPresentation } from './pg-authority-presentation.js';
 import { towerFetch as fetch } from './tower-transport.js';
 /**
  * Workspace management methods extracted from app.js.
@@ -1521,6 +1522,11 @@ export const workspaceManagerMixin = {
         this.hasForcedTaskFamilyBackfill = false;
         this.docCommentBackfillAttemptsByDocId = {};
         this.scopesLoaded = false;
+        clearPgAuthorityPresentation(this);
+        this.pgNavigationRecoveryPending = false;
+        this.pgNavigationRecoverySelection = null;
+        this.pgNavigationGeneration = null;
+        this.pgNavigationWorkspaceKey = '';
         this.localWorkspaceCoreLoadedForKey = '';
       }
 

@@ -1798,6 +1798,7 @@
 
         <div class="content-scroll-area" :class="{ 'content-scroll-area-deck': $store.chat.navSection === 'status' && $store.chat.deckInboxEnabled }">
         <p class="auth-error" role="alert" x-show="$store.chat.workspaceSelectionError" x-text="$store.chat.workspaceSelectionError" x-cloak></p>
+        <p class="workspace-recovery-status" role="status" x-show="$store.chat.pgNavigationRecoveryPending" x-cloak>Rechecking workspace access and restoring navigation. Saved drafts remain on this device.</p>
         <template x-if="$store.chat.navSection === 'context'">
           <section class="context-tree-view" x-data="contextTreeView" x-effect="queueSync($store.chat.currentWorkspace?.workspaceId || $store.chat.currentWorkspace?.workspace_id, $store.chat.pgContextScope?.record_id || $store.chat.selectedBoardScope?.record_id, $store.chat.workspaceDbKey, $store.chat.pgContextScope?.title || $store.chat.selectedBoardScope?.title || '', $store.chat.isLoggedIn && $store.chat.isTowerPgMode)" aria-label="Scope Context Tree">
             <header class="context-tree-header">
@@ -2852,7 +2853,7 @@
           @click="$store.chat.closeChatTaskModal()"
         ></div>
 
-        <template x-if="$store.chat.navSection === 'tasks' || $store.chat.chatTaskModalOpen">
+        <template x-if="!$store.chat.pgNavigationRecoveryPending && ($store.chat.navSection === 'tasks' || $store.chat.chatTaskModalOpen)">
           <div
             class="tasks-section"
             :class="{ 'chat-task-inline-section': $store.chat.chatTaskModalOpen, 'chat-task-modal-fullscreen': $store.chat.chatTaskModalFullScreen }"
@@ -4847,7 +4848,7 @@
           @click="$store.chat.closeChatDocModal()"
         ></div>
 
-        <template x-if="$store.chat.navSection === 'docs' || $store.chat.chatDocModalOpen">
+        <template x-if="!$store.chat.pgNavigationRecoveryPending && ($store.chat.navSection === 'docs' || $store.chat.chatDocModalOpen)">
           <div
             class="docs-section"
             x-data="{
@@ -8364,13 +8365,19 @@
           <p class="settings-success scope-section-notice" x-show="$store.chat.scopeDeleteNotice" x-text="$store.chat.scopeDeleteNotice"></p>
           <p class="scope-edit-error scope-section-notice" x-show="$store.chat.scopeDeleteError && !$store.chat.scopeDeleteConfirmation" x-text="$store.chat.scopeDeleteError"></p>
 
+          <p class="scope-edit-hint scope-section-notice" x-show="$store.chat.isTowerPgMode">Drag scopes or use Move Up / Move Down. This order is only for you in this workspace.</p>
+          <p role="status" aria-live="polite" x-show="$store.chat.scopeOrderNotice" x-text="$store.chat.scopeOrderNotice"></p>
+          <p role="alert" x-show="$store.chat.scopeOrderError" x-text="$store.chat.scopeOrderError"></p>
           <!-- Scope layout: cards + tree nav -->
           <div class="scope-layout" x-show="$store.chat.scopeTree.length > 0">
 
             <!-- Cards area. Legacy encrypted-record workspaces can still render nested scope chains. -->
             <div class="scope-cards">
               <template x-for="s1 in $store.chat.scopeTree" :key="s1.record_id">
-                <div class="scope-card" :data-level="s1.level" :id="'scope-' + s1.record_id" x-data="{ expanded: false, actionsOpen: false }">
+                <div class="scope-card" :data-level="s1.level" :id="'scope-' + s1.record_id" x-data="{ expanded: false, actionsOpen: false }" :draggable="$store.chat.isTowerPgMode && !$store.chat.scopeOrderSaving"
+                  @dragstart.stop="$store.chat.startScopeDrag(s1.record_id, $event)"
+                  @dragover.prevent @drop.stop.prevent="$store.chat.dropScopeBefore(s1.record_id, $event)"
+                  @dragend="$store.chat.draggedScopeId = null">
                   <div class="scope-card-header">
                     <span class="scope-level-badge" x-show="!$store.chat.isTowerPgMode" :data-level="s1.level" x-text="$store.chat.scopeLevelLabel(s1.level)"></span>
                     <div class="scope-card-actions">
@@ -8380,6 +8387,8 @@
                         </button>
                         <div class="doc-actions-popover" x-show="actionsOpen" x-cloak x-transition>
 	                          <button x-show="!$store.chat.isTowerPgMode && $store.chat.canAdminWorkspace && parseInt(s1.level.slice(1)) < 5" type="button" @click.stop="$store.chat.startNewScope('l' + (parseInt(s1.level.slice(1)) + 1), s1.record_id); actionsOpen = false">Add child scope</button>
+                          <button type="button" x-show="$store.chat.isTowerPgMode" :disabled="$store.chat.scopeOrderSaving || $store.chat.scopeTree[0]?.record_id === s1.record_id" @click.stop="$store.chat.moveScope(s1.record_id, -1)" :aria-label="'Move scope ' + s1.title + ' up'">Move Up</button>
+                          <button type="button" x-show="$store.chat.isTowerPgMode" :disabled="$store.chat.scopeOrderSaving || $store.chat.scopeTree[$store.chat.scopeTree.length - 1]?.record_id === s1.record_id" @click.stop="$store.chat.moveScope(s1.record_id, 1)" :aria-label="'Move scope ' + s1.title + ' down'">Move Down</button>
                           <button type="button" x-show="$store.chat.isTowerPgMode" @click.stop="$store.chat.openScopeAccess(s1); actionsOpen = false">Access</button>
 	                          <button type="button" x-show="$store.chat.canManageScope(s1)" @click.stop="$store.chat.startEditScope(s1.record_id); actionsOpen = false">Edit scope</button>
 	                          <button type="button" @click.stop="$store.chat.copyFlightDeckReference('scope', s1.record_id, s1.title || 'Untitled scope'); actionsOpen = false">FD Ref</button>
@@ -9847,7 +9856,7 @@
             </section>
             <p role="alert" class="channel-access-error" x-show="$store.chat.channelSettingsError" x-text="$store.chat.channelSettingsError"></p>
             <p role="status" class="settings-success" x-show="$store.chat.channelSettingsNotice" x-text="$store.chat.channelSettingsNotice"></p>
-            <p x-show="$store.chat.isTowerPgMode && $store.chat.channelDeleteConfirmArmed">This archives the channel, including nonempty channels. Stored content is retained in Tower. There is no restore control in Flight Deck.</p>
+            <p x-show="$store.chat.isTowerPgMode && $store.chat.channelDeleteConfirmArmed">This archives the channel, including nonempty channels. Stored tasks, documents, messages and files remain intact in Tower; this channel is no longer accessible. There is no restore control in Flight Deck.</p>
             <button type="button" class="btn-cancel" x-show="$store.chat.channelDeleteConfirmArmed" :disabled="$store.chat.channelDeleteSubmitting" @click="$store.chat.channelDeleteConfirmArmed = false">Cancel deletion</button>
 
             <section class="channel-metadata-panel" x-show="$store.chat.isTowerPgMode">

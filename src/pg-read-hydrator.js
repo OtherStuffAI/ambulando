@@ -3115,6 +3115,13 @@ export async function hydrateTowerPgEventUpdates(store, events = [], deps = {}) 
       attentionStateChanged = true;
     }
 
+    if (entityType === 'scope_order' || (['scope', 'channel'].includes(entityType) && trimText(event?.operation) === 'archived')) {
+      // These hints reconcile through the canonical journal only; no list or
+      // content hydration is needed for a private preference or tombstone.
+      fallbackEvents += 1;
+      continue;
+    }
+
     if (
       ['workspace_member', 'workspace_member_profile', 'actor_profile', 'actor'].includes(entityType)
       || trimText(event?.event_type) === 'actor.profile.updated'

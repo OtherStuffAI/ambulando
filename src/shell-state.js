@@ -1,3 +1,4 @@
+import { clearPgAuthorityPresentation } from './pg-authority-presentation.js';
 /**
  * Shell state module — owns app-level state that is not section-domain-specific.
  *
@@ -257,6 +258,7 @@ export const SHELL_METHOD_NAMES = Object.freeze([
 // Shared by the assembled shell and the inline fallback auth path. Durable rows,
 // drafts and outbox remain in the signer/workspace partition, never in this runtime.
 export function detachLoggedOutWorkspace(store) {
+  clearPgAuthorityPresentation(store, { preserveDrafts: false });
   store._workspaceSelectionRequest = (store._workspaceSelectionRequest || 0) + 1;
   store._workspaceSelectionGeneration = (store._workspaceSelectionGeneration || 0) + 1;
   store.stopDrive?.();
@@ -325,6 +327,10 @@ export function detachLoggedOutWorkspace(store) {
   store.editingTask = null;
   store.showTaskDetail = false;
   store.scopesLoaded = false;
+  store.pgNavigationRecoveryPending = false;
+  store.pgNavigationRecoverySelection = null;
+  store.pgNavigationGeneration = null;
+  store.pgNavigationWorkspaceKey = '';
   store.syncing = false;
   store.syncStatus = 'idle';
 }

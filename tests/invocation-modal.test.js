@@ -32,7 +32,7 @@ describe('invocation modal lifecycle', () => {
   });
 
   it('mounts invocation modals outside the docs-only template', () => {
-    const docsTemplateStart = indexSource.indexOf('<template x-if="$store.chat.navSection === \'docs\' || $store.chat.chatDocModalOpen">');
+    const docsTemplateStart = indexSource.search(/<template x-if="[^"]*navSection === 'docs'[^"]*chatDocModalOpen/);
     const filesTemplateStart = indexSource.indexOf('<template x-if="$store.chat.navSection === \'files\'">');
     const docsTemplateSource = indexSource.slice(docsTemplateStart, filesTemplateStart);
 

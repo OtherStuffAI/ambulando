@@ -2298,17 +2298,6 @@ export const chatMessageManagerMixin = {
       this.channelDeleteSubmitting = true;
       this.channelSettingsError = '';
       const completePgChannelDelete = async () => {
-        const fallbackNextChannelId = this.channels.find((item) => item.record_id !== channel.record_id)?.record_id ?? null;
-        await deleteChannelRuntimeState(channel.record_id);
-        this.channels = this.channels.filter((item) => item.record_id !== channel.record_id);
-        this.selectedChannelId = fallbackNextChannelId;
-        this.closeThread();
-        this.selectedChannelId = this.selectedChannelId ?? this.channels[0]?.record_id ?? null;
-        Promise.resolve()
-          .then(() => this.refreshMessages({ scrollToLatest: true }))
-          .catch((refreshError) => {
-            console.warn('[flightdeck] PG message refresh failed after channel delete', refreshError);
-          });
         this.showChannelSettingsModal = false;
         this.channelDeleteConfirmArmed = false;
         this.channelSettingsChannelId = '';

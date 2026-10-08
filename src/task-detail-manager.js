@@ -84,6 +84,7 @@ export const taskDetailManagerMixin = {
   },
 
   openTaskDetail(taskId, options = {}) {
+    if (this.rememberPgRecoveryDestination?.('task', taskId)) return false;
     this.taskDetailOpenGeneration = Number(this.taskDetailOpenGeneration || 0) + 1;
     this.commentVisibleCount = this.commentPageSize || 80;
     const isNewDetailEntry = !this.showTaskDetail;

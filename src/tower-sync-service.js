@@ -77,6 +77,7 @@ export class TowerSyncService {
     const familyKey = String(family || '').trim();
     if (!familyKey) throw new Error('ensureLoaded requires a family');
     const recordKey = String(id || '').trim();
+    if (this.ports.canLoad && !await this.ports.canLoad(familyKey, recordKey, options)) return { archived: true, family: familyKey, id: recordKey };
     const registration = this.families.get(familyKey);
     const freshnessKey = `${familyKey}:${recordKey}`;
     const freshMs = Number(options.freshMs ?? registration?.freshMs ?? 0);

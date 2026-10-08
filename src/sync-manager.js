@@ -1,3 +1,5 @@
+import { canLoadPgTarget } from './pg-archive-state.js';
+import { hydrateScopeOrder } from './scope-order.js';
 import { hydrateOrgData, readOrgDataPermissions } from './org-data/tower.js';
 import { resolveTowerPgWorkspaceContext } from './pg-read-hydrator.js';
 import { getTowerPgScopeAccess } from './api.js';
@@ -362,6 +364,7 @@ export const syncManagerMixin = {
     this._towerSyncService = replaceTowerSyncService(this._towerSyncService, {
       workspaceKey,
       families: {
+        'scope-order': { freshMs: 30000, load: (_id, options) => hydrateScopeOrder(this, options) },
         'org-data-permissions': { trackFreshness: false, load: (_key, options) => readOrgDataPermissions(this, options) },
         'org-data': { trackFreshness: false, load: (_key, options) => hydrateOrgData(this, options) },
         'message-activity': {
@@ -503,6 +506,7 @@ export const syncManagerMixin = {
         },
       },
       ports: {
+        canLoad: (family, id, options) => isTowerPgBackendMode() ? canLoadPgTarget(family, id, options) : true,
         connectSSE: ({ runSoon }) => this.connectSSEStream({
           reason: runSoon ? 'ensure-background-sync-soon' : 'ensure-background-sync',
         }),
@@ -3231,7 +3235,7 @@ export const syncManagerMixin = {
         const deltaRequested = targetRecoveryRequired || fallbackRefreshRequested
           || replayBurst
           || Number(eventResult?.fallbackEvents || 0) > 0;
-        const recentEventDelta = !events.some(event => ['context_component', 'context_reference'].includes(event?.entity_type)) && !targetRecoveryRequired && deltaRequested
+        const recentEventDelta = !events.some(event => ['context_component', 'context_reference', 'scope_order'].includes(event?.entity_type) || (['scope', 'channel'].includes(event?.entity_type) && event?.operation === 'archived')) && !targetRecoveryRequired && deltaRequested
           && Date.now() - Number(this.towerPgLastReplayDeltaAt || 0) < 30_000;
         const ranWorkspaceDelta = deltaRequested && !recentEventDelta;
         if (ranWorkspaceDelta) {

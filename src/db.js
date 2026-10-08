@@ -317,6 +317,7 @@ function createWorkspaceDb(workspaceDbKey) {
   // Read-only authority snapshots, partitioned by viewer/workspace/range.
   db.version(34).stores({ message_activity: '&key, context, range' });
   db.version(35).stores({ org_data: '&key' });
+  db.version(36).stores({ scope_orders: '&record_id, workspace_id', pg_archived_targets: '&key, family, id' });
   const commentFields = activityIndexFields;
   db.documents.hook('creating', (_key, row) => { Object.assign(row, commentFields(row)); });
   db.documents.hook('updating', (changes, _key, row) => commentFields({ ...row, ...changes }));

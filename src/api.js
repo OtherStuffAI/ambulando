@@ -2840,3 +2840,12 @@ export async function orgDataRequest(workspaceId, suffix, { baseUrl = _baseUrl, 
   const resp = await signedTowerPgFetch(path, { baseUrl, appNpub, signal, method, useWorkspaceKey: false, ...(body === undefined ? {} : { body }) });
   return json(resp, { requestUrl: resolveTowerPgUrl(path, baseUrl), method, prefix: 'Organisation data' });
 }
+
+export async function getTowerPgScopeOrder(workspaceId, { baseUrl = _baseUrl, appNpub = FLIGHT_DECK_PG_APP_NPUB } = {}) {
+  const requestPath = `/api/v4/flightdeck-pg/workspaces/${encodeURIComponent(workspaceId)}/me/scope-order`;
+  return json(await signedTowerPgFetch(requestPath, { baseUrl, appNpub, useWorkspaceKey: false }), { requestUrl: resolveTowerPgUrl(requestPath, baseUrl), method: 'GET', prefix: 'Tower PG API' });
+}
+export async function putTowerPgScopeOrder(workspaceId, body, { baseUrl = _baseUrl, appNpub = FLIGHT_DECK_PG_APP_NPUB } = {}) {
+  const requestPath = `/api/v4/flightdeck-pg/workspaces/${encodeURIComponent(workspaceId)}/me/scope-order`;
+  return json(await signedTowerPgFetch(requestPath, { method: 'PUT', body, baseUrl, appNpub, useWorkspaceKey: false }), { requestUrl: resolveTowerPgUrl(requestPath, baseUrl), method: 'PUT', prefix: 'Tower PG API' });
+}

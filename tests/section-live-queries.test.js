@@ -393,9 +393,9 @@ describe('section live query plan', () => {
     });
 
     expect(plan.workspace).toEqual([
+      'ws:archived-targets', 'ws:scope-order',
       'ws:personal-wapps',
-      'ws:scopes',
-      'ws:channels',
+      'ws:pg-navigation',
       'ws:groups',
       'ws:daily-notes',
       'ws:members',

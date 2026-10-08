@@ -136,3 +136,5 @@ export const putTowerPgScopeAccess = (store, ...args) => issueTypedApi(store, 's
 export const setTowerPgFileBlossom = (store, ...args) => issue(store, 'file-blossom.set', { args, entityId: `${args[1]}:${args[2]}` }, crypto.randomUUID());
 
 export const setTowerPgAttachmentBlossom = (store, ...args) => issue(store, 'attachment-blossom.set', { args, entityId: `${args[1]}:${args[2]}` }, crypto.randomUUID());
+
+export const putTowerPgScopeOrder = (store, ...args) => issueTypedApi(store, 'scope-order.put', args, args[1]?.mutation_id);

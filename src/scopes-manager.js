@@ -1,3 +1,6 @@
+import { resolvePgReaderActorId } from './pg-reader-identity.js';
+import { sortScopesPersonally } from './scope-order.js';
+import { putTowerPgScopeOrder } from './tower-command-intents.js';
 /**
  * Scope management methods extracted from app.js.
  *
@@ -7,8 +10,8 @@
  */
 
 import {
+  getWorkspaceDb,
   getScopesByOwner,
-  deleteChannelRuntimeState,
   upsertScope,
   upsertTask,
   upsertDocument,
@@ -254,6 +257,68 @@ export const scopesManagerMixin = {
     return Boolean(this.canAdminWorkspace || (this.isTowerPgMode && (this.scopes || []).length) || (this.scopes || []).some((scope) => this.canManageScope(scope)));
   },
 
+  get personallyOrderedScopes() {
+    const order = this.personalScopeOrder;
+    const valid = order?.actor_id === resolvePgReaderActorId(this) && order?.workspace_id === this.currentWorkspace?.workspaceId;
+    return sortScopesPersonally(this.scopes || [], valid ? order.scope_ids : []);
+  },
+
+  startScopeDrag(scopeId, event) {
+    if (!this.isTowerPgMode || this.scopeOrderSaving) return;
+    this.draggedScopeId = scopeId;
+    if (event?.dataTransfer) { event.dataTransfer.effectAllowed = 'move'; event.dataTransfer.setData('text/plain', scopeId); }
+  },
+  async dropScopeBefore(scopeId, event) {
+    event?.preventDefault();
+    const source = this.draggedScopeId; this.draggedScopeId = null;
+    if (!source || source === scopeId) return;
+    const ids = this.scopeTree.map(row => row.record_id).filter(id => id !== source);
+    const index = ids.indexOf(scopeId); if (index < 0) return;
+    ids.splice(index, 0, source); await this.savePersonalScopeOrder(ids);
+  },
+  async moveScope(scopeId, direction) {
+    const ids = this.scopeTree.map(row => row.record_id), index = ids.indexOf(scopeId), target = index + direction;
+    if (index < 0 || target < 0 || target >= ids.length || ![-1, 1].includes(direction)) return;
+    [ids[index], ids[target]] = [ids[target], ids[index]];
+    await this.savePersonalScopeOrder(ids);
+  },
+  async savePersonalScopeOrder(ids) {
+    if (!this.isTowerPgMode || this.scopeOrderSaving) return;
+    this.scopeOrderSaving = true; this.scopeOrderError = '';
+    try {
+      const context = resolveTowerPgWorkspaceContext(this);
+      await putTowerPgScopeOrder(this, context.workspaceId, { scope_ids: ids, expected_row_version: this.personalScopeOrder?.row_version || 0, mutation_id: crypto.randomUUID() }, context);
+      this.scopeOrderNotice = 'Personal scope order saved.';
+    } catch (error) {
+      this.scopeOrderError = /scope_order_conflict/.test(error?.message || '') ? 'Your order changed in another session. Refresh Scope Management and try again.' : error?.message || 'Could not save scope order.';
+    } finally { this.scopeOrderSaving = false; }
+  },
+
+  async handlePgArchivedTargets(targets = []) {
+    const workspaceKey = this.currentWorkspaceKey;
+    const ids = new Set(targets.map(row => row.id));
+    const activeChannelId = this.selectedChannelId || this.deckThreadChannelId;
+    const channel = (this.channels || []).find(row => row.record_id === activeChannelId);
+    const document = this.selectedDocument || this.selectedDoc || (this.selectedDocId ? await getWorkspaceDb().documents.get(this.selectedDocId) : null);
+    const details = [document, this.editingTask].filter(Boolean);
+    if (!ids.has(activeChannelId) && !ids.has(channel?.scope_id) && !ids.has(this.pgContextScopeId)
+      && !ids.has(this.selectedBoardId) && !details.some(row => ids.has(row.channel_id || row.pg_channel_id) || ids.has(row.scope_id || row.pg_scope_id || row.scope_l1_id))) return false;
+    this.saveChatComposerDraft?.('message'); this.saveChatComposerDraft?.('thread');
+    // Preserve unsent editor input locally before the archived destination
+    // disappears from the projection. No remote save or content rewrite.
+    if (document && this.docEditDraftDirty) await this.persistSelectedDocDraft?.({ immediate: true, item: document });
+    if (this.editingTask && this.taskDraftDirty) await this.persistTaskLocalDraft?.();
+    if (this.currentWorkspaceKey !== workspaceKey) return false;
+    this.cancelDocAutosave?.(); this.cancelDocLocalDraftPersistence?.();
+    this.docRichEditorAdapter?.setEditable?.(false);
+    this.selectedChannelId = null;
+    this.closeThread?.({ syncRoute: false });
+    this.activeThreadId = null; this.deckThreadChannelId = ''; this.deckThreadTowerId = '';
+    this.selectedDoc = null; this.selectedDocId = null; this.chatDocModalOpen = false; this.showTaskDetail = false;
+    this.openAllScopesOverview?.(); this.syncRoute?.();
+    return true;
+  },
+
   openScopeManagement() {
     this.navSection = 'settings';
     this.mobileNavOpen = false;
@@ -266,7 +331,7 @@ export const scopesManagerMixin = {
     const scope = this.scopesMap.get(scopeId);
     if (!scope) return;
     const consequence = isTowerPgBackendMode()
-      ? 'This archives the scope and all its channels, including nonempty channels. Stored content is retained in Tower. There is no restore control in Flight Deck.'
+      ? 'This archives the scope and all its channels, including nonempty channels. Stored tasks, documents, messages and files remain intact in Tower; archived channels are no longer accessible. There is no restore control in Flight Deck.'
       : 'This deletes the scope. Records assigned to it are not deleted.';
     this.scopeDeleteError = '';
     this.scopeDeleteConfirmation = {
@@ -858,6 +923,7 @@ export const scopesManagerMixin = {
 
   async refreshScopes() {
     if (isTowerPgBackendMode()) {
+      await this.requestTowerSyncFamily?.('scope-order', '', { force: true });
       return this.requestTowerSyncFamily?.('scopes') ?? [];
     }
     return this.loadLocalScopes();
@@ -2556,18 +2622,6 @@ export const scopesManagerMixin = {
         if (!workspaceId || !baseUrl) throw new Error('Flight Deck PG workspace is not connected');
         if (scope.pg_workspace_id && scope.pg_workspace_id !== workspaceId) throw new Error('This scope belongs to a different workspace.');
         await deleteTowerPgWorkspaceScope(this, workspaceId, scopeId, { baseUrl, appNpub });
-        await upsertScope(toRaw({ ...scope, record_state: 'deleted', sync_status: 'synced' }));
-        const channelIds = new Set((this.channels || []).filter((channel) => channel.scope_id === scopeId).map((channel) => channel.record_id));
-        for (const channelId of channelIds) await deleteChannelRuntimeState(channelId);
-        const selectedDeleted = channelIds.has(this.selectedChannelId) || this.pgContextScopeId === scopeId || this.selectedBoardId === scopeId;
-        this.scopes = this.scopes.filter((item) => item.record_id !== scopeId);
-        this.channels = (this.channels || []).filter((item) => !channelIds.has(item.record_id));
-        if (selectedDeleted) {
-          this.selectedChannelId = null;
-          this.closeThread?.();
-          this.messages = [];
-          this.openAllScopesOverview?.();
-        }
         this.scopeDeleteConfirmation = null;
         this.scopeDeleteNotice = `Archived scope "${scope.title || 'Untitled scope'}" and its channels.`;
         this.syncRoute?.();

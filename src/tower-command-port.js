@@ -1,3 +1,5 @@
+import { markPgTargetArchived } from './pg-archive-state.js';
+import { mapScopeOrder } from './scope-order.js';
 import { prepareOrgDataCommand } from './org-data/tower.js';
 import { prepareFeedCommand } from './feed/tower.js';
 import {
@@ -57,7 +59,7 @@ export const TOWER_WORKSPACE_COMMAND_CONTRACT = Object.freeze({
     'message.create', 'message.update', 'message.delete',
     'thread.branch',
     'file.create', 'file.update', 'file-folder.create', 'audio-note.create',
-    'scope.create', 'scope.update', 'scope.delete',
+    'scope-order.put', 'scope.create', 'scope.update', 'scope.delete',
     'channel.create', 'channel.update', 'channel.delete',
     'workroom.create', 'workroom.start', 'workroom.archive', 'workroom-approval.decide',
     'reaction.create', 'reaction.delete',
@@ -140,6 +142,13 @@ async function reconcileTypedCommand(name, result, { owner = '', args = [] } = {
   } else if (name === 'daily-note.upsert') {
     const row = mapPgDailyNoteToLocal(result?.daily_note || result?.note || result, { workspaceOwnerNpub: owner });
     if (row.record_id) await upsertDailyNote(row);
+  } else if (name === 'scope-order.put') {
+    const row = mapScopeOrder(result.scope_order);
+    const db = getWorkspaceDb();
+    await db.transaction('rw', db.scope_orders, async () => {
+      const prior = await db.scope_orders.get(row.record_id);
+      if (!prior || prior.row_version <= row.row_version) await db.scope_orders.put(row);
+    });
   } else if (name === 'resource-view-state.put') {
     const row = mapTowerResourceViewState(result?.view_state || result?.resource_view_state || result, { workspaceId: args[0] });
     if (row?.record_id) await upsertResourceViewState(row);
@@ -199,6 +208,7 @@ export function prepareTowerWorkspaceCommand(store, name, input = {}) {
     'scope.create': 'createTowerPgWorkspaceScope',
     'scope.update': 'updateTowerPgWorkspaceScope',
     'scope.delete': 'deleteTowerPgWorkspaceScope',
+    'scope-order.put': 'putTowerPgScopeOrder',
     'workspace.update': 'updateTowerPgWorkspace',
     'personal-agent-settings.update': 'updateTowerPgPersonalAgentSettings',
     'workspace.delete': 'deleteTowerPgWorkspace',
@@ -277,7 +287,7 @@ export function prepareTowerWorkspaceCommand(store, name, input = {}) {
         await upsertScope(mapPgScopeToLocal(result?.scope || result, { workspaceOwnerNpub: owner }));
         return result;
       },
-      'scope.delete': () => previousScope ? upsertScope(cloneableRow(previousScope, { record_state: 'deleted', sync_status: 'synced' })) : undefined,
+      'scope.delete': async () => { await markPgTargetArchived('scope', args[1]); if (previousScope) await upsertScope(cloneableRow(previousScope, { record_state: 'deleted', sync_status: 'synced' })); },
       'channel.create': async (result) => {
         const row = mapPgChannelToLocal(result?.channel || result, { workspaceOwnerNpub: owner });
         if (args[2]?.client_record_id && row.record_id !== args[2].client_record_id) {
@@ -290,7 +300,7 @@ export function prepareTowerWorkspaceCommand(store, name, input = {}) {
         await upsertChannel(mapPgChannelToLocal(result?.channel || result, { workspaceOwnerNpub: owner }));
         return result;
       },
-      'channel.delete': () => previousChannel ? upsertChannel(cloneableRow(previousChannel, { record_state: 'deleted', sync_status: 'synced' })) : undefined,
+      'channel.delete': async () => { await markPgTargetArchived('channel', args[1]); if (previousChannel) await upsertChannel(cloneableRow(previousChannel, { record_state: 'deleted', sync_status: 'synced' })); },
     }[name];
     const fail = {
       'scope.create': () => upsertScope({ ...mapPgScopeToLocal({ id: args[1]?.client_record_id, ...args[1] }, { workspaceOwnerNpub: owner }), sync_status: 'failed' }),

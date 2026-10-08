@@ -3392,6 +3392,15 @@
       "notes": [
         "Show a napplet only after its current document and authorised snapshot are ready, preventing stale clicks during reopen and navigation."
       ]
+    },
+    {
+      "buildNumber": 2306,
+      "label": "Personal scope order and targeted archives",
+      "notes": [
+        "Drag scopes or use Move Up and Move Down to save your own workspace order across sessions.",
+        "Archive scopes and channels with clear retained-content confirmation; connected and reconnecting sessions update without downloading unrelated content.",
+        "Keep navigation safe while workspace access is rechecked and preserve local recovery drafts."
+      ]
     }
   ]
 }
