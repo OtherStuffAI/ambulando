@@ -1200,10 +1200,6 @@
     <div class="app-layout" x-show="$store.chat.isLoggedIn">
       <div class="mobile-sidebar-backdrop" x-show="$store.chat.mobileNavOpen" @click="$store.chat.mobileNavOpen = false"></div>
       <nav id="sol-primary-navigation" aria-label="Workspace navigation" :role="$store.chat.mobileNavOpen ? 'dialog' : 'navigation'" :aria-modal="$store.chat.mobileNavOpen ? 'true' : null" x-sol-dialog="$store.chat.mobileNavOpen" :inert="$store.chat.mobileViewport && !$store.chat.mobileNavOpen" @keydown.escape.stop="if ($store.chat.mobileNavOpen) { $store.chat.mobileNavOpen = false; document.querySelector('.mobile-menu-btn')?.focus() }" class="sidebar" :class="{ 'sidebar-collapsed': $store.chat.navCollapsed, 'sidebar-mobile-open': $store.chat.mobileNavOpen }">
-        <button type="button" class="sol-sidebar-brand" @click="$store.chat.openCommandPalette()" aria-label="Open command palette">
-          <img src="/ambulando/confluence-symbol-provisional.png" alt="" />
-          <span x-show="!$store.chat.navCollapsed || $store.chat.mobileNavOpen">Ambulando<small class="sol-brand-tagline">Solvitur Ambulando</small></span>
-        </button>
               <nav
                 class="expanded-sidebar-section-switcher"
                 x-show="$store.chat.mobileNavOpen"

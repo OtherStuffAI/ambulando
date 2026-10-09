@@ -3482,6 +3482,13 @@
       "notes": [
         "Blend the Docs list title, search and actions into the workspace background in both themes while preserving sticky scrolling and white document paper."
       ]
+    },
+    {
+      "buildNumber": 2322,
+      "label": "Simpler sidebar navigation",
+      "notes": [
+        "Remove repeated Ambulando logo, name and tagline from the sidebar in both desktop states and the mobile drawer, keeping header branding and navigation without an empty branding gap."
+      ]
     }
   ]
 }

@@ -17,7 +17,7 @@ conventions in `src/sol.css`. Avoid new fixed light colors in any product surfac
 
 | Surface | Existing behavior retained | v5 presentation |
 | --- | --- | --- |
-| Shell/navigation | Section routing, view locks, scope/channel selection, workspace discovery/switching, profile/sync feedback | Confluence/name in expanded sidebar, symbol in rail, local Lucide navigation, responsive drawer, native keyboard buttons |
+| Shell/navigation | Section routing, view locks, scope/channel selection, workspace discovery/switching, profile/sync feedback | Header-only Confluence/name branding, compact rail, local Lucide navigation, responsive drawer, native keyboard buttons |
 | Login/onboarding | Ephemeral, NIP-07, bunker/nsec, workspace access/bootstrap and connection flows | Quiet bordered panels, labeled credentials, explicit disabled/loading/error feedback |
 | Home/Inbox/scopes | Dexie unread/working projections, filters, actions, scope cards and channel creation permissions | Semantic cards, status text, compact controls, selected accent |
 | Conversations/thread/composer | Thread routing, attachments, reactions, scroll ownership, drafts and send failure | Readable 16px messages, calm sender metadata, bounded modal, focus ring and local control colors |
@@ -50,7 +50,7 @@ panes, full-width boards, rich editor toolbars, sync/authority details and view
 locks remain because they serve working workflows. Expanded desktop product navigation
 uses the horizontal bar; the phone drawer retains view, scope/channel and workspace controls.
 Navigation keeps the original collapsed default; its toggle reveals the expanded
-Confluence/name sidebar and horizontal desktop product navigation.
+scope/channel sidebar and horizontal desktop product navigation.
 Baseline-disabled approvals, flows, schedules, people, opportunities and reports
 retain their existing feature guards. Their shared presentation is themed; the
 redesign does not enable those products or claim browser coverage of gated flows.
@@ -126,8 +126,9 @@ Visible product copy and installed-app titles use Ambulando. Sol remains the
 repository/runtime identifier; this change does not configure its future domain.
 
 Brand lockups retain Ambulando as the product name and place the secondary
-Solvitur Ambulando tagline underneath in the header, expanded sidebar and
-sign-in panel. The compact rail remains symbol-only. Uppercase presentation
+Solvitur Ambulando tagline underneath in the header and sign-in panel.
+The sidebar has no repeated brand block in either desktop state or the phone
+drawer; navigation starts at the top without a reserved branding gap. Uppercase presentation
 uses semantic muted text; the underlying text retains its requested spelling.
 At 320px the header reduces spacing while retaining readable tagline text and
 44px navigation, theme and profile controls.

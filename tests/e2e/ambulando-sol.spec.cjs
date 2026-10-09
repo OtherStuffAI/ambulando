@@ -176,8 +176,8 @@ for (const [width, theme] of [[1440, 'light'], [1440, 'dark'], [390, 'light'], [
     await page.evaluate(() => window.Alpine.store('chat').navigateTo('status', { syncRoute: false }));
     if (width > 768) {
       if (await page.evaluate(() => window.Alpine.store('chat').navCollapsed)) await page.getByRole('button', { name: 'Toggle navigation', exact: true }).click();
-      await expect(page.locator('.sidebar .sol-sidebar-brand')).toContainText('Ambulando');
-      await expect(page.locator('.sidebar .expanded-sidebar-section-switcher')).toBeVisible();
+      await expect(page.locator('.sidebar .sol-sidebar-brand')).toHaveCount(0);
+      await expect(page.locator('.sol-horizontal-navigation:visible')).toBeVisible();
       await capture(page, `fixture-${theme}-${width}-navigation`);
     }
     await expect(page.locator('.content-scroll-area')).toBeVisible();
@@ -497,10 +497,16 @@ for (const width of [1440, 1280, 900, 390, 320]) for (const theme of ['light', '
     expect(geometry.taglineScroll).toBeLessThanOrEqual(geometry.tagline.width + 1);
     expect(geometry.brand.right).toBeLessThanOrEqual(geometry.theme.left + 1);
     expect(geometry.theme.right).toBeLessThanOrEqual(geometry.profile.left + 1);
+    await expect(page.locator('.sidebar .sol-sidebar-brand')).toHaveCount(0);
+    if (width > 768) {
+      const gap = await page.locator('.sidebar-nav').evaluate(node => node.getBoundingClientRect().top - node.closest('.sidebar').getBoundingClientRect().top);
+      expect(gap).toBeLessThanOrEqual(12);
+    }
     await capture(page, `tagline-${theme}-${width}-compact`);
     await page.getByRole('button', { name:'Toggle navigation', exact:true }).click();
     const nav = width > 768 ? page.locator('.sol-horizontal-navigation:visible') : page.locator('.sidebar .expanded-sidebar-section-switcher:visible');
-    await expect(page.locator('.sol-sidebar-brand small:visible')).toHaveText('Solvitur Ambulando');
+    await expect(page.locator('.sidebar .sol-sidebar-brand')).toHaveCount(0);
+    await expect(page.locator('.brand-logo')).toBeVisible();
     await expect(nav).toBeVisible();
     const tabs = await nav.locator('.expanded-sidebar-section-switcher-btn').evaluateAll(nodes => nodes.map(node => ({ text:node.textContent.trim(), before:getComputedStyle(node,'::before').content, after:getComputedStyle(node,'::after').content, svgs:node.querySelectorAll('svg').length })));
     for (const tab of tabs) { expect(tab.svgs).toBe(1); expect(['none','normal','""']).toContain(tab.before); expect(['none','normal','""']).toContain(tab.after); }
