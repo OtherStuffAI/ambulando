@@ -263,13 +263,18 @@ function hasProseMirrorContentModel(contentModel = {}) {
 }
 
 function normalizedDocumentPlainText(value) {
-  return String(value || '').replace(/\s+/g, ' ').trim();
+  // innerText inserts layout-dependent separators (notably around pre/table).
+  // This guard checks text presence; exact whitespace/marks remain protected
+  // by the independent content-model round-trip validation.
+  return String(value || '').replace(/\s+/g, '');
 }
 
 function proseMirrorPlainText(node = null) {
   if (!node || typeof node !== 'object') return '';
   if (node.type === 'text') return String(node.text || '');
   if (node.type === 'fdWikiLink') return String(node.attrs?.title || '');
+  if (node.type === 'fdStorageFile') return String(node.attrs?.label || node.attrs?.title || node.attrs?.src || 'File');
+  if (node.type === 'fdUploadPlaceholder') return String(node.attrs?.label || 'Uploading image...');
   if (node.type === 'hardBreak') return '\n';
   const children = Array.isArray(node.content) ? node.content : [];
   const content = children.map(proseMirrorPlainText).join('');
@@ -4506,12 +4511,20 @@ export const docsManagerMixin = {
     const normalizedVisibleText = normalizedDocumentPlainText(visibleEditorText);
     const normalizedSerializedText = normalizedDocumentPlainText(proseMirrorPlainText(contentModel.editor_state));
     if (normalizedVisibleText
-      && (!normalizedSerializedText || normalizedVisibleText.length > normalizedSerializedText.length)) {
+      && normalizedVisibleText !== normalizedSerializedText) {
       // A stale adapter can still serialize the last accepted body while a
-      // duplicate visible editor contains a much longer draft. Preserve the
-      // complete visible text as a plain recovery model before refusing Save;
-      // keeping edit mode open also retains the original rich DOM in memory.
-      const recoveryModel = createDocumentEditorState({
+      // duplicate visible editor contains a different draft. Preserve a rich
+      // recovery when verifiable, otherwise keep visible text and the rich DOM.
+      const nativeState = this.docRichEditorAdapter?.getJSON?.();
+      const nativeModel = nativeState?.type === 'doc' ? prosemirrorToFlightDeckContentModel(nativeState) : null;
+      // Prefer the native rich tree, including comment-anchor identities, if
+      // only the adapter snapshot was stale. Parse DOM only for actual gaps.
+      const visibleModel = nativeModel
+        && normalizedDocumentPlainText(proseMirrorPlainText(nativeModel.editor_state)) === normalizedVisibleText
+        ? nativeModel : this.docRichEditorAdapter?.getVisibleContentModel?.();
+      const recoveryModel = visibleModel
+        && normalizedDocumentPlainText(proseMirrorPlainText(visibleModel.editor_state)) === normalizedVisibleText
+        ? visibleModel : createDocumentEditorState({
         content: visibleEditorText,
         content_blocks: [],
       }).contentModel;
@@ -4519,13 +4532,19 @@ export const docsManagerMixin = {
       this.docEditorBlocks = normalizeDocumentBlocks(recoveryModel.content_blocks, recoveryModel.content);
       this.docEditorProseMirrorState = recoveryModel.editor_state;
       this.docEditorContentModel = recoveryModel;
+      // Repair the adapter only when its schema can recover the complete rich
+      // surface. Otherwise keep the original DOM available for recovery.
+      if (recoveryModel === visibleModel) this.docRichEditorAdapter.setContent(recoveryModel.editor_state, { preserveSelection: true });
       this.docAutosaveState = 'error';
-      await this.persistSelectedDocDraft({ integrityError: 'visible_editor_content_exceeds_serialized_model' });
+      const recoveryRow = { ...this.buildSelectedDocDraftRow(), ...recoveryModel,
+        integrity_error: 'visible_editor_content_exceeds_serialized_model' };
+      await this.persistSelectedDocDraft({ row: recoveryRow, integrityError: recoveryRow.integrity_error });
       if (!autosave) {
         this.error = 'The visible document did not match the save model. Your complete text is still open and stored as a recovery draft; please retry Save.';
       }
       return null;
     }
+    if (String(this.error || '').startsWith('The visible document did not match the save model.')) this.error = null;
     if (isDocumentContentReadyForEditor(item)
       && contentModel.content === createDocumentEditorState(item).contentModel.content
       && documentContentSignature(contentModel) === documentContentSignature(item)

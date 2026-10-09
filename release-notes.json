@@ -3664,6 +3664,13 @@
       "label": "Validated shared frontend checkpoint",
       "notes": [],
       "noUserVisibleChanges": true
+    },
+    {
+      "buildNumber": 2350,
+      "label": "Verified rich document recovery",
+      "notes": [
+        "Keep native rich document formatting and comment anchors when retrying a stale editor snapshot. Clear the save integrity banner once text matches and preserve complete drafts on device."
+      ]
     }
   ]
 }

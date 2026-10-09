@@ -128,3 +128,24 @@ it('repairs copied block IDs while retaining the first comment anchor identity',
     expect(adapter.getJSON().content.map(node => node.attrs.fdBlockId)).toEqual(ids);
   } finally { adapter.destroy(); element.remove(); }
 });
+
+it('flushes a native DOM mutation before serialization and retains rich recovery semantics', () => {
+  const element = document.createElement('div');
+  document.body.append(element);
+  const updates = [];
+  const state = markdownToProseMirrorDoc('**Native** [link](https://example.com)\n\n- List\n\n```js\nconst x = 1;\n```\n\n- [x] Done\n\n[[Synthetic wiki]]\n\n![Image](storage://synthetic-image)');
+  const adapter = createTiptapEditorAdapter({ element, editorState: state, onUpdate: model => updates.push(model) });
+  try {
+    const text = element.querySelector('strong').firstChild;
+    text.nodeValue = 'Native mutation';
+    // No await: Save must flush the pending MutationObserver turn itself.
+    const saved = adapter.getContentModel();
+    expect(saved.content).toContain('Native mutation');
+    expect(updates.at(-1).editor_state).toEqual(saved.editor_state);
+    const recovered = adapter.getVisibleContentModel();
+    expect(documentEditorSemanticTokens(recovered.editor_state)).toEqual(documentEditorSemanticTokens(saved.editor_state));
+    expect(recovered.editor_state.content.some(n => n.type === 'bulletList')).toBe(true);
+    expect(recovered.editor_state.content.some(n => n.type === 'codeBlock')).toBe(true);
+    expect(validateDocumentContentModelRoundTrip(recovered)).toEqual({ ok: true });
+  } finally { adapter.destroy(); element.remove(); }
+});

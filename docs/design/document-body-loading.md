@@ -126,3 +126,19 @@ All typing scenarios preserved 74/74 characters. Heavy maximum frame gap was
 baseline, heavy render p95 improved from 231.2 ms, readiness from 1,588 ms and
 task opening from 499.8 ms. Thread opening is comparable to the prior local
 157.8 ms sample. No dropped text or typing long-task regression was observed.
+
+### Visible-text save integrity
+
+The DOM presence guard compares the ordered non-whitespace text, including saved
+wiki fallback labels and visible file/upload labels. Browser `innerText` inserts
+layout separators around fenced code and tables; their lengths do not establish
+content loss. Exact text, marks and attachment semantics remain subject to the
+independent model round-trip check. Save flushes pending native DOM observation
+before taking the adapter snapshot.
+
+A mismatch still blocks the write. Recovery prefers the complete native rich
+tree and its comment anchors; if needed, it uses the editor schema to recover
+the visible surface. It repairs the adapter only when recovered text matches,
+and checkpoints an explicit recovery row so a stale adapter cannot replace it.
+If rich recovery is unverifiable, visible text is preserved separately and the
+original DOM remains open. Duplicate/stale surfaces cannot bypass the guard.

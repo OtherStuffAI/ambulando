@@ -1966,6 +1966,46 @@ describe('docsManagerMixin rich editor mount safety', () => {
     expect(store.getVisibleDocRichEditorText()).toBe('A 5,000 word visible draft');
   });
 
+  it('accepts code boundaries and rendered storage labels without flattening a rich model', async () => {
+    const model = prosemirrorToFlightDeckContentModel({ type: 'doc', content: [
+      { type: 'codeBlock', attrs: { language: 'js' }, content: [{ type: 'text', text: 'const url = new URL("https://example.com");' }] },
+      { type: 'codeBlock', content: [{ type: 'text', text: 'next code' }] },
+      { type: 'paragraph', content: [{ type: 'text', text: 'After code', marks: [{ type: 'bold' }] }] },
+      { type: 'fdStorageFile', attrs: { src: 'storage://synthetic', label: 'Synthetic file' } },
+    ] });
+    const record = { record_id: 'code-boundaries', title: 'Code', ...model, version: 1, sync_status: 'synced' };
+    const store = createStore({ documents: [record], selectedDocId: record.record_id,
+      selectedDocType: 'document', docEditorTitle: record.title, docEditorMode: 'rich',
+      docRichEditorAdapter: { getContentModel: () => model },
+      docRichEditorMountEl: { querySelectorAll: () => [{ innerText: 'const url = new URL("https://example.com");\n\nnext code\n\nAfter code\nSynthetic file' }] },
+      clearSelectedDocDraft: vi.fn(async () => {}), persistSelectedDocDraft: vi.fn(async () => ({})),
+    });
+    expect(await store.saveSelectedPgDocItem(record, 'npub1owner')).toBe(record);
+    expect(store.docEditorContentModel.editor_state).toEqual(model.editor_state);
+    expect(store.persistSelectedDocDraft).not.toHaveBeenCalled();
+  });
+
+  it('rejects equal-length missing text, checkpoints rich recovery and permits a corrected retry', async () => {
+    const stale = richDocContentModel('Wrong text');
+    const visible = prosemirrorToFlightDeckContentModel({ type: 'doc', content: [{ type: 'paragraph', content: [
+      { type: 'text', text: 'Right text', marks: [{ type: 'bold' }] },
+    ] }] });
+    let model = stale;
+    const record = { record_id: 'equal-length-loss', title: 'Recovery', ...visible, version: 1, sync_status: 'synced' };
+    const adapter = { getContentModel: () => model, getVisibleContentModel: () => visible,
+      setContent: vi.fn(() => { model = visible; }) };
+    const store = createStore({ documents: [record], selectedDocId: record.record_id, selectedDocType: 'document',
+      docEditorTitle: record.title, docEditorMode: 'rich', docEditDraftDirty: true,
+      docRichEditorAdapter: adapter, docRichEditorMountEl: { querySelectorAll: () => [{ innerText: 'Right text' }] },
+      persistSelectedDocDraft: vi.fn(async () => ({})), clearSelectedDocDraft: vi.fn(async () => {}),
+    });
+    expect(await store.saveSelectedPgDocItem(record, 'npub1owner')).toBeNull();
+    expect(store.persistSelectedDocDraft.mock.calls[0][0].row.editor_state).toEqual(visible.editor_state);
+    expect(adapter.setContent).toHaveBeenCalled();
+    expect(await store.saveSelectedPgDocItem(record, 'npub1owner')).toBe(record);
+    expect(store.error).toBeNull();
+  });
+
   it('refuses a PG save when the referenced adapter is empty but the visible editor has text', async () => {
     isTowerPgBackendModeMock.mockReturnValue(true);
     updateTowerPgDocMock.mockClear();
@@ -2010,9 +2050,10 @@ describe('docsManagerMixin rich editor mount safety', () => {
     expect(store.docAutosaveState).toBe('error');
     expect(store.error).toContain('complete text is still open');
     expect(store.docEditorContent).toContain('The complete visible draft');
-    expect(store.persistSelectedDocDraft).toHaveBeenCalledWith({
+    expect(store.persistSelectedDocDraft).toHaveBeenCalledWith(expect.objectContaining({
       integrityError: 'visible_editor_content_exceeds_serialized_model',
-    });
+      row: expect.objectContaining({ content: expect.stringContaining('The complete visible draft') }),
+    }));
     expect(updateTowerPgDocMock).not.toHaveBeenCalled();
   });
 

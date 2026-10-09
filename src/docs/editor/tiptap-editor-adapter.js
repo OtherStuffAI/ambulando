@@ -1,5 +1,6 @@
 import { FlightDeckWikiLink, createWikiPicker } from './wiki-extension.js';
 import { Editor } from '@tiptap/core';
+import { DOMParser } from '@tiptap/pm/model';
 import { createFlightDeckTiptapExtensions } from './prosemirror-flightdeck-schema.js';
 import { resolveDocumentProseMirrorState } from './markdown-to-prosemirror.js';
 import { prosemirrorToFlightDeckContentModel } from './prosemirror-to-flightdeck.js';
@@ -59,7 +60,31 @@ export function createTiptapEditorAdapter({
       return editor.getJSON();
     },
     getContentModel() {
+      // Save can run in the same turn as native beforeinput/DOM mutations.
+      editor.view.domObserver.flush();
       return prosemirrorToFlightDeckContentModel(editor.getJSON());
+    },
+    getVisibleContentModel() {
+      // Recovery only: retain lists, marks and code instead of Markdown-parsing
+      // rendered plain text. Never use this to bypass the save integrity guard.
+      const surface = editor.view.dom.cloneNode(true);
+      surface.querySelectorAll('.ProseMirror-trailingBreak, .ProseMirror-separator').forEach(node => node.remove());
+      for (const item of surface.querySelectorAll('li[data-checked]')) {
+        // Task NodeViews omit the schema's identifying data-type attribute.
+        item.dataset.type = 'taskItem';
+        item.querySelector(':scope > label')?.remove();
+      }
+      for (const link of surface.querySelectorAll('[data-wiki-title]')) {
+        // NodeView title is a live tooltip, not the saved fallback label.
+        link.setAttribute('title', link.dataset.wikiTitle);
+        link.textContent = link.dataset.wikiTitle;
+      }
+      for (const image of surface.querySelectorAll('img[data-fd-storage-object-id]')) {
+        // Hydration changes src for presentation; recover the storage identity.
+        image.setAttribute('src', `storage://${image.dataset.fdStorageObjectId}`);
+      }
+      return prosemirrorToFlightDeckContentModel(DOMParser.fromSchema(editor.schema)
+        .parse(surface, { preserveWhitespace: 'full' }).toJSON());
     },
     setEditable(nextEditable) {
       // Access changes do not modify content or create a new recovery draft.
