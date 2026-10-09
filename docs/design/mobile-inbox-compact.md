@@ -37,3 +37,40 @@ source CSS, then runs the same fixture behavior checks and mobile/desktop screen
 It uses synthetic records and does not authenticate or contact Tower. This proves
 served layout behavior, but does not establish the build loaded in an existing user
 tab. Check runtime asset hashes and service-worker state separately.
+
+## Ambulando phone layout
+
+Ambulando's `src/sol.css` overrides the legacy one-row toolbar at widths up to
+768px. Inbox title/create/menu share a row, and four 44px filters plus Search
+share the next. Focus expands Search into its own row. This retains independent
+filters, native input behavior, keyboard focus and unclipped menus without
+reducing touch targets to fit a single row. Titles allow two lines, preserving
+more useful preview text; shorter cards retain the 76px minimum.
+
+The phone app header is 60px, with a 44px profile control, and the scope/channel
+rows use tighter surrounding spacing. Sol's hidden bottom section switcher has
+no reserved content height. Recovery notices stay in normal flow, with an 8px
+bottom margin; Deck no longer adds 24px above Inbox or an invisible Hello-card
+gap. Recovery visibility and authentication/sync behavior are unchanged.
+
+Deck pager buttons are 44px square transparent hit areas with 8px dots (10px
+for the active card), rather than painting a tiny-width button whose global
+minimum height makes a tall bar. Desktop and tablet rules above 768px retain
+the established geometry.
+
+`x-sol-viewport` tracks the visual viewport on the app shell. Phone content and
+thread overlays use its height/offset when the keyboard reduces or pans the
+viewport. Updates are frame-coalesced and skipped while pinch zoom is active,
+retaining native zoom/panning. Safe-area padding remains on composers/content.
+
+`tests/e2e/mobile-layout.spec.cjs` exercises seeded Inbox, recovery, phone drawer
+navigation, pager, composer drafts at full/short heights, task detail, a loaded
+document editor, and Files with a PDF at 320/375/390/430/900/1440px in both themes.
+It blocks service workers and external requests so cached runtime assets cannot
+replace fixture chunks. Use the configured managed runtime as
+`PLAYWRIGHT_BASE_URL`; no standalone preview is necessary. Optional
+`SOL_EVIDENCE_DIR` must be ignored and untracked. Screenshots/measurements are
+synthetic local evidence, not authenticated backend delivery or physical-device
+keyboard validation. `tests/sol-viewport.test.js` covers keyboard resize/pan,
+coalescing, pinch zoom and listener cleanup. Physical iPhone/WebKit and existing
+authenticated tabs still need a smoke check.

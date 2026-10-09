@@ -13,6 +13,30 @@ const firstControl = element => {
 // Reuse existing Alpine open/close handlers. This directive owns focus only;
 // it never approves an action, changes a record or overrides a busy exit guard.
 export function installSolAccessibility(Alpine) {
+  Alpine.directive('sol-viewport', (element, _directive, { cleanup }) => {
+    const viewport = window.visualViewport;
+    if (!viewport) return;
+    let frame = 0;
+    const update = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        // Pinch zoom must retain native panning rather than reflowing the app.
+        if (viewport.scale !== 1) return;
+        element.style.setProperty('--sol-visual-height', `${viewport.height}px`);
+        element.style.setProperty('--sol-visual-top', `${viewport.offsetTop}px`);
+      });
+    };
+    viewport.addEventListener('resize', update);
+    viewport.addEventListener('scroll', update);
+    update();
+    cleanup(() => {
+      cancelAnimationFrame(frame);
+      viewport.removeEventListener('resize', update);
+      viewport.removeEventListener('scroll', update);
+      element.style.removeProperty('--sol-visual-height');
+      element.style.removeProperty('--sol-visual-top');
+    });
+  });
   const openDialogs = [];
   const focusHistory = [];
   document.addEventListener('focusin', event => {

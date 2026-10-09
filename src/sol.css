@@ -267,3 +267,56 @@ code, pre { font-family:var(--font-code); }
   backdrop-filter:blur(6px);
 }
 .sidebar-collapsed .toolbox-nav-button { justify-content:center; padding:8px; }
+
+/* Phone layout: keep controls touch-sized while reducing surrounding chrome.
+   Sol uses the drawer, so no bottom section navigation needs reserved space. */
+@media (max-width:768px) {
+  .app-shell { --mobile-section-switcher-height:0px; }
+  .page-header { min-height:60px; padding-block:8px; }
+  .session-controls { min-height:44px; }
+  .page-header .avatar-chip { width:44px; height:44px; padding:0; flex:0 0 44px; }
+  .mobile-scope-switcher { margin-bottom:0; }
+  .mobile-scope-context-controls { grid-template-columns:44px minmax(0,1fr) 44px; padding:2px 8px; }
+  .mobile-scope-trigger { min-height:44px; }
+  .main-content { padding:0 8px; }
+  .global-pg-channel-bar { margin-bottom:4px; }
+  .chat-channel-header { padding:2px 0; min-height:48px; }
+  .content-scroll-area { padding-bottom:env(safe-area-inset-bottom); }
+  .content-scroll-area-deck { padding-bottom:env(safe-area-inset-bottom); }
+  .workspace-recovery-status { flex:0 0 auto; margin:4px 0 8px; font-size:13px; line-height:1.4; }
+  .status-section-deck { flex:1 1 0; height:auto; }
+  .flightdeck-summary-overview-deck { padding:0; gap:0; }
+  .flightdeck-summary-overview-deck > .deck-hello-card { display:none; }
+
+  /* Two rows avoid squeezing seven independent actions into 30px columns. */
+  .inbox-panel-heading[data-deck-mobile-sticky-heading] {
+    grid-template-columns:minmax(0,1fr) 44px 44px;
+    gap:4px;
+    padding:4px 8px;
+  }
+  .inbox-panel-heading h3 { grid-column:1; grid-row:1; }
+  .inbox-panel-heading .deck-new-thread-button { grid-column:2; grid-row:1; }
+  .inbox-panel-heading .inbox-read-menu { grid-column:3; grid-row:1; }
+  .inbox-panel-heading .inbox-type-toggles { grid-column:1; grid-row:2; gap:4px; }
+  .inbox-panel-heading .inbox-search-form { grid-column:2 / 4; grid-row:2; width:100%; }
+  .inbox-panel-heading .inbox-search-form:not(:focus-within) input { width:100%; height:44px; padding:0 8px; cursor:text; }
+  .inbox-panel-heading .inbox-search-form:not(:focus-within) input::placeholder { color:var(--muted-foreground); }
+  .inbox-panel-heading .inbox-search-form:focus-within { grid-column:1 / -1; grid-row:3; }
+  .inbox-panel-heading :is(.inbox-type-toggle, .inbox-search-submit, .deck-new-thread-button, .doc-actions-toggle) { width:44px; min-width:44px; height:44px; padding:6px; }
+  .inbox-panel-heading .inbox-search-form input { min-width:44px; }
+  .flightdeck-summary-panel-inbox .attention-card { padding:8px; min-height:76px; }
+  .flightdeck-summary-panel-inbox .attention-card-title { white-space:normal; overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow-wrap:anywhere; }
+
+  /* The button is the hit area; only its pseudo-element paints a small dot. */
+  .flightdeck-summary-overview-deck .deck-mobile-pagination { gap:0; min-height:44px; padding:0; }
+  .deck-mobile-pagination-button,
+  .deck-mobile-pagination-button-active { display:grid; place-items:center; width:44px; height:44px; min-width:44px; padding:0; background:transparent; }
+  .deck-mobile-pagination-button::before { content:''; width:8px; height:8px; border-radius:50%; background:var(--muted-foreground); }
+  .deck-mobile-pagination-button-active::before { background:var(--primary); width:10px; height:10px; }
+}
+
+@media (max-width:768px) {
+  .app-shell { height:var(--sol-visual-height, 100dvh); }
+  .chat-thread-modal-backdrop { top:var(--sol-visual-top, 0px); bottom:auto; height:var(--sol-visual-height, 100dvh); }
+  .chat-thread-panel, .chat-thread-panel.thread-full { height:calc(var(--sol-visual-height, 100dvh) - 1rem); max-height:calc(var(--sol-visual-height, 100dvh) - 1rem); }
+}

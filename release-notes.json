@@ -3523,6 +3523,14 @@
       "notes": [
         "Hide optional Agents and Context navigation slots on phones when their Settings toggles are off."
       ]
+    },
+    {
+      "buildNumber": 2329,
+      "label": "Comfortable phone layouts",
+      "notes": [
+        "Compact phone header and navigation spacing, readable Inbox previews and 44px Inbox controls.",
+        "Small Deck pager dots keep generous touch areas. Phone composers adapt to keyboard viewport changes while preserving pinch zoom."
+      ]
     }
   ]
 }
