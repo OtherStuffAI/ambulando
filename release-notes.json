@@ -3574,6 +3574,40 @@
       "notes": [
         "Keep phone Inbox search visible as an icon, expand it for typing, and preserve readable card previews with compact actions."
       ]
+    },
+    {
+      "buildNumber": 2336,
+      "label": "Offline-safe document drafts",
+      "notes": [
+        "Edit complete cached documents offline with drafts saved separately on this device. Reconnect verifies Tower before syncing; changed heads preserve both versions for reconciliation.",
+        "Preview-only documents stay read-only. Local drafts require an explicit resume, and delayed loading or saving cannot replace another document or clear later edits."
+      ]
+    },
+    {
+      "buildNumber": 2337,
+      "label": "Document editor guard completion",
+      "notes": [
+        "Keep title and source controls behind the same complete-body and draft-choice checks as the rich editor. Verify the document and workspace again after loading editor code."
+      ]
+    },
+    {
+      "buildNumber": 2338,
+      "label": "Managed app activation",
+      "notes": [],
+      "noUserVisibleChanges": true
+    },
+    {
+      "buildNumber": 2339,
+      "label": "Document response isolation",
+      "notes": [
+        "Keep failed document submissions from rolling back the canonical cache, and ignore editor callbacks belonging to an earlier selection."
+      ]
+    },
+    {
+      "buildNumber": 2340,
+      "label": "Verified managed document editor build",
+      "notes": [],
+      "noUserVisibleChanges": true
     }
   ]
 }

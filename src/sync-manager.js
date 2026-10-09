@@ -3433,6 +3433,9 @@ export const syncManagerMixin = {
         this.ensureBackgroundSync(true);
         if (event?.type === 'online') {
           this.markTowerReachabilityRecovered?.('browser-online', { refresh: false });
+          void this.reconnectSelectedDocDraft?.().catch((error) => {
+            console.warn('[flightdeck] document reconnect deferred', error);
+          });
         } else if (isBrowserOffline()) {
           this.markTowerReachabilityDegraded?.('browser-offline', 'offline');
         }

@@ -5474,6 +5474,7 @@
                     ></span>
                   </div>
                   <div class="doc-edit-access-actions">
+                    <button type="button" x-show="$store.chat.docEditAccessState === 'conflict'" @click="$store.chat.preserveSelectedDocConflictAsRecovery()">Preserve draft in Tower for reconciliation</button>
                     <button type="button" x-show="$store.chat.docEditAccessState === 'recovery_available'" @click="$store.chat.openSelectedDocRecoveryDraft()">Continue recovery</button>
                     <button type="button" x-show="$store.chat.docRecovery?.resolution_state === 'open'" :disabled="$store.chat.docRecoveryActionState || $store.chat.docEditDraftDirty" title="Save current recovery edits first" @click="$store.chat.promoteSelectedDocRecovery()" x-text="$store.chat.docRecoveryActionState === 'promoting' ? 'Saving…' : 'Use recovery as document'">Use recovery as document</button>
                     <button type="button" x-show="$store.chat.docRecovery?.resolution_state === 'open'" :disabled="$store.chat.docRecoveryActionState || $store.chat.docEditDraftDirty" title="Save or copy current recovery edits before discarding" @click="$store.chat.discardSelectedDocRecovery()" x-text="$store.chat.docRecoveryActionState === 'discarding' ? 'Discarding…' : 'Discard recovery'">Discard recovery</button>
@@ -5481,6 +5482,16 @@
                     <button type="button" x-show="$store.chat.docEditDraftDirty && !$store.chat.docRecovery" @click="$store.chat.discardSelectedDocDraft()">Discard local draft</button>
                   </div>
                 </details>
+
+                <div class="doc-edit-access-banner" x-show="$store.chat.docNeedsHeadCheck && !$store.chat.docDraftChoice && !$store.chat.docDraftReadSaved" x-cloak role="status">
+                  <span>Saved on this device · waiting to sync</span>
+                  <button type="button" class="btn-secondary" :disabled="$store.chat.docReconnectCheck" @click="$store.chat.reconnectSelectedDocDraft()">Retry sync</button>
+                </div>
+                <div class="doc-edit-access-banner" x-show="$store.chat.docDraftChoice || $store.chat.docDraftReadSaved" x-cloak role="status">
+                  <p>A local draft is preserved on this device. Choose which version to read or edit.</p>
+                  <button type="button" class="btn-secondary" @click="$store.chat.docDraftChoice = $store.chat.docDraftChoice || await $store.chat.getPreservedDocDraft(); $store.chat.docDraftReadSaved = false; await $store.chat.resumeSelectedDocDraft()">Resume draft</button>
+                  <button type="button" class="btn-secondary" @click="$store.chat.readSelectedDocSavedVersion()">Read saved version</button>
+                </div>
 
                 <div class="doc-title-block">
                   <div class="doc-title-main">
@@ -5560,8 +5571,8 @@
                     </svg>
                     <div class="doc-preview-surface">
                       <div role="status" aria-live="polite" x-cloak x-show="!$store.chat.isSelectedDocContentReadyForEditor() || ['loading', 'error'].includes($store.chat.docRichEditorLoadState)">
-                        <p x-text="$store.chat.docRichEditorLoadError || ($store.chat.selectedDocument?.content_storage_status === 'error' ? 'Document body could not load. Check your connection and try again.' : 'Loading document…')"></p>
-                        <button type="button" class="btn-secondary" x-show="$store.chat.docRichEditorLoadState === 'error' || $store.chat.selectedDocument?.content_storage_status === 'error'" :disabled="$store.chat.docRichEditorLoadState !== 'error' && ($store.chat.docEditDraftDirty || $store.chat.docLocalDraft)" @click="$store.chat.retrySelectedDocLoading()">Try again</button>
+                        <p x-text="$store.chat.docRichEditorLoadError || ($store.chat.selectedDocument?.content_storage_status === 'error' ? 'Preview only — complete document unavailable. Reconnect and retry to edit.' : 'Preview only — loading complete document…')"></p>
+                        <button type="button" class="btn-secondary" x-show="$store.chat.docRichEditorLoadState === 'error' || !$store.chat.isSelectedDocContentReadyForEditor()" :disabled="$store.chat.docRichEditorLoadState !== 'error' && ($store.chat.docEditDraftDirty || $store.chat.docLocalDraft)" @click="$store.chat.retrySelectedDocLoading()">Try again</button>
                         <button type="button" class="btn-secondary" x-show="$store.chat.docRichEditorLoadState === 'error'" @click="$store.chat.docEditorMode = 'preview'">Read without editor</button>
                       </div>
                       <template x-if="$store.chat.docEditorMode === 'rich'">

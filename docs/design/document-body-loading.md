@@ -72,3 +72,57 @@ an asynchronous boundary, and reads wait for those writes. Completion updates
 are guarded by editor generation and write revision so navigation cannot apply
 an old draft to another selection. Undo therefore remains durable when an older
 put is already in flight, including across a workspace switch.
+
+## Offline document editing
+
+Complete cached saved bodies open without a network read. Document updates keep
+that canonical cache intact until Tower accepts the write; mutable content lives
+in `document_drafts`, including an independent starting body and version/hash.
+Offline checkpoints show “Saved on this device · waiting to sync.” Storage-backed
+previews and failed body loads stay read-only with retry. Retry exhaustion is UI
+state and cannot write an error/preview over a good Dexie body.
+
+Local draft lookup briefly gates input. Differing drafts offer Resume draft or
+Read saved version without deleting either copy. This also protects an empty
+draft against silently replacing a populated saved body; explicit resumption
+retains intentional deletion. Asynchronous editor imports read one current
+snapshot after import completion.
+
+Reconnect acquires a Tower lease and makes an independent typed body/head read
+before comparing the draft's starting identity. It never joins an earlier
+prefetch or treats cached content as a fresh head. Autosave and manual submission
+are suppressed throughout that check. Failure leaves the draft local. A changed
+head offers explicit preservation in Tower's existing recovery/reconciliation
+workflow. Unchanged heads use the ordinary lease and base checks; frontend
+optimism cannot bypass Tower concurrency enforcement.
+
+Save uploads snapshot all base fields together. Accepted and recovery responses
+apply editor state only to their document, workspace and editor generation;
+later typing remains dirty. Canonical acceptance may advance the base of later
+edits without replacing their content. These safeguards use existing Tower
+contracts and do not remove documents, comments or historical recoveries.
+
+### Validation of the offline editor
+
+The final source validation passed 4,861 tests (one skipped), including delayed
+imports, draft restore, upload/navigation/typing races, offline cache reload,
+unchanged/changed reconnect heads, failed fresh-head checks and metadata-only
+cache preservation. Six served-browser document checks passed, including native
+offline typing and explicit draft resumption; seven performance checks passed.
+The browser suites use isolated synthetic records and default local Tower targets.
+Authenticated multi-user reconnect and the originally reported reproduction remain manual
+acceptance checks; historical incident attribution remains unproved.
+
+Final managed-build performance samples, in milliseconds:
+
+| Scenario | Shell / composer | Input p95 | Render p95 | Typing long tasks |
+| --- | --- | ---: | ---: | ---: |
+| Chat, 200 tasks/docs | 297 / 442 | 0.5 | 32.8 | 0 |
+| Heavy chat, 2,000 tasks/docs | 288 / 801 | 0.5 | 215.8 | 0 |
+| Diagnostics enabled | 289 / 468 | 0.6 | 148.7 | 0 |
+
+All typing scenarios preserved 74/74 characters. Heavy maximum frame gap was
+133.3 ms. Thread/task opening p95 was 158.0/286.3 ms. Against the documented
+baseline, heavy render p95 improved from 231.2 ms, readiness from 1,588 ms and
+task opening from 499.8 ms. Thread opening is comparable to the prior local
+157.8 ms sample. No dropped text or typing long-task regression was observed.

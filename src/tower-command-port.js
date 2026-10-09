@@ -365,6 +365,8 @@ export function prepareTowerWorkspaceCommand(store, name, input = {}) {
     const optimisticWriter = name === 'task.assignments.sync' ? upsertTask : optimisticWriterFor(input);
     const reconcile = async (accepted) => {
       if (!accepted || !optimisticWriter) return accepted;
+      if (name === 'document.update' && localRow?.pg_editor_workspace
+        && localRow.pg_editor_workspace !== store.getSelectedDocWorkspaceId?.()) return accepted;
       const localId = String(localRow?.record_id || '').trim();
       const acceptedId = String(accepted?.record_id || '').trim();
       if (localId && acceptedId && localId !== acceptedId) {
@@ -380,10 +382,10 @@ export function prepareTowerWorkspaceCommand(store, name, input = {}) {
     };
     return {
       entityKey: `${name}:${localRow?.record_id || input.taskId || ''}`,
-      optimistic: localRow && optimisticWriter ? () => optimisticWriter(localRow) : undefined,
+      optimistic: localRow && optimisticWriter && name !== 'document.update' ? () => optimisticWriter(localRow) : undefined,
       execute: generic,
       reconcile,
-      fail: previousRow && optimisticWriter ? () => optimisticWriter(previousRow) : undefined,
+      fail: previousRow && optimisticWriter && name !== 'document.update' ? () => optimisticWriter(previousRow) : undefined,
     };
   }
   const localRow = input.localRow;

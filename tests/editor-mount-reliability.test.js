@@ -33,6 +33,7 @@ describe('concurrent lazy editor failures', () => {
         [name]:mount, selectedDocId:'doc', selectedDocument:{record_id:'doc'}, docEditorMode:'rich', docEditorContent:'retained draft', docEditorBlocks:[], docEditDraftDirty:true, docLocalDraft:{content:'retained draft'},
         editingTask:{record_id:'task',description:'retained draft'}, isTaskDetailEditing:()=>true, taskDescriptionEditing:true,
         dailyNoteEditorMode:'edit', dailyNoteEditorBody:'retained draft',
+        getSelectedDocWorkspaceId:()=> 'workspace',
         isSelectedDocRichEditorEditable:()=>true, syncDocRichEditorContentModel:vi.fn(),
         [prefix+'MountGeneration']:0,
         ['destroy'+(kind==='document'?'DocRichEditor':kind==='task'?'TaskRichDescriptionEditor':'DailyNoteRichEditor')]() { this[prefix+'MountGeneration']++; this[prefix+'MountEl']=null; this[prefix+'MountPromise']=null; },

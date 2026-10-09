@@ -181,3 +181,23 @@ describe('documentLinkViewState', () => {
     });
   });
 });
+
+describe('verified body cache safety', () => {
+  it('retains complete body and hash across a metadata-only version advance', () => {
+    const saved = { record_id: 'doc-cache', version: 2, content: 'Complete saved body',
+      content_storage_object_id: 'same-object', content_storage_status: 'loaded',
+      content_sha256_hex: 'a'.repeat(64), pg_canonical_version_id: 'doc-cache:2' };
+    const metadata = { ...saved, version: 3, title: 'Renamed', content: 'Preview',
+      content_storage_status: 'remote', content_sha256_hex: null, pg_canonical_version_id: null };
+    expect(preserveHydratedDocumentContent(saved, metadata)).toMatchObject({ version: 3,
+      title: 'Renamed', content: 'Complete saved body', content_storage_status: 'loaded',
+      content_sha256_hex: 'a'.repeat(64), pg_canonical_version_id: 'doc-cache:3' });
+  });
+  it('never replaces a loaded body with failed hydration carrying preview editor blocks', () => {
+    const saved = { record_id: 'doc-cache', version: 2, content: 'Complete body',
+      content_storage_object_id: 'object', content_storage_status: 'loaded' };
+    expect(preserveHydratedDocumentContent(saved, { ...saved, content: '',
+      content_storage_status: 'error', content_blocks: [{ text: 'preview' }] })).toMatchObject({
+      content: 'Complete body', content_storage_status: 'loaded' });
+  });
+});

@@ -1273,6 +1273,12 @@ export function initApp() {
     newDocCommentReplyBody: '',
     docCommentReplyAudioDrafts: [],
     docAutosaveTimer: null,
+    docDraftRestorePending: false,
+    docReconnectCheck: null,
+    docNeedsHeadCheck: false,
+    docDraftChoice: null,
+    docDraftReadSaved: false,
+    docSavedSnapshot: null,
     docAutosaveState: 'saved',
     recordCheckoutPolicyConfig: FLIGHT_DECK_RECORD_CHECKOUT_POLICY_CONFIG,
     lockManagedCheckoutSessions: {},
@@ -2094,6 +2100,7 @@ export function initApp() {
     },
 
     get docSyncStatusLabel() {
+      if (this.docAutosaveState === 'device') return 'Saved on this device · waiting to sync';
       if (this.docAutosaveState === 'error') return 'Save failed';
       if (this.docAutosaveState === 'pending') return 'Unsaved changes';
       if (this.docAutosaveState === 'saving') return 'Saving…';
@@ -2146,7 +2153,7 @@ export function initApp() {
         });
         return `${ownHolderNpubs.has(holderNpub) ? 'Edit access held by you' : `Being edited by ${holder}`}${remaining ? ` · ${remaining}` : ''}`;
       }
-      if (this.selectedDocPgLeaseSession?.inspectionState === 'offline') return 'Offline · reconnect to edit';
+      if (this.selectedDocPgLeaseSession?.inspectionState === 'offline') return 'Offline · edits saved on this device';
       return 'Ready to edit';
     },
 

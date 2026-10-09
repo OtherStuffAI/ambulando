@@ -20,6 +20,8 @@ const DOCUMENT_CONTENT_FIELDS = [
 
 function hasCompleteDocumentContent(document = {}) {
   if (document.content_storage_status === 'loaded') return true;
+  if (document.content_storage_object_id && ['remote', 'error', 'loading'].includes(document.content_storage_status)
+    && !document.content_sha256_hex) return false;
   if (Array.isArray(document.content_blocks) && document.content_blocks.length > 0) return true;
   return document.editor_state?.type === 'doc';
 }
@@ -49,8 +51,12 @@ export function preserveHydratedDocumentContent(current = null, incoming = null)
   if (newest !== incoming) return newest;
   if (!current || !incoming) return incoming;
   if (String(current.record_id || '') !== String(incoming.record_id || '')) return incoming;
-  if (documentVersion(current) !== documentVersion(incoming)) return incoming;
-  if (!hasCompleteDocumentContent(current) || hasCompleteDocumentContent(incoming)) return incoming;
+  const sameStorage = current.content_storage_object_id
+    && current.content_storage_object_id === incoming.content_storage_object_id
+    && (!incoming.content_sha256_hex || !current.content_sha256_hex || current.content_sha256_hex === incoming.content_sha256_hex);
+  if (documentVersion(current) !== documentVersion(incoming) && !sameStorage) return incoming;
+  if (!hasCompleteDocumentContent(current)) return incoming;
+  if (hasCompleteDocumentContent(incoming) && incoming.content_storage_status !== 'error') return incoming;
   if (
     current.content_storage_object_id
     && incoming.content_storage_object_id
@@ -58,7 +64,7 @@ export function preserveHydratedDocumentContent(current = null, incoming = null)
   ) return incoming;
 
   return DOCUMENT_CONTENT_FIELDS.reduce((merged, field) => {
-    merged[field] = current[field];
+    merged[field] = field === 'pg_canonical_version_id' ? (incoming[field] || `${incoming.record_id}:${documentVersion(incoming)}`) : current[field];
     return merged;
   }, { ...incoming });
 }
