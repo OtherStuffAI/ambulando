@@ -98,3 +98,18 @@ extension behavior or physical phone/WebKit behavior. Review those in an
 isolated authorized workspace before releasing a live Sol registration. Runtime
 screenshots and run-specific evidence belong only in ignored
 `tmp/docs/handoffs/`, never in reusable public source.
+
+## Document paper
+
+Documents use an explicitly white paper surface in both shell themes, per the
+writing-workflow preference. The canvas is nominally 210mm wide with a 297mm
+minimum height and 20mm writing margins; long content grows without pagination.
+The existing document pane owns vertical and horizontal scrolling, so laptop
+layouts retain page width alongside independently scrolling comments. Phones
+adapt the paper width and use 20px side margins. Paper-local ink, links, code and
+border colors stay readable independently of the shell theme. Content storage,
+editor instances, checkout, autosave and wiki hierarchy are unchanged.
+
+The A4 cases in `tests/e2e/ambulando-sol.spec.cjs` check both themes at
+1440/1280/390px, long-content growth, paper geometry, ink, local overflow,
+comment isolation and editor retention while switching phone panes.

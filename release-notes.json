@@ -3445,6 +3445,13 @@
         "Present the connected workspace with Ambulando v5 light and dark themes, Confluence identity and local Lucide icons.",
         "Save your theme on this device; use keyboard-accessible navigation and dialogs with readable phone controls across conversations, tasks, documents, files, agents and settings."
       ]
+    },
+    {
+      "buildNumber": 2315,
+      "label": "White A4 document canvas",
+      "notes": [
+        "Write on a fixed A4-width white page with readable dark ink and generous margins in either theme. Laptop pages scroll locally; phone pages adapt to the available width."
+      ]
     }
   ]
 }

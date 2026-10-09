@@ -359,3 +359,60 @@ for (const width of [1440, 390, 320]) {
     });
   }
 }
+
+for (const width of [1440, 1280, 390]) for (const theme of ['light', 'dark']) {
+  test(`A4 paper geometry, editing and comments: ${theme} ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await openFixture(page);
+    await page.evaluate(({ theme, width }) => {
+      const s = window.Alpine.store('chat');
+      s.closeThread({ syncRoute: false });
+      window.Alpine.store('appearance').setTheme(theme);
+      s.documents[0].content = '# Writing on paper\n\nThe browser remains the working application.\n\n' + Array.from({ length: 35 }, (_, i) => `## Section ${i + 1}\n\nA long document grows continuously while comments keep their own scroll pane. This is a synthetic review document.\n\n`).join('');
+      s.navigateTo('docs', { syncRoute: false });
+      s.selectedDocId = 'sol-doc'; s.selectedDocType = 'document'; s.loadDocEditorFromSelection();
+      s.docComments = [{ record_id: 'a4-comment', target_record_id: 'sol-doc', parent_comment_id: null, comment_status: 'open', body: 'Review the writing margins and keep the page white in both themes.', sender_npub: s.session.npub, record_state: 'active', created_at: new Date().toISOString(), updated_at: new Date().toISOString() }];
+      s.docCommentsVisible = width > 768;
+      s.docMobilePane = 'document';
+    }, { theme, width });
+    const editor = page.locator('.doc-rich-editor .ProseMirror');
+    await expect(editor).toContainText('Section 35');
+    const geometry = await page.locator('.doc-rich-editor').evaluate(paper => {
+      const style = getComputedStyle(paper), pane = paper.parentElement, ink = getComputedStyle(paper.querySelector('.ProseMirror'));
+      return { width: paper.getBoundingClientRect().width, height: paper.getBoundingClientRect().height, minHeight: parseFloat(style.minHeight), padding: parseFloat(style.paddingLeft), background: style.backgroundColor, ink: ink.color, paneWidth: pane.clientWidth, paneScrollWidth: pane.scrollWidth, paneScrollHeight: pane.scrollHeight, paneHeight: pane.clientHeight, overflow: document.documentElement.scrollWidth - innerWidth };
+    });
+    expect(geometry.background).toBe('rgb(255, 255, 255)');
+    expect(geometry.ink).toBe('rgb(32, 39, 51)');
+    expect(geometry.minHeight).toBeGreaterThan(1122);
+    expect(geometry.height).toBeGreaterThan(geometry.minHeight);
+    expect(geometry.overflow).toBeLessThanOrEqual(0);
+    if (width > 768) {
+      expect(geometry.width).toBeCloseTo(210 * 96 / 25.4, 0);
+      expect(geometry.padding).toBeCloseTo(20 * 96 / 25.4, 0);
+      expect(geometry.paneScrollHeight).toBeGreaterThan(geometry.paneHeight);
+      await expect(page.locator('.doc-comment-thread-panel')).toContainText('Review the writing margins');
+      await page.locator('.doc-preview-surface').evaluate(pane => { pane.scrollTop = 600; pane.scrollLeft = pane.scrollWidth; });
+      expect(await page.locator('.doc-comment-thread-panel').evaluate(pane => pane.scrollTop)).toBe(0);
+      await page.locator('.doc-preview-surface').evaluate(pane => { pane.scrollTop = 0; pane.scrollLeft = 0; });
+    } else {
+      expect(geometry.width).toBeLessThan(390);
+      expect(geometry.paneScrollWidth).toBeLessThanOrEqual(geometry.paneWidth);
+    }
+    await editor.evaluate(node => node.dataset.a4Probe = 'preserved');
+    await editor.click({ position: { x: 20, y: 20 } });
+    await page.keyboard.type('Draft probe ');
+    await expect(editor).toContainText('Draft probe');
+    await capture(page, `a4-${theme}-${width}-document`);
+    if (width < 769) {
+      await page.getByLabel('Document sections').getByRole('button', { name: 'Comments', exact: true }).click();
+      await expect(page.locator('.doc-comment-thread-panel')).toContainText('Review the writing margins');
+      const comment = page.locator('.doc-thread-entry-root:visible');
+      await page.locator('.doc-thread-list:visible').evaluate(list => list.scrollTop = list.scrollHeight);
+      await expect(comment).toContainText('Review the writing margins');
+      await capture(page, `a4-${theme}-${width}-comments`);
+      await page.getByLabel('Document sections').getByRole('button', { name: 'Docs', exact: true }).click();
+    }
+    await expect(editor).toHaveAttribute('data-a4-probe', 'preserved');
+    console.log('SOL_A4_GEOMETRY', JSON.stringify({ theme, width, geometry }));
+  });
+}

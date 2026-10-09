@@ -173,3 +173,45 @@ code, pre { font-family:var(--font-code); }
   .task-calendar-days button { min-height:44px; }
   .task-bar-popover .task-calendar-clear { border-radius:var(--radius-control); }
 }
+
+/* Paper is deliberately white in both shell themes. Keep the existing document
+   scroll owner: a laptop can pan the nominal A4 page without shrinking it. */
+.docs-section .doc-preview-surface {
+  padding:24px;
+  background:var(--background);
+  border:1px solid var(--border);
+  border-radius:var(--radius-panel);
+  overflow:auto;
+}
+.docs-section .doc-preview-surface > :is(.doc-rich-editor, .doc-source-editor, .doc-block-editor-surface) {
+  --foreground:#202733;
+  --text:#202733;
+  --muted-foreground:#526071;
+  --primary:#244f78;
+  --card:#ffffff;
+  --border:#c8cdd3;
+  --muted:#f1f3f5;
+  box-sizing:border-box;
+  width:210mm;
+  min-width:210mm;
+  min-height:297mm;
+  margin:0 auto;
+  padding:20mm;
+  background:#ffffff;
+  color:var(--text);
+  color-scheme:light;
+  border:1px solid var(--border);
+  border-radius:0;
+  box-shadow:0 2px 8px #00000014;
+}
+.docs-section .doc-rich-editor .ProseMirror { min-height:calc(297mm - 40mm - 2px); }
+.docs-section .doc-rich-editor .ProseMirror pre { background:var(--muted); color:var(--text); }
+.docs-section .doc-rich-editor .ProseMirror a { color:var(--primary); }
+@media (max-width:768px) {
+  .docs-section .doc-preview-surface { padding:12px; }
+  .docs-section .doc-preview-surface > :is(.doc-rich-editor, .doc-source-editor, .doc-block-editor-surface) {
+    width:100%;
+    min-width:0;
+    padding:24px 20px;
+  }
+}
