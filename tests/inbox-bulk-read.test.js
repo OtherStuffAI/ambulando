@@ -176,7 +176,7 @@ describe('Inbox bulk read', () => {
     expect(store.markTowerPgResourcesViewed).not.toHaveBeenCalled();
   });
 
-  it('renders an accessible family menu and derives task icons from board-column colour while unread treatment remains red', () => {
+  it('renders an accessible family menu and derives task icons from board-column colour while unread treatment uses information tokens', () => {
     const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
     const styles = readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8');
     expect(html).toContain('aria-label="Inbox read actions"');
@@ -184,10 +184,10 @@ describe('Inbox bulk read', () => {
     expect(html).toContain("runInboxReadAction(['thread', 'task', 'document'], 'Inbox items')");
     expect(html).toContain('role="status" aria-live="polite"');
     expect(html.match(/--task-status-color': \$store\.chat\.resolveTaskBoardColumnColor\((?:item|task)\)/g)).toHaveLength(2);
-    expect(styles).toMatch(/\.flightdeck-summary-card-task\s*\{[^}]*--flightdeck-summary-card-accent:\s*var\(--task-status-color, #9ca3af\)/s);
+    expect(styles).toMatch(/\.flightdeck-summary-card-task\s*\{[^}]*--flightdeck-summary-card-accent:\s*var\(--task-status-color, var\(--muted-foreground\)\)/s);
     expect(styles).toMatch(/--flightdeck-summary-card-icon-bg:\s*color-mix\([^;]*--task-status-color/s);
     expect(styles).toMatch(/--flightdeck-summary-card-icon-color:\s*color-mix\([^;]*--task-status-color/s);
-    expect(styles).toMatch(/--unread-pastel-red:\s*rgba\(254, 226, 226, 0\.62\)/);
+    expect(styles).toMatch(/--unread-pastel-red:\s*var\(--info-background\)/);
   });
 });
 

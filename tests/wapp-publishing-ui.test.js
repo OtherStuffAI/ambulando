@@ -138,7 +138,7 @@ describe('WApp publishing UI contract', () => {
   it('uses the same thin border on every Feed card edge', () => {
     const cardRule = styles.match(/\.wapp-update-card\s*\{([^}]*)\}/s)?.[1] || '';
 
-    expect(cardRule).toMatch(/border:\s*1px solid rgba\(148, 163, 184, 0\.28\);/);
+    expect(cardRule).toMatch(/border:\s*1px solid color-mix\(in srgb, var\(--border\) 28%, transparent\);/);
     expect(styles).not.toMatch(/\.wapp-update-card[^\{]*\{[^}]*(?:border-left|border-inline-start)\s*:/s);
   });
 
@@ -146,7 +146,7 @@ describe('WApp publishing UI contract', () => {
     const modal = html.slice(html.indexOf('wapp-publishing-editor-backdrop'), html.indexOf('x-show="$store.chat.dailyNoteEditorOpen"'));
     expect(html).toContain('openNewWappPublishingEditor()');
     expect(html).toContain('Background-only · no launcher assignment');
-    expect(modal).toContain('Can post alerts to Flight Deck');
+    expect(modal).toContain('Can post alerts to Ambulando Sol');
     expect(modal).toContain('No default is selected');
     expect(modal).toContain('wappPublishingDestinationIds.includes(channel.channel_id)');
     expect(modal).toContain('Registered HTTPS open origins');

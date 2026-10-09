@@ -18,7 +18,7 @@ describe('rendered markdown code block styling', () => {
   });
 
   it('keeps inline code and fenced code styling separate and preserves keyboard focus', () => {
-    expect(css).toMatch(/\.chat-post-markdown code,[\s\S]*background:\s*#f1f5f9;/);
+    expect(css).toMatch(/\.chat-post-markdown code,[\s\S]*background:\s*var\(--card\);/);
     expect(css).toMatch(/\.md-code-copy-button:focus-visible\s*\{[^}]*outline:/s);
     expect(css).toMatch(/\.md-code-scroll code[^}]*background:\s*transparent;/s);
   });

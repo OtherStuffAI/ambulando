@@ -9,13 +9,13 @@ const app = readFileSync(new URL('../src/app.js', import.meta.url), 'utf8');
 const mobileSelectorStart = html.indexOf('class="mobile-scope-switcher"');
 const mobileSelectorEnd = html.indexOf('<section class="auth-panel"', mobileSelectorStart);
 const mobileSelector = html.slice(mobileSelectorStart, mobileSelectorEnd);
-const sidebarStart = html.indexOf('<nav class="sidebar"');
+const sidebarStart = html.indexOf('<nav id="sol-primary-navigation"');
 const sidebarEnd = html.indexOf('<div class="main-content">', sidebarStart);
 const sidebar = html.slice(sidebarStart, sidebarEnd);
 const globalBarStart = html.indexOf('class="global-pg-channel-bar"');
 const globalBarEnd = html.indexOf('<div class="content-scroll-area"', globalBarStart);
 const globalBar = html.slice(globalBarStart, globalBarEnd);
-const expandedSwitcher = globalBar.match(/<nav\s+class="expanded-sidebar-section-switcher"[\s\S]*?<\/nav>/)?.[0] ?? '';
+const expandedSwitcher = sidebar.match(/<nav\s+class="expanded-sidebar-section-switcher"[\s\S]*?<\/nav>/)?.[0] ?? '';
 
 describe('expanded left-column section switcher', () => {
   it('keeps the approved collapsed mobile scope, channel, sidebar, and compact controls', () => {
@@ -31,10 +31,10 @@ describe('expanded left-column section switcher', () => {
     expect(globalBar).toContain('class="mobile-section-switcher" x-show="!$store.chat.mobileNavOpen"');
   });
 
-  it('renders exactly one labelled section set in the shared top bar for either expanded-column state', () => {
+  it('renders exactly one labelled section set in the sidebar for either expanded-column state', () => {
     expect(html.match(/class="expanded-sidebar-section-switcher"/g)).toHaveLength(1);
     expect(expandedSwitcher).toContain('x-show="!$store.chat.navCollapsed || $store.chat.mobileNavOpen"');
-    expect(expandedSwitcher).toContain('aria-label="Flight Deck sections"');
+    expect(expandedSwitcher).toContain('aria-label="Product sections"');
     expect(mobileSelector).not.toContain('section-switcher');
 
     for (const [section, label] of [
@@ -57,26 +57,20 @@ describe('expanded left-column section switcher', () => {
 
   });
 
-  it('removes the actual expanded left-column navigation set and its layout space', () => {
+  it('places expanded navigation before scopes while preserving the collapsed rail', () => {
     expect(sidebar).toContain('class="sidebar-nav" x-show="$store.chat.navCollapsed && !$store.chat.mobileNavOpen"');
+    expect(sidebar.indexOf('class="expanded-sidebar-section-switcher"')).toBeLessThan(sidebar.indexOf('class="sidebar-scope-navigation"'));
+    expect(globalBar).not.toContain('class="expanded-sidebar-section-switcher"');
     expect(sidebar).toMatch(/<\/ul>\s*<section\s+class="sidebar-scope-navigation"/s);
-    expect(sidebar).not.toContain('sidebar-workspace-navigation-divider');
-    expect(sidebar).not.toContain('mobile-expanded-section-switcher');
-    expect(sidebar).not.toContain("navigateTo('settings')");
     expect(styles).toMatch(/\.sidebar\.sidebar-mobile-open \.sidebar-nav\s*\{[^}]*display:\s*none;/s);
-    expect(styles).not.toMatch(/global-pg-channel-bar-sidebar-expanded\s*\{[^}]*display:\s*none;/s);
   });
 
-  it('keeps the full-screen control at the right edge of the same top bar', () => {
-    const switcherIndex = globalBar.indexOf('class="expanded-sidebar-section-switcher"');
+  it('keeps the full-screen control at the right edge of the shared top bar', () => {
     const actionsIndex = globalBar.indexOf('class="chat-channel-header-actions"');
     const fullScreenIndex = globalBar.indexOf(":aria-label=\"$store.chat.appHeaderHidden ? 'Show header' : 'Full screen'\"");
-
-    expect(switcherIndex).toBeGreaterThanOrEqual(0);
-    expect(actionsIndex).toBeGreaterThan(switcherIndex);
+    expect(actionsIndex).toBeGreaterThanOrEqual(0);
     expect(fullScreenIndex).toBeGreaterThan(actionsIndex);
     expect(globalBar.match(/class="chat-channel-header-actions"/g)).toHaveLength(1);
-    expect(globalBar).not.toContain('global-pg-channel-bar-mobile-sidebar-open');
   });
 
   it('preserves expanded desktop navigation and restores collapsed mobile composition after selection', () => {
@@ -113,8 +107,8 @@ describe('expanded left-column section switcher', () => {
   it('keeps touch, keyboard focus, active state, and horizontal overflow behavior', () => {
     expect(styles).toMatch(/\.expanded-sidebar-section-switcher\s*\{[^}]*overflow-x:\s*auto;[^}]*touch-action:\s*pan-x;/s);
     expect(styles).toMatch(/\.expanded-sidebar-section-switcher-btn\s*\{[^}]*min-height:\s*44px;/s);
-    expect(styles).toMatch(/\.expanded-sidebar-section-switcher-btn:focus-visible\s*\{[^}]*outline:\s*2px solid #2563eb;/s);
-    expect(styles).toMatch(/\.expanded-sidebar-section-switcher-btn-active\s*\{[^}]*background:\s*#eff6ff;/s);
+    expect(styles).toMatch(/\.expanded-sidebar-section-switcher-btn:focus-visible\s*\{[^}]*outline:\s*2px solid var\(--ring\);/s);
+    expect(styles).toMatch(/\.expanded-sidebar-section-switcher-btn-active\s*\{[^}]*background:\s*var\(--muted\);/s);
     expect(styles).not.toContain('expanded-sidebar-section-switcher-btn-mobile-only');
   });
 });

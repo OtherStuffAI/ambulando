@@ -1,0 +1,226 @@
+{
+  "family": "Lucide",
+  "sourceCommit": "a04f228cd01185e09c188b7227b9600c08c565ec",
+  "license": "ISC; inherited Feather portions MIT, see LICENSE",
+  "strokeWidth": 2,
+  "defaultSize": 16,
+  "navigationSize": 20,
+  "icons": [
+    {
+      "component": "LayoutDashboard",
+      "slug": "layout-dashboard",
+      "label": "Overview",
+      "use": "Workspace overview; summary navigation",
+      "asset": "icons/layout-dashboard.svg",
+      "reference": "https://lucide.dev/icons/layout-dashboard",
+      "source": "https://raw.githubusercontent.com/lucide-icons/lucide/a04f228cd01185e09c188b7227b9600c08c565ec/icons/layout-dashboard.svg"
+    },
+    {
+      "component": "MessageSquare",
+      "slug": "message-square",
+      "label": "Conversations",
+      "use": "Chat navigation and threads",
+      "asset": "icons/message-square.svg",
+      "reference": "https://lucide.dev/icons/message-square",
+      "source": "https://raw.githubusercontent.com/lucide-icons/lucide/a04f228cd01185e09c188b7227b9600c08c565ec/icons/message-square.svg"
+    },
+    {
+      "component": "ListTodo",
+      "slug": "list-todo",
+      "label": "Tasks",
+      "use": "Task list and work queue",
+      "asset": "icons/list-todo.svg",
+      "reference": "https://lucide.dev/icons/list-todo",
+      "source": "https://raw.githubusercontent.com/lucide-icons/lucide/a04f228cd01185e09c188b7227b9600c08c565ec/icons/list-todo.svg"
+    },
+    {
+      "component": "Bot",
+      "slug": "bot",
+      "label": "Agents",
+      "use": "Agent directory; not an authority badge",
+      "asset": "icons/bot.svg",
+      "reference": "https://lucide.dev/icons/bot",
+      "source": "https://raw.githubusercontent.com/lucide-icons/lucide/a04f228cd01185e09c188b7227b9600c08c565ec/icons/bot.svg"
+    },
+    {
+      "component": "Files",
+      "slug": "files",
+      "label": "Files",
+      "use": "File library",
+      "asset": "icons/files.svg",
+      "reference": "https://lucide.dev/icons/files",
+      "source": "https://raw.githubusercontent.com/lucide-icons/lucide/a04f228cd01185e09c188b7227b9600c08c565ec/icons/files.svg"
+    },
+    {
+      "component": "Settings",
+      "slug": "settings",
+      "label": "Settings",
+      "use": "Workspace or account settings",
+      "asset": "icons/settings.svg",
+      "reference": "https://lucide.dev/icons/settings",
+      "source": "https://raw.githubusercontent.com/lucide-icons/lucide/a04f228cd01185e09c188b7227b9600c08c565ec/icons/settings.svg"
+    },
+    {
+      "component": "Search",
+      "slug": "search",
+      "label": "Search",
+      "use": "Search field and command launcher",
+      "asset": "icons/search.svg",
+      "reference": "https://lucide.dev/icons/search",
+      "source": "https://raw.githubusercontent.com/lucide-icons/lucide/a04f228cd01185e09c188b7227b9600c08c565ec/icons/search.svg"
+    },
+    {
+      "component": "Plus",
+      "slug": "plus",
+      "label": "Create",
+      "use": "Create a record with an explicit noun",
+      "asset": "icons/plus.svg",
+      "reference": "https://lucide.dev/icons/plus",
+      "source": "https://raw.githubusercontent.com/lucide-icons/lucide/a04f228cd01185e09c188b7227b9600c08c565ec/icons/plus.svg"
+    },
+    {
+      "component": "Ellipsis",
+      "slug": "ellipsis",
+      "label": "More actions",
+      "use": "Contextual row actions",
+      "asset": "icons/ellipsis.svg",
+      "reference": "https://lucide.dev/icons/ellipsis",
+      "source": "https://raw.githubusercontent.com/lucide-icons/lucide/a04f228cd01185e09c188b7227b9600c08c565ec/icons/ellipsis.svg"
+    },
+    {
+      "component": "ExternalLink",
+      "slug": "external-link",
+      "label": "Open externally",
+      "use": "New-site destination, labelled",
+      "asset": "icons/external-link.svg",
+      "reference": "https://lucide.dev/icons/external-link",
+      "source": "https://raw.githubusercontent.com/lucide-icons/lucide/a04f228cd01185e09c188b7227b9600c08c565ec/icons/external-link.svg"
+    },
+    {
+      "component": "ArrowRight",
+      "slug": "arrow-right",
+      "label": "Continue",
+      "use": "Forward navigation or next step",
+      "asset": "icons/arrow-right.svg",
+      "reference": "https://lucide.dev/icons/arrow-right",
+      "source": "https://raw.githubusercontent.com/lucide-icons/lucide/a04f228cd01185e09c188b7227b9600c08c565ec/icons/arrow-right.svg"
+    },
+    {
+      "component": "ChevronDown",
+      "slug": "chevron-down",
+      "label": "Expand",
+      "use": "Disclosure and select trigger",
+      "asset": "icons/chevron-down.svg",
+      "reference": "https://lucide.dev/icons/chevron-down",
+      "source": "https://raw.githubusercontent.com/lucide-icons/lucide/a04f228cd01185e09c188b7227b9600c08c565ec/icons/chevron-down.svg"
+    },
+    {
+      "component": "Check",
+      "slug": "check",
+      "label": "Selected",
+      "use": "Selection confirmation",
+      "asset": "icons/check.svg",
+      "reference": "https://lucide.dev/icons/check",
+      "source": "https://raw.githubusercontent.com/lucide-icons/lucide/a04f228cd01185e09c188b7227b9600c08c565ec/icons/check.svg"
+    },
+    {
+      "component": "CircleCheck",
+      "slug": "circle-check",
+      "label": "Complete",
+      "use": "Confirmed successful result",
+      "asset": "icons/circle-check.svg",
+      "reference": "https://lucide.dev/icons/circle-check",
+      "source": "https://raw.githubusercontent.com/lucide-icons/lucide/a04f228cd01185e09c188b7227b9600c08c565ec/icons/circle-check.svg"
+    },
+    {
+      "component": "CircleAlert",
+      "slug": "circle-alert",
+      "label": "Needs attention",
+      "use": "Warning with explanatory text",
+      "asset": "icons/circle-alert.svg",
+      "reference": "https://lucide.dev/icons/circle-alert",
+      "source": "https://raw.githubusercontent.com/lucide-icons/lucide/a04f228cd01185e09c188b7227b9600c08c565ec/icons/circle-alert.svg"
+    },
+    {
+      "component": "CircleX",
+      "slug": "circle-x",
+      "label": "Failed",
+      "use": "Error with recovery action",
+      "asset": "icons/circle-x.svg",
+      "reference": "https://lucide.dev/icons/circle-x",
+      "source": "https://raw.githubusercontent.com/lucide-icons/lucide/a04f228cd01185e09c188b7227b9600c08c565ec/icons/circle-x.svg"
+    },
+    {
+      "component": "LoaderCircle",
+      "slug": "loader-circle",
+      "label": "Working",
+      "use": "Only during live pending work",
+      "asset": "icons/loader-circle.svg",
+      "reference": "https://lucide.dev/icons/loader-circle",
+      "source": "https://raw.githubusercontent.com/lucide-icons/lucide/a04f228cd01185e09c188b7227b9600c08c565ec/icons/loader-circle.svg"
+    },
+    {
+      "component": "X",
+      "slug": "x",
+      "label": "Close",
+      "use": "Dismiss transient surface",
+      "asset": "icons/x.svg",
+      "reference": "https://lucide.dev/icons/x",
+      "source": "https://raw.githubusercontent.com/lucide-icons/lucide/a04f228cd01185e09c188b7227b9600c08c565ec/icons/x.svg"
+    },
+    {
+      "component": "PanelLeft",
+      "slug": "panel-left",
+      "label": "Navigation",
+      "use": "Collapse/expand sidebar",
+      "asset": "icons/panel-left.svg",
+      "reference": "https://lucide.dev/icons/panel-left",
+      "source": "https://raw.githubusercontent.com/lucide-icons/lucide/a04f228cd01185e09c188b7227b9600c08c565ec/icons/panel-left.svg"
+    },
+    {
+      "component": "Download",
+      "slug": "download",
+      "label": "Download",
+      "use": "Save an actual file",
+      "asset": "icons/download.svg",
+      "reference": "https://lucide.dev/icons/download",
+      "source": "https://raw.githubusercontent.com/lucide-icons/lucide/a04f228cd01185e09c188b7227b9600c08c565ec/icons/download.svg"
+    },
+    {
+      "component": "Sun",
+      "slug": "sun",
+      "label": "Light theme",
+      "use": "Theme selection",
+      "asset": "icons/sun.svg",
+      "reference": "https://lucide.dev/icons/sun",
+      "source": "https://raw.githubusercontent.com/lucide-icons/lucide/a04f228cd01185e09c188b7227b9600c08c565ec/icons/sun.svg"
+    },
+    {
+      "component": "Moon",
+      "slug": "moon",
+      "label": "Dark theme",
+      "use": "Theme selection",
+      "asset": "icons/moon.svg",
+      "reference": "https://lucide.dev/icons/moon",
+      "source": "https://raw.githubusercontent.com/lucide-icons/lucide/a04f228cd01185e09c188b7227b9600c08c565ec/icons/moon.svg"
+    },
+    {
+      "component": "ShieldCheck",
+      "slug": "shield-check",
+      "label": "Verified",
+      "use": "Only verified evidence, not generic agent decoration",
+      "asset": "icons/shield-check.svg",
+      "reference": "https://lucide.dev/icons/shield-check",
+      "source": "https://raw.githubusercontent.com/lucide-icons/lucide/a04f228cd01185e09c188b7227b9600c08c565ec/icons/shield-check.svg"
+    },
+    {
+      "component": "FileText",
+      "slug": "file-text",
+      "label": "Documents",
+      "use": "Sol extension: documents, editor and wiki; distinct from adjacent Files navigation",
+      "asset": "icons/file-text.svg",
+      "reference": "https://lucide.dev/icons/file-text",
+      "source": "https://raw.githubusercontent.com/lucide-icons/lucide/a04f228cd01185e09c188b7227b9600c08c565ec/icons/file-text.svg"
+    }
+  ]
+}

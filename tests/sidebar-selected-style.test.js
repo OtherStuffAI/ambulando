@@ -11,11 +11,11 @@ function declarationsFor(selector) {
 }
 
 describe('selected left navigation styling', () => {
-  it('keeps the selected fill and blue emphasis without a border or outline', () => {
+  it('keeps the selected semantic fill and emphasis without a border or outline', () => {
     const active = declarationsFor('.sidebar-nav li.active');
 
-    expect(active).toMatch(/background:\s*#eff6ff;/);
-    expect(active).toMatch(/color:\s*#1d4ed8;/);
+    expect(active).toMatch(/background:\s*var\(--muted\);/);
+    expect(active).toMatch(/color:\s*var\(--primary\);/);
     expect(active).toMatch(/font-weight:\s*700;/);
     expect(active).not.toMatch(/(?:^|[;\s])border(?:-left)?:/);
     expect(active).not.toMatch(/(?:^|[;\s])outline:/);

@@ -3437,6 +3437,14 @@
         "Manage members and groups in separate tabs, search the roster and choose channel access explicitly.",
         "Review existing access and permission reductions before applying changes; keep custom grants and report each channel outcome."
       ]
+    },
+    {
+      "buildNumber": 2314,
+      "label": "Ambulando Sol workspace redesign",
+      "notes": [
+        "Present the connected workspace with Ambulando v5 light and dark themes, Confluence identity and local Lucide icons.",
+        "Save your theme on this device; use keyboard-accessible navigation and dialogs with readable phone controls across conversations, tasks, documents, files, agents and settings."
+      ]
     }
   ]
 }

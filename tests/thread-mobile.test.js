@@ -332,16 +332,16 @@ describe('Thread mobile responsive behavior', () => {
       const taskBackdropDecl = extractDeclarations(styles, '.chat-task-page-backdrop');
       const docBackdropDecl = extractDeclarations(styles, '.chat-doc-page-backdrop');
 
-      expect(backdropDecl).toMatch(/background\s*:\s*rgba\(15,\s*23,\s*42,\s*0\.42\)/);
-      expect(backdropDecl).toMatch(/backdrop-filter\s*:\s*blur\(10px\)/);
+      expect(backdropDecl).toMatch(/background\s*:\s*color-mix\(in srgb, var\(--primary\) 42%, transparent\)/);
+      expect(backdropDecl).toMatch(/backdrop-filter\s*:\s*none/);
       expect(backdropDecl).toMatch(/z-index\s*:\s*220/);
       expect(panelDecl).toMatch(/width\s*:\s*min\(66\.666vw,\s*1120px\)/);
       expect(taskBackdropDecl).toMatch(/z-index\s*:\s*220/);
-      expect(taskBackdropDecl).toMatch(/background\s*:\s*rgba\(15,\s*23,\s*42,\s*0\.42\)/);
-      expect(taskBackdropDecl).toMatch(/backdrop-filter\s*:\s*blur\(10px\)/);
+      expect(taskBackdropDecl).toMatch(/background\s*:\s*color-mix\(in srgb, var\(--primary\) 42%, transparent\)/);
+      expect(taskBackdropDecl).toMatch(/backdrop-filter\s*:\s*none/);
       expect(docBackdropDecl).toMatch(/z-index\s*:\s*220/);
-      expect(docBackdropDecl).toMatch(/background\s*:\s*rgba\(15,\s*23,\s*42,\s*0\.42\)/);
-      expect(docBackdropDecl).toMatch(/backdrop-filter\s*:\s*blur\(10px\)/);
+      expect(docBackdropDecl).toMatch(/background\s*:\s*color-mix\(in srgb, var\(--primary\) 42%, transparent\)/);
+      expect(docBackdropDecl).toMatch(/backdrop-filter\s*:\s*none/);
     });
   });
 });

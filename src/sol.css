@@ -1,0 +1,175 @@
+/* Ambulando Sol: component conventions layered over established layout owners. */
+html { font-family:var(--font-ui); font-size:16px; }
+body { padding:0; font-size:14px; line-height:1.5; background:var(--background); color:var(--foreground); }
+.app-shell { height:100dvh; padding-inline:0; }
+.page-header { margin:0; padding:8px 16px; min-height:60px; background:var(--card); }
+.header-leading { min-width:0; gap:8px; }
+.brand-copy h1 { font-size:18px; font-weight:650; color:var(--foreground); }
+.brand-copy p { display:none; }
+.sol-product-name { color:var(--muted-foreground); font-size:14px; font-weight:400; }
+.brand-logo, .sol-sidebar-brand img { width:40px; height:40px; object-fit:contain; background:var(--brand-ivory); border-radius:var(--radius-control); padding:4px; }
+.brand-lockup-button { min-height:44px; }
+.sol-theme-button { display:inline-flex; align-items:center; gap:8px; padding:8px 12px; margin-left:auto; background:transparent; color:var(--foreground); border:1px solid var(--border); }
+.sol-theme-button svg { width:18px; height:18px; }
+.session-controls { margin-left:12px; }
+button { min-height:var(--control-height); border-radius:var(--radius-control); background:var(--primary); color:var(--primary-foreground); }
+button:hover:not(:disabled) { filter:none; }
+button:disabled { cursor:not-allowed; opacity:.65; }
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]), select, textarea { color:var(--foreground); background:var(--card); border-color:var(--input); border-radius:var(--radius-control); min-height:var(--control-height); font-size:14px; }
+input::placeholder, textarea::placeholder { color:var(--muted-foreground); opacity:1; }
+input[readonly], textarea[readonly] { background:var(--muted); }
+[aria-invalid="true"] { border-color:var(--destructive); }
+:focus-visible { outline:2px solid var(--ring) !important; outline-offset:3px; }
+::selection { background:var(--accent); color:var(--accent-foreground); }
+h1 { font-size:24px; } h2 { font-size:20px; } h3 { font-size:16px; }
+code, pre { font-family:var(--font-code); }
+.btn-primary, .btn-confirm, .connect-primary-action, .auth-option { background:var(--primary); color:var(--primary-foreground); border:1px solid var(--primary); border-radius:var(--radius-control); box-shadow:none; }
+.btn-primary:hover:not(:disabled), .btn-confirm:hover:not(:disabled), .auth-option:hover:not(:disabled) { background:var(--primary); color:var(--primary-foreground); opacity:.9; }
+.btn-secondary, .btn-cancel, .auth-extension { background:var(--secondary); color:var(--secondary-foreground); border:1px solid var(--border); border-radius:var(--radius-control); }
+.btn-danger, .btn-destructive { background:var(--destructive); color:var(--destructive-foreground); border-radius:var(--radius-control); }
+.icon-btn, .mobile-menu-btn, .modal-close { border-radius:var(--radius-control); background:transparent; color:var(--foreground); min-width:36px; min-height:36px; }
+.app-layout { background:var(--background); }
+.sidebar { width:248px; background:var(--sidebar); color:var(--sidebar-foreground); border-color:var(--sidebar-border); }
+.sidebar-collapsed { width:72px; }
+.sol-sidebar-brand { flex-shrink:0; display:flex; gap:12px; align-items:center; min-height:64px; width:100%; padding:12px 16px; color:var(--sidebar-foreground); background:transparent; text-align:left; }
+.sol-sidebar-brand > span { font-size:17px; font-weight:650; }
+.sol-sidebar-brand small { display:block; color:var(--muted-foreground); font-size:12px; font-weight:400; }
+.sidebar .expanded-sidebar-section-switcher { flex:0 0 auto; display:flex; flex-direction:column; gap:4px; overflow:auto; padding:8px 12px; max-height:45vh; }
+.sidebar .expanded-sidebar-section-switcher-btn { justify-content:flex-start; font-size:14px; min-height:36px; width:100%; font-weight:500; padding:8px 12px; border-radius:var(--radius-control); color:var(--sidebar-foreground); }
+.sidebar .expanded-sidebar-section-switcher-btn:hover, .sidebar-nav li:hover { background:var(--sidebar-accent); color:var(--sidebar-accent-foreground); }
+.sidebar .expanded-sidebar-section-switcher-btn-active, .sidebar-nav li.active { background:var(--sidebar-accent); color:var(--sidebar-accent-foreground); font-weight:600; }
+.sidebar .view-lock-button { align-self:flex-end; margin-top:-40px; margin-right:4px; min-height:28px; }
+.sidebar-nav { margin:8px; gap:4px; }
+.sidebar-nav li, .sidebar-collapsed .sidebar-nav li { padding:0; border-radius:var(--radius-control); }
+.sol-nav-button { display:flex; gap:12px; align-items:center; width:100%; padding:8px 12px; background:transparent; color:inherit; min-height:36px; }
+.sidebar-collapsed .sol-nav-button { justify-content:center; padding:8px; }
+.sidebar-collapsed .sol-sidebar-brand { padding:12px 16px; }
+.sidebar-nav .context-nav-button, .sidebar-nav .toolbox-nav-button { min-height:36px; }
+.sidebar-workspace-footer { padding:12px; border-top:1px solid var(--border); }
+.sidebar-workspace-trigger { background:var(--muted); color:var(--foreground); border-radius:var(--radius-control); }
+.sidebar-scope-navigation { padding:8px 12px; }
+.sidebar-scope-heading-control { color:var(--muted-foreground); font-size:12px; }
+.sidebar-scope-channel { min-height:36px; color:var(--sidebar-foreground); }
+.sidebar-scope-channel-row.active { background:var(--accent); color:var(--accent-foreground); }
+.main-content { min-width:0; padding:0 24px; background:var(--background); }
+.global-pg-channel-bar { background:var(--background); }
+.global-pg-channel-bar.global-pg-channel-bar-sidebar-expanded { display:flex; }
+.chat-channel-header { background:var(--background); }
+.auth-panel { background:var(--card); border:1px solid var(--border); border-radius:var(--radius-panel); box-shadow:none; width:min(560px,calc(100% - 32px)); margin:48px auto 16px; padding:32px; }
+.auth-brand { align-items:center; }
+.auth-brand-logo { width:64px; height:64px; padding:8px; object-fit:contain; background:var(--brand-ivory); border-radius:var(--radius-panel); }
+.auth-description, .hero-hint { color:var(--muted-foreground); }
+.auth-panel h2 { font-size:22px; color:var(--foreground); }
+.auth-field { display:flex; flex:1; flex-direction:column; gap:4px; text-align:left; }
+.auth-field span { font-size:12px; color:var(--muted-foreground); }
+.auth-form { align-items:end; }
+.hero-hint { text-align:center; }
+.settings-panel, .flightdeck-panel, .flightdeck-scope-card, .task-card, .doc-card, .files-card, .agent-status-card { border-radius:var(--radius-panel); box-shadow:none; }
+.settings-panel { background:var(--card); color:var(--card-foreground); }
+.sol-appearance-panel { display:flex; align-items:center; justify-content:space-between; gap:24px; margin:24px 0; }
+.sol-appearance-panel h2 { margin-bottom:4px; font-size:18px; }
+.sol-appearance-panel p { margin:0; color:var(--muted-foreground); }
+.sol-appearance-panel label { display:flex; flex-direction:column; gap:4px; min-width:180px; }
+.settings-tabs { gap:4px; flex-wrap:wrap; }
+.settings-tab { border-radius:var(--radius-control); min-height:36px; color:var(--muted-foreground); }
+.settings-tab.active { background:var(--accent); color:var(--accent-foreground); }
+.modal, .modal-card, .doc-modal-card, .command-palette { background:var(--popover); color:var(--popover-foreground); border-radius:var(--radius-panel); border:1px solid var(--border); box-shadow:var(--shadow-strong); }
+.modal-overlay, .command-palette-overlay { backdrop-filter:none; background:color-mix(in srgb, var(--background) 75%, transparent); }
+.modal-overlay-opaque { background:var(--background); }
+.avatar-menu, .doc-actions-popover, .thread-title-menu-popover, .chat-channel-menu, .sidebar-workspace-popover { background:var(--popover); color:var(--popover-foreground); border:1px solid var(--border); box-shadow:var(--shadow-strong); border-radius:var(--radius-panel); }
+.error-bar, .auth-error, .settings-error, .access-alert-error { background:var(--danger-background); color:var(--destructive); }
+.error-bar { border:1px solid var(--destructive); border-radius:var(--radius-control); }
+.settings-success, .access-alert-success { color:var(--success); background:var(--success-background); }
+.thread-message-body, .chat-post-body, .task-desc-preview, .doc-rich-editor .ProseMirror { font-size:16px; line-height:1.6; color:var(--foreground); overflow-wrap:anywhere; }
+.task-desc-preview p, .doc-rich-editor .ProseMirror p { max-width:75ch; }
+.thread-message { background:var(--card); color:var(--card-foreground); border-color:var(--border); border-radius:var(--radius-panel); }
+.thread-input-bar, .chat-input-bar { background:var(--card); border-color:var(--input); border-radius:var(--radius-control); }
+.thread-title, .task-detail-title, .doc-title-display { color:var(--foreground); }
+.thread-title { font-size:20px; }
+.task-detail-panel, .doc-editor-panel { background:var(--card); color:var(--card-foreground); }
+.task-status-btn, .task-date-chip, .task-tag-add, .tasks-state-filter-trigger { border-radius:var(--radius-control); }
+.task-detail-status-row { flex-wrap:wrap; }
+@media (max-width:768px), (pointer:coarse) {
+  button, [role="button"], select, input:not([type="checkbox"]):not([type="radio"]), .sol-nav-button, .expanded-sidebar-section-switcher-btn { min-height:44px; }
+  .icon-btn, .modal-close, .mobile-menu-btn, .view-lock-button { min-width:44px; min-height:44px; }
+  input, textarea, select { font-size:16px !important; }
+}
+@media (max-width:768px) {
+  .page-header { padding:8px 12px; gap:8px; min-height:60px; }
+  .brand-logo { width:32px; height:32px; }
+  .brand-copy h1 { font-size:16px; }
+  .sol-product-name, .sol-theme-label { display:none; }
+  .sol-theme-button { width:44px; padding:8px; justify-content:center; flex-shrink:0; }
+  .session-controls { margin-left:0; min-width:44px; }
+  .main-content { padding:0 16px; }
+  .sidebar, .sidebar-collapsed { top:60px; height:calc(100dvh - 60px); width:min(86vw,320px); }
+  .sidebar .expanded-sidebar-section-switcher { max-height:45vh; }
+  .sidebar .expanded-sidebar-section-switcher-btn { min-height:44px; }
+  .mobile-sidebar-backdrop { top:60px; background:color-mix(in srgb, var(--foreground) 25%, transparent); }
+  .sidebar .view-lock-button { margin-top:-48px; min-height:44px; }
+  .mobile-section-switcher { display:none !important; }
+  .sol-appearance-panel { align-items:stretch; flex-direction:column; gap:16px; margin-top:16px; }
+  .auth-panel { margin-top:24px; padding:24px; }
+  .auth-brand { align-items:flex-start; }
+  .auth-panel h2 { font-size:20px; }
+  .auth-form { flex-direction:column; align-items:stretch; }
+  .auth-field { width:100%; }
+  .thread-message-body { max-width:100%; }
+}
+@media (prefers-reduced-motion:reduce) {
+  *, *::before, *::after { animation-duration:0.01ms !important; animation-iteration-count:1 !important; transition-duration:0.01ms !important; scroll-behavior:auto !important; }
+}
+.chat-thread-modal-overlay, .doc-comment-thread-overlay, .task-detail-modal-overlay { background:color-mix(in srgb, var(--background) 78%, transparent); backdrop-filter:none; }
+.settings-section { overflow-y:auto; }
+.sidebar .expanded-sidebar-section-switcher .sol-nav-button { width:100%; justify-content:flex-start; }
+.thread-message { box-shadow:none; }
+.tower-connection-indicator { background:var(--warning-background); color:var(--warning); }
+.tower-connection-indicator[data-state="offline"] { background:var(--danger-background); color:var(--destructive); }
+.chat-thread-modal-backdrop { background:color-mix(in srgb, var(--background) 78%, transparent); }
+.flightdeck-summary-overview { width:100%; padding:24px 0; }
+.flightdeck-summary-header { margin-bottom:24px; }
+.flightdeck-summary-header h2, .flightdeck-hero h2, .task-detail-title-display, .task-detail-title, .docs-section .doc-title-display { font-size:24px; line-height:1.3; font-weight:650; color:var(--foreground); }
+.flightdeck-report-metric-value { font-size:24px; line-height:1.3; }
+.tasks-section .task-card-tag, .tag-chip, .task-tag-chip { border-radius:var(--radius-control); }
+.wapps-stack-panel::before, .wapps-stack-panel::after, .agents-stack-panel::before, .agents-stack-panel::after { background:var(--card); }
+.message-activity-modal::backdrop { backdrop-filter:none; background:color-mix(in srgb, var(--background) 78%, transparent); }
+.context-tree-node-selected, .context-tree-node-selected:hover { color:var(--primary-foreground); }
+.context-tree-node-selected :is(.context-tree-component-icon, .context-tree-counts) { color:var(--primary-foreground); }
+.context-tree-node-selected .context-tree-counts > span { background:var(--primary); }
+.context-tree-outline .context-tree-node-toggle:hover { background:var(--primary); color:var(--primary-foreground); }
+.context-tree-view .context-tree-primary { color:var(--primary-foreground); }
+.context-tree-view .context-tree-danger { color:var(--destructive-foreground); }
+.btn-improve { background:var(--primary); color:var(--primary-foreground); }
+.btn-reject { background:var(--destructive); color:var(--destructive-foreground); }
+.btn-approve, .schedule-primary-btn, .schedule-primary-btn:hover, .schedules-section .tag-chip-active, .schedule-modal .tag-chip-active, .wapp-visibility-section .tag-chip-active { background:var(--success-background); color:var(--success); }
+.context-tree-dialog::backdrop, .chat-image-preview-backdrop { background:color-mix(in srgb, var(--background) 78%, transparent); }
+.agent-space, .agent-space-list, .agent-space-detail, .agent-space-header > div, .agent-space-panel, .agent-space-row { min-width:0; }
+.agent-space { grid-template-columns:minmax(220px,280px) minmax(0,1fr); }
+.agent-space :is(h1, strong, p, span, small) { overflow-wrap:anywhere; }
+.agent-space-card.active { background:var(--accent); color:var(--accent-foreground); border-color:var(--border); }
+.agent-space-card.active :is(span, small) { color:var(--accent-foreground); }
+.agent-space-row p { color:var(--muted-foreground); }
+@media (max-width:768px) {
+  .agent-space { grid-template-columns:minmax(0,1fr); }
+  .agent-space-list, .agent-space-detail { padding:16px; }
+  .agent-space-tabs button { flex-shrink:0; }
+  .agent-space-tabs { flex-wrap:wrap; }
+  .context-tree-view button, .context-tree-dialog button, .context-tree-outline .context-tree-node-toggle, .context-tree-outline .context-tree-node-add { min-width:44px; min-height:44px; }
+  .context-tree-outline .context-tree-node-toggle { top:2px; }
+  .context-tree-outline .context-tree-node-add { top:2px; }
+  .context-tree-outline .context-tree-node-title { padding-left:48px; padding-right:48px; }
+  .task-detail-status-row button, .task-detail-panel button, .task-detail-modal button, .docs-section button, .files-section button, .settings-tab, .thread-header button, .thread-reactions button, .global-pg-channel-bar button { min-width:44px; min-height:44px; }
+  .docs-section .doc-comment-drawer-rail, .mobile-detail-switcher .mobile-detail-switcher-btn, .reaction-bar button { min-width:44px; min-height:44px; }
+  .mobile-scope-workspace-avatar-btn, .avatar-chip, .identity-avatar-button, .chat-msg-actions-toggle, .task-detail-meta-pill.task-status-badge, .chat-image-preview-close { min-width:44px; min-height:44px; }
+  .task-record-heading .task-status-picker > button, .task-record-heading .task-state-popover .task-status-badge { min-height:44px; border-radius:var(--radius-control); }
+  .chat-image-preview-close { border-radius:var(--radius-control); }
+  .thread-header { flex-wrap:wrap; }
+  .thread-header-copy { flex-basis:100%; }
+  .thread-header-actions { margin-left:auto; }
+  /* On a phone the calendar/tag picker is a bounded sheet above fixed tabs. */
+  .task-bar-popover { position:fixed; top:auto; bottom:calc(132px + env(safe-area-inset-bottom)); left:8px; right:8px; width:auto; max-width:360px; max-height:min(440px, calc(100dvh - 220px)); overflow-y:auto; z-index:350; padding:8px; }
+  .task-date-popover { left:2px; right:2px; padding:2px; }
+  .task-calendar-days { gap:0; }
+  .task-calendar-days button { min-height:44px; }
+  .task-bar-popover .task-calendar-clear { border-radius:var(--radius-control); }
+}

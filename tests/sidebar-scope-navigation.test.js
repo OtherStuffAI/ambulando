@@ -186,7 +186,7 @@ describe('expanded sidebar scope/channel navigation', () => {
     expect(navigation).toContain(":class=\"{ active: $store.chat.pgContextSelectedChannelId === channel.record_id && !$store.chat.pgContextSelectedThreadId }\"");
     expect(styles).toMatch(/\.sidebar-unread-section\s*\{[^}]*border-bottom:\s*1px solid var\(--border\);/s);
     expect(styles).toMatch(/\.sidebar-unread-channel\s*\{[^}]*min-height:\s*34px;[^}]*font-weight:\s*800;/s);
-    expect(styles).toMatch(/\.sidebar-unread-channel\.active\s*\{[^}]*background:\s*#eff6ff;[^}]*color:\s*#1d4ed8;/s);
+    expect(styles).toMatch(/\.sidebar-unread-channel\.active\s*\{[^}]*background:\s*var\(--muted\);[^}]*color:\s*var\(--primary\);/s);
   });
 
   it('does not bind agent-activity scan helpers inside the sidebar shortcut section', () => {
@@ -230,7 +230,7 @@ describe('expanded sidebar scope/channel navigation', () => {
     expect(html).toContain('class="unread-dot unread-dot-channel" x-show="$store.chat.isChannelUnread(channel.record_id)" x-cloak aria-hidden="true"');
     expect(styles).toMatch(/\.sidebar-scope-channel-label\s*\{[^}]*flex:\s*1 1 auto;[^}]*min-width:\s*0;[^}]*text-overflow:\s*ellipsis;/s);
     expect(styles).toMatch(/\.sidebar-scope-channel-unread \.sidebar-scope-channel-label\s*\{[^}]*font-weight:\s*800;/s);
-    expect(styles).toMatch(/\.sidebar-scope-channel-row\.active\.sidebar-scope-channel-unread \.sidebar-scope-channel-label\s*\{[^}]*color:\s*#1d4ed8;/s);
+    expect(styles).toMatch(/\.sidebar-scope-channel-row\.active\.sidebar-scope-channel-unread \.sidebar-scope-channel-label\s*\{[^}]*color:\s*var\(--primary\);/s);
   });
 
   it('adds a permission-aware scoped channel creation control without navigating Home', () => {
@@ -239,7 +239,7 @@ describe('expanded sidebar scope/channel navigation', () => {
     expect(html).toContain(":aria-label=\"'Create channel in ' + ($store.chat.getScopeBreadcrumb(group.scope.record_id) || group.scope.title || group.scope.record_id)\"");
     expect(html).toContain('@click.stop.prevent="$store.chat.openNewChannelModal({ scopeId: group.scope.record_id })"');
     expect(styles).toMatch(/\.sidebar-scope-add-channel\s*\{[^}]*width:\s*36px;[^}]*height:\s*36px;/s);
-    expect(styles).toMatch(/\.sidebar-scope-add-channel:focus-visible\s*\{[^}]*outline:\s*2px solid #2563eb;/s);
+    expect(styles).toMatch(/\.sidebar-scope-add-channel:focus-visible\s*\{[^}]*outline:\s*2px solid var\(--ring\);/s);
   });
 
   it('renders a visible sibling settings control on every channel row', () => {
@@ -253,9 +253,9 @@ describe('expanded sidebar scope/channel navigation', () => {
   it('keeps the scope navigation stack scrollable and hides it in collapsed/mobile rails', () => {
     expect(styles).toMatch(/\.sidebar-nav\s*\{[^}]*flex:\s*0 0 auto;/s);
     expect(styles).toMatch(/\.sidebar-scope-navigation\s*\{[^}]*flex:\s*1 1 auto;[^}]*min-height:\s*0;[^}]*overflow-y:\s*auto;[^}]*overscroll-behavior-y:\s*contain;/s);
-    expect(styles).toMatch(/\.sidebar-scope-heading-control:focus-visible\s*\{[^}]*outline:\s*2px solid #2563eb;/s);
-    expect(styles).toMatch(/\.sidebar-workspace-overview:focus-visible\s*\{[^}]*outline:\s*2px solid #2563eb;/s);
-    expect(styles).toMatch(/\.sidebar-workspace-overview:active\s*\{[^}]*background:\s*#dbeafe;/s);
+    expect(styles).toMatch(/\.sidebar-scope-heading-control:focus-visible\s*\{[^}]*outline:\s*2px solid var\(--ring\);/s);
+    expect(styles).toMatch(/\.sidebar-workspace-overview:focus-visible\s*\{[^}]*outline:\s*2px solid var\(--ring\);/s);
+    expect(styles).toMatch(/\.sidebar-workspace-overview:active\s*\{[^}]*background:\s*var\(--muted\);/s);
     expect(styles).toMatch(/\.sidebar-workspace-footer\s*\{[^}]*flex:\s*0 0 auto;/s);
     expect(styles).toMatch(/\.sidebar-collapsed \.sidebar-scope-navigation[\s\S]*display:\s*none;/);
     expect(styles).toMatch(/\.sidebar-collapsed \.sidebar-manage-scopes-footer\s*\{[^}]*display:\s*none;/s);

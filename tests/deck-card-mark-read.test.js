@@ -59,7 +59,7 @@ describe('Deck card Mark read action', () => {
     const styles = readFileSync(STYLES_PATH, 'utf8');
 
     expect(styles).toMatch(/\.attention-card-mark-read\s*\{[^}]*min-height:\s*1\.7rem;[^}]*font-size:\s*0\.7rem;[^}]*white-space:\s*nowrap;/s);
-    expect(styles).toMatch(/\.attention-card-mark-read:focus-visible\s*\{[^}]*outline:\s*2px solid #2563eb;/s);
+    expect(styles).toMatch(/\.attention-card-mark-read:focus-visible\s*\{[^}]*outline:\s*2px solid var\(--ring\);/s);
     expect(styles).toMatch(/@media \(max-width: 720px\)[\s\S]*?\.attention-card-meta\s*\{[^}]*flex-wrap:\s*wrap;/s);
   });
 

@@ -7,7 +7,7 @@ const css = readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8');
 describe('scope rename surface', () => {
   it('renders scope deletion through an in-app confirmation dialog', () => {
     expect(html).toContain('class="modal-overlay scope-delete-confirm-overlay"');
-    expect(html).toContain('role="dialog" aria-modal="true" aria-labelledby="scope-delete-confirm-title"');
+    expect(html).toMatch(/role="dialog"[^>]*aria-modal="true"[^>]*aria-labelledby="scope-delete-confirm-title"/);
     expect(html).toContain('$store.chat.confirmPendingScopeDelete()');
     expect(html).toContain('$store.chat.scopeDeleteError');
     expect(css).toContain('.scope-delete-confirm-overlay');
@@ -48,11 +48,11 @@ describe('scope rename surface', () => {
     const disabled = rule('.scope-actions-menu .doc-actions-popover button:disabled');
     const destructive = rule('.scope-actions-menu .doc-actions-popover .doc-actions-delete');
 
-    expect(popover).toContain('background: #ffffff;');
-    expect(popover).toContain('color: #111827;');
-    expect(button).toContain('color: #111827;');
-    expect(disabled).toContain('color: #6b7280;');
-    expect(destructive).toContain('color: #b91c1c;');
+    expect(popover).toContain('background: var(--card);');
+    expect(popover).toContain('color: var(--primary);');
+    expect(button).toContain('color: var(--primary);');
+    expect(disabled).toContain('color: var(--muted-foreground);');
+    expect(destructive).toContain('color: var(--destructive);');
     expect(css).toContain('.scope-actions-menu .doc-actions-popover button:hover:not(:disabled)');
     expect(css).toContain('.scope-actions-menu .doc-actions-popover button:focus-visible');
     expect(css).toContain('.scope-actions-menu .doc-actions-popover button[aria-selected="true"]');

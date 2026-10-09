@@ -1,0 +1,223 @@
+{
+  "name": "Ambulando design system",
+  "version": "5.0.0",
+  "project": "Wingman_Suite",
+  "artifact": "ambulando-logo-options",
+  "sharing": "private",
+  "entrypoint": "design.md",
+  "identity": {
+    "approved": "assets/confluence-approved.png",
+    "original": "v3 favourite-a.png, preserved through v4 approved-logo.png",
+    "provisional": "assets/confluence-symbol-provisional.png",
+    "source": "v4 mark.png"
+  },
+  "files": [
+    {
+      "path": "README.md",
+      "bytes": 2378,
+      "sha256": "45dd8884d615d2622b9f77cbbe40843a0b15516f3f790b1b21868ac123f985e4"
+    },
+    {
+      "path": "artifact-version.json",
+      "bytes": 100,
+      "sha256": "cfc990488ef96d719a2fdaa1ccd1fbffef4f5ef3ddf9e5ed9c2ec9ef53a1ab8e"
+    },
+    {
+      "path": "assets/README.md",
+      "bytes": 560,
+      "sha256": "d2482830c52081c16da73374e4fe22a4a4dc211a9dfcf4d730f90404627bb599"
+    },
+    {
+      "path": "assets/confluence-approved.png",
+      "bytes": 1110880,
+      "sha256": "e2bc8c5e5294f641f4bb2e40de0decdfa8a647c8b38cf717918a253e572389e7"
+    },
+    {
+      "path": "assets/confluence-symbol-provisional.png",
+      "bytes": 524800,
+      "sha256": "05d6a0a84fdcaa35eb3f6479b4d971acdc5ad3d3300459ea0d393c9d33b1333f"
+    },
+    {
+      "path": "components.json",
+      "bytes": 9417,
+      "sha256": "f8cda0be9adaf4b100ca906ac0646114022d1630f8d08b4f34b9a2acc31d6f4f"
+    },
+    {
+      "path": "design.md",
+      "bytes": 17253,
+      "sha256": "4db3fb27c63e85046aa0cd1438710607839a3f67aff7cf07f5bc8e38d1fe6d70"
+    },
+    {
+      "path": "examples/shadcn-example.tsx",
+      "bytes": 1735,
+      "sha256": "37e692c85c1c42a3df6fedd3f7917e31f8618d5a0a9f4c44b03a6480b0528fc0"
+    },
+    {
+      "path": "icons/LICENSE",
+      "bytes": 3208,
+      "sha256": "b495047bd93a9b06913511076f504daba17d5bbeb3e0650f3bb53a4220329c57"
+    },
+    {
+      "path": "icons/arrow-right.svg",
+      "bytes": 261,
+      "sha256": "288397fdb73bb4f783cf9eabb726ff47357df1d4e3f1201dd748090579f108b9"
+    },
+    {
+      "path": "icons/bot.svg",
+      "bytes": 380,
+      "sha256": "e46fe72fc5b33d7a17b0112df85da9ded851860312e8353f4fe23d87a4ce77f5"
+    },
+    {
+      "path": "icons/check.svg",
+      "bytes": 239,
+      "sha256": "7f33acc9a77a61659531044525fc008edebe215bf4dcf1c789c8674ad3277db0"
+    },
+    {
+      "path": "icons/chevron-down.svg",
+      "bytes": 236,
+      "sha256": "66ea878e72ed3488bb3b464c39dfdccee8d1f78e560dccea40e5e12da0e87e87"
+    },
+    {
+      "path": "icons/circle-alert.svg",
+      "bytes": 332,
+      "sha256": "ce3e98b7a03b78c0071131df42466e4e1ff5187fccad30e739ec9ce951cf685a"
+    },
+    {
+      "path": "icons/circle-check.svg",
+      "bytes": 278,
+      "sha256": "9711e045a5999f8a3b0782eb88e09b04e0559bc7b379dcc0a4ae645223e10345"
+    },
+    {
+      "path": "icons/circle-x.svg",
+      "bytes": 293,
+      "sha256": "bcd8788901e6f29e1b231a81ba5e707d083d06cb4848a28f29407fab4f8e0b64"
+    },
+    {
+      "path": "icons/download.svg",
+      "bytes": 318,
+      "sha256": "3daeee13ded5a3afa2198b1bb4e2262d163922f97d96ac6ff9953e8ed4fe039d"
+    },
+    {
+      "path": "icons/ellipsis.svg",
+      "bytes": 312,
+      "sha256": "4f495cc72013ffdfec677f03b33a150f7b4dd741979283fd6853a09024bca112"
+    },
+    {
+      "path": "icons/external-link.svg",
+      "bytes": 332,
+      "sha256": "3891241b8c3bfc3a8a930078f26ffc5a7e9763da6d0162ace2050b28d4c1d1fe"
+    },
+    {
+      "path": "icons/files.svg",
+      "bytes": 444,
+      "sha256": "97adf06fc0511e7a40be93ecda04466ed196718ab4a5e3a62b1148cc49697775"
+    },
+    {
+      "path": "icons/layout-dashboard.svg",
+      "bytes": 416,
+      "sha256": "281ab865b4c04dab32a04023473e448f58be6a7ad90769450ac3349d79dc4aed"
+    },
+    {
+      "path": "icons/list-todo.svg",
+      "bytes": 359,
+      "sha256": "8620dcb86d9d27e0eeebc627b6a0f995ff3bb0264fd3c12ad003401981771848"
+    },
+    {
+      "path": "icons/loader-circle.svg",
+      "bytes": 251,
+      "sha256": "043021bb903919668804bdb6fee0342072e4ffea5f03fbd857774c440179ad3b"
+    },
+    {
+      "path": "icons/message-square.svg",
+      "bytes": 339,
+      "sha256": "5812a3be783fdcd73efd2b6026e03131e4b8c6649e7d52aa2dc7bf2e2023a59d"
+    },
+    {
+      "path": "icons/moon.svg",
+      "bytes": 334,
+      "sha256": "205b959e940d5841f0ce1d09c933153da9d9c94130a54d5cc0c68c2af1d403da"
+    },
+    {
+      "path": "icons/panel-left.svg",
+      "bytes": 284,
+      "sha256": "029f67b9e3eeb7ddf7c7c499b174c50388725e8ea50d4ea59ed7dbaf8d61cb82"
+    },
+    {
+      "path": "icons/plus.svg",
+      "bytes": 256,
+      "sha256": "7f6af73bf1ff6c4bca3f18351c8d1bdec6749c0c2530c4de5da85d520c21df17"
+    },
+    {
+      "path": "icons/search.svg",
+      "bytes": 275,
+      "sha256": "283d371c2e433817bb9c0c8310caa6c77fa4177c0f4f1168d9c83b97af7389dc"
+    },
+    {
+      "path": "icons/settings.svg",
+      "bytes": 586,
+      "sha256": "0ae27fd0f81999229e3127ac96c5b32edfea448e291d509e76212b917551d66b"
+    },
+    {
+      "path": "icons/shield-check.svg",
+      "bytes": 415,
+      "sha256": "8d4fcdbde5bba4abb1a2f6fe53e37ceb6343a1d5449a9d88f6f97c1971d26c4e"
+    },
+    {
+      "path": "icons/sun.svg",
+      "bytes": 485,
+      "sha256": "a3955c8b0425fcc5c9ba12d2bdd77fe53b2cd5dd05e7742a56f342e996fb2ef8"
+    },
+    {
+      "path": "icons/x.svg",
+      "bytes": 260,
+      "sha256": "4a9cdab38fbb96162e7dace28e33f4ca0e49d8963a6162abc3d4691b7d675117"
+    },
+    {
+      "path": "icons.json",
+      "bytes": 8727,
+      "sha256": "07087825947f21b1158d02cc20c412e77319ce711398c0db6f11d33d20e26569"
+    },
+    {
+      "path": "index.html",
+      "bytes": 53336,
+      "sha256": "1d0c9b630e539179d548f6136ce94d8a0fcd1650feb79d55d93764d19f24e3d7"
+    },
+    {
+      "path": "package.json",
+      "bytes": 260,
+      "sha256": "abd7687dcc2203d286611adb6d72156e8e057cc6ed2eece0669bda096fba4c81"
+    },
+    {
+      "path": "preview.css",
+      "bytes": 7543,
+      "sha256": "0b7d0a6ea546e0b547e0f4c4009da8dba795d4a6552e6dd16314b0df67ab0f9c"
+    },
+    {
+      "path": "tailwind.css",
+      "bytes": 2089,
+      "sha256": "cb454ef06c2b778365b6fec005483c9e9114f4dee435b2051fe0c1b0c5fe3567"
+    },
+    {
+      "path": "tokens.css",
+      "bytes": 2923,
+      "sha256": "acafeac18e054726a6a9597c6746aa63614172157de923c8c38db28a61618327"
+    },
+    {
+      "path": "tokens.json",
+      "bytes": 3289,
+      "sha256": "7183a34be4632a2886347e1054fb6229a9064b0a3eb60d98f8572f8c654d624a"
+    },
+    {
+      "path": "validation.json",
+      "bytes": 4449,
+      "sha256": "1734050495d3e810c6b5eaf34e2c8f19ac2b52383859b876ec81252505dce90e"
+    }
+  ],
+  "license": "Private brand assets; Lucide SVG licenses in icons/LICENSE",
+  "references": [
+    "https://ui.shadcn.com/docs/theming",
+    "https://ui.shadcn.com/docs/components/button",
+    "https://lucide.dev/guide/react"
+  ],
+  "officialDocsReviewed": "2026-10-08"
+}

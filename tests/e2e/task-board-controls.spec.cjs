@@ -50,11 +50,11 @@ for (const width of [1280, 390, 320]) {
   await page.evaluate(()=> { const s=Alpine.store('chat'); s.showTaskDetail=false; s.selectedBoardId=null; s.taskViewMode='kanban'; s.taskFilterState=''; s.taskFilterTags=[]; s.taskFilter=''; s.taskFilterAssignee=null; s.tasks=[{record_id:'backlog-task',title:'Plan the next release',state:'new',tags:'polish,accessibility',scheduled_for:'2026-10-15',record_state:'active',version:1},{record_id:'ready-task',title:'Review the compact controls',state:'ready',tags:'polish',record_state:'active',version:1}]; });
   const column=page.locator('.kanban-col-new'); await expect(column.locator('.kanban-column-title')).toHaveText('Backlog');
   await column.locator('.kanban-column-header').click(); await expect(column.locator('.kanban-card')).toContainText('Plan the next release');
-  await expect(column.locator('.task-card-tag').first()).toHaveCSS('border-radius','8px');
-  await expect(column.locator('.badge-date')).toHaveCSS('border-radius','8px');
+  await expect(column.locator('.task-card-tag').first()).toHaveCSS('border-radius','6px');
+  await expect(column.locator('.badge-date')).toHaveCSS('border-radius','10px');
   if(width<769) await page.getByRole('button',{name:'Task controls',exact:true}).click();
   const filter=page.getByRole('button',{name:'Filter tasks by status',exact:true});
-  const mine=page.locator('.filter-to-me-btn'); await expect(mine).toHaveCSS('border-radius','8px'); await mine.focus(); await mine.press('Space'); await expect(mine).toHaveAttribute('aria-pressed','true'); await mine.press('Space'); await expect(mine).toHaveAttribute('aria-pressed','false');
+  const mine=page.locator('.filter-to-me-btn'); await expect(mine).toHaveCSS('border-radius','6px'); await mine.focus(); await mine.press('Space'); await expect(mine).toHaveAttribute('aria-pressed','true'); await mine.press('Space'); await expect(mine).toHaveAttribute('aria-pressed','false');
   await filter.focus(); await filter.press('ArrowDown');
   const states=page.getByRole('group',{name:'Task status filters'});
   await expect(states.getByRole('button',{name:'All statuses',exact:true})).toBeFocused();

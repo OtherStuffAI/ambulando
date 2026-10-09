@@ -129,6 +129,6 @@ describe('task comments panel fullscreen affordance', () => {
     expect(mobileCss).toContain('.task-detail-body-mobile-comments .task-detail-main');
     const mobileFullscreenRule = extractRule(mobileCss, '.task-comments-fullscreen-modal');
     expect(mobileFullscreenRule).toMatch(/height\s*:\s*100%/);
-    expect(mobileFullscreenRule).toMatch(/border-radius\s*:\s*0/);
+    expect(mobileFullscreenRule).toMatch(/border-radius\s*:\s*var\(--radius-panel\)/);
   });
 });

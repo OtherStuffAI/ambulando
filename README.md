@@ -1,4 +1,15 @@
-# Wingman Flight Deck
+# Ambulando Sol
+
+Sol is the connected Flight Deck frontend with Ambulando design system v5.
+It retains the Alpine/Dexie/Nostr/Tower application and record contracts.
+See [the surface map and integration conventions](docs/design/ambulando-sol.md)
+and [local identity/icon provenance](public/ambulando/README.md).
+
+This fork keeps source commits local until a dedicated remote is configured.
+Do not push Sol changes to the original Flight Deck upstream. Build outputs are
+ignored; existing live application registrations are independent of this fork.
+
+# Flight Deck application foundation
 
 Flight Deck is the human coordination workspace for Wingman Be Free. It gives people one browser interface for conversations, tasks, documents, scopes, flows, approvals, colleagues, and WApps—so they can direct work, see what is happening, and review what agents produce.
 

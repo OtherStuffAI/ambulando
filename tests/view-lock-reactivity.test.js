@@ -9,6 +9,7 @@ describe('view lock composer reactivity', () => {
     try {
       window.innerWidth = 375;
       const store = createShellState({ initialSection: 'tasks' });
+      store.navCollapsed = true; // Exercise the collapsed desktop state explicitly; Sol opens expanded.
       expect(store.mobileNavOpen).toBe(false);
       expect(store.canLockCurrentView).toBe(true);
       store.toggleCurrentViewLock();

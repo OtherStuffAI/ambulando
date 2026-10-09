@@ -68,8 +68,8 @@ describe('Wingman iPhone WebView typography marker', () => {
     vi.useRealTimers();
   });
 
-  it('keeps the standalone PWA viewport and vertical layout frozen', () => {
-    expect(sourceHtml).toContain('<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />');
+  it('keeps the standalone PWA viewport and vertical layout stable while permitting zoom', () => {
+    expect(sourceHtml).toContain('<meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0" />');
     expect(sourceStyles).toMatch(/body\s*\{[^}]*padding:\s*0\.5rem 0;[^}]*height:\s*100dvh;/s);
     expect(sourceStyles).toMatch(/\.app-shell\s*\{[^}]*height:\s*calc\(100dvh - 1rem\);/s);
     expect(sourceStyles).toMatch(/--app-edge-gutter:\s*max\(0\.75rem, env\(safe-area-inset-left\), env\(safe-area-inset-right\)\)/);

@@ -23,9 +23,9 @@ describe('avatar startup receive progress presentation', () => {
     expect(html).toContain('@click="$store.chat.retryStartupSync()">Retry updates</button>');
   });
 
-  it('rotates only an orange/yellow ring pseudo-element and keeps it static for reduced motion', () => {
-    expect(css).toMatch(/\.avatar-chip\.avatar-status-receiving::before\s*\{[^}]*conic-gradient\(#f97316, #facc15, #fb923c, #f97316\)[^}]*animation: avatar-receive-ring/s);
-    expect(css).toMatch(/@keyframes avatar-receive-ring\s*\{\s*to \{ transform: rotate\(360deg\); \}\s*\}/);
+  it('rotates only a semantic information ring pseudo-element and keeps it static for reduced motion', () => {
+    expect(css).toMatch(/\.avatar-chip\.avatar-status-receiving::before\s*\{[^}]*border-top-color:\s*var\(--info\);[^}]*animation: avatar-receive-ring/s);
+    expect(css).toMatch(/@keyframes avatar-receive-ring\s*\{\s*to \{ transform:\s*rotate\(360deg\); \}\s*\}/);
     expect(css).toMatch(/@media \(prefers-reduced-motion: reduce\)\s*\{[^}]*\.avatar-chip\.avatar-status-receiving::before,[^}]*animation: none;/s);
 
     const avatarImageRule = css.match(/\.avatar-chip img\s*\{([^}]*)\}/)?.[1] || '';

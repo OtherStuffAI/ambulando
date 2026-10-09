@@ -59,12 +59,12 @@ describe('thread title UI', () => {
     expect(menu).toContain("x-text=\"$store.chat.isChatThreadArchiveSubmitting($store.chat.getThreadParentMessage()?.record_id, 'unarchive') ? 'Unarchiving...' : 'Unarchive thread'\"");
   });
 
-  it('pins the title menu to black text on a white background', () => {
+  it('pairs the title menu semantic surface and foreground in both themes', () => {
     const popoverRule = css.match(/\.thread-title-menu-popover\s*\{[\s\S]*?\}/)?.[0] || '';
     const buttonRule = css.match(/\.thread-title-menu-popover button\s*\{[\s\S]*?\}/)?.[0] || '';
-    expect(popoverRule).toContain('background: #fff;');
-    expect(popoverRule).toContain('color: #000;');
-    expect(buttonRule).toContain('color: #000;');
-    expect(css).toMatch(/\.thread-title-menu-popover \.chat-msg-actions-danger\s*\{[\s\S]*?color:\s*#dc2626;/);
+    expect(popoverRule).toContain('background: var(--card);');
+    expect(popoverRule).toContain('color: var(--foreground);');
+    expect(buttonRule).toContain('color: var(--foreground);');
+    expect(css).toMatch(/\.thread-title-menu-popover \.chat-msg-actions-danger\s*\{[\s\S]*?color:\s*var\(--destructive\);/);
   });
 });

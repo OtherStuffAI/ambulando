@@ -70,7 +70,7 @@ describe('flight deck summary template', () => {
     expect(inbox).toMatch(/item\.inboxKind === 'task'[\s\S]*flightdeck-summary-card-inbox-unread/);
     expect(inbox).toMatch(/item\.inboxKind === 'document'[\s\S]*flightdeck-summary-card-inbox-unread/);
     expect(inbox).not.toMatch(/item\.inboxKind === 'file'[\s\S]*flightdeck-summary-card-inbox-unread/);
-    expect(styles).toMatch(/--unread-pastel-red:\s*rgba\(254, 226, 226, 0\.62\)/);
+    expect(styles).toMatch(/--unread-pastel-red:\s*var\(--info-background\)/);
     expect(styles).toMatch(/\.flightdeck-summary-panel-inbox \.flightdeck-summary-card-inbox-unread,[\s\S]*background:\s*var\(--unread-pastel-red\)/);
     expect(styles).toMatch(/\.chat-post-thread-unread,[\s\S]*background:\s*var\(--unread-pastel-red\)/);
   });
@@ -91,7 +91,7 @@ describe('flight deck summary template', () => {
     expect(inbox).toMatch(/item\.inboxKind === 'task'[\s\S]*flightdeck-summary-card-inbox-working/);
     expect(inbox).toMatch(/item\.inboxKind === 'document'[\s\S]*flightdeck-summary-card-inbox-working/);
     expect(inbox).not.toMatch(/item\.inboxKind === 'file'[\s\S]*flightdeck-summary-card-inbox-working/);
-    expect(styles).toMatch(/--inbox-working-blue:\s*rgba\(219, 234, 254, 0\.86\)/);
+    expect(styles).toMatch(/--inbox-working-blue:\s*var\(--info-background\)/);
     expect(styles).toMatch(/animation:\s*flightdeck-inbox-working-pulse 2\.1s ease-in-out infinite alternate/);
     expect(styles).toMatch(/@media \(prefers-reduced-motion: reduce\)[\s\S]*\.flightdeck-summary-card-inbox-working[\s\S]*animation:\s*none;/);
   });
@@ -101,7 +101,7 @@ describe('flight deck summary template', () => {
 
     expect(styles).toMatch(/\.flightdeck-summary-panel-inbox\s*\{[^}]*min-height:\s*0;[^}]*box-shadow:\s*none;/s);
     expect(styles).not.toMatch(/\.flightdeck-summary-panel-inbox\s*\{[^}]*(?:border-top|border-top-left-radius|border-top-right-radius):/s);
-    expect(styles).toMatch(/\.flightdeck-summary-panel\s*\{[^}]*border:\s*1px solid[^}]*border-radius:\s*8px;[^}]*box-shadow:\s*inset 0 3px 0/s);
+    expect(styles).toMatch(/\.flightdeck-summary-panel\s*\{[^}]*border:\s*1px solid[^}]*border-radius:\s*var\(--radius-panel\);[^}]*box-shadow:\s*inset 0 3px 0/s);
     expect(styles).toMatch(/\.flightdeck-summary-panel-inbox \.flightdeck-summary-card::before\s*\{[^}]*content:\s*none;/s);
   });
 
@@ -150,7 +150,7 @@ describe('flight deck summary template', () => {
     expect(feed).toContain('class="autopilot-panel-heading wapp-updates-heading" data-deck-mobile-sticky-heading');
     expect(recent).toContain('class="autopilot-panel-heading" data-deck-mobile-sticky-heading');
     const mobileStyles = styles.slice(styles.indexOf('@media (max-width: 720px)'), styles.indexOf('@media (max-width: 720px)', styles.indexOf('@media (max-width: 720px)') + 1));
-    expect(mobileStyles).toMatch(/\[data-deck-mobile-sticky-heading\]\s*\{[^}]*position:\s*sticky;[^}]*top:\s*0;[^}]*z-index:\s*2;[^}]*margin:\s*0 -0\.95rem;[^}]*padding:\s*1rem 0\.95rem 0\.75rem;[^}]*border-bottom:[^}]*background:\s*var\(--surface, #fff\);/s);
+    expect(mobileStyles).toMatch(/\[data-deck-mobile-sticky-heading\]\s*\{[^}]*position:\s*sticky;[^}]*top:\s*0;[^}]*z-index:\s*2;[^}]*margin:\s*0 -0\.95rem;[^}]*padding:\s*1rem 0\.95rem 0\.75rem;[^}]*border-bottom:[^}]*background:\s*var\(--surface, var\(--card\)\);/s);
     expect(mobileStyles).toMatch(/\.deck-columns-track > \.deck-column,\s*\.deck-right-stack > \.deck-column\s*\{[^}]*padding-top:\s*0;/s);
     expect(styles.slice(0, styles.indexOf('@media (max-width: 720px)'))).not.toContain('[data-deck-mobile-sticky-heading]');
   });

@@ -28,7 +28,7 @@ describe('Chat channel rendering hooks', () => {
     const modalStart = html.indexOf('class="chat-thread-modal-backdrop"', indexStart);
     expect(html.slice(indexStart, modalStart)).not.toContain('data-chat-composer="message"');
     expect(styles).toMatch(/\.chat-feed\.channel-thread-index\s*\{[\s\S]*gap:\s*1rem;/);
-    expect(styles).toMatch(/\.chat-post\.channel-thread-card\s*\{[\s\S]*border-radius:\s*16px;/);
+    expect(styles).toMatch(/\.chat-post\.channel-thread-card\s*\{[\s\S]*border-radius:\s*var\(--radius-panel\);/);
   });
 
   it('uses a compact channel header without duplicate navigation copy', () => {
@@ -75,7 +75,7 @@ describe('Chat channel rendering hooks', () => {
 
   it('binds the pastel unread treatment to root thread resource state', () => {
     expect(html).toContain("'chat-post-thread-unread': $store.chat.isRootThreadUnread(msg)");
-    expect(styles).toMatch(/--unread-pastel-red:\s*rgba\(254, 226, 226, 0\.62\)/);
+    expect(styles).toMatch(/--unread-pastel-red:\s*var\(--info-background\)/);
     expect(styles).toMatch(/\.chat-post-thread-unread,[\s\S]*background:\s*var\(--unread-pastel-red\)/);
     expect(styles).toContain('.chat-post-thread-unread:hover');
     expect(styles).toContain('.chat-post-thread-unread.chat-post-focused');
