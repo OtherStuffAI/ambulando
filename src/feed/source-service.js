@@ -95,3 +95,18 @@ export class FeedSourceService {
     await purgePrivateFeedBodies(this.db, this.context);
   }
 }
+
+// Validate before saving a subscription; never cache this provisional body.
+export async function validateFeedSource(source, binding, signal, parse, fetchImpl = fetch) {
+  const headers = source.kind === 'wapp' ? await binding.headers(binding.url, signal) : {};
+  signal?.throwIfAborted();
+  const response = await (binding.fetchImpl || fetchImpl)(binding.url, { method: 'GET', headers, credentials: 'omit', cache: 'no-store', redirect: 'error', mode: 'cors', signal });
+  if (!response.ok) { const error = new Error(`feed_http_${response.status}`); error.status = response.status; error.feedSource = true; throw error; }
+  const type = response.headers.get('content-type') || '';
+  const format = /json/i.test(type) ? 'jsonfeed-1.1' : /xml|rss/i.test(type) ? 'rss' : '';
+  if (!format || (source.kind === 'wapp' && format !== 'jsonfeed-1.1')) throw new Error('unsupported_content_type');
+  const normalized = await parse(await boundedFeedText(response, signal), format, source.kind === 'wapp');
+  signal?.throwIfAborted();
+  if (normalized.next_url) nextFeedUrl(normalized.next_url, binding.url, source.kind === 'wapp');
+  return { title: normalized.title, format };
+}

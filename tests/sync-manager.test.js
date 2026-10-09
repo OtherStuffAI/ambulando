@@ -1458,37 +1458,6 @@ describe('sync family progress helpers', () => {
     expect(store.flightDeckTimingMessageIds.has('message-trace-1')).toBe(true);
   });
 
-  it('reconciles the authoritative WApp feed for visible activity events', async () => {
-    isTowerPgBackendMode.mockReturnValue(true);
-    const reconcileWappActivity = vi.fn(async () => ({ items: [], counts: {}, mutes: [] }));
-    const { fn } = bindMethod('handleSSEStatus', { reconcileWappActivity });
-
-    await fn({
-      status: 'pull-complete',
-      families: ['flightdeck_pg'],
-      pgEvents: [{ entity_type: 'wapp_activity_item', entity_id: 'item-1', event_type: 'flightdeck_pg.wapp_activity.updated' }],
-    });
-
-    expect(reconcileWappActivity).toHaveBeenCalledOnce();
-    expect(syncTowerPgWorkspace).not.toHaveBeenCalled();
-  });
-
-  it('does not reconcile WApp activity for an SSE fallback without a relevant event', async () => {
-    isTowerPgBackendMode.mockReturnValue(true);
-    const reconcileWappActivity = vi.fn();
-    const { fn } = bindMethod('handleSSEStatus', { reconcileWappActivity });
-    await fn({ status: 'pull-complete', families: ['flightdeck_pg'], pgEvents: [], fallbackRefresh: true });
-    expect(reconcileWappActivity).not.toHaveBeenCalled();
-  });
-
-  it('does not refetch WApp activity for unrelated channel SSE events', async () => {
-    isTowerPgBackendMode.mockReturnValue(true);
-    const reconcileWappActivity = vi.fn();
-    const { fn } = bindMethod('handleSSEStatus', { reconcileWappActivity });
-    await fn({ status: 'pull-complete', families: ['flightdeck_pg'], pgEvents: [{ entity_type: 'channel' }] });
-    expect(reconcileWappActivity).not.toHaveBeenCalled();
-  });
-
   it('runs a bundled delta on SSE reconnect', async () => {
     isTowerPgBackendMode.mockReturnValue(true);
     const { fn, store } = bindMethod('handleSSEStatus', {
@@ -2212,26 +2181,6 @@ describe('performTowerPgFullSync', () => {
     expect(store.syncFamilyProgress.every((family) => family.status === 'done')).toBe(true);
   });
 
-  it('bootstraps WApp activity once, then leaves connected SSE in sole ownership', async () => {
-    syncTowerPgWorkspace.mockResolvedValue({ applied: 0, pages: 1 });
-    const reconcileWappActivity = vi.fn(async function reconcile() {
-      this.wappActivityReconciledWorkspaceKey = this.currentWorkspaceKey;
-    });
-    const { fn, store } = bindMethod('performTowerPgFullSync', {
-      session: { npub: 'npub1me' },
-      backendUrl: 'https://backend.example.com',
-      currentWorkspaceKey: 'workspace-a',
-      wappActivityReconciledWorkspaceKey: '',
-      isSSEConnected: true,
-      reconcileWappActivity,
-    });
-
-    await fn({ manual: false });
-    await fn({ manual: false });
-
-    expect(reconcileWappActivity).toHaveBeenCalledOnce();
-    expect(store.wappActivityReconciledWorkspaceKey).toBe('workspace-a');
-  });
 
   it('surfaces PG full sync failures in the progress modal', async () => {
     syncTowerPgWorkspace.mockRejectedValueOnce(new Error('PG is offline'));

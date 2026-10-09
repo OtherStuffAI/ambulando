@@ -17,8 +17,6 @@ import {
   getTowerPgDailyNotes,
   getTowerPgPersonalWapps,
   getTowerPgWappPublishingGrants,
-  getTowerPgWappActivityItems,
-  getTowerPgWappActivityMutes,
   getTowerPgApprovals,
   getTowerPgDoc,
   getTowerPgDocBody,
@@ -63,8 +61,6 @@ import {
   replaceFileFoldersForWorkspace,
   replacePgPersonalWappsForOwner,
   replaceWappPublishingGrants,
-  replaceWappActivityItems,
-  replaceWappActivityMutes,
   replaceWorkspaceMembers,
   replacePgDocumentsForChannel,
   replacePgFileFoldersForChannel,
@@ -152,24 +148,6 @@ async function readAllTowerPgChannelMessages(readMessages, workspaceId, channelI
   } while (cursor);
 
   return messages;
-}
-
-async function readAllTowerPgWappActivityItems(readItems, workspaceId, options = {}) {
-  const items = [];
-  const seenCursors = new Set();
-  let cursor = null;
-
-  do {
-    const page = await readItems(workspaceId, { ...options, cursor });
-    items.push(...(Array.isArray(page?.items) ? page.items : []));
-    const nextCursor = trimText(page?.next_cursor);
-    if (!nextCursor) break;
-    if (seenCursors.has(nextCursor)) throw new Error('Tower PG WApp activity pagination returned a repeated cursor');
-    seenCursors.add(nextCursor);
-    cursor = nextCursor;
-  } while (cursor);
-
-  return items;
 }
 
 function isMissingPgReactionTargetError(error) {
@@ -1264,62 +1242,6 @@ export function mapPgWappPublishingGrantToLocal(input) {
     updated_at: source.updated_at || source.created_at || null,
     pg_backend: true,
     pg_record_type: 'wapp_publishing_grant',
-  };
-}
-
-export function mapPgWappActivityItemToLocal(input) {
-  const item = input?.item && typeof input.item === 'object' ? input.item : input || {};
-  const readAt = item.read_at || item.user_state?.read_at || null;
-  const dismissedAt = item.dismissed_at || item.user_state?.dismissed_at || null;
-  const state = trimText(item.state) || 'active';
-  return {
-    ...item,
-    record_id: trimText(item.id || item.record_id),
-    workspace_id: trimText(item.workspace_id),
-    wapp_installation_id: trimText(item.wapp_installation_id || item.installation_id),
-    publisher_npub: trimText(item.publisher_npub),
-    source_name: trimText(item.display_name || item.source_name || item.wapp_name || item.app_id) || 'WApp',
-    category: trimText(item.category) || 'update',
-    title: trimText(item.title) || 'WApp update',
-    summary: trimText(item.summary),
-    scope_id: trimText(item.scope_id),
-    channel_id: trimText(item.channel_id),
-    scope_title: trimText(item.scope_title || item.scope_name),
-    channel_title: trimText(item.channel_title || item.channel_name),
-    priority: trimText(item.priority) || 'normal',
-    state,
-    version: Number(item.version || 1),
-    open_url: trimText(item.open_url),
-    registered_open_origins: normalizeStringList(item.registered_open_origins || item.approved_open_origins),
-    grant_status: trimText(item.grant_status || item.source_status),
-    open_url_allowed: item.open_url_allowed === true,
-    open_links_disabled: item.open_links_disabled === true,
-    read_at: readAt,
-    dismissed_at: dismissedAt,
-    unread: typeof item.unread === 'boolean' ? item.unread : !readAt,
-    muted: item.muted === true,
-    occurred_at: item.occurred_at || item.created_at || null,
-    updated_at: item.updated_at || item.occurred_at || item.created_at || null,
-    withdrawn_at: item.withdrawn_at || (state === 'withdrawn' ? item.updated_at || null : null),
-    resolved_at: item.resolved_at || (state === 'resolved' ? item.updated_at || null : null),
-    pg_backend: true,
-    pg_record_type: 'wapp_activity_item',
-  };
-}
-
-export function mapPgWappActivityMuteToLocal(input) {
-  const mute = input?.mute && typeof input.mute === 'object' ? input.mute : input || {};
-  const targetType = trimText(mute.target_type || mute.targetType);
-  const targetValue = trimText(mute.target_value || mute.targetValue);
-  return {
-    ...mute,
-    record_id: trimText(mute.id || mute.record_id) || `${targetType}:${targetValue}`,
-    target_type: targetType,
-    target_value: targetValue,
-    created_at: mute.created_at || null,
-    updated_at: mute.updated_at || mute.created_at || null,
-    pg_backend: true,
-    pg_record_type: 'wapp_activity_mute',
   };
 }
 
@@ -3166,8 +3088,7 @@ export async function hydrateTowerPgEventUpdates(store, events = [], deps = {}) 
       if (ownerActorId) personalWappOwnerIds.add(ownerActorId);
       else fallbackEvents += 1;
     } else if (['wapp_activity_item', 'wapp_activity_mute'].includes(entityType)) {
-      // The WApp projection has its own bounded reconciliation path. Treat its
-      // SSE events as recognized so they do not also trigger a workspace delta.
+      // Retired publisher records are ignored without fetching or deleting history.
     } else if (entityType === 'reaction' && trimText(payload.target_type) && trimText(payload.target_id)) {
       const targetType = trimText(payload.target_type);
       const targetId = trimText(payload.target_id);
@@ -3492,36 +3413,6 @@ export async function hydrateTowerPgWappPublishingGrants(store, deps = {}) {
   assertTowerPgWorkspaceCurrent(store, context);
   await replaceGrants(grants);
   return grants;
-}
-
-export async function hydrateTowerPgWappActivity(store, deps = {}) {
-  const context = resolveTowerPgWorkspaceContext(store);
-  if (!context.workspaceId || !context.baseUrl) return { items: [], counts: {}, mutes: [] };
-  const readItems = deps.getTowerPgWappActivityItems || getTowerPgWappActivityItems;
-  const readMutes = deps.getTowerPgWappActivityMutes || getTowerPgWappActivityMutes;
-  const replaceItems = deps.replaceWappActivityItems || replaceWappActivityItems;
-  const replaceMutes = deps.replaceWappActivityMutes || replaceWappActivityMutes;
-  const sourceRows = await readAllTowerPgWappActivityItems(readItems, context.workspaceId, {
-    baseUrl: context.baseUrl,
-    appNpub: context.appNpub,
-    limit: deps.limit || 100,
-    includeResolved: true,
-  });
-  const items = sourceRows.map(mapPgWappActivityItemToLocal);
-  const muteResult = await readMutes(context.workspaceId, { baseUrl: context.baseUrl, appNpub: context.appNpub });
-  const mutes = (Array.isArray(muteResult?.mutes) ? muteResult.mutes : [])
-    .map(mapPgWappActivityMuteToLocal)
-    .filter((mute) => mute.target_type && mute.target_value);
-  const currentContext = resolveTowerPgWorkspaceContext(store);
-  const counts = {
-    unread: items.filter((item) => item?.unread === true && !item?.dismissed_at && item?.muted !== true).length,
-  };
-  if (currentContext.workspaceId !== context.workspaceId || currentContext.baseUrl !== context.baseUrl) {
-    return { items, counts, mutes };
-  }
-  assertTowerPgWorkspaceCurrent(store, context);
-  await Promise.all([replaceItems(items, { authoritative: true }), replaceMutes(mutes)]);
-  return { items, counts, mutes };
 }
 
 export async function hydrateTowerPgDocumentsAndFiles(store, deps = {}) {

@@ -297,7 +297,6 @@ export function detachLoggedOutWorkspace(store) {
   store.localWorkspaceCoreLoadedForKey = '';
   closeWorkspaceDb();
   store.chatPresentationCache?.clear?.();
-  store.resetWappActivityProjection?.();
   store.closeMentionPopover?.();
   for (const key of [
     'channels', 'messages', 'groups', 'documents', 'directories', 'tasks',

@@ -140,10 +140,9 @@ describe('shell navigation data retention', () => {
     expect(shell.startWorkspaceLiveQueries).toHaveBeenCalled();
   });
 
-  it('does not refresh status projections or WApp activity during repeated scope changes on the Deck', () => {
+  it('does not refresh status projections during repeated scope changes on the Deck', () => {
     const shell = buildNavigableShell();
     shell.navSection = 'status';
-    shell.refreshWappActivity = vi.fn();
     shell.selectBoard = vi.fn(function selectBoard(boardId) {
       this.selectedBoardId = boardId;
     });
@@ -154,7 +153,6 @@ describe('shell navigation data retention', () => {
 
     expect(shell.selectBoard).toHaveBeenCalledTimes(25);
     expect(shell.refreshStatusRecentChanges).not.toHaveBeenCalled();
-    expect(shell.refreshWappActivity).not.toHaveBeenCalled();
     expect(shell.startWorkspaceLiveQueries).toHaveBeenCalledTimes(25);
     expect(shell.ensureBackgroundSync).toHaveBeenCalledTimes(25);
   });

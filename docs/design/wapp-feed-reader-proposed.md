@@ -1,4 +1,4 @@
-# Flight Deck subscribed feed reader
+# Ambulando Feeds reader
 
 Status: **implemented in source; integrated human acceptance remains pending**. Companion to canonical
 [`wapp-feed-v1-proposed`, revision `1`](../../../tower/docs/contract/wapp-feed-v1-proposed.md).
@@ -7,80 +7,55 @@ The proposed baseline remains unchanged. Tower owns the selected
 the Book of Sand graph-signature extension; this companion does not redefine it.
 Source tests do not attest deployed endpoints or an integrated release.
 
-## Reader and discovery
+## Feeds reader and URL onboarding
 
-Feed has explicit **Legacy** and **Subscribed** views. Legacy is the initial view;
-existing publisher, grants, records and flags remain available and unchanged.
-There is no subscription seeding, historical conversion or automatic combined
-legacy/source card list. Feed + discovers authorised installations across shared
-Tower PG Autopilot connections using the existing `/api/wapps` registry, signs
-`/feed/list` as the actual reader, and subscribes to a permitted feed through Tower.
+The Deck has one **Feeds** reader. It starts automatically when the workspace's
+actual-reader identity is available. An obsolete client `subscribedFeedView`
+preference is ignored; there is no Legacy selector, activity-reader fallback or
+legacy subscription seeding. Paste an exact JSON Feed or RSS URL into Add feed.
+The browser fetches and parses the source before creating a Tower subscription;
+format is detected from JSON/XML content type. Failures keep the form open.
+There is no app discovery, source-specific format choice, registration step or
+transport picker in this onboarding.
 
-The reader uses the canonical `currentWorkspace.pgMe.actor` from Tower’s
-actual-reader `/me` response. Its npub must match the active session and cached
-workspace signer; mismatched workspace responses are rejected. A missing actor
-triggers a coalesced actual-reader `/me` request before feed hydration or UI work,
-with generation/backend/workspace/session guards and retry after failure. The
-record worker receives the same actor metadata, so cache partitions, SSE and
-record deltas agree. Workspace-owner and workspace-key identities are never used
-as reader substitutes.
+Public feeds need no WApp registration. Requests omit credentials/cookies and
+reject redirects, including public redirects. They use direct browser CORS;
+feeds without browser access report a source error. No proxy or server-side
+fetch endpoint is introduced. Queries are preserved and URL fragments removed.
 
-The picker uses shared `autopilot_connections` rows from Agents. If the local
-connection cache is empty, it requests the existing service-owned workspace
-bootstrap before discovery. Device transport preferences are per connection and
-reader/workspace/backend. On first use ordinary browsers select registered HTTPS;
-a supported native FIPS client selects FIPS. A saved FIPS selection never falls
-back to HTTPS. The visible connection selector lets the reader explicitly change
-that choice. FIPS registry discovery uses the existing endpoint/peer-pinned
-Autopilot adapter and exact reader signing of `/api/wapps`.
+Private subscriptions already stored as Tower WApp tuples continue through the
+existing authority adapter. Exact private feed URLs recognized by a trusted
+workspace launcher binding use the existing signed reader/list/graph contract;
+only a feed actually returned by that authorized list can be subscribed. The
+form does not guess Editions, convert home URLs to source-specific endpoints,
+accept feed content as a binding, or fall back to public access after denial.
+Archived/invalid known bindings fail closed. No reader credentials are sent to
+arbitrary public URLs. Existing FIPS transport choices remain honored; missing
+independently pinned WApp mesh endpoints still report a source error.
 
-The registry currently exposes a WApp `launchUrl` but no authoritative WApp mesh
-endpoint and peer binding. FIPS feed loading therefore reports a recoverable
-prerequisite instead of guessing a mesh port or using HTTPS. Platform work must
-advertise and bind the WApp feed mesh destination and support exact intended-URL
-reader and graph signatures before this can be implemented safely. Path-mounted
-feed bases remain unsupported. Each private refresh re-resolves the registry;
-observed connection changes/removal invalidate the source.
+The reader uses canonical `currentWorkspace.pgMe.actor` from the actual-reader
+Tower `/me` response. Actor, signer, workspace, backend and generation checks
+reject stale responses. Owner/workspace-key identities never substitute for the
+reader. Feed state remains service-owned Tower → Dexie → liveQuery → Alpine.
 
-HTTPS discovery requires the Autopilot registry to permit unsigned browser
-OPTIONS preflight and return CORS headers on signed GET/error responses for the
-Flight Deck origin. Book of Sand independently needs the exact origin in
-`BOOK_OF_SAND_FEED_CORS_ORIGINS`. Runtime CORS/ACL failures cannot be repaired by
-reader actor initialization or restarting Flight Deck.
+T1's persisted source union is `public` (URL + JSON/RSS format) or `wapp`
+(connection + installation + feed ID + endpoint). It has no general authenticated
+URL source or authentication-scheme negotiation. Thus a private JSON URL without
+a supported trusted binding cannot be given guessed signatures/cookies. The
+smallest future contract addition for arbitrary authenticated URL sources is an
+explicit source authentication profile and its exact allowed signing audience,
+plus private cache classification and revocation semantics across Tower/client.
+Current adapters retain authorization for supported existing private sources;
+this change does not claim human ACL/CORS acceptance or new source protocols.
 
-The registry publisher `appNpub` must not be assumed to identify a separate
-existing graph corpus. A source with a distinct graph identity uses the explicit
-Tower launcher feed binding described below; clients validate that binding before signing. Do not rotate a publisher or accept
-arbitrary bootstrap identities to work around a mismatch. Graph targets must
-use the reader’s selected logical Tower origin. Book of Sand supports
-`BOOK_OF_SAND_FEED_TOWER_URL` for that public signing/forwarding origin, preserving
-its unrelated legacy `TOWER_URL` publishing paths.
-
-Manual Book of Sand links accept the registered home URL, `/feed/`, or
-`/feed/editions` without query/fragment. Flight Deck resolves them from Tower
-personal-WApp launcher metadata through the existing workspace bootstrap and Dexie,
-independently of Autopilot registry availability. A launcher `metadata.feed_binding`
-pins `protocol: book-of-sand-v1`, the verified `installation_id`, the shared
-`autopilot_connection_id`, and `graph_source_app_npub`. The launcher supplies the
-registered root origin and app ID; an ambiguous, archived or missing binding fails
-visibly. Publishing that configuration uses existing Tower launcher permissions,
-not a feed bootstrap's self-declared identity. No new Tower source kind is added.
-
-Manual validation signs Book of Sand's bootstrap and list as the actual reader,
-checks the graph origin/owner/source/group/query bounds, and saves the standard
-Tower WApp tuple only when Editions is readable. Reload resolves the same Tower
-pin and reauthenticates the source without requiring `/api/wapps`. Binding removal
-or change invalidates cached private bodies; a formerly pinned source cannot
-quietly switch to registry-derived authority. Connected browsing still lists the
-authorized registry and checks its origin/app/installation against any Tower pin.
-The independent graph pin distinguishes an existing corpus from its publisher.
-The manual button remains usable while registry discovery is pending or failed.
-
-Public URLs accept JSON Feed 1.1 or RSS/podcast feeds through direct browser CORS,
-with no reader credentials, cookies or public proxy. The user selects the format.
-A network/CORS failure is surfaced per source; universal no-CORS support is not
-claimed. All automatic redirects are rejected conservatively, including public
-redirects. URL serialization removes the source fragment while preserving queries.
+The retired activity reader's APIs, projections, commands, state, filtering,
+legacy card UI and exclusive tests are deleted. Historical `wapp_activity_items`
+and `wapp_activity_mutes` Dexie schema slots remain dormant so an upgrade does
+not silently destroy history. No automatic conversion can safely identify JSON
+or RSS item IDs for these publisher records. Existing `feed_subscriptions` and
+`feed_item_states` retain identity and all read/dismissed/saved flags. Independent
+Toolbox installation/publishing administration is outside the reader and remains
+available; it is not a prerequisite or fallback for Feeds.
 
 Cards show source, title, text, date and podcast attachment metadata. Only a
 deliberate headline click opens the exact safe source-provided URL once, with
@@ -185,8 +160,8 @@ performance validation follows [the baseline](../playwright-performance-baseline
 Real two-client Tower/browser convergence, actual human CORS/ACL and native lock/FIPS
 proof still belong to integration validation; mocked tests do not claim them.
 
-A1 (public proxy), M1 (historical migration/publisher removal) and R1 (integrated
-release/activation) remain excluded. See the [service contract](tower-sync-service.md)
+A public proxy, automatic conversion of historical publisher records and
+arbitrary authenticated URL contracts remain excluded. See the [service contract](tower-sync-service.md)
 and [FIPS transport](../fips-transport.md).
 
 ## Joint Feed/workspace release check

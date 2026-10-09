@@ -120,6 +120,7 @@ const WORKSPACE_STORES_V18 = {
 const WORKSPACE_STORES_V19 = {
   ...WORKSPACE_STORES_V18,
   wapp_publishing_grants: '&wapp_installation_id, app_id, publisher_npub, status, updated_at',
+  // Dormant history slots: do not delete user data when retiring the activity reader.
   wapp_activity_items: 'record_id, workspace_id, wapp_installation_id, category, channel_id, state, unread, muted, priority, occurred_at, updated_at',
   wapp_activity_mutes: '&record_id, target_type, target_value, updated_at, &[target_type+target_value]',
 };
@@ -1571,74 +1572,6 @@ export async function replaceWorkspaceMembers(workspaceId, members = []) {
   });
 }
 
-export async function replaceWappActivityItems(items = [], options = {}) {
-  const db = wsDb();
-  const rows = (Array.isArray(items) ? items : [])
-    .map((item) => sanitizeForStorage(item))
-    .filter((item) => String(item?.record_id || '').trim());
-  return db.transaction('rw', db.wapp_activity_items, async () => {
-    if (options.authoritative === false) {
-      if (rows.length > 0) await db.wapp_activity_items.bulkPut(rows);
-      return rows;
-    }
-    return reconcileAuthoritativeRows(db.wapp_activity_items, rows, 'record_id');
-  });
-}
-
-export async function upsertWappActivityItem(item) {
-  const row = sanitizeForStorage(item);
-  if (!String(row?.record_id || '').trim()) throw new Error('WApp activity item requires record_id');
-  await wsDb().wapp_activity_items.put(row);
-  return row;
-}
-
-export async function getWappActivityItems() {
-  return wsDb().wapp_activity_items.orderBy('occurred_at').reverse().toArray();
-}
-
-export async function replaceWappActivityMutes(mutes = []) {
-  const db = wsDb();
-  const rows = (Array.isArray(mutes) ? mutes : [])
-    .map((mute) => sanitizeForStorage(mute))
-    .filter((mute) => String(mute?.record_id || '').trim());
-  return db.transaction('rw', db.wapp_activity_mutes, async () => {
-    return reconcileAuthoritativeRows(db.wapp_activity_mutes, rows, 'record_id');
-  });
-}
-
-export async function getWappActivityMutes() {
-  return wsDb().wapp_activity_mutes.toArray();
-}
-
-export async function deleteWappActivityMute(recordId) {
-  const id = String(recordId || '').trim();
-  if (!id) return;
-  await wsDb().wapp_activity_mutes.delete(id);
-}
-
-export async function upsertWappActivityMute(mute) {
-  const row = sanitizeForStorage(mute);
-  if (!String(row?.record_id || '').trim()) throw new Error('WApp activity mute requires record_id');
-  await wsDb().wapp_activity_mutes.put(row);
-  return row;
-}
-
-export async function getWappActivityProjection() {
-  const [items, mutes] = await Promise.all([
-    getWappActivityItems(),
-    getWappActivityMutes(),
-  ]);
-  const mutedTargets = new Set(mutes.map((mute) => `${mute?.target_type}:${mute?.target_value}`));
-  const projectedItems = items.map((item) => ({
-    ...item,
-    muted: item?.muted === true
-      || mutedTargets.has(`installation:${item?.wapp_installation_id}`)
-      || mutedTargets.has(`category:${item?.category}`),
-  }));
-  const unread = projectedItems.filter((item) => item.unread === true && !item.dismissed_at && item.muted !== true).length;
-  return { items: projectedItems, counts: { unread }, mutes };
-}
-
 // ---------------------------------------------------------------------------
 // groups — workspace DB
 // ---------------------------------------------------------------------------
@@ -1784,8 +1717,6 @@ export async function runWorkspaceSyncTransaction(callback) {
     db.wapps,
     db.workspace_members,
     db.wapp_publishing_grants,
-    db.wapp_activity_items,
-    db.wapp_activity_mutes,
     db.autopilot_connections,
     db.workspace_agents,
     db.sync_state,
@@ -1811,7 +1742,6 @@ export async function deleteTowerPgSyncTombstones(tombstones = []) {
       case 'audio_note': await db.audio_notes.delete(entityId); break;
       case 'daily_note': await db.daily_notes.delete(entityId); break;
       case 'personal_wapp': await db.wapps.delete(entityId); break;
-      case 'wapp_activity_item': await db.wapp_activity_items.delete(entityId); break;
       case 'autopilot_connection': await db.autopilot_connections.delete(entityId); break;
       case 'workspace_agent': await db.workspace_agents.delete(entityId); break;
       default: break;

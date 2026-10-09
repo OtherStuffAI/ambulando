@@ -3,10 +3,7 @@
 export {
   createTowerPgPersonalWapp,
   createTowerPgScopeChannel,
-  deleteTowerPgWappActivityMute,
   disableTowerPgWappPublishingGrant,
-  patchTowerPgWappActivityUserState,
-  putTowerPgWappActivityMute,
   putTowerPgWappPublishingGrant,
   revokeTowerPgWappPublishingGrant,
   rotateTowerPgWappPublishingGrant,
@@ -17,8 +14,6 @@ export {
   hydrateTowerPgChannels,
   mapPgChannelToLocal,
   mapPgPersonalWappToLocal,
-  mapPgWappActivityItemToLocal,
-  mapPgWappActivityMuteToLocal,
   mapPgWappPublishingGrantToLocal,
   resolveTowerPgWorkspaceContext,
 } from './pg-read-hydrator.js';

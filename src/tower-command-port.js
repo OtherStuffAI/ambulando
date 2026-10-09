@@ -20,13 +20,10 @@ import {
   upsertScope,
   upsertTask,
   upsertWapp,
-  upsertWappActivityItem,
-  upsertWappActivityMute,
   upsertWappPublishingGrant,
   upsertWorkroom,
   upsertWorkroomApproval,
   upsertDailyNote,
-  deleteWappActivityMute,
   upsertAutopilotConnection,
   upsertWorkspaceAgent,
 } from './db.js';
@@ -38,8 +35,6 @@ import {
   mapPgPersonalWappToLocal,
   mapPgReactionToLocal,
   mapPgScopeToLocal,
-  mapPgWappActivityItemToLocal,
-  mapPgWappActivityMuteToLocal,
   mapPgWappPublishingGrantToLocal,
   mapPgWorkroomApprovalToLocal,
   mapPgWorkroomToLocal,
@@ -66,7 +61,6 @@ export const TOWER_WORKSPACE_COMMAND_CONTRACT = Object.freeze({
     'wapp.create', 'wapp.update', 'wapp.delete',
     'wapp-publishing-grant.put', 'wapp-publishing-grant.disable',
     'wapp-publishing-grant.revoke', 'wapp-publishing-grant.rotate',
-    'wapp-activity.patch', 'wapp-activity-mute.put', 'wapp-activity-mute.delete',
     'wapp-delegation.list', 'wapp-delegation.create', 'wapp-delegation.revoke',
     'wapp-install-intent.list', 'wapp-install-intent.create', 'wapp-installation.list',
     'wapp-installation.reconcile', 'wapp-installation.revoke',
@@ -130,15 +124,6 @@ async function reconcileTypedCommand(name, result, { owner = '', args = [] } = {
   } else if (name.startsWith('wapp-publishing-grant.')) {
     const row = mapPgWappPublishingGrantToLocal(result?.grant || result);
     if (row.wapp_installation_id) await upsertWappPublishingGrant(row);
-  } else if (name === 'wapp-activity.patch') {
-    const row = mapPgWappActivityItemToLocal(result?.item || result?.activity || result);
-    if (row.record_id) await upsertWappActivityItem(row);
-  } else if (name === 'wapp-activity-mute.put') {
-    const row = mapPgWappActivityMuteToLocal(result?.mute || result);
-    if (row.record_id) await upsertWappActivityMute(row);
-  } else if (name === 'wapp-activity-mute.delete') {
-    const recordId = String(result?.mute?.id || result?.id || '').trim();
-    if (recordId) await deleteWappActivityMute(recordId);
   } else if (name === 'daily-note.upsert') {
     const row = mapPgDailyNoteToLocal(result?.daily_note || result?.note || result, { workspaceOwnerNpub: owner });
     if (row.record_id) await upsertDailyNote(row);
@@ -234,9 +219,6 @@ export function prepareTowerWorkspaceCommand(store, name, input = {}) {
     'wapp-publishing-grant.disable': 'disableTowerPgWappPublishingGrant',
     'wapp-publishing-grant.revoke': 'revokeTowerPgWappPublishingGrant',
     'wapp-publishing-grant.rotate': 'rotateTowerPgWappPublishingGrant',
-    'wapp-activity.patch': 'patchTowerPgWappActivityUserState',
-    'wapp-activity-mute.put': 'putTowerPgWappActivityMute',
-    'wapp-activity-mute.delete': 'deleteTowerPgWappActivityMute',
     'wapp-delegation.list': 'getTowerPgWappDelegations',
     'wapp-delegation.create': 'createTowerPgWappDelegation',
     'wapp-delegation.revoke': 'revokeTowerPgWappDelegation',

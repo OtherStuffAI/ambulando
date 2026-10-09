@@ -9,8 +9,6 @@ import {
   replaceWorkspaceMembers,
   runWorkspaceSyncTransaction,
   upsertMessage,
-  upsertWappActivityItem,
-  upsertWappActivityMute,
 } from '../src/db.js';
 import { rankMainFeedMessages } from '../src/chat-order.js';
 import { getSectionLiveQueryPlan, sectionLiveQueryMixin } from '../src/section-live-queries.js';
@@ -292,54 +290,10 @@ describe('section live query plan', () => {
       'status:directories',
       'status:documents:100:all:::0',
       'status:tasks:100:all:::0',
-      'status:wapp-activity',
     ]);
     expect(plan.detail).toEqual([]);
   });
 
-  it('applies one workspace-guarded WApp projection from Dexie', async () => {
-    const subscriptions = [];
-    const store = {
-      currentWorkspaceKey: 'wapp-workspace-a',
-      workspaceOwnerNpub: 'npub-owner-a',
-      navSection: 'status',
-      startSharedLiveQueries: vi.fn(),
-      createLiveSubscription: vi.fn((query, onNext) => {
-        subscriptions.push({ query, onNext });
-        return { unsubscribe() {} };
-      }),
-      stopLiveSubscription: vi.fn(),
-      initUnreadTracking: vi.fn(),
-      applyScopes: vi.fn(), applyChannels: vi.fn(), applyFileMessages: vi.fn(), applyFileComments: vi.fn(),
-      applyDirectories: vi.fn(), applyDocuments: vi.fn(), applyTasks: vi.fn(), applyReports: vi.fn(), applySchedules: vi.fn(),
-      applyWappActivityProjection: vi.fn(),
-      resetWappActivityProjection: vi.fn(),
-    };
-    openWorkspaceDb(store.currentWorkspaceKey);
-    await clearRuntimeData();
-    await upsertWappActivityItem({ record_id: 'item-a', wapp_installation_id: 'install-a', category: 'lead', unread: true, occurred_at: '2026-08-04T00:00:00.000Z' });
-    await upsertWappActivityMute({ record_id: 'category:lead', target_type: 'category', target_value: 'lead' });
-
-    sectionLiveQueryMixin.startWorkspaceLiveQueries.call(store);
-    const subscription = subscriptions.find((entry) => entry.query.toString().includes('getWappActivityProjection'));
-    const projection = await subscription.query();
-    subscription.onNext(projection);
-
-    expect(store.applyWappActivityProjection).toHaveBeenCalledWith(expect.objectContaining({
-      items: [expect.objectContaining({ record_id: 'item-a', muted: true })],
-      counts: { unread: 0 },
-      mutes: [expect.objectContaining({ record_id: 'category:lead' })],
-    }));
-
-    store.currentWorkspaceKey = 'wapp-workspace-b';
-    store.workspaceOwnerNpub = 'npub-owner-b';
-    openWorkspaceDb(store.currentWorkspaceKey);
-    await clearRuntimeData();
-    subscription.onNext(projection);
-    expect(store.applyWappActivityProjection).toHaveBeenCalledTimes(1);
-    sectionLiveQueryMixin.startWorkspaceLiveQueries.call(store);
-    expect(store.resetWappActivityProjection).toHaveBeenCalledTimes(2);
-  });
 
   it('keeps doc comments cold until a document is open', () => {
     const browserPlan = getSectionLiveQueryPlan({
@@ -505,7 +459,6 @@ describe('section live query plan', () => {
     expect(store.refreshGroups).toHaveBeenCalledWith({ force: true, minIntervalMs: 0 });
     expect(store.refreshScopes).toHaveBeenCalledTimes(1);
     expect(store.refreshChannels).toHaveBeenCalledTimes(1);
-    expect(store.requestTowerSyncFamily).toHaveBeenCalledWith('wapp-activity', '', { force: true });
     expect(store.requestTowerSyncFamily).toHaveBeenCalledWith('personal-wapps', '', { force: true });
     expect(store.refreshTasks).not.toHaveBeenCalled();
     expect(store.refreshDocuments).not.toHaveBeenCalled();

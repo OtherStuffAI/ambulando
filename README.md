@@ -149,7 +149,5 @@ publishing the source or creating a replacement repository, follow the
 - [Release notes workflow](docs/release-notes.md)
 - [Context editing and authority](docs/design/context-tree-editing.md)
 - [File previews and storage routing](docs/design/file-previews.md)
-- [Subscribed feed reader](docs/design/wapp-feed-reader-proposed.md): source
-  implementation, selected Tower/WApp adapters, and remaining integration
-  boundaries. Legacy Feed publishing remains available; source validation does
-  not establish live activation.
+- [Feeds reader](docs/design/wapp-feed-reader-proposed.md): JSON Feed/RSS URL onboarding, reader
+  authorization, cache lifecycle and remaining integration boundaries.

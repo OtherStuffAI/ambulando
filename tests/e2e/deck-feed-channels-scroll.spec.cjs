@@ -62,13 +62,8 @@ for (const viewport of [{ width: 390, height: 844 }, { width: 375, height: 667 }
     }
     const feed = page.locator('[data-testid="deck-wapp-updates"]');
     await feed.scrollIntoViewIfNeeded();
-    await feed.getByRole('button', { name: 'Feed options', exact: true }).click();
-    await expect(feed.getByRole('dialog', { name: 'Feed options' })).toBeVisible();
-    const menu = await feed.getByRole('dialog', { name: 'Feed options' }).boundingBox();
-    const bounds = await feed.boundingBox();
-    expect(menu.y + menu.height).toBeLessThanOrEqual(bounds.y + bounds.height + 1);
-    expect(menu.x).toBeGreaterThanOrEqual(bounds.x);
-    expect(menu.x + menu.width).toBeLessThanOrEqual(bounds.x + bounds.width + 1);
+    await expect(feed.getByRole('heading', { name: 'Feeds', exact: true })).toBeVisible();
+    await expect(feed.getByLabel('Feed view')).toHaveCount(0);
     await page.screenshot({ path: testInfo.outputPath("feed-channels.png") });
   });
 }

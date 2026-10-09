@@ -210,33 +210,6 @@ it('pages distinct chat threads despite a busy thread and keeps Recent Channels 
   expect((await getRecentChannelActivity(owner)).some(row => row.channel_id === latest.channel_id)).toBe(false);
 });
 
-it('retains the live Feed subscription through Inbox type, page and scope transitions and delivers add/edit/remove', async () => {
-  const received = [];
-  const subscriptions = [];
-  const store = Object.assign(Object.defineProperties({}, Object.getOwnPropertyDescriptors(autopilotOverviewManagerMixin)), sectionLiveQueryMixin, {
-    currentWorkspaceKey: 'inbox-recovery', workspaceOwnerNpub: owner, navSection: 'status',
-    createLiveSubscription(query, onNext) { const sub = liveQuery(query).subscribe({ next: onNext }); subscriptions.push({ query, sub }); return sub; },
-    stopLiveSubscription(sub) { sub.unsubscribe(); },
-    applyAddressBookPeople() {}, applyWapps() {}, applyScopes() {}, applyChannels() {}, applyDailyNotes() {},
-    applyTasks() {}, applyDocuments() {}, applyFileMessages() {}, applyFileComments() {}, applyDirectories() {},
-    applyWappActivityProjection(projection) { received.push(projection); },
-  });
-  store.startWorkspaceLiveQueries();
-  const feed = subscriptions.find(entry => entry.query.toString().includes('getWappActivityProjection'));
-  const waitFor = async predicate => { for (let i = 0; i < 100 && !predicate(); i++) await new Promise(resolve => setTimeout(resolve, 10)); expect(predicate()).toBe(true); };
-  try {
-    await waitFor(() => received.length > 0);
-    store.setDeckInboxType('chat'); store.inboxActivityVisibleCount = 150; store.startWorkspaceLiveQueries();
-    store.syncDeckInboxContext('scope:another', 'another');
-    expect(subscriptions.filter(entry => entry.query.toString().includes('getWappActivityProjection'))).toEqual([feed]);
-    await db.wapp_activity_items.put({ record_id: 'feed-test', title: 'new', occurred_at: '2026-09-05T00:00:00Z' });
-    await waitFor(() => received.at(-1).items.some(row => row.title === 'new'));
-    await db.wapp_activity_items.update('feed-test', { title: 'changed' });
-    await waitFor(() => received.at(-1).items.some(row => row.title === 'changed'));
-    await db.wapp_activity_items.delete('feed-test');
-    await waitFor(() => received.at(-1).items.length === 0);
-  } finally { store.stopWorkspaceLiveQueries(); store.stopSharedLiveQueries(); }
-});
 
 it('keeps comment-driven task search while hiding parent attachments from Deck file cards', async () => {
   const task = await db.tasks.toCollection().first();

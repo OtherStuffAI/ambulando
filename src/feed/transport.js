@@ -13,7 +13,7 @@ async function sourceHttpError(response, signal) {
   error.status = response.status; error.code = code; error.feedSource = true;
   return error;
 }
-export function defaultFeedConnectionTransport(connection) {
+function defaultFeedConnectionTransport(connection) {
   const native = globalThis.window?.fipsTransport;
   return native?.available !== false && native?.version >= 2 ? 'fips' : connection.https_endpoint ? 'https' : 'fips';
 }
@@ -47,7 +47,7 @@ export async function discoverFeedApps(connections, signal, options = {}) {
   }));
   return { apps: results.flatMap(r => r.status === 'fulfilled' ? r.value : []), errors: results.flatMap((r, i) => r.status === 'rejected' ? [{ connection_id: eligible[i].id, connection_name: eligible[i].display_name || eligible[i].https_endpoint || 'Autopilot', error: feedDiscoveryError(r.reason), status: r.reason?.status }] : []) };
 }
-export function feedDiscoveryError(error) {
+function feedDiscoveryError(error) {
   if ([401, 403].includes(error?.status)) return 'App discovery access denied. Check this Autopilot’s access for your signed-in identity.';
   if (error?.message === 'invalid_registry') return 'This Autopilot returned an unsupported app registry response. Retry or update the Autopilot.';
   if (error?.status === 404) return 'This Autopilot does not expose its app registry.';
@@ -74,13 +74,6 @@ export async function registeredFeedApps(connections, towerContext, options = {}
       launch_url: launch.href, graph_source_app_npub: pin.graph_source_app_npub, feed_protocol: pin.protocol,
       tower_binding_id: row.record_id }];
   });
-}
-export function manualFeedApp(url, apps) {
-  const input = new URL(safeFeedUrl(url));
-  if (input.search || input.hash || !['/', '/feed/', '/feed/editions'].includes(input.pathname)) throw new Error('invalid_manual_feed_url');
-  const matches = apps.filter(app => new URL(app.launch_url).origin === input.origin);
-  if (matches.length !== 1) throw new Error('manual_feed_unregistered');
-  return matches[0];
 }
 async function applyTowerFeedBinding(app, towerContext, options) {
   if (!app.connection || !towerContext.workspaceId) return app;
@@ -162,4 +155,33 @@ export async function resolveSubscriptionSource(sub, signal, towerContext, optio
   const app = result.apps.find(a => a.installation_id === sub.source.installation_id); if (!app) throw new Error('registry_revoked');
   const binding = await resolveWappBinding(app, signal, towerContext, options);
   return { url: feedEndpoint(binding.origin, sub.source.endpoint, sub.source.feed_id), headers: binding.headers };
+}
+
+// URL onboarding never discovers apps. Only an already-authoritative workspace
+// binding can select a private adapter; source content cannot confer authority.
+export async function resolveFeedUrlSource(url, signal, towerContext, options = {}) {
+  const db = options.db || getWorkspaceDb();
+  const connections = await db.autopilot_connections.where('workspace_id').equals(towerContext.workspaceId).toArray();
+  const apps = await registeredFeedApps(connections, towerContext, { ...options, db });
+  const input = new URL(safeFeedUrl(url));
+  const matches = apps.filter(app => new URL(app.launch_url).origin === input.origin);
+  if (!matches.length) {
+    const launchers = await db.wapps.toArray();
+    const knownPrivate = launchers.some(row => {
+      if (!row.pg_backend || row.pg_workspace_id !== towerContext.workspaceId || !row.metadata?.feed_binding) return false;
+      try { return new URL(safeFeedUrl(row.launch_url)).origin === input.origin; } catch { return false; }
+    });
+    if (knownPrivate) throw new Error('authenticated_feed_unavailable');
+    return { source: { kind: 'public', url: input.href }, binding: { url: input.href } };
+  }
+  if (matches.length !== 1 || input.search || input.hash) throw new Error('authenticated_feed_unavailable');
+  const app = matches[0];
+  const preference = await db.feed_connection_transports.get(JSON.stringify([JSON.stringify([towerContext.baseUrl, towerContext.workspaceId, towerContext.readerActorId]), app.connection.id]));
+  app.transport = preference?.transport || defaultFeedConnectionTransport(app.connection);
+  const feeds = await listWappFeeds(app, signal, towerContext, { ...options, db });
+  const feed = feeds.find(f => feedEndpoint(app.launch_url, f.endpoint, f.id) === input.href);
+  if (!feed) throw new Error('authenticated_feed_unavailable');
+  const source = { kind: 'wapp', autopilot_connection_id: app.connection.id, installation_id: app.installation_id, feed_id: feed.id, endpoint: feed.endpoint, format: feed.format };
+  const binding = await resolveSubscriptionSource({ source }, signal, towerContext, { ...options, db });
+  return { source, binding };
 }

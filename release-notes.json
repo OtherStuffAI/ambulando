@@ -3614,6 +3614,27 @@
       "label": "Validated Ambulando deployment checkpoint",
       "notes": [],
       "noUserVisibleChanges": true
+    },
+    {
+      "buildNumber": 2342,
+      "label": "One Feeds reader",
+      "notes": [
+        "Read JSON Feed and RSS in one Feeds card. Paste a URL to validate and add a source without app discovery or transport setup.",
+        "Removed the legacy activity reader while preserving existing feed subscriptions and personal read, dismissed and saved state."
+      ]
+    },
+    {
+      "buildNumber": 2343,
+      "label": "Validated Feeds onboarding",
+      "notes": [
+        "Use one URL-only add-feed form, with automatic JSON Feed/RSS detection and source validation."
+      ]
+    },
+    {
+      "buildNumber": 2344,
+      "label": "Feeds reader validation checkpoint",
+      "notes": [],
+      "noUserVisibleChanges": true
     }
   ]
 }

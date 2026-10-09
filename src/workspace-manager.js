@@ -1506,7 +1506,6 @@ export const workspaceManagerMixin = {
         this.pgWorkspaceMembers = [];
         this.closeMentionPopover?.();
         this.recentChannelMessages = [];
-        this.resetWappActivityProjection?.();
         this.selectedDocId = null;
         this.selectedDocType = null;
         this.currentFolderId = null;

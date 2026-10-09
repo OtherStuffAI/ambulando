@@ -40,7 +40,6 @@ import {
   getAgentActivitiesForChannel,
   getAgentSessionHealthForChannel,
   getWappPublishingGrants,
-  getWappActivityProjection,
   getWappsByOwner,
   getWorkspaceMembers,
   getWorkroomsByWorkspace,
@@ -239,7 +238,6 @@ function scheduleTowerPgWorkspaceHydration(store, state) {
       store.getTowerSyncService?.();
       state.pgHydratedWorkspaceKeys.add(workspaceKey);
       const optionalRefreshes = [
-        ['wapp-activity', () => store.requestTowerSyncFamily?.('wapp-activity', '', { force: true })],
         ['personal-wapps', () => store.requestTowerSyncFamily?.('personal-wapps', '', { force: true })],
         ...(store.canAdminWorkspace ? [['wapp-publishing', () => store.requestTowerSyncFamily?.('wapp-publishing-grants', '', { force: true })]] : []),
       ];
@@ -654,14 +652,7 @@ function buildWorkspaceSpecs(store) {
             return store.applyTasks(page.rows);
           },
         },
-        {
-          key: 'status:wapp-activity',
-          query: () => getWappActivityProjection(),
-          onNext: (projection) => {
-            if (!isSameWorkspace(store, workspaceKey, ownerNpub)) return;
-            store.applyWappActivityProjection?.(projection);
-          },
-        },
+
       ];
       break;
     case 'chat':
@@ -1217,7 +1208,7 @@ export const sectionLiveQueryMixin = {
   },
 
   startWorkspaceLiveQueries() {
-    this.startSubscribedReader?.();
+    void this.activateFeeds?.();
     const state = getSectionState(this);
     if (typeof this.startSharedLiveQueries === 'function') {
       this.startSharedLiveQueries();
@@ -1239,7 +1230,6 @@ export const sectionLiveQueryMixin = {
       this.filesActivityPageHasMore = {};
       this.deckInboxVisibleCount = 50;
       this.hasBootstrappedUnreadTracking = false;
-      this.resetWappActivityProjection?.();
     }
 
     if (!ownerNpub) {
