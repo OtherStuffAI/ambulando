@@ -147,7 +147,7 @@ describe('auth/nostr helpers', () => {
       signEvent: vi.fn(async (event) => ({ ...event, id: 'ext-id', sig: 'ext-sig' })),
     };
     await signLoginEvent('extension');
-    const body = '{"workspace_name":"Café","idempotency_key":"6c5e818f-bf8a-4df8-9ffc-ed5753ce5891","terms_version":"hosted-free-v1"}';
+    const body = '{"workspace_name":"Café","idempotency_key":"6c5e818f-bf8a-4df8-9ffc-ed5753ce5891","terms_version":"hosted-usd-v1"}';
     const url = 'https://tower.example/api/v4/flightdeck-pg/hosted/workspaces';
     const first = JSON.parse(atob((await createNip98AuthHeader(url, 'POST', body, { freshContent: true })).slice(6)));
     const second = JSON.parse(atob((await createNip98AuthHeader(url, 'POST', body, { freshContent: true })).slice(6)));

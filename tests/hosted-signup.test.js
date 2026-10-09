@@ -5,7 +5,7 @@ import { createHostedSignupHandler, createSiteSigner, SITE_NPUB, TOWER_PATH } fr
 
 const target = `https://tower.example${TOWER_PATH}`;
 const origin = 'https://flightdeck.example';
-const body = Buffer.from(JSON.stringify({ workspace_name: 'Example', idempotency_key: randomUUID(), terms_version: 'hosted-free-v1' }));
+const body = Buffer.from(JSON.stringify({ workspace_name: 'Example', idempotency_key: randomUUID(), terms_version: 'hosted-usd-v1' }));
 const userKey = generateSecretKey();
 const siteKey = generateSecretKey();
 const siteNpub = nip19.npubEncode(finalizeEvent({ kind: 1, created_at: 1, tags: [], content: '' }, siteKey).pubkey);

@@ -886,7 +886,7 @@ export const connectSettingsManagerMixin = {
   },
 
   connectPgWizardSummary() {
-    if (this.connectHostedConfig) return 'Hosted Free includes 1 GB (1,000,000,000 bytes). Payment required: no. Terms version: hosted-free-v1.';
+    if (this.connectHostedConfig) return 'USD $5 per decimal GB per 720 hours, with one $5 customer welcome credit expiring after 30 days. Paid credits do not expire. Terms: hosted-usd-v1.';
     if (this.connectCreatingWorkspace) {
       return 'Flight Deck is creating the workspace, spaces, channel grants, and local materialized view.';
     }
@@ -1490,6 +1490,7 @@ export const connectSettingsManagerMixin = {
       const workspace = await this.connectSelectPgWorkspace(listed);
       if (this.connectWorkspacesError) throw new Error(this.connectWorkspacesError);
       this.connectHostedPhase = 'success';
+      this.openTowerUsage?.();
       this.connectHostedIntent = null;
       this.connectNewWorkspaceName = '';
       return workspace;

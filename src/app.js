@@ -1,3 +1,4 @@
+import { hostingBillingMixin } from './hosting-billing.js';
 import { showEditorMountFailure } from './docs/editor/editor-mount-failure.js';
 import { createDiagnosticOperation, finishDiagnosticOperation, emitDiagnostic } from './diagnostics-events.js';
 import { orgDataMixin } from './org-data/manager.js';
@@ -10428,6 +10429,7 @@ export function initApp() {
     subscribedReaderMixin,
     messageActivityMixin,
     orgDataMixin,
+    hostingBillingMixin,
     toolboxMixin,
     towerUsageMixin,
     wappPublishingManagerMixin,

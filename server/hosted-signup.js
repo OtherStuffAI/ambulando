@@ -65,7 +65,7 @@ function validBody(bytes) {
       || typeof body.workspace_name !== 'string' || body.workspace_name !== body.workspace_name.trim()
       || body.workspace_name.length < 1 || body.workspace_name.length > 80
       || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(body.idempotency_key)
-      || body.terms_version !== 'hosted-free-v1') return false;
+      || body.terms_version !== 'hosted-usd-v1') return false;
     return true;
   } catch { return false; }
 }

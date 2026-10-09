@@ -3671,6 +3671,14 @@
       "notes": [
         "Keep native rich document formatting and comment anchors when retrying a stale editor snapshot. Clear the save integrity banner once text matches and preserve complete drafts on device."
       ]
+    },
+    {
+      "buildNumber": 2357,
+      "label": "USD hosting balance and Stripe test top-ups",
+      "notes": [
+        "Hosted workspaces share one customer balance with a single $5 welcome credit expiring after 30 days. Tower Usage displays balances, fractional hourly spending and transactions.",
+        "Stripe test top-ups require Tower configuration; live payments remain blocked pending payment validation and refunds/disputes. Existing workspaces are not automatically charged."
+      ]
     }
   ]
 }

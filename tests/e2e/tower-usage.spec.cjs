@@ -122,10 +122,10 @@ for (const width of [1280, 390]) {
     await expect(dialog.getByText('8 KiB', { exact: true })).toBeVisible();
     await expect(dialog.getByText('1 KiB', { exact: true })).toHaveCount(0);
     status = 403; await dialog.getByRole('button', { name: 'Refresh usage' }).click();
-    await expect(dialog.getByRole('alert')).toContainText('management permission');
+    await expect(dialog.getByTestId('tower-usage-error')).toContainText('management permission');
     await expect(dialog.locator('dd > strong').filter({ hasText: 'Unavailable' })).toHaveCount(6);
     status = 503; await dialog.getByRole('button', { name: 'Refresh usage' }).click();
-    await expect(dialog.getByRole('alert')).toContainText('unavailable');
+    await expect(dialog.getByTestId('tower-usage-error')).toContainText('unavailable');
     // Focus is trapped, Escape closes and focus returns to the Apps stack.
     await dialog.getByRole('button', { name: 'Refresh usage' }).focus(); await page.keyboard.press('Tab');
     await page.keyboard.press('Tab');

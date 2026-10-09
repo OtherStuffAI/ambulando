@@ -1,6 +1,6 @@
 import { createNip98AuthHeader } from './auth/nostr.js';
 
-export const HOSTED_TERMS_VERSION = 'hosted-free-v1';
+export const HOSTED_TERMS_VERSION = 'hosted-usd-v1';
 export const HOSTED_ALLOWANCE_BYTES = 1_000_000_000;
 const HOSTED_PATH = '/api/v4/flightdeck-pg/hosted/workspaces';
 
@@ -54,7 +54,7 @@ export async function submitHostedSignup(intent, config, { fetchImpl = fetch, si
   if (!result.workspace_id || !result.descriptor || result.policy?.plan !== 'hosted_free'
     || result.policy?.allowance_bytes !== HOSTED_ALLOWANCE_BYTES
     || result.policy?.terms_version !== HOSTED_TERMS_VERSION
-    || result.policy?.billing_state !== 'free_allowance'
+    || result.policy?.billing_state !== 'usd_prepaid'
     || result.policy?.payment_required !== false) throw new Error('Tower returned an invalid hosted workspace result. Retry to verify it.');
   return result;
 }

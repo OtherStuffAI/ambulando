@@ -1,3 +1,4 @@
+import { hydrateHostingBilling } from './hosting-billing.js';
 import { canLoadPgTarget } from './pg-archive-state.js';
 import { hydrateScopeOrder } from './scope-order.js';
 import { hydrateOrgData, readOrgDataPermissions } from './org-data/tower.js';
@@ -361,6 +362,7 @@ export const syncManagerMixin = {
     this._towerSyncService = replaceTowerSyncService(this._towerSyncService, {
       workspaceKey,
       families: {
+        'hosting-billing': { freshMs: 60000, load: (_id, options) => hydrateHostingBilling(this, options), materialize: result => result },
         'scope-order': { freshMs: 30000, load: (_id, options) => hydrateScopeOrder(this, options) },
         'org-data-permissions': { trackFreshness: false, load: (_key, options) => readOrgDataPermissions(this, options) },
         'org-data': { trackFreshness: false, load: (_key, options) => hydrateOrgData(this, options) },
@@ -3464,6 +3466,7 @@ export const syncManagerMixin = {
           });
         }
         await (this.requestTowerSyncFamily?.('workspace-bootstrap') ?? this.runTowerPgWorkspaceSync());
+        if (this.towerUsageOpen) await this.refreshHostingBilling?.();
         if (this.orgDataOpen) await this.syncOrgData?.();
         this.markTowerReachabilityRecovered?.('background-sync-success', {
           refresh: false,

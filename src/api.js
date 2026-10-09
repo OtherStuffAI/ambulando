@@ -2766,3 +2766,10 @@ export async function putTowerPgScopeOrder(workspaceId, body, { baseUrl = _baseU
   const requestPath = `/api/v4/flightdeck-pg/workspaces/${encodeURIComponent(workspaceId)}/me/scope-order`;
   return json(await signedTowerPgFetch(requestPath, { method: 'PUT', body, baseUrl, appNpub, useWorkspaceKey: false }), { requestUrl: resolveTowerPgUrl(requestPath, baseUrl), method: 'PUT', prefix: 'Tower PG API' });
 }
+
+export async function hostingBillingRequest(workspaceId, operation, { baseUrl = _baseUrl, appNpub = FLIGHT_DECK_PG_APP_NPUB, signal, method = 'GET', body } = {}) {
+  if (!['status', 'usage', 'ledger', 'checkout'].includes(operation)) throw new Error('Invalid hosting billing operation');
+  const path = `/api/v4/hosting-billing/workspaces/${encodeURIComponent(workspaceId)}/${operation}`;
+  const response = await signedTowerPgFetch(path, { baseUrl, appNpub, signal, method, useWorkspaceKey: false, ...(body === undefined ? {} : { body }) });
+  return json(response, { requestUrl: resolveTowerPgUrl(path, baseUrl), method, prefix: 'Hosting billing' });
+}

@@ -4,13 +4,13 @@ import { hostedSignupIntent, submitHostedSignup, hostedSignupError } from '../sr
 
 const config = { signup_ready: true, tower_public_base_url: 'https://tower.example/' };
 const descriptor = { type: 'wingman_workspace_locator', identity: { workspace_id: 'workspace-1' } };
-const policy = { plan: 'hosted_free', allowance_bytes: 1_000_000_000, terms_version: 'hosted-free-v1', billing_state: 'free_allowance', payment_required: false };
+const policy = { plan: 'hosted_free', allowance_bytes: 1_000_000_000, terms_version: 'hosted-usd-v1', billing_state: 'usd_prepaid', payment_required: false };
 
 describe('hosted workspace signup', () => {
   it('signs the exact Tower URL and body sent to the site route; retries reuse bytes with a fresh signature', async () => {
     const intent = hostedSignupIntent('  Café  ');
     expect(Object.keys(JSON.parse(intent.body))).toEqual(['workspace_name', 'idempotency_key', 'terms_version']);
-    expect(JSON.parse(intent.body)).toMatchObject({ workspace_name: 'Café', terms_version: 'hosted-free-v1' });
+    expect(JSON.parse(intent.body)).toMatchObject({ workspace_name: 'Café', terms_version: 'hosted-usd-v1' });
     const sign = vi.fn().mockResolvedValueOnce('Nostr first').mockResolvedValueOnce('Nostr second');
     const fetchImpl = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ workspace_id: 'workspace-1', descriptor, policy }) });
     await submitHostedSignup(intent, config, { sign, fetchImpl });
