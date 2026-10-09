@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#F7F8F6" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <meta name="apple-mobile-web-app-title" content="Ambulando Sol" />
+  <meta name="apple-mobile-web-app-title" content="Ambulando" />
   <script data-sol-theme>
     (() => {
       let theme = 'system';
@@ -63,7 +63,7 @@
             textAlign: 'center',
           });
           const title = document.createElement('h1');
-          title.textContent = 'Ambulando Sol could not finish loading';
+          title.textContent = 'Ambulando could not finish loading';
           const message = document.createElement('p');
           message.textContent = 'A required application file is still unavailable. Your local workspace data has not been cleared.';
           const retry = document.createElement('button');
@@ -127,7 +127,7 @@
   <link rel="apple-touch-icon" href="/ambulando/favicon-180.png" />
   <link rel="icon" type="image/png" sizes="32x32" href="/ambulando/favicon-32.png" />
   <link rel="icon" type="image/png" sizes="16x16" href="/ambulando/favicon-16.png" />
-  <title>Ambulando Sol</title>
+  <title>Ambulando</title>
 </head>
 <body x-data x-init="$store.chat.init()" x-cloak>
   <template x-if="$store.chat.scopeDeleteConfirmation">
@@ -321,11 +321,11 @@
           class="brand-lockup brand-lockup-button"
           :class="{ 'brand-lockup-clickable': $store.chat.isLoggedIn }"
           @click="if ($store.chat.isLoggedIn) $store.chat.openCommandPalette()"
-          :aria-label="$store.chat.isLoggedIn ? 'Open command palette' : 'Ambulando Sol'"
+          :aria-label="$store.chat.isLoggedIn ? 'Open command palette' : 'Ambulando'"
         >
           <img class="brand-logo" src="/ambulando/confluence-symbol-provisional.png" alt="" />
           <div class="brand-copy">
-            <h1>Ambulando <span class="sol-product-name">Sol</span></h1>
+            <h1>Ambulando</h1>
             <p>Workspace</p>
           </div>
         </button>
@@ -395,7 +395,7 @@
               <strong x-text="$store.chat.startupSyncProgressLabel()"></strong>
             </div>
             <span class="startup-sync-progress-meta" x-show="$store.chat.startupSyncProgressMeta()" x-text="$store.chat.startupSyncProgressMeta()"></span>
-            <span class="startup-sync-progress-copy" x-show="$store.chat.startupSyncProgress.active">Cached workspace remains available while Ambulando Sol updates.</span>
+            <span class="startup-sync-progress-copy" x-show="$store.chat.startupSyncProgress.active">Cached workspace remains available while Ambulando updates.</span>
             <span class="sync-error-text" x-show="$store.chat.startupSyncProgress.error" x-text="$store.chat.startupSyncProgress.error"></span>
             <button class="startup-sync-retry" type="button" x-show="$store.chat.startupSyncProgress.error" :disabled="$store.chat.startupSyncProgress.active" @click="$store.chat.retryStartupSync()">Retry updates</button>
           </div>
@@ -425,7 +425,7 @@
             <div class="avatar-sync-conflict" x-show="$store.chat.avatarSyncConflictCount > 0" x-cloak>
               <details :open="!$store.chat.avatarSyncConflictDismissed">
                 <summary x-text="$store.chat.avatarSyncConflictDismissed ? 'Local file clash (dismissed)' : `${$store.chat.avatarSyncConflictCount} local file ${$store.chat.avatarSyncConflictCount === 1 ? 'clash' : 'clashes'}`"></summary>
-                <p>Tower will overwrite the older local file metadata. A local recovery copy is kept when Ambulando Sol refreshes from Tower.</p>
+                <p>Tower will overwrite the older local file metadata. A local recovery copy is kept when Ambulando refreshes from Tower.</p>
                 <div class="avatar-sync-conflict-actions">
                   <button type="button" @click="$store.chat.dismissAvatarSyncConflicts()">Dismiss</button>
                   <button type="button" @click="$store.chat.useTowerForAvatarSyncConflicts()">Use Tower version</button>
@@ -553,7 +553,7 @@
         <img class="auth-brand-logo" src="/ambulando/confluence-symbol-provisional.png" alt="" />
         <div>
           <h2>Sign in with Nostr to get started</h2>
-          <p class="auth-description">Ambulando Sol · Your shared workspace</p>
+          <p class="auth-description">Ambulando · Your shared workspace</p>
         </div>
       </div>
       <div class="auth-actions">
@@ -594,9 +594,9 @@
       <div class="modal workspace-access-modal" role="dialog" aria-modal="true" x-sol-dialog aria-labelledby="workspace-access-title">
         <section class="workspace-access-review" x-show="$store.chat.workspaceAccessGateStep === 'review'">
           <div class="workspace-access-top">
-            <p class="connect-modal-eyebrow">Ambulando Sol access</p>
-            <h2 id="workspace-access-title">You've been added to Ambulando Sol</h2>
-            <p x-text="$store.chat.workspaceAccessGateWorkspaces.length > 1 ? 'These workspaces are ready for you. Continue to load the workspace data before entering Ambulando Sol.' : 'This workspace is ready for you. Continue to load the workspace data before entering Ambulando Sol.'"></p>
+            <p class="connect-modal-eyebrow">Ambulando access</p>
+            <h2 id="workspace-access-title">You've been added to Ambulando</h2>
+            <p x-text="$store.chat.workspaceAccessGateWorkspaces.length > 1 ? 'These workspaces are ready for you. Continue to load the workspace data before entering Ambulando.' : 'This workspace is ready for you. Continue to load the workspace data before entering Ambulando.'"></p>
           </div>
           <div class="workspace-access-list">
             <template x-for="workspace in $store.chat.workspaceAccessGateWorkspaces" :key="workspace.workspaceKey || workspace.workspaceOwnerNpub">
@@ -626,13 +626,13 @@
             <div class="connect-build-progress-bar" aria-hidden="true">
               <span :style="`width: ${$store.chat.workspaceAccessGateProgressPercent()}%`"></span>
             </div>
-            <p>Ambulando Sol is loading your workspace before opening the space.</p>
+            <p>Ambulando is loading your workspace before opening the space.</p>
           </div>
         </section>
 
         <section class="workspace-access-review" x-show="$store.chat.workspaceAccessGateStep === 'error'" x-cloak>
           <div class="workspace-access-top">
-            <p class="connect-modal-eyebrow">Ambulando Sol access</p>
+            <p class="connect-modal-eyebrow">Ambulando access</p>
             <h2>Workspace data could not be loaded</h2>
             <p x-text="$store.chat.workspaceAccessGateProgress.error || 'Try again to load your workspace data.'"></p>
           </div>
@@ -700,7 +700,7 @@
                 <span>4</span>
                 <span>5</span>
               </div>
-              <p x-text="$store.chat.isTowerPgMode ? 'Choose a Tower host or paste a workspace descriptor. Ambulando Sol opens into an empty workspace shell, then builds the selected spaces through Tower.' : 'Choose a host or enter a custom URL.'"></p>
+              <p x-text="$store.chat.isTowerPgMode ? 'Choose a Tower host or paste a workspace descriptor. Ambulando opens into an empty workspace shell, then builds the selected spaces through Tower.' : 'Choose a host or enter a custom URL.'"></p>
             </div>
             <section class="connect-onboarding-card">
               <div class="connect-hosts-list">
@@ -761,7 +761,7 @@
                 <div class="connect-build-progress-bar" aria-hidden="true" x-show="!$store.chat.connectHostedConfig">
                   <span :style="`width: ${$store.chat.connectPgBootstrapProgress.total ? Math.max(8, Math.round((($store.chat.connectPgBootstrapProgress.completed || 0) / $store.chat.connectPgBootstrapProgress.total) * 100)) : 8}%`"></span>
                 </div>
-                <p x-text="$store.chat.connectHostedConfig ? 'Keep this page open while Ambulando Sol completes signup.' : 'Tower is creating the workspace, scopes, and channels before Ambulando Sol opens the space.'"></p>
+                <p x-text="$store.chat.connectHostedConfig ? 'Keep this page open while Ambulando completes signup.' : 'Tower is creating the workspace, scopes, and channels before Ambulando opens the space.'"></p>
               </div>
             </section>
 
@@ -991,8 +991,8 @@
             x-model="$store.chat.commandPaletteQuery"
             @input="$store.chat.handleCommandPaletteQueryInput()"
             @keydown.backspace="$store.chat.handleCommandPaletteBackspace()"
-            :placeholder="$store.chat.commandPaletteMode === 'scope' ? 'Filter scopes…' : 'Search Ambulando Sol or press 1-4'"
-            :aria-label="$store.chat.commandPaletteMode === 'scope' ? 'Filter scopes' : 'Search Ambulando Sol'"
+            :placeholder="$store.chat.commandPaletteMode === 'scope' ? 'Filter scopes…' : 'Search Ambulando or press 1-4'"
+            :aria-label="$store.chat.commandPaletteMode === 'scope' ? 'Filter scopes' : 'Search Ambulando'"
             role="combobox"
             :aria-controls="$store.chat.commandPaletteMode === 'scope' ? 'command-palette-scope-results' : 'command-palette-results'"
             :aria-activedescendant="$store.chat.commandPaletteActiveItem?.id || null"
@@ -1201,11 +1201,11 @@
       <nav id="sol-primary-navigation" aria-label="Workspace navigation" :role="$store.chat.mobileNavOpen ? 'dialog' : 'navigation'" :aria-modal="$store.chat.mobileNavOpen ? 'true' : null" x-sol-dialog="$store.chat.mobileNavOpen" :inert="$store.chat.mobileViewport && !$store.chat.mobileNavOpen" @keydown.escape.stop="if ($store.chat.mobileNavOpen) { $store.chat.mobileNavOpen = false; document.querySelector('.mobile-menu-btn')?.focus() }" class="sidebar" :class="{ 'sidebar-collapsed': $store.chat.navCollapsed, 'sidebar-mobile-open': $store.chat.mobileNavOpen }">
         <button type="button" class="sol-sidebar-brand" @click="$store.chat.openCommandPalette()" aria-label="Open command palette">
           <img src="/ambulando/confluence-symbol-provisional.png" alt="" />
-          <span x-show="!$store.chat.navCollapsed || $store.chat.mobileNavOpen">Ambulando <small>Sol</small></span>
+          <span x-show="!$store.chat.navCollapsed || $store.chat.mobileNavOpen">Ambulando</span>
         </button>
               <nav
                 class="expanded-sidebar-section-switcher"
-                x-show="!$store.chat.navCollapsed || $store.chat.mobileNavOpen"
+                x-show="$store.chat.mobileNavOpen"
                 x-cloak
                 aria-label="Product sections"
               >
@@ -1562,6 +1562,86 @@
               :class="{ 'pg-all-scopes-context': $store.chat.pgContextAllScopesSelected }"
             >
 
+              <nav
+                class="expanded-sidebar-section-switcher sol-horizontal-navigation"
+                x-show="!$store.chat.navCollapsed && !$store.chat.mobileViewport"
+                x-cloak
+                aria-label="Product sections"
+              >
+                <button type="button" class="expanded-sidebar-section-switcher-btn" :class="{ 'expanded-sidebar-section-switcher-btn-active': $store.chat.navSection === 'status' }" :aria-current="$store.chat.navSection === 'status' ? 'page' : null" @click="$store.chat.navigateTo('status')">
+                  <span class="expanded-sidebar-section-icon" aria-hidden="true"><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="/ambulando/icons.svg#layout-dashboard" /></svg></span>
+                  <span>Deck</span>
+                </button>
+                <button type="button" class="expanded-sidebar-section-switcher-btn" :class="{ 'expanded-sidebar-section-switcher-btn-active': $store.chat.navSection === 'chat' }" :aria-current="$store.chat.navSection === 'chat' ? 'page' : null" @click="$store.chat.navigateTo('chat')">
+                  <span class="expanded-sidebar-section-icon" aria-hidden="true"><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="/ambulando/icons.svg#message-square" /></svg></span>
+                  <span>Chat</span>
+                </button>
+                <button type="button" class="view-lock-button"
+                  x-cloak x-show="$store.chat.canLockCurrentView && $store.chat.navSection === 'chat'"
+                  :class="{ 'view-lock-button-locked': $store.chat.isCurrentViewLocked }"
+                  :aria-pressed="$store.chat.isCurrentViewLocked"
+                  aria-label="Lock Chat view"
+                  :title="$store.chat.isCurrentViewLocked ? 'Unlock Chat view' : 'Keep Chat when changing scope or channel'"
+                  @click.stop="$store.chat.toggleCurrentViewLock()">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                    <rect x="5" y="10" width="14" height="11" rx="2"></rect>
+                    <path :d="$store.chat.isCurrentViewLocked ? 'M8 10V6a4 4 0 0 1 8 0v4' : 'M8 10V6a4 4 0 0 1 8 0'"></path>
+                  </svg>
+                </button>
+                <button type="button" class="expanded-sidebar-section-switcher-btn" :class="{ 'expanded-sidebar-section-switcher-btn-active': $store.chat.navSection === 'tasks' }" :aria-current="$store.chat.navSection === 'tasks' ? 'page' : null" @click="$store.chat.navigateTo('tasks')">
+                  <span class="expanded-sidebar-section-icon" aria-hidden="true"><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="/ambulando/icons.svg#list-todo" /></svg></span>
+                  <span>Tasks</span>
+                </button>
+                <button type="button" class="view-lock-button"
+                  x-cloak x-show="$store.chat.canLockCurrentView && $store.chat.navSection === 'tasks'"
+                  :class="{ 'view-lock-button-locked': $store.chat.isCurrentViewLocked }"
+                  :aria-pressed="$store.chat.isCurrentViewLocked"
+                  aria-label="Lock Tasks view"
+                  :title="$store.chat.isCurrentViewLocked ? 'Unlock Tasks view' : 'Keep Tasks when changing scope or channel'"
+                  @click.stop="$store.chat.toggleCurrentViewLock()">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                    <rect x="5" y="10" width="14" height="11" rx="2"></rect>
+                    <path :d="$store.chat.isCurrentViewLocked ? 'M8 10V6a4 4 0 0 1 8 0v4' : 'M8 10V6a4 4 0 0 1 8 0'"></path>
+                  </svg>
+                </button>
+                <button type="button" class="expanded-sidebar-section-switcher-btn" :class="{ 'expanded-sidebar-section-switcher-btn-active': $store.chat.navSection === 'docs' }" :aria-current="$store.chat.navSection === 'docs' ? 'page' : null" @click="$store.chat.navigateTo('docs')">
+                  <span class="expanded-sidebar-section-icon" aria-hidden="true"><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="/ambulando/icons.svg#file-text" /></svg></span>
+                  <span>Docs</span>
+                </button>
+                <button type="button" class="view-lock-button"
+                  x-cloak x-show="$store.chat.canLockCurrentView && $store.chat.navSection === 'docs'"
+                  :class="{ 'view-lock-button-locked': $store.chat.isCurrentViewLocked }"
+                  :aria-pressed="$store.chat.isCurrentViewLocked"
+                  aria-label="Lock Docs view"
+                  :title="$store.chat.isCurrentViewLocked ? 'Unlock Docs view' : 'Keep Docs when changing scope or channel'"
+                  @click.stop="$store.chat.toggleCurrentViewLock()">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                    <rect x="5" y="10" width="14" height="11" rx="2"></rect>
+                    <path :d="$store.chat.isCurrentViewLocked ? 'M8 10V6a4 4 0 0 1 8 0v4' : 'M8 10V6a4 4 0 0 1 8 0'"></path>
+                  </svg>
+                </button>
+                <button type="button" class="expanded-sidebar-section-switcher-btn" :class="{ 'expanded-sidebar-section-switcher-btn-active': $store.chat.navSection === 'files' }" :aria-current="$store.chat.navSection === 'files' ? 'page' : null" @click="$store.chat.navigateTo('files')">
+                  <span class="expanded-sidebar-section-icon" aria-hidden="true"><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="/ambulando/icons.svg#files" /></svg></span>
+                  <span>Files</span>
+                </button>
+                <button type="button" class="view-lock-button"
+                  x-cloak x-show="$store.chat.canLockCurrentView && $store.chat.navSection === 'files'"
+                  :class="{ 'view-lock-button-locked': $store.chat.isCurrentViewLocked }"
+                  :aria-pressed="$store.chat.isCurrentViewLocked"
+                  aria-label="Lock Files view"
+                  :title="$store.chat.isCurrentViewLocked ? 'Unlock Files view' : 'Keep Files when changing scope or channel'"
+                  @click.stop="$store.chat.toggleCurrentViewLock()">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                    <rect x="5" y="10" width="14" height="11" rx="2"></rect>
+                    <path :d="$store.chat.isCurrentViewLocked ? 'M8 10V6a4 4 0 0 1 8 0v4' : 'M8 10V6a4 4 0 0 1 8 0'"></path>
+                  </svg>
+                </button>
+                <button type="button" class="expanded-sidebar-section-switcher-btn" :class="{ 'expanded-sidebar-section-switcher-btn-active': $store.chat.navSection === 'agents' }" :aria-current="$store.chat.navSection === 'agents' ? 'page' : null" @click="$store.chat.navigateTo('agents')">
+                  <span class="expanded-sidebar-section-icon" aria-hidden="true"><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="/ambulando/icons.svg#bot" /></svg></span><span>Agents</span>
+                </button>
+                <button type="button" class="expanded-sidebar-section-switcher-btn" :class="{ 'expanded-sidebar-section-switcher-btn-active': $store.chat.navSection === 'context' }" :aria-current="$store.chat.navSection === 'context' ? 'page' : null" @click="$store.chat.navigateTo('context')"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="9" y="2" width="6" height="5" rx="1"/><path d="M12 7v5M4 17v-5h16v5"/><rect x="1" y="17" width="6" height="5" rx="1"/><rect x="17" y="17" width="6" height="5" rx="1"/></svg><span>Context</span></button>
+                <button type="button" class="expanded-sidebar-section-switcher-btn" aria-label="Toolbox" :class="{ 'expanded-sidebar-section-switcher-btn-active': $store.chat.navSection === 'toolbox' }" :aria-current="$store.chat.navSection === 'toolbox' ? 'page' : null" @click="$store.chat.navigateTo('toolbox')"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="18" height="14" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 12h18M10 10v4h4v-4"/></svg><span>Toolbox</span></button>
+              </nav>
               <button
                 type="button"
                 class="channel-row-workspace-avatar-btn"
@@ -2661,8 +2741,8 @@
               <div class="reports-list-header">
                 <div>
                   <p class="reports-pane-eyebrow">Scope reports</p>
-                  <h2 x-text="$store.chat.selectedBoardScope ? $store.chat.selectedBoardLabel : 'All Ambulando Sol reports'"></h2>
-                  <p x-text="$store.chat.selectedBoardScope ? 'Reports scoped to the current focus and its descendants.' : 'All reports visible on Ambulando Sol.'"></p>
+                  <h2 x-text="$store.chat.selectedBoardScope ? $store.chat.selectedBoardLabel : 'All Ambulando reports'"></h2>
+                  <p x-text="$store.chat.selectedBoardScope ? 'Reports scoped to the current focus and its descendants.' : 'All reports visible on Ambulando.'"></p>
                 </div>
                 <span class="reports-list-count" x-text="$store.chat.scopedReports.length"></span>
               </div>
@@ -6338,8 +6418,8 @@
             </section>
             <section class="workroom-native-view workroom-empty-page" x-show="!$store.chat.workroomDetailOpen" x-cloak>
               <header class="workroom-detail-header">
-                <div><p class="workroom-eyebrow">Workroom</p><h2>Select a workroom</h2><p>Open a workroom from chat or the Ambulando Sol workroom list.</p></div>
-                <button type="button" class="btn-secondary" @click="$store.chat.navigateTo('status')">Back to Ambulando Sol</button>
+                <div><p class="workroom-eyebrow">Workroom</p><h2>Select a workroom</h2><p>Open a workroom from chat or the Ambulando workroom list.</p></div>
+                <button type="button" class="btn-secondary" @click="$store.chat.navigateTo('status')">Back to Ambulando</button>
               </header>
             </section>
           </section>
@@ -6830,7 +6910,7 @@
                   </div>
                 </div>
                 <p class="files-shared-status" role="status" x-text="$store.chat.driveStatusLabel"></p>
-                <p class="files-upload-error" x-show="$store.chat.driveState === 'missing-transport'">WM App Drive bridge unavailable or incompatible. Update WM App, reopen Ambulando Sol there, or copy Diagnostics.</p>
+                <p class="files-upload-error" x-show="$store.chat.driveState === 'missing-transport'">WM App Drive bridge unavailable or incompatible. Update WM App, reopen Ambulando there, or copy Diagnostics.</p>
                 <div class="files-shared-browser">
                   <aside class="files-shared-sources" x-show="!$store.chat.driveSelected" aria-label="Shared folder sources">
                     <template x-for="share in $store.chat.driveSources" :key="share.key">
@@ -7346,7 +7426,7 @@
               <section class="workroom-create-section"><h3>Workroom</h3><div class="workroom-create-grid"><label><span>Title</span><input type="text" x-model="$store.chat.workroomCreationForm.title" placeholder="Release workroom"></label><label><span>Goal</span><textarea rows="2" x-model="$store.chat.workroomCreationForm.goal" placeholder="What should this room deliver?"></textarea></label></div></section>
               <section class="workroom-create-section"><h3>People</h3><p class="workroom-create-help">People who can see this channel are included automatically. Assign roles below; manage missing people through channel or scope membership.</p><p class="workroom-create-help" x-show="$store.chat.workroomCreationPeopleLoading">Loading channel access...</p><div class="workroom-participants workroom-create-wide"><div class="workroom-field-heading"><span>Channel members <small>Everyone starts as a contributor</small></span></div><div class="workroom-participant-roster" x-show="$store.chat.workroomCreationForm.participants.length > 0"><template x-for="(participant, index) in $store.chat.workroomCreationForm.participants" :key="participant.actor_npub"><div class="workroom-participant-row"><div class="workroom-participant-identity"><strong x-text="participant.label || participant.actor_npub"></strong><small x-text="participant.actor_npub"></small></div><select x-model="participant.role" @change="$store.chat.setWorkroomParticipantRole(index, participant.role)" :aria-label="`Role for ${participant.label || participant.actor_npub}`"><template x-for="role in $store.chat.workroomRoleOptions" :key="role.value"><option :value="role.value" x-text="role.label"></option></template></select></div></template></div><p class="workroom-empty" x-show="!$store.chat.workroomCreationPeopleLoading && $store.chat.workroomCreationForm.participants.length === 0">No visible channel members. Add people through channel or scope membership, then reopen workroom creation.</p></div></section>
               <section class="workroom-create-section"><h3>Repository and branches</h3><div class="workroom-create-grid"><label class="workroom-create-wide workroom-typeahead-field"><span>Repository <small>Choose a prior repo or type a GitHub URL / org/repo</small></span><input type="search" x-model="$store.chat.workroomCreationForm.repo_query" @input="$store.chat.selectWorkroomRepo($store.chat.workroomCreationForm.repo_query)" list="workroom-repo-options" placeholder="org/repo or https://github.com/org/repo" autocomplete="off"><datalist id="workroom-repo-options"><template x-for="repo in $store.chat.workroomCreationRepoSuggestions" :key="repo.url || repo.name"><option :value="repo.name || repo.url"></option></template></datalist><small class="workroom-inferred-value" x-show="$store.chat.workroomCreationForm.repo_name || $store.chat.workroomCreationForm.repo_url" x-text="[$store.chat.workroomCreationForm.repo_name, $store.chat.workroomCreationForm.repo_url].filter(Boolean).join(' · ')"></small></label><label><span>Integration branch</span><input type="text" x-model="$store.chat.workroomCreationForm.integration_branch" placeholder="staging"></label><label><span>Production branch</span><input type="text" x-model="$store.chat.workroomCreationForm.production_branch" placeholder="deployed"></label></div></section>
-              <section class="workroom-create-section"><h3>App targets</h3><p class="workroom-create-help">Select from the available personal WApps/app cards already loaded in Ambulando Sol. Remote integration-Autopilot discovery is not currently exposed here.</p><div class="workroom-create-grid"><label><span>Preview app</span><select x-model="$store.chat.workroomCreationForm.preview_app_target"><option value="">No preview target</option><template x-for="app in $store.chat.workroomCreationAppTargets" :key="`preview-${app.value}`"><option :value="app.value" x-text="app.label"></option></template></select></label><label><span>Production app</span><select x-model="$store.chat.workroomCreationForm.production_app_target"><option value="">No production target</option><template x-for="app in $store.chat.workroomCreationAppTargets" :key="`production-${app.value}`"><option :value="app.value" x-text="app.label"></option></template></select></label></div></section>
+              <section class="workroom-create-section"><h3>App targets</h3><p class="workroom-create-help">Select from the available personal WApps/app cards already loaded in Ambulando. Remote integration-Autopilot discovery is not currently exposed here.</p><div class="workroom-create-grid"><label><span>Preview app</span><select x-model="$store.chat.workroomCreationForm.preview_app_target"><option value="">No preview target</option><template x-for="app in $store.chat.workroomCreationAppTargets" :key="`preview-${app.value}`"><option :value="app.value" x-text="app.label"></option></template></select></label><label><span>Production app</span><select x-model="$store.chat.workroomCreationForm.production_app_target"><option value="">No production target</option><template x-for="app in $store.chat.workroomCreationAppTargets" :key="`production-${app.value}`"><option :value="app.value" x-text="app.label"></option></template></select></label></div></section>
               <section class="workroom-create-section"><h3>Approval and defaults</h3><label><span>Approval policy</span><select x-model="$store.chat.workroomCreationForm.approval_policy"><option value="human_required">Human approval required</option><option value="team_required">Team approval required</option><option value="none">No approval</option></select></label></section>
             </div>
             <label class="workroom-defaults-check"><input type="checkbox" x-model="$store.chat.workroomCreationForm.save_choices_as_channel_defaults"> Save these integration choices as channel defaults</label>
@@ -7698,7 +7778,7 @@
               rows="3"
               placeholder="What this workspace is for"
             ></textarea>
-            <label class="settings-field-label" for="workspace-dashboard-greeting-input">Ambulando Sol greeting</label>
+            <label class="settings-field-label" for="workspace-dashboard-greeting-input">Ambulando greeting</label>
             <textarea
               id="workspace-dashboard-greeting-input"
               x-model="$store.chat.workspaceProfileDashboardGreetingTemplateInput"
@@ -7717,7 +7797,7 @@
               />
               <span>Enable workrooms</span>
             </label>
-            <p class="settings-field-help">Shows workroom tools on the Ambulando Sol and adds workroom creation to chat menus. Existing chat history remains visible when disabled.</p>
+            <p class="settings-field-help">Shows workroom tools on the Ambulando and adds workroom creation to chat menus. Existing chat history remains visible when disabled.</p>
             <label class="settings-field-label settings-checkbox-row" for="workspace-advanced-options-input">
               <input
                 id="workspace-advanced-options-input"
@@ -8187,7 +8267,7 @@
                 </div>
               </div>
               <p class="settings-field-help">
-                Ambulando Sol asks the browser for notification permission only when you press Enable on this device.
+                Ambulando asks the browser for notification permission only when you press Enable on this device.
               </p>
               <div class="settings-actions">
                 <button
@@ -8266,7 +8346,7 @@
               </div>
               <div class="workspace-cleanup-panel">
                 <span class="avatar-menu-label">Workspace discovery</span>
-                <p class="settings-field-help">Check saved Ambulando Sol PG workspaces against Tower and remove entries that no longer verify.</p>
+                <p class="settings-field-help">Check saved Ambulando PG workspaces against Tower and remove entries that no longer verify.</p>
                 <div class="settings-actions">
                   <button
                     type="button"
@@ -8284,7 +8364,7 @@
               <div class="wapp-publishing-admin">
                 <div class="settings-panel-header wapp-publishing-admin-heading">
                   <div>
-                    <h3>Ambulando Sol publishing</h3>
+                    <h3>Ambulando publishing</h3>
                     <p>Grant registered WApp installations write-only access to selected channels. A launcher is optional.</p>
                   </div>
                   <div class="wapp-publishing-admin-actions"><button type="button" class="btn-primary btn-compact" @click="$store.chat.openNewWappPublishingEditor()">Add installation</button><button type="button" class="btn-secondary btn-compact" @click="$store.chat.refreshWappPublishingGrants()" :disabled="$store.chat.wappPublishingLoading" x-text="$store.chat.wappPublishingLoading ? 'Refreshing…' : 'Refresh'"></button></div>
@@ -9375,7 +9455,7 @@
                 x-model="$store.chat.repairTaskIdInput"
                 placeholder="26bf9412-1de7-49be-a167-976fa9e53ffc"
               />
-              <p class="settings-field-help">Checks whether a specific task exists on Tower for the current workspace. If found but missing locally, Ambulando Sol force-rebuilds the `Tasks` family.</p>
+              <p class="settings-field-help">Checks whether a specific task exists on Tower for the current workspace. If found but missing locally, Ambulando force-rebuilds the `Tasks` family.</p>
               <div class="settings-actions">
                 <button
                   type="button"
@@ -10005,7 +10085,7 @@
             </section>
             <p role="alert" class="channel-access-error" x-show="$store.chat.channelSettingsError" x-text="$store.chat.channelSettingsError"></p>
             <p role="status" class="settings-success" x-show="$store.chat.channelSettingsNotice" x-text="$store.chat.channelSettingsNotice"></p>
-            <p x-show="$store.chat.isTowerPgMode && $store.chat.channelDeleteConfirmArmed">This archives the channel, including nonempty channels. Stored tasks, documents, messages and files remain intact in Tower; this channel is no longer accessible. There is no restore control in Ambulando Sol.</p>
+            <p x-show="$store.chat.isTowerPgMode && $store.chat.channelDeleteConfirmArmed">This archives the channel, including nonempty channels. Stored tasks, documents, messages and files remain intact in Tower; this channel is no longer accessible. There is no restore control in Ambulando.</p>
             <button type="button" class="btn-cancel" x-show="$store.chat.channelDeleteConfirmArmed" :disabled="$store.chat.channelDeleteSubmitting" @click="$store.chat.channelDeleteConfirmArmed = false">Cancel deletion</button>
 
             <section class="channel-metadata-panel" x-show="$store.chat.isTowerPgMode">
@@ -10259,7 +10339,7 @@
               <button class="modal-close" type="button" @click="$store.chat.closeReportDeleteConfirm()" :disabled="$store.chat.reportDeleteSubmitting">&times;</button>
             </div>
             <p class="report-delete-confirm-body">
-              This will remove the report from Ambulando Sol for this workspace.
+              This will remove the report from Ambulando for this workspace.
             </p>
             <p class="report-delete-error" x-show="$store.chat.reportDeleteError" x-text="$store.chat.reportDeleteError"></p>
             <div class="new-doc-modal-actions">
@@ -10962,7 +11042,7 @@
         </div>
 
         <div class="doc-modal-backdrop wapp-management-editor-backdrop" x-show="$store.chat.wappDelegationEditorOpen" x-cloak @click.self="$store.chat.wappDelegationEditorOpen = false">
-          <div class="doc-modal-card wapp-management-editor-modal" role="dialog" aria-modal="true" x-sol-dialog aria-labelledby="wapp-delegation-title"><header><h3 id="wapp-delegation-title">Grant WApp management</h3><button type="button" class="icon-btn" aria-label="Close WApp management grant" @click="$store.chat.wappDelegationEditorOpen = false">×</button></header><div class="wapp-management-editor-body"><label><span>Person or agent</span><select x-model="$store.chat.wappDelegationDraft.delegate_actor_id"><option value="">Choose…</option><template x-for="member in $store.chat.wappManagementMembers" :key="member.actor_id || member.id"><option :value="member.actor_id || member.id" x-text="member.display_name || member.name || member.npub"></option></template></select></label><label><span>Expires</span><input type="datetime-local" x-model="$store.chat.wappDelegationDraft.expires_at" /></label><div class="wapp-management-filter-grid"><label><span>Named app IDs</span><textarea rows="2" x-model="$store.chat.wappDelegationDraft.app_ids" placeholder="One per line"></textarea></label><label><span>Installation IDs</span><textarea rows="2" x-model="$store.chat.wappDelegationDraft.installation_ids" placeholder="One per line"></textarea></label><label><span>Workspace scope IDs</span><textarea rows="2" x-model="$store.chat.wappDelegationDraft.scope_ids" placeholder="One per line"></textarea></label><label><span>Destination channel IDs</span><textarea rows="2" x-model="$store.chat.wappDelegationDraft.channel_ids" placeholder="One per line"></textarea></label><label><span>Approved View-link origins</span><textarea rows="2" x-model="$store.chat.wappDelegationDraft.open_origins" placeholder="https://app.example"></textarea></label><label><span>Approved Autopilot origins</span><textarea rows="2" x-model="$store.chat.wappDelegationDraft.autopilot_origins" placeholder="https://wingman.example"></textarea></label></div><label class="settings-checkbox"><input type="checkbox" x-model="$store.chat.wappDelegationDraft.activity_publish" /><span>Allow <code>activity.publish</code> to approved Feed destinations</span></label><aside class="wapp-capability-preview"><strong>Before you sign</strong><p x-text="$store.chat.wappDelegationPreview"></p><small>Your browser identity signs the exact Tower request. Ambulando Sol never asks for or stores a private key.</small></aside><p class="error-text" x-show="$store.chat.wappManagementError" x-text="$store.chat.wappManagementError"></p></div><footer><button type="button" class="btn-secondary" @click="$store.chat.wappDelegationEditorOpen = false">Cancel</button><button type="button" class="btn-primary" @click="$store.chat.saveWappDelegation()" :disabled="$store.chat.wappDelegationSaving" x-text="$store.chat.wappDelegationSaving ? 'Signing…' : 'Sign and grant'"></button></footer></div>
+          <div class="doc-modal-card wapp-management-editor-modal" role="dialog" aria-modal="true" x-sol-dialog aria-labelledby="wapp-delegation-title"><header><h3 id="wapp-delegation-title">Grant WApp management</h3><button type="button" class="icon-btn" aria-label="Close WApp management grant" @click="$store.chat.wappDelegationEditorOpen = false">×</button></header><div class="wapp-management-editor-body"><label><span>Person or agent</span><select x-model="$store.chat.wappDelegationDraft.delegate_actor_id"><option value="">Choose…</option><template x-for="member in $store.chat.wappManagementMembers" :key="member.actor_id || member.id"><option :value="member.actor_id || member.id" x-text="member.display_name || member.name || member.npub"></option></template></select></label><label><span>Expires</span><input type="datetime-local" x-model="$store.chat.wappDelegationDraft.expires_at" /></label><div class="wapp-management-filter-grid"><label><span>Named app IDs</span><textarea rows="2" x-model="$store.chat.wappDelegationDraft.app_ids" placeholder="One per line"></textarea></label><label><span>Installation IDs</span><textarea rows="2" x-model="$store.chat.wappDelegationDraft.installation_ids" placeholder="One per line"></textarea></label><label><span>Workspace scope IDs</span><textarea rows="2" x-model="$store.chat.wappDelegationDraft.scope_ids" placeholder="One per line"></textarea></label><label><span>Destination channel IDs</span><textarea rows="2" x-model="$store.chat.wappDelegationDraft.channel_ids" placeholder="One per line"></textarea></label><label><span>Approved View-link origins</span><textarea rows="2" x-model="$store.chat.wappDelegationDraft.open_origins" placeholder="https://app.example"></textarea></label><label><span>Approved Autopilot origins</span><textarea rows="2" x-model="$store.chat.wappDelegationDraft.autopilot_origins" placeholder="https://wingman.example"></textarea></label></div><label class="settings-checkbox"><input type="checkbox" x-model="$store.chat.wappDelegationDraft.activity_publish" /><span>Allow <code>activity.publish</code> to approved Feed destinations</span></label><aside class="wapp-capability-preview"><strong>Before you sign</strong><p x-text="$store.chat.wappDelegationPreview"></p><small>Your browser identity signs the exact Tower request. Ambulando never asks for or stores a private key.</small></aside><p class="error-text" x-show="$store.chat.wappManagementError" x-text="$store.chat.wappManagementError"></p></div><footer><button type="button" class="btn-secondary" @click="$store.chat.wappDelegationEditorOpen = false">Cancel</button><button type="button" class="btn-primary" @click="$store.chat.saveWappDelegation()" :disabled="$store.chat.wappDelegationSaving" x-text="$store.chat.wappDelegationSaving ? 'Signing…' : 'Sign and grant'"></button></footer></div>
         </div>
 
 
@@ -11056,7 +11136,7 @@
                       <span x-show="$store.chat.selectedWappPublishingInstallation.last_successful_publication_at" x-text="`Last success ${$store.chat.formatRelativeTime($store.chat.selectedWappPublishingInstallation.last_successful_publication_at)}`"></span>
                       <span x-show="$store.chat.selectedWappPublishingInstallation.last_rejected_publication_at" x-text="`Last rejection ${$store.chat.formatRelativeTime($store.chat.selectedWappPublishingInstallation.last_rejected_publication_at)}${$store.chat.selectedWappPublishingInstallation.last_rejection_reason ? ` · ${$store.chat.selectedWappPublishingInstallation.last_rejection_reason}` : ''}`"></span>
                     </div>
-                    <label class="settings-toggle-row wapp-publishing-capability"><input type="checkbox" x-model="$store.chat.wappPublishingCanPost" /><span><strong>Can post alerts to Ambulando Sol</strong><small>Write-only projection access. This does not grant read access or silent actions.</small></span></label>
+                    <label class="settings-toggle-row wapp-publishing-capability"><input type="checkbox" x-model="$store.chat.wappPublishingCanPost" /><span><strong>Can post alerts to Ambulando</strong><small>Write-only projection access. This does not grant read access or silent actions.</small></span></label>
                     <fieldset class="wapp-publishing-destinations" :disabled="!$store.chat.wappPublishingCanPost">
                       <legend>Publishing channels</legend>
                       <div class="wapp-publishing-fieldset-heading">
@@ -11066,7 +11146,7 @@
                       <div class="wapp-publishing-new-channel" x-show="$store.chat.wappPublishingNewChannelOpen" x-cloak>
                         <label class="daily-note-field"><span>Existing scope</span><select x-model="$store.chat.wappPublishingNewChannelScopeId"><option value="">Choose a scope</option><template x-for="scope in $store.chat.wappPublishingChannelScopeOptions" :key="scope.id"><option :value="scope.id" x-text="scope.label"></option></template></select></label>
                         <label class="daily-note-field"><span>Channel name</span><input type="text" x-model="$store.chat.wappPublishingNewChannelName" placeholder="Publishing updates" @keydown.enter.prevent="$store.chat.createWappPublishingChannel()" /></label>
-                        <p class="settings-field-help">Creates a channel in the selected scope using the standard Ambulando Sol access defaults.</p>
+                        <p class="settings-field-help">Creates a channel in the selected scope using the standard Ambulando access defaults.</p>
                         <p class="error-text" x-show="$store.chat.wappPublishingNewChannelError" x-text="$store.chat.wappPublishingNewChannelError"></p>
                         <div class="wapp-publishing-inline-actions"><button type="button" class="btn-cancel btn-compact" @click="$store.chat.closeWappPublishingNewChannel()" :disabled="$store.chat.wappPublishingNewChannelSaving">Cancel</button><button type="button" class="btn-confirm btn-compact" @click="$store.chat.createWappPublishingChannel()" :disabled="$store.chat.wappPublishingNewChannelSaving"><span x-show="!$store.chat.wappPublishingNewChannelSaving">Create and select</span><span x-show="$store.chat.wappPublishingNewChannelSaving">Creating…</span></button></div>
                       </div>
@@ -11089,7 +11169,7 @@
                       </div>
                     </fieldset>
                     <label class="daily-note-field"><span>Registered HTTPS open origins</span><textarea rows="3" x-model="$store.chat.wappPublishingOriginsText" placeholder="https://app.example.com"></textarea></label>
-                    <p class="settings-field-help">One origin per line. Ambulando Sol opens only approved HTTPS origins with noopener,noreferrer.</p>
+                    <p class="settings-field-help">One origin per line. Ambulando opens only approved HTTPS origins with noopener,noreferrer.</p>
                     <div class="wapp-publishing-rotation" x-show="$store.chat.wappPublishingRotateOpen" x-cloak>
                       <label class="daily-note-field"><span>Replacement publisher npub</span><input type="text" x-model="$store.chat.wappPublishingRotateNpub" placeholder="npub1…" /></label>
                       <p class="settings-field-help">Rotation keeps the stable installation ID. Tower records the nonce, expiry, and administrator approval.</p>
@@ -11302,7 +11382,7 @@
                 </template>
               </select>
             </label>
-            <p class="record-transfer-help" x-show="$store.chat.recordTransfer.mode === 'tag'">Ambulando Sol will create and open a new thread in this channel. Its opening message will contain the structured record mention, ready for you to add instructions in a reply.</p>
+            <p class="record-transfer-help" x-show="$store.chat.recordTransfer.mode === 'tag'">Ambulando will create and open a new thread in this channel. Its opening message will contain the structured record mention, ready for you to add instructions in a reply.</p>
             <p class="error-text" role="alert" aria-live="assertive" x-show="$store.chat.recordTransfer.error" x-text="$store.chat.recordTransfer.error"></p>
             <div class="new-doc-modal-actions">
               <button type="button" class="btn-cancel" @click="$store.chat.closeRecordTransfer()" :disabled="$store.chat.recordTransfer.submitting">Cancel</button>
@@ -11404,7 +11484,7 @@
   <div class="modal-overlay" x-show="$store.chat.showAgentConnectModal" x-cloak @keydown.escape.window="$store.chat.closeAgentConnectModal()" data-testid="agent-connect-modal">
     <section class="modal agent-connect-modal" role="dialog" aria-modal="true" x-sol-dialog aria-labelledby="agent-connect-title" @click.stop>
       <header><div><p class="eyebrow">Native FIPS connection</p><h2 id="agent-connect-title">Connect Autopilot agents</h2></div><button type="button" class="btn-cancel" @click="$store.chat.closeAgentConnectModal()">Close</button></header>
-      <template x-if="$store.chat.agentConnectStep === 'package'"><div><p>Paste the short-lived signed connect-package from Autopilot. Ambulando Sol verifies it locally, then uses only its exact native FIPS endpoint.</p><textarea rows="10" x-model="$store.chat.agentConnectInput" spellcheck="false" placeholder="{ &quot;manifest&quot;: …, &quot;signature&quot;: … }" aria-label="Autopilot connect package"></textarea><div class="modal-actions"><button type="button" class="btn-primary" @click="$store.chat.verifyAndDiscoverAutopilotAgents()" :disabled="$store.chat.agentConnectBusy || !$store.chat.agentConnectInput.trim()" x-text="$store.chat.agentConnectBusy ? 'Connecting…' : 'Verify and discover'"></button></div></div></template>
+      <template x-if="$store.chat.agentConnectStep === 'package'"><div><p>Paste the short-lived signed connect-package from Autopilot. Ambulando verifies it locally, then uses only its exact native FIPS endpoint.</p><textarea rows="10" x-model="$store.chat.agentConnectInput" spellcheck="false" placeholder="{ &quot;manifest&quot;: …, &quot;signature&quot;: … }" aria-label="Autopilot connect package"></textarea><div class="modal-actions"><button type="button" class="btn-primary" @click="$store.chat.verifyAndDiscoverAutopilotAgents()" :disabled="$store.chat.agentConnectBusy || !$store.chat.agentConnectInput.trim()" x-text="$store.chat.agentConnectBusy ? 'Connecting…' : 'Verify and discover'"></button></div></div></template>
       <template x-if="$store.chat.agentConnectStep === 'agents'"><div><p>Select the agents to make visible in this workspace.</p><div class="agent-connect-selection"><template x-for="agent in $store.chat.agentDiscoveredAgents" :key="agent.agentId"><label><input type="checkbox" :checked="$store.chat.agentSelectedDiscoveryIds.includes(agent.agentId)" @change="$store.chat.toggleDiscoveredAgent(agent.agentId)" /><span><strong x-text="agent.name"></strong><small x-text="agent.description || agent.agentId"></small><em x-text="agent.canInstruct ? 'Can receive instructions' : 'Read-only'"></em></span></label></template></div><div class="modal-actions"><button type="button" class="btn-secondary" @click="$store.chat.agentConnectStep = 'package'">Back</button><button type="button" class="btn-primary" @click="$store.chat.installSelectedAutopilotAgents()" :disabled="$store.chat.agentConnectBusy || $store.chat.agentSelectedDiscoveryIds.length === 0" x-text="$store.chat.agentConnectBusy ? 'Saving…' : 'Add selected agents'"></button></div></div></template>
       <p class="error-text" role="alert" x-show="$store.chat.agentConnectError" x-text="$store.chat.agentConnectError"></p>
     </section>

@@ -1,6 +1,6 @@
 {
-  "name": "Ambulando Sol",
-  "short_name": "Sol",
+  "name": "Ambulando",
+  "short_name": "Ambulando",
   "description": "Ambulando shared workspace",
   "start_url": "/",
   "display": "standalone",

@@ -111,7 +111,7 @@ describe('bootstrap stale-asset recovery', () => {
     expect(harness.appended).toHaveLength(1);
     expect(harness.appended[0].id).toBe('flightdeck-asset-recovery-failed');
     expect(harness.appended[0].children.map((element) => element.textContent)).toEqual([
-      'Ambulando Sol could not finish loading',
+      'Ambulando could not finish loading',
       'A required application file is still unavailable. Your local workspace data has not been cleared.',
       'Retry loading',
     ]);

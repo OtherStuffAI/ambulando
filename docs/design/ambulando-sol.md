@@ -47,10 +47,10 @@ Nonmodal calendars/popovers retain their existing keyboard primitives.
 
 The product is denser than the reference gallery: existing independent scroll
 panes, full-width boards, rich editor toolbars, sync/authority details and view
-locks remain because they serve working workflows. Expanded product navigation
-moves into the sidebar; the drawer retains scope/channel and workspace controls.
-Navigation keeps the original collapsed default; its toggle reveals the complete
-expanded Confluence/name navigation.
+locks remain because they serve working workflows. Expanded desktop product navigation
+uses the horizontal bar; the phone drawer retains view, scope/channel and workspace controls.
+Navigation keeps the original collapsed default; its toggle reveals the expanded
+Confluence/name sidebar and horizontal desktop product navigation.
 Baseline-disabled approvals, flows, schedules, people, opportunities and reports
 retain their existing feature guards. Their shared presentation is themed; the
 redesign does not enable those products or claim browser coverage of gated flows.
@@ -113,3 +113,10 @@ editor instances, checkout, autosave and wiki hierarchy are unchanged.
 The A4 cases in `tests/e2e/ambulando-sol.spec.cjs` check both themes at
 1440/1280/390px, long-content growth, paper geometry, ink, local overflow,
 comment isolation and editor retention while switching phone panes.
+
+Expanded desktop sidebars place product view buttons in the horizontal context
+bar. The collapsed icon rail and phone drawer retain their navigation; mutually
+exclusive visibility keeps one reachable product section set. The horizontal
+bar scrolls locally when necessary and retains view locks and fullscreen actions.
+Visible product copy and installed-app titles use Ambulando. Sol remains the
+repository/runtime identifier; this change does not configure its future domain.

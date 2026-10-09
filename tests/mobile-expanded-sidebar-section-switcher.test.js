@@ -31,9 +31,10 @@ describe('expanded left-column section switcher', () => {
     expect(globalBar).toContain('class="mobile-section-switcher" x-show="!$store.chat.mobileNavOpen"');
   });
 
-  it('renders exactly one labelled section set in the sidebar for either expanded-column state', () => {
+  it('keeps phone drawer and horizontal desktop sections mutually exclusive', () => {
     expect(html.match(/class="expanded-sidebar-section-switcher"/g)).toHaveLength(1);
-    expect(expandedSwitcher).toContain('x-show="!$store.chat.navCollapsed || $store.chat.mobileNavOpen"');
+    expect(expandedSwitcher).toContain('x-show="$store.chat.mobileNavOpen"');
+    expect(globalBar).toContain('x-show="!$store.chat.navCollapsed && !$store.chat.mobileViewport"');
     expect(expandedSwitcher).toContain('aria-label="Product sections"');
     expect(mobileSelector).not.toContain('section-switcher');
 
@@ -60,7 +61,7 @@ describe('expanded left-column section switcher', () => {
   it('places expanded navigation before scopes while preserving the collapsed rail', () => {
     expect(sidebar).toContain('class="sidebar-nav" x-show="$store.chat.navCollapsed && !$store.chat.mobileNavOpen"');
     expect(sidebar.indexOf('class="expanded-sidebar-section-switcher"')).toBeLessThan(sidebar.indexOf('class="sidebar-scope-navigation"'));
-    expect(globalBar).not.toContain('class="expanded-sidebar-section-switcher"');
+    expect(globalBar).toContain('class="expanded-sidebar-section-switcher sol-horizontal-navigation"');
     expect(sidebar).toMatch(/<\/ul>\s*<section\s+class="sidebar-scope-navigation"/s);
     expect(styles).toMatch(/\.sidebar\.sidebar-mobile-open \.sidebar-nav\s*\{[^}]*display:\s*none;/s);
   });

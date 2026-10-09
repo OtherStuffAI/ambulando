@@ -146,7 +146,7 @@ describe('WApp publishing UI contract', () => {
     const modal = html.slice(html.indexOf('wapp-publishing-editor-backdrop'), html.indexOf('x-show="$store.chat.dailyNoteEditorOpen"'));
     expect(html).toContain('openNewWappPublishingEditor()');
     expect(html).toContain('Background-only · no launcher assignment');
-    expect(modal).toContain('Can post alerts to Ambulando Sol');
+    expect(modal).toContain('Can post alerts to Ambulando');
     expect(modal).toContain('No default is selected');
     expect(modal).toContain('wappPublishingDestinationIds.includes(channel.channel_id)');
     expect(modal).toContain('Registered HTTPS open origins');

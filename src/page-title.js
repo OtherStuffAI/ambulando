@@ -1,4 +1,4 @@
-export const FLIGHT_DECK_APP_TITLE = 'Ambulando Sol';
+export const FLIGHT_DECK_APP_TITLE = 'Ambulando';
 
 function cleanTitlePart(value) {
   return String(value || '').trim();

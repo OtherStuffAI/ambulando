@@ -11,7 +11,7 @@ async function capture(page, name) {
   execFileSync('git', ['check-ignore', `${evidence}/${name}.png`]);
   if (execFileSync('git', ['ls-files', evidence], { encoding: 'utf8' }).trim()) throw new Error('Evidence destination must be untracked');
   await fs.mkdir(evidence, { recursive: true });
-  await page.screenshot({ path: `${evidence}/${name}.png`, fullPage: true });
+  await page.screenshot({ path: `${evidence}/${name}.png`, fullPage: true, animations: 'disabled' });
 }
 async function openFixture(page) {
   await page.route('**/*', route => serveBuiltFlightDeck(route));
@@ -414,5 +414,55 @@ for (const width of [1440, 1280, 390]) for (const theme of ['light', 'dark']) {
     }
     await expect(editor).toHaveAttribute('data-a4-probe', 'preserved');
     console.log('SOL_A4_GEOMETRY', JSON.stringify({ theme, width, geometry }));
+  });
+}
+
+for (const width of [1440, 1280, 390]) for (const theme of ['light', 'dark']) {
+  test(`Ambulando name and responsive view navigation: ${theme} ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await openFixture(page);
+    await page.evaluate(theme => { const s = Alpine.store('chat'); s.closeThread({ syncRoute: false }); Alpine.store('appearance').setTheme(theme); }, theme);
+    await expect(page.locator('.brand-copy h1')).toHaveText('Ambulando');
+    await expect(page).toHaveTitle(/Ambulando$/);
+    expect(await page.locator('head title').textContent()).not.toContain('Sol');
+    // Static fixture responses are page-routed; inspect the built manifest directly.
+    const installed = JSON.parse(await fs.readFile('dist/manifest.json', 'utf8'));
+    expect(installed.name).toBe('Ambulando');
+    expect(installed.short_name).toBe('Ambulando');
+    await page.getByRole('button', { name: 'Toggle navigation', exact: true }).click();
+    const nav = width > 768 ? page.locator('.sol-horizontal-navigation:visible') : page.locator('.sidebar .expanded-sidebar-section-switcher:visible');
+    await expect(nav).toBeVisible();
+    expect(await page.locator('.expanded-sidebar-section-switcher:visible').count()).toBe(1);
+    if (width > 768) {
+      await expect(page.locator('.sidebar .expanded-sidebar-section-switcher')).toBeHidden();
+      const rect = await nav.boundingBox();
+      expect(rect.y).toBeLessThan(150);
+      expect(rect.width).toBeGreaterThan(500);
+    } else await assertTouchTargets(nav.locator('.expanded-sidebar-section-switcher-btn'), 'phone product navigation');
+    await capture(page, `nav-${theme}-${width}-expanded`);
+    for (const [label, section] of [['Deck','status'],['Chat','chat'],['Tasks','tasks'],['Docs','docs'],['Files','files'],['Agents','agents'],['Context','context'],['Toolbox','toolbox']]) {
+      if (width < 769 && !(await nav.isVisible())) await page.getByRole('button', { name: 'Toggle navigation', exact: true }).click();
+      await nav.getByRole('button', { name: label, exact: true }).click();
+      await expect.poll(() => page.evaluate(() => Alpine.store('chat').navSection)).toBe(section);
+      if (width > 768) await expect(nav.getByRole('button', { name: label, exact: true })).toHaveAttribute('aria-current','page');
+      else await expect(nav).toBeHidden();
+    }
+    if (width > 768) {
+      if (width === 1280) {
+        await page.setViewportSize({ width: 900, height: 900 });
+        expect(await nav.evaluate(node => node.scrollWidth > node.clientWidth)).toBe(true);
+        await nav.getByRole('button', { name: 'Toolbox', exact: true }).click();
+        await capture(page, `nav-${theme}-900-horizontal-scroll`);
+        expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(0);
+        await page.setViewportSize({ width, height: 900 });
+      }
+      await page.getByRole('button', { name: 'Toggle navigation', exact: true }).click();
+      await expect(page.locator('.sol-horizontal-navigation')).toBeHidden();
+      await page.locator('.sidebar-nav:visible').getByRole('button', { name: 'Docs', exact: true }).click();
+      await expect.poll(() => page.evaluate(() => Alpine.store('chat').navSection)).toBe('docs');
+      await expect(page.locator('.sidebar-nav:visible li').filter({has:page.getByRole('button',{name:'Docs',exact:true})})).toHaveClass(/active/);
+    }
+    await capture(page, `nav-${theme}-${width}-compact`);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(0);
   });
 }

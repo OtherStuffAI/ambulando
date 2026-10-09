@@ -3452,6 +3452,14 @@
       "notes": [
         "Write on a fixed A4-width white page with readable dark ink and generous margins in either theme. Laptop pages scroll locally; phone pages adapt to the available width."
       ]
+    },
+    {
+      "buildNumber": 2316,
+      "label": "Ambulando navigation refinement",
+      "notes": [
+        "Show product views in the horizontal bar when the desktop sidebar is expanded, while keeping compact and phone navigation available.",
+        "Use Ambulando as the visible app name."
+      ]
     }
   ]
 }

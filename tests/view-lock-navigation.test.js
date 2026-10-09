@@ -210,7 +210,8 @@ describe.each([false, true])('Lock into a content view (mobile: %s)', (mobile) =
   it('renders independent native toggle buttons with state, tooltip, and focus treatment', () => {
     const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
     const buttons = html.match(/<button type="button" class="view-lock-button(?: mobile-view-lock-button)?"[\s\S]*?<\/button>/g);
-    expect(buttons).toHaveLength(8);
+    // Four locks in each mutually exclusive compact, phone and expanded desktop set.
+    expect(buttons).toHaveLength(12);
     for (const button of buttons) {
       expect(button).toContain(':aria-pressed="$store.chat.isCurrentViewLocked"');
       expect(button).toContain('aria-label="Lock ');
