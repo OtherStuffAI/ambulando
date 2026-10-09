@@ -643,3 +643,33 @@ for (const width of [1440, 390]) {
     });
   }
 }
+
+for (const width of [1440, 390]) {
+  for (const theme of ['light', 'dark']) {
+    test(`code blocks in connected thread and Docs paper: ${theme} ${width}px`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 900 });
+      await openFixture(page);
+      await page.evaluate(theme => {
+        window.Alpine.store('appearance').setTheme(theme);
+        const s = window.Alpine.store('chat');
+        const body = 'Inline `safe <code>` remains readable.\n\n```\nBuild started for ambulando\n<escape> & preserve whitespace\n' + 'long_line_'.repeat(90) + '\n```\n\n```js\n// readable comment\nconst greeting = "Hello <world>";\nfunction greet(count = 42) { return greeting + count; }\nconsole.log(greet());\n```';
+        s.messages = s.messages.map(row => ({ ...row, body: row.parent_message_id ? body : 'Code block review' }));
+        s.documents = s.documents.map(row => ({ ...row, content: '# Code on white paper\n\n' + body }));
+      }, theme);
+      await expect(page.locator('.chat-thread-panel .md-code-block').first()).toBeVisible();
+      await expect(page.locator('.chat-thread-panel .md-code-block code').first()).toContainText('<escape> & preserve whitespace');
+      await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+      await page.locator('.chat-thread-panel [data-md-code-copy]').nth(1).click();
+      expect(await page.evaluate(() => navigator.clipboard.readText())).toBe('// readable comment\nconst greeting = "Hello <world>";\nfunction greet(count = 42) { return greeting + count; }\nconsole.log(greet());');
+      await capture(page, `connected-code-${theme}-${width}-thread`);
+      await page.evaluate(() => { const s = window.Alpine.store('chat'); s.navigateTo('docs', { syncRoute: false }); s.selectedDocId = 'sol-doc'; s.selectedDocType = 'document'; s.loadDocEditorFromSelection(); });
+      const code = page.locator('.doc-rich-editor .ProseMirror pre code').first();
+      await expect(code).toContainText('<escape> & preserve whitespace');
+      const styles = await code.evaluate(node => ({ color: getComputedStyle(node).color, surface: getComputedStyle(node.parentElement).backgroundColor, whiteSpace: getComputedStyle(node).whiteSpace }));
+      expect(styles.color).toBe('rgb(32, 39, 51)');
+      expect(styles.surface).toBe('rgb(241, 243, 245)');
+      expect(styles.whiteSpace).toBe('pre');
+      await capture(page, `connected-code-${theme}-${width}-docs`);
+    });
+  }
+}

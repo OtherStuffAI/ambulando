@@ -3489,6 +3489,13 @@
       "notes": [
         "Remove repeated Ambulando logo, name and tagline from the sidebar in both desktop states and the mobile drawer, keeping header branding and navigation without an empty branding gap."
       ]
+    },
+    {
+      "buildNumber": 2323,
+      "label": "Readable code blocks",
+      "notes": [
+        "Make fenced code, syntax highlighting, language labels and Copy feedback readable in both themes, preserving code content and horizontal scrolling."
+      ]
     }
   ]
 }

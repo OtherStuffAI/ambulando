@@ -9174,8 +9174,8 @@ html.wingman-iphone-webview .chat-channel-tab-scroll * {
   padding: 0.8rem 0.95rem;
   overflow-x: auto;
   border-radius: var(--radius-panel);
-  background: var(--primary);
-  color: var(--muted-foreground);
+  background: var(--code-background);
+  color: var(--code-foreground);
 }
 
 .chat-post-markdown code,
@@ -9197,6 +9197,7 @@ html.wingman-iphone-webview .chat-channel-tab-scroll * {
   color: inherit;
 }
 
+.md-code-block,
 .chat-post-markdown .md-code-block,
 .thread-msg-text .chat-post-markdown .md-code-block,
 .doc-block-rendered .md-code-block,
@@ -9209,9 +9210,9 @@ html.wingman-iphone-webview .chat-channel-tab-scroll * {
   overflow: hidden;
   border: 1px solid var(--border);
   border-radius: var(--radius-panel);
-  background: var(--primary);
+  background: var(--code-background);
   box-shadow: 0 1px 2px color-mix(in srgb, color-mix(in srgb, var(--foreground) 12%, transparent) 24%, transparent);
-  color: var(--muted-foreground);
+  color: var(--code-foreground);
 }
 
 .md-code-block-toolbar {
@@ -9222,13 +9223,13 @@ html.wingman-iphone-webview .chat-channel-tab-scroll * {
   gap: 0.75rem;
   padding: 0.35rem 0.45rem 0.35rem 0.8rem;
   border-bottom: 1px solid var(--border);
-  background: var(--primary);
+  background: var(--code-toolbar);
 }
 
 .md-code-block-language {
   min-width: 0;
   overflow: hidden;
-  color: var(--muted-foreground);
+  color: var(--code-muted);
   font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace);
   font-size: 0.72rem;
   font-weight: 650;
@@ -9250,8 +9251,8 @@ html.wingman-iphone-webview .chat-channel-tab-scroll * {
   padding: 0.25rem 0.52rem;
   border: 1px solid var(--border);
   border-radius: var(--radius-control);
-  background: var(--secondary);
-  color: var(--muted-foreground);
+  background: var(--code-toolbar);
+  color: var(--code-muted);
   cursor: pointer;
   font: inherit;
   font-size: 0.72rem;
@@ -9262,8 +9263,8 @@ html.wingman-iphone-webview .chat-channel-tab-scroll * {
 
 .md-code-copy-button:hover {
   border-color: var(--border);
-  background: var(--secondary);
-  color: var(--primary-foreground);
+  background: var(--code-toolbar);
+  color: var(--code-foreground);
 }
 
 .md-code-copy-button:focus-visible {
@@ -9273,14 +9274,14 @@ html.wingman-iphone-webview .chat-channel-tab-scroll * {
 
 .md-code-copy-button[data-copy-state="copied"] {
   border-color: var(--border);
-  background: color-mix(in srgb, var(--success) 24%, transparent);
-  color: var(--success);
+  background: var(--code-toolbar);
+  color: var(--code-string);
 }
 
 .md-code-copy-button[data-copy-state="failed"] {
   border-color: var(--border);
-  background: color-mix(in srgb, var(--destructive) 22%, transparent);
-  color: var(--destructive);
+  background: var(--code-toolbar);
+  color: var(--code-deletion);
 }
 
 .md-code-copy-icon {
@@ -9301,6 +9302,7 @@ html.wingman-iphone-webview .chat-channel-tab-scroll * {
   border: 0;
 }
 
+.md-code-block .md-code-scroll,
 .chat-post-markdown .md-code-scroll,
 .thread-msg-text .chat-post-markdown .md-code-scroll,
 .doc-block-rendered .md-code-scroll,
@@ -9313,10 +9315,10 @@ html.wingman-iphone-webview .chat-channel-tab-scroll * {
   padding: 0.85rem 0.95rem;
   overflow-x: auto;
   overscroll-behavior-x: contain;
-  border-radius: var(--radius-panel);
-  background: var(--primary);
-  color: var(--muted-foreground);
-  scrollbar-color: var(--border) var(--info);
+  border-radius: 0;
+  background: var(--code-background);
+  color: var(--code-foreground);
+  scrollbar-color: var(--code-muted) var(--code-background);
   scrollbar-width: thin;
 }
 
@@ -9325,15 +9327,16 @@ html.wingman-iphone-webview .chat-channel-tab-scroll * {
 }
 
 .md-code-scroll::-webkit-scrollbar-track {
-  background: var(--primary);
+  background: var(--code-background);
 }
 
 .md-code-scroll::-webkit-scrollbar-thumb {
   border: 2px solid var(--border);
   border-radius: 999px;
-  background: var(--secondary);
+  background: var(--code-toolbar);
 }
 
+.md-code-block .md-code-scroll code,
 .chat-post-markdown .md-code-scroll code,
 .thread-msg-text .chat-post-markdown .md-code-scroll code,
 .doc-block-rendered .md-code-scroll code,
@@ -9356,7 +9359,7 @@ html.wingman-iphone-webview .chat-channel-tab-scroll * {
 
 .md-code-block .hljs-comment,
 .md-code-block .hljs-quote {
-  color: var(--muted-foreground);
+  color: var(--code-muted);
   font-style: italic;
 }
 
@@ -9365,7 +9368,7 @@ html.wingman-iphone-webview .chat-channel-tab-scroll * {
 .md-code-block .hljs-literal,
 .md-code-block .hljs-section,
 .md-code-block .hljs-link {
-  color: var(--primary);
+  color: var(--code-keyword);
 }
 
 .md-code-block .hljs-string,
@@ -9379,7 +9382,7 @@ html.wingman-iphone-webview .chat-channel-tab-scroll * {
 .md-code-block .hljs-variable,
 .md-code-block .hljs-template-tag,
 .md-code-block .hljs-template-variable {
-  color: var(--primary);
+  color: var(--code-string);
 }
 
 .md-code-block .hljs-number,
@@ -9387,18 +9390,18 @@ html.wingman-iphone-webview .chat-channel-tab-scroll * {
 .md-code-block .hljs-built_in,
 .md-code-block .hljs-builtin-name,
 .md-code-block .hljs-params {
-  color: var(--warning);
+  color: var(--code-number);
 }
 
 .md-code-block .hljs-title.function_,
 .md-code-block .hljs-function .hljs-title,
 .md-code-block .hljs-selector-id,
 .md-code-block .hljs-selector-class {
-  color: var(--muted-foreground);
+  color: var(--code-function);
 }
 
 .md-code-block .hljs-deletion {
-  color: var(--destructive);
+  color: var(--code-deletion);
 }
 
 .chat-post-markdown blockquote,
@@ -12085,8 +12088,8 @@ html.wingman-iphone-webview .chat-channel-tab-scroll * {
 }
 
 .doc-rich-editor .ProseMirror pre {
-  background: var(--primary);
-  color: var(--muted-foreground);
+  background: var(--code-background);
+  color: var(--code-foreground);
   padding: 0.85rem 1rem;
   border-radius: var(--radius-panel);
   overflow-x: auto;
@@ -12101,6 +12104,10 @@ html.wingman-iphone-webview .chat-channel-tab-scroll * {
 
 .doc-rich-editor .ProseMirror pre code {
   background: transparent;
+  color: inherit;
+  overflow-wrap: normal;
+  word-break: normal;
+  white-space: pre;
   padding: 0;
 }
 
@@ -12197,8 +12204,8 @@ html.wingman-iphone-webview .chat-channel-tab-scroll * {
 }
 
 .doc-block-rendered pre {
-  background: var(--primary);
-  color: var(--muted-foreground);
+  background: var(--code-background);
+  color: var(--code-foreground);
   padding: 0.85rem 1rem;
   border-radius: var(--radius-panel);
   overflow-x: auto;

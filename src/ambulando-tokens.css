@@ -26,6 +26,16 @@
   --space-10: 40px;
   --space-12: 48px;
   --space-16: 64px;
+  /* Code uses paired surfaces/ink rather than action-accent colors. */
+  --code-background: #F1F5F3;
+  --code-foreground: #16354B;
+  --code-toolbar: #E5EDE8;
+  --code-muted: #52645C;
+  --code-keyword: #653B83;
+  --code-string: #25613E;
+  --code-number: #805400;
+  --code-function: #215C85;
+  --code-deletion: #B42318;
   --background: #F7F8F6;
   --foreground: #16354B;
   --card: #FFFFFF;
@@ -66,6 +76,15 @@
   --chart-5: #B42318;
 }
 .dark, [data-theme="dark"] {
+  --code-background: #111D29;
+  --code-foreground: #E8EEF2;
+  --code-toolbar: #223442;
+  --code-muted: #B3C2C9;
+  --code-keyword: #D1B0D6;
+  --code-string: #A4D1B5;
+  --code-number: #F3CF80;
+  --code-function: #ADD2F0;
+  --code-deletion: #FCA59D;
   --background: #111D29;
   --foreground: #E8EEF2;
   --card: #182735;

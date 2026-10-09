@@ -138,3 +138,24 @@ stronger scrim, and dimming remains when backdrop filtering is unavailable.
 Modal content keeps its own sharp surface. Channel-menu containers remain
 transparent layout wrappers; only their popovers receive floating-surface
 styles. The compact Toolbox button centers its icon like the other rail views.
+
+## Markdown code
+
+Fenced code uses paired `--code-*` tokens rather than action-primary colors.
+Light mode uses a pale neutral surface with dark ink; dark mode uses navy with
+light ink. Syntax, comments, language labels and Copy feedback retain at least
+4.5:1 text contrast. The shared renderer and clipboard delegation preserve
+source text, whitespace and escaping; each block scrolls long lines locally.
+Inline code keeps its surrounding text/paper colors. White Docs paper and its
+rich-editor code styling remain independent of the shell theme.
+
+`tests/e2e/markdown-code-contrast.spec.cjs` checks computed text contrast, Copy
+hover/focus/success/failure, plain and highlighted copy fidelity, monospace and
+horizontal scrolling at desktop and phone widths in both themes. It renders
+synthetic Markdown with production renderer/CSS under chat, thread, document,
+comment and history ancestors against the configured runtime, blocking backend
+requests. It does not establish authenticated delivery or native clipboard
+permissions. The connected thread/Docs cases in `ambulando-sol.spec.cjs` also
+verify the Chromium clipboard with explicitly granted permissions and preserve
+the white paper code colors in both themes. Set `SOL_EVIDENCE_DIR` to a verified ignored handoff directory to
+capture screenshots.
