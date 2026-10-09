@@ -3503,6 +3503,26 @@
       "notes": [
         "Place task-detail Back immediately left of the title while keeping Save, Discard, Copy link and menu actions on the right."
       ]
+    },
+    {
+      "buildNumber": 2325,
+      "label": "Optional Agents and Context",
+      "notes": [
+        "Agents and Context are hidden by default. Enable each independently in Settings alongside Inbox; preferences persist and hiding views preserves data."
+      ]
+    },
+    {
+      "buildNumber": 2326,
+      "label": "Optional view entry guards",
+      "notes": [],
+      "noUserVisibleChanges": true
+    },
+    {
+      "buildNumber": 2327,
+      "label": "Optional mobile navigation",
+      "notes": [
+        "Hide optional Agents and Context navigation slots on phones when their Settings toggles are off."
+      ]
     }
   ]
 }

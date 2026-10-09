@@ -6,6 +6,7 @@ export const pipelineViewerManagerMixin = {
   pipelineViewerOpen: false,
   pipelineViewerRoute: {},
   openPipelineViewer({definitionId='',runId=''}={}) {
+    if (this.agentsEnabled !== true) { this.navigateTo('status'); return; }
     if(!this.pipelineViewerEnabled){this.pipelineViewerOpen=false;this.pipelineViewerRoute={};this.pipelineViewerActivationPending=true;return;}
     this.pipelineViewerActivationPending=false;
     const connection=this.selectedAgentConnection;

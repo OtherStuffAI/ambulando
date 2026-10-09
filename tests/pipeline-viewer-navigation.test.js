@@ -3,13 +3,13 @@ import { createShellState } from '../src/shell-state.js';
 import { pipelineViewerManagerMixin } from '../src/pipeline-viewer-manager.js';
 import { parseRouteLocation } from '../src/route-helpers.js';
 it('opens a definition under Agents and preserves verified service/run route parameters',()=>{
-  const store={...pipelineViewerManagerMixin,pipelineViewerEnabled:true,selectedAgentConnection:{installation_id:'service',metadata:{installation_npub:'signer'}},syncRoute:vi.fn()};
+  const store={...pipelineViewerManagerMixin,agentsEnabled:true,pipelineViewerEnabled:true,selectedAgentConnection:{installation_id:'service',metadata:{installation_npub:'signer'}},syncRoute:vi.fn()};
   store.openPipelineViewer({definitionId:'bird.timeline.chat.v2'});expect(store).toMatchObject({navSection:'agents',agentSpaceView:'pipelines',pipelineViewerOpen:true,pipelineViewerRoute:{service:'service',signer:'signer',definition:'bird.timeline.chat.v2'}});
   const route=parseRouteLocation('https://flightdeck.invalid/workspace/agents?viewer=1&service=service&signer=signer&run=historical');expect(route.params).toMatchObject({viewer:'1',service:'service',signer:'signer',run:'historical'});
   store.closePipelineViewer();expect(store.pipelineViewerOpen).toBe(false);expect(store.pipelineViewerRoute).toEqual({});
 });
 it('shell URL retains viewer identities independently of endpoint and clears them outside Agents',()=>{
-  const shell=createShellState();const store={navSection:'agents',currentWorkspaceSlug:'workspace',currentWorkspaceKey:'key',selectedBoardId:null,selectedWorkspaceAgentId:'agent',agentSpaceView:'pipelines',pipelineViewerEnabled:true,pipelineViewerOpen:true,pipelineViewerRoute:{service:'installation',signer:'verified-signer',run:'run'},getRoutePath:()=>'/workspace/agents'};
+  const shell=createShellState();const store={agentsEnabled:true,navSection:'agents',currentWorkspaceSlug:'workspace',currentWorkspaceKey:'key',selectedBoardId:null,selectedWorkspaceAgentId:'agent',agentSpaceView:'pipelines',pipelineViewerEnabled:true,pipelineViewerOpen:true,pipelineViewerRoute:{service:'installation',signer:'verified-signer',run:'run'},getRoutePath:()=>'/workspace/agents'};
   const previous=globalThis.window;globalThis.window={location:{href:'https://flightdeck.invalid/workspace/agents'}};
   try{const path=shell.buildRouteUrl.call(store);expect(path).toContain('service=installation');expect(path).toContain('signer=verified-signer');expect(path).toContain('run=run');expect(path).not.toContain('endpoint');store.navSection='chat';expect(shell.buildRouteUrl.call(store)).not.toContain('viewer=');}finally{globalThis.window=previous;}
 });
@@ -51,7 +51,7 @@ it('bounds rendered records while searching and copying any of 5000 exact record
  view.closeInspector();expect(view.recordPage).toBe(1);expect(view.matchingRecords).toEqual([]);
 });
 it('blocks disabled open attempts, route publication and initialization before any viewer read',async()=>{
- const {createPipelineViewerView}=await import('../src/pipeline-viewer-view.js');const syncRoute=vi.fn(),store={...pipelineViewerManagerMixin,pipelineViewerEnabled:false,selectedAgentConnection:{installation_id:'service'},syncRoute};
+ const {createPipelineViewerView}=await import('../src/pipeline-viewer-view.js');const syncRoute=vi.fn(),store={...pipelineViewerManagerMixin,agentsEnabled:true,pipelineViewerEnabled:false,selectedAgentConnection:{installation_id:'service'},syncRoute};
  store.openPipelineViewer({runId:'private-run'});expect(store.pipelineViewerOpen).toBe(false);expect(store.pipelineViewerActivationPending).toBe(true);expect(store.pipelineViewerRoute).toEqual({});expect(syncRoute).not.toHaveBeenCalled();
  const createConnection=vi.fn(),getDb=vi.fn();const view=createPipelineViewerView({enabled:false,createConnection,getDb});await view.sync('workspace','actor','db','backend',[],true);expect(view.status).toBe('pending');expect(getDb).not.toHaveBeenCalled();expect(createConnection).not.toHaveBeenCalled();
  const previous=globalThis.window;globalThis.window={location:{href:'https://flightdeck.invalid/workspace/agents'}};

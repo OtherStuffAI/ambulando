@@ -772,6 +772,8 @@ export function initApp() {
     summaryCollapsedPanels: {},
     summaryPanelPages: {},
     deckInboxEnabled: true,
+    agentsEnabled: false,
+    contextEnabled: false,
     dailyNoteEditorOpen: false,
     dailyNoteEditorSaving: false,
     dailyNoteEditorError: '',
@@ -2340,6 +2342,8 @@ export function initApp() {
           : {};
         this.deckInboxEnabled = resolveDeckInboxEnabled(settings);
         this.myFocusEnabled = resolveMyFocusEnabled(settings);
+        this.agentsEnabled = settings.agentsEnabled === true;
+        this.contextEnabled = settings.contextEnabled === true;
       }
       // Extract ?token= from URL (e.g. invite/share link) and bootstrap workspace
       if (typeof window !== 'undefined') {
@@ -2440,6 +2444,20 @@ export function initApp() {
       this.deckInboxEnabled = Boolean(enabled);
       const settings = (await getSettings()) || {};
       await saveSettings({ ...settings, deckInboxEnabled: this.deckInboxEnabled });
+    },
+
+    async setAgentsEnabled(enabled) {
+      this.agentsEnabled = Boolean(enabled);
+      if (!this.agentsEnabled && this.navSection === 'agents') this.navigateTo('status');
+      const settings = (await getSettings()) || {};
+      await saveSettings({ ...settings, agentsEnabled: this.agentsEnabled });
+    },
+
+    async setContextEnabled(enabled) {
+      this.contextEnabled = Boolean(enabled);
+      if (!this.contextEnabled && this.navSection === 'context') this.navigateTo('status');
+      const settings = (await getSettings()) || {};
+      await saveSettings({ ...settings, contextEnabled: this.contextEnabled });
     },
 
     async setMyFocusEnabled(enabled) {
@@ -2691,7 +2709,7 @@ export function initApp() {
 
     getRoutePath(section = this.navSection) {
       const slug = this.currentWorkspaceSlug;
-      const enabledSection = normalizeEnabledFlightDeckSection(section);
+      const enabledSection = normalizeEnabledFlightDeckSection(section, this);
       if (enabledSection === 'workroom') {
         return this.activeWorkroomId
           ? `/${slug}/workroom/${encodeURIComponent(this.activeWorkroomId)}`
@@ -2728,7 +2746,7 @@ export function initApp() {
       // retains the active scope when navigating between tasks/chat/docs/etc.
       if (this.selectedBoardId) url.searchParams.set('scopeid', this.selectedBoardId);
 
-      const enabledSection = normalizeEnabledFlightDeckSection(this.navSection);
+      const enabledSection = normalizeEnabledFlightDeckSection(this.navSection, this);
       if (enabledSection !== this.navSection) this.navSection = enabledSection;
 
       if (this.navSection === 'chat') {
@@ -2846,7 +2864,7 @@ export function initApp() {
           // This is handled by syncRoute(true) at the bottom
         }
 
-        this.navSection = normalizeEnabledFlightDeckSection(route.section);
+        this.navSection = normalizeEnabledFlightDeckSection(route.section, this);
         this.mobileNavOpen = false;
 
         // Restore scopeid from URL for all sections so browser history
@@ -3277,7 +3295,7 @@ export function initApp() {
     },
 
     navigateTo(section, options = {}) {
-      const enabledSection = normalizeEnabledFlightDeckSection(section);
+      const enabledSection = normalizeEnabledFlightDeckSection(section, this);
       if (enabledSection !== section) {
         const surfaceId = section === 'reports' ? 'reports' : section === 'people' ? 'people' : section === 'opportunities' ? 'opportunities' : '';
         if (surfaceId) blockDisabledFlightDeckSurface(this, surfaceId);

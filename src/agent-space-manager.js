@@ -125,6 +125,7 @@ export const agentSpaceManagerMixin = {
     finally { this.agentConnectBusy = false; }
   },
   async openAgentSpace(workspaceAgentId, view = 'overview') {
+    if (this.agentsEnabled !== true) { this.navigateTo('status'); return; }
     this.selectedWorkspaceAgentId = text(workspaceAgentId); this.navSection = 'agents'; this.mobileNavOpen = false;
     await this.selectAgentSpaceView(view, { syncRoute: true });
   },

@@ -38,7 +38,9 @@ export function isFlightDeckSectionDisabled(section) {
   return Object.values(DISABLED_SECTION_BY_SURFACE).includes(normalized);
 }
 
-export function normalizeEnabledFlightDeckSection(section) {
+export function normalizeEnabledFlightDeckSection(section, preferences = null) {
+  if (preferences && section === 'agents' && preferences.agentsEnabled !== true) return 'status';
+  if (preferences && section === 'context' && preferences.contextEnabled !== true) return 'status';
   return isFlightDeckSectionDisabled(section) ? 'status' : section;
 }
 

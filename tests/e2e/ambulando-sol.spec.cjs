@@ -673,3 +673,77 @@ for (const width of [1440, 390]) {
     });
   }
 }
+
+test('optional Agents and Context persist independently and restore navigation without deleting records', async ({ page }) => {
+  await openFixture(page);
+  await page.evaluate(() => {
+    const s = window.Alpine.store('chat');
+    s.navigateTo('settings');
+    s.settingsTab = 'deck';
+  });
+  const agents = page.getByTestId('agents-enabled');
+  const context = page.getByTestId('context-enabled');
+  await expect(agents).not.toBeChecked();
+  await expect(context).not.toBeChecked();
+  await expect(page.locator('[aria-label="Agents"]:visible')).toHaveCount(0);
+  await expect(page.locator('[aria-label="Context"]:visible')).toHaveCount(0);
+  for (const width of [1440, 390]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.evaluate(() => { const s = window.Alpine.store('chat'); s.navSection = 'chat'; s.navCollapsed = true; });
+    await expect(page.locator('[aria-label="Agents"]:visible')).toHaveCount(0);
+    await expect(page.locator('[aria-label="Context"]:visible')).toHaveCount(0);
+    await expect(page.locator('.mobile-section-switcher-item:has([aria-label="Agents"]):visible')).toHaveCount(0);
+  }
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.evaluate(() => { const s = window.Alpine.store('chat'); s.navSection = 'settings'; s.settingsTab = 'deck'; });
+  await agents.check();
+  await context.check();
+  for (const width of [1440, 390]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.evaluate(() => { const s = window.Alpine.store('chat'); s.navSection = 'chat'; s.navCollapsed = true; });
+    await expect(page.locator('[aria-label="Agents"]:visible').first()).toBeVisible();
+    await expect(page.locator('[aria-label="Context"]:visible').first()).toBeVisible();
+  }
+  await expect.poll(() => page.evaluate(() => {
+    const s = window.Alpine.store('chat');
+    return s.agentsEnabled && s.contextEnabled;
+  })).toBe(true);
+  await page.reload();
+  await page.waitForFunction(() => window.Alpine?.store('chat')?.routeSyncPaused === false);
+  await expect.poll(() => page.evaluate(() => {
+    const s = window.Alpine.store('chat');
+    return [s.agentsEnabled, s.contextEnabled];
+  })).toEqual([true, true]);
+  await openFixture(page);
+  await page.evaluate(async () => {
+    const s = window.Alpine.store('chat');
+    s.navSection = 'agents';
+    await s.setAgentsEnabled(false);
+  });
+  await expect.poll(() => page.evaluate(() => window.Alpine.store('chat').navSection)).toBe('status');
+  await expect.poll(() => page.evaluate(() => window.Alpine.store('chat').contextEnabled)).toBe(true);
+  await page.evaluate(async () => {
+    const s = window.Alpine.store('chat');
+    s.navSection = 'context';
+    await s.setContextEnabled(false);
+    s.navSection = 'agents';
+  });
+  await expect.poll(() => page.evaluate(() => window.Alpine.store('chat').navSection)).toBe('status');
+  await page.reload();
+  await page.waitForFunction(() => window.Alpine?.store('chat')?.routeSyncPaused === false);
+  await expect.poll(() => page.evaluate(() => {
+    const s = window.Alpine.store('chat'); return [s.agentsEnabled, s.contextEnabled];
+  })).toEqual([false, false]);
+  await openFixture(page);
+  await page.evaluate(async () => {
+    const s = window.Alpine.store('chat');
+    const channels = JSON.stringify(s.channels);
+    await s.setAgentsEnabled(true);
+    await s.setContextEnabled(true);
+    s.navSection = 'agents';
+    if (s.navSection !== 'agents') throw new Error('Agents was not restored');
+    s.navSection = 'context';
+    if (s.navSection !== 'context') throw new Error('Context was not restored');
+    if (JSON.stringify(s.channels) !== channels) throw new Error('Preference change altered channel data');
+  });
+});

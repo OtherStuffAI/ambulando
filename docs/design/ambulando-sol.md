@@ -43,6 +43,16 @@ status badges and actual avatars may stay rounded. Keyboard focus uses `--ring`.
 surfaces. Existing close/Escape handlers and busy guards remain authoritative.
 Nonmodal calendars/popovers retain their existing keyboard primitives.
 
+## Optional views
+
+Settings → Deck layout includes independent Show Agents and Show Context options
+alongside Inbox and My Focus. Both default off and persist in the existing
+shared device-local app settings, across reloads and workspace changes. They do
+not write Tower records or change permissions. Navigation, direct view entry and
+browser routes respect these preferences; disabling the active optional view
+returns to Deck. Existing agent installations and context records are retained,
+and enabling the preference restores access.
+
 ## Intentional departures and limitations
 
 The product is denser than the reference gallery: existing independent scroll

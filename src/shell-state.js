@@ -373,10 +373,11 @@ export function createShellState(options = {}) {
     error: null,
 
     // ── Navigation ────────────────────────────────────────────
-    _navSection: initialSection,
+    _navSection: ['agents', 'context'].includes(initialSection) ? 'status' : initialSection,
     lockedView: null,
     get navSection() { return this._navSection; },
     set navSection(section) {
+      if (section === 'agents' || section === 'context') section = normalizeEnabledFlightDeckSection(section, this);
       // Backlog expansion lasts only for the current visit to Tasks.
       if (section === 'tasks' && section !== this._navSection) {
         this.collapsedSections = { ...this.collapsedSections, new: true };
@@ -571,6 +572,8 @@ export function createShellState(options = {}) {
       this.initDocCommentConnector();
       this.startSharedLiveQueries();
       const settings = await getSettings();
+      this.agentsEnabled = settings?.agentsEnabled === true;
+      this.contextEnabled = settings?.contextEnabled === true;
       if (settings) {
         this.backendUrl = normalizeBackendUrl(settings.backendUrl ?? '');
         this.ownerNpub = settings.ownerNpub ?? '';
@@ -812,7 +815,7 @@ export function createShellState(options = {}) {
 
     getRoutePath(section = this.navSection) {
       const slug = this.currentWorkspaceSlug;
-      const enabledSection = normalizeEnabledFlightDeckSection(section);
+      const enabledSection = normalizeEnabledFlightDeckSection(section, this);
       if (enabledSection === 'workroom') {
         return this.activeWorkroomId
           ? `/${slug}/workroom/${encodeURIComponent(this.activeWorkroomId)}`
@@ -849,7 +852,7 @@ export function createShellState(options = {}) {
       if (this.currentWorkspaceKey) url.searchParams.set('workspacekey', this.currentWorkspaceKey);
       if (this.selectedBoardId) url.searchParams.set('scopeid', this.selectedBoardId);
 
-      const enabledSection = normalizeEnabledFlightDeckSection(this.navSection);
+      const enabledSection = normalizeEnabledFlightDeckSection(this.navSection, this);
       if (enabledSection !== this.navSection) this.navSection = enabledSection;
 
       if (this.navSection === 'chat') {
@@ -908,7 +911,7 @@ export function createShellState(options = {}) {
 
     async applyRouteFromLocation() {
       const route = parseRouteLocation();
-      const routeSection = normalizeEnabledFlightDeckSection(route.section);
+      const routeSection = normalizeEnabledFlightDeckSection(route.section, this);
       this.routeSyncPaused = true;
       try {
         if (route.params.workspacekey) {
@@ -1072,7 +1075,7 @@ export function createShellState(options = {}) {
     // ── Navigation ────────────────────────────────────────────
 
     navigateTo(section, options = {}) {
-      section = normalizeEnabledFlightDeckSection(section);
+      section = normalizeEnabledFlightDeckSection(section, this);
       const previousSection = this.navSection;
       const docsVisit = this.docsHomeVisit = Number(this.docsHomeVisit || 0) + 1;
       if (previousSection === 'docs' && section !== 'docs' && this.docEditDraftDirty && !options.draftPreserved) {
