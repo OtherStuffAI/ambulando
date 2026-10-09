@@ -101,7 +101,7 @@ screenshots and run-specific evidence belong only in ignored
 
 ## Document paper
 
-The Docs workspace, sticky header, comments panel and collapsed comments rail use
+The Docs workspace, sticky list and editor headers, comments panel and collapsed comments rail use
 `--background` in both themes, including the inline document dialog. Controls and
 individual comment cards retain their existing semantic surfaces.
 

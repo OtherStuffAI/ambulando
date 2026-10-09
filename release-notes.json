@@ -3475,6 +3475,13 @@
       "notes": [
         "Keep the document page white while the surrounding Docs workspace, header and comments area follow the app background in both themes."
       ]
+    },
+    {
+      "buildNumber": 2321,
+      "label": "Docs list header background",
+      "notes": [
+        "Blend the Docs list title, search and actions into the workspace background in both themes while preserving sticky scrolling and white document paper."
+      ]
     }
   ]
 }

@@ -594,3 +594,46 @@ for (const width of [1280, 390]) for (const theme of ['light','dark']) {
     console.log('SOL_MODAL_CHANNEL_REVIEW',JSON.stringify({width,theme,menuStyle,scrim}));
   });
 }
+
+for (const width of [1440, 390]) {
+  for (const theme of ['light', 'dark']) {
+    test(`Docs list header and Files comparison: ${theme} ${width}px`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 900 });
+      await openFixture(page);
+      await page.evaluate(theme => {
+        window.Alpine.store('appearance').setTheme(theme);
+        const s = window.Alpine.store('chat');
+        s.closeThread({ syncRoute: false });
+        s.navigateTo('files', { syncRoute: false });
+      }, theme);
+      await capture(page, `header-${theme}-${width}-files`);
+      const files = await page.locator('.files-header').evaluate(node => ({ background: getComputedStyle(node).backgroundColor, display: getComputedStyle(node).display }));
+      await page.evaluate(() => {
+        const s = window.Alpine.store('chat');
+        s.navigateTo('docs', { syncRoute: false });
+        s.docsEditorOpen = false;
+        s.selectedDocId = null;
+      });
+      const header = page.locator('.docs-header:visible');
+      await expect(header).toBeVisible();
+      await capture(page, `header-${theme}-${width}-docs`);
+      const docs = await header.evaluate(node => ({ background: getComputedStyle(node).backgroundColor, position: getComputedStyle(node).position, top: getComputedStyle(node).top, shell: getComputedStyle(document.querySelector('.main-content')).backgroundColor }));
+      console.log('SOL_DOCS_HEADER', JSON.stringify({ theme, width, files, docs }));
+      expect(docs.background).toBe(docs.shell);
+      expect(docs.position).toBe('sticky');
+      expect(docs.top).toBe('0px');
+      if (width < 641) await header.getByRole('button', { name: 'Search and document options' }).click();
+      const search = header.getByPlaceholder('Search docs');
+      await search.fill('Connected');
+      await expect(search).toHaveValue('Connected');
+      await expect(page.locator('.docs-section .doc-item:visible')).toContainText('Connected design review');
+      await search.fill('no matching document');
+      await expect(page.locator('.docs-section .doc-item:visible')).toHaveCount(0);
+      await search.fill('');
+      if (width < 641) await header.getByRole('button', { name: 'New document', exact: true }).click();
+      else await header.getByRole('button', { name: 'New document', exact: true }).click();
+      await expect(page.locator('.new-doc-modal:visible')).toBeVisible();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    });
+  }
+}

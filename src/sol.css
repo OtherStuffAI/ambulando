@@ -182,7 +182,7 @@ code, pre { font-family:var(--font-code); }
    Scope these overrides outside the paper so its local colors remain intact. */
 .docs-section,
 .docs-section.chat-doc-inline-section,
-.docs-section :is(.docs-view, .doc-editor-header, .doc-comment-thread-panel, .doc-comment-drawer-rail),
+.docs-section :is(.docs-view, .docs-header, .doc-editor-header, .doc-comment-thread-panel, .doc-comment-drawer-rail),
 .docs-section .doc-mobile-switcher {
   background:var(--background);
 }
