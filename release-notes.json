@@ -3679,6 +3679,13 @@
         "Hosted workspaces share one customer balance with a single $5 welcome credit expiring after 30 days. Tower Usage displays balances, fractional hourly spending and transactions.",
         "Stripe test top-ups require Tower configuration; live payments remain blocked pending payment validation and refunds/disputes. Existing workspaces are not automatically charged."
       ]
+    },
+    {
+      "buildNumber": 2358,
+      "label": "Mobile views outside the drawer",
+      "notes": [
+        "Use the bottom navigation to switch mobile views. The drawer now keeps channels and workspaces together without duplicate view buttons."
+      ]
     }
   ]
 }

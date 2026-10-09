@@ -58,7 +58,8 @@ and enabling the preference restores access.
 The product is denser than the reference gallery: existing independent scroll
 panes, full-width boards, rich editor toolbars, sync/authority details and view
 locks remain because they serve working workflows. Expanded desktop product navigation
-uses the horizontal bar; the phone drawer retains view, scope/channel and workspace controls.
+uses the horizontal bar; phones use the fixed bottom view switcher, with
+scope/channel and workspace controls in the drawer.
 Navigation keeps the original collapsed default; its toggle reveals the expanded
 scope/channel sidebar and horizontal desktop product navigation.
 Baseline-disabled approvals, flows, schedules, people, opportunities and reports
@@ -129,7 +130,9 @@ The A4 cases in `tests/e2e/ambulando-sol.spec.cjs` check both themes at
 comment isolation and editor retention while switching phone panes.
 
 Expanded desktop sidebars place product view buttons in the horizontal context
-bar. The collapsed icon rail and phone drawer retain their navigation; mutually
+bar. The collapsed desktop icon rail retains its navigation. Phones use the
+bottom view switcher and reserve its height plus the safe-area inset; the drawer
+contains scopes, channels and workspaces without duplicate product views. Mutually
 exclusive visibility keeps one reachable product section set. The horizontal
 bar scrolls locally when necessary and retains view locks and fullscreen actions.
 Visible product copy and installed-app titles use Ambulando. Sol remains the

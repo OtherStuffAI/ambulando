@@ -1215,86 +1215,7 @@
     <div class="app-layout" x-show="$store.chat.isLoggedIn">
       <div class="mobile-sidebar-backdrop" x-show="$store.chat.mobileNavOpen" @click="$store.chat.mobileNavOpen = false"></div>
       <nav id="sol-primary-navigation" aria-label="Workspace navigation" :role="$store.chat.mobileNavOpen ? 'dialog' : 'navigation'" :aria-modal="$store.chat.mobileNavOpen ? 'true' : null" x-sol-dialog="$store.chat.mobileNavOpen" :inert="$store.chat.mobileViewport && !$store.chat.mobileNavOpen" @keydown.escape.stop="if ($store.chat.mobileNavOpen) { $store.chat.mobileNavOpen = false; document.querySelector('.mobile-menu-btn')?.focus() }" class="sidebar" :class="{ 'sidebar-collapsed': $store.chat.navCollapsed, 'sidebar-mobile-open': $store.chat.mobileNavOpen }">
-              <nav
-                class="expanded-sidebar-section-switcher"
-                x-show="$store.chat.mobileNavOpen"
-                x-cloak
-                aria-label="Product sections"
-              >
-                <button type="button" class="expanded-sidebar-section-switcher-btn" :class="{ 'expanded-sidebar-section-switcher-btn-active': $store.chat.navSection === 'status' }" :aria-current="$store.chat.navSection === 'status' ? 'page' : null" @click="$store.chat.navigateTo('status')">
-                  <span class="expanded-sidebar-section-icon" aria-hidden="true"><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="/ambulando/icons.svg#layout-dashboard" /></svg></span>
-                  <span>Deck</span>
-                </button>
-                <button type="button" class="expanded-sidebar-section-switcher-btn" :class="{ 'expanded-sidebar-section-switcher-btn-active': $store.chat.navSection === 'chat' }" :aria-current="$store.chat.navSection === 'chat' ? 'page' : null" @click="$store.chat.navigateTo('chat')">
-                  <span class="expanded-sidebar-section-icon" aria-hidden="true"><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="/ambulando/icons.svg#message-square" /></svg></span>
-                  <span>Chat</span>
-                </button>
-                <button type="button" class="view-lock-button"
-                  x-cloak x-show="$store.chat.canLockCurrentView && $store.chat.navSection === 'chat'"
-                  :class="{ 'view-lock-button-locked': $store.chat.isCurrentViewLocked }"
-                  :aria-pressed="$store.chat.isCurrentViewLocked"
-                  aria-label="Lock Chat view"
-                  :title="$store.chat.isCurrentViewLocked ? 'Unlock Chat view' : 'Keep Chat when changing scope or channel'"
-                  @click.stop="$store.chat.toggleCurrentViewLock()">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                    <rect x="5" y="10" width="14" height="11" rx="2"></rect>
-                    <path :d="$store.chat.isCurrentViewLocked ? 'M8 10V6a4 4 0 0 1 8 0v4' : 'M8 10V6a4 4 0 0 1 8 0'"></path>
-                  </svg>
-                </button>
-                <button type="button" class="expanded-sidebar-section-switcher-btn" :class="{ 'expanded-sidebar-section-switcher-btn-active': $store.chat.navSection === 'tasks' }" :aria-current="$store.chat.navSection === 'tasks' ? 'page' : null" @click="$store.chat.navigateTo('tasks')">
-                  <span class="expanded-sidebar-section-icon" aria-hidden="true"><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="/ambulando/icons.svg#list-todo" /></svg></span>
-                  <span>Tasks</span>
-                </button>
-                <button type="button" class="view-lock-button"
-                  x-cloak x-show="$store.chat.canLockCurrentView && $store.chat.navSection === 'tasks'"
-                  :class="{ 'view-lock-button-locked': $store.chat.isCurrentViewLocked }"
-                  :aria-pressed="$store.chat.isCurrentViewLocked"
-                  aria-label="Lock Tasks view"
-                  :title="$store.chat.isCurrentViewLocked ? 'Unlock Tasks view' : 'Keep Tasks when changing scope or channel'"
-                  @click.stop="$store.chat.toggleCurrentViewLock()">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                    <rect x="5" y="10" width="14" height="11" rx="2"></rect>
-                    <path :d="$store.chat.isCurrentViewLocked ? 'M8 10V6a4 4 0 0 1 8 0v4' : 'M8 10V6a4 4 0 0 1 8 0'"></path>
-                  </svg>
-                </button>
-                <button type="button" class="expanded-sidebar-section-switcher-btn" :class="{ 'expanded-sidebar-section-switcher-btn-active': $store.chat.navSection === 'docs' }" :aria-current="$store.chat.navSection === 'docs' ? 'page' : null" @click="$store.chat.navigateTo('docs')">
-                  <span class="expanded-sidebar-section-icon" aria-hidden="true"><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="/ambulando/icons.svg#file-text" /></svg></span>
-                  <span>Docs</span>
-                </button>
-                <button type="button" class="view-lock-button"
-                  x-cloak x-show="$store.chat.canLockCurrentView && $store.chat.navSection === 'docs'"
-                  :class="{ 'view-lock-button-locked': $store.chat.isCurrentViewLocked }"
-                  :aria-pressed="$store.chat.isCurrentViewLocked"
-                  aria-label="Lock Docs view"
-                  :title="$store.chat.isCurrentViewLocked ? 'Unlock Docs view' : 'Keep Docs when changing scope or channel'"
-                  @click.stop="$store.chat.toggleCurrentViewLock()">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                    <rect x="5" y="10" width="14" height="11" rx="2"></rect>
-                    <path :d="$store.chat.isCurrentViewLocked ? 'M8 10V6a4 4 0 0 1 8 0v4' : 'M8 10V6a4 4 0 0 1 8 0'"></path>
-                  </svg>
-                </button>
-                <button type="button" class="expanded-sidebar-section-switcher-btn" :class="{ 'expanded-sidebar-section-switcher-btn-active': $store.chat.navSection === 'files' }" :aria-current="$store.chat.navSection === 'files' ? 'page' : null" @click="$store.chat.navigateTo('files')">
-                  <span class="expanded-sidebar-section-icon" aria-hidden="true"><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="/ambulando/icons.svg#files" /></svg></span>
-                  <span>Files</span>
-                </button>
-                <button type="button" class="view-lock-button"
-                  x-cloak x-show="$store.chat.canLockCurrentView && $store.chat.navSection === 'files'"
-                  :class="{ 'view-lock-button-locked': $store.chat.isCurrentViewLocked }"
-                  :aria-pressed="$store.chat.isCurrentViewLocked"
-                  aria-label="Lock Files view"
-                  :title="$store.chat.isCurrentViewLocked ? 'Unlock Files view' : 'Keep Files when changing scope or channel'"
-                  @click.stop="$store.chat.toggleCurrentViewLock()">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                    <rect x="5" y="10" width="14" height="11" rx="2"></rect>
-                    <path :d="$store.chat.isCurrentViewLocked ? 'M8 10V6a4 4 0 0 1 8 0v4' : 'M8 10V6a4 4 0 0 1 8 0'"></path>
-                  </svg>
-                </button>
-                <button type="button" class="expanded-sidebar-section-switcher-btn" x-show="$store.chat.agentsEnabled" x-cloak :class="{ 'expanded-sidebar-section-switcher-btn-active': $store.chat.navSection === 'agents' }" :aria-current="$store.chat.navSection === 'agents' ? 'page' : null" @click="$store.chat.navigateTo('agents')">
-                  <span class="expanded-sidebar-section-icon" aria-hidden="true"><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="/ambulando/icons.svg#bot" /></svg></span><span>Agents</span>
-                </button>
-                <button type="button" class="expanded-sidebar-section-switcher-btn" x-show="$store.chat.contextEnabled" x-cloak :class="{ 'expanded-sidebar-section-switcher-btn-active': $store.chat.navSection === 'context' }" :aria-current="$store.chat.navSection === 'context' ? 'page' : null" @click="$store.chat.navigateTo('context')"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="9" y="2" width="6" height="5" rx="1"/><path d="M12 7v5M4 17v-5h16v5"/><rect x="1" y="17" width="6" height="5" rx="1"/><rect x="17" y="17" width="6" height="5" rx="1"/></svg><span>Context</span></button>
-                <button type="button" class="expanded-sidebar-section-switcher-btn" aria-label="Toolbox" :class="{ 'expanded-sidebar-section-switcher-btn-active': $store.chat.navSection === 'toolbox' }" :aria-current="$store.chat.navSection === 'toolbox' ? 'page' : null" @click="$store.chat.navigateTo('toolbox')"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="18" height="14" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 12h18M10 10v4h4v-4"/></svg><span>Toolbox</span></button>
-              </nav>
+
         <ul class="sidebar-nav" x-show="$store.chat.navCollapsed && !$store.chat.mobileNavOpen">
           <li :class="{ active: $store.chat.navSection === 'status' }"><button type="button" class="sol-nav-button" aria-label="Deck" @click="$store.chat.navigateTo('status')">
             <span class="sidebar-icon" aria-hidden="true">
@@ -1874,7 +1795,7 @@
                   <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="/ambulando/icons.svg#bot" /></svg>
                 </button>
               </div>
-              <div class="mobile-section-switcher-item" x-show="$store.chat.contextEnabled" x-cloak><button type="button" class="mobile-section-switcher-btn" aria-label="Context" title="Context" :class="{ 'mobile-section-switcher-btn-active': $store.chat.navSection === 'context' }" @click="$store.chat.navigateTo('context')"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="9" y="2" width="6" height="5" rx="1"/><path d="M12 7v5M4 17v-5h16v5"/><rect x="1" y="17" width="6" height="5" rx="1"/><rect x="17" y="17" width="6" height="5" rx="1"/></svg></button></div>
+              <div class="mobile-section-switcher-item" x-show="$store.chat.contextEnabled" x-cloak><button type="button" class="mobile-section-switcher-btn" aria-label="Context" title="Context" :aria-current="$store.chat.navSection === 'context' ? 'page' : null" :class="{ 'mobile-section-switcher-btn-active': $store.chat.navSection === 'context' }" @click="$store.chat.navigateTo('context')"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="9" y="2" width="6" height="5" rx="1"/><path d="M12 7v5M4 17v-5h16v5"/><rect x="1" y="17" width="6" height="5" rx="1"/><rect x="17" y="17" width="6" height="5" rx="1"/></svg></button></div>
               <div class="mobile-section-switcher-item"><button type="button" class="mobile-section-switcher-btn" aria-label="Toolbox" title="Toolbox" :class="{ 'mobile-section-switcher-btn-active': $store.chat.navSection === 'toolbox' }" :aria-current="$store.chat.navSection === 'toolbox' ? 'page' : null" @click="$store.chat.navigateTo('toolbox')"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="18" height="14" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 12h18M10 10v4h4v-4"/></svg></button></div>
             </nav>
           </div>

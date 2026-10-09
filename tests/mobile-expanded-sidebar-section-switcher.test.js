@@ -15,9 +15,9 @@ const sidebar = html.slice(sidebarStart, sidebarEnd);
 const globalBarStart = html.indexOf('class="global-pg-channel-bar"');
 const globalBarEnd = html.indexOf('<div class="content-scroll-area"', globalBarStart);
 const globalBar = html.slice(globalBarStart, globalBarEnd);
-const expandedSwitcher = sidebar.match(/<nav\s+class="expanded-sidebar-section-switcher"[\s\S]*?<\/nav>/)?.[0] ?? '';
+const mobileSwitcher = globalBar.slice(globalBar.indexOf('class="mobile-section-switcher"'));
 
-describe('expanded left-column section switcher', () => {
+describe('mobile views outside the drawer', () => {
   it('keeps the approved collapsed mobile scope, channel, sidebar, and compact controls', () => {
     expect(mobileSelector).toContain('x-show="$store.chat.isLoggedIn && !$store.chat.mobileNavOpen"');
     expect(mobileSelector).toContain('class="mobile-scope-context-controls"');
@@ -31,11 +31,11 @@ describe('expanded left-column section switcher', () => {
     expect(globalBar).toContain('class="mobile-section-switcher" x-show="!$store.chat.mobileNavOpen"');
   });
 
-  it('keeps phone drawer and horizontal desktop sections mutually exclusive', () => {
-    expect(html.match(/class="expanded-sidebar-section-switcher"/g)).toHaveLength(1);
-    expect(expandedSwitcher).toContain('x-show="$store.chat.mobileNavOpen"');
+  it('keeps bottom mobile and horizontal desktop views mutually exclusive', () => {
+    expect(sidebar).not.toContain('class="expanded-sidebar-section-switcher"');
+    expect(mobileSwitcher).toContain('x-show="!$store.chat.mobileNavOpen"');
     expect(globalBar).toContain('x-show="!$store.chat.navCollapsed && !$store.chat.mobileViewport"');
-    expect(expandedSwitcher).toContain('aria-label="Product sections"');
+    expect(mobileSwitcher).toContain('aria-label="Scope section navigation"');
     expect(mobileSelector).not.toContain('section-switcher');
 
     for (const [section, label] of [
@@ -48,19 +48,19 @@ describe('expanded left-column section switcher', () => {
       ['context', 'Context'],
       ['toolbox', 'Toolbox'],
     ]) {
-      expect(expandedSwitcher).toContain(`navigateTo('${section}')`);
-      expect(expandedSwitcher).toContain(`$store.chat.navSection === '${section}' ? 'page' : null`);
-      expect(expandedSwitcher).toMatch(new RegExp(`>${label}<\\/span>`));
+      expect(mobileSwitcher).toContain(`navigateTo('${section}')`);
+      expect(mobileSwitcher).toContain(`$store.chat.navSection === '${section}' ? 'page' : null`);
+      expect(mobileSwitcher).toContain(`aria-label="${label}"`);
     }
 
-    expect(expandedSwitcher.match(/class="expanded-sidebar-section-switcher-btn"/g)).toHaveLength(8);
-    expect(expandedSwitcher).not.toContain("navigateTo('settings')");
+    expect(mobileSwitcher.match(/class="mobile-section-switcher-btn"/g)).toHaveLength(8);
+    expect(mobileSwitcher).not.toContain("navigateTo('settings')");
 
   });
 
-  it('places expanded navigation before scopes while preserving the collapsed rail', () => {
+  it('keeps views out of the drawer while preserving the desktop rail', () => {
     expect(sidebar).toContain('class="sidebar-nav" x-show="$store.chat.navCollapsed && !$store.chat.mobileNavOpen"');
-    expect(sidebar.indexOf('class="expanded-sidebar-section-switcher"')).toBeLessThan(sidebar.indexOf('class="sidebar-scope-navigation"'));
+    expect(sidebar).not.toContain('Product sections');
     expect(globalBar).toContain('class="expanded-sidebar-section-switcher sol-horizontal-navigation"');
     expect(sidebar).toMatch(/<\/ul>\s*<section\s+class="sidebar-scope-navigation"/s);
     expect(styles).toMatch(/\.sidebar\.sidebar-mobile-open \.sidebar-nav\s*\{[^}]*display:\s*none;/s);

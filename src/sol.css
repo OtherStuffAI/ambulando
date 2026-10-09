@@ -138,7 +138,7 @@ code, pre { font-family:var(--font-code); }
   .sidebar .expanded-sidebar-section-switcher-btn { min-height:44px; }
   .mobile-sidebar-backdrop { top:60px; background:color-mix(in srgb, var(--foreground) 25%, transparent); }
   .sidebar .view-lock-button { margin-top:-48px; min-height:44px; }
-  .mobile-section-switcher { display:none !important; }
+  .mobile-section-switcher-btn-active { background:var(--accent); color:var(--accent-foreground); }
   .sol-appearance-panel { align-items:stretch; flex-direction:column; gap:16px; margin-top:16px; }
   .auth-panel { margin-top:24px; padding:24px; }
   .auth-brand { align-items:flex-start; }
@@ -299,10 +299,9 @@ code, pre { font-family:var(--font-code); }
 }
 .sidebar-collapsed .toolbox-nav-button { justify-content:center; padding:8px; }
 
-/* Phone layout: keep controls touch-sized while reducing surrounding chrome.
-   Sol uses the drawer, so no bottom section navigation needs reserved space. */
+/* Phone layout: reserve the bottom view switcher and its safe-area inset. */
 @media (max-width:768px) {
-  .app-shell { --mobile-section-switcher-height:0px; }
+  .app-shell { --mobile-section-switcher-height:68px; }
   .page-header { min-height:60px; padding-block:8px; }
   .session-controls { min-height:44px; }
   .page-header .avatar-chip { width:44px; height:44px; padding:0; flex:0 0 44px; }
@@ -312,8 +311,8 @@ code, pre { font-family:var(--font-code); }
   .main-content { padding:0 8px; }
   .global-pg-channel-bar { margin-bottom:4px; }
   .chat-channel-header { padding:2px 0; min-height:48px; }
-  .content-scroll-area { padding-bottom:env(safe-area-inset-bottom); }
-  .content-scroll-area-deck { padding-bottom:env(safe-area-inset-bottom); }
+  .content-scroll-area { padding-bottom:calc(var(--mobile-section-switcher-height) + env(safe-area-inset-bottom) + 0.75rem); }
+  .content-scroll-area-deck { padding-bottom:calc(var(--mobile-section-switcher-height) + env(safe-area-inset-bottom)); }
   .workspace-recovery-status { flex:0 0 auto; margin:4px 0 8px; font-size:13px; line-height:1.4; }
   .status-section-deck { flex:1 1 0; height:auto; }
   .flightdeck-summary-overview-deck { padding:0; gap:0; }

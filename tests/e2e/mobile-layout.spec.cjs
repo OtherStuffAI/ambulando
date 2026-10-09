@@ -1,7 +1,7 @@
 const { test, expect } = require('playwright/test');
 const fs = require('node:fs/promises');
 const { execFileSync } = require('node:child_process');
-test.use({ serviceWorkers:'block' });
+test.use({ serviceWorkers:'block', reducedMotion:'reduce' });
 const { openFixture } = require('./fixtures/mobile-chat.cjs');
 
 async function capture(page, name) {
@@ -37,6 +37,9 @@ for (const width of [320,375,390,430,900,1440]) {
     await expect(page.locator('[data-deck-column="inbox"]')).toBeVisible();
     await expect(page.locator('[data-deck-column="inbox"] .attention-card').first()).toBeVisible();
     await capture(page, `${width}-${theme}-inbox-recovery`);
+    if (width < 769 && !process.env.SOL_LAYOUT_BEFORE) {
+      await expect.poll(async () => (await bounds(page,'.inbox-panel-heading button:visible')).every(r => r.width >= 44 && r.height >= 44 && r.x >= 0 && r.right <= width)).toBe(true);
+    }
     const header = await bounds(page,'.page-header');
     const cards = await bounds(page,'[data-deck-column="inbox"] .attention-card');
     const toolbar = await bounds(page,'.inbox-panel-heading button:visible');
@@ -69,8 +72,7 @@ for (const width of [320,375,390,430,900,1440]) {
     await page.evaluate(() => { window.Alpine.store('chat').pgNavigationRecoveryPending=false; });
     await capture(page,`${width}-${theme}-inbox`);
     if(width<769) {
-      await page.getByRole('button',{name:'Toggle navigation',exact:true}).click();
-      await page.locator('.sidebar .expanded-sidebar-section-switcher-btn').filter({hasText:'Chat'}).click();
+      await page.locator('.mobile-section-switcher').getByRole('button',{name:'Chat',exact:true}).click();
     } else await page.evaluate(() => window.Alpine.store('chat').navigateTo('chat',{syncRoute:false}));
     await page.evaluate(() => {
       const s=window.Alpine.store('chat'); s.openThread('phone-thread-0',{preserveChannelContext:true,scrollToLatest:false,syncRoute:false});
@@ -85,7 +87,7 @@ for (const width of [320,375,390,430,900,1440]) {
       await page.setViewportSize({width,height:520});
       await composer.focus();
       await capture(page,`${width}-${theme}-chat-short-viewport`);
-      if(!process.env.SOL_LAYOUT_BEFORE) { const r=(await bounds(page,'.thread-input-bar'))[0]; expect(r.bottom).toBeLessThanOrEqual(520); expect(r.y).toBeGreaterThan(0); }
+      if(!process.env.SOL_LAYOUT_BEFORE) { await expect.poll(async () => (await bounds(page,'.thread-input-bar'))[0].bottom).toBeLessThanOrEqual(520); const r=(await bounds(page,'.thread-input-bar'))[0]; expect(r.y).toBeGreaterThan(0); }
       await page.setViewportSize({width,height:844});
     }
     await page.evaluate(() => { const s=window.Alpine.store('chat'); s.closeThread({syncRoute:false}); s.navigateTo('tasks',{syncRoute:false}); s.openTaskDetail('sol-task'); s.taskDetailMode='view'; });
