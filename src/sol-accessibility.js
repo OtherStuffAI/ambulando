@@ -37,6 +37,42 @@ export function installSolAccessibility(Alpine) {
       element.style.removeProperty('--sol-visual-top');
     });
   });
+  Alpine.directive('sol-composer-scroll', (element, _directive, { cleanup }) => {
+    let frame = 0;
+    const update = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        // Only the footer scrolls. Keep history anchors, selection and native
+        // zoom/panning intact when context chips or editing state appear.
+        if (window.innerWidth > 768 || (window.visualViewport && window.visualViewport.scale !== 1)) return;
+        const editor = element.querySelector('[data-chat-composer="thread"]');
+        if (!editor?.contains(document.activeElement)) return;
+        const viewport = element.getBoundingClientRect();
+        const draft = editor.getBoundingClientRect();
+        const actions = element.querySelector('.thread-input-actions')?.getBoundingClientRect();
+        const bottom = Math.max(draft.bottom, actions?.bottom || draft.bottom);
+        const top = Math.min(draft.top, actions?.top ?? draft.top);
+        if (bottom > viewport.bottom) element.scrollTop += bottom - viewport.bottom;
+        else if (top < viewport.top) element.scrollTop += top - viewport.top;
+      });
+    };
+    window.visualViewport?.addEventListener('resize', update);
+    window.visualViewport?.addEventListener('scroll', update);
+    element.addEventListener('focusin', update);
+    element.addEventListener('input', update);
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(update);
+    observer?.observe(element);
+    const bar = element.querySelector('.thread-input-bar');
+    if (bar) observer?.observe(bar);
+    cleanup(() => {
+      cancelAnimationFrame(frame);
+      observer?.disconnect();
+      window.visualViewport?.removeEventListener('resize', update);
+      window.visualViewport?.removeEventListener('scroll', update);
+      element.removeEventListener('focusin', update);
+      element.removeEventListener('input', update);
+    });
+  });
   const openDialogs = [];
   const focusHistory = [];
   document.addEventListener('focusin', event => {

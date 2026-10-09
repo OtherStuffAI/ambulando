@@ -3531,6 +3531,49 @@
         "Compact phone header and navigation spacing, readable Inbox previews and 44px Inbox controls.",
         "Small Deck pager dots keep generous touch areas. Phone composers adapt to keyboard viewport changes while preserving pinch zoom."
       ]
+    },
+    {
+      "buildNumber": 2330,
+      "label": "More room for phone conversations",
+      "notes": [
+        "Phone chat headers and message spacing are more compact, while long drafts scroll inside a keyboard-aware composer.",
+        "Attachments and edit errors share a bounded footer, preserving independently scrolling conversation history and accessible chat actions."
+      ]
+    },
+    {
+      "buildNumber": 2331,
+      "label": "Keep focused phone drafts visible",
+      "notes": [
+        "Keep the focused phone draft and send controls visible when mention chips, edit status or keyboard changes move the composer within its bounded footer."
+      ]
+    },
+    {
+      "buildNumber": 2332,
+      "label": "Keep compose actions inside the footer",
+      "notes": [
+        "Keep the complete phone send and menu hit areas in view alongside the focused draft when editing or mention context expands."
+      ]
+    },
+    {
+      "buildNumber": 2333,
+      "label": "Compact phone Inbox controls",
+      "notes": [
+        "Give phone Inbox cards smaller action icons with full touch targets and a single toolbar row on wider phones."
+      ]
+    },
+    {
+      "buildNumber": 2334,
+      "label": "Keep phone drafts visible after zoom",
+      "notes": [
+        "Keep the focused draft and compose actions visible when returning from zoom, including long drafts and attachment errors."
+      ]
+    },
+    {
+      "buildNumber": 2335,
+      "label": "Discoverable phone Inbox search",
+      "notes": [
+        "Keep phone Inbox search visible as an icon, expand it for typing, and preserve readable card previews with compact actions."
+      ]
     }
   ]
 }

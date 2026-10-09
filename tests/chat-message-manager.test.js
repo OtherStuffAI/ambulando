@@ -1432,6 +1432,32 @@ describe('scroll and composer methods', () => {
     }
   });
 
+  it('bounds an enlarged phone draft after keyboard resize without losing its scroll position', () => {
+    const { fn } = bindMethod('autosizeComposer');
+    const viewport = { scale: 1, height: 844 };
+    let cap = 112;
+    const element = { dataset: { chatComposer: 'thread' }, scrollHeight: 300, scrollTop: 84,
+      style: { height: '240px', overflowY: 'hidden' }, getBoundingClientRect: () => ({ height: 240 }) };
+    const getComputedStyle = vi.fn(() => ({ height: '240px', lineHeight: '22px', paddingTop: '6px', paddingBottom: '6px',
+      borderTopWidth: '1px', borderBottomWidth: '1px', minHeight: '44px', maxHeight: `${cap}px` }));
+    vi.stubGlobal('window', { innerWidth: 390, innerHeight: 844, visualViewport: viewport, getComputedStyle });
+    try {
+      fn(element, { canShrink: false });
+      expect(element.style.height).toBe('112px');
+      viewport.height = 320; cap = 70.4;
+      fn(element, { canShrink: false });
+      expect(element.style.height).toBe('70.4px');
+      expect(element.style.overflowY).toBe('auto');
+      expect(element.scrollTop).toBe(84);
+      fn(element, { canShrink: false });
+      expect(getComputedStyle).toHaveBeenCalledTimes(2);
+      viewport.scale = 2; viewport.height = 160;
+      fn(element, { canShrink: false });
+      expect(element.style.height).toBe('70.4px');
+      expect(getComputedStyle).toHaveBeenCalledTimes(2);
+    } finally { vi.unstubAllGlobals(); }
+  });
+
   it('scheduleChatPreviewMeasurement does not throw in test env', () => {
     const { fn } = bindMethod('scheduleChatPreviewMeasurement');
     expect(() => fn()).not.toThrow();

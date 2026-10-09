@@ -320,3 +320,124 @@ code, pre { font-family:var(--font-code); }
   .chat-thread-modal-backdrop { top:var(--sol-visual-top, 0px); bottom:auto; height:var(--sol-visual-height, 100dvh); }
   .chat-thread-panel, .chat-thread-panel.thread-full { height:calc(var(--sol-visual-height, 100dvh) - 1rem); max-height:calc(var(--sol-visual-height, 100dvh) - 1rem); }
 }
+
+/* Phone conversation density: reading owns the remaining height; draft and
+   ancillary state share one bounded, scrollable footer. Inputs stay 16px so
+   Safari need not zoom on focus. Hit areas and painted icons are independent. */
+@media (max-width:768px) {
+  .chat-thread-panel { --sol-thread-footer-max:min(180px, calc(var(--sol-visual-height, 100dvh) * .30)); }
+  .chat-thread-panel > .thread-header {
+    flex:0 0 auto;
+    padding:2px 6px;
+    gap:0;
+    max-height:94px;
+    overflow-y:auto;
+    overflow-x:clip;
+  }
+  .chat-thread-panel .thread-header-copy { flex-basis:100%; }
+  .chat-thread-panel .thread-title-display {
+    width:100%;
+    height:44px;
+    font-size:14px;
+    line-height:18px;
+    overflow:hidden;
+    display:-webkit-box;
+    -webkit-line-clamp:2;
+    -webkit-box-orient:vertical;
+  }
+  .chat-thread-panel .thread-header-actions { height:44px; gap:0; }
+  .chat-thread-panel .thread-sequence-controls { gap:0; }
+  .chat-thread-panel .thread-header-actions > button,
+  .chat-thread-panel .thread-header-actions .thread-resize-btn { width:44px; height:44px; padding:10px; }
+  .chat-thread-panel .thread-title-editor-row { gap:4px; }
+  .chat-thread-panel .thread-title-editor-row input { flex-basis:auto; width:0; }
+  .chat-thread-panel .thread-title-editor-row button { padding:4px 8px; font-size:12px; }
+  .chat-thread-panel .thread-title-editor .error-text { font-size:12px; line-height:16px; }
+  /* Popovers must float outside the bounded header rather than be clipped. */
+  .chat-thread-panel .thread-title-menu-popover { position:fixed; top:calc(var(--sol-visual-top, 0px) + 102px); right:16px; max-height:calc(var(--sol-visual-height, 100dvh) - 118px); overflow-y:auto; }
+  .chat-thread-panel .thread-replies { flex:1 1 0; }
+  .chat-thread-panel .thread-message { gap:8px; padding:8px; border-radius:0; flex-shrink:0; }
+  .chat-thread-panel .thread-avatar { width:28px; height:28px; font-size:12px; }
+  .chat-thread-panel .thread-msg-text { font-size:14px; line-height:1.45; }
+  .chat-thread-panel .thread-msg-header { gap:6px; margin-bottom:2px; }
+  .chat-thread-panel .thread-msg-header .chat-sender { font-size:12px; }
+  .chat-thread-panel .thread-message > .identity-avatar-button { width:44px; height:44px; padding:8px; margin:0; }
+  .chat-thread-panel .thread-composer-region {
+    flex:0 0 auto;
+    min-height:0;
+    max-height:var(--sol-thread-footer-max);
+    overflow-y:auto;
+    overflow-x:clip;
+    overscroll-behavior:contain;
+    background:var(--card);
+  }
+  .chat-thread-panel .thread-input-bar { padding:6px 8px calc(6px + env(safe-area-inset-bottom)); gap:4px; border-radius:0; }
+  .chat-thread-panel .thread-composer-body { gap:4px 6px; }
+  .chat-thread-panel .thread-input-bar .chat-input {
+    font-size:16px;
+    line-height:1.35;
+    padding:6px 8px;
+    min-height:44px;
+    max-height:min(112px, calc(var(--sol-visual-height, 100dvh) * .22));
+    overflow-y:auto !important;
+    resize:none;
+    overscroll-behavior:contain;
+  }
+  .chat-thread-panel .thread-input-actions { flex-direction:row; gap:4px; }
+  .chat-thread-panel .thread-input-actions :is(.chat-composer-menu-trigger, .thread-reply-btn) { height:44px; min-width:48px; padding:4px 8px; font-size:12px; }
+  .chat-thread-panel .chat-editing-banner { padding:0 4px; gap:4px; font-size:12px; }
+  .chat-thread-panel .recent-mention-chips { flex-wrap:nowrap; overflow-x:auto; }
+  .chat-thread-panel :is(.chat-file-draft-list, .chat-image-draft-list, .audio-draft-list) { margin:0; padding:4px 8px; }
+  .chat-thread-panel .chat-composer-menu-popover { position:fixed; bottom:calc(100dvh - var(--sol-visual-top, 0px) - var(--sol-visual-height, 100dvh) + 58px); right:16px; max-height:calc(var(--sol-visual-height, 100dvh) - 80px); overflow-y:auto; }
+}
+
+/* Inbox density follows the same distinction between 44px targets and small
+   painted controls. Wide phones fit the existing actions in one row. */
+@media (max-width:768px) {
+  .page-header { min-height:56px; padding:6px 8px; }
+  .mobile-scope-context-controls { padding:0 8px; }
+  .mobile-scope-workspace-avatar { width:26px; height:26px; }
+  .chat-channel-header { min-height:44px; padding:0; }
+  .inbox-panel-heading[data-deck-mobile-sticky-heading] { gap:0; padding:4px; }
+  .inbox-panel-heading .inbox-type-toggles { gap:0; }
+  .inbox-panel-heading h3 { font-size:13px; letter-spacing:0; }
+  .flightdeck-summary-panel-inbox .attention-card { padding:6px; gap:6px; min-height:76px; }
+  .flightdeck-summary-panel-inbox .attention-card-content { gap:2px; }
+  .flightdeck-summary-panel-inbox .flightdeck-summary-card-task.task-title-long { grid-template-columns:28px minmax(0,1fr) auto; }
+  .flightdeck-summary-panel-inbox .flightdeck-summary-card-task.task-title-long .attention-card-meta { grid-column:3; }
+  .flightdeck-summary-panel-inbox .attention-card-title { font-size:13px; line-height:17px; }
+  .flightdeck-summary-panel-inbox .attention-card-kicker,
+  .flightdeck-summary-panel-inbox .attention-card-time { font-size:10px; line-height:12px; }
+  .flightdeck-summary-panel-inbox .attention-card-subtitle { font-size:12px; line-height:15px; }
+  .flightdeck-summary-panel-inbox .attention-card-mark-read {
+    width:44px; height:44px; min-width:44px; padding:10px;
+    border:0; background:transparent; box-shadow:none; font-size:0;
+  }
+  .flightdeck-summary-panel-inbox .attention-card-mark-read::before {
+    content:''; display:block; width:24px; height:24px; background:currentColor;
+    mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8'%3E%3Ccircle cx='12' cy='12' r='9'/%3E%3Cpath d='m7 12 3 3 7-7'/%3E%3C/svg%3E") center/contain no-repeat;
+  }
+  .flightdeck-summary-panel-inbox .attention-card-mark-read[aria-label="Mark done"]::before {
+    mask-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8'%3E%3Crect x='3' y='3' width='18' height='18' rx='3'/%3E%3Cpath d='m7 12 3 3 7-7'/%3E%3C/svg%3E");
+  }
+}
+@media (min-width:361px) and (max-width:768px) {
+  .inbox-panel-heading[data-deck-mobile-sticky-heading] { grid-template-columns:minmax(0,1fr) auto 44px 44px 44px; }
+  .inbox-panel-heading .inbox-type-toggles { grid-column:2; grid-row:1; }
+  .inbox-panel-heading .inbox-search-form { grid-column:3; grid-row:1; width:44px; }
+  .inbox-panel-heading .deck-new-thread-button { grid-column:4; }
+  .inbox-panel-heading .inbox-read-menu { grid-column:5; }
+  .inbox-panel-heading .inbox-search-form:not(:focus-within) input { width:44px; padding:0; color:transparent; }
+  .inbox-panel-heading .inbox-search-form:not(:focus-within) input::placeholder { color:transparent; }
+  .inbox-panel-heading .inbox-search-form:focus-within { grid-row:2; width:100%; }
+}
+
+@media (max-width:768px) {
+  #deck-inbox-search, #thread-title-input { font-size:16px; }
+}
+@media (min-width:361px) and (max-width:768px) {
+  #deck-inbox-search:not(:focus) {
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='m20 20-4-4'/%3E%3C/svg%3E");
+    background-position:center; background-repeat:no-repeat; background-size:20px;
+  }
+}

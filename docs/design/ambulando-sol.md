@@ -20,7 +20,7 @@ conventions in `src/sol.css`. Avoid new fixed light colors in any product surfac
 | Shell/navigation | Section routing, view locks, scope/channel selection, workspace discovery/switching, profile/sync feedback | Header-only Confluence/name branding, compact rail, local Lucide navigation, responsive drawer, native keyboard buttons |
 | Login/onboarding | Ephemeral, NIP-07, bunker/nsec, workspace access/bootstrap and connection flows | Quiet bordered panels, labeled credentials, explicit disabled/loading/error feedback |
 | Home/Inbox/scopes | Dexie unread/working projections, filters, actions, scope cards and channel creation permissions | Semantic cards, status text, compact controls, selected accent |
-| Conversations/thread/composer | Thread routing, attachments, reactions, scroll ownership, drafts and send failure | Readable 16px messages, calm sender metadata, bounded modal, focus ring and local control colors |
+| Conversations/thread/composer | Thread routing, attachments, reactions, scroll ownership, drafts and send failure | Readable messages (16px desktop, compact phone proportions), calm sender metadata, bounded modal, focus ring and local control colors |
 | Tasks/list/board/detail | Board grouping/filtering, assignments, dates/tags, rich descriptions, dependencies, comments and save leases | 6px actions, 10px cards, readable descriptions, semantic state colors, wrapping controls |
 | Documents/editor/wiki | Local draft recovery, checkout, Tiptap, notebook links, backlinks, body hydration and independent scrolling | Theme-aware editor/toolbars, reading text, restrained document panels |
 | Files | Workspace-aware signed storage, previews/downloads, upload/publish states | Themed file cards, previews, dialogs and failure feedback |
@@ -169,3 +169,8 @@ permissions. The connected thread/Docs cases in `ambulando-sol.spec.cjs` also
 verify the Chromium clipboard with explicitly granted permissions and preserve
 the white paper code colors in both themes. Set `SOL_EVIDENCE_DIR` to a verified ignored handoff directory to
 capture screenshots.
+
+Phone conversation spacing, bounded long-draft/edit/attachment state and
+keyboard-visible reading-area checks are specified in
+[Phone conversation space](mobile-chat-density.md). Chat inputs stay 16px,
+while phone message text uses the classic compact 14px proportion.

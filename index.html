@@ -4807,6 +4807,7 @@
                     </template>
               </div>
 
+              <div class="thread-composer-region" x-sol-composer-scroll>
               <div class="thread-input-bar">
                 <div class="chat-editing-banner" x-show="$store.chat.isEditingMessage('thread')" x-cloak>
                   <div><strong>Editing reply</strong><span x-show="$store.chat.messageEdit.error" x-text="$store.chat.messageEdit.error"></span></div>
@@ -4903,6 +4904,7 @@
                     <button type="button" aria-label="Remove attachment" @click="$store.chat.removeChatFileDraft(draft.draft_id, 'thread')">&times;</button>
                   </div>
                 </template>
+              </div>
               </div>
             </div>
             </div>

@@ -914,16 +914,29 @@ export const chatMessageManagerMixin = {
       textarea.style.overflowY = 'hidden';
     }
     const viewportWidth = Number(window.innerWidth) || 0;
+    // Phone thread sizing follows the CSS visual-viewport budget. Desktop
+    // composers retain manual resizing; a phone draft must give space back to
+    // history when the keyboard opens, including after it was enlarged.
+    const phoneThread = textarea.dataset?.chatComposer === 'thread' && viewportWidth > 0 && viewportWidth <= 768;
     let metrics = composerAutosizeMetrics.get(textarea);
-    if (!metrics || metrics.viewportWidth !== viewportWidth || options.refreshMetrics === true) {
+    const viewportHeight = phoneThread
+      ? (window.visualViewport?.scale === 1 ? window.visualViewport.height : metrics?.viewportHeight || window.innerHeight)
+      : 0;
+    if (!metrics || metrics.viewportWidth !== viewportWidth || metrics.viewportHeight !== viewportHeight || options.refreshMetrics === true) {
       const styles = window.getComputedStyle(textarea);
       const lineHeight = parseFloat(styles.lineHeight) || 20;
       const paddingY = (parseFloat(styles.paddingTop) || 0) + (parseFloat(styles.paddingBottom) || 0);
       const borderY = (parseFloat(styles.borderTopWidth) || 0) + (parseFloat(styles.borderBottomWidth) || 0);
       metrics = {
         viewportWidth,
+        viewportHeight,
         minHeight: parseFloat(styles.minHeight) || (lineHeight + paddingY + borderY),
-        maxHeight: (lineHeight * this.COMPOSER_MAX_LINES) + paddingY + borderY,
+        maxHeight: phoneThread
+          ? Math.max(parseFloat(styles.minHeight) || 0, Math.min(
+            (lineHeight * this.COMPOSER_MAX_LINES) + paddingY + borderY,
+            parseFloat(styles.maxHeight) || Infinity,
+          ))
+          : (lineHeight * this.COMPOSER_MAX_LINES) + paddingY + borderY,
         renderedHeight: parseFloat(styles.height) || 0,
       };
       composerAutosizeMetrics.set(textarea, metrics);
@@ -932,7 +945,7 @@ export const chatMessageManagerMixin = {
 
     const composer = String(textarea.dataset?.chatComposer || '').trim();
     const preservesManualSize = ['message', 'thread', 'task-comment', 'doc-comment', 'doc-reply'].includes(composer)
-      && options.resetManualSize !== true;
+      && options.resetManualSize !== true && !phoneThread;
     if (preservesManualSize) {
       const scrollTop = textarea.scrollTop;
       const renderedHeight = textarea.getBoundingClientRect?.().height
@@ -952,6 +965,7 @@ export const chatMessageManagerMixin = {
       return;
     }
 
+    const scrollTop = textarea.scrollTop;
     if (options.canShrink !== false) textarea.style.height = 'auto';
     const scrollHeight = textarea.scrollHeight;
     const nextHeight = Math.min(Math.max(scrollHeight, minHeight), maxHeight);
@@ -959,6 +973,7 @@ export const chatMessageManagerMixin = {
     const overflowY = scrollHeight > maxHeight ? 'auto' : 'hidden';
     if (textarea.style.height !== height) textarea.style.height = height;
     if (textarea.style.overflowY !== overflowY) textarea.style.overflowY = overflowY;
+    if (phoneThread && options.resetManualSize !== true) textarea.scrollTop = scrollTop;
   },
 
   scheduleComposerElementAutosize(element, options = {}) {
