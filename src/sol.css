@@ -18,6 +18,37 @@ button:hover:not(:disabled) { filter:none; }
 button:disabled { cursor:not-allowed; opacity:.65; }
 input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]), select, textarea { color:var(--foreground); background:var(--card); border-color:var(--input); border-radius:var(--radius-control); min-height:var(--control-height); font-size:14px; }
 input::placeholder, textarea::placeholder { color:var(--muted-foreground); opacity:1; }
+
+/* The update header has its own paired surface; action-primary ink belongs
+   only on action-primary backgrounds. Keep the existing header palette. */
+.update-banner {
+  --update-header-foreground:var(--primary-foreground);
+  --update-header-hover:color-mix(in srgb, var(--primary) 88%, var(--primary-foreground));
+}
+[data-theme="dark"] .update-banner {
+  --update-header-foreground:var(--info);
+  --update-header-hover:color-mix(in srgb, var(--info-background) 88%, var(--info));
+}
+.update-banner-summary, .update-banner-btn { color:var(--update-header-foreground); }
+.update-banner-btn { border-color:var(--update-header-foreground); }
+.update-banner-summary:hover, .update-banner-btn:hover { background:var(--update-header-hover); }
+.update-banner-btn:disabled { opacity:1; }
+.update-banner-summary:focus-visible, .update-banner-btn:focus-visible {
+  outline-color:var(--update-header-foreground) !important;
+}
+.update-banner-btn.is-updating::before {
+  border-color:color-mix(in srgb, var(--update-header-foreground) 45%, transparent);
+  border-top-color:var(--update-header-foreground);
+}
+
+/* Success feedback and image-preview controls also need paired ink. Preview
+   labels have an opaque backing so underlying images cannot erase them. */
+.copy-button.copied { background:var(--success-background); color:var(--success); }
+.image-preview-close, .image-preview-caption { background:var(--card); color:var(--foreground); opacity:1; }
+.image-preview-close:focus-visible { outline-offset:-3px; }
+/* Canonical l1–l5 scope labels inherit from a transparent button. Give that
+   button surface ink; legacy coloured badges keep their explicit pairs. */
+.doc-scope-pill-btn { color:var(--foreground); }
 input[readonly], textarea[readonly] { background:var(--muted); }
 [aria-invalid="true"] { border-color:var(--destructive); }
 :focus-visible { outline:2px solid var(--ring) !important; outline-offset:3px; }

@@ -170,6 +170,27 @@ verify the Chromium clipboard with explicitly granted permissions and preserve
 the white paper code colors in both themes. Set `SOL_EVIDENCE_DIR` to a verified ignored handoff directory to
 capture screenshots.
 
+## Notification and shared-surface contrast
+
+The update header retains navy in light mode and the blue information surface
+in dark mode. Its local `--update-header-*` tokens pair title, disclosure,
+actions, border, hover and keyboard outline with that surface. Updating feedback
+keeps full ink opacity. Success Copy feedback uses the existing success pair.
+Image-preview captions and close controls use opaque card backing and foreground
+ink so the underlying content cannot erase them; the close focus ring is inset.
+
+`tests/e2e/theme-contrast.spec.cjs` renders production notification and image
+preview constructors with synthetic content and production styles. It measures
+composited CSS colours (including colour mixes and opacity) in light/dark themes
+at desktop/phone widths, with keyboard, hover, updating, retry and dismissal
+checks. It also samples headers, secondary text, input placeholders, buttons,
+notifications, tabs, badges, activity text, document metadata and white paper.
+Set `SOL_CONTRAST_DIST=1` to test the built CSS and `SOL_EVIDENCE_DIR` to a verified
+ignored handoff directory for measurements and screenshots. The sampled cases
+target 4.5:1 text and 3:1 meaningful controls/focus indicators; they do not establish
+whole-product compliance, arbitrary user-defined status colours or authenticated
+backend coverage.
+
 Phone conversation spacing, bounded long-draft/edit/attachment state and
 keyboard-visible reading-area checks are specified in
 [Phone conversation space](mobile-chat-density.md). Chat inputs stay 16px,
