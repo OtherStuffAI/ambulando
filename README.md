@@ -1,29 +1,68 @@
-# Ambulando Sol
+<p align="center">
+  <img src="public/ambulando/confluence-approved.png" alt="Ambulando logo — Solvitur Ambulando" width="480">
+</p>
 
-Sol is the connected Flight Deck frontend with Ambulando design system v5.
-It retains the Alpine/Dexie/Nostr/Tower application and record contracts.
-See [the surface map and integration conventions](docs/design/ambulando-sol.md)
-and [local identity/icon provenance](public/ambulando/README.md).
+# Ambulando
 
-This fork keeps source commits local until a dedicated remote is configured.
-Do not push Sol changes to the original Flight Deck upstream. Build outputs are
-ignored; existing live application registrations are independent of this fork.
+**Solvitur Ambulando** — “It is solved by walking.”
 
-# Flight Deck application foundation
+The Latin phrase expresses a practical idea: taking a step helps you find the
+way forward. Ambulando applies that idea to collaborative work. Start a
+conversation, turn an intention into a task, bring in the right context, and
+review the result. Each action produces evidence that makes the next decision
+clearer.
 
-Flight Deck is the human coordination workspace for Wingman Be Free. It gives people one browser interface for conversations, tasks, documents, scopes, flows, approvals, colleagues, and WApps—so they can direct work, see what is happening, and review what agents produce.
+Ambulando is the browser workspace for coordinating people and AI agents in
+Wingman Be Free. It brings conversations, work, knowledge, and agent activity
+together so you can direct progress and review what gets done. This repository
+contains the Flight Deck web client, presented with the Ambulando design system.
 
-Flight Deck is one of three distinct parts of the core system:
+## What you can do
 
-- **Flight Deck coordinates the people and work.** It owns the human-facing workspace experience and its local Dexie materialization.
-- **Tower holds the shared truth.** It owns authentication, workspaces, typed APIs, storage, and graph access boundaries.
-- **Autopilot runs the work.** It owns agents, sessions, pipelines, triggers, managed apps, and their runtime lifecycle.
+- **Chat in context.** Use channels and threads to discuss work, share
+  attachments, mention people or agents, and follow working updates. Inbox
+  brings attention back to conversations that need you.
+- **Track tasks.** Organize work in lists and boards, assign responsibility,
+  track state, dates and dependencies, and keep descriptions and comments with
+  the task.
+- **Write and connect documents.** Create and edit rich documents, organize
+  wiki navigation, follow internal links and backlinks, and discuss the content
+  in comments.
+- **Share files.** Upload workspace files, preview images and attachments, and
+  download them through authenticated storage access.
+- **Explore project context.** Use the scope context tree in outline or visual
+  form to find connected tasks, documents, files and artifacts. Structure and
+  reference editing follow workspace permissions.
+- **Coordinate agents.** Connect to Autopilot agents, direct work from
+  conversations, and inspect current activity and retained working history.
+  Toolbox connects the workspace to WApps.
 
-Flight Deck reads and writes shared workspace state through Tower, while Autopilot supplies the agent and app runtimes that users can direct from the interface. Flight Deck does not become the backend or the agent supervisor: its job is to make coordination clear, fast, and useful to humans.
+Workspaces, scopes and channels keep related work together. Responsive layouts,
+light and dark themes, and browser-local data support everyday use on desktop
+and phone. Available actions and records depend on workspace permissions and
+connected services.
 
-This repository is the active Flight Deck web client. It preserves responsive, local-first ergonomics by materializing Tower Postgres records in Dexie, while typed Tower adapters and an SSE-first sync path keep the shared workspace current.
+## How the system fits together
 
-## Development Model
+| Component | Responsibility |
+| --- | --- |
+| **Ambulando / Flight Deck** | Browser experience, local Dexie data, workspace navigation, and coordination UI. |
+| **Tower** | Shared workspace records, authentication, typed APIs, storage, and access authority. |
+| **Autopilot** | Agent execution, sessions, pipelines, triggers, managed apps, and runtime lifecycle. |
+
+The browser reads and writes shared state through Tower. Autopilot supplies the
+agent and app runtimes exposed through the workspace. Alpine drives the UI;
+Dexie materializes workspace records locally, while background synchronization
+and server-sent events keep them current. Local changes can appear before their
+Tower writes finish; sync status communicates pending or failed work.
+
+See the [presentation and integration guide](docs/design/ambulando-sol.md),
+[context browser](docs/design/context-tree-browser.md), and
+[checkout semantics](docs/checkout_semantics.md) for implementation details.
+The [artwork and icon provenance](public/ambulando/README.md) records the existing
+brand assets and their separate licensing terms.
+
+## Contributing
 
 Run model:
 
@@ -43,10 +82,9 @@ Schema workflow:
 - `bun run test` validates real Flight Deck outbound payloads against those published schemas
 - If a record payload changes, update the schema manifests and republish them with `sb-publisher`
 
-Backend deployment note:
-- `docs/tower-backend-prod.md` covers the Tower env, Docker commands, and admin connection-token flow from the Flight Deck side
+Backend deployment guidance is in [Tower backend operations](docs/tower-backend-prod.md).
 
-Migration planning starts in `docs/pg-migration/implementation.md`.
+The [Postgres migration guide](docs/pg-migration/implementation.md) describes the backend transition.
 
 Install dependencies and run the test suite with:
 
@@ -78,10 +116,11 @@ The unused-code report uses Knip and exits zero even when it finds baseline
 issues. Treat it as evidence for task handoffs, not as delete permission. Knip
 reports static unused files, dependencies, exports, duplicate exports, and
 unlisted imports; it does not prove that runtime branches, feature-flag paths,
-workspace-specific paths, or backend-driven UI states are dead. See
-`docs/unused-code-report.md` for the current baseline and cleanup guidance.
+workspace-specific paths, or backend-driven UI states are dead. See the
+[unused-code report guide](docs/unused-code-report.md) for the current baseline
+and cleanup guidance.
 
-Before committing a source checkpoint, run:
+For application source changes, run the complete validation gate:
 
 ```bash
 bun run validate
@@ -90,7 +129,10 @@ bun run validate
 `validate` composes lint, public-source checks, Vitest, build, dist asset
 verification, and `git diff --check`. The build step uses the normal local
 Flight Deck build behavior, so release build metadata may change and should be
-committed when appropriate.
+committed when appropriate. For documentation-only changes, verify links and
+rendering, run `bun run check:public-source`, `bun run test` and
+`git diff --check`, and avoid
+`validate` or a build that would change release metadata.
 
 Build the static site with:
 
@@ -100,11 +142,14 @@ bun run build
 
 Generated `dist/` output is ignored and rebuilt for deployment. Before
 publishing the source or creating a replacement repository, follow the
-sanitization and clean-history procedure in `docs/public-source-policy.md`.
+[public-source policy and clean-history procedure](docs/public-source-policy.md).
 
-## Subscribed feed reader
+## Further reading
 
-[Subscribed feed reader](docs/design/wapp-feed-reader-proposed.md) documents the
-source implementation, selected Tower/WApp adapters and remaining integration
-boundaries. Legacy Feed publishing remains available. Source builds and tests
-are not a claim of integrated release or live activation.
+- [Release notes workflow](docs/release-notes.md)
+- [Context editing and authority](docs/design/context-tree-editing.md)
+- [File previews and storage routing](docs/design/file-previews.md)
+- [Subscribed feed reader](docs/design/wapp-feed-reader-proposed.md): source
+  implementation, selected Tower/WApp adapters, and remaining integration
+  boundaries. Legacy Feed publishing remains available; source validation does
+  not establish live activation.
