@@ -2,6 +2,8 @@
   "$schema": "https://unpkg.com/knip@6/schema.json",
   "entry": [
     "index.html",
+    "legal/*.html",
+    "src/hosting-legal-page.js",
     "src/main.js",
     "src/worker/sync-worker-runner.js",
     "src/worker/tower-pg-materialization-worker.js",

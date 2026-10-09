@@ -9,6 +9,7 @@ import { installStableHtml } from './stable-html.js';
 import { initializeTowerTransports } from './tower-transport.js';
 import './styles.css';
 import './sol.css';
+import './hosting-onboarding.css';
 import { initApp } from './app.js';
 import { maybePerformHardReset } from './hard-reset.js';
 import { startVersionCheck } from './version-check.js';

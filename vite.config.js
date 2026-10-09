@@ -421,6 +421,7 @@ export default defineConfig({
   appType: 'spa',
   build: {
     outDir: 'dist',
+    rollupOptions: { input: { app: path.resolve(__dirname, 'index.html'), privacy: path.resolve(__dirname, 'legal/privacy.html'), terms: path.resolve(__dirname, 'legal/terms.html') } },
   },
   test: {
     environment: 'node',

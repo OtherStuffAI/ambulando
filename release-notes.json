@@ -3635,6 +3635,35 @@
       "label": "Feeds reader validation checkpoint",
       "notes": [],
       "noUserVisibleChanges": true
+    },
+    {
+      "buildNumber": 2345,
+      "label": "Readable notification and preview controls",
+      "notes": [
+        "Improve update title, action, chevron, hover and keyboard focus contrast in both themes, including Updating feedback.",
+        "Make Copied feedback and image-preview captions and close controls readable with existing Ambulando colour pairs."
+      ]
+    },
+    {
+      "buildNumber": 2346,
+      "label": "Nstack hosting choices and draft legal pages",
+      "notes": [
+        "Choose Host My Tower or BYO Tower in workspace setup, with USD pricing, first-month credit and unpaid-account pause explained.",
+        "Read editable draft Other Stuff Privacy and Terms pages without signing in. Nstack subscription signup clearly reports awaiting activation."
+      ]
+    },
+    {
+      "buildNumber": 2347,
+      "label": "Rich document save integrity",
+      "notes": [
+        "Save rich documents containing fenced code without false visible-text errors. Preserve formatting and complete recovery drafts when retrying an actual editor mismatch."
+      ]
+    },
+    {
+      "buildNumber": 2348,
+      "label": "Validated shared frontend checkpoint",
+      "notes": [],
+      "noUserVisibleChanges": true
     }
   ]
 }

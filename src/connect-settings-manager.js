@@ -398,6 +398,12 @@ async function fetchTowerDiscovery(url, fallbackLabel = '') {
 // ---------------------------------------------------------------------------
 
 export const connectSettingsManagerMixin = {
+  connectHostedNotice: '',
+
+  connectRequestHostedTower() {
+    this.connectHostedNotice = 'Other Stuff’s Nstack subscription signup is not yet available here. No Tower has been provisioned and no payment has been taken. You can connect an existing Tower using BYO Tower, or return when hosted subscriptions are available.';
+  },
+
 
   backendOverrideDraft: null,
   towerTransportMode: 'https',
@@ -758,6 +764,7 @@ export const connectSettingsManagerMixin = {
     this.connectHostTowerName = '';
     this.connectHostTowerDescription = '';
     this.connectHostError = null;
+    this.connectHostedNotice = '';
     this.connectHostBusy = false;
     this.connectManualUrl = '';
     this.connectWorkspaces = [];

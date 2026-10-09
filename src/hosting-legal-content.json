@@ -1,0 +1,132 @@
+{
+  "draftNotice": "Draft for owner review and editing. These pages describe the proposed Other Stuff Nstack hosting service; subscription signup is awaiting activation. Unfinished fields below must be completed before these drafts are adopted as final service terms.",
+  "terms": {
+    "title": "Terms of Hosting",
+    "sections": [
+      {
+        "title": "Provider and service",
+        "paragraphs": [
+          "Other Stuff provides Tower hosting on nstack.otherstuff.ai. These draft terms cover that hosting service. BYO Tower connections are operated by the customer or their chosen provider and are not an Other Stuff hosting subscription.",
+          "Editable draft fields: contracting legal entity, business address, effective date, service contact and applicable governing law remain to be confirmed. No jurisdiction or arbitration agreement is specified in this draft."
+        ]
+      },
+      {
+        "title": "Price, first-month credit and payment",
+        "paragraphs": [
+          "The proposed price is USD $5 per GB per month. Your first 1 GB is free for one month through a USD $5 credit against the first month’s 1 GB charge. The credit is not recurring free storage. Charges beyond that credit remain payable; after the first month, 1 GB costs USD $5 per month.",
+          "The account is paused if the amount due is unpaid. These terms do not authorize or assume automatic charges. Payment arrangements must be shown and agreed before purchase. Pausing service may prevent access to hosted applications and data; it is not itself a statement that data has been deleted.",
+          "Editable draft fields: GB measurement, usage metering, billing dates, invoice delivery, payment method, taxes, payment dispute process and resumption procedure must be confirmed. The existing free-workspace signup is a separate service and does not implement this subscription or credit."
+        ]
+      },
+      {
+        "title": "Your data and our limited permission",
+        "paragraphs": [
+          "You retain ownership of your hosted content and data. You grant Other Stuff only the permission needed to store, transmit and process it to operate the service, follow your lawful instructions, provide authorized support, protect service security and comply with legal duties. This is not a transfer of ownership.",
+          "You must have authority to upload and process the data, provide required notices and obtain any necessary permissions. You are responsible for lawful content and processing and for backups appropriate to your needs. Confirm the service’s actual backup and recovery arrangements before relying on them."
+        ]
+      },
+      {
+        "title": "Shared responsibility",
+        "paragraphs": [
+          "Other Stuff is responsible for operating and maintaining the infrastructure it controls and for its own applicable security and statutory obligations. Customers are responsible for their application code, account access, users, secrets and API keys, public sharing, permissions and database access rules, including row level security (RLS) where applicable.",
+          "Review access controls before exposing content or applications. Shared responsibility does not universally excuse Other Stuff’s own fault or legal duties, nor does a customer configuration error automatically decide liability. Responsibilities depend on the service supplied, the facts and non-excludable law."
+        ]
+      },
+      {
+        "title": "Acceptable use",
+        "paragraphs": [
+          "Do not use the service for illegal content or conduct, child exploitation or child sexual abuse material (CSAM), malware, fraud, unauthorized access, infringement of others’ rights, or abuse that disrupts or damages the service or other users. Do not evade access restrictions, misuse credentials, attack systems, or deliberately overwhelm shared resources.",
+          "You are responsible for your users’ authorized use and should promptly address compromised access and unlawful content. Report suspected abuse through the provider’s confirmed reporting process; urgent threats should also be reported to the appropriate authorities."
+        ]
+      },
+      {
+        "title": "Abuse reports, investigation and takedown",
+        "paragraphs": [
+          "Other Stuff does not undertake a general obligation to proactively review all hosted customer content. It may perform operational and security monitoring, investigate specific reports, restrict access where justified and cooperate with lawful requests. This is not a promise never to access data or monitor the service.",
+          "Reports should identify the affected service or content, explain the alleged violation, include supporting evidence and provide a way to respond. Other Stuff will assess reports and take appropriate action, including content restriction, proportionate suspension or termination. Urgent action may be necessary for serious harm, security threats or legal requirements; where appropriate and lawful, notice and an opportunity to respond will be provided.",
+          "Copyright complaints and disputes will be handled under applicable law, including counter-notice procedures where available. Repeated infringement may lead to termination in appropriate circumstances. This draft makes no claim of automatic safe-harbor immunity or a registered DMCA agent.",
+          "Editable draft fields: abuse reporting contact, copyright notice contact, dispute/counter-notice submission route and repeat-infringer procedure require confirmation. No unverified email address is supplied."
+        ]
+      },
+      {
+        "title": "Cancellation, export and deletion",
+        "paragraphs": [
+          "You may request cancellation through the confirmed service contact or available account controls. Export the data you need before cancellation when access is available. If service is paused, request help with export and resolution; availability of export depends on lawful restrictions and the confirmed service process.",
+          "Cancellation ends hosting according to the agreed cancellation process. Deletion of active data and eventual removal from backups must follow the confirmed retention policy and any legal preservation duties. No deletion deadline or recovery window is promised here.",
+          "Editable draft fields: cancellation method, final charges or refunds, export format/access, deletion timing, backup expiry and legal-hold handling must be completed."
+        ]
+      },
+      {
+        "title": "Availability, warranties and liability",
+        "paragraphs": [
+          "Other Stuff will use reasonable care in providing the agreed hosting service. Maintenance, failures and necessary security or legal action can interrupt availability. No uptime level or guaranteed recovery is specified in this draft; service levels require a separate confirmed commitment.",
+          "Hosting is supplied subject to the agreed service description and applicable law. Any final warranty or liability limits must be reasonable and legally valid. Nothing here excludes rights, remedies, duties or liability that cannot lawfully be excluded, including applicable consumer protections. This draft does not impose a blanket exclusion for provider fault.",
+          "Changes to final terms or pricing should be communicated before taking effect, with the applicable notice and cancellation rights. Editable draft fields: final warranty wording, any permitted liability limits, service levels and change-notice process require review."
+        ]
+      }
+    ]
+  },
+  "privacy": {
+    "title": "Privacy Policy",
+    "sections": [
+      {
+        "title": "Scope and responsible provider",
+        "paragraphs": [
+          "This draft describes information handling for Other Stuff’s proposed Nstack Tower hosting service on nstack.otherstuff.ai and the Ambulando browser interface. A BYO Tower is operated by your selected provider, whose practices should be checked separately.",
+          "Editable draft fields: responsible legal entity, privacy contact, business address and effective date remain to be confirmed."
+        ]
+      },
+      {
+        "title": "Service information and hosted content",
+        "paragraphs": [
+          "Account information may include your public signing identity, workspace identifiers and contact details you provide. Billing information may include plan, usage, invoice and payment records. Support correspondence and security/operational records may include request details, timestamps, network identifiers and diagnostic information needed to investigate issues. The actual billing and logging configuration must be confirmed before activation.",
+          "Hosted customer content is distinct from that service information. It includes the records, files and other data you choose to host, which may contain personal information about you or others. Customers decide what to upload, who can access it and why it is processed."
+        ]
+      },
+      {
+        "title": "Purposes and instructions",
+        "paragraphs": [
+          "Service information is used as needed to deliver and administer hosting, communicate with you, handle billing and support, protect security and meet legal duties. Hosted content is processed to provide the service under the customer’s lawful instructions, with limited additional processing where required for security or compliance with law.",
+          "Customers remain responsible for their own lawful processing purposes and notices to affected people. Editable draft fields: applicable legal bases and any required customer data-processing agreement must be confirmed for the provider and markets served."
+        ]
+      },
+      {
+        "title": "Access and service providers",
+        "paragraphs": [
+          "Authorized personnel may need limited access for support, security investigation or service operation. Access should be limited to what is needed for the relevant purpose. This draft does not promise that hosted content can never be accessed.",
+          "Infrastructure providers and payment processors may handle information as needed to supply those services, under appropriate arrangements. No vendor list is asserted before it is verified. Editable draft fields: actual subprocessors, their roles and any change-notice arrangements must be published."
+        ]
+      },
+      {
+        "title": "Disclosure, location and transfers",
+        "paragraphs": [
+          "Information may be disclosed where legally required, to respond to valid legal process, or where lawful and necessary to investigate abuse or protect people and service security. Disclosure should be limited to the relevant purpose and applicable law.",
+          "The domain nstack.otherstuff.ai does not establish a physical hosting location. Editable draft fields: actual hosting/support locations, international transfers and applicable safeguards must be confirmed. No data-residency, certification, encryption-at-rest or DDoS-protection claim is made in this draft."
+        ]
+      },
+      {
+        "title": "Browser storage and connected services",
+        "paragraphs": [
+          "Ambulando uses IndexedDB through Dexie for local workspace records and pending changes, local storage for device preferences and sign-in/workspace settings, session storage for temporary recovery state, and service-worker caches for application assets. Depending on your chosen sign-in method, browser storage may also contain identity or key material. Protect access to your device and browser profile.",
+          "Connections to Tower, signers, Autopilot and other services you choose send requests to those services. Clearing browser storage can remove local settings and unsynced work; it does not delete server-hosted data. Opening these legal pages does not require signing in or selecting a workspace.",
+          "No advertising analytics integration or application cookie-setting path was identified in the inspected onboarding and browser storage code. This is a narrow code observation, not a promise about every configured proxy, external service or future deployment. Editable draft field: confirm deployed cookies, operational logging and any telemetry before publication."
+        ]
+      },
+      {
+        "title": "Retention, deletion and backups",
+        "paragraphs": [
+          "Service information should be retained only as needed for the stated purposes and applicable duties. Hosted content follows the customer’s instructions and the agreed service retention policy, subject to lawful preservation requirements. Deleting active data may not immediately remove copies from backups.",
+          "An unpaid-account pause restricts service; it does not by itself confirm deletion. On cancellation, confirm export and deletion arrangements before losing access. Editable draft fields: retention periods or criteria for account, billing, support and security records, active content deletion, backup expiry and legal holds must be completed. This draft does not invent a retention period."
+        ]
+      },
+      {
+        "title": "Rights, requests and updates",
+        "paragraphs": [
+          "Depending on applicable law, people may have rights to access, correct, delete or restrict processing of their personal information, receive a portable copy, object to certain processing or complain to a relevant regulator. Requests may require proportionate identity verification and are subject to applicable exceptions.",
+          "For information hosted by a customer, contact that customer first where they determine the processing; Other Stuff should assist as required by its role and applicable law. For provider account or service information, use the confirmed privacy contact.",
+          "Editable draft fields: working rights/privacy contact, request process, relevant regulator and policy-update notification process must be completed. No fictional address or dead email link is provided."
+        ]
+      }
+    ]
+  }
+}

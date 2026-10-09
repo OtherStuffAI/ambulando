@@ -703,7 +703,21 @@
               </div>
               <p x-text="$store.chat.isTowerPgMode ? 'Choose a Tower host or paste a workspace descriptor. Ambulando opens into an empty workspace shell, then builds the selected spaces through Tower.' : 'Choose a host or enter a custom URL.'"></p>
             </div>
-            <section class="connect-onboarding-card">
+            <div class="connect-host-options" :class="{ 'connect-host-options-pg': $store.chat.isTowerPgMode }">
+              <section class="connect-onboarding-card connect-hosted-card" x-show="$store.chat.isTowerPgMode">
+                <h3>Host My Tower</h3>
+                <p>Hosting provided by Other Stuff on <strong>nstack.otherstuff.ai</strong>.</p>
+                <p class="connect-hosted-price">USD $5 <span>per GB per month</span></p>
+                <p>First 1 GB free for one month: a <strong>USD $5 credit</strong> against your first month’s 1 GB. Additional usage is payable; the credit does not renew.</p>
+                <p>After the credit, 1 GB costs USD $5 per month. Your account is paused if the amount due is unpaid. No automatic charge is assumed.</p>
+                <p class="connect-legal-links"><a href="%BASE_URL%legal/privacy.html" target="_blank" rel="noopener">Privacy Policy (draft)</a> · <a href="%BASE_URL%legal/terms.html" target="_blank" rel="noopener">Terms (draft)</a><br><small>Opens in a new tab; your workspace setup stays here.</small></p>
+                <button class="auth-option" type="button" @click="$store.chat.connectRequestHostedTower()" :disabled="$store.chat.connectHostBusy">Host My Tower</button>
+                <p class="connect-hosted-availability">Subscription signup is awaiting activation.</p>
+                <p class="auth-error" role="status" aria-live="polite" x-show="$store.chat.connectHostedNotice" x-text="$store.chat.connectHostedNotice"></p>
+              </section>
+            <section class="connect-onboarding-card connect-byo-card">
+              <h3 x-show="$store.chat.isTowerPgMode">BYO Tower</h3>
+              <p x-show="$store.chat.isTowerPgMode">Connect your existing Tower using its URL or workspace descriptor.</p>
               <div class="connect-hosts-list">
                 <template x-for="host in $store.chat.mergedHostsList" :key="host.url">
                   <button type="button" class="connect-host-row" @click="$store.chat.connectToHost(host.url, host.towerName || host.label || host.url)" :disabled="$store.chat.connectHostBusy">
@@ -715,7 +729,7 @@
               </div>
               <form class="connect-manual-form" @submit.prevent="$store.chat.connectByo()">
                 <label>
-                  <span x-text="$store.chat.isTowerPgMode ? 'BYO Tower PG' : 'BYO SuperBased'"></span>
+                  <span x-text="$store.chat.isTowerPgMode ? 'Tower URL or workspace descriptor' : 'BYO SuperBased'"></span>
                   <input type="text" x-model="$store.chat.connectManualUrl" :placeholder="$store.chat.isTowerPgMode ? 'URL or workspace descriptor JSON' : 'URL or connection token'" :disabled="$store.chat.connectHostBusy" />
                 </label>
                 <button class="auth-option" type="submit" :disabled="$store.chat.connectHostBusy || !$store.chat.connectManualUrl.trim()">
@@ -725,6 +739,7 @@
               </form>
               <p class="auth-error" x-show="$store.chat.connectHostError" x-text="$store.chat.connectHostError"></p>
             </section>
+            </div>
           </div>
         </template>
 
