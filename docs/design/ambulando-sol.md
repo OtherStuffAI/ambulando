@@ -101,6 +101,10 @@ screenshots and run-specific evidence belong only in ignored
 
 ## Document paper
 
+The Docs workspace, sticky header, comments panel and collapsed comments rail use
+`--background` in both themes, including the inline document dialog. Controls and
+individual comment cards retain their existing semantic surfaces.
+
 Documents use an explicitly white paper surface in both shell themes, per the
 writing-workflow preference. The canvas is nominally 210mm wide with a 297mm
 minimum height and 20mm writing margins; long content grows without pagination.

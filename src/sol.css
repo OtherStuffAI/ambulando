@@ -178,6 +178,15 @@ code, pre { font-family:var(--font-code); }
   .task-bar-popover .task-calendar-clear { border-radius:var(--radius-control); }
 }
 
+/* Docs surrounds follow the shell; sticky headers keep an opaque background.
+   Scope these overrides outside the paper so its local colors remain intact. */
+.docs-section,
+.docs-section.chat-doc-inline-section,
+.docs-section :is(.docs-view, .doc-editor-header, .doc-comment-thread-panel, .doc-comment-drawer-rail),
+.docs-section .doc-mobile-switcher {
+  background:var(--background);
+}
+
 /* Paper is deliberately white in both shell themes. Keep the existing document
    scroll owner: a laptop can pan the nominal A4 page without shrinking it. */
 .docs-section .doc-preview-surface {

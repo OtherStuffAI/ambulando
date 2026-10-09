@@ -3468,6 +3468,13 @@
         "Show Solvitur Ambulando beneath the wordmark in header, expanded navigation and sign-in branding.",
         "Keep channel settings controls on the selected tab surface, center the compact Toolbox icon, and dim and blur modal backgrounds while keeping their content sharp."
       ]
+    },
+    {
+      "buildNumber": 2320,
+      "label": "Docs workspace background",
+      "notes": [
+        "Keep the document page white while the surrounding Docs workspace, header and comments area follow the app background in both themes."
+      ]
     }
   ]
 }

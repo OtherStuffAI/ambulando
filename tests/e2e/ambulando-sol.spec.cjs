@@ -381,6 +381,14 @@ for (const width of [1440, 1280, 390]) for (const theme of ['light', 'dark']) {
     }, { theme, width });
     const editor = page.locator('.doc-rich-editor .ProseMirror');
     await expect(editor).toContainText('Section 35');
+    const surrounds = await page.locator('.docs-section').evaluate(section => {
+      const background = getComputedStyle(document.documentElement).getPropertyValue('--background').trim();
+      const probe = document.createElement('span'); probe.style.backgroundColor = background; section.append(probe);
+      const expected = getComputedStyle(probe).backgroundColor; probe.remove();
+      return { expected, surfaces: [section, ...section.querySelectorAll('.docs-view,.doc-editor-header,.doc-preview-surface,.doc-comment-thread-panel,.doc-comment-drawer-rail,.doc-mobile-switcher')].map(node => ({ name: node.className, background: getComputedStyle(node).backgroundColor })) };
+    });
+    for (const surface of surrounds.surfaces) expect(surface.background, surface.name).toBe(surrounds.expected);
+
     const geometry = await page.locator('.doc-rich-editor').evaluate(paper => {
       const style = getComputedStyle(paper), pane = paper.parentElement, ink = getComputedStyle(paper.querySelector('.ProseMirror'));
       return { width: paper.getBoundingClientRect().width, height: paper.getBoundingClientRect().height, minHeight: parseFloat(style.minHeight), padding: parseFloat(style.paddingLeft), background: style.backgroundColor, ink: ink.color, paneWidth: pane.clientWidth, paneScrollWidth: pane.scrollWidth, paneScrollHeight: pane.scrollHeight, paneHeight: pane.clientHeight, overflow: document.documentElement.scrollWidth - innerWidth };
