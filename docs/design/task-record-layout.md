@@ -15,12 +15,17 @@ Chat and comment composers retain their sizing and resize behavior; the shared
 composer autosizer also exempts `task-description` from chat line limits.
 Draft/save handling and edit leases retain their existing paths.
 
-The title and actions share the top row, with Back last on the right. Narrow
-layouts wrap the title above the actions. Status is a coloured button with a
-state picker (arrow keys, Home/End, Enter/Space and Escape). The assignment
+The title and actions share the top row, with Back immediately left of the title.
+Narrow layouts keep Back beside the title and wrap the right-side actions below.
+Status is a coloured button with a state picker (arrow keys, Home/End, Enter/Space and Escape). The assignment
 control shows either avatar/name and Clear or a compact typeahead. Remote-update
 notices live in the overflow menu; Save/Discard retain draft reconciliation.
 Status and assignee controls share a compact desktop row and wrap on mobile.
+`tests/e2e/task-back-control.spec.cjs` exercises the production header at
+1280/390/320px in both themes: read/edit long titles, keyboard order, Save/reopen,
+Discard, clipboard/menu focus, PG draft retention on Back and history return.
+With `FLIGHTDECK_TASK_LIVE=1` it uses managed runtime assets while blocking
+backend traffic; these fixtures do not establish authenticated Tower acceptance.
 Description/editor and subtask container borders are removed; dependencies and
 subtasks remain below the complete description. Scope data remains part of the
 record and routing, without a scope field on this surface.

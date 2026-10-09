@@ -3496,6 +3496,13 @@
       "notes": [
         "Make fenced code, syntax highlighting, language labels and Copy feedback readable in both themes, preserving code content and horizontal scrolling."
       ]
+    },
+    {
+      "buildNumber": 2324,
+      "label": "Task Back placement",
+      "notes": [
+        "Place task-detail Back immediately left of the title while keeping Save, Discard, Copy link and menu actions on the right."
+      ]
     }
   ]
 }

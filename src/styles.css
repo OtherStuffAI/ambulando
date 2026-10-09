@@ -18631,7 +18631,9 @@ button.task-desc-toggle:focus-visible {
 }
 
 /* Compact task heading; pickers overlay the body without clipping. */
-.task-header-title { flex:1 1 18rem; min-width:0; }
+.task-header-title { display:flex; align-items:center; gap:0.75rem; flex:1 1 18rem; min-width:0; }
+.task-header-title-content { flex:1 1 0; min-width:0; }
+.task-header-title > .task-back-btn { flex-shrink:0; }
 .task-detail-header { gap:0.75rem; flex:0 0 auto; }
 .task-detail-actions { flex-shrink:0; flex-wrap:wrap; justify-content:flex-end; }
 .task-header-title .task-detail-title,

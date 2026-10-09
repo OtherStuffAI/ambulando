@@ -3409,21 +3409,25 @@
                 </div>
               <div class="task-detail-header">
                 <div class="task-header-title">
-                  <h1 class="task-detail-title-display" x-show="!$store.chat.isTaskDetailEditing()" :class="$store.chat.getTaskTitleLengthClass($store.chat.editingTask.title)" x-text="$store.chat.editingTask.title || 'Untitled task'"></h1>
-                  <textarea
-                    class="task-detail-title"
-                    rows="1"
-                    x-show="$store.chat.isTaskDetailEditing()"
-                    x-model="$store.chat.editingTask.title"
-                    @input="$store.chat.handleEditingTaskDraftChanged()"
-                    :readonly="!$store.chat.isTaskDetailEditing()"
-                    :class="{ 'task-readonly-control': !$store.chat.isTaskDetailEditing() }"
-                    aria-label="Task title"
-                    placeholder="Task title"
-                  ></textarea>
-
+                  <button type="button" class="task-back-btn" x-show="!$store.chat.chatTaskModalOpen" @click="$store.chat.returnFromTaskDetail()">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+                    Back
+                  </button>
+                  <div class="task-header-title-content">
+                    <h1 class="task-detail-title-display" x-show="!$store.chat.isTaskDetailEditing()" :class="$store.chat.getTaskTitleLengthClass($store.chat.editingTask.title)" x-text="$store.chat.editingTask.title || 'Untitled task'"></h1>
+                    <textarea
+                      class="task-detail-title"
+                      rows="1"
+                      x-show="$store.chat.isTaskDetailEditing()"
+                      x-model="$store.chat.editingTask.title"
+                      @input="$store.chat.handleEditingTaskDraftChanged()"
+                      :readonly="!$store.chat.isTaskDetailEditing()"
+                      :class="{ 'task-readonly-control': !$store.chat.isTaskDetailEditing() }"
+                      aria-label="Task title"
+                      placeholder="Task title"
+                    ></textarea>
+                  </div>
                 </div>
-
                 <div class="task-detail-actions">
                   <button
                     type="button"
@@ -3511,10 +3515,6 @@
                       <button type="button" class="doc-actions-delete" @click="if($store.chat.editingTask?.record_id && confirm('Delete this task?')) $store.chat.deleteTask($store.chat.editingTask.record_id); open = false">Delete task</button>
                     </div>
                   </div>
-                <button type="button" class="task-back-btn" x-show="!$store.chat.chatTaskModalOpen" @click="$store.chat.returnFromTaskDetail()">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
-                  Back
-                </button>
                 <button type="button" class="task-back-btn task-modal-close-btn" x-show="$store.chat.chatTaskModalOpen" @click="$store.chat.closeChatTaskModal()" title="Close task" aria-label="Close task">&times;</button>
                 </div>
               </div>
