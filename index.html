@@ -326,7 +326,7 @@
           <img class="brand-logo" src="/ambulando/confluence-symbol-provisional.png" alt="" />
           <div class="brand-copy">
             <h1>Ambulando</h1>
-            <p>Workspace</p>
+            <p class="sol-brand-tagline">Solvitur Ambulando</p>
           </div>
         </button>
       </div>
@@ -552,6 +552,7 @@
       <div class="auth-brand">
         <img class="auth-brand-logo" src="/ambulando/confluence-symbol-provisional.png" alt="" />
         <div>
+          <p class="sol-auth-wordmark">Ambulando<small class="sol-brand-tagline">Solvitur Ambulando</small></p>
           <h2>Sign in with Nostr to get started</h2>
           <p class="auth-description">Ambulando · Your shared workspace</p>
         </div>
@@ -1201,7 +1202,7 @@
       <nav id="sol-primary-navigation" aria-label="Workspace navigation" :role="$store.chat.mobileNavOpen ? 'dialog' : 'navigation'" :aria-modal="$store.chat.mobileNavOpen ? 'true' : null" x-sol-dialog="$store.chat.mobileNavOpen" :inert="$store.chat.mobileViewport && !$store.chat.mobileNavOpen" @keydown.escape.stop="if ($store.chat.mobileNavOpen) { $store.chat.mobileNavOpen = false; document.querySelector('.mobile-menu-btn')?.focus() }" class="sidebar" :class="{ 'sidebar-collapsed': $store.chat.navCollapsed, 'sidebar-mobile-open': $store.chat.mobileNavOpen }">
         <button type="button" class="sol-sidebar-brand" @click="$store.chat.openCommandPalette()" aria-label="Open command palette">
           <img src="/ambulando/confluence-symbol-provisional.png" alt="" />
-          <span x-show="!$store.chat.navCollapsed || $store.chat.mobileNavOpen">Ambulando</span>
+          <span x-show="!$store.chat.navCollapsed || $store.chat.mobileNavOpen">Ambulando<small class="sol-brand-tagline">Solvitur Ambulando</small></span>
         </button>
               <nav
                 class="expanded-sidebar-section-switcher"

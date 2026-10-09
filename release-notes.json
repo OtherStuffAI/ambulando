@@ -3460,6 +3460,14 @@
         "Show product views in the horizontal bar when the desktop sidebar is expanded, while keeping compact and phone navigation available.",
         "Use Ambulando as the visible app name."
       ]
+    },
+    {
+      "buildNumber": 2319,
+      "label": "Ambulando branding and review refinements",
+      "notes": [
+        "Show Solvitur Ambulando beneath the wordmark in header, expanded navigation and sign-in branding.",
+        "Keep channel settings controls on the selected tab surface, center the compact Toolbox icon, and dim and blur modal backgrounds while keeping their content sharp."
+      ]
     }
   ]
 }

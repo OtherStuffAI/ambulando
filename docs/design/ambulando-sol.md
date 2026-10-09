@@ -120,3 +120,16 @@ exclusive visibility keeps one reachable product section set. The horizontal
 bar scrolls locally when necessary and retains view locks and fullscreen actions.
 Visible product copy and installed-app titles use Ambulando. Sol remains the
 repository/runtime identifier; this change does not configure its future domain.
+
+Brand lockups retain Ambulando as the product name and place the secondary
+Solvitur Ambulando tagline underneath in the header, expanded sidebar and
+sign-in panel. The compact rail remains symbol-only. Uppercase presentation
+uses semantic muted text; the underlying text retains its requested spelling.
+At 320px the header reduces spacing while retaining readable tagline text and
+44px navigation, theme and profile controls.
+
+Modal backdrops use a dim scrim and 6px background blur; dark mode has a
+stronger scrim, and dimming remains when backdrop filtering is unavailable.
+Modal content keeps its own sharp surface. Channel-menu containers remain
+transparent layout wrappers; only their popovers receive floating-surface
+styles. The compact Toolbox button centers its icon like the other rail views.

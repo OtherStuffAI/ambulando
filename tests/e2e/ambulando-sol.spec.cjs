@@ -6,7 +6,7 @@ const fs = require('node:fs/promises');
 // These are isolated synthetic records in a fresh Playwright browser context.
 // All remote requests are blocked; this is frontend coverage, not authenticated
 // Tower, checkout, permission, delivery or synchronization acceptance.
-const evidence = 'tmp/docs/handoffs/sol-v5';
+const evidence = process.env.SOL_EVIDENCE_DIR || 'tmp/docs/handoffs/sol-v5';
 async function capture(page, name) {
   execFileSync('git', ['check-ignore', `${evidence}/${name}.png`]);
   if (execFileSync('git', ['ls-files', evidence], { encoding: 'utf8' }).trim()) throw new Error('Evidence destination must be untracked');
@@ -268,7 +268,11 @@ test('profile actions support menu keyboard navigation and restore the avatar tr
 
 async function contrastRatio(locator) {
   return locator.evaluate(element => {
-    const parse = value => (value.match(/[\d.]+/g) || []).map(Number);
+    const parse = value => {
+      const canvas=document.createElement('canvas'); canvas.width=canvas.height=1;
+      const context=canvas.getContext('2d'); context.fillStyle=value; context.fillRect(0,0,1,1);
+      const rgba=Array.from(context.getImageData(0,0,1,1).data); rgba[3]/=255; return rgba;
+    };
     const composite = (foreground, background) => {
       const alpha = foreground.length > 3 ? foreground[3] : 1;
       return foreground.slice(0, 3).map((value, index) => value * alpha + background[index] * (1 - alpha));
@@ -464,5 +468,121 @@ for (const width of [1440, 1280, 390]) for (const theme of ['light', 'dark']) {
     }
     await capture(page, `nav-${theme}-${width}-compact`);
     expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(0);
+  });
+}
+
+for (const width of [1440, 1280, 900, 390, 320]) for (const theme of ['light', 'dark']) {
+  test(`tagline and tab render review: ${theme} ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await openFixture(page);
+    await page.evaluate(theme => { const s = Alpine.store('chat'); s.closeThread({ syncRoute: false }); Alpine.store('appearance').setTheme(theme); }, theme);
+    const tagline = page.locator('.brand-copy p');
+    await expect(tagline).toBeVisible();
+    await expect(tagline).toHaveText('Solvitur Ambulando');
+    const taglineContrast = await contrastRatio(tagline);
+    expect(taglineContrast).toBeGreaterThanOrEqual(4.5);
+    const geometry = await page.locator('.page-header').evaluate(header => {
+      const rect = node => { const r = node.getBoundingClientRect(); return { left:r.left, right:r.right, top:r.top, bottom:r.bottom, width:r.width, height:r.height }; };
+      return { brand:rect(header.querySelector('.brand-lockup')), theme:rect(header.querySelector('.sol-theme-button')), profile:rect(header.querySelector('.session-controls')), menu:rect(header.querySelector('.mobile-menu-btn')), tagline:rect(header.querySelector('.brand-copy p')), taglineScroll:header.querySelector('.brand-copy p').scrollWidth, overflow:document.documentElement.scrollWidth-innerWidth };
+    });
+    expect(geometry.overflow).toBeLessThanOrEqual(0);
+    expect(geometry.taglineScroll).toBeLessThanOrEqual(geometry.tagline.width + 1);
+    expect(geometry.brand.right).toBeLessThanOrEqual(geometry.theme.left + 1);
+    expect(geometry.theme.right).toBeLessThanOrEqual(geometry.profile.left + 1);
+    await capture(page, `tagline-${theme}-${width}-compact`);
+    await page.getByRole('button', { name:'Toggle navigation', exact:true }).click();
+    const nav = width > 768 ? page.locator('.sol-horizontal-navigation:visible') : page.locator('.sidebar .expanded-sidebar-section-switcher:visible');
+    await expect(page.locator('.sol-sidebar-brand small:visible')).toHaveText('Solvitur Ambulando');
+    await expect(nav).toBeVisible();
+    const tabs = await nav.locator('.expanded-sidebar-section-switcher-btn').evaluateAll(nodes => nodes.map(node => ({ text:node.textContent.trim(), before:getComputedStyle(node,'::before').content, after:getComputedStyle(node,'::after').content, svgs:node.querySelectorAll('svg').length })));
+    for (const tab of tabs) { expect(tab.svgs).toBe(1); expect(['none','normal','""']).toContain(tab.before); expect(['none','normal','""']).toContain(tab.after); }
+    const lock = nav.getByRole('button', { name:'Lock Chat view', exact:true });
+    await expect(lock).toBeVisible();
+    await expect(lock).toHaveAttribute('aria-pressed','false');
+    await lock.click();
+    await expect(lock).toHaveAttribute('aria-pressed','true');
+    await lock.click();
+    await expect(lock).toHaveAttribute('aria-pressed','false');
+    await capture(page, `tagline-${theme}-${width}-expanded-chat`);
+    if (width > 768) {
+      for (const label of ['Tasks','Docs','Files']) {
+        await nav.getByRole('button', { name:label, exact:true }).click();
+        await expect(nav.getByRole('button', { name:label, exact:true })).toHaveAttribute('aria-current','page');
+        await capture(page, `tabs-${theme}-${width}-${label.toLowerCase()}`);
+      }
+    }
+    await page.evaluate(() => { const s = Alpine.store('chat'); s.mobileNavOpen = false; s.session = null; });
+    await expect(page.locator('.auth-brand .sol-brand-tagline')).toHaveText('Solvitur Ambulando');
+    await expect(page.locator('.auth-brand .sol-brand-tagline')).toBeVisible();
+    expect(await contrastRatio(page.locator('.auth-brand .sol-brand-tagline'))).toBeGreaterThanOrEqual(4.5);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth-innerWidth)).toBeLessThanOrEqual(0);
+    await capture(page, `tagline-${theme}-${width}-signin`);
+    console.log('SOL_TAGLINE_RENDER', JSON.stringify({ theme,width,geometry,tabs,taglineContrast }));
+  });
+}
+
+for (const width of [1280, 390]) for (const theme of ['light','dark']) {
+  test(`channel tab, Toolbox and modal review: ${theme} ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height:900 });
+    await openFixture(page);
+    await page.evaluate(theme => {
+      const s=Alpine.store('chat'); s.closeThread({syncRoute:false});
+      Alpine.store('appearance').setTheme(theme);
+      s.pgBackendMode=true; s.selectedBoardId='__pg_channel__:sol-channel';
+      s.isChannelUnread=()=>true;
+      s.preparePgChannelAccessPanel=()=>{};
+    },theme);
+    const tab=page.locator('.chat-channel-tab-item.active:visible').first();
+    await expect(tab).toContainText('Design implementation');
+    const menu=tab.locator('.chat-channel-tab-menu');
+    const settings=menu.getByRole('button',{name:'Channel settings',exact:true});
+    await expect(settings).toBeVisible();
+    const menuStyle=await menu.evaluate(n=>({background:getComputedStyle(n).backgroundColor,border:getComputedStyle(n).borderWidth,shadow:getComputedStyle(n).boxShadow}));
+    expect(menuStyle).toEqual({background:'rgba(0, 0, 0, 0)',border:'0px',shadow:'none'});
+    expect(await contrastRatio(settings)).toBeGreaterThanOrEqual(4.5);
+    await expect(tab.locator('.unread-dot')).toBeVisible();
+    await settings.hover();
+    expect(await contrastRatio(settings)).toBeGreaterThanOrEqual(4.5);
+    await capture(page, `channel-${theme}-${width}-hover-unread`);
+    if(width>768) {
+      const centers=await page.locator('.sidebar-nav button:visible svg').evaluateAll(nodes=>nodes.map(n=>({label:n.closest('button').getAttribute('aria-label'),x:n.getBoundingClientRect().x+n.getBoundingClientRect().width/2})));
+      const deck=centers.find(n=>n.label==='Deck'), toolbox=centers.find(n=>n.label==='Toolbox');
+      expect(Math.abs(deck.x-toolbox.x)).toBeLessThanOrEqual(.5);
+      await page.locator('.sidebar-nav').getByRole('button',{name:'Toolbox',exact:true}).click();
+      await expect.poll(()=>page.evaluate(()=>Alpine.store('chat').navSection)).toBe('toolbox');
+      await capture(page, `toolbox-${theme}-${width}-centered`);
+      await page.evaluate(()=>Alpine.store('chat').navigateTo('chat',{syncRoute:false}));
+      console.log('SOL_RAIL_CENTERS',JSON.stringify(centers));
+    }
+    await settings.click();
+    const dialog=page.getByRole('dialog',{name:'Channel settings',exact:true});
+    await expect(dialog).toBeVisible();
+    const backdrop=page.locator('.channel-settings-modal-backdrop:visible');
+    const scrim=await backdrop.evaluate(n=>({background:getComputedStyle(n).backgroundColor,blur:getComputedStyle(n).backdropFilter}));
+    expect(scrim.blur).toBe('blur(6px)');
+    if(theme==='dark') expect(scrim.background).toBe('rgba(5, 12, 18, 0.68)');
+    expect(await dialog.evaluate(n=>getComputedStyle(n).filter)).toBe('none');
+    await capture(page, `modal-${theme}-${width}-settings`);
+    await page.keyboard.press('Escape');
+    await expect(dialog).toBeHidden();
+    await expect(settings).toBeFocused();
+    await page.evaluate(()=>Alpine.store('chat').openThread('sol-thread',{preserveChannelContext:true,scrollToLatest:false,syncRoute:false}));
+    const thread=page.getByRole('dialog',{name:'Thread',exact:true});
+    await expect(thread).toBeVisible();
+    expect(await page.locator('.chat-thread-modal-backdrop:visible').evaluate(n=>getComputedStyle(n).backdropFilter)).toBe('blur(6px)');
+    expect(await thread.evaluate(n=>getComputedStyle(n).filter)).toBe('none');
+    const composer=thread.locator('[data-chat-composer="thread"]');
+    await composer.fill('Modal draft stays sharp');
+    await expect(composer).toHaveText('Modal draft stays sharp');
+    await capture(page, `modal-${theme}-${width}-thread`);
+    await page.keyboard.press('Escape');
+    await expect(thread).toBeHidden();
+    await page.addStyleTag({content:'.chat-thread-modal-backdrop {backdrop-filter:none!important;-webkit-backdrop-filter:none!important}'});
+    await page.evaluate(()=>Alpine.store('chat').openThread('sol-thread',{preserveChannelContext:true,scrollToLatest:false,syncRoute:false}));
+    await expect(thread).toBeVisible();
+    expect(await page.locator('.chat-thread-modal-backdrop:visible').evaluate(n=>getComputedStyle(n).backgroundColor)).toBe(scrim.background);
+    await capture(page, `modal-${theme}-${width}-fallback`);
+    expect(await page.evaluate(()=>document.documentElement.scrollWidth-innerWidth)).toBeLessThanOrEqual(0);
+    console.log('SOL_MODAL_CHANNEL_REVIEW',JSON.stringify({width,theme,menuStyle,scrim}));
   });
 }
