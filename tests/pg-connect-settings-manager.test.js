@@ -78,6 +78,56 @@ describe('PG connect settings manager', () => {
     vi.clearAllMocks();
   });
 
+  it('checks availability before choosing the explicit hosted Tower and guards duplicate clicks', async () => {
+    const hosted = await import('../src/hosted-workspace-signup.js');
+    const config = { signup_ready: true, tower_public_base_url: 'https://hosted.example/' };
+    let resolve;
+    hosted.hostedSignupConfig.mockReturnValue(new Promise(r => { resolve = r; }));
+    const { connectSettingsManagerMixin } = await import('../src/connect-settings-manager.js');
+    const store = createStore({ connectManualUrl: 'https://byo.example', connectStep: 1 });
+    Object.defineProperties(store, Object.getOwnPropertyDescriptors(connectSettingsManagerMixin));
+    store.connectToPgHost = vi.fn();
+    const pending = store.connectRequestHostedTower();
+    expect(store.connectHostBusy).toBe(true);
+    await store.connectRequestHostedTower();
+    expect(hosted.hostedSignupConfig).toHaveBeenCalledTimes(1);
+    resolve(config);
+    await pending;
+    expect(store.connectToPgHost).toHaveBeenCalledWith(config.tower_public_base_url, 'Other Stuff hosted Tower', config);
+    expect(store.connectManualUrl).toBe('https://byo.example');
+    expect(store.connectHostBusy).toBe(false);
+  });
+
+  it.each([null, 'network failure'])('keeps BYO and current backend when hosted readiness fails: %s', async (failure) => {
+    const hosted = await import('../src/hosted-workspace-signup.js');
+    if (failure) hosted.hostedSignupConfig.mockRejectedValue(new Error(failure));
+    else hosted.hostedSignupConfig.mockResolvedValue(null);
+    const { connectSettingsManagerMixin } = await import('../src/connect-settings-manager.js');
+    const store = createStore({ backendUrl: 'https://byo.example', connectManualUrl: 'my draft', connectStep: 1 });
+    Object.defineProperties(store, Object.getOwnPropertyDescriptors(connectSettingsManagerMixin));
+    store.connectToPgHost = vi.fn();
+    await store.connectRequestHostedTower();
+    expect(store.connectToPgHost).not.toHaveBeenCalled();
+    expect(store.backendUrl).toBe('https://byo.example');
+    expect(store.connectManualUrl).toBe('my draft');
+    expect(store.connectStep).toBe(1);
+    expect(store.connectHostedNotice).toMatch(/Retry/);
+    expect(store.connectHostBusy).toBe(false);
+  });
+
+  it('requires explicit terms acceptance before submitting hosted signup', async () => {
+    const hosted = await import('../src/hosted-workspace-signup.js');
+    const { connectSettingsManagerMixin } = await import('../src/connect-settings-manager.js');
+    const store = createStore({ connectHostedConfig: { tower_public_base_url: 'https://tower.example/' }, connectNewWorkspaceName: 'One' });
+    Object.defineProperties(store, Object.getOwnPropertyDescriptors(connectSettingsManagerMixin));
+    expect(store.connectPgCanContinue()).toBe(false);
+    await store.connectCreateHostedWorkspace();
+    expect(hosted.submitHostedSignup).not.toHaveBeenCalled();
+    expect(store.connectWorkspacesError).toMatch(/Accept/);
+    store.connectHostedTermsAccepted = true;
+    expect(store.connectPgCanContinue()).toBe(true);
+  });
+
   it('creates a hosted workspace without owner nomination or admin calls, then verifies list and opens', async () => {
     const api = await import('../src/api.js');
     const hosted = await import('../src/hosted-workspace-signup.js');
@@ -88,6 +138,7 @@ describe('PG connect settings manager', () => {
     const { connectSettingsManagerMixin } = await import('../src/connect-settings-manager.js');
     const store = createStore({ connectHostedConfig: { tower_public_base_url: 'https://tower.example/' }, connectNewWorkspaceName: 'Example Workspace', connectHostUrl: 'https://tower.example', backendUrl: 'https://tower.example', connectCreatingWorkspace: false });
     Object.defineProperties(store, Object.getOwnPropertyDescriptors(connectSettingsManagerMixin));
+    store.connectHostedTermsAccepted = true;
     await store.connectCreateWorkspace();
     expect(hosted.submitHostedSignup).toHaveBeenCalledWith({ workspaceName: 'Example Workspace', body: 'body:Example Workspace' }, store.connectHostedConfig, expect.any(Object));
     expect(api.createTowerPgAdminWorkspace).not.toHaveBeenCalled();
@@ -103,6 +154,7 @@ describe('PG connect settings manager', () => {
     const { connectSettingsManagerMixin } = await import('../src/connect-settings-manager.js');
     const store = createStore({ connectHostedConfig: { tower_public_base_url: 'https://tower.example/' }, connectNewWorkspaceName: 'One', connectCreatingWorkspace: false });
     Object.defineProperties(store, Object.getOwnPropertyDescriptors(connectSettingsManagerMixin));
+    store.connectHostedTermsAccepted = true;
     await store.connectCreateWorkspace();
     const intent = store.connectHostedIntent;
     expect(store.connectWorkspacesError).toMatch(/unavailable/);

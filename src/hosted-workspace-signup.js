@@ -15,7 +15,11 @@ export async function hostedSignupConfig(fetchImpl = fetch) {
   const response = await fetchImpl('/api/hosted/config', { cache: 'no-store' });
   if (!response.ok) return null;
   const config = await response.json();
-  if (!config.signup_ready || !/^https:\/\/[^/?#]+\/$/.test(config.tower_public_base_url || '')) return null;
+  if (config?.signup_ready !== true) return null;
+  try {
+    const tower = new URL(config.tower_public_base_url);
+    if (tower.protocol !== 'https:' || tower.username || tower.password || tower.search || tower.hash || tower.pathname !== '/') return null;
+  } catch { return null; }
   return config;
 }
 
@@ -24,6 +28,11 @@ export function hostedSignupError(code) {
     nip98_invalid: 'The signature was invalid or expired. Retry to sign again.',
     nip98_expired: 'The signature expired. Retry to sign again.',
     signature_replayed: 'This signature was already used. Retry to sign again.',
+    site_not_allowed: 'The hosting site is not authorized by Tower. Retry later or contact support.',
+    site_attestation_required: 'The hosting site proof is unavailable. Retry later or contact support.',
+    site_attestation_invalid: 'Tower rejected the hosting site proof. Retry later or contact support.',
+    site_attestation_mismatch: 'The hosting site proof did not match this signup. Retry or contact support.',
+    idempotency_conflict: 'This signup retry no longer matches the original request. Contact support before starting another signup.',
     site_attestation_expired: 'The signup proof expired. Retry to sign again.',
     direct_user_signature_required: 'Sign with your own Nostr identity to create a workspace.',
     workspace_name_taken: 'You already have a workspace with this name. Choose another name.',
@@ -55,6 +64,9 @@ export async function submitHostedSignup(intent, config, { fetchImpl = fetch, si
     || result.policy?.allowance_bytes !== HOSTED_ALLOWANCE_BYTES
     || result.policy?.terms_version !== HOSTED_TERMS_VERSION
     || result.policy?.billing_state !== 'usd_prepaid'
+    || result.policy?.billing_version !== 1
+    || result.policy?.welcome_credit_usd !== '5'
+    || result.policy?.promo_expiry_days !== 30
     || result.policy?.payment_required !== false) throw new Error('Tower returned an invalid hosted workspace result. Retry to verify it.');
   return result;
 }

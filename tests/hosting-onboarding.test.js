@@ -4,13 +4,12 @@ import { connectSettingsManagerMixin } from '../src/connect-settings-manager.js'
 import content from '../src/hosting-legal-content.json';
 
 describe('Nstack onboarding and draft policies', () => {
-  it('reports the unsupported subscription without changing connection drafts or claiming provisioning', () => {
+  it('requires authentication without changing connection drafts or claiming provisioning', async () => {
     const store = { connectManualUrl: 'https://my-tower.example', connectStep: 1, connectHostedNotice: '' };
-    connectSettingsManagerMixin.connectRequestHostedTower.call(store);
+    await connectSettingsManagerMixin.connectRequestHostedTower.call(store);
     expect(store.connectManualUrl).toBe('https://my-tower.example');
     expect(store.connectStep).toBe(1);
-    expect(store.connectHostedNotice).toMatch(/No Tower has been provisioned and no payment has been taken/);
-    expect(store.connectHostedNotice).toMatch(/BYO Tower/);
+    expect(store.connectHostedNotice).toMatch(/Sign in with your Nostr identity/);
   });
   it('offers public base-aware legal links in separate tabs and keeps BYO submit', () => {
     const html = readFileSync('index.html', 'utf8');

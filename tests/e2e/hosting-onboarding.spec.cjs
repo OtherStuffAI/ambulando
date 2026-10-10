@@ -48,7 +48,7 @@ for (const width of [1280, 390, 320]) {
     await popup.close();
     await expect(input).toHaveValue('https://my-tower.example');
     await hosted.getByRole('button', { name: 'Host My Tower' }).click();
-    await expect(hosted.getByRole('status')).toContainText('No Tower has been provisioned');
+    await expect(hosted.getByRole('status')).toContainText('Sign in with your Nostr identity');
     await expect(input).toHaveValue('https://my-tower.example');
     await byo.getByRole('button', { name: 'Connect', exact: true }).click();
     await expect(byo).toContainText('BYO submitted: https://my-tower.example');
@@ -68,3 +68,47 @@ for (const policy of ['privacy', 'terms']) {
     await capture(page, `legal-from-${policy}`);
   });
 }
+
+test('ready hosting opens name and draft terms, gates acceptance and shows a recoverable signup error', async ({ page, context }) => {
+  await context.route('**/*', route => {
+    if (new URL(route.request().url()).pathname === '/api/hosted/config') {
+      return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ signup_ready: true, tower_public_base_url: 'https://tower.example/' }) });
+    }
+    return serveBuiltFlightDeck(route);
+  });
+  await page.goto('/');
+  await page.waitForFunction(() => window.Alpine?.store('chat')?.routeSyncPaused === false);
+  await page.evaluate(() => {
+    const s = window.Alpine.store('chat');
+    s.isTowerPgMode = true;
+    s.session = { npub: 'synthetic-browser-user' };
+    s.openConnectModal();
+    // Isolate browser UI from remote Tower transport; this is not a provisioning test.
+    s.connectToPgHost = async function (url, label, config) {
+      this.connectHostedConfig = config;
+      this.connectHostUrl = url;
+      this.connectHostLabel = label;
+      this.connectStep = 2;
+      this.connectPgOnboardingStep = 2;
+      this.connectWorkspaces = [];
+    };
+    s.connectCreateWorkspace = async function () {
+      this.connectHostedIntent = { workspaceName: this.connectNewWorkspaceName };
+      this.connectWorkspacesError = 'The hosting site is not authorized by Tower. Retry later or contact support.';
+    };
+  });
+  await page.locator('.connect-hosted-card').getByRole('button', { name: 'Host My Tower' }).click();
+  const modal = page.locator('.connect-modal');
+  await expect(modal.getByRole('heading', { name: 'Choose or create a workspace' })).toBeVisible();
+  await expect(modal.locator('.connect-hosted-policy')).toContainText('shared across workspaces');
+  await modal.locator('input[x-model="$store.chat.connectNewWorkspaceName"]').first().fill('Activation browser fixture');
+  const create = modal.getByRole('button', { name: 'Create workspace', exact: true }).first();
+  await expect(create).toBeDisabled();
+  await modal.locator('input[x-model="$store.chat.connectHostedTermsAccepted"]').check();
+  await expect(create).toBeEnabled();
+  await create.click();
+  await expect(modal).toContainText('hosting site is not authorized');
+  await expect(modal.getByRole('button', { name: 'Retry signup' })).toBeVisible();
+  expect(await page.evaluate(() => window.Alpine.store('chat').showConnectModal)).toBe(true);
+  await capture(page, 'ready-hosted-terms-error');
+});

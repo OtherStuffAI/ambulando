@@ -28,3 +28,21 @@ The first pass supports test Checkout only. Managed signup requires an authorize
 server-side site signer, allowlisted site on Tower and explicit hosted Tower URL.
 `signup_ready:false` is an activation blocker, not a reason to create credentials
 or silently bind the UI to another Tower.
+
+Host My Tower checks the site's readiness endpoint before choosing its explicit
+hosted Tower. An unavailable or failed check leaves the BYO draft intact. The
+hosted wizard requires a workspace name and explicit acceptance of the linked
+draft terms. Retries retain the signup body and idempotency key while obtaining
+fresh signatures. A returned billing policy must match the supported USD version,
+welcome credit and expiry; the descriptor and signed workspace list are verified
+before opening Tower Usage.
+
+The site attestation binds the exact Tower URL, POST method, payload hash and
+user signature event ID. The server validates the returned site's identity,
+signature, bindings and expiry before forwarding. Async signing is supported by
+the handler, but this alone does not configure a durable signer at startup.
+Current startup requires the site's server-managed signing configuration. Never
+substitute an agent session capability or export a key to supply it. An app-bound
+signer must be available through an authorized runtime facility; session/pipeline
+secret signing is not an app credential injection mechanism. Until that facility
+and Tower's site allowlist are verified, readiness must remain false.

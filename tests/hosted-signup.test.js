@@ -102,6 +102,37 @@ describe('hosted signup attestation', () => {
     expect(calls).toHaveLength(1);
   });
 
+  it.each(['url', 'method', 'payload', 'user', 'expired', 'signature'])('refuses invalid site attestation before forwarding: %s', async (invalid) => {
+    const calls = [];
+    const handler = createHostedSignupHandler({
+      towerUrl: 'https://tower.example/', siteNpub, now: () => now,
+      sign: async (url, hash, id, time) => {
+        const event = finalizeEvent({ kind: 27235, created_at: invalid === 'expired' ? time - 61 : time, content: randomUUID(),
+          tags: [['u', invalid === 'url' ? origin : url], ['method', invalid === 'method' ? 'GET' : 'POST'],
+            ['payload', invalid === 'payload' ? '0'.repeat(64) : hash], ['user_event_id', invalid === 'user' ? '0'.repeat(64) : id]],
+        }, siteKey);
+        return invalid === 'signature' ? { ...event, sig: '0'.repeat(128) } : event;
+      },
+      fetchImpl: async (...args) => { calls.push(args); return Response.json({}); },
+    });
+    const response = await handler(request(proof().header));
+    expect(response.status).toBe(503);
+    expect(calls).toHaveLength(0);
+  });
+
+  it('preserves billing policy and upstream errors instead of inventing signup success', async () => {
+    const result = { workspace_id: 'verified-workspace', policy: { billing_state: 'usd_prepaid', billing_version: 1, welcome_credit_usd: '5', promo_expiry_days: 30 } };
+    for (const [status, payload] of [[201, result], [403, { code: 'site_not_allowed' }]]) {
+      const handler = createHostedSignupHandler({ towerUrl: 'https://tower.example/', siteNpub, now: () => now,
+        sign: async (url, hash, id, time) => finalizeEvent({ kind: 27235, created_at: time, content: randomUUID(), tags: [['u', url], ['method', 'POST'], ['payload', hash], ['user_event_id', id]] }, siteKey),
+        fetchImpl: async () => Response.json(payload, { status }),
+      });
+      const response = await handler(request(proof().header));
+      expect(response.status).toBe(status);
+      expect(await response.json()).toEqual(payload);
+    }
+  });
+
   it('fails closed for absent or mismatched site identity', () => {
     expect(() => createSiteSigner('', SITE_NPUB)).toThrow();
     expect(() => createSiteSigner(nip19.nsecEncode(siteKey), SITE_NPUB)).toThrow();

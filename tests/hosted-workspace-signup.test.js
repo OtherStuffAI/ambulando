@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createHash } from 'node:crypto';
-import { hostedSignupIntent, submitHostedSignup, hostedSignupError } from '../src/hosted-workspace-signup.js';
+import { hostedSignupIntent, submitHostedSignup, hostedSignupError, hostedSignupConfig } from '../src/hosted-workspace-signup.js';
 
 const config = { signup_ready: true, tower_public_base_url: 'https://tower.example/' };
 const descriptor = { type: 'wingman_workspace_locator', identity: { workspace_id: 'workspace-1' } };
-const policy = { plan: 'hosted_free', allowance_bytes: 1_000_000_000, terms_version: 'hosted-usd-v1', billing_state: 'usd_prepaid', payment_required: false };
+const policy = { plan: 'hosted_free', allowance_bytes: 1_000_000_000, terms_version: 'hosted-usd-v1', billing_state: 'usd_prepaid', billing_version: 1, welcome_credit_usd: '5', promo_expiry_days: 30, payment_required: false };
 
 describe('hosted workspace signup', () => {
   it('signs the exact Tower URL and body sent to the site route; retries reuse bytes with a fresh signature', async () => {
@@ -23,6 +23,21 @@ describe('hosted workspace signup', () => {
     expect(fetchImpl.mock.calls[1][1]).toMatchObject({ body: intent.body, headers: { Authorization: 'Nostr second' } });
     expect(createHash('sha256').update(new TextEncoder().encode(fetchImpl.mock.calls[0][1].body)).digest('hex'))
       .toBe(createHash('sha256').update(new TextEncoder().encode(sign.mock.calls[0][2])).digest('hex'));
+  });
+
+  it.each([
+    { billing_state: 'legacy_unlinked' }, { billing_version: 2 },
+    { welcome_credit_usd: '0' }, { promo_expiry_days: 0 }, { payment_required: true },
+  ])('rejects incompatible billing response: %j', async (change) => {
+    await expect(submitHostedSignup(hostedSignupIntent('One'), config, {
+      sign: async () => 'Nostr test', fetchImpl: async () => Response.json({ workspace_id: 'workspace-1', descriptor, policy: { ...policy, ...change } }),
+    })).rejects.toThrow(/invalid hosted workspace result/);
+  });
+
+  it.each([null, { signup_ready: false }, { ...config, tower_public_base_url: 'https://user:password@tower.example/' },
+    { ...config, tower_public_base_url: 'http://tower.example/' }, { ...config, tower_public_base_url: 'https://tower.example/path' },
+  ])('refuses invalid readiness configuration: %j', async value => {
+    expect(await hostedSignupConfig(async () => Response.json(value))).toBeNull();
   });
 
   it('gives recoverable errors for denial, expiry and transport failure', async () => {

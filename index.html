@@ -711,8 +711,8 @@
                 <p>First 1 GB free for one month: a <strong>USD $5 credit</strong> against your first month’s 1 GB. Additional usage is payable; the credit does not renew.</p>
                 <p>After the credit, 1 GB costs USD $5 per month. Your account is paused if the amount due is unpaid. No automatic charge is assumed.</p>
                 <p class="connect-legal-links"><a href="%BASE_URL%legal/privacy.html" target="_blank" rel="noopener">Privacy Policy (draft)</a> · <a href="%BASE_URL%legal/terms.html" target="_blank" rel="noopener">Terms (draft)</a><br><small>Opens in a new tab; your workspace setup stays here.</small></p>
-                <button class="auth-option" type="button" @click="$store.chat.connectRequestHostedTower()" :disabled="$store.chat.connectHostBusy">Host My Tower</button>
-                <p class="connect-hosted-availability">Subscription signup is awaiting activation.</p>
+                <button class="auth-option" type="button" @click="$store.chat.connectRequestHostedTower()" :disabled="$store.chat.connectHostBusy"><span x-text="$store.chat.connectHostBusy ? 'Checking hosting…' : 'Host My Tower'"></span></button>
+                <p class="connect-hosted-availability">Continue to check availability and create your hosted workspace. Payments use Stripe test mode.</p>
                 <p class="auth-error" role="status" aria-live="polite" x-show="$store.chat.connectHostedNotice" x-text="$store.chat.connectHostedNotice"></p>
               </section>
             <section class="connect-onboarding-card connect-byo-card">
@@ -749,7 +749,7 @@
             <div class="connect-wizard-top">
               <p class="connect-modal-eyebrow">New workspace</p>
               <h2 x-text="$store.chat.isTowerPgMode ? $store.chat.connectPgWizardTitle() : 'Select Workspace'"></h2>
-              <div class="connect-wizard-steps" x-show="$store.chat.isTowerPgMode" aria-label="Onboarding progress">
+              <div class="connect-wizard-steps" x-show="$store.chat.isTowerPgMode && !$store.chat.connectHostedConfig" aria-label="Onboarding progress">
                 <template x-for="step in [1, 2, 3, 4, 5]" :key="step">
                   <span :class="{ active: $store.chat.connectPgOnboardingStep === step }" x-text="step"></span>
                 </template>
@@ -811,7 +811,8 @@
                     <label><span>New workspace name</span><input type="text" x-model="$store.chat.connectNewWorkspaceName" placeholder="My workspace" maxlength="80" autocomplete="off" /></label>
                     <label x-show="!$store.chat.connectHostedConfig"><span>Description</span><input type="text" x-model="$store.chat.connectNewWorkspaceDescription" placeholder="Optional" /></label>
                   </div>
-                  <p class="connect-hosted-policy" x-show="$store.chat.connectHostedConfig">Hosting: USD $5 per decimal GB per 720 hours. One $5 welcome credit per customer, expiring after 30 days; shared across workspaces. Paid credits do not expire. Terms: hosted-usd-v1. Creating a workspace accepts this version.</p>
+                  <p class="connect-hosted-policy" x-show="$store.chat.connectHostedConfig">Hosting: USD $5 per decimal GB per 720 hours. One $5 welcome credit per customer, expiring after 30 days; shared across workspaces. Paid credits do not expire. Terms: hosted-usd-v1.</p>
+                  <label x-show="$store.chat.connectHostedConfig"><input type="checkbox" x-model="$store.chat.connectHostedTermsAccepted" :disabled="$store.chat.connectCreatingWorkspace" /> <span>I accept the <a href="%BASE_URL%legal/terms.html" target="_blank" rel="noopener">Terms (draft)</a> and have read the <a href="%BASE_URL%legal/privacy.html" target="_blank" rel="noopener">Privacy Policy (draft)</a> for hosted-usd-v1.</span></label>
                 </div>
 
                 <div class="connect-choice-grid" x-show="!$store.chat.connectHostedConfig && $store.chat.connectPgOnboardingStep === 3">

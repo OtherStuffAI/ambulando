@@ -110,9 +110,15 @@ export function createHostedSignupHandler({ towerUrl, sign, siteNpub = SITE_NPUB
     if (actorEntries.length >= 12) return fail(429, 'signup_rate_limited');
     recent.set(`${event.pubkey}:${event.id}`, time + 120);
     let attestation;
-    try { attestation = sign(target, hash, event.id, now()); }
+    try { attestation = JSON.parse(JSON.stringify(await sign(target, hash, event.id, now()))); }
     catch { return fail(503, 'site_signer_unavailable'); }
-    if (!attestation || !verifyEvent(attestation) || nip19.npubEncode(attestation.pubkey) !== siteNpub) return fail(503, 'site_signer_unavailable');
+    let validAttestation = false;
+    try { validAttestation = Boolean(attestation && verifyEvent(attestation)); } catch { /* Fail closed for malformed signer responses. */ }
+    if (!validAttestation || nip19.npubEncode(attestation.pubkey) !== siteNpub
+      || attestation.kind !== 27235 || !Number.isInteger(attestation.created_at)
+      || Math.abs(now() - attestation.created_at) > MAX_AGE
+      || exactTag(attestation, 'u') !== target || exactTag(attestation, 'method') !== 'POST'
+      || exactTag(attestation, 'payload') !== hash || exactTag(attestation, 'user_event_id') !== event.id) return fail(503, 'site_signer_unavailable');
     try {
       const upstream = await fetchImpl(target, {
         method: 'POST', body: bytes, redirect: 'error', signal: AbortSignal.timeout(10000),
