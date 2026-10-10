@@ -3700,6 +3700,26 @@
       "notes": [
         "Keep title editing usable beside compact mobile chat controls. Hosted workspace setup checks availability and requires acceptance of hosting terms before creation."
       ]
+    },
+    {
+      "buildNumber": 2361,
+      "label": "Readable chat message actions",
+      "notes": [
+        "Message actions sit clear of prose with accessible touch targets. Sender metadata wraps safely, and Escape closes the action list and restores button focus."
+      ]
+    },
+    {
+      "buildNumber": 2362,
+      "label": "Message actions at enlarged text sizes",
+      "notes": [
+        "Keep long thread messages at their natural height so prose and message controls remain reachable when text is enlarged on desktop."
+      ]
+    },
+    {
+      "buildNumber": 2363,
+      "label": "Validated message action checkpoint",
+      "notes": [],
+      "noUserVisibleChanges": true
     }
   ]
 }

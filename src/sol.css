@@ -477,3 +477,15 @@ code, pre { font-family:var(--font-code); }
     background-position:center; background-repeat:no-repeat; background-size:20px;
   }
 }
+
+/* Message actions occupy metadata space, never the prose hit area. */
+.thread-message { flex-shrink:0; }
+.thread-msg-header { display:grid; grid-template-columns:minmax(0, 1fr) 44px; align-items:center; }
+.thread-msg-metadata { display:flex; flex-wrap:wrap; align-items:baseline; gap:0.5rem; min-width:0; overflow-wrap:anywhere; }
+.thread-msg-header .chat-msg-actions-menu { position:relative; top:auto; right:auto; opacity:1; }
+.chat-msg-actions-toggle { width:44px; height:44px; min-width:44px; min-height:44px; background:transparent; box-shadow:none; }
+.chat-msg-actions-toggle:hover { background:var(--accent); color:var(--accent-foreground); }
+.chat-msg-actions-menu:has(.chat-msg-actions-toggle[aria-expanded="true"]) { opacity:1; }
+.channel-thread-card-heading { padding-right:52px; min-height:44px; }
+@media (hover:none) { .chat-msg-actions-menu { opacity:1; } }
+.chat-msg-actions-popover { max-width:calc(100vw - 32px); max-height:50dvh; overflow-y:auto; }

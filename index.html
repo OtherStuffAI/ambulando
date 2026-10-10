@@ -4119,8 +4119,8 @@
 
                 <template x-for="(msg, index) in $store.chat.visibleMainFeedMessages" :key="msg.record_id">
                   <article class="chat-post channel-thread-card" :class="{ 'chat-post-focused': $store.chat.isFocusedMessage(msg.record_id), 'chat-post-unread': $store.chat.isMessageUnread(msg), 'chat-post-thread-unread': $store.chat.isRootThreadUnread(msg) }" :data-message-id="msg.record_id" tabindex="0" role="link" :aria-label="`Open ${$store.chat.getThreadCardTitle(msg)} conversation`" @keydown.enter.prevent="$store.chat.openThread(msg.record_id)" @keydown.space.prevent="$store.chat.openThread(msg.record_id)">
-                    <div class="chat-msg-actions-menu" @click.outside="$store.chat.isMessageActionsMenuOpen(msg.record_id) && $store.chat.closeMessageActionsMenu()">
-                      <button type="button" class="chat-msg-actions-toggle" title="Message actions" aria-label="Message actions" @click.stop="$store.chat.toggleMessageActionsMenu(msg.record_id)">
+                    <div class="chat-msg-actions-menu" @keydown.enter.stop @keydown.space.stop @keydown.escape.stop.prevent="$store.chat.closeMessageActionsMenu(); $el.querySelector('.chat-msg-actions-toggle').focus()" @click.outside="$store.chat.isMessageActionsMenuOpen(msg.record_id) && $store.chat.closeMessageActionsMenu()">
+                      <button type="button" class="chat-msg-actions-toggle" title="Message actions" aria-label="Message actions" :aria-expanded="$store.chat.isMessageActionsMenuOpen(msg.record_id).toString()" @click.stop="$store.chat.toggleMessageActionsMenu(msg.record_id)">
                         <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
                           <circle cx="12" cy="5" r="1.8"></circle>
                           <circle cx="12" cy="12" r="1.8"></circle>
@@ -4400,30 +4400,6 @@
                 >Load all messages in thread</button>
                 <template x-if="$store.chat.getThreadParentMessage() && $store.chat.getThreadParentMessage().pg_record_type !== 'thread'">
                   <div class="thread-message" :class="{ 'thread-message-focused': $store.chat.isFocusedMessage($store.chat.getThreadParentMessage()?.record_id) }" :data-thread-message-id="$store.chat.getThreadParentMessage()?.record_id || ''">
-                    <div class="chat-msg-actions-menu" @click.outside="$store.chat.isMessageActionsMenuOpen($store.chat.getThreadParentMessage()?.record_id) && $store.chat.closeMessageActionsMenu()">
-                      <button type="button" class="chat-msg-actions-toggle" title="Message actions" aria-label="Message actions" @click.stop="$store.chat.toggleMessageActionsMenu($store.chat.getThreadParentMessage()?.record_id)">
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
-                          <circle cx="12" cy="5" r="1.8"></circle>
-                          <circle cx="12" cy="12" r="1.8"></circle>
-                          <circle cx="12" cy="19" r="1.8"></circle>
-                        </svg>
-                      </button>
-                      <div class="chat-msg-actions-popover" x-show="$store.chat.isMessageActionsMenuOpen($store.chat.getThreadParentMessage()?.record_id)" x-cloak x-transition>
-                        <button type="button" :data-record-id="$store.chat.getThreadParentMessage()?.record_id || ''" data-source-surface="thread_parent" data-chat-get-it-done="true">Get it done</button>
-                        <button type="button" x-show="$store.chat.canResendMessage($store.chat.getThreadParentMessage())" :disabled="$store.chat.isMessageResendPending($store.chat.getThreadParentMessage()?.record_id)" @click.stop.prevent="$store.chat.resendFailedMessage($store.chat.getThreadParentMessage()?.record_id)" x-text="$store.chat.isMessageResendPending($store.chat.getThreadParentMessage()?.record_id) ? 'Resending…' : 'Resend'"></button>
-                        <button type="button" x-show="$store.chat.canEditMessage($store.chat.getThreadParentMessage())" @click.stop.prevent="$store.chat.startMessageEdit($store.chat.getThreadParentMessage()?.record_id)">Edit</button>
-                        <button type="button" x-show="$store.chat.canBranchFromMessage($store.chat.getThreadParentMessage())" :disabled="$store.chat.isBranchFromMessageSubmitting($store.chat.getThreadParentMessage()?.record_id)" @click.stop.prevent="$store.chat.branchFromMessage($store.chat.getThreadParentMessage()?.record_id)" x-text="$store.chat.isBranchFromMessageSubmitting($store.chat.getThreadParentMessage()?.record_id) ? 'Branching…' : 'Branch from here'"></button>
-                        <button type="button" @click.stop.prevent="$store.chat.copyMessageRawText($store.chat.getThreadParentMessage()?.record_id)">Copy message</button>
-                        <button type="button" x-show="$store.chat.hasThreadAutopilotSessionLink($store.chat.getThreadParentMessage())" @click.stop.prevent="$store.chat.openThreadAutopilotSession($store.chat.getThreadParentMessage())">Autopilot Link</button>
-                        <button type="button" @click.stop.prevent="$store.chat.copyThreadRawText($store.chat.getThreadParentMessage()?.record_id)">Copy thread</button>
-                        <button type="button" @click.stop.prevent="$store.chat.copyFlightDeckReference('chat', $store.chat.buildChatMessageFlightDeckReferenceId($store.chat.getThreadParentMessage()?.record_id), 'Chat thread'); $store.chat.closeMessageActionsMenu()">FD Ref</button>
-                        <button type="button" x-show="$store.chat.isTowerPgMode && !$store.chat.isChatThreadArchived($store.chat.getThreadParentMessage()?.record_id)" :disabled="$store.chat.isChatThreadArchiveSubmitting($store.chat.getThreadParentMessage()?.record_id)" @click.stop.prevent="$store.chat.archiveChatThreadByParentId($store.chat.getThreadParentMessage()?.record_id, true)" x-text="$store.chat.isChatThreadArchiveSubmitting($store.chat.getThreadParentMessage()?.record_id, 'archive') ? 'Archiving...' : 'Archive thread'"></button>
-                        <button type="button" x-show="$store.chat.isTowerPgMode && $store.chat.isChatThreadArchived($store.chat.getThreadParentMessage()?.record_id)" :disabled="$store.chat.isChatThreadArchiveSubmitting($store.chat.getThreadParentMessage()?.record_id)" @click.stop.prevent="$store.chat.archiveChatThreadByParentId($store.chat.getThreadParentMessage()?.record_id, false)" x-text="$store.chat.isChatThreadArchiveSubmitting($store.chat.getThreadParentMessage()?.record_id, 'unarchive') ? 'Unarchiving...' : 'Unarchive thread'"></button>
-                        <button type="button" class="chat-msg-actions-danger" @click.stop.prevent="$store.chat.openChatDeleteConfirm('message', $store.chat.getThreadParentMessage()?.record_id)">Delete message</button>
-                        <button type="button" class="chat-msg-actions-danger" @click.stop.prevent="$store.chat.openChatDeleteConfirm('thread', $store.chat.getThreadParentMessage()?.record_id)">Delete thread</button>
-                        <button type="button" x-show="!$store.chat.isTowerPgMode" @click.stop.prevent="$store.chat.inspectMessageSyncStatus($store.chat.getThreadParentMessage()?.record_id)">Check sync status</button>
-                      </div>
-                    </div>
                     <span
                       class="thread-status-dot"
                       :class="$store.chat.getThreadParentMessage()?.sync_status === 'synced' ? 'thread-status-dot-synced' : $store.chat.getThreadParentMessage()?.sync_status === 'failed' ? 'thread-status-dot-failed' : 'thread-status-dot-pending'"
@@ -4440,10 +4416,36 @@
                     </button>
                     <div class="thread-msg-body">
                       <div class="thread-msg-header">
-                        <span class="chat-sender" x-text="$store.chat.getSenderName($store.chat.getThreadParentMessage()?.sender_npub)"></span>
-                        <span class="chat-archived-badge" x-show="$store.chat.isChatThreadArchived($store.chat.getThreadParentMessage()?.record_id)" x-cloak>Archived</span>
-                        <span class="chat-time" x-text="new Date($store.chat.getThreadParentMessage()?.updated_at || '').toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })"></span>
-                        <span class="chat-edited-indicator" x-show="$store.chat.isMessageEdited($store.chat.getThreadParentMessage())" x-cloak>edited</span>
+                        <div class="thread-msg-metadata">
+                          <span class="chat-sender" x-text="$store.chat.getSenderName($store.chat.getThreadParentMessage()?.sender_npub)"></span>
+                          <span class="chat-archived-badge" x-show="$store.chat.isChatThreadArchived($store.chat.getThreadParentMessage()?.record_id)" x-cloak>Archived</span>
+                          <span class="chat-time" x-text="new Date($store.chat.getThreadParentMessage()?.updated_at || '').toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })"></span>
+                          <span class="chat-edited-indicator" x-show="$store.chat.isMessageEdited($store.chat.getThreadParentMessage())" x-cloak>edited</span>
+                        </div>
+                        <div class="chat-msg-actions-menu" @keydown.enter.stop @keydown.space.stop @keydown.escape.stop.prevent="$store.chat.closeMessageActionsMenu(); $el.querySelector('.chat-msg-actions-toggle').focus()" @click.outside="$store.chat.isMessageActionsMenuOpen($store.chat.getThreadParentMessage()?.record_id) && $store.chat.closeMessageActionsMenu()">
+                          <button type="button" class="chat-msg-actions-toggle" title="Message actions" aria-label="Message actions" :aria-expanded="$store.chat.isMessageActionsMenuOpen($store.chat.getThreadParentMessage()?.record_id).toString()" @click.stop="$store.chat.toggleMessageActionsMenu($store.chat.getThreadParentMessage()?.record_id)">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
+                              <circle cx="12" cy="5" r="1.8"></circle>
+                              <circle cx="12" cy="12" r="1.8"></circle>
+                              <circle cx="12" cy="19" r="1.8"></circle>
+                            </svg>
+                          </button>
+                          <div class="chat-msg-actions-popover" x-show="$store.chat.isMessageActionsMenuOpen($store.chat.getThreadParentMessage()?.record_id)" x-cloak x-transition>
+                            <button type="button" :data-record-id="$store.chat.getThreadParentMessage()?.record_id || ''" data-source-surface="thread_parent" data-chat-get-it-done="true">Get it done</button>
+                            <button type="button" x-show="$store.chat.canResendMessage($store.chat.getThreadParentMessage())" :disabled="$store.chat.isMessageResendPending($store.chat.getThreadParentMessage()?.record_id)" @click.stop.prevent="$store.chat.resendFailedMessage($store.chat.getThreadParentMessage()?.record_id)" x-text="$store.chat.isMessageResendPending($store.chat.getThreadParentMessage()?.record_id) ? 'Resending…' : 'Resend'"></button>
+                            <button type="button" x-show="$store.chat.canEditMessage($store.chat.getThreadParentMessage())" @click.stop.prevent="$store.chat.startMessageEdit($store.chat.getThreadParentMessage()?.record_id)">Edit</button>
+                            <button type="button" x-show="$store.chat.canBranchFromMessage($store.chat.getThreadParentMessage())" :disabled="$store.chat.isBranchFromMessageSubmitting($store.chat.getThreadParentMessage()?.record_id)" @click.stop.prevent="$store.chat.branchFromMessage($store.chat.getThreadParentMessage()?.record_id)" x-text="$store.chat.isBranchFromMessageSubmitting($store.chat.getThreadParentMessage()?.record_id) ? 'Branching…' : 'Branch from here'"></button>
+                            <button type="button" @click.stop.prevent="$store.chat.copyMessageRawText($store.chat.getThreadParentMessage()?.record_id)">Copy message</button>
+                            <button type="button" x-show="$store.chat.hasThreadAutopilotSessionLink($store.chat.getThreadParentMessage())" @click.stop.prevent="$store.chat.openThreadAutopilotSession($store.chat.getThreadParentMessage())">Autopilot Link</button>
+                            <button type="button" @click.stop.prevent="$store.chat.copyThreadRawText($store.chat.getThreadParentMessage()?.record_id)">Copy thread</button>
+                            <button type="button" @click.stop.prevent="$store.chat.copyFlightDeckReference('chat', $store.chat.buildChatMessageFlightDeckReferenceId($store.chat.getThreadParentMessage()?.record_id), 'Chat thread'); $store.chat.closeMessageActionsMenu()">FD Ref</button>
+                            <button type="button" x-show="$store.chat.isTowerPgMode && !$store.chat.isChatThreadArchived($store.chat.getThreadParentMessage()?.record_id)" :disabled="$store.chat.isChatThreadArchiveSubmitting($store.chat.getThreadParentMessage()?.record_id)" @click.stop.prevent="$store.chat.archiveChatThreadByParentId($store.chat.getThreadParentMessage()?.record_id, true)" x-text="$store.chat.isChatThreadArchiveSubmitting($store.chat.getThreadParentMessage()?.record_id, 'archive') ? 'Archiving...' : 'Archive thread'"></button>
+                            <button type="button" x-show="$store.chat.isTowerPgMode && $store.chat.isChatThreadArchived($store.chat.getThreadParentMessage()?.record_id)" :disabled="$store.chat.isChatThreadArchiveSubmitting($store.chat.getThreadParentMessage()?.record_id)" @click.stop.prevent="$store.chat.archiveChatThreadByParentId($store.chat.getThreadParentMessage()?.record_id, false)" x-text="$store.chat.isChatThreadArchiveSubmitting($store.chat.getThreadParentMessage()?.record_id, 'unarchive') ? 'Unarchiving...' : 'Unarchive thread'"></button>
+                            <button type="button" class="chat-msg-actions-danger" @click.stop.prevent="$store.chat.openChatDeleteConfirm('message', $store.chat.getThreadParentMessage()?.record_id)">Delete message</button>
+                            <button type="button" class="chat-msg-actions-danger" @click.stop.prevent="$store.chat.openChatDeleteConfirm('thread', $store.chat.getThreadParentMessage()?.record_id)">Delete thread</button>
+                            <button type="button" x-show="!$store.chat.isTowerPgMode" @click.stop.prevent="$store.chat.inspectMessageSyncStatus($store.chat.getThreadParentMessage()?.record_id)">Check sync status</button>
+                          </div>
+                        </div>
                       </div>
                       <div class="thread-msg-text">
                         <template x-if="$store.chat.isHangCallInvitation($store.chat.getThreadParentMessage())">
@@ -4511,26 +4513,6 @@
 
                 <template x-for="reply in $store.chat.visibleThreadMessages" :key="reply.record_id">
                   <div class="thread-message" :class="{ 'thread-message-focused': $store.chat.isFocusedMessage(reply.record_id) }" data-thread-reply :data-thread-message-id="reply.record_id">
-                    <div class="chat-msg-actions-menu" @click.outside="$store.chat.isMessageActionsMenuOpen(reply.record_id) && $store.chat.closeMessageActionsMenu()">
-                      <button type="button" class="chat-msg-actions-toggle" title="Message actions" aria-label="Message actions" @click.stop="$store.chat.toggleMessageActionsMenu(reply.record_id)">
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
-                          <circle cx="12" cy="5" r="1.8"></circle>
-                          <circle cx="12" cy="12" r="1.8"></circle>
-                          <circle cx="12" cy="19" r="1.8"></circle>
-                        </svg>
-                      </button>
-                      <div class="chat-msg-actions-popover" x-show="$store.chat.isMessageActionsMenuOpen(reply.record_id)" x-cloak x-transition>
-                        <button type="button" x-show="!reply.read_only" :data-record-id="reply.record_id" data-source-surface="thread_reply" data-chat-get-it-done="true">Get it done</button>
-                        <button type="button" x-show="$store.chat.canResendMessage(reply)" :disabled="$store.chat.isMessageResendPending(reply.record_id)" @click.stop.prevent="$store.chat.resendFailedMessage(reply.record_id)" x-text="$store.chat.isMessageResendPending(reply.record_id) ? 'Resending…' : 'Resend'"></button>
-                        <button type="button" x-show="$store.chat.canEditMessage(reply)" @click.stop.prevent="$store.chat.startMessageEdit(reply.record_id)">Edit</button>
-                        <button type="button" x-show="$store.chat.canBranchFromMessage(reply)" :disabled="$store.chat.isBranchFromMessageSubmitting(reply.record_id)" @click.stop.prevent="$store.chat.branchFromMessage(reply.record_id)" x-text="$store.chat.isBranchFromMessageSubmitting(reply.record_id) ? 'Branching…' : 'Branch from here'"></button>
-                        <button type="button" @click.stop.prevent="$store.chat.copyMessageRawText(reply.record_id)">Copy message</button>
-                        <button type="button" x-show="$store.chat.hasThreadAutopilotSessionLink(reply)" @click.stop.prevent="$store.chat.openThreadAutopilotSession(reply)">Autopilot Link</button>
-                        <button type="button" @click.stop.prevent="$store.chat.copyFlightDeckReference('chat', $store.chat.buildChatMessageFlightDeckReferenceId(reply.record_id), 'Chat reply'); $store.chat.closeMessageActionsMenu()">FD Ref</button>
-                        <button type="button" x-show="!reply.read_only" class="chat-msg-actions-danger" @click.stop.prevent="$store.chat.openChatDeleteConfirm('message', reply.record_id)">Delete message</button>
-                        <button type="button" x-show="!$store.chat.isTowerPgMode" @click.stop.prevent="$store.chat.inspectMessageSyncStatus(reply.record_id)">Check sync status</button>
-                      </div>
-                    </div>
                     <span
                       class="thread-status-dot"
                       :class="reply.sync_status === 'synced' ? 'thread-status-dot-synced' : reply.sync_status === 'failed' ? 'thread-status-dot-failed' : 'thread-status-dot-pending'"
@@ -4546,10 +4528,32 @@
                     </button>
                     <div class="thread-msg-body">
                       <div class="thread-msg-header">
-                        <span class="chat-sender" x-text="$store.chat.getSenderName(reply.sender_npub)"></span>
-                        <span class="chat-time" x-text="new Date(reply.updated_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })"></span>
-                        <span class="chat-archived-badge" x-show="reply.read_only" x-cloak>Inherited · read-only</span>
-                        <span class="chat-edited-indicator" x-show="$store.chat.isMessageEdited(reply)" x-cloak>edited</span>
+                        <div class="thread-msg-metadata">
+                          <span class="chat-sender" x-text="$store.chat.getSenderName(reply.sender_npub)"></span>
+                          <span class="chat-time" x-text="new Date(reply.updated_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })"></span>
+                          <span class="chat-archived-badge" x-show="reply.read_only" x-cloak>Inherited · read-only</span>
+                          <span class="chat-edited-indicator" x-show="$store.chat.isMessageEdited(reply)" x-cloak>edited</span>
+                        </div>
+                        <div class="chat-msg-actions-menu" @keydown.enter.stop @keydown.space.stop @keydown.escape.stop.prevent="$store.chat.closeMessageActionsMenu(); $el.querySelector('.chat-msg-actions-toggle').focus()" @click.outside="$store.chat.isMessageActionsMenuOpen(reply.record_id) && $store.chat.closeMessageActionsMenu()">
+                          <button type="button" class="chat-msg-actions-toggle" title="Message actions" aria-label="Message actions" :aria-expanded="$store.chat.isMessageActionsMenuOpen(reply.record_id).toString()" @click.stop="$store.chat.toggleMessageActionsMenu(reply.record_id)">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
+                              <circle cx="12" cy="5" r="1.8"></circle>
+                              <circle cx="12" cy="12" r="1.8"></circle>
+                              <circle cx="12" cy="19" r="1.8"></circle>
+                            </svg>
+                          </button>
+                          <div class="chat-msg-actions-popover" x-show="$store.chat.isMessageActionsMenuOpen(reply.record_id)" x-cloak x-transition>
+                            <button type="button" x-show="!reply.read_only" :data-record-id="reply.record_id" data-source-surface="thread_reply" data-chat-get-it-done="true">Get it done</button>
+                            <button type="button" x-show="$store.chat.canResendMessage(reply)" :disabled="$store.chat.isMessageResendPending(reply.record_id)" @click.stop.prevent="$store.chat.resendFailedMessage(reply.record_id)" x-text="$store.chat.isMessageResendPending(reply.record_id) ? 'Resending…' : 'Resend'"></button>
+                            <button type="button" x-show="$store.chat.canEditMessage(reply)" @click.stop.prevent="$store.chat.startMessageEdit(reply.record_id)">Edit</button>
+                            <button type="button" x-show="$store.chat.canBranchFromMessage(reply)" :disabled="$store.chat.isBranchFromMessageSubmitting(reply.record_id)" @click.stop.prevent="$store.chat.branchFromMessage(reply.record_id)" x-text="$store.chat.isBranchFromMessageSubmitting(reply.record_id) ? 'Branching…' : 'Branch from here'"></button>
+                            <button type="button" @click.stop.prevent="$store.chat.copyMessageRawText(reply.record_id)">Copy message</button>
+                            <button type="button" x-show="$store.chat.hasThreadAutopilotSessionLink(reply)" @click.stop.prevent="$store.chat.openThreadAutopilotSession(reply)">Autopilot Link</button>
+                            <button type="button" @click.stop.prevent="$store.chat.copyFlightDeckReference('chat', $store.chat.buildChatMessageFlightDeckReferenceId(reply.record_id), 'Chat reply'); $store.chat.closeMessageActionsMenu()">FD Ref</button>
+                            <button type="button" x-show="!reply.read_only" class="chat-msg-actions-danger" @click.stop.prevent="$store.chat.openChatDeleteConfirm('message', reply.record_id)">Delete message</button>
+                            <button type="button" x-show="!$store.chat.isTowerPgMode" @click.stop.prevent="$store.chat.inspectMessageSyncStatus(reply.record_id)">Check sync status</button>
+                          </div>
+                        </div>
                       </div>
                       <div class="thread-msg-text">
                         <template x-if="$store.chat.isHangCallInvitation(reply)">

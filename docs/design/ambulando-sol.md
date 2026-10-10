@@ -198,3 +198,24 @@ Phone conversation spacing, bounded long-draft/edit/attachment state and
 keyboard-visible reading-area checks are specified in
 [Phone conversation space](mobile-chat-density.md). Chat inputs stay 16px,
 while phone message text uses the classic compact 14px proportion.
+
+## Message action placement
+
+Thread message actions occupy a 44px column beside wrapping sender metadata.
+Messages keep their natural height in the scrolling history at every width.
+The prose begins below that row and keeps the full body width; neither the
+button background nor its hit area covers text. Channel cards reserve heading
+space beside their action button. The closed control is transparent, with a
+semantic hover surface and the shared keyboard focus ring. Expanded state is
+announced; Escape closes the list and restores focus. Native buttons retain
+Tab navigation, outside-click dismissal and the existing permission guards.
+Action lists scroll within half the viewport height.
+
+`tests/e2e/chat-message-actions.spec.cjs` checks both themes at
+320/390/430/768/1440px, long sender names and multiline prose, 150%/200% text
+sizes, CDP pinch-scale simulation, geometric separation, selection, scrolling, keyboard and pointer
+dismissal, action callbacks, read-only visibility and the compact thread header.
+It uses the production store/template with synthetic records and blocked backend
+requests; it does not establish authenticated permissions or physical-device
+zoom behavior. Optional `SOL_EVIDENCE_DIR` writes screenshots only to ignored,
+untracked evidence storage.
