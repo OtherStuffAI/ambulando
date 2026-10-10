@@ -73,7 +73,7 @@ for (const width of [320,390,430,768,1440]) for (const theme of ['light','dark']
   expect(zoomClear).toBe(true);
   await cdp.send('Emulation.setPageScaleFactor',{pageScaleFactor:1});
   const dir=process.env.SOL_EVIDENCE_DIR;
-  if(dir){await page.evaluate(()=>{getSelection().removeAllRanges();document.activeElement?.blur();});execFileSync('git',['check-ignore',dir]);expect(execFileSync('git',['ls-files',dir],{encoding:'utf8'}).trim()).toBe('');await fs.mkdir(dir,{recursive:true});await page.screenshot({path:path.join(dir,`actions-${width}-${theme}.png`)});await toggle.click();await page.screenshot({path:path.join(dir,`actions-${width}-${theme}-open.png`)});await page.keyboard.press('Escape');}
+  if(dir){await expect(page.locator('.chat-thread-panel .chat-msg-actions-popover:visible')).toHaveCount(0);await page.evaluate(()=>{getSelection().removeAllRanges();document.activeElement?.blur();});execFileSync('git',['check-ignore',dir]);expect(execFileSync('git',['ls-files',dir],{encoding:'utf8'}).trim()).toBe('');await fs.mkdir(dir,{recursive:true});await page.screenshot({path:path.join(dir,`actions-${width}-${theme}.png`)});await toggle.click();await expect.poll(()=>menu.evaluate(n=>getComputedStyle(n).opacity)).toBe('1');await page.screenshot({path:path.join(dir,`actions-${width}-${theme}-open.png`)});await page.keyboard.press('Escape');}
   // Channel card heading also reserves its closed target, with keyboard events isolated.
   await page.evaluate(()=>Alpine.store('chat').closeThread());
   const card=page.locator('.channel-thread-card').first();
