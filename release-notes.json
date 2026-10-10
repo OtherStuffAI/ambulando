@@ -3720,6 +3720,13 @@
       "label": "Validated message action checkpoint",
       "notes": [],
       "noUserVisibleChanges": true
+    },
+    {
+      "buildNumber": 2364,
+      "label": "Protected hosted signup signing",
+      "notes": [
+        "Use an app-bound protected signing broker for hosted signup and check live signer and Tower route readiness before opening signup."
+      ]
     }
   ]
 }

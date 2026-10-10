@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createHash, randomUUID } from 'node:crypto';
 import { finalizeEvent, generateSecretKey, nip19, verifyEvent } from 'nostr-tools';
-import { createHostedSignupHandler, createSiteSigner, SITE_NPUB, TOWER_PATH } from '../server/hosted-signup.js';
+import { createHostedSignupHandler, TOWER_PATH } from '../server/hosted-signup.js';
 
 const target = `https://tower.example${TOWER_PATH}`;
 const origin = 'https://flightdeck.example';
@@ -133,12 +133,4 @@ describe('hosted signup attestation', () => {
     }
   });
 
-  it('fails closed for absent or mismatched site identity', () => {
-    expect(() => createSiteSigner('', SITE_NPUB)).toThrow();
-    expect(() => createSiteSigner(nip19.nsecEncode(siteKey), SITE_NPUB)).toThrow();
-    const sign = createSiteSigner(nip19.nsecEncode(siteKey), siteNpub);
-    const event = sign(target, 'a'.repeat(64), 'b'.repeat(64), now);
-    expect(verifyEvent(event)).toBe(true);
-    expect(event.pubkey).toBe(nip19.decode(siteNpub).data);
-  });
 });

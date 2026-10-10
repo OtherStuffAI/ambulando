@@ -1,5 +1,5 @@
-import { createHash, randomUUID } from 'node:crypto';
-import { finalizeEvent, getPublicKey, nip19, verifyEvent } from 'nostr-tools';
+import { createHash } from 'node:crypto';
+import { nip19, verifyEvent } from 'nostr-tools';
 
 export const SIGNUP_PATH = '/api/hosted/workspaces';
 export const TOWER_PATH = '/api/v4/flightdeck-pg/hosted/workspaces';
@@ -17,23 +17,6 @@ export function towerSignupUrl(base) {
   const url = new URL(base);
   if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash || url.pathname !== '/') throw new Error('Invalid Tower public base URL');
   return new URL(TOWER_PATH, url).href;
-}
-
-export function createSiteSigner(nsec, expectedNpub = SITE_NPUB) {
-  if (!nsec) throw new Error('Flight Deck site signer is unavailable');
-  let secret;
-  try {
-    const decoded = nip19.decode(nsec);
-    if (decoded.type !== 'nsec' || !(decoded.data instanceof Uint8Array)) throw new Error();
-    secret = decoded.data;
-    if (nip19.npubEncode(getPublicKey(secret)) !== expectedNpub) throw new Error();
-  } catch {
-    throw new Error('Flight Deck site signer identity mismatch');
-  }
-  return (url, hash, userEventId, now) => finalizeEvent({
-    kind: 27235, created_at: now, content: randomUUID(),
-    tags: [['u', url], ['method', 'POST'], ['payload', hash], ['user_event_id', userEventId]],
-  }, secret);
 }
 
 function exactTag(event, name) {
@@ -110,7 +93,7 @@ export function createHostedSignupHandler({ towerUrl, sign, siteNpub = SITE_NPUB
     if (actorEntries.length >= 12) return fail(429, 'signup_rate_limited');
     recent.set(`${event.pubkey}:${event.id}`, time + 120);
     let attestation;
-    try { attestation = JSON.parse(JSON.stringify(await sign(target, hash, event.id, now()))); }
+    try { attestation = JSON.parse(JSON.stringify(await sign(target, hash, event.id, now(), { payload: decoder.decode(bytes), userEvent: event }))); }
     catch { return fail(503, 'site_signer_unavailable'); }
     let validAttestation = false;
     try { validAttestation = Boolean(attestation && verifyEvent(attestation)); } catch { /* Fail closed for malformed signer responses. */ }
