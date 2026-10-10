@@ -3686,6 +3686,20 @@
       "notes": [
         "Use the bottom navigation to switch mobile views. The drawer now keeps channels and workspaces together without duplicate view buttons."
       ]
+    },
+    {
+      "buildNumber": 2359,
+      "label": "Compact mobile chat",
+      "notes": [
+        "Mobile mention pills fit surrounding text, including drafts. Thread titles and controls share one row, with long titles shortened visually and available in full on hover."
+      ]
+    },
+    {
+      "buildNumber": 2360,
+      "label": "Mobile title editing and hosted signup checks",
+      "notes": [
+        "Keep title editing usable beside compact mobile chat controls. Hosted workspace setup checks availability and requires acceptance of hosting terms before creation."
+      ]
     }
   ]
 }

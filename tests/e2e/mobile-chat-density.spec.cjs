@@ -63,7 +63,7 @@ async function evidence(page,name,data) {
   await page.screenshot({path:path.join(dir,name+'.png'),clip,animations:'disabled'});
   await fs.writeFile(path.join(dir,name+'.json'),JSON.stringify(data,null,2));
 }
-for(const width of [320,375,390,430]) for(const theme of ['light','dark']) {
+for(const width of [320,375,390,430,768]) for(const theme of ['light','dark']) {
  test(`long draft reading space ${width} ${theme}`,async({page})=>{
   const editor=await prepare(page,width,theme,360,0);
   for(const height of [400,360,320]) {
@@ -87,15 +87,21 @@ for(const width of [320,375,390,430]) for(const theme of ['light','dark']) {
     }
     if(comparison)continue;
     expect(g.history.height).toBeGreaterThanOrEqual(110);
-    expect(g.header.height).toBeLessThanOrEqual(100);
+    expect(g.header.height).toBeLessThanOrEqual(49);
+    const title=page.getByRole('button',{name:'Rename thread title',exact:true});
+    expect(await title.getAttribute('title')).toBe('we do need to review mobile sizing and layout this long conversation title');
+    const titleGeometry=await title.evaluate(n=>({width:n.clientWidth,scroll:n.scrollWidth,top:n.getBoundingClientRect().top,ellipsis:getComputedStyle(n).textOverflow}));
+    expect(titleGeometry.ellipsis).toBe('ellipsis');
+    if(width<430)expect(titleGeometry.scroll).toBeGreaterThan(titleGeometry.width);
     expect(g.composer.height).toBeLessThanOrEqual(105);
     expect(g.editor.height).toBeLessThanOrEqual(height*.25);
-    expect(g.editor.scrollHeight).toBeGreaterThan(g.editor.clientHeight);
+    if(width<768)expect(g.editor.scrollHeight).toBeGreaterThan(g.editor.clientHeight);
     expect(g.rootOverflow).toBe(false);
     expect(g.panel.top).toBeGreaterThanOrEqual(offsetTop);
     expect(g.panel.bottom).toBeLessThanOrEqual(offsetTop+height);
     expect(g.history.bottom).toBeLessThanOrEqual(g.composer.top+1);
     const controls=await page.locator('.chat-thread-panel .thread-header-actions button:visible').evaluateAll(nodes=>nodes.map(n=>{const r=n.getBoundingClientRect();return {width:r.width,height:r.height,left:r.left,right:r.right,hit:n.contains(document.elementFromPoint(r.left+r.width/2,r.top+r.height/2))};}));
+    expect(Math.abs(titleGeometry.top-(await page.locator('.chat-thread-panel .thread-header-actions').boundingBox()).y)).toBeLessThan(1);
     for(const r of controls){expect(r.width).toBeGreaterThanOrEqual(44);expect(r.height).toBeGreaterThanOrEqual(44);expect(r.left).toBeGreaterThanOrEqual(0);expect(r.right).toBeLessThanOrEqual(width);expect(r.hit).toBe(true);}
     await expect(editor).toHaveText(draft);
     await page.locator('.thread-replies').evaluate(n=>n.scrollTop=80);
@@ -158,7 +164,29 @@ for(const width of [320,375,390,430]) for(const theme of ['light','dark']) {
   });
   await page.getByRole('button',{name:'Mention Implementation agent',exact:true}).click();
   await expect(editor.locator('.mention-composer-pill')).toContainText('Implementation agent');
+  expect(await editor.evaluate(n=>n.scrollWidth<=n.clientWidth)).toBe(true);
   expect(await editor.textContent()).toContain(draft+'!');
+  await page.evaluate(()=>{
+    const s=Alpine.store('chat');
+    s.threadInput='Hello @[Reviewer](mention:agent:npub1solagent) here\nSecond line';
+    s.messages=s.messages.map((m,i)=>i===1?{...m,body:'Hello @[Reviewer](mention:agent:npub1solagent) here\n\nSecond line with @[Planning](mention:tag:planning) and more text.'}:m);
+  });
+  await expect(editor.locator('.mention-composer-pill')).toContainText('Reviewer');
+  const inline=await page.evaluate(()=>{
+    const editor=document.querySelector('[data-chat-composer="thread"]');
+    const pill=editor.querySelector('.mention-composer-pill');
+    const withPill=editor.scrollHeight;
+    const clone=editor.cloneNode(true);clone.removeAttribute('data-chat-composer');clone.style.width=editor.clientWidth+'px';
+    clone.querySelectorAll('.mention-composer-pill').forEach(n=>n.replaceWith(n.textContent));editor.parentNode.append(clone);
+    const plain=clone.scrollHeight;clone.remove();
+    return {withPill,plain,pill:pill.getBoundingClientRect().height,line:parseFloat(getComputedStyle(editor).lineHeight),rendered:[...document.querySelectorAll('.thread-msg-text .mention-pill')].map(n=>({height:n.getBoundingClientRect().height,line:parseFloat(getComputedStyle(n.closest('.thread-msg-text')).lineHeight)}))};
+  });
+  console.log('INLINE',JSON.stringify({width,theme,...inline}));
+  expect(inline.pill).toBeLessThanOrEqual(inline.line);
+  expect(inline.withPill).toBeLessThanOrEqual(inline.plain+1);
+  expect(inline.rendered.length).toBeGreaterThanOrEqual(2);
+  for(const token of inline.rendered)expect(token.height).toBeLessThanOrEqual(token.line);
+
   await page.evaluate(()=>window.mockViewport(160,55,2));
   expect((await geometry(page)).panel.height).toBe(g.panel.height);
   await page.setViewportSize({width,height:320});

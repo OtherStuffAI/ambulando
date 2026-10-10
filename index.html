@@ -4324,7 +4324,7 @@
               @keydown.escape.window="($store.chat.activeThreadId || $store.chat.deckThreadComposerOpen) && !$store.chat.chatTaskModalOpen && !$store.chat.chatDocModalOpen && ($store.chat.deckThreadComposerOpen ? $store.chat.closeDeckThreadComposer() : $store.chat.closeVisibleThread())"
             >
             <div class="chat-thread-panel" :class="{ 'thread-full': $store.chat.threadSize === 'full', 'thread-create-mode': $store.chat.deckThreadComposerOpen }" role="dialog" aria-modal="true" x-sol-dialog :aria-label="$store.chat.deckThreadComposerOpen ? 'Create thread' : 'Thread'" @keydown.window="$store.chat.handleDeckThreadNavigationKeydown($event)" @touchstart.passive="$store.chat.beginDeckThreadSwipe($event)" @touchend.passive="$store.chat.endDeckThreadSwipe($event)" @touchcancel.passive="$store.chat.endDeckThreadSwipe($event)">
-              <div class="thread-header">
+              <div class="thread-header" :class="{ 'thread-title-editing': !$store.chat.deckThreadComposerOpen && $store.chat.threadTitleEditing }">
                 <button type="button" class="thread-create-back" x-show="$store.chat.deckThreadComposerOpen && $store.chat.deckThreadComposerRouted" x-cloak @click="$store.chat.backDeckThreadComposerToRouting()">Back</button>
                 <div class="thread-header-copy">
                   <label class="thread-create-title" x-show="$store.chat.deckThreadComposerOpen" x-cloak>
@@ -4336,7 +4336,7 @@
                     class="thread-title-display"
                     x-show="!$store.chat.deckThreadComposerOpen && !$store.chat.threadTitleEditing"
                     @click="$store.chat.startThreadTitleEdit()"
-                    title="Rename thread"
+                    :title="$store.chat.getActiveThreadTitle()"
                     aria-label="Rename thread title"
                     x-text="$store.chat.getActiveThreadTitle()"
                   ></button>

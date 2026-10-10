@@ -12,7 +12,7 @@ describe('thread title UI', () => {
   });
 
   it('edits the displayed thread title in place with accessible controls', () => {
-    const header = html.slice(html.indexOf('<div class="thread-header">'), html.indexOf('<div class="thread-replies"'));
+    const header = html.slice(html.indexOf('<div class="thread-header"'), html.indexOf('<div class="thread-replies"'));
     expect(header).toContain('class="thread-title-display"');
     expect(header).toContain('@click="$store.chat.startThreadTitleEdit()"');
     expect(header).toContain('class="thread-title-editor"');
@@ -23,7 +23,7 @@ describe('thread title UI', () => {
   });
 
   it('links every thread message menu and the thread header to the latest thread session', () => {
-    const header = html.slice(html.indexOf('<div class="thread-header">'), html.indexOf('<div class="thread-replies"'));
+    const header = html.slice(html.indexOf('<div class="thread-header"'), html.indexOf('<div class="thread-replies"'));
     expect(header).toContain('x-show="$store.chat.hasThreadAutopilotSessionLink()"');
     expect(header).toContain('@click.stop.prevent="$store.chat.openThreadAutopilotSession()"');
     expect(html).toContain('x-show="$store.chat.hasThreadAutopilotSessionLink(msg)"');
@@ -33,7 +33,7 @@ describe('thread title UI', () => {
   });
 
   it('offers the full root-message action set from the thread header in product order', () => {
-    const header = html.slice(html.indexOf('<div class="thread-header">'), html.indexOf('<div class="thread-replies"'));
+    const header = html.slice(html.indexOf('<div class="thread-header"'), html.indexOf('<div class="thread-replies"'));
     const menu = header.slice(header.indexOf('<div class="thread-title-menu-popover"'), header.indexOf('</div>', header.indexOf('<div class="thread-title-menu-popover"')));
     const labels = [
       'Get it done',
