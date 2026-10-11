@@ -84,6 +84,7 @@ for (const protocol of [1, 2]) test(`v${protocol}: two caches retain UI and inte
           : m.syncTowerPgWorkspace(store, {}, { getTowerPgRecordSync: readPage, hydrateTowerPgSyncBundle: (_s, b) => apply(b), getTowerPgResourceViewStates: async () => ({ states: [] }), getTowerPgWorkspaceMembers: async () => ({ members: [] }), getTowerPgWorkspaceGroups: async () => ({ groups: [] }) }) } });
         const sub = m.liveQuery(async () => ({ navigation: await m.readPgNavigationProjection(store), messages: m.projectPgDownloadedAccess(await db.chat_messages.toArray(), await state()) })).subscribe(async result => { await m.applyPgNavigationProjection(store, result.navigation); store.accessLost = result.navigation.accessLost; store.messages = result.messages; });
         window.run = () => service.recoverCursor();
+        window.canonical = (family, id) => db.pg_record_rows.get(`${family}:${id}`);
         window.snapshot = async () => ({ state: await state(), counts: await Promise.all(['pg_record_rows','chat_messages','documents','tasks','channels'].map(name => db.table(name).count())), outbox: await db.pending_writes.toArray(), drafts: await db.document_drafts.toArray(), unrelatedContent: JSON.stringify(await Promise.all(['chat_messages','documents','tasks'].map(name => db.table(name).toArray()))), selection: store.selectedChannelId, thread: store.activeThreadId, editor: store.messageInput, reply: store.threadInput, scroll: document.querySelector('#history').scrollTop, messages: store.messages });
         window.seedIntent = async () => { store.selectedChannelId = channelId; store.activeThreadId = 'fixture-thread'; store.messageInput = 'unsent editor text'; store.threadInput = 'unsent reply'; await db.pending_writes.add({ record_id: 'pending-local', envelope: { body: 'retained intent' } }); await db.document_drafts.put({ draft_key: 'draft', workspace_id: context.workspaceId, document_id: 'doc', content: 'retained document draft' }); document.querySelector('#history').scrollTop = 333; };
         window.restartWorker = () => { materializer.dispose(); start(); };
@@ -110,6 +111,50 @@ for (const protocol of [1, 2]) test(`v${protocol}: two caches retain UI and inte
       expect(c.requests.filter(r => r.path.endsWith('/record-sync'))).toHaveLength(1);
       expect(c.requests.every(r => r.path.includes('/record-sync'))).toBe(true);
       expect(c.requests.filter(r => r.path.endsWith('/record-sync'))[0]).toMatchObject({ cursor: 'seed', mode: 'delta', changedFamilies: ['channel'], changedIds: ['new-empty-channel'] });
+    }
+    // Operation-specific wire effects use the production materializer in both
+    // settled caches. Mutation-service tests independently prove Tower produces
+    // these bounded pages; this harness never signs or contacts a live workspace.
+    const scope = fixture.canonical_upserts.changes.find(c => c.family === 'scope');
+    const newScope = { ...scope, version: '21', id: 'routine-scope', scope_id: 'routine-scope', row: { ...scope.row, id: 'routine-scope', name: 'Routine scope' } };
+    const renamedChannel = { ...channel, version: '20', id: 'new-empty-channel', row: { ...channel.row, id: 'new-empty-channel', name: 'Renamed routine channel' } };
+    const operations = [
+      ['channel-rename', [renamedChannel]],
+      ['scope-create', [newScope]],
+      ['scope-rename', [{ ...newScope, version: '22', row: { ...newScope.row, name: 'Renamed routine scope' } }]],
+      ['group-create', []], // Groups use the separate roster projection.
+      ['channel-archive', [{ ...renamedChannel, version: '23', operation: 'delete', row: null }]],
+      ['scope-archive', [{ ...newScope, version: '24', operation: 'delete', row: null }]],
+    ];
+    for (const [operation, changes] of operations) {
+      for (const [i, c] of clients.entries()) {
+        const previous = await c.page.evaluate(() => window.snapshot());
+        c.queue.push(c.wire(changes, operation));
+        if (i === 1) await c.page.evaluate(() => window.restartWorker());
+        await c.page.evaluate(() => window.run());
+        const after = await c.page.evaluate(() => window.snapshot());
+        expect(after.editor).toBe(baseline[i].editor); expect(after.selection).toBe(baseline[i].selection);
+        expect(after.outbox).toEqual(baseline[i].outbox); expect(after.drafts).toEqual(baseline[i].drafts);
+        expect(after.unrelatedContent).toBe(baseline[i].unrelatedContent);
+        expect(after.state.localGeneration || 0).toBe(baseline[i].state.localGeneration || 0);
+        if (protocol === 2) expect(after.state.device.clientId).toBe(baseline[i].state.device.clientId);
+        expect(c.requests.filter(r => r.path.endsWith('/record-sync')).at(-1)).toMatchObject({cursor:previous.state.cursor,mode:'delta',changedIds:changes.map(c=>c.id)});
+        const title = operation === 'channel-rename' ? 'Renamed routine channel' : operation === 'scope-create' ? 'Routine scope' : operation === 'scope-rename' ? 'Renamed routine scope' : null;
+        if (operation === 'scope-create') await expect.poll(() => c.page.evaluate(() => window.Alpine.store('cache').scopes.map(row => row.title)), {timeout:5000}).toContain(title);
+        if (operation === 'channel-rename' || operation === 'scope-rename') {
+          // Characterize the observed defect: Tower scope/channel rows have no
+          // row_version. Canonical journal progress commits, but the generic
+          // local-version guard keeps the old navigation title. Manager repair
+          // must replace these assertions with the renamed presentation titles.
+          const family=operation==='channel-rename'?'channel':'scope', id=family==='channel'?'new-empty-channel':'routine-scope';
+          expect((await c.page.evaluate(({family,id})=>window.canonical(family,id),{family,id})).row.name).toBe(title);
+          const titles=await c.page.evaluate(()=>[...window.Alpine.store('cache').channels,...window.Alpine.store('cache').scopes].map(row=>row.title));
+          expect(titles).not.toContain(title);expect(titles).toContain(family==='channel'?'New empty channel':'Routine scope');
+        }
+        if (operation === 'channel-archive' || operation === 'scope-archive') await c.page.waitForFunction(({operation}) => {
+          const store=window.Alpine.store('cache');return operation==='channel-archive' ? !store.channels.some(row=>row.record_id==='new-empty-channel') : !store.scopes.some(row=>row.record_id==='routine-scope');
+        }, {operation}, {timeout:5000});
+      }
     }
     const c = clients[1], message = fixture.one_message_delta.changes[0];
     const older = { ...message, id: 'newly-granted-older-history', version: '1', row: { ...message.row, id: 'newly-granted-older-history', body: 'Old newly authorized history', created_at: '2020-01-01T00:00:00Z' } };
