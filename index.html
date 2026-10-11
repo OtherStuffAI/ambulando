@@ -3266,12 +3266,12 @@
                 </div>
               <div class="task-detail-header">
                 <div class="task-header-title">
-                  <button type="button" class="task-back-btn" x-show="!$store.chat.chatTaskModalOpen" @click="$store.chat.returnFromTaskDetail()">
+                  <button type="button" class="task-back-btn" aria-label="Back" x-show="!$store.chat.chatTaskModalOpen" @click="$store.chat.returnFromTaskDetail()">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
-                    Back
+                    <span class="task-back-label">Back</span>
                   </button>
                   <div class="task-header-title-content">
-                    <h1 class="task-detail-title-display" x-show="!$store.chat.isTaskDetailEditing()" :class="$store.chat.getTaskTitleLengthClass($store.chat.editingTask.title)" x-text="$store.chat.editingTask.title || 'Untitled task'"></h1>
+                    <h1 class="task-detail-title-display" :title="$store.chat.editingTask.title" x-show="!$store.chat.isTaskDetailEditing()" :class="$store.chat.getTaskTitleLengthClass($store.chat.editingTask.title)" x-text="$store.chat.editingTask.title || 'Untitled task'"></h1>
                     <textarea
                       class="task-detail-title"
                       rows="1"
@@ -3288,7 +3288,7 @@
                 <div class="task-detail-actions">
                   <button
                     type="button"
-                    class="task-copy-btn task-modal-expand-btn"
+                    class="task-copy-btn task-modal-expand-btn task-desktop-action"
                     x-show="$store.chat.chatTaskModalOpen"
                     @click="$store.chat.toggleChatTaskModalFullScreen()"
                     :title="$store.chat.chatTaskModalFullScreen ? 'Exit full screen' : 'Full screen'"
@@ -3299,7 +3299,7 @@
                   </button>
                   <button
                     type="button"
-                    class="task-copy-btn"
+                    class="task-copy-btn task-desktop-action"
                     x-show="$store.chat.chatTaskModalOpen"
                     @click="$store.chat.openChatTaskFullPage()"
                   >Open full page</button>
@@ -3321,7 +3321,7 @@
                   ></button>
                   <button
                     type="button"
-                    class="task-copy-btn"
+                    class="task-copy-btn task-desktop-action"
                     x-show="$store.chat.isTaskDetailEditing() && (!$store.chat.isTowerPgMode || $store.chat.taskDraftDirty)"
                     @click="$store.chat.cancelTaskDetailEdit()"
                     :disabled="$store.chat.taskDetailSaving"
@@ -3329,7 +3329,7 @@
                   ></button>
                   <button
                     type="button"
-                    class="task-copy-btn"
+                    class="task-copy-btn task-desktop-action"
                     @click="if ($store.chat.editingTask?.record_id) $store.chat.copyTaskLink($store.chat.editingTask.record_id)"
                     x-text="$store.chat.editingTask?.record_id && $store.chat.copiedTaskLinkId === $store.chat.editingTask.record_id ? 'Copied link' : 'Copy link'"
                   ></button>
@@ -3342,6 +3342,15 @@
                       </svg>
                     </button>
                     <div class="doc-actions-popover" x-show="open" x-cloak x-transition>
+                      <div class="task-phone-actions">
+                        <p class="task-menu-title" x-text="$store.chat.editingTask.title || 'Untitled task'"></p>
+                        <button type="button" x-show="$store.chat.isTaskDetailEditing() && (!$store.chat.isTowerPgMode || $store.chat.taskDraftDirty)" :disabled="$store.chat.taskDetailSaving" @click="$store.chat.cancelTaskDetailEdit(); open = false" x-text="$store.chat.isTowerPgMode ? 'Discard' : 'Cancel'"></button>
+                        <button type="button" @click="if ($store.chat.editingTask?.record_id) $store.chat.copyTaskLink($store.chat.editingTask.record_id); open = false" x-text="$store.chat.copiedTaskLinkId === $store.chat.editingTask?.record_id ? 'Copied link' : 'Copy link'"></button>
+                        <button type="button" x-show="$store.chat.chatTaskModalOpen" @click="$store.chat.toggleChatTaskModalFullScreen(); open = false" x-text="$store.chat.chatTaskModalFullScreen ? 'Exit full screen' : 'Full screen'"></button>
+                        <button type="button" x-show="$store.chat.chatTaskModalOpen" @click="$store.chat.openChatTaskFullPage(); open = false">Open full page</button>
+                        <button type="button" x-show="$store.chat.getPrimaryTaskAssigneeNpub($store.chat.editingTask)" :disabled="$store.chat.taskDetailSaving || $store.chat.taskDetailCheckoutPending" @click="if ($store.chat.isTaskDetailEditing() || await $store.chat.enterTaskDetailEditMode()) await $store.chat.clearEditingTaskAssignee(); open = false">Clear task assignee</button>
+                      </div>
+
                   <span
                     class="task-detail-mode-pill"
                     :class="$store.chat.isTaskDetailEditing() ? 'task-detail-mode-edit' : 'task-detail-mode-view'"
@@ -3416,7 +3425,7 @@
                       type="text"
                       x-model="$store.chat.taskAssigneeQuery"
                       @input="suggestionsOpen = true; $store.chat.handleTaskAssigneeInput($event.target.value)"
-                      placeholder="Type a name or npub"
+                      :placeholder="$store.chat.mobileViewport ? 'Assign' : 'Type a name or npub'"
                     />
                     <ul class="docs-share-suggestions" x-ref="assigneeSuggestions" @keydown.escape.stop="$refs.assigneeInput.focus(); suggestionsOpen = false" x-show="suggestionsOpen && !$store.chat.getPrimaryTaskAssigneeNpub($store.chat.editingTask) && $store.chat.isTaskDetailEditing() && $store.chat.taskAssigneeSuggestions.length > 0">
                       <template x-for="person in $store.chat.taskAssigneeSuggestions" :key="`task-assignee-${person.npub}`">
@@ -3439,8 +3448,8 @@
                   </div>
 
                 <div class="task-date-picker" x-data="{ open: false, anchor: '', active: '', close() { this.open = false; this.$refs.trigger.focus(); }, show() { this.anchor = this.active = $store.chat.taskDateAnchor($store.chat.editingTask.scheduled_for); this.open = true; this.$nextTick(() => requestAnimationFrame(() => this.focusDay())); }, focusDay() { this.$refs.days.querySelector('[data-date=&quot;' + this.active + '&quot;]')?.focus(); }, move(step, view = 'day') { this.active = $store.chat.shiftTaskDate(this.active, view, step); this.anchor = this.active; this.$nextTick(() => requestAnimationFrame(() => this.focusDay())); } }" @click.outside="open = false" @focusout="if ($event.relatedTarget && !$el.contains($event.relatedTarget)) open = false" @keydown.escape.prevent.stop="close()">
-                  <button type="button" class="task-bar-control" x-ref="trigger" aria-label="Schedule task" aria-haspopup="dialog" :aria-expanded="open" :disabled="$store.chat.taskDetailSaving || $store.chat.taskDetailCheckoutPending" @click="open ? close() : show()" @keydown.arrow-down.prevent="show()">
-                    <span class="task-bar-icon" x-html="$store.chat.getAttentionIconSvg('calendar')"></span><span x-text="$store.chat.editingTask.scheduled_for ? $store.chat.formatTaskDueDate($store.chat.editingTask.scheduled_for) : 'No date'"></span>
+                  <button type="button" class="task-bar-control" :title="$store.chat.editingTask.scheduled_for ? $store.chat.formatTaskDueDate($store.chat.editingTask.scheduled_for) : 'No date'" x-ref="trigger" aria-label="Schedule task" aria-haspopup="dialog" :aria-expanded="open" :disabled="$store.chat.taskDetailSaving || $store.chat.taskDetailCheckoutPending" @click="open ? close() : show()" @keydown.arrow-down.prevent="show()">
+                    <span class="task-bar-icon" x-html="$store.chat.getAttentionIconSvg('calendar')"></span><span class="task-date-label" x-text="$store.chat.editingTask.scheduled_for ? $store.chat.formatTaskDueDate($store.chat.editingTask.scheduled_for) : 'No date'"></span>
                   </button>
                   <div class="task-bar-popover task-date-popover" x-show="open" x-cloak role="dialog" aria-label="Schedule task calendar">
                     <div class="task-calendar-navigation"><button type="button" aria-label="Previous month" @click="anchor = active = $store.chat.shiftTaskDate(anchor, 'month', -1)">‹</button><strong aria-live="polite" x-text="$store.chat.taskDateCalendar(anchor).label"></strong><button type="button" aria-label="Next month" @click="anchor = active = $store.chat.shiftTaskDate(anchor, 'month', 1)">›</button></div>
@@ -3452,9 +3461,10 @@
                   </div>
                 </div>
                 <div class="task-tag-area task-detail-meta-row" aria-label="Task tags" x-data="{ open: false, query: '', index: 0, close() { this.open = false; this.$refs.add.focus(); }, async add(tag) { this.$refs.search.focus(); if (await $store.chat.changeEditingTaskTag(tag)) { this.query = ''; this.index = 0; this.$refs.search.focus(); } } }" @click.outside="open = false" @focusout="if ($event.relatedTarget && !$el.contains($event.relatedTarget)) open = false" @keydown.escape.prevent.stop="close()">
-                  <template x-for="tag in [...new Set($store.chat.getTaskTags($store.chat.editingTask))]" :key="tag"><span class="task-bar-tag"><span x-text="tag"></span><button type="button" :aria-label="'Remove tag ' + tag" :disabled="$store.chat.taskDetailSaving || $store.chat.taskDetailCheckoutPending" @click="await $store.chat.changeEditingTaskTag(tag, true); $refs.add.focus()">×</button></span></template>
-                  <button type="button" x-ref="add" class="task-bar-control" aria-haspopup="dialog" :aria-expanded="open" :disabled="$store.chat.taskDetailSaving || $store.chat.taskDetailCheckoutPending" @click="open = !open; if (open) $nextTick(() => requestAnimationFrame(() => $refs.search.focus()))"><span aria-hidden="true">＋</span> Add tag</button>
+                  <template x-for="tag in [...new Set($store.chat.getTaskTags($store.chat.editingTask))]" :key="tag"><span class="task-bar-tag task-desktop-tag"><span x-text="tag"></span><button type="button" :aria-label="'Remove tag ' + tag" :disabled="$store.chat.taskDetailSaving || $store.chat.taskDetailCheckoutPending" @click="await $store.chat.changeEditingTaskTag(tag, true); $refs.add.focus()">×</button></span></template>
+                  <button type="button" x-ref="add" class="task-bar-control" aria-label="Add tag" :title="'Tags: ' + ($store.chat.editingTask.tags || 'none')" aria-haspopup="dialog" :aria-expanded="open" :disabled="$store.chat.taskDetailSaving || $store.chat.taskDetailCheckoutPending" @click="open = !open; if (open) $nextTick(() => requestAnimationFrame(() => $refs.search.focus()))"><span aria-hidden="true">＋</span><span class="task-add-tag-label">Add tag</span></button>
                   <div class="task-bar-popover task-tag-popover" role="dialog" aria-label="Add task tags" x-show="open" x-cloak>
+                    <div class="task-phone-tags"><template x-for="tag in [...new Set($store.chat.getTaskTags($store.chat.editingTask))]" :key="tag"><span class="task-bar-tag"><span x-text="tag"></span><button type="button" :aria-label="'Remove tag ' + tag" :disabled="$store.chat.taskDetailSaving || $store.chat.taskDetailCheckoutPending" @click="await $store.chat.changeEditingTaskTag(tag, true); $refs.search.focus()">×</button></span></template></div>
                     <input type="text" x-ref="search" aria-label="Find or create tag" x-model="query" @input="index = 0" placeholder="Find or create tag" @keydown.arrow-down.prevent="index = Math.min(index + 1, $store.chat.taskTagOptions(query).length - 1)" @keydown.arrow-up.prevent="index = Math.max(0, index - 1)" @keydown.enter.prevent="if ($store.chat.taskTagOptions(query)[index]) add($store.chat.taskTagOptions(query)[index]); else if (query.trim()) add(query)" />
                     <div class="task-tag-options"><template x-for="(tag, i) in (open ? $store.chat.taskTagOptions(query) : [])" :key="tag"><button type="button" :class="{ 'tag-option-active': index === i }" @click="add(tag)" x-text="tag"></button></template></div>
                     <button type="button" class="task-tag-create" x-show="query.trim()" @click="add(query)">Add <span x-text="query"></span></button>

@@ -92,6 +92,7 @@ for (const width of [1280, 390, 320]) {
     await search.fill('CUSTOM');
     await search.press('Enter');
     await search.press('Escape');
+    if (width < 769) await page.getByRole('button',{name:'Add tag',exact:true}).click();
     await expect(page.getByRole('button',{name:'Remove tag custom'})).toHaveCount(1);
     await page.getByRole('button',{name:'Remove tag design'}).click();
     expect(await page.evaluate(()=>Alpine.store('chat').editingTask.tags)).toBe('polish,custom');
@@ -100,6 +101,7 @@ for (const width of [1280, 390, 320]) {
     expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
     await page.screenshot({path:`tmp/docs/handoffs/task-date-tags-${width}-${modal ? 'modal' : 'page'}.png`,fullPage:true});
     await page.keyboard.press('Escape');
+    if (width < 769) await page.getByRole('button',{name:'More actions',exact:true}).click();
     await page.getByRole('button',{name:'Discard',exact:true}).click();
     await expect(date).toHaveText('No date');
     expect(await page.evaluate(()=>Alpine.store('chat').editingTask.tags)).toBe('');
@@ -112,6 +114,7 @@ for (const width of [1280, 390, 320]) {
     await expect.poll(()=>page.evaluate(()=>window.taskSavedPatch?.tags)).toBe('saved-tag');
     expect(await page.evaluate(()=>window.taskSavedPatch.scheduled_for)).toBe(selected);
     await page.evaluate(()=>Alpine.store('chat').openTaskDetail('layout-task'));
+    if (width < 769) await page.getByRole('button',{name:'Add tag',exact:true}).click();
     await expect(page.getByRole('button',{name:'Remove tag saved-tag'})).toBeVisible();
     expect(await page.evaluate(()=>Alpine.store('chat').editingTask.scheduled_for)).toBe(selected);
   });

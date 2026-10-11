@@ -747,3 +747,49 @@ test('optional Agents and Context persist independently and restore navigation w
     if (JSON.stringify(s.channels) !== channels) throw new Error('Preference change altered channel data');
   });
 });
+
+for (const [width, height] of [[320, 700], [390, 844], [390, 600], [720, 900]]) {
+  for (const safeArea of [0, 34]) {
+    test(`Deck dots meet bottom navigation at ${width}x${height}, safe area ${safeArea}`, async ({ page }) => {
+      await page.setViewportSize({ width, height });
+      await openFixture(page);
+      // Chromium does not expose iOS insets. Substitute only the bottom env()
+      // value in the loaded production styles, retaining their cascade order.
+      const styles = await page.evaluate(inset => [...document.styleSheets]
+        .map(sheet => [...sheet.cssRules].map(rule => rule.cssText).join('\n'))
+        .join('\n').replaceAll(/env\(safe-area-inset-bottom(?:,\s*0px)?\)/g, `${inset}px`), safeArea);
+      await page.addStyleTag({ content: styles });
+      await page.evaluate(() => {
+        const s = window.Alpine.store('chat');
+        s.closeThread({ syncRoute: false });
+        s.deckInboxEnabled = true;
+        s.navigateTo('status', { syncRoute: false });
+      });
+      const dots = page.locator('.deck-mobile-pagination');
+      await expect(dots).toBeVisible();
+      await assertTouchTargets(dots.locator('button'), 'Deck dots');
+      await assertTouchTargets(page.locator('.mobile-section-switcher-btn:visible'), 'bottom navigation');
+      const geometry = await page.evaluate(() => {
+        const dots = document.querySelector('.deck-mobile-pagination').getBoundingClientRect();
+        const bar = document.querySelector('.mobile-section-switcher');
+        const navigation = bar.getBoundingClientRect();
+        return { gap: navigation.top - dots.bottom, navigationHeight: navigation.height, safeArea: parseFloat(getComputedStyle(bar).paddingBottom) };
+      });
+      expect(Math.abs(geometry.gap)).toBeLessThanOrEqual(1);
+      expect(geometry.navigationHeight).toBe(45 + safeArea);
+      expect(geometry.safeArea).toBe(safeArea);
+      console.log('SOL_DECK_SPACING', JSON.stringify({ width, height, ...geometry }));
+      await capture(page, `deck-spacing-${width}-${height}-safe-${safeArea}`);
+      const buttons = dots.locator('button');
+      await buttons.last().click();
+      await expect(buttons.last()).toHaveAttribute('aria-current', 'page');
+      await buttons.first().focus();
+      await page.keyboard.press('Enter');
+      await expect(buttons.first()).toHaveAttribute('aria-current', 'page');
+      // Native horizontal scrolling is the Deck's page-swipe path.
+      await page.locator('[data-deck-columns-track]').evaluate(node => { node.scrollLeft = node.scrollWidth; node.dispatchEvent(new Event('scroll')); });
+      await expect(buttons.last()).toHaveAttribute('aria-current', 'page');
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    });
+  }
+}

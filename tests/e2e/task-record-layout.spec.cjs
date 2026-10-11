@@ -260,6 +260,7 @@ for (const width of [1280, 390, 320]) {
     await expect(panel.locator('.task-assignee-selected')).toContainText('Layout reviewer');
     await expect(assign).toBeHidden();
     await page.screenshot({ path: `tmp/docs/handoffs/task-card-assigned-${width}.png`, fullPage: true });
+    if (width < 769) await header.getByRole('button', { name: 'More actions' }).click();
     await panel.getByRole('button', { name: 'Clear task assignee' }).click();
     await expect(assign).toBeVisible();
     await expect(panel.locator('.task-assignee-selected')).toHaveCount(0);
@@ -286,11 +287,12 @@ for (const width of [1280, 390, 320]) {
     await page.keyboard.press('Escape');
     await expect(header.getByRole('button', { name: 'More actions' })).toBeFocused();
     await expect(header.locator('.doc-actions-popover')).toBeHidden();
+    if (width < 769) await header.getByRole('button', { name: 'More actions' }).click();
     await expect(header.getByRole('button', { name: 'Copy link', exact: true })).toBeVisible();
     await expect(header.getByRole('button', { name: 'Save', exact: true })).toBeVisible();
     await expect(header.getByRole('button', { name: 'Discard', exact: true })).toBeVisible();
     const actions = await header.locator('.task-detail-actions').evaluate(node => [...node.querySelectorAll('button')].filter(button => button.getBoundingClientRect().width > 0).map(button => button.textContent.trim()));
-    expect(actions.at(-1)).toBe('Back');
+    expect(actions).toContain('Save');
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.screenshot({ path: `tmp/docs/handoffs/task-card-unassigned-${width}.png`, fullPage: true });
     await header.getByRole('button', { name: 'Discard', exact: true }).click();

@@ -16,11 +16,18 @@ composer autosizer also exempts `task-description` from chat line limits.
 Draft/save handling and edit leases retain their existing paths.
 
 The title and actions share the top row, with Back immediately left of the title.
-Narrow layouts keep Back beside the title and wrap the right-side actions below.
+Phones keep Back, the title, Save/Edit and the overflow menu in one row.
+Read titles show up to two lines; the complete title remains in the overflow
+menu and accessible heading. The editable title scrolls internally. Discard,
+Copy link, modal expansion/full-page actions and Clear assignee live in the
+phone overflow menu; desktop controls retain their existing placement.
 Status is a coloured button with a state picker (arrow keys, Home/End, Enter/Space and Escape). The assignment
 control shows either avatar/name and Clear or a compact typeahead. Remote-update
 notices live in the overflow menu; Save/Discard retain draft reconciliation.
-Status and assignee controls share a compact desktop row and wrap on mobile.
+Phone status, assignment, date and tag controls share a second row. Date/tag
+buttons retain accessible labels and their current values in tooltips; selected
+tags and removal actions appear in the tag popup. Controls keep 44px touch
+targets, and popups remain outside the row’s layout.
 `tests/e2e/task-back-control.spec.cjs` exercises the production header at
 1280/390/320px in both themes: read/edit long titles, keyboard order, Save/reopen,
 Discard, clipboard/menu focus, PG draft retention on Back and history return.

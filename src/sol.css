@@ -301,7 +301,7 @@ code, pre { font-family:var(--font-code); }
 
 /* Phone layout: reserve the bottom view switcher and its safe-area inset. */
 @media (max-width:768px) {
-  .app-shell { --mobile-section-switcher-height:68px; }
+  .app-shell { --mobile-section-switcher-height:44px; }
   .page-header { min-height:60px; padding-block:8px; }
   .session-controls { min-height:44px; }
   .page-header .avatar-chip { width:44px; height:44px; padding:0; flex:0 0 44px; }
@@ -312,7 +312,8 @@ code, pre { font-family:var(--font-code); }
   .global-pg-channel-bar { margin-bottom:4px; }
   .chat-channel-header { padding:2px 0; min-height:48px; }
   .content-scroll-area { padding-bottom:calc(var(--mobile-section-switcher-height) + env(safe-area-inset-bottom) + 0.75rem); }
-  .content-scroll-area-deck { padding-bottom:calc(var(--mobile-section-switcher-height) + env(safe-area-inset-bottom)); }
+  /* Match the 44px navigation targets plus its border; the bar owns the inset. */
+  .content-scroll-area-deck { padding-bottom:calc(var(--mobile-section-switcher-height) + 1px + env(safe-area-inset-bottom)); }
   .workspace-recovery-status { flex:0 0 auto; margin:4px 0 8px; font-size:13px; line-height:1.4; }
   .status-section-deck { flex:1 1 0; height:auto; }
   .flightdeck-summary-overview-deck { padding:0; gap:0; }
@@ -489,3 +490,33 @@ code, pre { font-family:var(--font-code); }
 .channel-thread-card-heading { padding-right:52px; min-height:44px; }
 @media (hover:none) { .chat-msg-actions-menu { opacity:1; } }
 .chat-msg-actions-popover { max-width:calc(100vw - 32px); max-height:50dvh; overflow-y:auto; }
+
+/* Phone task front matter: one title/action row and one metadata row. */
+.task-phone-actions, .task-phone-tags { display:none; }
+@media (max-width:768px) {
+  .task-detail-header { flex-wrap:nowrap; gap:4px; margin-bottom:4px; padding:0 0 4px; }
+  .task-header-title { flex:1 1 0; gap:4px; }
+  .task-detail-header .task-detail-actions { width:auto; flex-wrap:nowrap; gap:0; }
+  .task-detail-header .task-desktop-action { display:none; }
+  .task-back-label { display:none; }
+  .task-detail-header .task-back-btn { width:44px; padding:0; justify-content:center; }
+  .task-header-title .task-detail-title-display { font-size:14px; line-height:20px; margin:0; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+  .task-header-title .task-detail-title { font-size:16px; line-height:20px; height:44px; min-height:44px; padding:2px 4px; overflow-y:auto; }
+  .task-detail-header .task-copy-btn { padding:0 4px; font-size:12px; }
+  .task-phone-actions { display:block; }
+  .task-menu-title { margin:4px 8px; font-size:14px; overflow-wrap:anywhere; }
+  .task-actions-menu .doc-actions-popover { max-width:calc(100vw - 24px); max-height:60dvh; overflow-y:auto; }
+  .task-record-heading { flex-wrap:nowrap; gap:4px; padding:0 0 4px; }
+  .task-record-heading .task-status-picker > button { padding:4px 6px; font-size:12px; }
+  .task-record-heading .task-assignee-field { flex:1 1 0; min-width:44px; max-width:none; }
+  .task-record-heading .task-assignee-selected { padding:0; gap:2px; min-height:44px; }
+  .task-record-heading .task-assignee-selected .docs-share-suggestion-copy { min-width:0; }
+  .task-record-heading .task-assignee-selected .new-channel-profile-name { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:12px; }
+  .task-record-heading .task-assignee-selected small, .task-record-heading .task-inline-clear-btn { display:none; }
+  .task-record-heading .task-assignee-field > input { width:100%; min-width:44px; padding:4px; }
+  .task-record-heading .task-date-picker, .task-record-heading .task-tag-area { flex:0 0 44px; }
+  .task-record-heading .task-date-picker > button, .task-record-heading .task-tag-area > button { width:44px; padding:0; justify-content:center; }
+  .task-date-label, .task-add-tag-label, .task-record-heading .task-desktop-tag { display:none; }
+  .task-phone-tags { display:flex; flex-wrap:wrap; gap:4px; margin-bottom:4px; }
+  .task-phone-tags .task-bar-tag button { min-width:44px; min-height:44px; }
+}

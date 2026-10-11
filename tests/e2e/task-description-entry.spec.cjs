@@ -52,7 +52,9 @@ for (const width of [1280, 390, 320]) {
     await expect(editor).toHaveCount(1);
     await expect(panel.locator('[aria-label="Task description formatting"]')).toHaveCount(1);
     await expect(panel.locator('.task-save-btn')).toBeVisible();
+    if (width < 769) await panel.getByRole('button', { name: 'More actions' }).click();
     await expect(panel.getByRole('button', { name: 'Discard', exact: true })).toBeVisible();
+    if (width < 769) await page.keyboard.press('Escape');
     if (width < 769) {
       await panel.getByRole('button', { name: 'Comments', exact: true }).click();
       await expect(panel.locator('.task-detail-main')).toBeHidden();

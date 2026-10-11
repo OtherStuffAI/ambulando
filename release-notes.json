@@ -3749,6 +3749,14 @@
       "notes": [
         "Keep a downloaded channel selected when access status becomes read-only, preserving its thread and unsent composer."
       ]
+    },
+    {
+      "buildNumber": 2368,
+      "label": "Compact mobile layout",
+      "notes": [
+        "Remove the blank band between the Deck page dots and bottom navigation while preserving touch targets and safe-area clearance.",
+        "Keep mobile task titles and actions in one compact row, with metadata on a second row and secondary actions in menus."
+      ]
     }
   ]
 }
