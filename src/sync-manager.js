@@ -1243,9 +1243,9 @@ export const syncManagerMixin = {
       policy,
       checkoutId,
       checkoutMissing,
-      syncBlocker: checkoutMissing
-        ? 'checkout_required write is missing checkout_id'
-        : '',
+      syncBlocker: row?.authorization_blocked
+        ? `Access denied; local intent retained. Explicitly retry after access changes. ${row.sync_error || ''}`
+        : checkoutMissing ? 'checkout_required write is missing checkout_id' : '',
     };
   },
 
@@ -3624,6 +3624,17 @@ export const syncManagerMixin = {
     if (s.phase === 'applying' || s.phase === 'done') return 100;
     if (s.phase === 'checking') return 5;
     return 0;
+  },
+
+  get retainedDownloadNotice() {
+    if (!this.isTowerPgMode) return '';
+    if (this.pgRetainedAccessLost) return 'Workspace access lost. Downloads remain available for reading and local drafts remain on this device. Tower will deny forbidden reads and writes.';
+    const rows = this.navSection === 'docs' || this.navSection === 'files' ? this.documents || []
+      : this.navSection === 'tasks' ? this.tasks || []
+      : [...(this.messages || []), ...(this.channels || []).filter(row => row.record_id === this.selectedChannelId)];
+    if (rows.some(row => row.pg_access_status === 'access-lost')) return 'Access lost for retained downloads in this view. Keep reading cached content; Tower must authorize future reads and writes. Local drafts are preserved.';
+    if (rows.some(row => row.pg_access_status === 'stale')) return 'Retained downloads in this view may be stale. Tower must confirm access before future changes.';
+    return '';
   },
 
   lastSyncTimeLabel() {

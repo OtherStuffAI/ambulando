@@ -20,6 +20,7 @@ const state = {
 vi.mock('../src/db.js', () => ({
   openWorkspaceDb: vi.fn(),
   getPendingWrites: vi.fn(async () => state.pending),
+  updatePendingWrite: vi.fn(async (id, patch) => Object.assign(state.pending.find(row => row.row_id === id), patch)),
   removePendingWrite: vi.fn(async (rowId) => {
     state.removed.push(rowId);
     state.pending = state.pending.filter((row) => row.row_id !== rowId);
@@ -617,6 +618,11 @@ describe('sync worker pending write batching', () => {
 
     expect(result).toEqual({ pushed: 1 });
     expect(state.removed).toEqual([2]);
+    expect(state.pending[0].authorization_blocked).toBe(true);
+    await flushPendingWrites('npub-owner');
+    expect(state.syncCalls).toHaveLength(1);
+    await flushPendingWrites('npub-owner', null, { retryForbiddenWrites: true });
+    expect(state.pending).toHaveLength(0);
   });
 
   it('skips inbound apply when a lock-managed pending write is newer than Tower', async () => {

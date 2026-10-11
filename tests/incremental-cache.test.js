@@ -30,7 +30,7 @@ describe('indexed incremental cache', () => {
   it('does not erase unchanged included rows during complete reconciliation', async () => {
     await replacePgMessagesForChannel('channel', [row('keep'),row('omit')]);
     await replacePgMessagesForChannel('channel', [row('keep')], {authoritative:true});
-    expect(await db.chat_messages.toCollection().primaryKeys()).toEqual(['keep']);
+    expect(await db.chat_messages.toCollection().primaryKeys()).toEqual(['keep', 'omit']);
   });
   it('replaces optimistic identities exactly once without channel scans', async () => {
     await db.chat_messages.put(row('local', {sync_status:'pending'}));

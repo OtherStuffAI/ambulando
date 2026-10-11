@@ -35,14 +35,14 @@ it('atomically rolls back terminal projection and cursor on failure', async () =
   await expect(applyPgRecordChanges(store, page(changes, 'a'), { beforeCommit() { throw Error('crash'); } })).rejects.toThrow('crash');
   expect(await db.context_components.count()).toBe(0); expect(await db.pg_record_rows.count()).toBe(0);
 });
-it('fails closed on reset and removes omitted scope after multipage replacement', async () => {
+it('retains context downloads across repair and an omitted scope', async () => {
   await applyPgRecordChanges(store, page(changes, 'a'));
   await resetPgRecordAuthority(store, { preserveViews: true });
-  expect(await db.context_components.count()).toBe(0);
+  expect(await db.context_components.count()).toBe(2);
   const snapshot = { ...page([], 'b', true), mode: 'snapshot', snapshot_id: 'snapshot', snapshot_complete: true, partitions_complete: PG_RECORD_DELTA_FAMILIES };
   await applyPgRecordChanges(store, snapshot);
   await applyPgRecordChanges(store, page([], 'c'));
-  expect(await db.context_components.count()).toBe(0); expect(await db.context_references.count()).toBe(0);
+  expect(await db.context_components.count()).toBe(2); expect(await db.context_references.count()).toBe(1);
 });
 it('liveQuery distinguishes unloaded/loading/complete empty and isolates workspace ids', async () => {
   const values = []; const subscription = observeContextScope(db, workspaceId, scopeId).subscribe(value => values.push(value));

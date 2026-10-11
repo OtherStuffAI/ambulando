@@ -380,6 +380,10 @@
           </template>
         </button>
         <div id="profile-avatar-menu" class="avatar-menu" role="region" aria-label="Profile and workspace actions" tabindex="-1" x-sol-menu="$store.chat.showAvatarMenu" x-show="$store.chat.showAvatarMenu" @click.outside="$store.chat.showAvatarMenu = false">
+          <div class="avatar-menu-section" x-show="$store.chat.retainedDownloadNotice">
+            <span class="avatar-menu-label">Retained downloads</span>
+            <span role="status" x-text="$store.chat.retainedDownloadNotice"></span>
+          </div>
           <div class="avatar-menu-header">
             <span class="avatar-menu-name" x-text="$store.chat.displayName"></span>
           </div>
@@ -515,6 +519,7 @@
         </section>
       </div>
     </header>
+    <div class="startup-sync-progress-panel" role="status" x-show="$store.chat.retainedDownloadNotice" x-cloak x-text="$store.chat.retainedDownloadNotice"></div>
 
     <div
       class="mobile-scope-switcher"
@@ -1836,6 +1841,7 @@
                 <button type="button" @click="loadTree()" :disabled="status === 'loading'">Reload</button>
               </div>
             </header>
+            <p class="context-tree-notice" role="status" x-show="retainedStatus === 'access-lost'">Access lost. Downloaded context is retained for reading; editing requires Tower access.</p>
             <p class="context-tree-notice" role="status" x-show="notice" x-text="notice"></p>
             <p class="context-tree-notice" role="alert" x-show="editError && !dialogOpen" x-text="editError"></p>
             <div class="context-tree-panes">

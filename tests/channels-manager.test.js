@@ -2901,11 +2901,8 @@ describe('channels-manager pure utilities', () => {
           permissions: permissionsForPgChannelCapacity('viewer'),
         }],
       });
-      let finishMaterialization;
-      hydrateTowerPgScopes.mockImplementationOnce(() => new Promise((resolve) => {
-        finishMaterialization = resolve;
-      }));
-      const store = createPgGrantStore({ canAdminWorkspace: true, channelGrants: [] });
+      const requestTowerSyncFamily = vi.fn(async () => ({}));
+      const store = createPgGrantStore({ canAdminWorkspace: true, channelGrants: [], requestTowerSyncFamily });
 
       await store.createChannelGrant();
 
@@ -2922,14 +2919,8 @@ describe('channels-manager pure utilities', () => {
       expect(store.channelGrantsNotice).toBe('Channel access updated.');
 
       await flushMicrotasks();
-      expect(hydrateTowerPgScopes).toHaveBeenCalledWith(store);
-      expect(hydrateTowerPgChannels).not.toHaveBeenCalled();
-      finishMaterialization();
-      await flushMicrotasks();
-      expect(hydrateTowerPgChannels).toHaveBeenCalledWith(store);
-      expect(hydrateTowerPgTasks).toHaveBeenCalledWith(store);
-      expect(hydrateTowerPgDocumentsAndFiles).toHaveBeenCalledWith(store);
-      expect(hydrateTowerPgAudioNotes).toHaveBeenCalledWith(store);
+      expect(requestTowerSyncFamily).toHaveBeenCalledWith('channel', 'channel-1', { force: true });
+      for (const read of [hydrateTowerPgScopes, hydrateTowerPgChannels, hydrateTowerPgTasks, hydrateTowerPgDocumentsAndFiles, hydrateTowerPgAudioNotes]) expect(read).not.toHaveBeenCalled();
     });
   });
 });

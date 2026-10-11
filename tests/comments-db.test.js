@@ -54,6 +54,7 @@ describe('comment db helpers', () => {
     const comments = await getCommentsByTarget('task-1');
     expect(comments.map((comment) => comment.record_id)).toEqual([
       'pending-comment',
+      'synced-old',
       'synced-new',
     ]);
   });

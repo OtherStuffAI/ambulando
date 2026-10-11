@@ -57,5 +57,5 @@ test('populated v30 upgrade, second-client paging/reconnect, subtree delete, rev
   // Later additive workspace stores must not invalidate the v30 context upgrade.
   expect(result.upgraded.version).toBeGreaterThanOrEqual(31);expect(result.upgraded.task.title).toBe('Retained existing cache');expect(result.upgraded.cursor.value).toBe('retained');
   expect(result.partial).toEqual([0,0]);expect(result.reconnected).toEqual([2,1]);expect(result.secondClient).toBe('Second client change');
-  expect(result.splitDelete).toEqual([2,1]);expect(result.deleted).toEqual([0,0]);expect(result.revoked).toEqual([0,0]);expect(result.switched).toEqual([0,0]);expect(result.orphanSnapshots).toBe(0);
+  expect(result.splitDelete).toEqual([2,1]);expect(result.deleted).toEqual([0,0]);expect(result.revoked).toEqual([2,1]);expect(result.switched).toEqual([0,0]);expect(result.orphanSnapshots).toBe(0);
 });

@@ -1737,12 +1737,12 @@ describe('PG read hydrator', () => {
       { entity_type: 'daily_scope_agent_access', entity_id: 'actor-agent' },
     ]);
 
-    expect(result.fallbackEvents).toBe(0);
+    expect(result.fallbackEvents).toBe(3);
     expect(refreshTowerPgWorkspaceMembers).toHaveBeenCalledWith({ force: true, limit: 200 });
     expect(refreshGroups).toHaveBeenCalledWith({ force: true, minIntervalMs: 0 });
     expect(refreshDailyScopeAgentAccess).toHaveBeenCalledOnce();
     expect(refreshChannelGrants).toHaveBeenCalledOnce();
-    expect(refreshPgChannelAccessMaterialization).toHaveBeenCalledOnce();
+    expect(refreshPgChannelAccessMaterialization).toHaveBeenCalledWith({ channelIds: ['channel-1'] });
   });
 
   it('routes PG workroom visible events to targeted workroom hydrators', async () => {

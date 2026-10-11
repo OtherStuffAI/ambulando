@@ -4804,6 +4804,12 @@ export const docsManagerMixin = {
         });
         void releasePgEditLeaseForRecord(this, item, 'document', { reportError: false });
         if (!autosave) this.error = this.docEditAccessMessage;
+      } else if (error?.status === 403) {
+        this.cancelDocAutosave();
+        this.docEditAccessState = 'blocked';
+        this.docEditAccessMessage = 'Tower denied this save. Your local draft is retained. Get edit access or explicitly retry after access changes.';
+        this.docRichEditorAdapter?.setEditable?.(true);
+        this.error = this.docEditAccessMessage;
       } else if (!autosave) {
         this.error = error?.message || 'Failed to save PG document.';
       }

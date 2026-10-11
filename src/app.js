@@ -667,6 +667,7 @@ export function initApp() {
     connectShowTokenFallback: false,
     knownHosts: [],
     showAgentConnectModal: false,
+    pgRetainedAccessLost: false,
     syncStatus: 'synced',
     syncSession: {
       state: 'synced',

@@ -3727,6 +3727,28 @@
       "notes": [
         "Use an app-bound protected signing broker for hosted signup and check live signer and Tower route readiness before opening signup."
       ]
+    },
+    {
+      "buildNumber": 2365,
+      "label": "Retained downloads and incremental channel access",
+      "notes": [
+        "Keep downloaded workspace content, navigation and drafts through access loss and checkpoint repair; show retained access status and pause forbidden queued writes.",
+        "Apply channel grants and newly authorized history through targeted updates without refreshing unrelated workspace collections."
+      ]
+    },
+    {
+      "buildNumber": 2366,
+      "label": "Retained context access",
+      "notes": [
+        "Keep downloaded scope context available after access loss, with a read-only notice and protected local drafts."
+      ]
+    },
+    {
+      "buildNumber": 2367,
+      "label": "Retained channel selection",
+      "notes": [
+        "Keep a downloaded channel selected when access status becomes read-only, preserving its thread and unsent composer."
+      ]
     }
   ]
 }

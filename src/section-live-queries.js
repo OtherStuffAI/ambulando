@@ -1,4 +1,5 @@
-import { clearPgAuthorityPresentation, rememberPgRecoveryDestination } from './pg-authority-presentation.js';
+import { projectPgDownloadedAccess } from './pg-access-state.js';
+import { rememberPgRecoveryDestination } from './pg-authority-presentation.js';
 import { filterProjectionForArchivedTargets } from './pg-archive-state.js';
 import { resolvePgReaderActorId } from './pg-reader-identity.js';
 import { disposePipelineViewer, resumePipelineViewer } from './pipeline-viewer-view.js';
@@ -171,8 +172,9 @@ function syncBucket(store, bucket, specs) {
     const workspaceKey = store.currentWorkspaceKey;
     const generation = store._workspaceSelectionGeneration;
     const query = currentPgWorkspaceId(store) && !['address-book', 'app-placements'].includes(spec.key) ? async () => {
-      const [value, targets] = await Promise.all([spec.query(), getWorkspaceDb().pg_archived_targets.toArray()]);
-      return filterProjectionForArchivedTargets(value, targets);
+      const { recordDeltaCursorKey } = await import('./pg-record-delta.js');
+      const [value, targets, authority] = await Promise.all([spec.query(), getWorkspaceDb().pg_archived_targets.toArray(), getWorkspaceDb().sync_state.get(`${recordDeltaCursorKey(store)}:record-access`)]);
+      return projectPgDownloadedAccess(filterProjectionForArchivedTargets(value, targets), authority?.value);
     } : spec.query;
     let subscription;
     subscription = store.createLiveSubscription(query, (...args) => {
@@ -375,18 +377,21 @@ export async function readPgNavigationProjection(store, ownerNpub = store.worksp
   return db.transaction('r', db.scopes, db.channels, db.sync_state, db.pg_archived_targets, async () => {
     const state = (await db.sync_state.get(recordDeltaCursorKey(store)))?.value;
     return {
-      scopes: await getScopesByOwner(ownerNpub),
-      channels: await getChannelsByOwner(ownerNpub),
+      scopes: projectPgDownloadedAccess(await getScopesByOwner(ownerNpub), state),
+      channels: projectPgDownloadedAccess(await getChannelsByOwner(ownerNpub), state),
       generation: Number(state?.localGeneration || 0),
       pending: Boolean(state?.resetting || state?.snapshotReconciliationPending || state?.snapshotRetirement),
       resetting: state?.resetting === true,
+      accessLost: state?.accessLost === true,
       archivedTargets: await db.pg_archived_targets.toArray(),
     };
   });
 }
 
 export function pgRecoveryRowReadable(row, scopes = []) {
-  if (!row || row.record_state === 'deleted' || row.can_read === false || row.readable === false) return false;
+  if (!row || row.record_state === 'deleted') return false;
+  if (['stale', 'access-lost'].includes(row.pg_access_status)) return true;
+  if (row.can_read === false || row.readable === false) return false;
   const scopeId = row.scope_id || row.pg_scope_id || row.scope_l1_id;
   return !scopeId || scopes.some(scope => scope.record_id === scopeId && scope.record_state !== 'deleted'
     && scope.can_read !== false && scope.readable !== false);
@@ -407,38 +412,15 @@ export async function applyPgNavigationProjection(store, projection) {
   store.pgNavigationWorkspaceKey = workspaceKey;
   store.pgNavigationGeneration = projection.generation;
   store.pgNavigationRecoveryPending = projection.pending;
-  if (changed) {
-    // Cached presentation is not authority. Fence asynchronous local selection
-    // reads as well as network reads already fenced by the materializer.
-    store.chatPresentationCache?.clear?.();
-    store.channelSelectionGeneration = Number(store.channelSelectionGeneration || 0) + 1;
-    if (projection.pending || authorityChanged) {
-      const previousIntent = store.pgNavigationRecoverySelection;
-      const retainIntent = previousIntent?.workspaceKey === workspaceKey
-        && !store.selectedChannelId && !store.activeTaskId && !store.selectedDocId && !store.selectedReportId;
-      if (!retainIntent) {
-        store.pgNavigationRecoverySelection = {
-          workspaceKey, boardId: store.selectedBoardId, channelId: store.selectedChannelId,
-          threadId: store.activeThreadId, section: store.navSection,
-          taskId: store.activeTaskId, docId: store.selectedDocId, reportId: store.selectedReportId,
-        };
-        store.saveChatComposerDraft?.('message');
-        store.saveChatComposerDraft?.('thread');
-      }
-      clearPgAuthorityPresentation(store);
-      store.closeThread?.({ syncRoute: false, saveDraft: false });
-      store.activeThreadId = null;
-      store.selectedChannelId = null;
-      store.messages = [];
-      store.messageInput = '';
-      store.threadInput = '';
-      store.stopSelectedChannelLiveQuery?.();
-    }
+  store.pgRetainedAccessLost = projection.accessLost === true;
+  // A same-workspace checkpoint generation fences network/worker responses.
+  // It does not invalidate local selection, an editor, or downloaded models.
+  if (changed && !authorityChanged && store.pgNavigationRecoverySelection?.workspaceKey !== workspaceKey) {
+    store.pgNavigationRecoverySelection = null;
   }
-  if (projection.pending && !changed) clearPgAuthorityPresentation(store);
   const omittedChannel = store.selectedChannelId && !channels.some(row => row.record_id === store.selectedChannelId
-    && row.record_state !== 'deleted' && row.can_read !== false && row.readable !== false);
-  if (omittedChannel && store.navSection === 'chat') {
+    && pgRecoveryRowReadable(row, projection.scopes));
+  if (omittedChannel && !projection.pending && store.navSection === 'chat') {
     store.chatPresentationCache?.clear?.();
     store.channelSelectionGeneration = Number(store.channelSelectionGeneration || 0) + 1;
     store.saveChatComposerDraft?.('message');

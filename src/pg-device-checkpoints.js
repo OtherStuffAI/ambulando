@@ -116,10 +116,10 @@ export async function syncDeviceRecords({ context, options, readState, materiali
       clientId: state.device.clientId, localGeneration: Number(state.localGeneration || 0) } });
     assertCurrent();
   };
-  const replace = async preserveViews => {
+  const replace = async (preserveViews, accessLost = false) => {
     assertCurrent();
     await materialize({ protocol_version: 2, reset_authority: true, local_apply_options: {
-      preserveViews, expectedCursor: state?.cursor || null, expectedGeneration: Number(state?.localGeneration || 0), deviceScope: scope,
+      preserveViews, accessLost, expectedCursor: state?.cursor || null, expectedGeneration: Number(state?.localGeneration || 0), deviceScope: scope,
     } });
     state = await readState(cursorKey);
   };
@@ -127,7 +127,8 @@ export async function syncDeviceRecords({ context, options, readState, materiali
     // Adoption replaces the authoritative snapshot, never upgrades a v1 cursor.
     // An unrelated authority must be hidden, whereas the same cache's v1 views
     // remain available until the replacement's snapshot handover completes.
-    await replace(!state?.device && (!inspection.owner || inspection.owner.scope === scope));
+    await replace((!inspection.owner || inspection.owner.scope === scope)
+      && (!state?.device || state.device.scope === scope));
   }
   const retireObsolete = async () => {
     for (const obsolete of state.obsoleteDevices || []) {
@@ -172,7 +173,7 @@ export async function syncDeviceRecords({ context, options, readState, materiali
       }
       await acknowledge();
       options.onProgress?.({ stage: 'receiving', page: pages, applied, cursorPresent: Boolean(state.cursor), mode: 'unavailable', protocolVersion: 2 });
-      const requested = { cursor: state.cursor, clientId: state.device.clientId, generation: state.localGeneration };
+      const requested = { cursor: state.cursor, clientId: state.device.clientId, generation: state.localGeneration, accessLost: Boolean(state.accessLost) };
       const page = await readPage(context.workspaceId, { ...transport, protocolVersion: 2,
         clientId: requested.clientId, cursor: requested.cursor, limit: options.limit || 200 });
       assertCurrent();
@@ -184,7 +185,7 @@ export async function syncDeviceRecords({ context, options, readState, materiali
       options.onProgress?.({ stage: 'applying', page: pages, applied, cursorPresent: Boolean(state.cursor), mode: page.mode, fullSnapshot: page.mode === 'snapshot', hasMore: page.has_more === true, protocolVersion: 2 });
       await preparePage?.(page, state);
       const result = await materialize({ ...page, local_apply_options: {
-        expectedCursor: requested.cursor, expectedGeneration: Number(requested.generation || 0),
+        expectedCursor: requested.cursor, expectedGeneration: Number(requested.generation || 0), expectedAccessLost: requested.accessLost,
         deviceScope: scope, authorityEpoch: state.device.authorityEpoch, incrementalSnapshot: true,
         viewBaselineInitialized: true,
       } });
@@ -203,12 +204,15 @@ export async function syncDeviceRecords({ context, options, readState, materiali
         && (!payload.identity?.workspace_id || payload.identity.workspace_id === context.workspaceId);
       const reset = error.status === 409 && ['reset_required', 'history_pruned', 'client_expired', 'client_not_registered', 'page_token_invalid'].includes(code);
       if (!revoked && !reset) throw error;
-      // Repeated denied polls have no authority left to discard. Keep the
-      // replacement ID stable instead of accumulating registrations/recovery
-      // metadata while membership remains revoked.
-      if (revoked && !state.device.registered && !state.cursor) throw error;
+      if (revoked) {
+        assertCurrent();
+        await materialize({ protocol_version: 2, access_lost: true, local_apply_options: {
+          expectedCursor: state.cursor, expectedGeneration: Number(state.localGeneration || 0),
+        } });
+        throw error;
+      }
       options.onProgress?.({ stage: 'recovery', recoveryReason: code, page: pages, applied, cursorPresent: Boolean(state.cursor), mode: 'unavailable', protocolVersion: 2 });
-      await replace(false);
+      await replace(true);
       if (revoked || ++resets > 2) throw error;
     }
     await new Promise(resolve => setTimeout(resolve, 0));

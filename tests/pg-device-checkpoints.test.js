@@ -136,11 +136,11 @@ it.each(['reset_required', 'history_pruned', 'client_expired', 'client_not_regis
   expect(h.remote.client.mock.calls.filter(c => c[2].operation === 'retire').map(c => c[1])).toEqual([old]);
 });
 
-it('hides revoked authority immediately and keeps pending commands for recovery', async () => {
+it('retains revoked downloads and keeps pending commands for recovery', async () => {
   const h = harness(); await h.run(); await db.pending_writes.add({ record_id: 'pending' });
   h.remote.page.mockRejectedValueOnce(failure('workspace_membership_required', 403));
   await expect(h.run()).rejects.toThrow('workspace_membership_required');
-  expect(await db.pg_record_rows.count()).toBe(0); expect(await db.chat_messages.count()).toBe(0); expect(await db.pending_writes.count()).toBe(1);
+  expect(await db.pg_record_rows.count()).toBe(17); expect(await db.chat_messages.count()).toBeGreaterThan(0); expect(await db.pending_writes.count()).toBe(1); expect((await state()).accessLost).toBe(true);
 });
 
 it('does not downgrade or endlessly register on capacity and authentication errors', async () => {
@@ -238,7 +238,7 @@ it('resumes snapshot retirement after interruption and acknowledges only its fin
   const interruptedState = await state();
   expect(interruptedState.snapshotRetirement.pendingAck).toBeTruthy(); expect(interruptedState.device.pendingAck).toBeNull();
   expect(h.remote.client.mock.calls.filter(c => c[2].operation === 'ack')).toHaveLength(1);
-  await h.run(); expect(await db.chat_messages.get('obsolete')).toBeUndefined();
+  await h.run(); expect(await db.chat_messages.get('obsolete')).toMatchObject({ pg_access_status: 'stale' });
   expect((await state()).snapshotRetirement).toBeNull(); expect((await state()).device.pendingAck).toBeNull();
   expect(h.remote.client.mock.calls.filter(c => c[2].operation === 'ack')[1][2].cursor).toBe(interruptedState.snapshotRetirement.nextCursor);
 });

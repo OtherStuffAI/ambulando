@@ -129,8 +129,8 @@ describe('Autopilot materialization and compatibility migration', () => {
 
     await reconcileTowerPgSnapshot({ autopilot_connections: [presentConnection.id], workspace_agents: [presentAgent.id] });
 
-    expect(await db.autopilot_connections.get(connection.id)).toBeUndefined();
-    expect(await db.workspace_agents.get(agent.id)).toBeUndefined();
+    expect(await db.autopilot_connections.get(connection.id)).toMatchObject({ pg_access_status: 'stale' });
+    expect(await db.workspace_agents.get(agent.id)).toMatchObject({ pg_access_status: 'stale' });
     expect(await db.autopilot_connections.get(presentConnection.id)).toMatchObject({ installation_id: 'present-installation' });
     expect(await db.workspace_agents.get(presentAgent.id)).toMatchObject({ connection_id: presentConnection.id, sort_order: 7 });
     expect((await db.autopilot_connections.toArray()).filter(row => row.pg_backend === false)).toHaveLength(1);

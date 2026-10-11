@@ -21,31 +21,30 @@ function client() {
   };
   return s;
 }
-const page = (pending, scopes = [], channels = [], generation = 2) => ({ pending, generation, scopes, channels });
+const page = (pending, scopes = [scope], channels = [channel], generation = 2) => ({ pending, generation, scopes, channels });
 const scope = { record_id: 'scope' };
 const channel = { record_id: 'channel' };
 
 describe('authority recovery navigation', () => {
-  it('keeps only routing and draft intent through empty and partial pages, restores after completion', async () => {
+  it('keeps selection and drafts through same-identity checkpoint repair', async () => {
     const s = client();
     await applyPgNavigationProjection(s, page(true));
-    expect(s.messages).toEqual([]); expect(s.messageInput).toBe(''); expect(s.activeThreadId).toBeNull();
-    expect(s.chatPresentationCache.size).toBe(0); expect(s.selectedBoardId).toBe('scope');
-    expect(s.drafts.get('message')).toBe('unsent message'); expect(s.drafts.get('thread')).toBe('unsent reply');
-    for (let i = 0; i < 5; i++) await applyPgNavigationProjection(s, page(true, [scope], i > 2 ? [channel] : []));
-    expect(s.selectedChannelId).toBeNull(); expect(s.messageInput).toBe('');
+    expect(s.selectedChannelId).toBe('channel'); expect(s.activeThreadId).toBe('root');
+    expect(s.messageInput).toBe('unsent message'); expect(s.threadInput).toBe('unsent reply');
+    expect(s.chatPresentationCache.size).toBe(1);
+    for (let i = 0; i < 5; i++) await applyPgNavigationProjection(s, page(true, [scope], [channel]));
     await applyPgNavigationProjection(s, page(false, [scope], [channel]));
     expect(s.selectedChannelId).toBe('channel'); expect(s.messageInput).toBe('unsent message');
-    expect(s.openThread).toHaveBeenCalledWith('root', expect.objectContaining({ syncRoute: false }));
+    expect(s.openThread).not.toHaveBeenCalled(); expect(s.closeThread).not.toHaveBeenCalled();
   });
   it('retains saved intent when another reset interrupts an incomplete replacement', async () => {
     const s = client();
     await applyPgNavigationProjection(s, page(true));
-    await applyPgNavigationProjection(s, page(true, [], [], 3));
+    await applyPgNavigationProjection(s, page(true, [scope], [channel], 3));
     await applyPgNavigationProjection(s, page(false, [scope], [channel], 3));
     expect(s.selectedChannelId).toBe('channel');
     expect(s.messageInput).toBe('unsent message');
-    expect(s.drafts.get('thread')).toBe('unsent reply');
+    expect(s.threadInput).toBe('unsent reply');
   });
   it('does not restore revoked destinations or render drafts and accepts newly granted channels', async () => {
     const s = client(); await applyPgNavigationProjection(s, page(true));
@@ -125,7 +124,7 @@ describe('canonical navigation projection', () => {
 });
 
 describe('detail authority review', () => {
-  it('clears task/document/report models, editor buffers and modal content on reset', async () => {
+  it('retains task/document/report models and editors during same-identity reset', async () => {
     const s = client();
     Object.assign(s, { activeTaskId: 'task', editingTask: { record_id: 'task', title: 'private' }, taskEditOriginal: { title: 'private' },
       tasks: ['private'], documents: ['private'], reports: ['private'], selectedDocId: 'doc', selectedReportId: 'report',
@@ -133,19 +132,24 @@ describe('detail authority review', () => {
       reportModalReport: { title: 'private report' }, showTaskDetail: true, chatDocModalOpen: true,
       persistTaskLocalDraft: vi.fn(), persistSelectedDocDraft: vi.fn(), destroyTaskRichDescriptionEditor: vi.fn(), destroyDocRichEditor: vi.fn() });
     await applyPgNavigationProjection(s, page(true));
-    expect(s.pgNavigationRecoverySelection).toMatchObject({ taskId: 'task', docId: 'doc', reportId: 'report' });
-    expect(s.editingTask).toBeNull(); expect(s.taskEditOriginal).toBeNull(); expect(s.reportModalReport).toBeNull();
-    expect(s.docEditorContent).toBe(''); expect(s.docEditorTitle).toBe(''); expect(s.showTaskDetail).toBe(false);
-    expect(s.tasks).toEqual([]); expect(s.documents).toEqual([]); expect(s.reports).toEqual([]);
-    expect(s.persistTaskLocalDraft).toHaveBeenCalledTimes(1); expect(s.persistSelectedDocDraft).toHaveBeenCalledTimes(1);
-    await applyPgNavigationProjection(s, page(true, [], [], 3));
-    expect(s.pgNavigationRecoverySelection).toMatchObject({ taskId: 'task', docId: 'doc', reportId: 'report', channelId: 'channel' });
+    expect(s.editingTask).toMatchObject({ record_id: 'task', title: 'private' });
+    expect(s.docEditorContent).toBe('private document'); expect(s.docEditorTitle).toBe('private title');
+    expect(s.showTaskDetail).toBe(true); expect(s.tasks).toEqual(['private']);
+    expect(s.persistTaskLocalDraft).not.toHaveBeenCalled(); expect(s.destroyDocRichEditor).not.toHaveBeenCalled();
+    await applyPgNavigationProjection(s, page(true, [scope], [channel], 3));
+    expect(s.selectedChannelId).toBe('channel'); expect(s.docEditorContent).toBe('private document');
   });
-  it('clears detail models even if live-query coalescing skips the pending phase', async () => {
+  it('retains detail models if live-query coalescing skips the repair phase', async () => {
     const s = client(); s.editingTask = { record_id: 'task', title: 'old authority' }; s.docEditorContent = 'old body';
     s.reportModalReport = { title: 'old report' };
     await applyPgNavigationProjection(s, page(false, [scope], [channel], 3));
-    expect(s.editingTask).toBeNull(); expect(s.docEditorContent).toBe(''); expect(s.reportModalReport).toBeNull();
+    expect(s.editingTask).toMatchObject({ record_id: 'task' }); expect(s.docEditorContent).toBe('old body'); expect(s.reportModalReport).toMatchObject({ title: 'old report' });
+  });
+  it('keeps a downloaded denied channel selected with retained access status', async () => {
+    const s = client();
+    await applyPgNavigationProjection(s, page(false, [scope], [{ ...channel, can_read: false, pg_access_status: 'access-lost' }]));
+    expect(s.selectedChannelId).toBe('channel'); expect(s.activeThreadId).toBe('root');
+    expect(s.messageInput).toBe('unsent message'); expect(s.closeThread).not.toHaveBeenCalled();
   });
   it('channel presence alone cannot prove its missing or denied scope', async () => {
     for (const scopes of [[], [{ ...scope, can_read: false }]]) {
@@ -160,8 +164,8 @@ describe('detail authority review', () => {
     const { rememberPgRecoveryDestination } = await import('../src/pg-authority-presentation.js');
     const s = client(); await applyPgNavigationProjection(s, page(true));
     expect(rememberPgRecoveryDestination(s, 'doc', 'different-doc')).toBe(true);
-    await applyPgNavigationProjection(s, page(true, [], [], 3));
+    await applyPgNavigationProjection(s, page(true, [scope], [channel], 3));
     expect(s.pgNavigationRecoverySelection).toMatchObject({ section: 'docs', docId: 'different-doc', channelId: null });
-    expect(s.selectedDocId).toBeNull(); expect(s.docEditorContent).toBe('');
+    expect(s.selectedDocId).toBeUndefined(); expect(s.docEditorContent).toBeUndefined();
   });
 });

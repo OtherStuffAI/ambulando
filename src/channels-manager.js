@@ -2370,21 +2370,18 @@ export const channelsManagerMixin = {
     return Boolean(this.canManageSelectedPgChannelGrants && !grant?.inherited && grant?.capacity !== 'custom');
   },
 
-  async refreshPgChannelAccessMaterialization() {
+  async refreshPgChannelAccessMaterialization({ channelIds = [] } = {}) {
     if (!isTowerPgBackendMode()) return;
-    await this.requestTowerSyncFamily?.('scopes', '', { force: true });
-    await this.requestTowerSyncFamily?.('channels', '', { force: true });
-    await Promise.all([
-      this.requestTowerSyncFamily?.('tasks', '', { force: true }),
-      this.requestTowerSyncFamily?.('documents', '', { force: true }),
-      hydrateTowerPgAudioNotes(this),
-    ]);
+    // The record journal owns content and historic access catchup. A grant
+    // hint refreshes only affected channel descriptors, never workspace lists.
+    const ids = [...new Set(channelIds.map(String).filter(Boolean))];
+    await Promise.all(ids.map(id => this.requestTowerSyncFamily?.('channel', id, { force: true })));
   },
 
-  schedulePgChannelAccessMaterializationRefresh() {
+  schedulePgChannelAccessMaterializationRefresh(channelId = this.selectedChannelId) {
     if (!isTowerPgBackendMode()) return;
     Promise.resolve()
-      .then(() => this.refreshPgChannelAccessMaterialization())
+      .then(() => this.refreshPgChannelAccessMaterialization({ channelIds: channelId ? [channelId] : [] }))
       .catch((error) => {
         flightDeckLog('warn', 'settings', 'PG channel access materialization refresh failed', {
           error: error?.message || String(error),

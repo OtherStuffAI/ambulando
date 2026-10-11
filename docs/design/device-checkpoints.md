@@ -25,8 +25,8 @@ cloning is not a supported backup/import operation: a clone must omit checkpoint
 identity/owner metadata so its next pull creates an independent registration.
 
 First v2 adoption preserves v1 views and local writes until the replacement
-snapshot and delta handover finish. Reset/history loss/client expiry hides old
-authority while preserving pending commands and recoverable local edits.
+snapshot and delta handover finish. Reset/history loss/client expiry preserves same-reader downloaded content,
+pending commands and recoverable local edits.
 Registrations marked obsolete by this cache are retired only under their matching
 signer/backend/workspace scope. Capacity errors retain the new ID and report the
 failure; active devices are never enumerated or evicted.
@@ -71,3 +71,40 @@ logical signing URL through the existing Tower transport adapter.
 Automated coverage lives in `tests/pg-device-checkpoints.test.js` and the exact
 transport cases in `tests/api-sync-auth.test.js`, alongside the existing bounded
 record-delta, hydrator and materialisation-worker suites.
+
+## Retained downloads and additive access
+
+Tower's additive access extension keeps channel birth and permission changes on
+existing v1/v2 cursors and v2 device identities. Its opaque cursor independently
+pages newly authorized historic partitions; catchup uses canonical delta changes,
+not a workspace snapshot. `access_revision` is distinct from checkpoint CAS
+revision. `access_changes` is reader-specific and includes family, resource type,
+resource ID, granted/lost status, and optional resource kind for view states.
+
+The materialization worker commits the partition ledger with each page cursor.
+Dexie liveQuery projects access status into cached rows without scanning and
+rewriting an entire channel on each permission event. Loss in one family does
+not mark another family in that channel lost. Tower continues to authorize every
+future read/write. Previously downloaded bytes remain in the original reader's
+workspace partition and are shown as retained, stale or access-lost. A membership
+denial preserves cursor/client/ack intent and marks local access lost; a subsequent
+authorized page clears that workspace status. Typed reads compare access revision
+and loss status as well as cursor/generation to reject stale responses.
+
+Exceptional checkpoint repair preserves canonical and presentation rows. Snapshot
+omission marks retained content stale; only explicit content tombstones delete
+records. Same-workspace recovery leaves selected channels, scroll, editor buffers,
+drafts and outbox intact. Explicit identity replacement remains a separate cache
+isolation boundary. Browser activation and worker disposal guards still apply.
+
+Grant hints refresh only affected channel descriptors and selected grant controls;
+the existing service cursor loop delivers access notifications and historic rows.
+Forbidden queued writes retain their envelopes and stop automatic submission.
+Explicit retry is allowed after access changes. A forbidden document save retains
+its draft and blocks remote autosave while local draft persistence continues.
+
+Synthetic network/browser coverage is in `additive-workspace-sync.spec.cjs`;
+`pg-additive-access.test.js` covers partition status, atomic commit, older history,
+forbidden intent and identity replacement. Isolated fixtures do not establish
+that a deployed Tower migration has run; coordinated Tower-first activation and
+real signed two-reader acceptance remain part of the manager's release smoke.

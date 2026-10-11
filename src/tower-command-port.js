@@ -367,7 +367,13 @@ export function prepareTowerWorkspaceCommand(store, name, input = {}) {
       optimistic: localRow && optimisticWriter && name !== 'document.update' ? () => optimisticWriter(localRow) : undefined,
       execute: generic,
       reconcile,
-      fail: previousRow && optimisticWriter && name !== 'document.update' ? () => optimisticWriter(previousRow) : undefined,
+      fail: localRow && optimisticWriter && name !== 'document.update' ? error => {
+        if (error?.status === 403) return optimisticWriter(cloneableRow(localRow, {
+          sync_status: 'failed', sync_error: 'Tower denied this write. Local intent retained; retry after access changes.',
+          pg_blocked_command: { name, input: toRaw(input) }, pg_access_status: 'access-lost',
+        }));
+        return previousRow ? optimisticWriter(previousRow) : undefined;
+      } : undefined,
     };
   }
   const localRow = input.localRow;

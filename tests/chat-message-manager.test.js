@@ -1746,7 +1746,7 @@ describe('PG channel message refresh reconciliation', () => {
     }
   });
 
-  it('still applies tombstones and supports an explicitly authoritative replacement', async () => {
+  it('applies tombstones while retaining downloads omitted by replacement', async () => {
     const workspaceDbKey = 'chat-message-manager-pg-authoritative-refresh';
     openWorkspaceDb(workspaceDbKey);
     await clearRuntimeData();
@@ -1771,7 +1771,7 @@ describe('PG channel message refresh reconciliation', () => {
       expect((await getMessagesByChannel('ch1')).map((message) => message.record_id)).toEqual(['message-2']);
 
       await replacePgMessagesForChannel('ch1', [], { authoritative: true });
-      expect(await getMessagesByChannel('ch1')).toEqual([]);
+      expect(await getMessagesByChannel('ch1')).toMatchObject([{ record_id: 'message-2', pg_access_status: 'stale' }]);
     } finally {
       await deleteWorkspaceDb(workspaceDbKey);
     }

@@ -128,7 +128,7 @@ test('retains a seeded cache through paged delta, interrupted 85-page replacemen
       const replaced = await visible();
       await send(delta('deleted', false, fixture.explicit_delete.changes));
       const deleted = await counts();
-      // Confirmed authorized empty replacement retires omissions at handover only.
+      // Empty authorized replacement retains downloaded content; only tombstones delete.
       await send({ protocol_version: 1, reset_authority: true, local_apply_options: { preserveViews: true } });
       await send({ ...fixture.canonical_upserts, snapshot_id: 'empty-generation', changes: [], next_cursor: 'empty-snapshot', has_more: true,
         local_apply_options: { incrementalSnapshot: true } });
@@ -142,7 +142,7 @@ test('retains a seeded cache through paged delta, interrupted 85-page replacemen
   expect(result.seeded).toEqual([1, 1, 2]);
   expect(result.replaced).toEqual([1, 1, 16802]);
   expect(result.deleted).toEqual([1, 1, 16801]);
-  expect(result.retired).toEqual([0, 0, 0]);
+  expect(result.retired).toEqual(result.deleted);
   console.log('Seeded canonical cache lifecycle:', JSON.stringify(result));
 });
 

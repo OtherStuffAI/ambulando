@@ -1465,7 +1465,7 @@ export async function hydrateTowerPgSyncBundle(store, bundle = {}, deps = {}) {
     return commitDeviceMetadata(recordDeltaCursorKey(store), { ...bundle.device_action, deviceLease: bundle.local_apply_options?.deviceLease });
   }
   if ([1, 2].includes(bundle.protocol_version)) {
-    const { applyPgRecordChanges, resetPgRecordAuthority, reconcilePgRecordConflicts, rebuildPgRecordSummaries, retireSnapshotOmissions } = await import('./pg-record-delta.js');
+    const { applyPgRecordChanges, resetPgRecordAuthority, markPgRecordAccessLost, reconcilePgRecordConflicts, rebuildPgRecordSummaries, retireSnapshotOmissions } = await import('./pg-record-delta.js');
     if (bundle.resume_snapshot_retirement) return retireSnapshotOmissions(store, bundle.local_apply_options);
     if (bundle.rebuild_summaries) return rebuildPgRecordSummaries(store);
     if (bundle.reconcile_commands) return reconcilePgRecordConflicts(store, { acceptRemoteKey: bundle.accept_remote_key || null });
@@ -1482,6 +1482,7 @@ export async function hydrateTowerPgSyncBundle(store, bundle = {}, deps = {}) {
       });
       return { applied: (bundle.members?.length || 0) + (bundle.groups?.length || 0), cursor: null, hasMore: false };
     }
+    if (bundle.access_lost === true) return markPgRecordAccessLost(store, bundle.local_apply_options);
     if (bundle.reset_authority === true) { const reset = await resetPgRecordAuthority(store, bundle.local_apply_options); return { applied: 0, cursor: null, hasMore: false, ...reset }; }
     const context = resolveTowerPgWorkspaceContext(store);
     await (deps.migrateLegacyAutopilotLaunchers || migrateLegacyAutopilotLaunchers)(
@@ -1819,11 +1820,12 @@ async function syncTowerPgRecordWorkspace(store, options, deps) {
   // In particular, probing a rolled-back server must never purge the cache.
   for (let pages = 1; pages <= (options.maxPages || 1000); pages++) {
     options.onProgress?.({ stage: 'receiving', page: pages, applied, cursorPresent: Boolean(cursor), mode: 'unavailable', protocolVersion: 1 });
+    const requestAccessLost = Boolean((await (deps.getSyncState || getSyncState)(recordDeltaCursorKey(store)))?.accessLost);
     let page;
     try {
       page = await read(context.workspaceId, { baseUrl: context.baseUrl, appNpub: context.appNpub, diagnosticOperation: options.diagnosticOperation, cursor, limit: options.limit || 200, timeoutMs: options.timeoutMs || 30000 });
     } catch (error) {
-      if (!authorityResetting && resets === 0 && [404, 406, 501].includes(error.status)) {
+      if (!authorityResetting && !requestAccessLost && resets === 0 && [404, 406, 501].includes(error.status)) {
         options.onProgress?.({ stage: 'recovery', recoveryReason: 'unsupported', page: pages, applied, cursorPresent: Boolean(cursor), mode: 'unavailable', protocolVersion: 1 });
         return { unsupported: true, fallbackAuthority: { expectedCursor: cursor, expectedGeneration: localGeneration } };
       }
@@ -1832,9 +1834,15 @@ async function syncTowerPgRecordWorkspace(store, options, deps) {
       const code = error.code || payload.code || payload.error;
       const matchingWorkspace = !payload.identity?.workspace_id || payload.identity.workspace_id === context.workspaceId;
       const revoked = matchingWorkspace && error.status === 403 && code === 'workspace_membership_required';
-      if (revoked || (error.status === 409 && String(error.responseText || error.message).includes('reset_required'))) {
+      if (revoked) {
         assertTowerPgWorkspaceCurrent(store, context);
-        const reset = await materialize(store, { protocol_version: 1, reset_authority: true, local_apply_options: { preserveViews: !revoked, expectedCursor: cursor, expectedGeneration: localGeneration } }, deps);
+        await materialize(store, { protocol_version: 1, access_lost: true,
+          local_apply_options: { expectedCursor: cursor, expectedGeneration: localGeneration } }, deps);
+        throw error;
+      }
+      if (error.status === 409 && ['reset_required', 'history_pruned', 'client_expired', 'client_not_registered', 'page_token_invalid'].includes(code || String(error.message))) {
+        assertTowerPgWorkspaceCurrent(store, context);
+        const reset = await materialize(store, { protocol_version: 1, reset_authority: true, local_apply_options: { preserveViews: true, accessLost: revoked, expectedCursor: cursor, expectedGeneration: localGeneration } }, deps);
         localGeneration = reset.localGeneration;
         if (revoked || ++resets > 2) throw error;
         options.onProgress?.({ stage: 'recovery', recoveryReason: 'reset_required', page: pages, applied, cursorPresent: Boolean(cursor), mode: 'unavailable', protocolVersion: 1 });
@@ -1877,7 +1885,7 @@ async function syncTowerPgRecordWorkspace(store, options, deps) {
     options.onProgress?.({ stage: 'applying', page: pages, applied, cursorPresent: Boolean(cursor), mode: page.mode, fullSnapshot: page.mode === 'snapshot', hasMore: page.has_more === true, protocolVersion: 1 });
     assertTowerPgWorkspaceCurrent(store, context);
     if (page.has_more && page.next_cursor === cursor) throw new Error('Tower record sync repeated its cursor');
-    const result = await materialize(store, { ...page, local_apply_options: { expectedCursor: cursor, expectedGeneration: localGeneration, viewBaselineInitialized, incrementalSnapshot: true } }, deps);
+    const result = await materialize(store, { ...page, local_apply_options: { expectedCursor: cursor, expectedGeneration: localGeneration, expectedAccessLost: requestAccessLost, viewBaselineInitialized, incrementalSnapshot: true } }, deps);
     applied += result.applied;
     cursor = result.cursor;
     if (!result.hasMore) {
@@ -3051,10 +3059,12 @@ export async function hydrateTowerPgEventUpdates(store, events = [], deps = {}) 
       workspaceMembersChanged = true;
     } else if (['group', 'group_member', 'workspace_group_member'].includes(entityType)) {
       groupsChanged = true;
+      fallbackEvents += 1;
     } else if (['daily_scope_agent_access', 'daily_scope_access'].includes(entityType)) {
       dailyScopeAccessChanged = true;
     } else if (entityType === 'channel_grant' && channelId) {
       channelGrantChannels.add(channelId);
+      fallbackEvents += 1;
     } else if (entityType === 'channel') {
       channelsChanged = true;
     } else if (['message', 'thread'].includes(entityType) && channelId) {
@@ -3184,7 +3194,7 @@ export async function hydrateTowerPgEventUpdates(store, events = [], deps = {}) 
       ? [store.refreshGroups({ force: true, minIntervalMs: 0 })]
       : []),
     ...(accessMaterializationChanged && typeof store?.refreshPgChannelAccessMaterialization === 'function'
-      ? [store.refreshPgChannelAccessMaterialization()]
+      ? [store.refreshPgChannelAccessMaterialization({ channelIds: [...channelGrantChannels] })]
       : []),
     ...(dailyScopeAccessChanged && typeof store?.refreshDailyScopeAgentAccess === 'function'
       ? [store.refreshDailyScopeAgentAccess()]

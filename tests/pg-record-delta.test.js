@@ -65,13 +65,13 @@ describe('Tower canonical record-delta v1 consumer',()=>{
   });
 });
 
-it('retires an old generation only after the terminal snapshot and delta handover',async()=>{
+it('marks retained old downloads stale only after the terminal snapshot and delta handover',async()=>{
   await db.chat_messages.put({record_id:'old',channel_id:'old-channel',pg_backend:true,sync_status:'synced'});
   await db.chat_messages.put({record_id:'pending-old',channel_id:'old-channel',pg_backend:true,sync_status:'pending'});
   await applyPgRecordChanges(store,{...fixture.canonical_upserts,next_cursor:'snapshot-end'},{expectedCursor:null});
   expect(await db.chat_messages.get('old')).toBeTruthy();
   await applyPgRecordChanges(store,page([],'handover'),{expectedCursor:'snapshot-end'});
-  expect(await db.chat_messages.get('old')).toBeUndefined();
+  expect(await db.chat_messages.get('old')).toMatchObject({ pg_access_status: 'stale' });
   expect(await db.chat_messages.get('pending-old')).toBeTruthy();
 });
 
@@ -445,7 +445,7 @@ it('limits Feed omission authority to advertised snapshot families and still hon
   await resetPgRecordAuthority(reader, { preserveViews: true });
   await applyPgRecordChanges(reader, { ...fixture.canonical_upserts, families, partitions_complete: families });
   await applyPgRecordChanges(reader, { ...page([], 'supported-empty-handover'), families });
-  expect(await db.feed_subscriptions.count()).toBe(0);
+  expect(await db.feed_subscriptions.count()).toBe(1);
   await applyPgRecordChanges(reader, { ...page([change], 'feed-returned'), families });
   await applyPgRecordChanges(reader, { ...page([{ ...change, version: '2', operation: 'delete', row: null }], 'feed-deleted'), families });
   expect(await db.feed_subscriptions.count()).toBe(0);
