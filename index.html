@@ -1213,16 +1213,8 @@
     </div>
 
     <div class="app-layout" x-show="$store.chat.isLoggedIn">
-      <div class="mobile-sidebar-backdrop" x-show="$store.chat.mobileNavOpen" @click="$store.chat.mobileNavOpen = false"></div>
+      <div class="mobile-sidebar-backdrop" x-show="$store.chat.mobileNavOpen" @click="$store.chat.mobileNavOpen = false; $nextTick(() => requestAnimationFrame(() => document.querySelector($store.chat.appHeaderHidden ? '.mobile-context-menu' : '.page-header .mobile-menu-btn')?.focus()))"></div>
       <nav id="sol-primary-navigation" aria-label="Workspace navigation" :role="$store.chat.mobileNavOpen ? 'dialog' : 'navigation'" :aria-modal="$store.chat.mobileNavOpen ? 'true' : null" x-sol-dialog="$store.chat.mobileNavOpen" :inert="$store.chat.mobileViewport && !$store.chat.mobileNavOpen" @keydown.escape.stop="if ($store.chat.mobileNavOpen) { $store.chat.mobileNavOpen = false; $nextTick(() => requestAnimationFrame(() => document.querySelector($store.chat.appHeaderHidden ? '.mobile-context-menu' : '.page-header .mobile-menu-btn')?.focus())) }" class="sidebar" :class="{ 'sidebar-collapsed': $store.chat.navCollapsed, 'sidebar-mobile-open': $store.chat.mobileNavOpen }">
-
-        <div class="mobile-navigation-tools" x-show="$store.chat.mobileViewport && $store.chat.mobileNavOpen" x-cloak>
-          <button type="button" aria-label="Close navigation" @click="$store.chat.mobileNavOpen = false; $nextTick(() => requestAnimationFrame(() => document.querySelector($store.chat.appHeaderHidden ? '.mobile-context-menu' : '.page-header .mobile-menu-btn')?.focus()))">Close navigation</button>
-          <button type="button" @click="$store.appearance.toggle()">Change color theme</button>
-          <button type="button" @click="$store.chat.mobileNavOpen = false; if ($store.chat.appHeaderHidden) $store.chat.toggleAppHeaderHidden(); $store.chat.showAvatarMenu = true">Profile and sync</button>
-          <button type="button" @click="$store.chat.mobileNavOpen = false; $store.chat.openCommandPalette()">Open command palette</button>
-          <button type="button" @click="$store.chat.navigateTo('settings')">Settings</button>
-        </div>
 
         <ul class="sidebar-nav" x-show="$store.chat.navCollapsed && !$store.chat.mobileNavOpen">
           <li :class="{ active: $store.chat.navSection === 'status' }"><button type="button" class="sol-nav-button" aria-label="Deck" @click="$store.chat.navigateTo('status')">

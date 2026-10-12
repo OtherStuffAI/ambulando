@@ -542,7 +542,6 @@ code, pre { font-family:var(--font-code); }
 }
 
 /* Branding stays above mobile context; focus hides branding only. */
-.mobile-navigation-tools { display:none; }
 @media (max-width:768px) {
   .page-header { padding-top:calc(6px + env(safe-area-inset-top)); padding-left:max(8px, env(safe-area-inset-left)); padding-right:max(8px, env(safe-area-inset-right)); }
   .mobile-scope-switcher { padding-left:env(safe-area-inset-left); padding-right:env(safe-area-inset-right); }
@@ -556,6 +555,4 @@ code, pre { font-family:var(--font-code); }
   .sidebar, .sidebar-collapsed { top:var(--sol-visual-top, 0px); height:var(--sol-visual-height, 100dvh); padding-top:env(safe-area-inset-top); padding-bottom:env(safe-area-inset-bottom); }
   .mobile-sidebar-backdrop { top:var(--sol-visual-top, 0px); }
   .app-shell:has(.sidebar-mobile-open) .page-header { z-index:40; }
-  .sidebar .mobile-navigation-tools { display:flex; flex-direction:column; gap:4px; padding:8px 12px; flex:0 0 auto; }
-  .mobile-navigation-tools button { min-height:44px; text-align:left; background:transparent; color:var(--sidebar-foreground); }
 }

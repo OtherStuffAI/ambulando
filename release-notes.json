@@ -3828,6 +3828,20 @@
       "notes": [
         "Close profile cards with X or clicks inside the surrounding thread, keep closed cards dismissed after Copy, and clear the card when switching or closing conversations."
       ]
+    },
+    {
+      "buildNumber": 2379,
+      "label": "Mobile navigation starts with Home",
+      "notes": [
+        "Remove the five utility rows above Home in mobile navigation. Home, scopes, channels and the workspace switcher remain; Escape or the backdrop closes the drawer and returns focus to the menu button."
+      ]
+    },
+    {
+      "buildNumber": 2380,
+      "label": "Fullscreen drawer focus restoration",
+      "notes": [
+        "Return focus to the fullscreen menu button after closing mobile navigation with the backdrop, as well as Escape."
+      ]
     }
   ]
 }

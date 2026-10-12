@@ -765,9 +765,10 @@ describe('command palette defaults and search', () => {
     expect(focus).toHaveBeenCalledOnce();
   });
 
-  it('keeps the desktop scope launcher and mobile sidebar palette access', () => {
+  it('keeps the desktop scope launcher and mobile workspace navigation', () => {
     expect(indexSource.match(/openCommandPaletteScopeSwitcher\(\$event\)/g)?.length).toBeGreaterThanOrEqual(1);
-    expect(indexSource).toContain('class="mobile-navigation-tools"');
+    expect(indexSource).not.toContain('class="mobile-navigation-tools"');
+    expect(indexSource).toContain('class="sidebar-workspace-overview"');
     expect(indexSource).not.toContain('class="mobile-scope-trigger"');
     expect(indexSource).toContain('class="board-picker-typeahead-input channel-row-scope-input"');
     expect(indexSource).toContain('class="command-palette-scope-grid"');

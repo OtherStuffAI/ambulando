@@ -483,7 +483,23 @@ for (const width of [1440, 1280, 900, 390, 320]) for (const theme of ['light', '
   test(`tagline and tab render review: ${theme} ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 });
     await openFixture(page);
-    await page.evaluate(theme => { const s = Alpine.store('chat'); s.closeThread({ syncRoute: false }); Alpine.store('appearance').setTheme(theme); }, theme);
+    await page.evaluate(theme => {
+      const s = Alpine.store('chat');
+      s.closeThread({ syncRoute: false });
+      Alpine.store('appearance').setTheme(theme);
+      // Home requires a selected workspace; use synthetic navigation records.
+      if (innerWidth <= 768) {
+        s.isTowerPgMode = true; s.pgBackendMode = true;
+        s.selectedWorkspaceKey = 'tagline-fixture';
+        s.knownWorkspaces = [{ workspaceKey: 'tagline-fixture', workspaceId: 'tagline-fixture', name: 'Synthetic workspace',
+          pgBackendMode: true, pgMe: { actor: { actor_id: 'reader', npub: 'npub1solfixture' } },
+          directHttpsUrl: 'http://127.0.0.1:3100', workspaceOwnerNpub: 'synthetic-owner' }];
+        s.scopesLoaded = true;
+        s.scopes = [{ record_id: 'tagline-scope', title: 'Review scope', level: 'l1', record_state: 'active' }];
+        s.channels = [{ record_id: 'tagline-channel', title: 'Review channel', scope_id: 'tagline-scope', record_state: 'active' }];
+        s.selectedBoardId = '__pg_channel__:tagline-channel';
+      }
+    }, theme);
     const tagline = page.locator('.brand-copy p');
     await expect(tagline).toBeVisible();
     await expect(tagline).toHaveText('Solvitur Ambulando');
@@ -521,7 +537,8 @@ for (const width of [1440, 1280, 900, 390, 320]) for (const theme of ['light', '
       await expect(lock).toHaveAttribute('aria-pressed','false');
       await capture(page, `tagline-${theme}-${width}-expanded-chat`);
     } else {
-      await expect(nav.getByRole('button', { name:'Close navigation', exact:true })).toBeVisible();
+      await expect(nav.locator('.mobile-navigation-tools')).toHaveCount(0);
+      await expect(nav.locator('.sidebar-workspace-overview')).toBeVisible();
       await expect(page.locator('.mobile-scope-switcher')).toBeHidden();
     }
     if (width > 768) {

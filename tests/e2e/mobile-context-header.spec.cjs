@@ -22,8 +22,10 @@ async function seed(page, baseURL) {
       pgBackendMode: true, pgMe: { actor: { actor_id: 'reader', npub: 'npub1solfixture' } },
       directHttpsUrl: 'http://127.0.0.1:3100', workspaceOwnerNpub: 'synthetic-owner' }];
     s.scopesLoaded = true;
-    s.scopes = [{ record_id: 'header-scope', title: 'Product planning', level: 'l1', record_state: 'active' }];
-    s.channels = [{ record_id: 'header-channel', title: 'Implementation', name: 'Implementation', scope_id: 'header-scope', record_state: 'active' }];
+    s.scopes = [{ record_id: 'header-scope', title: 'Product planning', level: 'l1', record_state: 'active' },
+      { record_id: 'header-dms', title: 'DMs', pg_kind: 'dm', level: 'l1', record_state: 'active' }];
+    s.channels = [{ record_id: 'header-channel', title: 'Implementation', name: 'Implementation', scope_id: 'header-scope', record_state: 'active' },
+      { record_id: 'header-dm', title: 'Review partner', name: 'Review partner', scope_id: 'header-dms', channel_type: 'dm', record_state: 'active' }];
     s.selectedBoardId = '__pg_channel__:header-channel';
     s.navSection = 'status';
     s.canCreateChannelInScope = () => true;
@@ -96,9 +98,10 @@ for (const width of [320, 390, 720, 1280]) for (const theme of ['light', 'dark']
   });
 }
 
-for (const focused of [false, true]) test(`sidebar scope/channel navigation and mobile utilities focus=${focused}`, async ({ page, baseURL }) => {
+for (const theme of ['light', 'dark']) for (const focused of [false, true]) test(`sidebar Home and scope/channel navigation ${theme} focus=${focused}`, async ({ page, baseURL }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await seed(page, baseURL);
+  await page.evaluate(theme => Alpine.store('appearance').setTheme(theme), theme);
   if (focused) await page.locator('.mobile-context-fullscreen').click();
   const opener = page.locator(focused ? '.mobile-context-menu' : '.page-header .mobile-menu-btn');
   const nav = page.locator('#sol-primary-navigation');
@@ -113,29 +116,53 @@ for (const focused of [false, true]) test(`sidebar scope/channel navigation and 
   await nav.locator('.sidebar-scope-channel').filter({ hasText: 'Implementation' }).click();
   await expect(page.locator('.mobile-context-name').last()).toHaveText('Implementation');
   await opener.click();
-  await nav.getByRole('button', { name: 'Change color theme', exact: true }).click();
-  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
-  await nav.getByRole('button', { name: 'Profile and sync', exact: true }).click();
-  await expect(page.locator('#profile-avatar-menu')).toBeVisible();
-  await page.evaluate(() => { Alpine.store('chat').showAvatarMenu = false; });
-
+  await expect(nav.getByRole('button', { name: 'Open DMs home', exact: true })).toBeVisible();
+  await nav.locator('.sidebar-scope-channel').filter({ hasText: 'Review partner' }).click();
+  await expect(page.locator('.mobile-context-name').first()).toHaveText('DMs');
+  await expect(page.locator('.mobile-context-name').last()).toHaveText('Review partner');
+  await opener.click();
+  await expect(nav.locator('.mobile-navigation-tools')).toHaveCount(0);
+  for (const name of ['Close navigation', 'Change color theme', 'Profile and sync', 'Open command palette', 'Settings']) {
+    await expect(nav.getByRole('button', { name, exact: true })).toHaveCount(0);
+  }
+  const home = nav.getByRole('button', { name: 'All workspace activity', exact: true });
+  await expect(home).toBeVisible();
+  await expect.poll(async () => (await nav.boundingBox()).x).toBe(0);
+  const homeBox = await home.boundingBox();
+  const navBox = await nav.boundingBox();
+  expect(homeBox.y - navBox.y).toBeLessThanOrEqual(16);
+  expect(await nav.locator('button:visible').first().getAttribute('aria-label')).toBe('All workspace activity');
+  await expect(nav.locator('.sidebar-workspace-trigger')).toBeVisible();
+  await nav.locator('.sidebar-workspace-trigger').click();
+  await expect(nav.locator('.sidebar-workspace-trigger')).toHaveAttribute('aria-expanded', 'true');
+  await nav.locator('.sidebar-workspace-trigger').click();
+  await capture(page, `drawer-${theme}-${focused ? 'fullscreen' : 'normal'}`);
+  console.log('DRAWER_HOME_POSITION', JSON.stringify({ theme, focused, home: homeBox, nav: navBox }));
+  await home.click();
+  await expect(nav).not.toHaveClass(/sidebar-mobile-open/);
+  expect(await page.evaluate(() => Alpine.store('chat').selectedBoardId)).toBe('__all__');
+  await expect(page.locator('.mobile-context-name').first()).toHaveText('All');
 });
 
-test('sidebar keyboard close and Settings remain reachable', async ({ page, baseURL }) => {
+for (const theme of ['light', 'dark']) for (const focused of [false, true]) test(`drawer Escape and backdrop close restore focus ${theme} focus=${focused}`, async ({ page, baseURL }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await seed(page, baseURL);
-  const opener = page.locator('.page-header .mobile-menu-btn');
+  await page.evaluate(theme => Alpine.store('appearance').setTheme(theme), theme);
+  if (focused) await page.locator('.mobile-context-fullscreen').click();
+  const opener = page.locator(focused ? '.mobile-context-menu' : '.page-header .mobile-menu-btn');
   const nav = page.locator('#sol-primary-navigation');
-  await opener.click();
-  await expect(nav).toHaveClass(/sidebar-mobile-open/);
-  await nav.getByRole('button', { name: 'Close navigation', exact: true }).focus();
-  await page.keyboard.press('Escape');
-  await expect(nav).not.toHaveClass(/sidebar-mobile-open/);
-  await expect(opener).toBeVisible();
-  await expect(opener).toBeFocused();
-  await opener.click();
-  await nav.getByRole('button', { name: 'Settings', exact: true }).click();
-  await expect(page.locator('.settings-section')).toBeVisible();
+  for (const method of ['Escape', 'backdrop']) {
+    await opener.click();
+    await expect(nav).toHaveClass(/sidebar-mobile-open/);
+    await expect(nav).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(nav.locator('.sidebar-workspace-overview')).toBeFocused();
+    if (method === 'Escape') await page.keyboard.press('Escape');
+    else await page.locator('.mobile-sidebar-backdrop').click({ position: { x: 380, y: 200 } });
+    await expect(nav).not.toHaveClass(/sidebar-mobile-open/);
+    await expect(opener).toBeFocused();
+    await expect(opener).toBeVisible();
+  }
 });
 
 test('fullscreen restores header and keyboard focus in every mobile section', async ({ page, baseURL }) => {
@@ -203,9 +230,9 @@ test('safe areas and reduced keyboard viewport keep mobile header reachable', as
   await capture(page, 'header-keyboard-fullscreen-safe-area');
   await exit.click();
   await page.locator('.page-header .mobile-menu-btn').click();
-  const close = page.getByRole('button', { name: 'Close navigation', exact: true });
-  await expect(close).toBeVisible();
-  await close.click();
+  await expect(page.locator('#sol-primary-navigation')).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(page.locator('.page-header .mobile-menu-btn')).toBeFocused();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   console.log('HEADER_KEYBOARD_SAFE_AREA', JSON.stringify({ row, restore: r, visualHeight: 320, visualTop: 37 }));
 });
@@ -218,7 +245,8 @@ for (const focused of [false, true]) test(`hamburger and workspace home have dis
   await opener.click();
   await expect(page.locator('#sol-primary-navigation')).toHaveClass(/sidebar-mobile-open/);
   expect(await page.evaluate(() => Alpine.store('chat').selectedBoardId)).toBe('__pg_channel__:header-channel');
-  await page.getByRole('button', { name: 'Close navigation', exact: true }).click();
+  await expect(page.locator('#sol-primary-navigation')).toBeFocused();
+  await page.keyboard.press('Escape');
   await expect(opener).toBeFocused();
   await page.locator('.mobile-context-home').click();
   await expect(page.locator('#sol-primary-navigation')).not.toHaveClass(/sidebar-mobile-open/);

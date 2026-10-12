@@ -68,8 +68,10 @@ current scope/channel and Full screen. Focus hides only the branding row and
 places a hamburger before workspace home; the context and Show header toggle
 remain visible. There is one visible hamburger in either mode. Scope/channel
 switching stays in the sidebar. Names truncate with full accessible labels.
-Drawer close restores keyboard focus after dialog cleanup, and the fullscreen
-control retains focus through both directions. Desktop placement is unchanged.
+The mobile drawer starts with Home, followed by scopes/channels and the workspace
+switcher; it has no utility text block. Backdrop and Escape close it in normal
+and focused modes, restoring focus to the existing hamburger after dialog cleanup.
+The fullscreen control retains focus through both directions. Desktop placement is unchanged.
 Both rows and the drawer respect safe-area and visual viewport insets.
 Browser fullscreen and external browser chrome remain browser-owned.
 Baseline-disabled approvals, flows, schedules, people, opportunities and reports
