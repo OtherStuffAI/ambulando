@@ -571,6 +571,26 @@ describe('thread lifecycle', () => {
     await deleteWorkspaceDb(workspaceDbKey);
   });
 
+  it('branches an inherited selection from the active branch with only its inclusive prefix', async () => {
+    const workspaceDbKey = 'chat-message-manager-nested-cutoff';
+    await openWorkspaceDb(workspaceDbKey);
+    isTowerPgBackendMode.mockReturnValue(true);
+    branchTowerPgThreadFromMessage.mockResolvedValue({ record_id: 'nested', channel_id: 'channel-1',
+      pg_thread_id: 'nested', pg_record_type: 'thread', pg_backend: true,
+      pg_parent_thread_id: 'branch', pg_branch_point_message_id: 'm3' });
+    const branch = { record_id: 'branch', channel_id: 'channel-1', pg_thread_id: 'branch', pg_record_type: 'thread',
+      pg_effective_message_ids: ['m1', 'm2', 'm3', 'm4', 'm5'] };
+    const store = createStore({ isTowerPgMode: true, selectedChannelId: 'channel-1', activeThreadId: 'branch',
+      getActiveThreadRecord: () => branch, requestTowerSyncFamily: vi.fn().mockResolvedValue([]),
+      messages: [branch, ...[1, 2, 3, 4, 5].map(n => ({ record_id: `m${n}`, channel_id: 'channel-1',
+        pg_backend: true, pg_thread_id: 'ancestor', pg_owning_thread_id: 'ancestor', pg_inherited: true, parent_message_id: 'branch' }))] });
+    const child = await store.branchFromMessage('m3');
+    expect(branchTowerPgThreadFromMessage).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ record_id: 'm3' }),
+      expect.objectContaining({ parentThreadId: 'branch' }));
+    expect(child.pg_effective_message_ids).toEqual(['m1', 'm2', 'm3']);
+    await deleteWorkspaceDb(workspaceDbKey);
+  });
+
   it('restores a legitimate existing child draft without adding the inherited recipient', async () => {
     const workspaceDbKey = 'chat-message-manager-branch-draft';
     await openWorkspaceDb(workspaceDbKey);

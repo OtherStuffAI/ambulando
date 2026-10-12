@@ -51,7 +51,7 @@ export function clampBranchEffectiveMessageIds(ids = [], rows = [], thread = {})
     const row = rowsById.get(id);
     const rowThreadId = String(row?.pg_thread_id ?? row?.thread_id ?? '').trim();
     const owningThreadId = String(row?.pg_owning_thread_id ?? row?.owning_thread_id ?? rowThreadId).trim();
-    return rowThreadId === threadId || owningThreadId === threadId;
+    return owningThreadId === threadId;
   });
 }
 

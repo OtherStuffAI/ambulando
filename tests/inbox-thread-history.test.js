@@ -243,6 +243,44 @@ describe('real Inbox thread history path', () => {
     expect(rows.some(row => row.record_id === 'ancestor-3')).toBe(false);
   });
 
+  it('inherits messages 1–3 of five through reload, nested branches and later parent replies', async () => {
+    openWorkspaceDb(key);
+    const db = getWorkspaceDb(); const s = store();
+    const branch = { ...rawThread('branch'), source_message_id: null, parent_thread_id: 'ancestor', branch_point_message_id: 'ancestor-3' };
+    const inherited = (n, effective) => ({ ...rawMessage('ancestor', n), thread_id: effective,
+      owning_thread_id: 'ancestor', effective_thread_id: effective, inherited: true, read_only: true });
+    const hydrate = (thread, messages) => hydrateTowerPgSyncBundle(s, { thread_history_page: {
+      channelId: 'channel-a', thread, messages, nextCursor: null,
+    } });
+    await hydrate(branch, [1, 2, 3, 4, 5].map(n => inherited(n, 'branch')));
+    expect((await db.chat_messages.get('branch')).pg_effective_message_ids).toEqual(['ancestor-1', 'ancestor-2', 'ancestor-3']);
+    await hydrate(branch, [...[1, 2, 3, 4, 5, 6].map(n => inherited(n, 'branch')), rawMessage('branch', 7)]);
+    db.close(); await db.open(); openWorkspaceDb(key);
+    const ids = async thread => (await getThreadMessagePresentationWindow('channel-a', thread, { replyLimit: 20 }))
+      .filter(row => row.pg_record_type === 'message').map(row => row.record_id);
+    expect(await ids('branch')).toEqual(['ancestor-1', 'ancestor-2', 'ancestor-3', 'branch-7']);
+    const nested = { ...rawThread('nested'), source_message_id: null, parent_thread_id: 'branch', branch_point_message_id: 'ancestor-2' };
+    await hydrate(nested, [...[1, 2, 3, 4, 5, 6].map(n => inherited(n, 'nested')),
+      { ...rawMessage('branch', 7), thread_id: 'nested', owning_thread_id: 'branch', inherited: true }, rawMessage('nested', 8)]);
+    expect((await getWorkspaceDb().chat_messages.get('nested')).pg_effective_message_ids).toEqual(['ancestor-1', 'ancestor-2', 'nested-8']);
+    db.close(); await db.open(); openWorkspaceDb(key);
+    expect(await ids('nested')).toEqual(['ancestor-1', 'ancestor-2', 'nested-8']);
+    const ownSelection = { ...rawThread('own-selection'), source_message_id: null, parent_thread_id: 'branch', branch_point_message_id: 'branch-7' };
+    await hydrate(ownSelection, [...[1, 2, 3].map(n => inherited(n, 'own-selection')),
+      ...[7, 9].map(n => ({ ...rawMessage('branch', n), owning_thread_id: 'branch', effective_thread_id: 'own-selection', inherited: true })),
+      rawMessage('own-selection', 10)]);
+    expect(await ids('own-selection')).toEqual(['ancestor-1', 'ancestor-2', 'ancestor-3', 'branch-7', 'own-selection-10']);
+  });
+
+  it('clamps persisted legacy membership before taking a bounded reload window', async () => {
+    openWorkspaceDb(key); await seed('ancestor', 20);
+    const db = getWorkspaceDb();
+    const branch = { ...rawThread('branch'), source_message_id: null, parent_thread_id: 'ancestor', branch_point_message_id: 'ancestor-3' };
+    await db.chat_messages.put({ ...mapPgThreadToLocal(branch), pg_effective_message_ids: Array.from({ length: 20 }, (_, n) => `ancestor-${n}`) });
+    const rows = await getThreadMessagePresentationWindow('channel-a', 'branch', { replyLimit: 6 });
+    expect(rows.filter(row => row.pg_record_type === 'message').map(row => row.record_id)).toEqual(['ancestor-1', 'ancestor-2', 'ancestor-3']);
+  });
+
   it('does not regress continuation on replay or reordered pages and rejects stale authority', async () => {
     openWorkspaceDb(key); const db = getWorkspaceDb(); const s = store();
     const page = (cursor, nextCursor, numbers, version = 1) => ({ thread_history_page: {
