@@ -10,7 +10,7 @@ for (const width of [1280, 320]) {
     await page.evaluate(() => {
       const s = Alpine.store('chat');
       const npub = s.session.npub;
-      s.chatProfiles[npub] = { name: 'Pete', about: 'Profile interaction regression' };
+      s.chatProfiles[npub] = { name: 'Sample Reviewer', about: 'Profile interaction regression' };
       s.messages = [...s.messages, { ...s.messages[0], record_id: 'other-thread', thread_id: 'other-thread', pg_thread_id: 'other-thread', body: 'Another conversation' }];
       // Keep clipboard deterministic while exercising the production Copy handler.
       Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async value => { window.copiedProfile = value; } } });
