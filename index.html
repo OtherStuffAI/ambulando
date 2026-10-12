@@ -301,7 +301,7 @@
       </div>
     </template>
 
-    <header class="page-header" :class="{ 'mobile-context-only': $store.chat.mobileViewport && $store.chat.isLoggedIn }" x-show="!$store.chat.appHeaderHidden || ($store.chat.mobileViewport && $store.chat.isLoggedIn)" x-cloak>
+    <header class="page-header" x-show="!$store.chat.appHeaderHidden" x-cloak>
       <div class="header-leading">
         <button
           type="button"
@@ -521,12 +521,15 @@
     </header>
     <div class="startup-sync-progress-panel" role="status" x-show="$store.chat.retainedDownloadNotice" x-cloak x-text="$store.chat.retainedDownloadNotice"></div>
 
-    <div class="mobile-scope-switcher" x-show="$store.chat.isLoggedIn && !$store.chat.mobileNavOpen && !$store.chat.appHeaderHidden" x-cloak>
+    <div class="mobile-scope-switcher" :class="{ 'mobile-context-focused': $store.chat.appHeaderHidden }" x-show="$store.chat.isLoggedIn && !$store.chat.mobileNavOpen" x-cloak>
       <div class="mobile-scope-context-controls">
-        <button type="button" class="mobile-scope-workspace-avatar-btn mobile-context-menu"
-          @click="$store.chat.togglePrimaryNav()" :title="$store.chat.currentWorkspaceName + ' navigation'"
-          :aria-label="'Open navigation for ' + $store.chat.currentWorkspaceName"
-          aria-controls="sol-primary-navigation" :aria-expanded="String($store.chat.mobileNavOpen)">
+        <button type="button" class="mobile-menu-btn mobile-context-menu" x-show="$store.chat.appHeaderHidden"
+          @click="$store.chat.togglePrimaryNav()" aria-label="Toggle navigation" aria-controls="sol-primary-navigation" :aria-expanded="String($store.chat.mobileNavOpen)">
+          <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+        </button>
+        <button type="button" class="mobile-scope-workspace-avatar-btn mobile-context-home"
+          @click="$store.chat.openAllScopesOverview()" :title="'Show all in ' + $store.chat.currentWorkspaceName"
+          :aria-label="'Show all in ' + $store.chat.currentWorkspaceName">
           <template x-if="$store.chat.currentWorkspaceAvatarUrl">
             <img class="mobile-scope-workspace-avatar" :src="$store.chat.currentWorkspaceAvatarUrl" alt="" />
           </template>
@@ -537,15 +540,12 @@
         <span class="mobile-context-name" :title="$store.chat.focusScopeTitle" :aria-label="'Current scope: ' + $store.chat.focusScopeTitle" x-text="$store.chat.focusScopeTitle"></span>
         <span class="mobile-context-divider" aria-hidden="true">|</span>
         <span class="mobile-context-name" :title="$store.chat.mobileHeaderChannelTitle" :aria-label="'Current channel: ' + $store.chat.mobileHeaderChannelTitle" x-text="$store.chat.mobileHeaderChannelTitle"></span>
-        <button type="button" class="chat-channel-header-icon-btn mobile-context-fullscreen" @click="$store.chat.toggleAppHeaderHidden(); $nextTick(() => requestAnimationFrame(() => document.querySelector('.mobile-header-restore')?.focus()))" title="Full screen" aria-label="Full screen" aria-pressed="false">
-          <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+        <button type="button" class="chat-channel-header-icon-btn mobile-context-fullscreen" @click="$store.chat.toggleAppHeaderHidden(); $nextTick(() => requestAnimationFrame(() => document.querySelector('.mobile-context-fullscreen')?.focus()))" :title="$store.chat.appHeaderHidden ? 'Show header' : 'Full screen'" :aria-label="$store.chat.appHeaderHidden ? 'Show header' : 'Full screen'" :aria-pressed="String($store.chat.appHeaderHidden)">
+          <svg x-show="!$store.chat.appHeaderHidden" aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+          <svg x-show="$store.chat.appHeaderHidden" aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="14" y1="10" x2="21" y2="3"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
         </button>
       </div>
     </div>
-    <button type="button" class="chat-channel-header-icon-btn mobile-header-restore" x-show="$store.chat.isLoggedIn && $store.chat.mobileViewport && $store.chat.appHeaderHidden && !$store.chat.mobileNavOpen" x-cloak
-      @click="$store.chat.toggleAppHeaderHidden(); $nextTick(() => requestAnimationFrame(() => document.querySelector('.mobile-context-fullscreen')?.focus()))" title="Show header" aria-label="Show header" aria-pressed="true">
-      <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="14" y1="10" x2="21" y2="3"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
-    </button>
 
     <section class="auth-panel" x-show="!$store.chat.isLoggedIn">
       <div class="auth-brand">
@@ -1214,12 +1214,12 @@
 
     <div class="app-layout" x-show="$store.chat.isLoggedIn">
       <div class="mobile-sidebar-backdrop" x-show="$store.chat.mobileNavOpen" @click="$store.chat.mobileNavOpen = false"></div>
-      <nav id="sol-primary-navigation" aria-label="Workspace navigation" :role="$store.chat.mobileNavOpen ? 'dialog' : 'navigation'" :aria-modal="$store.chat.mobileNavOpen ? 'true' : null" x-sol-dialog="$store.chat.mobileNavOpen" :inert="$store.chat.mobileViewport && !$store.chat.mobileNavOpen" @keydown.escape.stop="if ($store.chat.mobileNavOpen) { $store.chat.mobileNavOpen = false; $nextTick(() => requestAnimationFrame(() => document.querySelector($store.chat.appHeaderHidden ? '.mobile-header-restore' : '.mobile-context-menu')?.focus())) }" class="sidebar" :class="{ 'sidebar-collapsed': $store.chat.navCollapsed, 'sidebar-mobile-open': $store.chat.mobileNavOpen }">
+      <nav id="sol-primary-navigation" aria-label="Workspace navigation" :role="$store.chat.mobileNavOpen ? 'dialog' : 'navigation'" :aria-modal="$store.chat.mobileNavOpen ? 'true' : null" x-sol-dialog="$store.chat.mobileNavOpen" :inert="$store.chat.mobileViewport && !$store.chat.mobileNavOpen" @keydown.escape.stop="if ($store.chat.mobileNavOpen) { $store.chat.mobileNavOpen = false; $nextTick(() => requestAnimationFrame(() => document.querySelector($store.chat.appHeaderHidden ? '.mobile-context-menu' : '.page-header .mobile-menu-btn')?.focus())) }" class="sidebar" :class="{ 'sidebar-collapsed': $store.chat.navCollapsed, 'sidebar-mobile-open': $store.chat.mobileNavOpen }">
 
         <div class="mobile-navigation-tools" x-show="$store.chat.mobileViewport && $store.chat.mobileNavOpen" x-cloak>
-          <button type="button" aria-label="Close navigation" @click="$store.chat.mobileNavOpen = false; $nextTick(() => requestAnimationFrame(() => document.querySelector($store.chat.appHeaderHidden ? '.mobile-header-restore' : '.mobile-context-menu')?.focus()))">Close navigation</button>
+          <button type="button" aria-label="Close navigation" @click="$store.chat.mobileNavOpen = false; $nextTick(() => requestAnimationFrame(() => document.querySelector($store.chat.appHeaderHidden ? '.mobile-context-menu' : '.page-header .mobile-menu-btn')?.focus()))">Close navigation</button>
           <button type="button" @click="$store.appearance.toggle()">Change color theme</button>
-          <button type="button" @click="$store.chat.mobileNavOpen = false; $store.chat.showAvatarMenu = true">Profile and sync</button>
+          <button type="button" @click="$store.chat.mobileNavOpen = false; if ($store.chat.appHeaderHidden) $store.chat.toggleAppHeaderHidden(); $store.chat.showAvatarMenu = true">Profile and sync</button>
           <button type="button" @click="$store.chat.mobileNavOpen = false; $store.chat.openCommandPalette()">Open command palette</button>
           <button type="button" @click="$store.chat.navigateTo('settings')">Settings</button>
         </div>

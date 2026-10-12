@@ -19,10 +19,10 @@ const mobileSwitcher = globalBar.slice(globalBar.indexOf('class="mobile-section-
 
 describe('mobile views outside the drawer', () => {
   it('keeps mobile context compact with switching in the sidebar', () => {
-    expect(mobileSelector).toContain('x-show="$store.chat.isLoggedIn && !$store.chat.mobileNavOpen && !$store.chat.appHeaderHidden"');
+    expect(mobileSelector).toContain('x-show="$store.chat.isLoggedIn && !$store.chat.mobileNavOpen"');
     expect(mobileSelector).toContain('class="mobile-scope-context-controls"');
     expect(mobileSelector).toContain('class="mobile-context-name"');
-    expect(mobileSelector).toContain('class="mobile-scope-workspace-avatar-btn mobile-context-menu"');
+    expect(mobileSelector).toContain('class="mobile-scope-workspace-avatar-btn mobile-context-home"');
     expect(mobileSelector).toContain('@click="$store.chat.togglePrimaryNav()"');
     expect(mobileSelector).not.toContain('openCommandPaletteScopeSwitcher');
 

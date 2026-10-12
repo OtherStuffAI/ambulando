@@ -3807,6 +3807,20 @@
       "notes": [
         "Keep the fullscreen restore control and restored header reachable by keyboard after mobile layout updates."
       ]
+    },
+    {
+      "buildNumber": 2376,
+      "label": "Mobile header controls corrected",
+      "notes": [
+        "Mobile branding and profile remain visible normally. Full screen keeps context and a separate navigation menu beside workspace home; workspace home shows all in the workspace."
+      ]
+    },
+    {
+      "buildNumber": 2377,
+      "label": "Mobile drawer above retained branding",
+      "notes": [
+        "Keep navigation drawer controls above the restored mobile branding row so Close navigation remains reachable by touch."
+      ]
     }
   ]
 }

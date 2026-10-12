@@ -62,15 +62,16 @@ uses the horizontal bar; phones use the fixed bottom view switcher, with
 scope/channel and workspace controls in the drawer.
 Navigation keeps the original collapsed default; its toggle reveals the expanded
 scope/channel sidebar and horizontal desktop product navigation.
-On mobile, the app header is one 44px context row plus its border: workspace
-icon (opens navigation), current scope, current channel, and Full screen. Scope
-and channel names truncate visually while retaining their full text and accessible
-labels. No selected channel is shown explicitly. The sidebar owns scope/channel
-switching and creation, Settings, theme, profile/sync and command-palette access.
-Full screen uses the existing app-header focus state; a fixed 44px Show header
-control restores the row and keyboard focus. Desktop placement is unchanged.
-The mobile row, drawer and restore control respect safe-area and visual viewport
-insets. Browser fullscreen and external browser chrome remain browser-owned.
+On mobile, the branding row retains the logo, hamburger, theme and profile menu.
+The compact context row contains workspace home (show all in the workspace),
+current scope/channel and Full screen. Focus hides only the branding row and
+places a hamburger before workspace home; the context and Show header toggle
+remain visible. There is one visible hamburger in either mode. Scope/channel
+switching stays in the sidebar. Names truncate with full accessible labels.
+Drawer close restores keyboard focus after dialog cleanup, and the fullscreen
+control retains focus through both directions. Desktop placement is unchanged.
+Both rows and the drawer respect safe-area and visual viewport insets.
+Browser fullscreen and external browser chrome remain browser-owned.
 Baseline-disabled approvals, flows, schedules, people, opportunities and reports
 retain their existing feature guards. Their shared presentation is themed; the
 redesign does not enable those products or claim browser coverage of gated flows.

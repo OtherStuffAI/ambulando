@@ -276,8 +276,9 @@ describe('Chat channel rendering hooks', () => {
     const switcher = html.slice(switcherIndex, switcherEndIndex);
 
     expect(switcherIndex).toBeGreaterThan(-1);
-    expect(switcher).toContain('class="mobile-scope-workspace-avatar-btn mobile-context-menu"');
-    expect(switcher).toContain('@click="$store.chat.togglePrimaryNav()"');
+    expect(switcher).toContain('class="mobile-scope-workspace-avatar-btn mobile-context-home"');
+    expect(switcher).toContain('@click="$store.chat.openAllScopesOverview()"');
+    expect(switcher).toContain('class="mobile-menu-btn mobile-context-menu"');
     expect(switcher).not.toContain('openCommandPaletteScopeSwitcher');
     expect(switcher).toContain('$store.chat.mobileHeaderChannelTitle');
     expect(switcher).not.toContain('$store.chat.selectBoard(board.id)');

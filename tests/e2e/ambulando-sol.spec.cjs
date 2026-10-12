@@ -442,7 +442,7 @@ for (const width of [1440, 1280, 390]) for (const theme of ['light', 'dark']) {
     expect(installed.name).toBe('Ambulando');
     expect(installed.short_name).toBe('Ambulando');
     await page.getByRole('button', { name: 'Toggle navigation', exact: true }).click();
-    const nav = width > 768 ? page.locator('.sol-horizontal-navigation:visible') : page.locator('.sidebar .expanded-sidebar-section-switcher:visible');
+    const nav = width > 768 ? page.locator('.sol-horizontal-navigation:visible') : page.locator('#sol-primary-navigation.sidebar-mobile-open');
     await expect(nav).toBeVisible();
     expect(await page.locator('.expanded-sidebar-section-switcher:visible').count()).toBe(1);
     if (width > 768) {
@@ -504,20 +504,26 @@ for (const width of [1440, 1280, 900, 390, 320]) for (const theme of ['light', '
     }
     await capture(page, `tagline-${theme}-${width}-compact`);
     await page.getByRole('button', { name:'Toggle navigation', exact:true }).click();
-    const nav = width > 768 ? page.locator('.sol-horizontal-navigation:visible') : page.locator('.sidebar .expanded-sidebar-section-switcher:visible');
+    const nav = width > 768 ? page.locator('.sol-horizontal-navigation:visible') : page.locator('#sol-primary-navigation.sidebar-mobile-open');
     await expect(page.locator('.sidebar .sol-sidebar-brand')).toHaveCount(0);
     await expect(page.locator('.brand-logo')).toBeVisible();
     await expect(nav).toBeVisible();
-    const tabs = await nav.locator('.expanded-sidebar-section-switcher-btn').evaluateAll(nodes => nodes.map(node => ({ text:node.textContent.trim(), before:getComputedStyle(node,'::before').content, after:getComputedStyle(node,'::after').content, svgs:node.querySelectorAll('svg').length })));
-    for (const tab of tabs) { expect(tab.svgs).toBe(1); expect(['none','normal','""']).toContain(tab.before); expect(['none','normal','""']).toContain(tab.after); }
-    const lock = nav.getByRole('button', { name:'Lock Chat view', exact:true });
-    await expect(lock).toBeVisible();
-    await expect(lock).toHaveAttribute('aria-pressed','false');
-    await lock.click();
-    await expect(lock).toHaveAttribute('aria-pressed','true');
-    await lock.click();
-    await expect(lock).toHaveAttribute('aria-pressed','false');
-    await capture(page, `tagline-${theme}-${width}-expanded-chat`);
+    let tabs = [];
+    if (width > 768) {
+      tabs = await nav.locator('.expanded-sidebar-section-switcher-btn').evaluateAll(nodes => nodes.map(node => ({ text:node.textContent.trim(), before:getComputedStyle(node,'::before').content, after:getComputedStyle(node,'::after').content, svgs:node.querySelectorAll('svg').length })));
+      for (const tab of tabs) { expect(tab.svgs).toBe(1); expect(['none','normal','""']).toContain(tab.before); expect(['none','normal','""']).toContain(tab.after); }
+      const lock = nav.getByRole('button', { name:'Lock Chat view', exact:true });
+      await expect(lock).toBeVisible();
+      await expect(lock).toHaveAttribute('aria-pressed','false');
+      await lock.click();
+      await expect(lock).toHaveAttribute('aria-pressed','true');
+      await lock.click();
+      await expect(lock).toHaveAttribute('aria-pressed','false');
+      await capture(page, `tagline-${theme}-${width}-expanded-chat`);
+    } else {
+      await expect(nav.getByRole('button', { name:'Close navigation', exact:true })).toBeVisible();
+      await expect(page.locator('.mobile-scope-switcher')).toBeHidden();
+    }
     if (width > 768) {
       for (const label of ['Tasks','Docs','Files']) {
         await nav.getByRole('button', { name:label, exact:true }).click();

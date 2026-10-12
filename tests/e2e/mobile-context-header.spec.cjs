@@ -54,11 +54,14 @@ for (const width of [320, 390, 720, 1280]) for (const theme of ['light', 'dark']
     await expect(row).toBeVisible();
     await expect(row.locator('.mobile-context-name').first()).toHaveText('Product planning');
     await expect(row.locator('.mobile-context-name').last()).toHaveText('Implementation');
-    await expect(page.locator('.page-header .brand-lockup')).toBeHidden();
+    await expect(page.locator('.page-header .brand-lockup')).toBeVisible();
+    await expect(page.locator('.page-header .avatar-chip')).toBeVisible();
+    await expect(page.locator('.mobile-context-menu')).toBeHidden();
+    await expect(page.getByRole('button', { name: 'Toggle navigation', exact: true })).toHaveCount(1);
     await expect(page.locator('.global-pg-channel-bar > .chat-channel-header')).toBeHidden();
     const geometry = await row.boundingBox();
     expect(geometry.height).toBe(45);
-    const buttons = await row.locator('button').evaluateAll(ns => ns.map(n => n.getBoundingClientRect().toJSON()));
+    const buttons = await row.locator('button:visible').evaluateAll(ns => ns.map(n => n.getBoundingClientRect().toJSON()));
     expect(buttons).toHaveLength(2);
     for (const b of buttons) { expect(b.height).toBe(44); expect(b.width).toBe(44); }
     await capture(page, `header-${width}-${theme}`);
@@ -75,6 +78,17 @@ for (const width of [320, 390, 720, 1280]) for (const theme of ['light', 'dark']
     }
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await capture(page, `header-long-${width}-${theme}`);
+    await page.locator('.mobile-context-fullscreen').click();
+    await expect(page.locator('.page-header')).toBeHidden();
+    await expect(row).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Toggle navigation', exact: true })).toHaveCount(1);
+    const focusedButtons = await row.locator('button:visible').evaluateAll(ns => ns.map(n => n.getBoundingClientRect().toJSON()));
+    expect(focusedButtons).toHaveLength(3);
+    for (const b of focusedButtons) { expect(b.height).toBe(44); expect(b.width).toBe(44); }
+    expect(focusedButtons[0].x + 44).toBeLessThanOrEqual(focusedButtons[1].x);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await capture(page, `header-focused-${width}-${theme}`);
+    await page.locator('.mobile-context-fullscreen').click();
     await page.evaluate(() => { const s = Alpine.store('chat'); s.selectedBoardId = '__all__'; });
     await expect(row.locator('.mobile-context-name').first()).toHaveText('All');
     await expect(row.locator('.mobile-context-name').last()).toHaveText('No channel selected');
@@ -82,10 +96,11 @@ for (const width of [320, 390, 720, 1280]) for (const theme of ['light', 'dark']
   });
 }
 
-test('sidebar scope/channel navigation and mobile utilities', async ({ page, baseURL }) => {
+for (const focused of [false, true]) test(`sidebar scope/channel navigation and mobile utilities focus=${focused}`, async ({ page, baseURL }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await seed(page, baseURL);
-  const opener = page.locator('.mobile-context-menu');
+  if (focused) await page.locator('.mobile-context-fullscreen').click();
+  const opener = page.locator(focused ? '.mobile-context-menu' : '.page-header .mobile-menu-btn');
   const nav = page.locator('#sol-primary-navigation');
   await opener.click();
   await expect(nav).toBeVisible();
@@ -109,7 +124,7 @@ test('sidebar scope/channel navigation and mobile utilities', async ({ page, bas
 test('sidebar keyboard close and Settings remain reachable', async ({ page, baseURL }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await seed(page, baseURL);
-  const opener = page.locator('.mobile-context-menu');
+  const opener = page.locator('.page-header .mobile-menu-btn');
   const nav = page.locator('#sol-primary-navigation');
   await opener.click();
   await expect(nav).toHaveClass(/sidebar-mobile-open/);
@@ -129,15 +144,23 @@ test('fullscreen restores header and keyboard focus in every mobile section', as
   for (const section of ['status', 'chat', 'tasks', 'docs', 'files', 'toolbox', 'settings']) {
     await page.evaluate(section => { Alpine.store('chat').navSection = section; }, section);
     const enter = page.locator('.mobile-context-fullscreen');
-    const exit = page.locator('.mobile-header-restore');
+    const exit = page.locator('.mobile-context-fullscreen');
     await enter.click();
-    await expect(page.locator('.mobile-scope-switcher')).toBeHidden();
+    await expect(page.locator('.mobile-scope-switcher')).toBeVisible();
+    await expect(page.locator('.page-header')).toBeHidden();
+    await expect(page.locator('.mobile-context-menu')).toBeVisible();
+    await expect(exit).toHaveAccessibleName('Show header');
+    const menu = await page.locator('.mobile-context-menu').boundingBox();
+    const home = await page.locator('.mobile-context-home').boundingBox();
+    expect(menu.x + menu.width).toBeLessThanOrEqual(home.x);
     await expect(exit).toBeVisible();
     await expect(exit).toBeFocused();
     const r = await exit.boundingBox();
     expect(r.width).toBe(44); expect(r.height).toBe(44);
     await page.keyboard.press('Enter');
-    await expect(exit).toBeHidden();
+    await expect(page.locator('.page-header')).toBeVisible();
+    await expect(page.locator('.mobile-context-menu')).toBeHidden();
+    await expect(exit).toHaveAccessibleName('Full screen');
     await expect(enter).toBeVisible();
     await expect(enter).toBeFocused();
   }
@@ -168,18 +191,48 @@ test('safe areas and reduced keyboard viewport keep mobile header reachable', as
     shell.style.setProperty('--sol-visual-height', '320px');
   });
   const row = await page.locator('.mobile-scope-switcher').boundingBox();
-  expect(row.height).toBe(69);
+  expect(row.height).toBe(45);
   await page.locator('.mobile-context-fullscreen').click();
-  const exit = page.locator('.mobile-header-restore');
-  await expect(exit).toBeVisible();
+  const exit = page.locator('.mobile-context-fullscreen');
+  await expect(exit).toHaveAccessibleName('Show header');
+  await expect(page.locator('.page-header')).toBeHidden();
+  await expect(page.locator('.mobile-scope-switcher')).toHaveClass(/mobile-context-focused/);
+  await expect.poll(async () => (await page.locator('.mobile-scope-switcher').boundingBox()).height).toBe(69);
   const r = await exit.boundingBox();
-  expect(r.y).toBe(65); expect(r.x + r.width).toBeLessThanOrEqual(378);
+  expect(r.y).toBe(24); expect(r.y + r.height).toBeLessThanOrEqual(320); expect(r.x + r.width).toBeLessThanOrEqual(378);
   await capture(page, 'header-keyboard-fullscreen-safe-area');
   await exit.click();
-  await page.locator('.mobile-context-menu').click();
+  await page.locator('.page-header .mobile-menu-btn').click();
   const close = page.getByRole('button', { name: 'Close navigation', exact: true });
   await expect(close).toBeVisible();
   await close.click();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   console.log('HEADER_KEYBOARD_SAFE_AREA', JSON.stringify({ row, restore: r, visualHeight: 320, visualTop: 37 }));
+});
+
+for (const focused of [false, true]) test(`hamburger and workspace home have distinct effects focus=${focused}`, async ({ page, baseURL }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await seed(page, baseURL);
+  if (focused) await page.locator('.mobile-context-fullscreen').click();
+  const opener = page.locator(focused ? '.mobile-context-menu' : '.page-header .mobile-menu-btn');
+  await opener.click();
+  await expect(page.locator('#sol-primary-navigation')).toHaveClass(/sidebar-mobile-open/);
+  expect(await page.evaluate(() => Alpine.store('chat').selectedBoardId)).toBe('__pg_channel__:header-channel');
+  await page.getByRole('button', { name: 'Close navigation', exact: true }).click();
+  await expect(opener).toBeFocused();
+  await page.locator('.mobile-context-home').click();
+  await expect(page.locator('#sol-primary-navigation')).not.toHaveClass(/sidebar-mobile-open/);
+  expect(await page.evaluate(() => Alpine.store('chat').selectedBoardId)).toBe('__all__');
+  await expect(page.locator('.mobile-context-name').first()).toHaveText('All');
+  console.log('HEADER_HOME_STATE', JSON.stringify({ focused, board: await page.evaluate(() => Alpine.store('chat').selectedBoardId), drawerOpen: await page.evaluate(() => Alpine.store('chat').mobileNavOpen) }));
+  await capture(page, `header-home-focus-${focused}`);
+});
+
+test('normal branding row exposes theme and profile', async ({ page, baseURL }) => {
+  await page.setViewportSize({ width: 320, height: 700 });
+  await seed(page, baseURL);
+  await page.locator('.page-header .sol-theme-button').click();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  await page.locator('.page-header .avatar-chip').click();
+  await expect(page.locator('#profile-avatar-menu')).toBeVisible();
 });
