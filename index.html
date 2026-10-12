@@ -257,14 +257,14 @@
     </div>
   </div>
   <main class="app-shell" x-sol-viewport>
-    <template x-if="$store.chat.identityCardProfile">
+    <template x-if="$store.chat.identityCard.open && $store.chat.identityCardProfile">
       <div
         class="identity-card-popover"
         x-show="$store.chat.identityCard.open"
         x-cloak
         x-transition
-        @click.outside="$store.chat.closeIdentityCard()"
-        :style="`left: ${$store.chat.identityCard.x}px; top: ${$store.chat.identityCard.y}px;`"
+        @click.outside.capture="$store.chat.closeIdentityCard()"
+        :style="{ left: `${$store.chat.identityCard.x}px`, top: `${$store.chat.identityCard.y}px` }"
       >
         <button type="button" class="identity-card-close" @click="$store.chat.closeIdentityCard()" aria-label="Close profile card">&times;</button>
         <div class="identity-card-header">

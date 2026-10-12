@@ -3821,6 +3821,13 @@
       "notes": [
         "Keep navigation drawer controls above the restored mobile branding row so Close navigation remains reachable by touch."
       ]
+    },
+    {
+      "buildNumber": 2378,
+      "label": "Chat profile cards dismiss reliably",
+      "notes": [
+        "Close profile cards with X or clicks inside the surrounding thread, keep closed cards dismissed after Copy, and clear the card when switching or closing conversations."
+      ]
     }
   ]
 }
