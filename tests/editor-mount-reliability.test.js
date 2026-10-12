@@ -27,7 +27,7 @@ describe('concurrent lazy editor failures', () => {
       const start = source.indexOf(`    async ${name}(`) >= 0 ? source.indexOf(`    async ${name}(`) : source.indexOf(`  async ${name}(`);
       const indent = kind === 'document' ? '  ' : '    ';
       const end = source.indexOf(`\n${indent}},`, start) + indent.length + 3;
-      const bindings = {loadTiptapEditorAdapter:load,createDiagnosticOperation,finishDiagnosticOperation,showEditorMountFailure,createDailyNoteTiptapToolbar:()=>({element:document.createElement('div')}),document};
+      const bindings = {loadTiptapEditorAdapter:load,waitForDocumentRetry:async()=>{},createDiagnosticOperation,finishDiagnosticOperation,showEditorMountFailure,createDailyNoteTiptapToolbar:()=>({element:document.createElement('div')}),document};
       const mount = new Function(...Object.keys(bindings), `return ({${source.slice(start,end)}}).${name};`)(...Object.values(bindings));
       const store = {
         [name]:mount, selectedDocId:'doc', selectedDocument:{record_id:'doc'}, docEditorMode:'rich', docEditorContent:'retained draft', docEditorBlocks:[], docEditDraftDirty:true, docLocalDraft:{content:'retained draft'},
@@ -35,6 +35,7 @@ describe('concurrent lazy editor failures', () => {
         dailyNoteEditorMode:'edit', dailyNoteEditorBody:'retained draft',
         getSelectedDocWorkspaceId:()=> 'workspace',
         isSelectedDocRichEditorEditable:()=>true, syncDocRichEditorContentModel:vi.fn(),
+        cancelDocAutosave:vi.fn(), scheduleDocAutosave:vi.fn(),
         [prefix+'MountGeneration']:0,
         ['destroy'+(kind==='document'?'DocRichEditor':kind==='task'?'TaskRichDescriptionEditor':'DailyNoteRichEditor')]() { this[prefix+'MountGeneration']++; this[prefix+'MountEl']=null; this[prefix+'MountPromise']=null; },
       };
@@ -42,13 +43,13 @@ describe('concurrent lazy editor failures', () => {
       const second = store[name](element);
       if (failure === 'import') rejectImport(new TypeError('controlled import'));
       expect(await Promise.all([first,second])).toEqual([false,false]);
-      expect(load).toHaveBeenCalledOnce();
+      expect(load).toHaveBeenCalledTimes(kind === 'document' && failure === 'import' ? 2 : 1);
       expect(store[prefix+'LoadState']).toBe('error');
       expect(store.docEditorContent).toBe('retained draft');
       expect(store.editingTask.description).toBe('retained draft');
       expect(store.dailyNoteEditorBody).toBe('retained draft');
       expect(events.filter(e=>e.outcome==='failed')).toHaveLength(1);
-      expect(events.find(e=>e.outcome==='failed').stage).toBe(failure);
+      expect(events.find(e=>e.outcome==='failed').stage).toBe(kind === 'document' && failure === 'import' ? 'recovery-import' : failure);
       failFactory = false;
       load.mockResolvedValue({createTiptapEditorAdapter:factory,createTaskDescriptionEditor:factory});
       if (kind === 'document') {

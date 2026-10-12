@@ -1939,6 +1939,114 @@ describe('docsManagerMixin document block editor sizing', () => {
 });
 
 describe('docsManagerMixin rich editor mount safety', () => {
+  afterEach(() => { vi.restoreAllMocks(); vi.useRealTimers(); });
+
+  async function setupLoadingStore() {
+    const loader = await import('../src/docs/editor/lazy-tiptap-editor.js');
+    const load = vi.spyOn(loader, 'loadTiptapEditorAdapter');
+    const { store, record } = createSyncedPgDocSaveStore({ draftDirty: false });
+    store.docRichEditorAdapter = null;
+    store.docEditorContentModel = createDocumentEditorState(record).contentModel;
+    store.docEditorProseMirrorState = store.docEditorContentModel.editor_state;
+    store.scheduleStorageImageHydration = vi.fn();
+    store.scheduleDocAutosave = vi.fn();
+    const factory = vi.fn(options => ({ getContentModel: () => createDocumentEditorState(options.document).contentModel,
+      destroy: vi.fn() }));
+    return { store, record, load, factory, element: {} };
+  }
+
+  it('automatically recovers once and applies current permissions and the latest draft snapshot', async () => {
+    const { store, record, load, factory, element } = await setupLoadingStore();
+    const draft = richDocContentModel('Draft survives recovery');
+    load.mockRejectedValueOnce(new TypeError('Importing a module script failed'))
+      .mockImplementationOnce(async () => {
+        store.docEditorContent = draft.content;
+        store.docEditorContentModel = draft;
+        store.docEditorProseMirrorState = draft.editor_state;
+        store.docEditorBlocks = draft.content_blocks;
+        store.docDraftChoice = { draft: true };
+        return { createTiptapEditorAdapter: factory };
+      });
+    await store.mountDocRichEditor(element);
+    expect(load.mock.calls).toEqual([[{ retry: false }], [{ retry: true }]]);
+    expect(factory.mock.calls[0][0]).toMatchObject({ editable: false, document: { content: draft.content, record_id: record.record_id } });
+    expect(store.docRichEditorLoadState).toBe('ready');
+    expect(store.docRichEditorLoadError).toBe('');
+    expect(store.docEditorContentModel.editor_state).toEqual(draft.editor_state);
+  });
+
+  it('stops after permanent failure, keeps rich draft and saved body intact, and requires explicit retry', async () => {
+    const { store, record, load, factory, element } = await setupLoadingStore();
+    const draft = prosemirrorToFlightDeckContentModel({ type: 'doc', content: [{ type: 'paragraph', content: [
+      { type: 'text', text: 'Unsaved bold words', marks: [{ type: 'bold' }] },
+    ] }] });
+    store.docSavedSnapshot = structuredClone(record);
+    store.docEditorContent = draft.content;
+    store.docEditorContentModel = draft;
+    store.docEditorProseMirrorState = draft.editor_state;
+    store.docEditorBlocks = draft.content_blocks;
+    store.docEditDraftDirty = true;
+    store.persistSelectedDocDraft = vi.fn(async () => store.buildSelectedDocDraftRow());
+    load.mockRejectedValue(new Error('404 /assets/missing-editor.js'));
+    expect(await store.mountDocRichEditor(element)).toBe(false);
+    expect(store.docRichEditorLoadState).toBe('error');
+    expect(store.docRichEditorLoadError).not.toMatch(/404|assets|module script/);
+    expect(store.getDocEditorFallbackContent()).toBe(draft.content);
+    expect(store.docSavedSnapshot.content).toBe(record.content);
+    expect(store.docEditDraftDirty).toBe(true);
+    expect(store.buildSelectedDocContentModel().editor_state).toEqual(draft.editor_state);
+    await store.mountDocRichEditor(element);
+    expect(load).toHaveBeenCalledTimes(2);
+    expect(await store.saveSelectedPgDocItem(record, 'npub1owner')).toBeNull();
+    expect(store.persistSelectedDocDraft).toHaveBeenCalled();
+    expect(store.docLocalDraft).toBeFalsy();
+    load.mockResolvedValue({ createTiptapEditorAdapter: factory });
+    await store.mountDocRichEditor(element, { retry: true });
+    expect(store.docRichEditorLoadState).toBe('ready');
+    expect(store.docEditorContentModel.editor_state).toEqual(draft.editor_state);
+    expect(store.docSavedSnapshot.content).toBe(record.content);
+  });
+
+  it.each(['record', 'workspace', 'generation', 'mode', 'close'])('ignores recovery completion after a change of %s', async (kind) => {
+    const { store, load, factory, element } = await setupLoadingStore();
+    let recover;
+    load.mockRejectedValueOnce(new Error('network'))
+      .mockImplementationOnce(() => new Promise(resolve => { recover = resolve; }));
+    const mounting = store.mountDocRichEditor(element);
+    await vi.waitFor(() => expect(recover).toBeTypeOf('function'));
+    if (kind === 'record') store.selectedDocId = 'other';
+    if (kind === 'workspace') store.getSelectedDocWorkspaceId = () => 'other-workspace';
+    if (kind === 'generation') store.docEditAccessGeneration++;
+    if (kind === 'mode') store.docEditorMode = 'preview';
+    if (kind === 'close') store.destroyDocRichEditor();
+    recover({ createTiptapEditorAdapter: factory });
+    expect(await mounting).toBe(false);
+    expect(factory).not.toHaveBeenCalled();
+    expect(store.docRichEditorLoadState).not.toBe('ready');
+  });
+
+  it('does not retry an editor factory failure and retains a readable body', async () => {
+    const { store, load, factory, element } = await setupLoadingStore();
+    factory.mockImplementation(() => { throw new Error('schema mismatch'); });
+    load.mockResolvedValue({ createTiptapEditorAdapter: factory });
+    await store.mountDocRichEditor(element);
+    expect(load).toHaveBeenCalledTimes(1);
+    expect(store.docRichEditorLoadState).toBe('error');
+    expect(store.getDocEditorFallbackContent()).toBeTruthy();
+    expect(store.docEditorContentModel).toBeTruthy();
+  });
+
+  it('reads the retained native model without reconstructing it from a sparse compatibility preview', async () => {
+    const { store } = await setupLoadingStore();
+    const model = richDocContentModel('Complete native body');
+    store.docEditorContent = '';
+    store.docEditorContentModel = model;
+    expect(store.getDocEditorFallbackContent()).toBe(model.content);
+    expect(store.buildSelectedDocContentModel().editor_state).toEqual(model.editor_state);
+    store.docEditorContentModel = richDocContentModel('');
+    expect(store.getDocEditorFallbackContent()).toBe('');
+  });
+
   it('reuses an in-flight mount for the same element instead of creating a second editor', async () => {
     const element = {};
     const inFlightMount = Promise.resolve('mounted');
@@ -4491,6 +4599,37 @@ describe('offline document safety and asynchronous identity', () => {
     updateTowerPgDocMock.mockReset();
   });
   afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
+
+  it('preserves the complete persisted rich draft and canonical body through failed loading, save and recovery', async () => {
+    const draft = prosemirrorToFlightDeckContentModel({ type: 'doc', content: [{ type: 'paragraph', content: [
+      { type: 'text', text: 'Rich draft survives', marks: [{ type: 'bold' }] },
+    ] }] });
+    const { store, record } = createSyncedPgDocSaveStore({ currentModel: draft });
+    await upsertDocument(record);
+    store.docRichEditorAdapter = null;
+    store.docEditorContentModel = draft;
+    store.docEditorProseMirrorState = draft.editor_state;
+    store.docEditorContent = draft.content;
+    store.docEditorBlocks = draft.content_blocks;
+    store.docSavedSnapshot = structuredClone(record);
+    store.scheduleDocAutosave = vi.fn();
+    await store.persistSelectedDocDraft();
+    const loader = await import('../src/docs/editor/lazy-tiptap-editor.js');
+    const load = vi.spyOn(loader, 'loadTiptapEditorAdapter').mockRejectedValue(new Error('missing module'));
+    const element = {};
+    await store.mountDocRichEditor(element);
+    expect(await store.saveSelectedDocItem()).toBeNull();
+    expect(updateTowerPgDocMock).not.toHaveBeenCalled();
+    expect(await getDocumentDraft('workspace-1', record.record_id)).toMatchObject({ content: draft.content, editor_state: draft.editor_state });
+    expect(await getDocumentById(record.record_id)).toMatchObject({ content: record.content, version: record.version });
+    load.mockResolvedValue({ createTiptapEditorAdapter: options => ({
+      getContentModel: () => createDocumentEditorState(options.document).contentModel,
+    }) });
+    await store.mountDocRichEditor(element, { retry: true });
+    expect(store.docEditorContentModel.editor_state).toEqual(draft.editor_state);
+    expect(await getDocumentDraft('workspace-1', record.record_id)).toMatchObject({ editor_state: draft.editor_state });
+    expect(await getDocumentById(record.record_id)).toMatchObject({ content: record.content });
+  });
 
   it('edits a complete cached body offline, reloads its separate draft, and requires an explicit resume', async () => {
     vi.stubGlobal('navigator', { onLine: false });

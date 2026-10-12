@@ -3842,6 +3842,20 @@
       "notes": [
         "Return focus to the fullscreen menu button after closing mobile navigation with the backdrop, as well as Escape."
       ]
+    },
+    {
+      "buildNumber": 2382,
+      "label": "Resilient document editor loading",
+      "notes": [
+        "Documents stay readable while editing loads. A failed editor download retries automatically once; if editing remains unavailable, content and drafts are preserved with a clear retry action."
+      ]
+    },
+    {
+      "buildNumber": 2383,
+      "label": "Preserve complete rich document fallback",
+      "notes": [
+        "Keep complete rich document content and local drafts available when editing cannot load, including when the saved plain-text preview is sparse."
+      ]
     }
   ]
 }

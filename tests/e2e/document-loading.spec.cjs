@@ -1,9 +1,10 @@
 const { test, expect } = require('playwright/test');
 test.use({ serviceWorkers: 'block' });
 
-async function openCachedDocument(page) {
-  await page.goto('/');
+async function openCachedDocument(page, beforeOpen = async () => {}) {
+  await page.goto('/', { waitUntil: 'domcontentloaded' });
   await page.waitForFunction(() => window.Alpine?.store?.('chat'));
+  await beforeOpen();
   await page.evaluate(() => {
     const s = window.Alpine.store('chat');
     s.session = { npub: 'npub1documentloadingtest' };
@@ -21,12 +22,136 @@ async function openCachedDocument(page) {
   });
 }
 
-test('failed lazy editor load offers readable content without reload', async ({ page }) => {
-  await page.route('**/assets/tiptap-editor-adapter-*.js', route => route.abort('failed'));
+test('permanent editor failure automatically keeps readable content and permits a fresh explicit retry', async ({ page }) => {
+  const requests = [];
+  await page.route('**/assets/tiptap-editor-adapter-*.js*', route => {
+    requests.push(route.request().url());
+    return route.abort('failed');
+  });
   await openCachedDocument(page);
-  await expect(page.getByText(/Document editor could not load:/)).toBeVisible();
-  await page.getByRole('button', { name: 'Read without editor', exact: true }).click();
-  await expect(page.locator('.doc-block-editor-surface')).toContainText('Body survives editor failure');
+  await expect(page.getByText(/Editing is unavailable\./)).toBeVisible();
+  await expect(page.locator('[data-doc-editor-fallback]')).toContainText('Body survives editor failure');
+  await expect(page.locator('.doc-rich-editor')).toBeHidden();
+  expect(requests).toHaveLength(2);
+  expect(new URL(requests[1]).searchParams.get('editor-retry')).toBe('1');
+  await page.evaluate(() => { window.Alpine.store('chat').selectedDocument.version++; });
+  await page.waitForTimeout(600);
+  expect(requests).toHaveLength(2);
+  await page.unroute('**/assets/tiptap-editor-adapter-*.js*');
+  await page.getByRole('button', { name: 'Try again', exact: true }).click();
+  await expect(page.locator('.doc-rich-editor .ProseMirror')).toContainText('Body survives editor failure');
+  await expect(page.locator('[data-doc-editor-fallback]')).toHaveCount(0);
+  expect(await page.evaluate(() => window.Alpine.store('chat').selectedDocument.content)).toBe('Body survives editor failure');
+});
+
+test('transient entry import failure recovers automatically with a different module identity', async ({ page }) => {
+  const requests = [];
+  const failures = [];
+  page.on('pageerror', error => {
+    if (/module|tiptap|mountDocRichEditor/i.test(error.message)) failures.push(error.message);
+  });
+  await page.route('**/assets/tiptap-editor-adapter-*.js*', route => {
+    requests.push(route.request().url());
+    return requests.length === 1 ? route.abort('failed') : route.continue();
+  });
+  await openCachedDocument(page);
+  await expect(page.locator('[data-doc-editor-fallback]')).toContainText('Body survives editor failure');
+  await expect(page.locator('.doc-rich-editor .ProseMirror')).toContainText('Body survives editor failure');
+  expect(requests).toHaveLength(2);
+  expect(requests[0]).not.toBe(requests[1]);
+  expect(failures).toEqual([]);
+  expect(await page.evaluate(() => window.Alpine.store('chat').docRichEditorLoadError)).toBe('');
+});
+
+test('service-worker controlled editor recovers after a failed cold network fetch', async ({ browser }, testInfo) => {
+  // Playwright 1.51 gates interception of worker-owned network requests.
+  const previousWorkerEvents = process.env.PW_EXPERIMENTAL_SERVICE_WORKER_NETWORK_EVENTS;
+  process.env.PW_EXPERIMENTAL_SERVICE_WORKER_NETWORK_EVENTS = '1';
+  const context = await browser.newContext({ baseURL: testInfo.project.use.baseURL, serviceWorkers: 'allow' });
+  await context.addInitScript(() => {
+    new MutationObserver(() => document.querySelectorAll('iframe').forEach(frame => frame.remove()))
+      .observe(document, { childList: true, subtree: true });
+  });
+  const page = await context.newPage();
+  try {
+    let requests = 0;
+    let workerFetchFailed = false;
+    await context.route('**/assets/tiptap-editor-adapter-*.js*', route => {
+      requests++;
+      if (requests === 1) {
+        workerFetchFailed = Boolean(route.request().serviceWorker());
+        return route.abort('failed');
+      }
+      return route.continue();
+    });
+    // Synthetic workspaces have no island dashboards. Do not let empty iframe
+    // targets recursively boot the app shell while testing its real worker.
+    await page.route('**/*', route => {
+      const request = route.request();
+      if (request.isNavigationRequest() && request.frame() !== page.mainFrame()) {
+        return route.fulfill({ contentType: 'text/html', body: '' });
+      }
+      return route.continue();
+    });
+    const failedImport = page.waitForEvent('console', { timeout: 15000,
+      predicate: message => message.text().includes('document editor import failed; attempting recovery') });
+    await openCachedDocument(page, async () => {
+      await page.waitForFunction(() => Boolean(navigator.serviceWorker.controller), null, { timeout: 15000 });
+    });
+    await failedImport;
+    await expect(page.locator('[data-doc-editor-fallback]')).toContainText('Body survives editor failure');
+    await expect(page.locator('.doc-rich-editor .ProseMirror')).toContainText('Body survives editor failure');
+    expect(await page.evaluate(() => window.Alpine.store('chat').docRichEditorLoadState)).toBe('ready');
+    expect(workerFetchFailed).toBe(true);
+    expect(requests).toBe(2);
+  } finally {
+    await context.setOffline(false);
+    await context.close();
+    if (previousWorkerEvents === undefined) delete process.env.PW_EXPERIMENTAL_SERVICE_WORKER_NETWORK_EVENTS;
+    else process.env.PW_EXPERIMENTAL_SERVICE_WORKER_NETWORK_EVENTS = previousWorkerEvents;
+  }
+});
+
+test('a missing old-deploy editor asset stops recovery without reloading or replacing content', async ({ page }) => {
+  let navigations = 0;
+  let requests = 0;
+  page.on('request', request => {
+    if (request.isNavigationRequest() && request.frame() === page.mainFrame()) navigations++;
+  });
+  await page.route('**/assets/tiptap-editor-adapter-*.js*', route => {
+    requests++;
+    return route.fulfill({ status: 404, contentType: 'text/plain', body: 'Asset not found' });
+  });
+  await openCachedDocument(page);
+  await expect(page.getByText(/Editing is unavailable\./)).toBeVisible();
+  await expect(page.locator('[data-doc-editor-fallback]')).toContainText('Body survives editor failure');
+  await page.waitForTimeout(700);
+  expect(requests).toBe(2);
+  expect(navigations).toBe(1);
+  expect(await page.evaluate(() => ({ mode: window.Alpine.store('chat').docEditorMode,
+    body: window.Alpine.store('chat').selectedDocument.content }))).toEqual({ mode: 'rich', body: 'Body survives editor failure' });
+});
+
+test('navigation during recovery mounts only the new document and keeps it read-only when permission changes', async ({ page }) => {
+  let release;
+  await page.route('**/assets/tiptap-editor-adapter-*.js*', async route => {
+    if (!new URL(route.request().url()).searchParams.has('editor-retry')) return route.abort('failed');
+    await new Promise(resolve => { release = resolve; });
+    return route.continue();
+  });
+  await openCachedDocument(page);
+  await expect.poll(() => typeof release).toBe('function');
+  await page.evaluate(() => {
+    const s = window.Alpine.store('chat');
+    s.documents.push({ ...s.selectedDocument, record_id: 'next-document', title: 'Next document', content: 'New selection body' });
+    s.openDoc('next-document', { syncRoute: false });
+    s.isSelectedDocRichEditorEditable = () => false;
+  });
+  release();
+  await expect(page.locator('.doc-rich-editor .ProseMirror')).toContainText('New selection body');
+  await expect(page.locator('.doc-rich-editor .ProseMirror')).toHaveCount(1);
+  await expect(page.locator('.doc-rich-editor .ProseMirror')).toHaveAttribute('contenteditable', 'false');
+  expect(await page.evaluate(() => window.Alpine.store('chat').selectedDocId)).toBe('next-document');
 });
 
 test('warm document opens render the body repeatedly', async ({ page }) => {

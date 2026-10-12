@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import { createVersionMetadata, readReleaseNotesManifest } from './scripts/release-notes.mjs';
+import { documentEditorAssetPlugin } from './scripts/document-editor-asset.mjs';
 
 const DIST_DIR = path.resolve(__dirname, 'dist');
 const SUITE_ROOT = path.resolve(__dirname, '..');
@@ -400,7 +401,7 @@ export default defineConfig({
   // that entry again in WebKit, duplicating the DB singleton and listeners.
   worker: { format: 'es', rollupOptions: { output: { inlineDynamicImports: true } } },
   root: '.',
-  plugins: [flightDeckIdentityPlugin(), buildVersionPlugin(), missingDistAssetGuardPlugin()],
+  plugins: [flightDeckIdentityPlugin(), buildVersionPlugin(), missingDistAssetGuardPlugin(), documentEditorAssetPlugin()],
   server: {
     host: true,
     strictPort: true,

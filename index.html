@@ -5436,13 +5436,16 @@
                     </svg>
                     <div class="doc-preview-surface">
                       <div role="status" aria-live="polite" x-cloak x-show="!$store.chat.isSelectedDocContentReadyForEditor() || ['loading', 'error'].includes($store.chat.docRichEditorLoadState)">
-                        <p x-text="$store.chat.docRichEditorLoadError || ($store.chat.selectedDocument?.content_storage_status === 'error' ? 'Preview only — complete document unavailable. Reconnect and retry to edit.' : 'Preview only — loading complete document…')"></p>
+                        <p x-text="$store.chat.docRichEditorLoadError || (!$store.chat.isSelectedDocContentReadyForEditor() ? ($store.chat.selectedDocument?.content_storage_status === 'error' ? 'Preview only — complete document unavailable. Reconnect and retry to edit.' : 'Preview only — loading complete document…') : 'Preparing editing…')"></p>
                         <button type="button" class="btn-secondary" x-show="$store.chat.docRichEditorLoadState === 'error' || !$store.chat.isSelectedDocContentReadyForEditor()" :disabled="$store.chat.docRichEditorLoadState !== 'error' && ($store.chat.docEditDraftDirty || $store.chat.docLocalDraft)" @click="$store.chat.retrySelectedDocLoading()">Try again</button>
-                        <button type="button" class="btn-secondary" x-show="$store.chat.docRichEditorLoadState === 'error'" @click="$store.chat.docEditorMode = 'preview'">Read without editor</button>
                       </div>
+                      <template x-if="$store.chat.docEditorMode === 'rich' && $store.chat.docRichEditorLoadState !== 'ready'">
+                        <div class="doc-block-editor-surface" data-doc-editor-fallback x-html="$store.chat.renderMarkdown($store.chat.getDocEditorFallbackContent())" x-effect="$store.chat.getDocEditorFallbackContent(); $nextTick(() => $store.chat.scheduleStorageImageHydration())"></div>
+                      </template>
                       <template x-if="$store.chat.docEditorMode === 'rich'">
                         <div
                           class="doc-rich-editor"
+                          x-show="$store.chat.docRichEditorLoadState === 'ready'"
                           x-init="$nextTick(() => $store.chat.mountDocRichEditor($el))"
                           x-effect="$store.chat.docEditorMode; $store.chat.selectedDocument?.version; $store.chat.observeSelectedDocAuthoritativeVersion(); if ($store.chat.docEditorMode === 'rich') $nextTick(() => $store.chat.mountDocRichEditor($el))"
                         ></div>

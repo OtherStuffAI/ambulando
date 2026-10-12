@@ -1,6 +1,7 @@
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { collectCurrentAssetClosure } from './dist-release.mjs';
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 export function verifyDistAssets(distDir = path.join(rootDir, 'dist')) {
@@ -40,14 +41,14 @@ export function verifyDistAssets(distDir = path.join(rootDir, 'dist')) {
     }
   }
 
-  for (const assetRef of assetRefs) {
+  for (const assetRef of collectCurrentAssetClosure(distDir)) {
     const assetPath = path.join(distDir, 'assets', assetRef);
     if (!existsSync(assetPath)) {
-      fail(`dist/index.html references missing asset /assets/${assetRef}.`);
+      fail(`dist application graph references missing asset /assets/${assetRef}.`);
       continue;
     }
     if (statSync(assetPath).size <= 0) {
-      fail(`dist/index.html references empty asset /assets/${assetRef}.`);
+      fail(`dist application graph references empty asset /assets/${assetRef}.`);
     }
   }
 

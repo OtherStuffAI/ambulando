@@ -21,10 +21,41 @@ Ordinary board navigation can asynchronously close an open detail after a paint;
 following a document's owning channel must not trigger that lifecycle.
 
 Rich editor mounting reports loading and failure separately from edit lease
-access. A failed asset load exposes Try again and Read without editor. The latter
-uses the existing block preview and remains usable even when the browser caches
-an unsuccessful module fetch. Body failures expose a connection-aware message
-and an explicit same-document retry; local drafts must be preserved first.
+access. A read-only Markdown view of the current complete content model stays
+visible until the editor is ready, including when asset delivery fails. The
+fallback never rebuilds the rich tree or changes editor mode; local drafts,
+intentional empty drafts, marks and saved content retain their independent state.
+Body failures expose a connection-aware message and an explicit same-document
+retry; local drafts must be preserved first.
+
+Imports have an eight-second deadline. An import failure gets one automatic
+retry after 300 ms, using a fresh query on the same bundled editor entry. Clearing
+an application promise alone does not clear a browser's failed module map.
+`scripts/document-editor-asset.mjs` supplies the entry URL and allows additional
+shared exports so Rollup does not add a facade that reimports a failed child.
+Successful modules and concurrent attempts are shared. Late timed-out imports
+cannot replace a successful recovery. Factory failures do not retry themselves.
+
+Recovery checks document, workspace, edit generation, mount generation and mode
+before mounting, and reads the current draft and permission snapshot after the
+import completes. Failed mounts remain read-only with plain status and Try again;
+Alpine effects cannot restart an exhausted attempt. Explicit retry uses another
+fresh entry URL. Local checkpointing remains available, while remote saves wait
+for a ready rich editor. Technical errors remain in diagnostics and console.
+
+There is no automatic page reload, worker activation or import from a different
+release. A missing old asset or a browser-cached failure in a shared dependency
+may still require an explicit app refresh. The existing update flow remains
+responsible for coherent shell/worker updates. The service worker treats retry
+queries as distinct requests; it cannot recreate an asset removed by the server.
+
+Build publication follows absolute asset URLs, relative chunk imports and Vite
+preload maps when retaining the previous build's dependency closure. Dist
+verification checks those lazy dependencies before publication. This preserves
+the immediately previous release's editor for warm tabs; it is not indefinite
+retention of all historical releases. The previously missed relative-import
+closure is a demonstrated delivery defect, not attribution of any historical
+screenshot without its network trace.
 
 ## Regression coverage
 
@@ -36,10 +67,34 @@ workspace changes, dirty drafts and draft restoration ordering.
 records and native clicks. It covers repeated warm opens, delayed cold body
 completion, stale responses, a cross-channel document mention whose first body
 read is deferred, editor asset failure with readable fallback, and explicit body
-recovery on the same selection. Service workers are blocked so asset failures
-can be intercepted reliably. These checks validate browser orchestration; they
-do not establish authenticated access or the cause of a particular historical
-browser screenshot.
+recovery on the same selection. It also covers fresh-URL transient recovery,
+bounded permanent/404 failure, navigation and permission changes during recovery,
+and offline draft resumption. Most checks block service workers for deterministic
+asset interception; an isolated check enables the real worker and intercepts its
+cold network fetch using Playwright's worker-network event support. These checks
+validate browser orchestration; they do not establish authenticated access or
+the cause of a particular historical browser screenshot.
+
+Editor asset recovery validation passed 195 focused checks, 4,912 unit checks
+(one skipped), ten served-browser document checks and seven performance checks.
+The browser target was the managed Ambulando build 2383, using Chrome and the
+default local Tower target. An authenticated Safari pass on the originally
+reported document remains necessary for incident acceptance.
+
+Final managed-build performance samples, in milliseconds:
+
+| Scenario | Shell / composer | Input p95 | Render p95 | Typing long tasks |
+| --- | --- | ---: | ---: | ---: |
+| Chat, 200 tasks/docs | 307 / 491 | 0.4 | 127.8 | 0 |
+| Heavy chat, 2,000 tasks/docs | 311 / 835 | 0.5 | 110.5 | 0 |
+| Diagnostics enabled | 304 / 506 | 0.5 | 97.5 | 0 |
+
+All typing scenarios preserved 74/74 characters. Heavy maximum frame gap was
+100 ms. Thread/task opening p95 was 91.1/254 ms. Compared with
+`docs/playwright-performance-baseline.md`, heavy render p95 was below 231.2 ms,
+composer readiness below 1,588 ms and task opening below 499.8 ms, with no dropped
+characters or typing long-task regression. These are local samples, not cross-device
+performance guarantees.
 
 ## Save base and recovery behavior
 
