@@ -158,7 +158,7 @@ test('safe areas and reduced keyboard viewport keep mobile header reachable', as
       style.textContent = css.replaceAll('env(safe-area-inset-top)', '24px').replaceAll('env(safe-area-inset-bottom)', '34px').replaceAll('env(safe-area-inset-left)', '12px').replaceAll('env(safe-area-inset-right)', '12px');
       document.head.append(style);
     }
-    
+
   });
   await page.setViewportSize({ width: 390, height: 360 });
   await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
