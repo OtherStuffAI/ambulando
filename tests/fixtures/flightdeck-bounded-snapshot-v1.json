@@ -1,0 +1,17 @@
+{
+  "extension": "bounded_snapshot_v1",
+  "pending": {
+    "target_position": "9007199254740993",
+    "through_position": "9007199254740992",
+    "complete": false,
+    "authority_epoch": "epoch",
+    "access_revision": "3"
+  },
+  "complete": {
+    "target_position": "9007199254740993",
+    "through_position": "9007199254740993",
+    "complete": true,
+    "authority_epoch": "epoch",
+    "access_revision": "3"
+  }
+}

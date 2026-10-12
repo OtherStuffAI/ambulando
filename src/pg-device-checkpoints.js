@@ -49,6 +49,8 @@ export async function commitDeviceMetadata(cursorKey, action) {
       if (state.cursor || device.registered) return state;
       const checkpoint = action.checkpoint;
       const next = { ...state, cursor: checkpoint.initial_cursor, device: { ...device, registered: true,
+        extension: action.extension || device.extension || null,
+        largeRecords: action.largeRecords || device.largeRecords || null,
         authorityEpoch: checkpoint.authority_epoch, revision: checkpoint.checkpoint_revision } };
       await db.sync_state.put({ key: cursorKey, value: next });
       return next;
@@ -72,22 +74,44 @@ export async function commitDeviceMetadata(cursorKey, action) {
 }
 
 const discoveries = new Map();
-export async function discoverRecordProtocol(context, readService) {
+export async function discoverRecordCapabilities(context, readService) {
   const key = deviceCheckpointScope(context);
   if (!discoveries.has(key)) {
     const pending = Promise.resolve().then(() => readService({ baseUrl: context.baseUrl, appNpub: context.appNpub }))
-      .then(service => service?.record_sync?.device_checkpoints === true
-        && service.record_sync.protocol_versions?.includes(2) ? 2 : 1)
+      .then(service => {
+        const protocolVersion = service?.record_sync?.device_checkpoints === true
+          && service.record_sync.protocol_versions?.includes(2) ? 2 : 1;
+        return { protocolVersion, extension: protocolVersion === 2
+          && service.record_sync.extensions?.includes('bounded_snapshot_v1') ? 'bounded_snapshot_v1' : null,
+          largeRecords: protocolVersion === 2 && service.record_sync.extensions?.includes('bounded_snapshot_v1')
+            && service.record_sync.extensions?.includes('chunked_v1') ? 'chunked_v1' : null };
+      })
       .catch(error => {
         // Only absent service routes represent older servers. Authentication,
         // transport and authority failures must never silently negotiate down.
-        if ([404, 406, 501].includes(error.status)) return 1;
+        if ([404, 406, 501].includes(error.status)) return { protocolVersion: 1, extension: null };
         discoveries.delete(key);
         throw error;
       });
     discoveries.set(key, pending);
   }
   return discoveries.get(key);
+}
+
+export async function discoverRecordProtocol(context, readService) {
+  return (await discoverRecordCapabilities(context, readService)).protocolVersion;
+}
+
+export function validateBoundedHandover(page, authorityEpoch) {
+  const h = page.handover;
+  if (!h || !(h.target_position === null || checkpointRevision(h.target_position))
+    || !checkpointRevision(h.through_position) || !checkpointRevision(h.access_revision)
+    || h.authority_epoch !== authorityEpoch || typeof h.complete !== 'boolean'
+    || h.complete !== !page.has_more || h.complete && (page.mode !== 'delta'
+      || h.target_position === null || BigInt(h.through_position) < BigInt(h.target_position))) {
+    throw new Error('Invalid bounded snapshot handover');
+  }
+  return h;
 }
 
 export function withDeviceCacheLock(name, run, locks = globalThis.navigator?.locks) {
@@ -103,12 +127,15 @@ export function recordCheckpointError(error) {
 
 // Network orchestration is invoked by the service's cursor recovery port;
 // every mutation is dispatched to its existing worker materialisation port.
-export async function syncDeviceRecords({ context, options, readState, materialize, readPage, client, assertCurrent, cursorKey, preparePage, assertHeld = async () => {} }) {
+export async function syncDeviceRecords({ context, options, readState, materialize, readPage, readChunk, client, assertCurrent, cursorKey, preparePage, assertHeld = async () => {} }) {
   const scope = deviceCheckpointScope(context);
   const transport = { baseUrl: context.baseUrl, appNpub: context.appNpub, timeoutMs: options.timeoutMs || 30000, diagnosticOperation: options.diagnosticOperation };
   let state = await readState(cursorKey);
   const inspection = await materialize({ protocol_version: 2, device_action: { type: 'inspect' } });
   state = inspection.state;
+  if (state?.device?.extension && state.device.scope === scope && state.device.extension !== options.extension) throw new Error('Negotiated record sync extension is unavailable');
+  if (state?.device?.largeRecords && state.device.scope === scope && state.device.largeRecords !== options.largeRecords) throw new Error('Negotiated large record extension is unavailable');
+  await materialize({ protocol_version: 2, large_record_action: { type: 'discard' } });
   let applied = 0, resets = 0;
   const update = async action => {
     assertCurrent();
@@ -116,10 +143,10 @@ export async function syncDeviceRecords({ context, options, readState, materiali
       clientId: state.device.clientId, localGeneration: Number(state.localGeneration || 0) } });
     assertCurrent();
   };
-  const replace = async preserveViews => {
+  const replace = async (preserveViews, retainDownloads = false) => {
     assertCurrent();
     await materialize({ protocol_version: 2, reset_authority: true, local_apply_options: {
-      preserveViews, expectedCursor: state?.cursor || null, expectedGeneration: Number(state?.localGeneration || 0), deviceScope: scope,
+      preserveViews, retainDownloads, expectedCursor: state?.cursor || null, expectedGeneration: Number(state?.localGeneration || 0), deviceScope: scope,
     } });
     state = await readState(cursorKey);
   };
@@ -127,7 +154,9 @@ export async function syncDeviceRecords({ context, options, readState, materiali
     // Adoption replaces the authoritative snapshot, never upgrades a v1 cursor.
     // An unrelated authority must be hidden, whereas the same cache's v1 views
     // remain available until the replacement's snapshot handover completes.
-    await replace(!state?.device && (!inspection.owner || inspection.owner.scope === scope));
+    const sameCache = (!state?.device || state.device.scope === scope)
+      && (!inspection.owner || inspection.owner.scope === scope);
+    await replace(sameCache, sameCache);
   }
   const retireObsolete = async () => {
     for (const obsolete of state.obsoleteDevices || []) {
@@ -144,7 +173,7 @@ export async function syncDeviceRecords({ context, options, readState, materiali
     assertCurrent();
     try {
       const checkpoint = await client(context.workspaceId, state.device.clientId, { ...transport,
-        operation: 'ack', cursor: intent.cursor, expectedRevision: intent.expectedRevision });
+        operation: 'ack', cursor: intent.cursor, expectedRevision: intent.expectedRevision, largeRecordReceipts: intent.largeRecordReceipts });
       await update({ type: 'acknowledged', cursor: intent.cursor, checkpoint });
     } catch (error) {
       const { code } = recordCheckpointError(error);
@@ -154,6 +183,10 @@ export async function syncDeviceRecords({ context, options, readState, materiali
       // start at the locally committed cursor. It replaces durable ack intent.
       validateCheckpoint(await client(context.workspaceId, state.device.clientId, { ...transport, operation: 'read' }), state.device);
       assertCurrent();
+      // A manifest token cannot be bypassed by fetching a dependent page. A
+      // non-idempotent checkpoint conflict repairs through a fresh snapshot;
+      // never promote the diagnostic server checkpoint into local data.
+      if (intent.largeRecordReceipts?.length) throw Object.assign(new Error('Large record checkpoint needs authorised repair'), { status: 409, code: 'reset_required' });
     }
   };
   for (let pages = 1; pages <= (options.maxPages || 1000); pages++) {
@@ -162,7 +195,7 @@ export async function syncDeviceRecords({ context, options, readState, materiali
       if (!state.device.registered) {
         const checkpoint = validateCheckpoint(await client(context.workspaceId, state.device.clientId,
           { ...transport, operation: 'register' }), state.device);
-        await update({ type: 'registered', checkpoint });
+        await update({ type: 'registered', checkpoint, extension: options.extension, largeRecords: options.largeRecords });
       }
       if (state.snapshotRetirement) {
         await materialize({ protocol_version: 2, resume_snapshot_retirement: true, local_apply_options: {
@@ -174,20 +207,40 @@ export async function syncDeviceRecords({ context, options, readState, materiali
       options.onProgress?.({ stage: 'receiving', page: pages, applied, cursorPresent: Boolean(state.cursor), mode: 'unavailable', protocolVersion: 2 });
       const requested = { cursor: state.cursor, clientId: state.device.clientId, generation: state.localGeneration };
       const page = await readPage(context.workspaceId, { ...transport, protocolVersion: 2,
-        clientId: requested.clientId, cursor: requested.cursor, limit: options.limit || 200 });
+        extension: options.extension, largeRecords: options.largeRecords, clientId: requested.clientId, cursor: requested.cursor, limit: options.limit || 200 });
       assertCurrent();
       const current = await readState(cursorKey);
       if (current?.device?.scope !== scope || current.device.clientId !== requested.clientId
         || current.cursor !== requested.cursor || current.localGeneration !== requested.generation) throw new Error('Stale device page response');
       if (page.protocol_version !== 2 || page.client_id !== requested.clientId
         || !checkpointRevision(page.checkpoint_revision) || page.has_more && page.next_cursor === requested.cursor) throw new Error('Invalid negotiated device page');
+      if (options.extension === 'bounded_snapshot_v1') validateBoundedHandover(page, state.device.authorityEpoch);
+      if (page.large_records?.length && options.largeRecords !== 'chunked_v1') throw new Error('Unnegotiated large record manifest');
       options.onProgress?.({ stage: 'applying', page: pages, applied, cursorPresent: Boolean(state.cursor), mode: page.mode, fullSnapshot: page.mode === 'snapshot', hasMore: page.has_more === true, protocolVersion: 2 });
       await preparePage?.(page, state);
-      const result = await materialize({ ...page, local_apply_options: {
+      const applyOptions = {
         expectedCursor: requested.cursor, expectedGeneration: Number(requested.generation || 0),
         deviceScope: scope, authorityEpoch: state.device.authorityEpoch, incrementalSnapshot: true,
+        boundedExtension: options.extension,
+        largeRecords: options.largeRecords,
         viewBaselineInitialized: true,
-      } });
+      };
+      let result;
+      if (page.large_records?.length) {
+        try {
+          const assembly = await materialize({ protocol_version: 2, large_record_action: { type: 'begin', page }, local_apply_options: applyOptions });
+          for (let index = 0; index < assembly.chunks; index++) {
+            await assertHeld(); assertCurrent();
+            const bytes = await readChunk(context.workspaceId, requested.clientId, page.next_cursor, page.large_records[0].manifest_id, index, transport);
+            assertCurrent();
+            await materialize({ protocol_version: 2, large_record_action: { type: 'chunk', index, bytes }, local_apply_options: applyOptions });
+          }
+          result = await materialize({ protocol_version: 2, large_record_action: { type: 'finish' }, local_apply_options: applyOptions });
+        } catch (error) {
+          await materialize({ protocol_version: 2, large_record_action: { type: 'discard' } }).catch(() => {});
+          throw error;
+        }
+      } else result = await materialize({ ...page, local_apply_options: applyOptions });
       assertCurrent();
       applied += result.applied;
       state = await readState(cursorKey);
@@ -199,16 +252,18 @@ export async function syncDeviceRecords({ context, options, readState, materiali
       }
     } catch (error) {
       const { code, payload } = recordCheckpointError(error);
-      const revoked = error.status === 403 && code === 'workspace_membership_required'
+      const revoked = error.status === 403 && ['workspace_membership_required', 'record_access_required'].includes(code)
         && (!payload.identity?.workspace_id || payload.identity.workspace_id === context.workspaceId);
-      const reset = error.status === 409 && ['reset_required', 'history_pruned', 'client_expired', 'client_not_registered', 'page_token_invalid'].includes(code);
+      const reset = error.status === 409 && ['reset_required', 'history_pruned', 'client_expired', 'client_not_registered', 'page_token_invalid', 'large_record_changed', 'large_record_ack_required'].includes(code);
       if (!revoked && !reset) throw error;
       // Repeated denied polls have no authority left to discard. Keep the
       // replacement ID stable instead of accumulating registrations/recovery
       // metadata while membership remains revoked.
       if (revoked && !state.device.registered && !state.cursor) throw error;
       options.onProgress?.({ stage: 'recovery', recoveryReason: code, page: pages, applied, cursorPresent: Boolean(state.cursor), mode: 'unavailable', protocolVersion: 2 });
-      await replace(false);
+      // Revocation/expiry invalidates authority and the checkpoint, not the
+      // user's downloaded data or drafts in this same scoped cache.
+      await replace(true, true);
       if (revoked || ++resets > 2) throw error;
     }
     await new Promise(resolve => setTimeout(resolve, 0));

@@ -4,6 +4,7 @@
     "": {
       "name": "wm-fd-2",
       "dependencies": {
+        "@noble/hashes": "2.0.1",
         "@nostr-superbased/browser": "0.1.0",
         "@nostr-superbased/core": "0.1.0",
         "@tiptap/core": "^3.27.1",

@@ -3614,6 +3614,13 @@
       "label": "Validated Ambulando deployment checkpoint",
       "notes": [],
       "noUserVisibleChanges": true
+    },
+    {
+      "buildNumber": 2347,
+      "label": "Bounded snapshot compatibility",
+      "notes": [
+        "Negotiate finite record-sync handover and verified bounded chunks for large records when Tower supports them. Retain downloaded records and drafts during same-cache permission and checkpoint repair."
+      ]
     }
   ]
 }
