@@ -18,12 +18,13 @@ const globalBar = html.slice(globalBarStart, globalBarEnd);
 const mobileSwitcher = globalBar.slice(globalBar.indexOf('class="mobile-section-switcher"'));
 
 describe('mobile views outside the drawer', () => {
-  it('keeps the approved collapsed mobile scope, channel, sidebar, and compact controls', () => {
-    expect(mobileSelector).toContain('x-show="$store.chat.isLoggedIn && !$store.chat.mobileNavOpen"');
+  it('keeps mobile context compact with switching in the sidebar', () => {
+    expect(mobileSelector).toContain('x-show="$store.chat.isLoggedIn && !$store.chat.mobileNavOpen && !$store.chat.appHeaderHidden"');
     expect(mobileSelector).toContain('class="mobile-scope-context-controls"');
-    expect(mobileSelector).toContain('class="mobile-scope-trigger"');
-    expect(mobileSelector).toContain('class="mobile-scope-workspace-avatar-btn"');
-    expect(mobileSelector).toContain('@click="$store.chat.openCommandPaletteScopeSwitcher($event)"');
+    expect(mobileSelector).toContain('class="mobile-context-name"');
+    expect(mobileSelector).toContain('class="mobile-scope-workspace-avatar-btn mobile-context-menu"');
+    expect(mobileSelector).toContain('@click="$store.chat.togglePrimaryNav()"');
+    expect(mobileSelector).not.toContain('openCommandPaletteScopeSwitcher');
 
     expect(sidebar).toContain('class="sidebar-nav" x-show="$store.chat.navCollapsed && !$store.chat.mobileNavOpen"');
     expect(globalBar).toContain('class="channel-row-scope-switcher"');

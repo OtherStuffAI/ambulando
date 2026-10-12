@@ -376,7 +376,7 @@ describe('flight deck summary template', () => {
   it('keeps in-view channel tabs alongside the new expanded sidebar hierarchy', () => {
     const html = readFileSync(INDEX_PATH, 'utf8');
 
-    expect(html).toContain('class="page-header" x-show="!$store.chat.appHeaderHidden"');
+    expect(html).toContain('x-show="!$store.chat.appHeaderHidden || ($store.chat.mobileViewport && $store.chat.isLoggedIn)"');
     expect(html).toMatch(/class="global-pg-channel-bar"[\s\S]*?:class="\{ 'global-pg-channel-bar-sidebar-expanded': !\$store\.chat\.navCollapsed \|\| \$store\.chat\.mobileNavOpen \}"[\s\S]*?x-show="\$store\.chat\.isLoggedIn"/s);
     expect(html).toContain('class="content-scroll-area"');
     expect(html).toContain('class="chat-channel-tab-item"');

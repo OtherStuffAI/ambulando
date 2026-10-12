@@ -540,3 +540,27 @@ code, pre { font-family:var(--font-code); }
   .files-mobile-switcher-btn > span { white-space:nowrap; }
   .files-mobile-switcher-btn small { min-width:14px; padding-inline:2px; flex-shrink:0; }
 }
+
+/* Mobile context has one row; navigation owns scope/channel switching and
+   utilities. Keep the existing profile menu mounted without its desktop row. */
+.mobile-header-restore, .mobile-navigation-tools { display:none; }
+@media (max-width:768px) {
+  .page-header.mobile-context-only { display:contents; }
+  .page-header.mobile-context-only > .header-leading,
+  .page-header.mobile-context-only > .sol-theme-button { display:none; }
+  .page-header.mobile-context-only .session-controls { display:contents; }
+  .page-header.mobile-context-only .avatar-chip,
+  .page-header.mobile-context-only .tower-connection-indicator { display:none; }
+  .page-header.mobile-context-only .avatar-menu { position:fixed; top:calc(var(--sol-visual-top, 0px) + env(safe-area-inset-top) + 48px); right:max(8px, env(safe-area-inset-right)); max-width:calc(100vw - 16px); max-height:calc(var(--sol-visual-height, 100dvh) - env(safe-area-inset-top) - 56px); overflow:auto; z-index:200; }
+  .mobile-scope-switcher { padding-top:env(safe-area-inset-top); padding-left:env(safe-area-inset-left); padding-right:env(safe-area-inset-right); }
+  .mobile-scope-context-controls { grid-template-columns:44px minmax(0,1fr) auto minmax(0,1fr) 44px; gap:6px; padding:0 8px; }
+  .mobile-context-name { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:600; color:var(--foreground); }
+  .mobile-context-divider { color:var(--muted-foreground); }
+  .mobile-context-fullscreen, .mobile-context-menu { width:44px; height:44px; min-width:44px; min-height:44px; padding:0; }
+  .global-pg-channel-bar > .chat-channel-header { display:none; }
+  .mobile-header-restore { display:flex; position:fixed; top:calc(var(--sol-visual-top, 0px) + env(safe-area-inset-top) + 4px); right:max(8px, env(safe-area-inset-right)); width:44px; height:44px; min-width:44px; min-height:44px; padding:0; z-index:140; background:var(--card); color:var(--foreground); }
+  .sidebar, .sidebar-collapsed { top:var(--sol-visual-top, 0px); height:var(--sol-visual-height, 100dvh); padding-top:env(safe-area-inset-top); padding-bottom:env(safe-area-inset-bottom); }
+  .mobile-sidebar-backdrop { top:var(--sol-visual-top, 0px); }
+  .sidebar .mobile-navigation-tools { display:flex; flex-direction:column; gap:4px; padding:8px 12px; flex:0 0 auto; }
+  .mobile-navigation-tools button { min-height:44px; text-align:left; background:transparent; color:var(--sidebar-foreground); }
+}

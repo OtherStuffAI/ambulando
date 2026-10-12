@@ -276,9 +276,10 @@ describe('Chat channel rendering hooks', () => {
     const switcher = html.slice(switcherIndex, switcherEndIndex);
 
     expect(switcherIndex).toBeGreaterThan(-1);
-    expect(switcher).toContain('class="mobile-scope-workspace-avatar-btn"');
-    expect(switcher).toContain('@click="$store.chat.openAllScopesOverview()"');
-    expect(switcher).toContain('@click="$store.chat.openCommandPaletteScopeSwitcher($event)"');
+    expect(switcher).toContain('class="mobile-scope-workspace-avatar-btn mobile-context-menu"');
+    expect(switcher).toContain('@click="$store.chat.togglePrimaryNav()"');
+    expect(switcher).not.toContain('openCommandPaletteScopeSwitcher');
+    expect(switcher).toContain('$store.chat.mobileHeaderChannelTitle');
     expect(switcher).not.toContain('$store.chat.selectBoard(board.id)');
     expect(switcher).toContain('currentWorkspaceAvatarUrl');
     expect(switcher).toContain('currentWorkspaceInitials');

@@ -3236,6 +3236,12 @@ export function initApp() {
       this.navCollapsed = !this.navCollapsed;
     },
 
+    get mobileHeaderChannelTitle() {
+      const channelId = this.isTowerPgMode ? this.pgContextSelectedChannelId : this.selectedChannelId;
+      const channel = (this.channels || []).find((row) => row.record_id === channelId);
+      return channel ? (this.getChannelLabel(channel) || channel.name || 'Untitled channel') : 'No channel selected';
+    },
+
     toggleAppHeaderHidden() {
       this.appHeaderHidden = !this.appHeaderHidden;
     },

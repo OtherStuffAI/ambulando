@@ -3779,6 +3779,34 @@
       "notes": [
         "Allow large counts in phone Files source tabs to wrap within their touch targets while keeping ordinary counts on one row."
       ]
+    },
+    {
+      "buildNumber": 2372,
+      "label": "Simple mobile context header",
+      "notes": [
+        "Show workspace, current scope and current channel in one compact mobile row. Use the side menu for navigation and utilities, and restore the header from full screen with a dedicated control."
+      ]
+    },
+    {
+      "buildNumber": 2373,
+      "label": "Restore mobile navigation focus",
+      "notes": [
+        "Return keyboard focus to the compact header after closing mobile navigation with Escape."
+      ]
+    },
+    {
+      "buildNumber": 2374,
+      "label": "Mobile drawer focus restoration",
+      "notes": [
+        "Keep focus on the mobile header opener after drawer accessibility cleanup finishes."
+      ]
+    },
+    {
+      "buildNumber": 2375,
+      "label": "Mobile fullscreen keyboard focus",
+      "notes": [
+        "Keep the fullscreen restore control and restored header reachable by keyboard after mobile layout updates."
+      ]
     }
   ]
 }
