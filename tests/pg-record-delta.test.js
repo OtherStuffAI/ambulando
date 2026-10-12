@@ -518,3 +518,36 @@ it('repairs an existing assignment projection without moving the cursor, receipt
   await rebuildPgRecordSummaries(store);
   expect((await db.tasks.get(task.id)).assigned_to_npubs).toEqual(['npub1draft']);
 });
+describe.each(['scope','channel'])('unversioned %s navigation freshness', family => {
+  const base = fixture.canonical_upserts.changes.find(c => c.family === family);
+  const rename = (version, name) => {
+    const row = {...base.row, name};delete row.row_version;delete row.version;
+    return {...base,version,row};
+  };
+  const table = () => db.table(family === 'scope' ? 'scopes' : 'channels');
+  it('projects a fresh rename and rejects duplicate and stale journal delivery exactly', async () => {
+    await applyPgRecordChanges(store,page([rename('9007199254740992','Original')],'one'));
+    await applyPgRecordChanges(store,page([rename('9007199254740993','Renamed')],'two'));
+    expect((await table().get(base.id)).title).toBe('Renamed');
+    for (const [version,cursor] of [['9007199254740993','duplicate'],['9007199254740992','stale']]) {
+      expect((await applyPgRecordChanges(store,page([rename(version,'Wrong')],cursor))).applied).toBe(0);
+      expect((await table().get(base.id)).title).toBe('Renamed');
+    }
+  });
+  it.each(['pending','failed','command'])('preserves %s local intent while advancing canonical freshness', async kind => {
+    await applyPgRecordChanges(store,page([rename('10','Original')],'one'));
+    await table().update(base.id,{title:'Local draft',sync_status:kind === 'command' ? 'synced' : kind});
+    if(kind === 'command') await db.pending_writes.add({record_id:base.id,envelope:{name:'Local draft'}});
+    await applyPgRecordChanges(store,page([rename('11','Remote rename')],'two'));
+    expect((await table().get(base.id)).title).toBe('Local draft');
+    expect((await db.pg_record_rows.get(`${family}:${base.id}`)).row.name).toBe('Remote rename');
+    expect(await db.pg_record_conflicts.get(`${family}:${base.id}`)).toBeTruthy();
+    if(kind === 'command') expect(await db.pending_writes.count()).toBe(1);
+  });
+  it('rejects a rename from another workspace before changing navigation', async () => {
+    await applyPgRecordChanges(store,page([rename('10','Original')],'one'));
+    const foreign=rename('11','Foreign');foreign.workspace_id='other';foreign.row.workspace_id='other';
+    await expect(applyPgRecordChanges(store,page([foreign],'two'))).rejects.toThrow('Invalid Tower');
+    expect((await table().get(base.id)).title).toBe('Original');
+  });
+});

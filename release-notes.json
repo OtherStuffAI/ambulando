@@ -3856,6 +3856,14 @@
       "notes": [
         "Keep complete rich document content and local drafts available when editing cannot load, including when the saved plain-text preview is sparse."
       ]
+    },
+    {
+      "buildNumber": 2384,
+      "label": "Incremental navigation and reliable group saves",
+      "notes": [
+        "Remote channel and scope renames update downloaded navigation without a resync.",
+        "Group saves resolve every removal before changing membership; unavailable identities keep your selection open with a clear retry message."
+      ]
     }
   ]
 }

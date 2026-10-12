@@ -371,7 +371,13 @@ async function applyRecordPage(store, page, options = {}) {
         if (prior) { await table.delete(localId); applied++; }
         return;
       }
-      if (Number(prior?.version || 0) > Number(raw.row?.row_version || raw.row?.version || 0)) {
+      // Scope/channel canonical rows may have no content version. Their
+      // freshness is the exact journal version checked before materialization;
+      // pending edits and commands are protected above.
+      const journalVersionedNavigation = ['scope', 'channel'].includes(raw.family)
+        && raw.row?.row_version == null && raw.row?.version == null;
+      if (!journalVersionedNavigation
+        && Number(prior?.version || 0) > Number(raw.row?.row_version || raw.row?.version || 0)) {
         // A newer local version is still present in the authorized snapshot.
         await table.update(localId, { pg_delta_generation: generation, pg_delta_family: raw.family });
         return;

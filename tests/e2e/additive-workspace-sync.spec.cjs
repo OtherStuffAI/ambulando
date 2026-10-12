@@ -142,14 +142,9 @@ for (const protocol of [1, 2]) test(`v${protocol}: two caches retain UI and inte
         const title = operation === 'channel-rename' ? 'Renamed routine channel' : operation === 'scope-create' ? 'Routine scope' : operation === 'scope-rename' ? 'Renamed routine scope' : null;
         if (operation === 'scope-create') await expect.poll(() => c.page.evaluate(() => window.Alpine.store('cache').scopes.map(row => row.title)), {timeout:5000}).toContain(title);
         if (operation === 'channel-rename' || operation === 'scope-rename') {
-          // Characterize the observed defect: Tower scope/channel rows have no
-          // row_version. Canonical journal progress commits, but the generic
-          // local-version guard keeps the old navigation title. Manager repair
-          // must replace these assertions with the renamed presentation titles.
           const family=operation==='channel-rename'?'channel':'scope', id=family==='channel'?'new-empty-channel':'routine-scope';
           expect((await c.page.evaluate(({family,id})=>window.canonical(family,id),{family,id})).row.name).toBe(title);
-          const titles=await c.page.evaluate(()=>[...window.Alpine.store('cache').channels,...window.Alpine.store('cache').scopes].map(row=>row.title));
-          expect(titles).not.toContain(title);expect(titles).toContain(family==='channel'?'New empty channel':'Routine scope');
+          await expect.poll(() => c.page.evaluate(() => [...window.Alpine.store('cache').channels, ...window.Alpine.store('cache').scopes].map(row => row.title))).toContain(title);
         }
         if (operation === 'channel-archive' || operation === 'scope-archive') await c.page.waitForFunction(({operation}) => {
           const store=window.Alpine.store('cache');return operation==='channel-archive' ? !store.channels.some(row=>row.record_id==='new-empty-channel') : !store.scopes.some(row=>row.record_id==='routine-scope');

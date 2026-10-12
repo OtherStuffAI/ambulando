@@ -4028,6 +4028,17 @@ export const channelsManagerMixin = {
         for (const member of this.pgWorkspaceMembers || []) {
           if (member?.npub && member?.actor_id) actorIdByNpub.set(member.npub, member.actor_id);
         }
+        // Resolve the complete removal plan before additions or announcements.
+        const removals = membersToRemove.map((npub) => ({
+          npub,
+          actorId: String(actorIdByNpub.get(npub)
+            || group.members?.find((member) => member.npub === npub)?.actor_id
+            || '').trim(),
+        }));
+        const unresolved = removals.filter((member) => !member.actorId);
+        if (unresolved.length) {
+          throw new Error(`Cannot remove ${unresolved.map((member) => member.npub).join(', ')}: member identity is unavailable. Refresh the workspace members and retry; your selection is kept.`);
+        }
         for (const memberNpub of membersToAdd) {
           const selectedMember = members.find((member) => member.npub === memberNpub);
           await createTowerPgWorkspaceMember(this, workspaceId, {
@@ -4046,13 +4057,8 @@ export const channelsManagerMixin = {
             });
           }
         }
-        for (const memberNpub of membersToRemove) {
-          const actorId = actorIdByNpub.get(memberNpub)
-            || group.members?.find((member) => member.npub === memberNpub)?.actor_id
-            || '';
-          if (actorId) {
-            await removeTowerPgWorkspaceGroupMember(this, workspaceId, group.group_id, actorId, { baseUrl, appNpub });
-          }
+        for (const { actorId } of removals) {
+          await removeTowerPgWorkspaceGroupMember(this, workspaceId, group.group_id, actorId, { baseUrl, appNpub });
         }
         await this.rememberPeople(desiredMembers, 'pg-group');
         this.scheduleGroupsRefresh({ force: true, minIntervalMs: 0 }, 'PG group write');

@@ -26,10 +26,11 @@ it('removing a resolved person issues the typed group command and closes the dia
   expect(commands.remove).toHaveBeenCalledWith(s,'workspace','group','removed-actor',expect.any(Object));
   expect(s.showEditGroupModal).toBe(false);
 });
-it('diagnostic: an unresolved removal currently closes as success without issuing a command',async()=>{
+it('an unresolved removal retains selection and dialog with an actionable error',async()=>{
   const s=store();await channelsManagerMixin.saveGroupEdits.call(s);
-  expect(commands.remove).not.toHaveBeenCalled();expect(s.error).toBeNull();
-  expect(s.showEditGroupModal).toBe(false);expect(s.resetEditGroupDraft).toHaveBeenCalled();
+  expect(commands.remove).not.toHaveBeenCalled();expect(s.error).toMatch(/Cannot remove removed.*Refresh.*selection is kept/);
+  expect(s.showEditGroupModal).toBe(true);expect(s.resetEditGroupDraft).not.toHaveBeenCalled();
+  expect(s.editGroupMembers).toEqual([{npub:'keeper'}]);expect(s.groupEditPending).toBe(false);
 });
 it('adding a person first establishes workspace membership and then group membership',async()=>{
   const s=store({groups:[{group_id:'group',name:'Team',member_npubs:['keeper']}],editGroupMembers:[{npub:'keeper'},{npub:'added',kind:'human'}]});
@@ -43,4 +44,29 @@ it('creating an empty custom group issues the typed group route without key rota
   await channelsManagerMixin.createSharingGroup.call(s);
   expect(commands.create).toHaveBeenCalledWith(s,'workspace',{name:'Team',kind:'custom'},expect.any(Object));
   expect(commands.add).not.toHaveBeenCalled();expect(s.showNewGroupModal).toBe(false);
+});
+it('resolves removal from group actor projection before mixed additions', async () => {
+  const s = store({groups:[{group_id:'group',name:'Team',member_npubs:['keeper','removed'],members:[{npub:'removed',actor_id:'removed-actor'}]}],editGroupMembers:[{npub:'keeper'},{npub:'added'}]});
+  await channelsManagerMixin.saveGroupEdits.call(s);
+  expect(commands.add).toHaveBeenCalledTimes(1);expect(commands.remove).toHaveBeenCalledWith(s,'workspace','group','removed-actor',expect.any(Object));
+  expect(s.showEditGroupModal).toBe(false);
+});
+it('preflights all removals before mixed changes have side effects', async () => {
+  const s = store({groups:[{group_id:'group',name:'Team',member_npubs:['keeper','resolved','removed']}],pgWorkspaceMembers:[{npub:'resolved',actor_id:'resolved-actor'}],editGroupMembers:[{npub:'keeper'},{npub:'added'}]});
+  await channelsManagerMixin.saveGroupEdits.call(s);
+  expect(commands.member).not.toHaveBeenCalled();expect(commands.add).not.toHaveBeenCalled();expect(commands.remove).not.toHaveBeenCalled();
+  expect(s.rememberPeople).not.toHaveBeenCalled();expect(s.resetEditGroupDraft).not.toHaveBeenCalled();expect(s.showEditGroupModal).toBe(true);
+  expect(s.editGroupMembers).toEqual([{npub:'keeper'},{npub:'added'}]);expect(s.error).toContain('removed');
+});
+it('retains draft when a resolved removal is denied by Tower', async () => {
+  commands.remove.mockRejectedValueOnce(new Error('Group management permission denied'));
+  const s = store({pgWorkspaceMembers:[{npub:'removed',actor_id:'removed-actor'}]});
+  await channelsManagerMixin.saveGroupEdits.call(s);
+  expect(s.error).toContain('permission denied');expect(s.showEditGroupModal).toBe(true);expect(s.resetEditGroupDraft).not.toHaveBeenCalled();
+});
+it('sends one typed removal for every resolved intended member', async () => {
+  const s=store({groups:[{group_id:'group',name:'Team',member_npubs:['keeper','removed','second']}],pgWorkspaceMembers:[{npub:'removed',actor_id:'removed-actor'},{npub:'second',actor_id:'second-actor'}]});
+  await channelsManagerMixin.saveGroupEdits.call(s);
+  expect(commands.remove.mock.calls.map(call=>call[3])).toEqual(['removed-actor','second-actor']);
+  expect(s.showEditGroupModal).toBe(false);expect(s.resetEditGroupDraft).toHaveBeenCalledTimes(1);
 });

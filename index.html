@@ -9901,6 +9901,7 @@
           <div class="doc-modal-card new-group-modal" role="dialog" aria-modal="true" x-sol-dialog aria-labelledby="edit-group-modal-title" tabindex="-1" x-effect="$store.chat.syncGroupDialogFocus($el, $store.chat.showEditGroupModal)" @keydown.tab="$store.chat.trapGroupDialogFocus($event)">
             <button class="modal-close" type="button" aria-label="Close edit group" @click="$store.chat.closeEditGroupModal()" :disabled="$store.chat.groupEditPending">&times;</button>
             <h3 id="edit-group-modal-title">Edit group</h3>
+            <p class="error-text" role="alert" x-show="$store.chat.error" x-text="$store.chat.error"></p>
             <p class="new-group-hint">Rename the group and manage who can use it for sharing.</p>
 
             <label class="docs-field-label">Name</label>
