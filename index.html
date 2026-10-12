@@ -4168,7 +4168,7 @@
                         <span class="channel-thread-card-kicker" x-show="$store.chat.isRootThreadUnread(msg)" x-cloak>Unread activity</span>
                         <span class="channel-thread-card-count" x-text="$store.chat.getThreadMessageCount(msg.record_id) + ' ' + ($store.chat.getThreadMessageCount(msg.record_id) === 1 ? 'message' : 'messages')"></span>
                       </div>
-                      <h3 x-text="$store.chat.getThreadCardTitle(msg)"></h3>
+                      <h3 :title="$store.chat.getThreadCardTitle(msg)" x-text="$store.chat.getThreadCardTitle(msg)"></h3>
                     </div>
                     <div class="chat-post-header channel-thread-card-author">
                       <button type="button" class="identity-avatar-button" @click.stop="$store.chat.openIdentityCard($event, msg.sender_npub)" :title="$store.chat.getSenderName(msg.sender_npub)">

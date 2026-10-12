@@ -3772,6 +3772,13 @@
         "Keep Toolbox titles and Add together, and fit app visibility and actions into compact rows with full touch targets.",
         "Bound phone Chat card titles to two lines and keep Files source tabs on one row at narrow widths."
       ]
+    },
+    {
+      "buildNumber": 2371,
+      "label": "Keep large file counts readable",
+      "notes": [
+        "Allow large counts in phone Files source tabs to wrap within their touch targets while keeping ordinary counts on one row."
+      ]
     }
   ]
 }
