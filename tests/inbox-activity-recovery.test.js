@@ -6,7 +6,7 @@ import { applyPgRecordChanges, getPgAttentionProjection, recordDeltaCursorKey } 
 import { unreadStoreMixin } from '../src/unread-store.js';
 import { chatMessageManagerMixin } from '../src/chat-message-manager.js';
 import { queryInboxSource, sectionLiveQueryMixin } from '../src/section-live-queries.js';
-import { buildAutopilotOverviewThreads, autopilotOverviewManagerMixin } from '../src/autopilot-overview-manager.js';
+import { buildAutopilotOverviewThreads, buildAutopilotOverviewTasks, autopilotOverviewManagerMixin } from '../src/autopilot-overview-manager.js';
 
 const owner = 'npub1owner';
 const workspaceId = fixture.canonical_upserts.changes[0].workspace_id;
@@ -19,6 +19,54 @@ beforeEach(async () => {
 });
 const input = (type = 'all', scopeId = 'all') => ({ workspaceOwnerNpub: owner, deckInboxType: type,
   autopilotOverviewContext: { scopeId, channelId: 'all' }, inboxActivityVisibleCount: 100 });
+
+it.each(['done', 'complete', 'completed'])('keeps unread %s work visible until an explicit item receipt, preserving downloads', async state => {
+  const change = fixture.canonical_upserts.changes.find(row => row.family === 'task');
+  await applyPgRecordChanges(transport, { ...fixture.one_message_delta, next_cursor: 'away-update', changes: [
+    { ...change, version: '200', row: { ...change.row, state, row_version: 200, activity_version: 10,
+      assigned_to_npub: transport.session.npub, metadata: { ...change.row.metadata, assigned_to_npub: transport.session.npub },
+      attention: { policy_version: 1, last_activity_actor_id: 'another-reader', mention_activity_versions: {} } } },
+  ] });
+  const key = `task:${change.id}`;
+  expect((await db.pg_resource_attention.get(key)).unread).toBe(1);
+  const before = await db.tasks.get(change.id);
+  const cursors = await db.sync_state.toArray();
+  const views = await db.resource_view_states.toArray();
+  const context = { ...input('task'), autopilotOverviewContext: { scopeId: 'all', channelId: change.row.channel_id } };
+  const readDeck = async () => {
+    const page = await queryInboxSource(context, owner, 'tasks');
+    const projection = await getPgAttentionProjection({ ...transport, tasks: page.rows });
+    const view = { ...transport };
+    unreadStoreMixin.applyPgAttentionProjection.call(view, projection);
+    return { page, view, cards: buildAutopilotOverviewTasks({ tasks: page.rows, unreadTaskMap: view._unreadTaskItems }) };
+  };
+  for (let visit = 0; visit < 2; visit++) {
+    const deck = await readDeck();
+    expect(deck.view._unreadChannels[change.row.channel_id]).toBe(true);
+    expect(deck.cards.find(row => row.recordId === change.id)?.isUnread).toBe(true);
+    expect((await queryInboxSource({ ...context, autopilotOverviewContext: { scopeId: 'all', channelId: 'unaffected' } }, owner, 'tasks')).rows).toEqual([]);
+  }
+  expect(await db.resource_view_states.toArray()).toEqual(views);
+  expect(await db.sync_state.toArray()).toEqual(cursors);
+  expect(await db.tasks.get(change.id)).toEqual(before);
+  await upsertResourceViewState({ resource_type: 'task', resource_id: change.id,
+    channel_id: change.row.channel_id, activity_version: 10, viewed_activity_version: 10 });
+  const dismissed = await readDeck();
+  expect(dismissed.cards.some(row => row.recordId === change.id)).toBe(false);
+  expect(dismissed.view._unreadChannels[change.row.channel_id]).toBeUndefined();
+  expect(await db.tasks.get(change.id)).toEqual(before);
+});
+
+it('projects Deck and recent-channel thread collections independently of the selected chat window', async () => {
+  const thread = fixture.canonical_upserts.changes.find(change => change.family === 'thread');
+  await db.pg_resource_attention.put({ record_id: `thread:${thread.id}`, resource_type: 'thread', resource_id: thread.id,
+    channel_id: thread.row.channel_id, unread: 1 });
+  for (const collection of ['fileMessages', 'recentChannelMessages']) {
+    const projection = await getPgAttentionProjection({ ...transport, messages: [],
+      [collection]: [{ record_id: 'reply', parent_message_id: thread.id }] });
+    expect(projection.visible.find(row => row.resource_id === thread.id)?.unread).toBe(1);
+  }
+});
 
 it.each(['all', 'chat'])('shows canonical numeric thread attention in %s Inbox without a selected Chat window', async (type) => {
   const thread = fixture.canonical_upserts.changes.find(change => change.family === 'thread');

@@ -48,6 +48,29 @@ async function openFixture(page) {
   await expect(page.locator('div.chat-thread-panel')).toBeVisible();
 }
 
+test('Deck renders unread completed work and dismisses it through the real card control', async ({ page }) => {
+  await openFixture(page);
+  await page.evaluate(() => {
+    const s = window.Alpine.store('chat');
+    s.closeThread({ syncRoute: false });
+    s.navSection = 'status';
+    s.tasks = [{ ...s.tasks[0], record_id: 'unread-completed', title: 'Completed work awaiting a read', state: 'done' }];
+    s._unreadTaskItems = { 'unread-completed': true };
+    s._unreadChannels = { 'sol-channel': true };
+    s.markTaskRead = async id => {
+      s._unreadTaskItems = { ...s._unreadTaskItems, [id]: false };
+      s._unreadChannels = {};
+      return true;
+    };
+  });
+  const card = page.locator('.flightdeck-summary-card-inbox-unread').filter({ hasText: 'Completed work awaiting a read' });
+  await expect(card).toBeVisible();
+  await capture(page, 'unread-completed-before-read');
+  await card.getByRole('button', { name: 'Mark read', exact: true }).click();
+  await expect(card).toHaveCount(0);
+  expect(await page.evaluate(() => window.Alpine.store('chat').tasks[0].state)).toBe('done');
+});
+
 
 async function assertTouchTargets(locator, label) {
   const sizes = await locator.evaluateAll(nodes => nodes.map(node => ({ label: node.getAttribute('aria-label') || node.textContent.trim(), width: node.getBoundingClientRect().width, height: node.getBoundingClientRect().height })));

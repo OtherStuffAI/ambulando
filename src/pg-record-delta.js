@@ -162,7 +162,8 @@ export async function getPgAttentionProjection(store) {
   if (!authority || authority.legacyFallbackActive === true) return null;
   const ids = [...new Set([
     ...(store.tasks || []).map(r => `task:${r.record_id}`),
-    ...(store.messages || []).map(r => `thread:${r.pg_thread_id || r.record_id}`),
+    ...[...(store.messages || []), ...(store.fileMessages || []), ...(store.recentChannelMessages || [])]
+      .map(r => `thread:${r.pg_thread_id || r.parent_message_id || r.record_id}`),
     ...(store.documents || []).map(r => `document:${r.record_id}`),
   ])];
   const [counts, visible, conflicts] = await Promise.all([db.pg_attention_counts.toArray(), db.pg_resource_attention.bulkGet(ids), db.pg_record_conflicts.toArray()]);

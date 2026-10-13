@@ -350,7 +350,9 @@ describe('autopilot overview manager', () => {
       isUnread: true,
       activityAt: '2026-08-26T00:20:00.000Z',
     }));
-    expect(buildAutopilotOverviewInbox({ tasks: terminalRows })).toEqual([]);
+    expect(buildAutopilotOverviewInbox({ tasks: terminalRows }).map(row => row.taskState).sort())
+      .toEqual(['complete', 'completed', 'done']);
+    expect(buildAutopilotOverviewInbox({ tasks: terminalRows.map(row => ({ ...row, isUnread: false })) })).toEqual([]);
 
     const doneColumn = computeBoardColumns([], [acceptedDoneTask], [])
       .find((column) => column.state === 'done');

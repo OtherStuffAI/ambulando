@@ -82,12 +82,19 @@ export async function queryInboxSource(store, ownerNpub, tableName) {
 
   const sourceTypes = { chat_messages: ['chat', 'file'], tasks: ['task', 'file'], documents: ['document', 'file'], comments: ['task', 'document', 'file'] };
   if (!sourceTypes[tableName]?.some(type => types.includes(type))) return { rows: [], hasMore: false };
+  // Selection must use the same persisted attention as the rendered cards.
+  // Otherwise unread completed tasks contribute to the sidebar but are filtered
+  // out before their local rows ever reach the Deck's item projection.
+  const unreadTaskMap = tableName === 'tasks' ? Object.fromEntries(
+    (await getWorkspaceDb().pg_resource_attention.where('unread').equals(1)
+      .filter(row => row.resource_type === 'task').toArray()).map(row => [row.resource_id, true])
+  ) : {};
   const matches = (row, comments = []) => {
     const sources = { channels, documents: [], tasks: [], fileMessages: [], fileComments: comments };
     sources[{ chat_messages: 'fileMessages', comments: 'fileComments', tasks: 'tasks', documents: 'documents' }[tableName]] = [row];
     const cards = buildAutopilotOverviewInbox({
       threads: buildAutopilotOverviewThreads({ ...options, channels, messages: sources.fileMessages }),
-      tasks: buildAutopilotOverviewTasks({ ...options, tasks: sources.tasks, comments }),
+      tasks: buildAutopilotOverviewTasks({ ...options, tasks: sources.tasks, comments, unreadTaskMap }),
       documents: buildAutopilotOverviewDocuments({ ...options, documents: sources.documents, comments }),
       files: buildAutopilotOverviewFiles(buildFileBrowserRows(sources), options),
     });
@@ -111,6 +118,7 @@ export async function queryInboxSource(store, ownerNpub, tableName) {
     channels: channels.filter(row => scopeMatches(row.scope_id, context.scopeId, options.scopesMap)
       && (!context.channelId || context.channelId === 'all' || row.record_id === context.channelId)),
     groupThreads: tableName === 'chat_messages' && type !== 'file',
+    taskStates: tableName === 'tasks' ? ['new', 'ready', 'in_progress', 'blocked', 'review', 'done', 'complete', 'completed'] : undefined,
     kind: tableName === 'documents' && ['file', 'document'].includes(type) ? type : undefined,
   });
   if (['tasks', 'documents'].includes(tableName) && type !== 'file') {

@@ -2003,7 +2003,7 @@ export async function getOwnerActivityWindow(tableName, ownerNpub, options = {})
     if (options.matches) {
       const field = options.channelId ? 'channel' : options.scopeIds ? 'scope' : 'owner';
       const values = options.channelId ? [options.channelId] : options.scopeIds || [ownerNpub];
-      const states = ['new', 'ready', 'in_progress', 'blocked', 'review', 'done'];
+      const states = options.taskStates || ['new', 'ready', 'in_progress', 'blocked', 'review', 'done'];
       if (options.search && !options.scopeIds && !options.channelId) {
         const token = options.search.slice(0, 3);
         const candidates = await wsDb().tasks.where('cache_search_tokens').equals(token).limit(limit + 1).toArray();

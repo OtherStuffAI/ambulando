@@ -3885,6 +3885,13 @@
       "notes": [
         "A stalled browser signer lookup or signing queue now times out instead of holding workspace member addition indefinitely. Late signer results cannot send the expired membership request."
       ]
+    },
+    {
+      "buildNumber": 2388,
+      "label": "Deck unread consistency",
+      "notes": [
+        "Unread completed tasks stay in the Deck Inbox until explicitly read. Deck and Recent Channels use their own persisted thread attention; newly loaded documents refresh unread indicators without changing read state."
+      ]
     }
   ]
 }

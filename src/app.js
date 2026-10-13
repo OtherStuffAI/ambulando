@@ -3447,6 +3447,7 @@ export function initApp() {
       this.docRichEditorAdapter?.refreshWikiLinks?.();
       this.refreshOpenDocFromLatestDocument({ force: false });
       this.updatePageTitle();
+      this.scheduleTowerPgUnreadProjectionRefresh?.();
     },
 
     async refreshDocuments() {
