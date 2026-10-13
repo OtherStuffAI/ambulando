@@ -972,6 +972,20 @@ export function buildChannelAccessGrantPayloads(rows = []) {
 // Mixin — methods that use `this` (the Alpine store)
 // ---------------------------------------------------------------------------
 
+// Keep timers outside Alpine's reactive state; one recovery timer per store.
+const channelGrantRecovery = new WeakMap();
+
+function channelGrantReadContext(store) {
+  const { workspaceId, baseUrl, appNpub } = resolveTowerPgWorkspaceContext(store);
+  return JSON.stringify([workspaceId, baseUrl, appNpub, store.selectedChannelId]);
+}
+
+function transientChannelGrantError(error) {
+  if (error?.retryable === false) return false;
+  if (error?.status != null) return [408, 429, 500, 502, 503, 504].includes(Number(error.status));
+  return error instanceof TypeError || /load failed|failed to fetch|network|connection|timeout/i.test(error?.message || '');
+}
+
 export const channelsManagerMixin = {
   get newChannelScopeOptions() {
     return (this.scopes || [])
@@ -1933,6 +1947,7 @@ export const channelsManagerMixin = {
 
   closeChannelSettings() {
     if (this.channelRenameSaving || this.channelDeleteSubmitting) return;
+    this.cancelChannelGrantRecovery();
     this.closeChannelScopePicker();
     this.channelDeleteConfirmArmed = false;
     this.channelSettingsNotice = '';
@@ -2077,23 +2092,53 @@ export const channelsManagerMixin = {
   },
 
   async preparePgChannelAccessPanel() {
+    this.cancelChannelGrantRecovery();
+    const context = channelGrantReadContext(this);
     this.channelGrantsError = null;
-    try {
-      await Promise.all([
-        this.refreshGroups({ force: true, minIntervalMs: 0 }),
-        this.refreshTowerPgWorkspaceMembers?.({ force: true, limit: 200 }) ?? Promise.resolve([]),
-      ]);
-      this.resetChannelGrantDraft();
-      this.resetChannelBulkGrantDraft();
-      if (this.canAttemptSelectedPgChannelGrantRead) {
-        await this.refreshChannelGrants();
-      } else {
-        this.channelGrantsChannelId = String(this.selectedChannelId || '').trim() || null;
-        this.channelGrants = embeddedChannelGrants(this.selectedChannel || {});
-      }
-    } catch (error) {
-      this.channelGrantsError = error?.message || 'Failed to load channel access';
+    // Directory failures must not prevent the independent grants read.
+    const results = await Promise.allSettled([
+      this.refreshGroups({ force: true, minIntervalMs: 0 }),
+      this.refreshTowerPgWorkspaceMembers?.({ force: true, limit: 200 }) ?? Promise.resolve([]),
+      this.canAttemptSelectedPgChannelGrantRead ? this.refreshChannelGrants() : Promise.resolve([]),
+    ]);
+    if (context !== channelGrantReadContext(this) || !this.showChannelSettingsModal) return;
+    const grantError = this.channelGrantsError;
+    this.resetChannelGrantDraft();
+    this.resetChannelBulkGrantDraft();
+    this.channelGrantsError = grantError;
+    if (!this.canAttemptSelectedPgChannelGrantRead) {
+      this.channelGrantsChannelId = String(this.selectedChannelId || '').trim() || null;
+      this.channelGrants = embeddedChannelGrants(this.selectedChannel || {});
     }
+    const directoryFailure = results.slice(0, 2).find((result) => result.status === 'rejected');
+    if (directoryFailure && !this.channelGrantsError) {
+      this.channelGrantsError = directoryFailure.reason?.message || 'Failed to load channel access directory';
+    }
+  },
+
+  cancelChannelGrantRecovery() {
+    const recovery = channelGrantRecovery.get(this);
+    if (recovery?.timer) clearTimeout(recovery.timer);
+    channelGrantRecovery.delete(this);
+  },
+
+  scheduleChannelGrantRecovery(error, context) {
+    if (!transientChannelGrantError(error) || !this.showChannelSettingsModal
+      || !this.canAttemptSelectedPgChannelGrantRead || context !== channelGrantReadContext(this)) return;
+    const previous = channelGrantRecovery.get(this);
+    if (previous?.timer) clearTimeout(previous.timer);
+    const delay = Math.min((previous?.delay || 1000) * 2, 30_000);
+    const recovery = { delay, timer: null };
+    recovery.timer = setTimeout(() => {
+      recovery.timer = null;
+      if (!this.showChannelSettingsModal || !this.canAttemptSelectedPgChannelGrantRead
+        || context !== channelGrantReadContext(this)) {
+        this.cancelChannelGrantRecovery();
+        return;
+      }
+      this.refreshChannelGrants({ recovery: true });
+    }, delay);
+    channelGrantRecovery.set(this, recovery);
   },
 
   async cacheSelectedChannelGrants(channelId, grants = []) {
@@ -2117,23 +2162,30 @@ export const channelsManagerMixin = {
     );
   },
 
-  async refreshChannelGrants() {
+  async refreshChannelGrants({ recovery = false } = {}) {
     if (!isTowerPgBackendMode()) return [];
     const channelId = String(this.selectedChannelId || '').trim();
     if (!channelId) return [];
+    if (this.channelGrantsLoading) return this.getSelectedChannelGrantRows(channelId);
+    if (!recovery) this.cancelChannelGrantRecovery();
+    const context = channelGrantReadContext(this);
     this.channelGrantsLoading = true;
     this.channelGrantsError = null;
     try {
       const { workspaceId, baseUrl, appNpub } = resolveTowerPgWorkspaceContext(this);
       if (!workspaceId || !baseUrl) throw new Error('Flight Deck PG workspace is not connected');
       const result = await getTowerPgChannelGrants(workspaceId, channelId, { baseUrl, appNpub });
+      if (context !== channelGrantReadContext(this)) return [];
+      this.cancelChannelGrantRecovery();
       this.channelGrants = Array.isArray(result?.grants) ? result.grants : [];
       this.channelGrantsChannelId = channelId;
       await this.cacheSelectedChannelGrants(channelId, this.channelGrants);
       await this.materializeSelectedDmParticipantsFromChannelGrants();
       return this.channelGrants;
     } catch (error) {
+      if (context !== channelGrantReadContext(this)) return [];
       this.channelGrantsError = error?.message || 'Failed to load channel grants';
+      this.scheduleChannelGrantRecovery(error, context);
       return this.channelGrantsChannelId === channelId
         ? (this.channelGrants || [])
         : embeddedChannelGrants(this.selectedChannel || {});

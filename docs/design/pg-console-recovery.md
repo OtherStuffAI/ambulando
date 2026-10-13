@@ -70,3 +70,20 @@ Regression coverage lives in `pg-cache-continuity`, `pg-read-hydrator`,
 `tower-pg-materialization-worker-client`, and
 `tests/e2e/pg-console-transactions.spec.cjs`. The editor regression verifies one
 Link extension with the configured click, autolink and paste behavior.
+
+## Channel access settings
+
+Channel grants are read independently of the groups/member directory, so a
+failed directory read does not prevent grant recovery. Refresh retains cached
+rows and the original error detail. Temporary HTTP (408, 429, 500, 502–504) and
+network failures retry only while channel settings remain open and grant-read
+permission remains available. Backoff starts at two seconds, doubles, and caps
+at 30 seconds; only one grants read may be in flight. Success ends recovery.
+Closing settings cancels the timer; workspace, backend, app or channel changes
+invalidate pending retries and superseded responses. Permission, authentication
+and missing-resource failures require an explicit refresh. This read recovery
+does not submit grant writes or change permissions.
+
+Coverage: `channel-grants transient recovery` in `channels-manager.test.js` and
+`tests/e2e/channel-grants-recovery.spec.cjs` (intercepted local Tower, open settings,
+502 followed by success, original error and no grant writes).

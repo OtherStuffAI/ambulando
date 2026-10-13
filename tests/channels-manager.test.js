@@ -3102,3 +3102,94 @@ describe('PG channel lifecycle controls', () => {
     expect(updateTowerPgChannel).not.toHaveBeenCalled();
   });
 });
+
+
+describe('channel grants transient recovery', () => {
+  const openStore = (overrides = {}) => createPgGrantStore({
+    showChannelSettingsModal: true,
+    channelGrantsChannelId: 'channel-1',
+    closeChannelScopePicker: vi.fn(),
+    ...overrides,
+  });
+
+  it('retains cache and actual 502 detail, then recovers while settings stay open', async () => {
+    vi.useFakeTimers();
+    try {
+      const store = openStore();
+      const cached = store.channelGrants;
+      getTowerPgChannelGrants.mockRejectedValueOnce(Object.assign(new Error('Tower startup migrations unavailable'), { status: 502 }))
+        .mockResolvedValueOnce({ grants: [{ principal_type: 'group', principal_id: 'retained', permissions: ['channel.read'] }] });
+      await store.refreshChannelGrants();
+      expect(store.channelGrants).toBe(cached);
+      expect(store.channelGrantsError).toBe('Tower startup migrations unavailable');
+      await vi.advanceTimersByTimeAsync(1999);
+      expect(getTowerPgChannelGrants).toHaveBeenCalledTimes(1);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(store.channelGrantsError).toBeNull();
+      expect(store.channelGrants[0].principal_id).toBe('retained');
+      await vi.advanceTimersByTimeAsync(120000);
+      expect(getTowerPgChannelGrants).toHaveBeenCalledTimes(2);
+    } finally { vi.useRealTimers(); }
+  });
+
+  it('caps retry frequency and stops on close, without overlapping reads', async () => {
+    vi.useFakeTimers();
+    try {
+      const store = openStore();
+      getTowerPgChannelGrants.mockRejectedValue(Object.assign(new Error('Bad gateway'), { status: 502 }));
+      await store.refreshChannelGrants();
+      await vi.advanceTimersByTimeAsync(60000);
+      expect(getTowerPgChannelGrants).toHaveBeenCalledTimes(6);
+      await vi.advanceTimersByTimeAsync(30000);
+      expect(getTowerPgChannelGrants).toHaveBeenCalledTimes(7);
+      store.closeChannelSettings();
+      await vi.advanceTimersByTimeAsync(120000);
+      expect(getTowerPgChannelGrants).toHaveBeenCalledTimes(7);
+      let finish;
+      getTowerPgChannelGrants.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
+      const pending = store.refreshChannelGrants();
+      await store.refreshChannelGrants();
+      expect(getTowerPgChannelGrants).toHaveBeenCalledTimes(8);
+      finish({ grants: [] });
+      await pending;
+    } finally { vi.useRealTimers(); }
+  });
+
+  it.each([401, 403, 404])('does not retry authority/resource failure %s', async (status) => {
+    vi.useFakeTimers();
+    try {
+      const store = openStore();
+      getTowerPgChannelGrants.mockRejectedValue(Object.assign(new Error('Actual denied detail'), { status }));
+      await store.refreshChannelGrants();
+      await vi.advanceTimersByTimeAsync(120000);
+      expect(getTowerPgChannelGrants).toHaveBeenCalledTimes(1);
+      expect(store.channelGrantsError).toBe('Actual denied detail');
+    } finally { vi.useRealTimers(); }
+  });
+
+  it('discards superseded responses and cancels retries after workspace/channel changes', async () => {
+    vi.useFakeTimers();
+    try {
+      const store = openStore();
+      let finish;
+      getTowerPgChannelGrants.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
+      const pending = store.refreshChannelGrants();
+      store.selectedChannelId = 'channel-2';
+      finish({ grants: [{ principal_id: 'wrong-channel' }] });
+      await pending;
+      expect(store.channelGrantsChannelId).toBe('channel-1');
+      getTowerPgChannelGrants.mockRejectedValue(new TypeError('Load failed'));
+      await store.refreshChannelGrants();
+      store.currentWorkspace = { ...store.currentWorkspace, workspaceId: 'workspace-2' };
+      await vi.advanceTimersByTimeAsync(120000);
+      expect(getTowerPgChannelGrants).toHaveBeenCalledTimes(2);
+    } finally { vi.useRealTimers(); }
+  });
+
+  it('still reads grants when the directory read fails', async () => {
+    const store = openStore({ refreshGroups: vi.fn().mockRejectedValue(new Error('Directory unavailable')) });
+    await store.preparePgChannelAccessPanel();
+    expect(getTowerPgChannelGrants).toHaveBeenCalledTimes(1);
+    expect(store.channelGrantsError).toBe('Directory unavailable');
+  });
+});

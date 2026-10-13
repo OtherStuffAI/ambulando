@@ -3984,6 +3984,13 @@
       "notes": [
         "Use a thin, very faint grey outline when editing a document page."
       ]
+    },
+    {
+      "buildNumber": 2404,
+      "label": "Channel access recovery after temporary outages",
+      "notes": [
+        "Channel access retries temporary connection failures while settings remain open, preserves cached grants and the actual error, and no longer blames every loading failure on signing."
+      ]
     }
   ]
 }

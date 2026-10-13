@@ -10161,7 +10161,7 @@
               <p class="settings-success" x-show="$store.chat.channelGrantsNotice" x-text="$store.chat.channelGrantsNotice"></p>
               <p class="groups-subtitle channel-access-error" x-show="$store.chat.channelGrantsError" x-text="$store.chat.channelGrantsError"></p>
               <p class="groups-empty channel-grants-empty" x-show="!$store.chat.channelGrantsLoading && !$store.chat.channelGrantsError && $store.chat.channelGrantRows.length === 0">No channel grants loaded.</p>
-              <p class="groups-empty channel-grants-empty" x-show="!$store.chat.channelGrantsLoading && $store.chat.channelGrantsError && $store.chat.channelGrantRows.length === 0">Channel grants could not be loaded. Retry refresh when signing is available.</p>
+              <p class="groups-empty channel-grants-empty" x-show="!$store.chat.channelGrantsLoading && $store.chat.channelGrantsError && $store.chat.channelGrantRows.length === 0">Channel grants could not be loaded. Refresh to try again. Temporary connection failures retry automatically while settings are open.</p>
 
               <div class="channel-grants-list" x-show="$store.chat.channelGrantRows.length > 0">
                 <template x-for="grant in $store.chat.channelGrantRows" :key="grant.key">
