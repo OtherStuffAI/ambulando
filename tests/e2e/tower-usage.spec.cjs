@@ -43,10 +43,16 @@ async function seed(page, workspaceId = 'usage-workspace-a') {
     const pubkey = '1'.repeat(64);
     localStorage.setItem('nostr_secure_auth_recovery_v1', JSON.stringify({ method: 'extension', pubkey, createdAt: Date.now(), expiresAt: Date.now() + 600_000 }));
     window.nostr = { getPublicKey: async () => pubkey, signEvent: async event => ({ ...event, pubkey, id: '2'.repeat(64), sig: '3'.repeat(128) }) };
+    // The runtime is retained; a test-only opener replaces its removed default launcher.
+    if (!document.querySelector('[data-testid="tower-usage-runtime-open"]')) {
+      const opener = document.createElement('button');
+      opener.dataset.testid = 'tower-usage-runtime-open'; opener.textContent = 'Test Tower Usage runtime';
+      opener.onclick = () => s.openTowerUsage({ opener }); document.body.append(opener);
+    }
   }, workspaceId);
 }
 for (const width of [1280, 390]) {
-  test('Apps stack usage launcher, states, refresh and workspace switching at ' + width + 'px', async ({ page }) => {
+  test('retained usage runtime, states, refresh and workspace switching at ' + width + 'px', async ({ page }) => {
     await page.setViewportSize({ width, height: 900 });
     const errors = []; page.on('pageerror', error => errors.push(error.message));
     let status = 200, requests = [], release;
@@ -61,7 +67,7 @@ for (const width of [1280, 390]) {
       return serveBuiltFlightDeck(route);
     });
     await page.goto('/'); await seed(page);
-    const launch = page.getByTestId('tower-usage-launch');
+    const launch = page.getByTestId('tower-usage-runtime-open');
     for (const section of ['toolbox', 'tasks', 'docs', 'chat', 'files', 'agents', 'context', 'settings', 'status']) {
       await page.evaluate(section => { window.Alpine.store('chat').navSection = section; }, section);
       await expect(page.getByRole('navigation', { name: 'Global toolbox' })).toHaveCount(0);
@@ -70,9 +76,8 @@ for (const width of [1280, 390]) {
     // Synthetic credentials bypass onboarding; boot recovery may finish after seeding.
     await page.evaluate(() => { window.Alpine.store('chat').showConnectModal = false; });
     if (width === 390) await page.getByRole('button', { name: 'Show Hello and Links', exact: true }).evaluate(button => button.click());
-    const stack = page.getByRole('button', { name: 'Open Apps stack', exact: true });
-    await expect(stack).toBeVisible();
-    await stack.click({ timeout: 10000 });
+    const stack = launch;
+    await expect(page.getByTestId('tower-usage-launch')).toHaveCount(0);
     await expect(launch).toBeVisible();
     expect(requests).toHaveLength(0);
     // Opening loads once; rendering/idle does not recursively collect.
@@ -126,31 +131,31 @@ for (const width of [1280, 390]) {
     await expect(dialog.locator('dd > strong').filter({ hasText: 'Unavailable' })).toHaveCount(6);
     status = 503; await dialog.getByRole('button', { name: 'Refresh usage' }).click();
     await expect(dialog.getByTestId('tower-usage-error')).toContainText('unavailable');
-    // Focus is trapped, Escape closes and focus returns to the Apps stack.
+    // Focus is trapped, Escape closes and focus returns to the test opener.
     await dialog.getByRole('button', { name: 'Refresh usage' }).focus(); await page.keyboard.press('Tab');
     await page.keyboard.press('Tab');
     await expect(dialog.getByRole('button', { name: 'Tower Usage menu', exact: true })).toBeFocused();
     await page.keyboard.press('Escape'); await expect(dialog).toBeHidden(); await expect(stack).toBeFocused();
     mkdirSync('tmp/docs/handoffs/tower-usage-popup', { recursive: true });
-    status = 200; await stack.click(); await launch.click(); await expect(dialog.getByText('8 KiB', { exact: true })).toBeVisible();
+    status = 200; await launch.click(); await expect(dialog.getByText('8 KiB', { exact: true })).toBeVisible();
     await dialog.locator('.tower-usage-content').evaluate(el => { el.scrollTop = 0; });
     await page.screenshot({ path: `tmp/docs/handoffs/tower-usage-popup/usage-${width}.png` });
     await dialog.getByRole('button', { name: 'Expand Tower Usage', exact: true }).click(); await page.waitForTimeout(250);
     await page.screenshot({ path: `tmp/docs/handoffs/tower-usage-popup/usage-full-${width}.png` });
     await dialog.getByRole('button', { name: 'Tower Usage menu', exact: true }).click(); await dialog.getByRole('menuitem', { name: 'Close', exact: true }).click();
     await expect(dialog).toBeHidden(); await expect(stack).toBeFocused();
-    await stack.click(); await launch.click();
+    await launch.click();
     await expect(dialog).not.toHaveClass(/thread-full/);
     await dialog.getByRole('button', { name: 'Close Tower Usage', exact: true }).click();
     await expect(stack).toBeFocused();
-    await stack.click(); await launch.click();
+    await launch.click();
     await dialog.evaluate(el => el.close());
     await expect.poll(() => page.evaluate(() => window.Alpine.store('chat').towerUsageOpen)).toBe(false);
     await expect(stack).toBeFocused();
-    await stack.click(); await launch.click();
+    await launch.click();
     await page.mouse.click(2, 2);
     await expect(dialog).toBeHidden(); await expect(stack).toBeFocused();
-    await stack.click(); await launch.click();
+    await launch.click();
     await page.evaluate(() => window.dispatchEvent(new Event('pagehide')));
     await expect(dialog).toBeHidden();
     await expect.poll(() => page.evaluate(() => window.Alpine.store('chat').towerUsageSnapshot)).toBeNull();

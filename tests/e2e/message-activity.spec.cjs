@@ -37,13 +37,17 @@ async function setup(page) {
     };
     const service = new TowerSyncService({ workspaceKey: 'synthetic-activity', families: { 'message-activity': { load: (_id, options) => hydrateMessageActivity(store, options.range, options, { read }) } } });
     store._towerSyncService = service; store.getTowerSyncService = () => service;
+    // Explicit test control keeps retained runtime coverage independent of launcher defaults.
+    const opener = document.createElement('button');
+    opener.dataset.testid = 'message-activity-runtime-open'; opener.textContent = 'Test Message activity runtime';
+    opener.onclick = () => store.openMessageActivity({ opener }); document.body.append(opener);
   });
-  await expect(page.getByTestId('message-activity-launch')).toBeVisible();
+  await expect(page.getByTestId('message-activity-runtime-open')).toBeVisible();
 }
 const frame = page => page.frameLocator('#message-activity-modal iframe');
 
 test('immediate reopening ignores the old dialog close event and retains focus containment', async ({ page }) => {
-  await setup(page); await page.getByTestId('message-activity-launch').click();
+  await setup(page); await page.getByTestId('message-activity-runtime-open').click();
   await expect(frame(page).getByRole('heading', { name: '3 messages', exact: true })).toBeVisible();
   await page.evaluate(() => window.Alpine.store('chat').openMessageActivity());
   await expect(frame(page).getByRole('heading', { name: '3 messages', exact: true })).toBeVisible();
@@ -55,18 +59,18 @@ test('immediate reopening ignores the old dialog close event and retains focus c
     expect(await page.evaluate(() => {
       const active = document.activeElement;
       const contained = active === document.body || document.getElementById('message-activity-modal').contains(active);
-      document.querySelector('[data-testid="message-activity-launch"]').focus();
-      return contained && document.activeElement !== document.querySelector('[data-testid="message-activity-launch"]');
+      document.querySelector('[data-testid="message-activity-runtime-open"]').focus();
+      return contained && document.activeElement !== document.querySelector('[data-testid="message-activity-runtime-open"]');
     })).toBe(true);
   }
   await page.getByRole('button', { name: 'Close Message activity', exact: true }).click();
-  await expect(page.getByTestId('message-activity-launch')).toBeFocused();
+  await expect(page.getByTestId('message-activity-runtime-open')).toBeFocused();
 });
 
 for (const viewport of [{ width: 1280, height: 900 }, { width: 390, height: 844 }]) {
-  test(`Toolbox launches a real sandboxed dashboard, ranges, refresh and keyboard closure at ${viewport.width}px`, async ({ page }) => {
+  test(`retained runtime opens a real sandboxed dashboard, ranges, refresh and keyboard closure at ${viewport.width}px`, async ({ page }) => {
     await page.setViewportSize(viewport); await setup(page);
-    const launch = page.getByTestId('message-activity-launch'); await launch.click();
+    const launch = page.getByTestId('message-activity-runtime-open'); await launch.click();
     await expect(page.getByRole('dialog', { name: 'Message activity', exact: true })).toBeVisible();
     await expect(frame(page).getByRole('heading', { name: '3 messages', exact: true })).toBeVisible();
     await expect(frame(page).getByText('General <script>literal</script>', { exact: true })).toBeVisible();
@@ -93,7 +97,7 @@ for (const viewport of [{ width: 1280, height: 900 }, { width: 390, height: 844 
 }
 
 test('hostile requests, denied/empty responses, close and scope/workspace/identity invalidation clear stale counts', async ({ page }) => {
-  await setup(page); await page.getByTestId('message-activity-launch').click();
+  await setup(page); await page.getByTestId('message-activity-runtime-open').click();
   await expect(frame(page).getByRole('heading', { name: '3 messages', exact: true })).toBeVisible();
   await frame(page).locator('body').evaluate(() => {
     const base = { version: 1, session: location.hash.slice(1) };
@@ -112,7 +116,7 @@ test('hostile requests, denied/empty responses, close and scope/workspace/identi
   await expect(frame(page).getByRole('status')).toContainText('No accessible channels');
   await page.getByRole('button', { name: 'Close Message activity', exact: true }).click();
   await page.evaluate(() => { window.activityFixture.mode = 'ready'; });
-  await page.getByTestId('message-activity-launch').click();
+  await page.getByTestId('message-activity-runtime-open').click();
   await expect(frame(page).getByRole('heading', { name: '3 messages', exact: true })).toBeVisible();
   await page.evaluate(() => { window.activityFixture.mode = 'delayed'; });
   await frame(page).getByRole('button', { name: 'Refresh', exact: true }).click();
@@ -126,7 +130,7 @@ test('hostile requests, denied/empty responses, close and scope/workspace/identi
   await page.getByRole('button', { name: 'Close Message activity', exact: true }).click();
   for (const change of ['close', 'scope', 'workspace', 'identity']) {
     await page.evaluate(() => { window.activityFixture.mode = 'delayed'; });
-    await page.getByTestId('message-activity-launch').click();
+    await page.getByTestId('message-activity-runtime-open').click();
     await expect(frame(page).getByRole('status')).toContainText('Loading');
     await page.waitForFunction(() => window.activityFixture.pending.length > 0);
     await page.evaluate(change => {
@@ -146,7 +150,7 @@ test('hostile requests, denied/empty responses, close and scope/workspace/identi
 for (const width of [1280, 390]) {
   test(`napplet history, menu and in-place presentation preserve the dashboard at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 }); await setup(page);
-    await page.getByTestId('message-activity-launch').click();
+    await page.getByTestId('message-activity-runtime-open').click();
     const back = page.getByRole('button', { name: 'Back in napplet history', exact: true });
     const forward = page.getByRole('button', { name: 'Forward in napplet history', exact: true });
     const menu = page.getByRole('button', { name: 'Message activity menu', exact: true });
@@ -188,6 +192,6 @@ for (const width of [1280, 390]) {
     await menu.click(); await page.getByRole('menuitem', { name: 'Expand to full page' }).click();
     await page.getByRole('button', { name: 'Collapse Message activity', exact: true }).click();
     await menu.click(); await page.getByRole('menuitem', { name: 'Close', exact: true }).click();
-    await expect(page.getByTestId('message-activity-launch')).toBeFocused();
+    await expect(page.getByTestId('message-activity-runtime-open')).toBeFocused();
   });
 }

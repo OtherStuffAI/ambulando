@@ -9,11 +9,15 @@ keyboard support and horizontal scrolling.
 Toolbox reuses the personal launcher settings rows previously in Setup. Add,
 edit, archive, icon upload/URL and WApp server ordering retain their existing
 controls and transport. Setup retains provisioning, delegation and publishing.
-Message activity, Tower Usage and WApps share the home Apps stack and one editor.
+Authorized workspace-installed napplets and personal WApps share the home Apps
+stack and one editor. Message activity, Tower Usage, Organisation Data Catalogue,
+People, Organisation chart and Holiday viewer are no longer added automatically.
+Saved placement preferences do not create launcher entries; their stored data
+and bundled runtime modules/assets remain intact.
 The Apps stack is the launcher surface on desktop and mobile; there is no global
 Toolbox launcher row. Napplet
 icons and mixed-stack positions use local preferences; its sandbox and lifecycle
-are unchanged. Bundled napplets can be hidden, but cannot be archived or change
+are unchanged. Installed napplets can be hidden, but cannot be archived or change
 their runtime URL.
 
 The editor supports shown/hidden plus visibility everywhere, only a selected
@@ -29,11 +33,11 @@ Placement is local browser preference data in the existing shared Dexie
 app_settings row, under appPlacements, partitioned by JSON [workspaceKey, viewer].
 Workspace keys retain existing backend/workspace isolation; viewer uses the PG
 actor ID, or session npub when no PG actor is available. Entry IDs are namespaced
-as wapp:<record-id>, napplet:message-activity and napplet:tower-usage. Missing entries default to shown
-everywhere. Build-2271 boolean entries remain readable and migrate to objects on
+as wapp:<record-id> and napplet:bundle-<installation-key>. Missing preferences
+for eligible entries default to shown everywhere. Build-2271 boolean entries remain readable and migrate to objects on
 edit without losing false/hidden state. Objects contain shown, visibility,
 scopeId, channelId, position and optional napplet iconUrl and displayTitle. Napplet titles default to
-the bundled name when no custom title exists; a custom title changes only browser
+the installation name when no custom title exists; a custom title changes only browser
 display labels, never the stable napplet identity or runtime. Atomic patches preserve
 other settings/partitions and liveQuery publishes preferences across tabs.
 

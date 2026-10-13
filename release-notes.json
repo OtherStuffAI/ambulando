@@ -3955,6 +3955,13 @@
       "notes": [
         "Close Deck conversations reliably after opening a direct thread link. Return to the Deck without deleting messages or losing an unsent reply; normal Back navigation stays available."
       ]
+    },
+    {
+      "buildNumber": 2400,
+      "label": "Installed apps in the launcher",
+      "notes": [
+        "Remove the six automatic napplet launcher entries. Personal WApps and currently authorized workspace-installed napplets remain available."
+      ]
     }
   ]
 }
