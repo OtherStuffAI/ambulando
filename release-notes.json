@@ -3998,6 +3998,13 @@
       "notes": [
         "Refresh the newly selected channel even when an older request is still loading. Keep directory failures separate from loaded grants and leave signing failures for explicit refresh."
       ]
+    },
+    {
+      "buildNumber": 2406,
+      "label": "Lighter document edit outline",
+      "notes": [
+        "Lighten the document editing outline to an almost-white grey."
+      ]
     }
   ]
 }
