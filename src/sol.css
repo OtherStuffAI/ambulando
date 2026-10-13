@@ -245,6 +245,11 @@ code, pre { font-family:var(--font-code); }
   box-shadow:0 2px 8px #00000014;
 }
 .docs-section .doc-rich-editor .ProseMirror { min-height:calc(297mm - 40mm - 2px); }
+/* Keep the editing cue subtle on the white document paper. */
+.docs-section :is(.doc-rich-editor .ProseMirror, .doc-source-editor, .doc-block-editor):focus-visible {
+  outline:1px solid #e5e7eb !important;
+  outline-offset:1px;
+}
 .docs-section .doc-rich-editor .ProseMirror pre { background:var(--muted); color:var(--text); }
 .docs-section .doc-rich-editor .ProseMirror a { color:var(--primary); }
 @media (max-width:768px) {

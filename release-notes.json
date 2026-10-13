@@ -3977,6 +3977,13 @@
       "notes": [
         "Show the full signed-in Nostr identity when choosing a Tower workspace. Explain missing member access and offer sign-out to use the invited identity."
       ]
+    },
+    {
+      "buildNumber": 2403,
+      "label": "Subtle document editing border",
+      "notes": [
+        "Use a thin, very faint grey outline when editing a document page."
+      ]
     }
   ]
 }
