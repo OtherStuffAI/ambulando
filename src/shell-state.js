@@ -903,6 +903,13 @@ export function createShellState(options = {}) {
       }
       if (this.navSection === 'status' && this.activeThreadId && this.deckThreadChannelId) {
         state.deckThreadModal = true;
+        // Only a pushed modal owns a return entry. Route hydration can replace
+        // the first entry in a new tab, where history.back() cannot close it.
+        const previousOrigin = window.history.state?.deckThreadModalOrigin;
+        if (replace && previousOrigin) state.deckThreadModalOrigin = previousOrigin;
+        else if (!replace && !new URL(window.location.href).searchParams.has('threadid')) {
+          state.deckThreadModalOrigin = currentUrl;
+        }
       }
       if (replace) window.history.replaceState(state, '', nextUrl);
       else window.history.pushState(state, '', nextUrl);

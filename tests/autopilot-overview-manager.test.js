@@ -1538,7 +1538,7 @@ describe('autopilot overview manager', () => {
   it('uses browser back to close a Deck thread opened as a modal history entry', () => {
     const originalWindow = globalThis.window;
     const back = vi.fn();
-    globalThis.window = { history: { state: { deckThreadModal: true }, back } };
+    globalThis.window = { history: { state: { deckThreadModal: true, deckThreadModalOrigin: '/be-free/flight-deck' }, back } };
     try {
       const store = {
         deckThreadReturnContext: { selectedBoardId: 'scope-a' },
@@ -1549,6 +1549,27 @@ describe('autopilot overview manager', () => {
       expect(store.closeDeckThread()).toBe(true);
       expect(back).toHaveBeenCalledTimes(1);
       expect(store.closeThread).not.toHaveBeenCalled();
+    } finally {
+      globalThis.window = originalWindow;
+    }
+  });
+
+  it('closes a replaced modal entry locally when no return entry is owned', () => {
+    const originalWindow = globalThis.window;
+    const back = vi.fn();
+    globalThis.window = { history: { state: { deckThreadModal: true }, back } };
+    try {
+      const store = {
+        activeThreadId: 'thread-a', deckThreadChannelId: 'channel-a',
+        deckThreadReturnContext: { selectedBoardId: 'scope-a' },
+        closeThread: vi.fn(function () { this.activeThreadId = null; }),
+        restoreDeckReturnContext: vi.fn(), syncRoute: vi.fn(),
+      };
+      expect(autopilotOverviewManagerMixin.closeDeckThread.call(store)).toBe(true);
+      expect(back).not.toHaveBeenCalled();
+      expect(store.activeThreadId).toBeNull();
+      expect(store.deckThreadChannelId).toBe('');
+      expect(store.syncRoute).toHaveBeenCalledWith(true);
     } finally {
       globalThis.window = originalWindow;
     }

@@ -3948,6 +3948,13 @@
       "notes": [
         "Installed apps using the native data bridge stay mounted during background access checks and saves. Permission, context and installation changes still invalidate the document; writes wait for authorization."
       ]
+    },
+    {
+      "buildNumber": 2399,
+      "label": "Reliable mobile thread close",
+      "notes": [
+        "Close Deck conversations reliably after opening a direct thread link. Return to the Deck without deleting messages or losing an unsent reply; normal Back navigation stays available."
+      ]
     }
   ]
 }

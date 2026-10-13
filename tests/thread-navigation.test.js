@@ -123,7 +123,7 @@ describe('sequential thread navigation', () => {
             replaceState({ section: 'status', deckThreadModal: true }, '', `?threadid=${this.activeThreadId}`);
           } else {
             pushState({ section: 'status', deckThreadModal: true }, '', `?threadid=${this.activeThreadId}`);
-            globalThis.window.history.state = { deckThreadModal: true };
+            globalThis.window.history.state = { deckThreadModal: true, deckThreadModalOrigin: '/be-free/flight-deck' };
           }
         },
       });

@@ -1275,15 +1275,17 @@ export const autopilotOverviewManagerMixin = {
   },
 
   closeDeckThread(options = {}) {
+    if (this.messageEdit?.context === 'thread' && this.messageEdit.submitting) return false;
     const returnContext = this.deckThreadReturnContext;
     const canGoBack = options.fromRoute !== true
       && typeof window !== 'undefined'
-      && window.history?.state?.deckThreadModal === true;
+      && window.history?.state?.deckThreadModal === true
+      && Boolean(window.history.state.deckThreadModalOrigin);
     if (canGoBack) {
       window.history.back();
       return true;
     }
-    this.closeThread({ syncRoute: false });
+    if (this.closeThread({ syncRoute: false }) === false) return false;
     this.restoreDeckReturnContext(returnContext);
     this.deckThreadReturnContext = null;
     this.deckThreadChannelId = '';

@@ -266,10 +266,32 @@ describe('Deck thread route history', () => {
       shell.syncRoute();
 
       expect(pushState).toHaveBeenCalledWith(
-        { section: 'status', deckThreadModal: true },
+        { section: 'status', deckThreadModal: true, deckThreadModalOrigin: '/be-free/flight-deck?scopeid=scope-a' },
         '',
         '/be-free/flight-deck?scopeid=scope-a&channelid=channel-a&threadid=thread-a',
       );
+    } finally {
+      globalThis.window = originalWindow;
+    }
+  });
+
+  it.each([
+    [true, null, '?scopeid=scope-a&threadid=thread-old', undefined],
+    [true, { deckThreadModalOrigin: '/be-free/flight-deck?scopeid=scope-a' }, '?scopeid=scope-a&threadid=thread-old', '/be-free/flight-deck?scopeid=scope-a'],
+    [false, { deckThreadModalOrigin: '/be-free/flight-deck?scopeid=scope-a' }, '?scopeid=scope-a&threadid=thread-old', undefined],
+  ])('tracks only an immediately preceding nonmodal entry (replace=%s, state=%s)', (replace, state, search, origin) => {
+    const originalWindow = globalThis.window;
+    const write = vi.fn();
+    globalThis.window = {
+      location: { href: `https://flightdeck.example/be-free/flight-deck${search}`, pathname: '/be-free/flight-deck', search },
+      history: { state, pushState: write, replaceState: write },
+    };
+    try {
+      const shell = createShellState({ initialSection: 'status' });
+      Object.defineProperty(shell, 'currentWorkspaceSlug', { value: 'be-free' });
+      Object.assign(shell, { selectedBoardId: 'scope-a', activeThreadId: 'thread-new', deckThreadChannelId: 'channel-a', updatePageTitle: vi.fn() });
+      shell.syncRoute(replace);
+      expect(write.mock.calls[0][0].deckThreadModalOrigin).toBe(origin);
     } finally {
       globalThis.window = originalWindow;
     }
