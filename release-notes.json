@@ -3934,6 +3934,13 @@
       "notes": [
         "Denied napplet reads clear installed-app authority immediately, including retained browser cache updates."
       ]
+    },
+    {
+      "buildNumber": 2397,
+      "label": "Stable Project Register browsing",
+      "notes": [
+        "Background access checks preserve scrolling, filters and expanded evidence in unchanged installed snapshots. Denied access and changed installations still clear or replace the document."
+      ]
     }
   ]
 }

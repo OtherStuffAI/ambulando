@@ -132,7 +132,8 @@ export const orgDataMixin = {
       runtime.state = state;
       this.orgDataHostStatus = state.status;
       this.orgDataHostError = state.error || '';
-      this.orgDataBundleVisible = state.status === 'ready' && runtime.ready;
+      this.orgDataBundleVisible = runtime.ready && (state.status === 'ready'
+        || state.status === 'loading' && runtime.keepBundleVisible === true);
       this.orgDataRetainDraft = state.retainDraft === true && runtime.ready;
       if (state.status === 'error' && !state.retainDraft) {
         const discovery = INSTALLATIONS.get(this);
@@ -264,6 +265,8 @@ export const orgDataMixin = {
     const controller = new AbortController(), requestId = crypto.randomUUID(), view = runtime.view;
     const prior = runtime.authority;
     const retaining = preserveDraft && (runtime.dirty || runtime.writing) && !!prior && !runtime.blocked;
+    runtime.keepBundleVisible = preserveDraft && runtime.bundle?.capabilities.length === 0
+      && runtime.ready && !!prior && !runtime.blocked;
     runtime.authorizing = true;
     runtime.request = controller;
     const current = () => RUNTIMES.get(this) === runtime && !controller.signal.aborted
@@ -285,7 +288,7 @@ export const orgDataMixin = {
         // opened between those emissions. Every reauthorization has a new ID.
         runtime.deliveredRequestId = requestId;
         const unchanged = retaining && sameOrgDataAuthority(prior, projection);
-        if (retaining && !unchanged || runtime.bundle && prior && !sameOrgDataAuthority(prior, projection)) { this.clearOrgDataDocument(runtime); runtime.bundle = null; }
+        if (retaining && !unchanged || runtime.bundle && prior && !sameInstalledOrgDataAuthority(prior, projection, runtime.bundle)) { this.clearOrgDataDocument(runtime); runtime.bundle = null; }
         runtime.authority = projection; runtime.authorizing = false; runtime.blocked = false;
         if (runtime.documentCleared) {
           runtime.documentCleared = false; runtime.ready = false; runtime.session = crypto.randomUUID();
@@ -386,4 +389,15 @@ export function sameOrgDataAuthority(before, after) {
     installations: p.installations,
   });
   return signature(before) === signature(after);
+}
+
+// Capability-free bundles contain their own immutable snapshot. Organisation
+// records or grants unrelated to that installation cannot replace its document.
+// Bundles using the live bridge retain the existing broader authority checks.
+export function sameInstalledOrgDataAuthority(before, after, bundle) {
+  if (bundle.capabilities.length) return sameOrgDataAuthority(before, after);
+  if (before.capabilities?.read !== true || after.capabilities?.read !== true) return false;
+  const installed = p => p.installations?.find(b => b.key === bundle.key);
+  const previous = installed(before), current = installed(after);
+  return !!previous && !!current && JSON.stringify(previous) === JSON.stringify(current);
 }
