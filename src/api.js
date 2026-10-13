@@ -915,25 +915,69 @@ export async function getTowerPgWorkspaceScopes(workspaceId, { baseUrl = _baseUr
   return json(resp, { requestUrl: finalUrl, method: 'GET', prefix: 'Tower PG API' });
 }
 
-export async function getTowerPgRecordSync(workspaceId, { baseUrl = _baseUrl, appNpub = FLIGHT_DECK_PG_APP_NPUB, cursor = null, limit = 200, timeoutMs = 30_000, protocolVersion = 1, clientId = null, diagnosticOperation } = {}) {
+export async function getTowerPgRecordSync(workspaceId, { baseUrl = _baseUrl, appNpub = FLIGHT_DECK_PG_APP_NPUB, cursor = null, limit = 200, timeoutMs = 30_000, protocolVersion = 1, clientId = null, extension = null, largeRecords = null, diagnosticOperation } = {}) {
   if (protocolVersion === 2 && (!clientId || !cursor)) throw new Error('Device record sync requires client and local cursor');
   const params = new URLSearchParams({ protocol_version: String(protocolVersion), limit: String(Math.min(200, Math.max(1, limit))) });
   if (protocolVersion === 2) params.set('client_id', clientId);
   if (cursor) params.set('cursor', cursor);
+  if (extension) {
+    if (protocolVersion !== 2 || extension !== 'bounded_snapshot_v1') throw new Error('Unsupported record sync extension');
+    params.set('extension', extension);
+  }
+  if (largeRecords) {
+    if (extension !== 'bounded_snapshot_v1' || largeRecords !== 'chunked_v1') throw new Error('Unsupported large record extension');
+    params.set('large_records', largeRecords);
+  }
   const requestPath = `/api/v4/flightdeck-pg/workspaces/${encodeURIComponent(workspaceId)}/record-sync?${params}`;
   const requestUrl = resolveTowerPgUrl(requestPath, baseUrl);
   const resp = await signedTowerPgFetch(requestPath, { baseUrl, appNpub, timeoutMs, diagnosticOperation, useWorkspaceKey: protocolVersion !== 2 });
   return json(resp, { requestUrl, method: 'GET', prefix: 'Tower PG record sync' });
 }
 
-export async function towerPgRecordClient(workspaceId, clientId, { operation = 'read', cursor, expectedRevision, baseUrl = _baseUrl, appNpub = FLIGHT_DECK_PG_APP_NPUB, timeoutMs = 30_000, diagnosticOperation } = {}) {
+export async function towerPgRecordClient(workspaceId, clientId, { operation = 'read', cursor, expectedRevision, largeRecordReceipts, baseUrl = _baseUrl, appNpub = FLIGHT_DECK_PG_APP_NPUB, timeoutMs = 30_000, diagnosticOperation } = {}) {
   if (!['read', 'register', 'ack', 'retire'].includes(operation)) throw new Error('Invalid checkpoint operation');
   const method = { read: 'GET', register: 'POST', ack: 'POST', retire: 'DELETE' }[operation];
-  const body = operation === 'register' ? '' : operation === 'ack' ? { cursor, expected_revision: expectedRevision } : undefined;
+  const body = operation === 'register' ? '' : operation === 'ack' ? { cursor, expected_revision: expectedRevision,
+    ...(largeRecordReceipts ? { large_record_receipts: largeRecordReceipts } : {}) } : undefined;
   const path = `/api/v4/flightdeck-pg/workspaces/${encodeURIComponent(workspaceId)}/record-sync/clients/${encodeURIComponent(clientId)}${operation === 'ack' ? '/ack' : ''}?protocol_version=2`;
   const requestUrl = resolveTowerPgUrl(path, baseUrl);
   const response = await signedTowerPgFetch(path, { method, body, rawBody: operation === 'register', baseUrl, appNpub, timeoutMs, diagnosticOperation, useWorkspaceKey: false });
   return json(response, { requestUrl, method, prefix: 'Tower PG device checkpoint' });
+}
+
+export async function getTowerPgRecordChunk(workspaceId, clientId, pageCursor, manifestId, index, { baseUrl = _baseUrl, appNpub = FLIGHT_DECK_PG_APP_NPUB, timeoutMs = 30_000, diagnosticOperation } = {}) {
+  if (!Number.isSafeInteger(index) || index < 0) throw new Error('Invalid chunk index');
+  const path = `/api/v4/flightdeck-pg/workspaces/${encodeURIComponent(workspaceId)}/record-sync/clients/${encodeURIComponent(clientId)}/pages/${encodeURIComponent(pageCursor)}/large-records/${encodeURIComponent(manifestId)}/chunks/${index}?protocol_version=2`;
+  const safePath = '/api/v4/flightdeck-pg/workspaces/:id/record-sync/clients/:id/pages/:id/large-records/:id/chunks/:id';
+  try {
+    const response = await signedTowerPgFetch(path, { baseUrl, appNpub, timeoutMs, diagnosticOperation, useWorkspaceKey: false });
+    if (!response.ok) return await json(response, { requestUrl: safePath, method: 'GET', prefix: 'Tower PG record chunk' });
+    let bytes;
+    const reader = response.body?.getReader?.();
+    if (reader) {
+      const parts = []; let total = 0;
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          total += value.byteLength;
+          if (total > 262144) { await reader.cancel().catch(() => {}); throw new Error('Record chunk exceeds byte bound'); }
+          parts.push(value);
+        }
+      } finally { reader.releaseLock(); }
+      bytes = new Uint8Array(total);
+      let offset = 0;
+      for (const part of parts) { bytes.set(part, offset); offset += part.byteLength; }
+    } else bytes = new Uint8Array(await response.arrayBuffer());
+    if (bytes.byteLength > 262144) throw new Error('Record chunk exceeds byte bound');
+    return bytes;
+  } catch (error) {
+    // The opaque page handle is a capability, including when signing times out.
+    // Keep structured status/code for repair without exposing its signed URL.
+    if (error.message !== 'Record chunk exceeds byte bound') error.message = 'Tower PG record chunk request failed';
+    error.requestUrl = safePath;
+    throw error;
+  }
 }
 
 export async function getTowerPgWorkspaceSync(workspaceId, { baseUrl = _baseUrl, appNpub = FLIGHT_DECK_PG_APP_NPUB, cursor = null, limit = 500, timeoutMs = 30_000, diagnosticOperation } = {}) {

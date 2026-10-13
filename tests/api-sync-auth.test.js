@@ -848,14 +848,17 @@ it('signs exact v2 registration, page, acknowledgement, read and retirement requ
     const baseUrl = 'http://localhost:3100', workspace = 'workspace', client = '10000000-0000-4000-8000-000000000001';
     const common = { baseUrl, appNpub: 'app' };
     await api.towerPgRecordClient(workspace, client, { ...common, operation: 'register' });
-    await api.getTowerPgRecordSync(workspace, { ...common, protocolVersion: 2, clientId: client, cursor: 'local', limit: 200 });
-    await api.towerPgRecordClient(workspace, client, { ...common, operation: 'ack', cursor: 'next', expectedRevision: '9007199254740993' });
+    await api.getTowerPgRecordSync(workspace, { ...common, protocolVersion: 2, clientId: client, cursor: 'local', limit: 200, extension: 'bounded_snapshot_v1', largeRecords: 'chunked_v1' });
+    const receipts = [{ manifest_id: 'manifest', sha256: 'a'.repeat(64) }];
+    await api.towerPgRecordClient(workspace, client, { ...common, operation: 'ack', cursor: 'next', expectedRevision: '9007199254740993', largeRecordReceipts: receipts });
     await api.towerPgRecordClient(workspace, client, { ...common, operation: 'read' });
     await api.towerPgRecordClient(workspace, client, { ...common, operation: 'retire' });
     expect(requests.map(r => r.method)).toEqual(['POST', 'GET', 'POST', 'GET', 'DELETE']);
     expect(requests[0].body).toBe('');
     expect(requests[1].url).toContain(`protocol_version=2&limit=200&client_id=${client}&cursor=local`);
-    expect(requests[2].body).toBe('{"cursor":"next","expected_revision":"9007199254740993"}');
+    expect(requests[1].url).toContain('&extension=bounded_snapshot_v1');
+    expect(requests[1].url).toContain('&large_records=chunked_v1');
+    expect(JSON.parse(requests[2].body)).toEqual({ cursor: 'next', expected_revision: '9007199254740993', large_record_receipts: receipts });
     expect(requests[2].url).toContain(`/clients/${client}/ack?protocol_version=2`);
     for (let i = 0; i < requests.length; i++) {
       const [signedUrl, signedMethod, signedBody] = createNip98AuthHeaderMock.mock.calls[i];
@@ -865,5 +868,21 @@ it('signs exact v2 registration, page, acknowledgement, read and retirement requ
     }
     expect(createNip98AuthHeaderForSecretMock).not.toHaveBeenCalled();
     await expect(api.getTowerPgRecordSync(workspace, { ...common, protocolVersion: 2, clientId: client })).rejects.toThrow('local cursor');
+  } finally { globalThis.fetch = previousFetch; workspaceSecret = null; }
+});
+
+it('signs the exact session-owned chunk URL and rejects oversized chunk responses', async () => {
+  const previousFetch = globalThis.fetch;
+  createNip98AuthHeaderMock.mockClear(); createNip98AuthHeaderForSecretMock.mockClear();
+  workspaceSecret = new Uint8Array(32).fill(7);
+  globalThis.fetch = vi.fn(async () => ({ ok: true, status: 200, arrayBuffer: async () => new Uint8Array([1, 2, 3]).buffer }));
+  try {
+    const api = await import('../src/api.js');
+    const options = { baseUrl: 'http://localhost:3100', appNpub: 'app' };
+    expect(await api.getTowerPgRecordChunk('workspace', 'client', 'opaque/+cursor', 'manifest', 0, options)).toEqual(new Uint8Array([1, 2, 3]));
+    expect(createNip98AuthHeaderMock.mock.calls[0][0]).toBe('http://localhost:3100/api/v4/flightdeck-pg/workspaces/workspace/record-sync/clients/client/pages/opaque%2F%2Bcursor/large-records/manifest/chunks/0?protocol_version=2');
+    expect(createNip98AuthHeaderForSecretMock).not.toHaveBeenCalled();
+    globalThis.fetch.mockResolvedValueOnce(new Response(new Uint8Array(262145)));
+    await expect(api.getTowerPgRecordChunk('workspace', 'client', 'cursor', 'manifest', 0, options)).rejects.toThrow('byte bound');
   } finally { globalThis.fetch = previousFetch; workspaceSecret = null; }
 });

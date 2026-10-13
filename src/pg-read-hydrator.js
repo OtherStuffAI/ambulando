@@ -43,6 +43,7 @@ import {
   getTowerPgWorkspaceScopes,
   getTowerPgWorkspaceSync,
   getTowerPgRecordSync,
+  getTowerPgRecordChunk,
   getTowerPgService,
   towerPgRecordClient,
   getTowerPgResourceViewStates,
@@ -1457,6 +1458,7 @@ function mapPgSyncGroup(group = {}, workspaceOwnerNpub = '') {
 }
 
 export async function hydrateTowerPgSyncBundle(store, bundle = {}, deps = {}) {
+  if (bundle.large_record_action) return (await import('./pg-large-records.js')).materializeLargeRecord(store, bundle.large_record_action, bundle.local_apply_options);
   if (bundle.device_lock) return (await import('./pg-device-checkpoints.js')).commitDeviceLease(bundle.device_lock);
   if (bundle.thread_history_page) return materializeThreadHistoryPage(store, bundle.thread_history_page);
   if (bundle.device_action) {
@@ -1734,18 +1736,23 @@ async function syncTowerPgRecordWorkspace(store, options, deps) {
   const context = resolveTowerPgWorkspaceContext(store);
   const { recordDeltaCursorKey, PG_RECORD_DELTA_FAMILIES } = await import('./pg-record-delta.js');
   assertTowerPgWorkspaceCurrent(store, context);
-  const { discoverRecordProtocol, syncDeviceRecords, withDeviceCacheLock, withWorkerDeviceLease } = await import('./pg-device-checkpoints.js');
+  const { discoverRecordCapabilities, syncDeviceRecords, withDeviceCacheLock, withWorkerDeviceLease } = await import('./pg-device-checkpoints.js');
   // Existing v1-only injected ports do not imply a discovery capability.
-  const protocol = deps.getTowerPgRecordSync && !deps.getTowerPgService ? 1
-    : await discoverRecordProtocol(context, deps.getTowerPgService || getTowerPgService);
+  const capabilities = deps.getTowerPgRecordSync && !deps.getTowerPgService ? { protocolVersion: 1 }
+    : await discoverRecordCapabilities(context, deps.getTowerPgService || getTowerPgService);
+  const protocol = capabilities.protocolVersion;
   assertTowerPgWorkspaceCurrent(store, context);
+  const previousDevice = (await (deps.getSyncState || getSyncState)(recordDeltaCursorKey(store)))?.device;
+  if (previousDevice?.extension && previousDevice.extension !== capabilities.extension) throw new Error('Negotiated record sync extension is unavailable');
+  if (previousDevice?.largeRecords && previousDevice.largeRecords !== capabilities.largeRecords) throw new Error('Negotiated large record extension is unavailable');
   const deviceMaterialize = bundle => (deps.hydrateTowerPgSyncBundle || hydrateTowerPgSyncBundle)(store, bundle, deps);
   const runDevice = lease => syncDeviceRecords({
-    context, options, cursorKey: recordDeltaCursorKey(store),
+    context, options: { ...options, extension: capabilities.extension, largeRecords: capabilities.largeRecords }, cursorKey: recordDeltaCursorKey(store),
     readState: deps.getSyncState || getSyncState,
     materialize: bundle => deviceMaterialize({ ...bundle, local_apply_options: { ...bundle.local_apply_options, ...(lease?.token ? { deviceLease: lease.token } : {}) } }),
     assertHeld: lease?.assertHeld,
     readPage: deps.getTowerPgRecordSync || getTowerPgRecordSync,
+    readChunk: deps.getTowerPgRecordChunk || getTowerPgRecordChunk,
     client: deps.towerPgRecordClient || towerPgRecordClient,
     assertCurrent: () => assertTowerPgWorkspaceCurrent(store, context),
     preparePage: async (page, state) => {

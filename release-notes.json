@@ -3962,6 +3962,14 @@
       "notes": [
         "Remove the six automatic napplet launcher entries. Personal WApps and currently authorized workspace-installed napplets remain available."
       ]
+    },
+    {
+      "buildNumber": 2401,
+      "label": "Bounded sync and reliable access cancellation",
+      "notes": [
+        "Negotiate finite sync handover and verified chunks for large records when Tower supports them, preserving retained downloads and local drafts through permission changes.",
+        "Press Escape to cancel channel access review while loading or ready. Keep the review open during writes and group close controls inside their dialogs."
+      ]
     }
   ]
 }

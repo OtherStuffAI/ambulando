@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import fixture from './fixtures/flightdeck-record-delta-v1.json';
+import towerFixture from './fixtures/tower-record-delta-v1.json';
 import { openWorkspaceDb } from '../src/db.js';
 import { applyPgRecordChanges, resetPgRecordAuthority, recordDeltaCursorKey, rebuildPgRecordSummaries } from '../src/pg-record-delta.js';
 const workspaceId=fixture.one_message_delta.changes[0].workspace_id;
@@ -8,6 +9,28 @@ let db;
 beforeEach(async()=>{db=openWorkspaceDb('record-delta-tests');await db.open();await Promise.all(db.tables.map(t=>t.clear()))});
 const page=(changes,cursor='next')=>({...fixture.one_message_delta, changes, next_cursor:cursor, has_more:false});
 describe('Tower canonical record-delta v1 consumer',()=>{
+  it('materializes the current shared Tower fixture including actor-specific feed families', async () => {
+    const reader = towerFixture.canonical_upserts.changes.find(c => c.family === 'feed_subscription').row.reader_actor_id;
+    await applyPgRecordChanges({ ...store, currentWorkspace: { ...store.currentWorkspace,
+      pgMe: { actor: { actor_id: reader, npub: store.session.npub } } } }, towerFixture.canonical_upserts);
+    expect(await db.pg_record_rows.count()).toBe(towerFixture.canonical_upserts.changes.length);
+    expect(await db.feed_subscriptions.count()).toBe(1);
+    expect(await db.feed_item_states.count()).toBe(1);
+    await applyPgRecordChanges(store, towerFixture.explicit_delete);
+    const deleted = towerFixture.explicit_delete.changes[0];
+    expect((await db.pg_record_rows.get(`${deleted.family}:${deleted.id}`)).operation).toBe('delete');
+  });
+  it('materializes a 900 KiB row but rejects oversized JSON before publishing any prefix', async () => {
+    const change = fixture.one_message_delta.changes[0];
+    const body = 'x'.repeat(900 * 1024);
+    await applyPgRecordChanges(store, page([{ ...change, row: { ...change.row, body } }], 'large'));
+    expect((await db.chat_messages.get(change.id)).body).toBe(body);
+    const state = (await db.sync_state.get(recordDeltaCursorKey(store))).value;
+    await expect(applyPgRecordChanges(store, page([{ ...change, version: '21',
+      row: { ...change.row, body: 'x'.repeat(1048576) } }], 'oversized'), { expectedCursor: 'large' })).rejects.toThrow('byte bound');
+    expect((await db.chat_messages.get(change.id)).body).toBe(body);
+    expect((await db.sync_state.get(recordDeltaCursorKey(store))).value).toEqual(state);
+  });
   it('accepts every supplied canonical family without inventing row shapes',async()=>{
     const result=await applyPgRecordChanges(store,fixture.canonical_upserts,{expectedCursor:null});
     expect(result.protocolVersion).toBe(1);expect(await db.pg_record_rows.count()).toBe(17);

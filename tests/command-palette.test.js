@@ -765,6 +765,32 @@ describe('command palette defaults and search', () => {
     expect(focus).toHaveBeenCalledOnce();
   });
 
+  it('consumes window Escape only while the palette is open and owns the event', () => {
+    const escapeEvent = (target = null) => ({ target, defaultPrevented: false, preventDefault: vi.fn() });
+    const store = createStore({ showCommandPalette: false, commandPaletteQuery: '' });
+    const hidden = escapeEvent();
+    expect(store.handleCommandPaletteWindowEscape(hidden)).toBe(false);
+    expect(hidden.preventDefault).not.toHaveBeenCalled();
+
+    store.showCommandPalette = true;
+    const fromDialog = escapeEvent({ closest: (selector) => (selector === 'dialog[open]' ? {} : null) });
+    expect(store.handleCommandPaletteWindowEscape(fromDialog)).toBe(false);
+    expect(fromDialog.preventDefault).not.toHaveBeenCalled();
+    expect(store.showCommandPalette).toBe(true);
+
+    store.commandPaletteQuery = 'apollo';
+    const clearing = escapeEvent({ closest: () => null });
+    expect(store.handleCommandPaletteWindowEscape(clearing)).toBe(true);
+    expect(clearing.preventDefault).toHaveBeenCalledOnce();
+    expect(store.commandPaletteQuery).toBe('');
+    expect(store.showCommandPalette).toBe(true);
+    expect(store.handleCommandPaletteWindowEscape(escapeEvent({ closest: () => null }))).toBe(true);
+    expect(store.showCommandPalette).toBe(false);
+
+    expect(indexSource).not.toContain('@keydown.escape.window.prevent="$store.chat.handleCommandPaletteEscape()"');
+    expect(indexSource).toContain('@keydown.escape.window="$store.chat.handleCommandPaletteWindowEscape($event)"');
+  });
+
   it('keeps the desktop scope launcher and mobile workspace navigation', () => {
     expect(indexSource.match(/openCommandPaletteScopeSwitcher\(\$event\)/g)?.length).toBeGreaterThanOrEqual(1);
     expect(indexSource).not.toContain('class="mobile-navigation-tools"');

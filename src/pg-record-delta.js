@@ -2,7 +2,7 @@ import { mergePgAccessState } from './pg-access-state.js';
 import { markPgTargetArchived } from './pg-archive-state.js';
 import { mapScopeOrder } from './scope-order.js';
 import { personalAttentionVersion } from './personal-attention.js';
-import { canonicalClientId, checkpointRevision, DEVICE_CACHE_OWNER_KEY, assertDeviceLease, createDeviceCacheId } from './pg-device-checkpoints.js';
+import { canonicalClientId, checkpointRevision, DEVICE_CACHE_OWNER_KEY, assertDeviceLease, createDeviceCacheId, validateBoundedHandover } from './pg-device-checkpoints.js';
 import { publishContextAuthority, clearContextAuthority, mapContextRow } from './context-cache.js';
 import { resolvePgReaderActorId } from './pg-reader-identity.js';
 import { inboundFeedReaderRow } from './translators/feed-reader.js';
@@ -51,7 +51,7 @@ async function publishAccessProjection(db, cursorKey, state) {
 export function isTowerWinsLocalAssetConflict(conflict = {}) {
   return TOWER_WINS_LOCAL_ASSET_CONFLICT_FAMILIES.has(String(conflict.family || ''));
 }
-function validatePage(page, workspaceId) {
+export function validatePgRecordPage(page, workspaceId, options = {}) {
   if (![1, 2].includes(page?.protocol_version) || !['snapshot', 'delta'].includes(page.mode)
     || !Array.isArray(page.families) || !PG_RECORD_DELTA_FAMILIES.filter(f => !f.startsWith('feed_') && !f.startsWith('context_') && f !== 'scope_order').every(f => page.families.includes(f))
     || !Array.isArray(page.changes) || page.changes.length > 200
@@ -61,12 +61,15 @@ function validatePage(page, workspaceId) {
   if (page.protocol_version === 2 && (!canonicalClientId(page.client_id) || !checkpointRevision(page.checkpoint_revision))) throw new Error('Invalid device page metadata');
   const { local_apply_options, ...wirePage } = page;
   if (page.actors !== undefined && (!Array.isArray(page.actors) || page.changes.length + page.actors.length > 200)) throw new Error('Invalid record-delta actor bound');
+  if (page.access_changes !== undefined && !Array.isArray(page.access_changes)
+    || !options.verifiedLargeRecord && page.changes.length + (page.actors?.length || 0) + (page.access_changes?.length || 0) + (page.large_records?.length || 0) > 200) throw new Error('Invalid record-delta entry bound');
+  if (page.large_records?.length && !options.allowManifest) throw new Error('Unnegotiated large record manifest');
   const actorIds = new Set();
   for (const actor of page.actors || []) {
     if (!actor?.actor_id || actorIds.has(actor.actor_id) || typeof actor.npub !== 'string' || !['human','agent','app','service'].includes(actor.kind) || !(actor.display_name === null || typeof actor.display_name === 'string')) throw new Error('Invalid record-delta actor identity');
     actorIds.add(actor.actor_id);
   }
-  if (new TextEncoder().encode(JSON.stringify(wirePage)).byteLength > 1048576) throw new Error('Record-delta page exceeds byte bound');
+  if (!options.verifiedLargeRecord && new TextEncoder().encode(JSON.stringify(wirePage)).byteLength > 1048576) throw new Error('Record-delta page exceeds byte bound');
   for (const c of page.changes) {
     if (!PG_RECORD_DELTA_FAMILIES.includes(c.family) || typeof c.id !== 'string' || !c.id
       || c.workspace_id !== workspaceId || !/^\d+$/.test(c.version)
@@ -182,7 +185,8 @@ export async function getPgAttentionProjection(store) {
 
 export async function applyPgRecordChanges(store, page, options = {}) {
   const context = resolveTowerPgWorkspaceContext(store);
-  validatePage(page, context.workspaceId);
+  validatePgRecordPage(page, context.workspaceId, options);
+  if (options.boundedExtension === 'bounded_snapshot_v1') validateBoundedHandover(page, options.authorityEpoch);
   if (page.identity?.workspace_id && page.identity.workspace_id !== context.workspaceId) throw new Error('Record-delta workspace identity mismatch');
   // Validate the complete wire boundary before any prefix becomes visible.
   if (page.mode === 'snapshot' && (!page.snapshot_id || typeof page.snapshot_complete !== 'boolean'
@@ -213,12 +217,18 @@ export async function applyPgRecordChanges(store, page, options = {}) {
 
 async function applyRecordPage(store, page, options = {}) {
   const context = resolveTowerPgWorkspaceContext(store);
-  validatePage(page, context.workspaceId);
+  validatePgRecordPage(page, context.workspaceId, options);
   if (page.identity?.workspace_id && page.identity.workspace_id !== context.workspaceId) throw new Error('Record-delta workspace identity mismatch');
   const db = getWorkspaceDb();
   const cursorKey = recordDeltaCursorKey(store);
   return db.transaction('rw', db.tables, async () => {
     const state = (await db.sync_state.get(cursorKey))?.value || { cursor: null };
+    if (options.boundedExtension === 'bounded_snapshot_v1' && state.handover?.target_position !== null
+      && state.handover?.target_position !== undefined && !state.handover.complete
+      && page.handover.target_position !== state.handover.target_position
+      && (page.handover.target_position === null
+        || BigInt(page.handover.target_position) < BigInt(state.handover.target_position)
+        || BigInt(page.handover.access_revision) <= BigInt(state.handover.access_revision))) throw new Error('Bounded snapshot target changed');
     await assertDeviceLease(db, options.deviceLease);
     if (!options.reconcileOnly && page.protocol_version === 2 && (!state.device
       || page.client_id !== state.device.clientId || options.deviceScope !== state.device.scope
@@ -478,13 +488,17 @@ async function applyRecordPage(store, page, options = {}) {
     if (options.beforeCommit) await options.beforeCommit();
     const nextState = { ...state, accessPartitions, accessRevision: page.access_revision || state.accessRevision, contextDirty: page.has_more || options.partialPage ? contextDirty : false, viewBaselineInitialized: options.viewBaselineInitialized || state.viewBaselineInitialized || false, legacyFallbackActive: false, resetting: false, accessLost: options.partialPage ? Boolean(state.accessLost) : false, cursor: retirementPending || options.partialPage ? state.cursor : page.next_cursor, applyingPage: options.partialPage ? { nextCursor: page.next_cursor, through: options.pageOffset } : null, generation, incrementalSnapshot: true, snapshotRetirement: retirementPending ? state.snapshotRetirement || { tableIndex: 0, after: null, nextCursor: page.next_cursor } : null, snapshotId: page.mode === 'snapshot' ? page.snapshot_id : state.snapshotId,
       snapshotFamilies: page.mode === 'snapshot' ? page.families.filter(f => PG_RECORD_DELTA_FAMILIES.includes(f)) : state.snapshotFamilies,
+      handover: options.boundedExtension === 'bounded_snapshot_v1' ? page.handover : null,
       snapshotComplete: page.snapshot_complete || state.snapshotComplete || false,
       snapshotReconciliationPending: page.mode === 'snapshot' ? true
         : (page.has_more || retirementPending) ? state.snapshotReconciliationPending === true : false,
       converged: page.mode === 'delta' && !page.has_more && !retirementPending };
     if (!options.reconcileOnly && page.protocol_version === 2 && !options.partialPage) {
-      const intent = { cursor: page.next_cursor, expectedRevision: page.checkpoint_revision };
+      const intent = { cursor: page.next_cursor, expectedRevision: page.checkpoint_revision,
+        ...(options.largeRecordReceipts ? { largeRecordReceipts: options.largeRecordReceipts } : {}) };
       nextState.device = { ...state.device, revision: page.checkpoint_revision,
+        extension: options.boundedExtension || state.device.extension || null,
+        largeRecords: options.largeRecords || state.device.largeRecords || null,
         pendingAck: retirementPending ? null : intent };
       if (retirementPending) nextState.snapshotRetirement.pendingAck = intent;
     }
@@ -627,7 +641,9 @@ export async function resetPgRecordAuthority(store, { preserveViews = false, acc
     const obsoleteDevices = [...(priorState?.obsoleteDevices || []), ...(priorState?.device ? [priorState.device] : []),
       ...(ownerState?.device ? [ownerState.device] : [])];
     const replacement = { cursor: null, resetting: true, accessLost, accessPartitions: preserveViews ? priorState?.accessPartitions : {}, accessRevision: preserveViews ? priorState?.accessRevision : undefined, localGeneration, obsoleteDevices,
-      ...(deviceScope ? { device: { scope: deviceScope, clientId: createDeviceCacheId(), registered: false, revision: '0', pendingAck: null } } : {}) };
+      ...(deviceScope ? { device: { scope: deviceScope, clientId: createDeviceCacheId(), registered: false, revision: '0', pendingAck: null,
+        extension: priorState?.device?.scope === deviceScope ? priorState.device.extension || null : null,
+        largeRecords: priorState?.device?.scope === deviceScope ? priorState.device.largeRecords || null : null } } : {}) };
     await publishAccessProjection(db, cursorKey, replacement);
     await db.sync_state.put({ key: DEVICE_CACHE_OWNER_KEY, value: { cursorKey, scope: deviceScope,
       clientId: replacement.device?.clientId || null, canonicalCount: preserveViews ? await db.pg_record_rows.count() : 0 } });

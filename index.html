@@ -986,7 +986,7 @@
       x-show="$store.chat.showCommandPalette"
       x-cloak
       @click.self="$store.chat.closeCommandPalette()"
-      @keydown.escape.window.prevent="$store.chat.handleCommandPaletteEscape()"
+      @keydown.escape.window="$store.chat.handleCommandPaletteWindowEscape($event)"
     >
       <section
         class="command-palette"
@@ -9796,6 +9796,8 @@
               <dialog class="access-preview-dialog" data-testid="access-preview-dialog" aria-labelledby="access-preview-title"
                 x-effect="if ($store.chat.channelBulkGrantPreview) { if (!$el.open) $el.showModal(); } else if ($el.open) $el.close()"
                 @cancel.prevent="$store.chat.closeChannelBulkGrantPreview()"
+                @keydown.escape="$store.chat.channelBulkGrantBusy && $event.preventDefault()"
+                @close="$store.chat.channelBulkGrantPreview && ($store.chat.channelBulkGrantBusy ? $el.showModal() : $store.chat.closeChannelBulkGrantPreview())"
                 :aria-busy="String($store.chat.channelBulkGrantPreview?.status === 'loading' || $store.chat.channelBulkGrantBusy)">
                 <template x-if="$store.chat.channelBulkGrantPreview">
                   <div class="access-preview-body">

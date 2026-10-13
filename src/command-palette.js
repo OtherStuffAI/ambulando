@@ -902,6 +902,16 @@ export const commandPaletteMixin = {
     this.closeCommandPalette();
   },
 
+  // Window-level Escape only belongs to the palette while it is open. Leaving
+  // other events untouched keeps native <dialog> cancel requests working.
+  handleCommandPaletteWindowEscape(event) {
+    if (!this.showCommandPalette || event?.defaultPrevented) return false;
+    if (event?.target?.closest?.('dialog[open]')) return false;
+    event?.preventDefault?.();
+    this.handleCommandPaletteEscape();
+    return true;
+  },
+
   handleCommandPaletteBackspace() {
     if (!this.commandPaletteQuery) this.handleCommandPaletteEscape();
   },

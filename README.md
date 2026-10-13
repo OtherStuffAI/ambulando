@@ -13,9 +13,11 @@ review the result. Each action produces evidence that makes the next decision
 clearer.
 
 Ambulando is the browser workspace for coordinating people and AI agents in
-Wingman Be Free. It brings conversations, work, knowledge, and agent activity
+Wingman Suite. It brings conversations, work, knowledge, and agent activity
 together so you can direct progress and review what gets done. This repository
 contains the Flight Deck web client, presented with the Ambulando design system.
+
+This is a recent rebrand of Flight Deck.
 
 ## What you can do
 

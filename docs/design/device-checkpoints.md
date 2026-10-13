@@ -108,3 +108,72 @@ Synthetic network/browser coverage is in `additive-workspace-sync.spec.cjs`;
 forbidden intent and identity replacement. Isolated fixtures do not establish
 that a deployed Tower migration has run; coordinated Tower-first activation and
 real signed two-reader acceptance remain part of the manager's release smoke.
+
+## Negotiated finite snapshot handover
+
+When authenticated discovery advertises `record_sync.extensions` containing
+`bounded_snapshot_v1`, the service repeats `extension=bounded_snapshot_v1` on
+every v2 page. Registration and acknowledgements retain their existing v2 shape.
+The worker validates and persists `handover` (`target_position`,
+`through_position`, `complete`, `authority_epoch`, `access_revision`) with the
+page cursor and ack intent. A terminal delta needs a complete certificate through
+the target; incomplete snapshot/catchup pages cannot certify convergence. An
+active non-null target cannot change for ordinary writes. A newer access revision
+can extend it for authority-gain repair, as specified by Tower; it cannot regress.
+Positions are decimal
+strings compared with BigInt; cursors remain opaque. A saved negotiated extension
+cannot silently downgrade when later discovery stops advertising it.
+
+This certifies a convergent committed prefix with drained authority catchups,
+not a frozen historical export or authorization for future network reads or writes.
+Previously authorized downloads remain locally readable under the retained-download policy. Newer
+writes can be collected in the next finite round without prolonging this one.
+Authority churn may require additional repair catchups before certification.
+Unextended v2 retains its existing terminal-delta semantics.
+
+The complete JSON bound includes actor, access and extension metadata, and the
+200-entry bound includes changes, actors, access changes and manifests. Tower's
+schema/write inventory permits oversized rows and actor labels, so Flight Deck
+selects `large_records=chunked_v1` only when both extensions are advertised.
+Unnegotiated manifests still fail closed. Oversized records on older servers
+remain an explicit 413/incomplete condition.
+
+`pg-large-records.js` runs inside the existing materialisation worker. One
+assembly per physical cache stores at most 64 MiB of chunks in Dexie's existing
+`sync_state` table, with seven-day local expiry. Each signed chunk is at most
+256 KiB. The worker checks manifest/row identity, exact length, SHA256 and valid
+UTF-8 before applying the canonical row and actor sidecars. It commits receipts
+with the cursor/ack intent and deletes temporary chunks in that transaction.
+Portable worker hashing also supports native HTTP contexts without SubtleCrypto.
+Retry/reload discards unfinished assembly and requests from the prior committed
+cursor; already committed receipt intents survive reload and lost ack responses.
+Changed sources and manifest checkpoint conflicts trigger scoped repair while
+retaining downloads. No diagnostic server cursor replaces local materialisation.
+
+64 MiB is a client storage budget, not a server write limit. Larger records,
+quota failures, bad digests or interrupted transfers remain incomplete and
+never advance the checkpoint or emit completion. Universal traversal of every
+PostgreSQL-legal individual record is not claimed. Source tests do not prove
+deployed discovery, live authority races, slow-link deadlines or HTTPS/FIPS
+activation.
+
+Compatibility fixtures: `tests/fixtures/tower-record-delta-v1.json` mirrors
+Tower's current canonical fixture (including feed families), with its FIPS peer
+identity replaced by an approved synthetic public-source identity. No record or
+transport shape changes. `tests/fixtures/flightdeck-bounded-snapshot-v1.json`
+provides pending/complete handover examples above Number.MAX_SAFE_INTEGER for
+reuse by other consumers. The checkpoint suite combines these contracts with
+lost acknowledgements, interrupted retirement, empty progress, access catchup,
+revocation/re-grant, concurrent tombstones and stale upsert scenarios.
+`tests/fixtures/tower-bounded-record-snapshots-v1.json` is generated from Tower's
+`bounded-record-snapshots-v1.ts`: the large body is represented by its repeat
+recipe to avoid committing a duplicate 1.2 MB payload. The materialisation test
+recreates the exact bytes and consumes Tower's pinned digest/manifest and exact
+expected acknowledgement. Full-scale database fixtures and live slow-link
+acceptance remain Tower and cross-component validation responsibilities.
+
+Bounded handover and chunk negotiation preserve the additive access contract above.
+Membership denial marks access lost without discarding canonical rows, cursor or
+device identity; it does not authorize future reads or writes. Assembly commits
+reject an access-loss change during download. Explicit content tombstones still
+delete records, and viewer/backend replacement remains a cache-isolation boundary.

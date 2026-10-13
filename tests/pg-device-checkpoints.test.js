@@ -1,9 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import fixture from './fixtures/flightdeck-record-delta-v1.json';
+import boundedFixture from './fixtures/flightdeck-bounded-snapshot-v1.json';
 import { openWorkspaceDb } from '../src/db.js';
 import { hydrateTowerPgSyncBundle, resolveTowerPgWorkspaceContext, syncTowerPgWorkspace } from '../src/pg-read-hydrator.js';
 import { applyPgRecordChanges, recordDeltaCursorKey } from '../src/pg-record-delta.js';
-import { discoverRecordProtocol, syncDeviceRecords, withDeviceCacheLock, deviceCheckpointScope, DEVICE_CACHE_OWNER_KEY } from '../src/pg-device-checkpoints.js';
+import { discoverRecordProtocol, discoverRecordCapabilities, syncDeviceRecords, withDeviceCacheLock, deviceCheckpointScope, DEVICE_CACHE_OWNER_KEY } from '../src/pg-device-checkpoints.js';
 const workspaceId = fixture.one_message_delta.changes[0].workspace_id;
 const store = { workspaceDbKey: 'device-test', backendUrl: 'http://localhost:3100', session: { npub: 'viewer' }, currentWorkspace: { workspaceId, workspaceOwnerNpub: 'owner', pgBackendMode: true } };
 let db, context, key;
@@ -60,7 +61,152 @@ function harness(remote = server()) {
 }
 const state = async () => (await db.sync_state.get(key))?.value;
 
+async function largeHarness({ actorLabel = false } = {}) {
+  const h = harness(), read = h.ports.readPage, client = h.ports.client;
+  const change = { ...fixture.one_message_delta.changes[0], row: { ...fixture.one_message_delta.changes[0].row,
+    body: actorLabel ? 'small record' : '🙂é'.repeat(210000) } };
+  const actors = actorLabel ? [{ actor_id: change.row.created_by_actor_id, npub: 'viewer', kind: 'human', display_name: 'x'.repeat(1100000) }] : [];
+  const bytes = new TextEncoder().encode(JSON.stringify({ change, actors }));
+  const sha256 = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)), b => b.toString(16).padStart(2, '0')).join('');
+  const manifest = { manifest_id: crypto.randomUUID(), family: change.family, id: change.id, version: change.version,
+    sha256, total_bytes: bytes.length, chunk_bytes: 262144, chunk_count: Math.ceil(bytes.length / 262144) };
+  const manifestPages = new Set();
+  h.ports.readPage = async (...args) => {
+    expect(args[1].largeRecords).toBe('chunked_v1');
+    const page = await read(...args);
+    if (page.mode === 'snapshot') manifestPages.add(page.next_cursor);
+    return { ...page, changes: [], actors: [], large_records: page.mode === 'snapshot' ? [manifest] : [],
+      handover: { target_position: '2', through_position: page.has_more ? '1' : '2', complete: !page.has_more,
+        authority_epoch: 'epoch', access_revision: '1' } };
+  };
+  h.ports.readChunk = vi.fn(async (_, clientId, cursor, manifestId, index) => {
+    expect(manifestPages.has(cursor)).toBe(true); expect(manifestId).toBe(manifest.manifest_id);
+    expect(clientId).toBe((await state()).device.clientId);
+    return bytes.slice(index * 262144, (index + 1) * 262144);
+  });
+  h.ports.client = async (...args) => {
+    if (args[2].operation === 'ack' && manifestPages.has(args[2].cursor)) {
+      expect(args[2].largeRecordReceipts).toEqual([{ manifest_id: manifest.manifest_id, sha256 }]);
+      expect((await db.chat_messages.get(change.id)).body).toBe(change.row.body);
+      if (actorLabel) expect((await db.pg_actors.get(actors[0].actor_id)).display_name).toBe(actors[0].display_name);
+    }
+    return client(...args);
+  };
+  return { ...h, manifest, bytes, change, options: { extension: 'bounded_snapshot_v1', largeRecords: 'chunked_v1' } };
+}
+
+it.each([false, true])('verifies bounded byte chunks and commits the row/sidecars before receipt ack (large actor=%s)', async actorLabel => {
+  const h = await largeHarness({ actorLabel }); await h.run(h.options);
+  expect(h.ports.readChunk).toHaveBeenCalledTimes(h.manifest.chunk_count);
+  expect((await state()).converged).toBe(true); expect((await state()).device.pendingAck).toBeNull();
+  expect(await db.sync_state.get('record-large-assembly')).toBeUndefined();
+  expect(await db.sync_state.where('key').startsWith('record-large-assembly:chunk:').count()).toBe(0);
+});
+
+it('counts a manifest once in the wire budget even when decoded actors accompany 199 access entries', async () => {
+  const h = await largeHarness({ actorLabel: true }), read = h.ports.readPage;
+  h.ports.readPage = async (...args) => {
+    const page = await read(...args);
+    return { ...page, access_revision: '1', retention_policy: 'retain_downloaded',
+      access_changes: page.large_records.length ? Array.from({ length: 199 }, (_, i) => ({
+        family: 'message', resource_type: 'channel', resource_id: `channel-${i}`, status: 'granted',
+      })) : [] };
+  };
+  await h.run(h.options); expect((await state()).converged).toBe(true);
+});
+
+it.each(['interrupt', 'digest', 'quota', 'generation', 'access loss', 'expiry', 'cache loss', 'reordered'])('leaves the durable cursor unadvanced after large assembly %s and discards chunks', async scenario => {
+  const h = await largeHarness(), read = h.ports.readChunk, materialize = h.ports.materialize;
+  if (scenario === 'quota') h.manifest.total_bytes = 64 * 1024 * 1024 + 1;
+  if (scenario === 'quota') h.manifest.chunk_count = Math.ceil(h.manifest.total_bytes / 262144);
+  h.ports.readChunk = async (...args) => {
+    if (scenario === 'interrupt' && args[4] === 1) throw new Error('interrupted chunk');
+    const bytes = await read(...args);
+    if (scenario === 'digest' && args[4] === 0) bytes[bytes.length - 1] ^= 1;
+    if (scenario === 'generation' && args[4] === 0) {
+      const prior = await state(); await db.sync_state.put({ key, value: { ...prior, localGeneration: prior.localGeneration + 1 } });
+    }
+    if (scenario === 'access loss' && args[4] === 0) {
+      const prior = await state(); await db.sync_state.put({ key, value: { ...prior, accessLost: true } });
+    }
+    return bytes;
+  };
+  if (['expiry', 'cache loss', 'reordered'].includes(scenario)) h.ports.materialize = async bundle => {
+    if (bundle.large_record_action?.type === 'finish') {
+      if (scenario === 'expiry') {
+        const row = await db.sync_state.get('record-large-assembly'); await db.sync_state.put({ ...row, value: { ...row.value, expiresAt: 0 } });
+      }
+      if (scenario === 'cache loss') await db.sync_state.delete('record-large-assembly:chunk:1');
+    }
+    if (scenario === 'reordered' && bundle.large_record_action?.type === 'chunk') return materialize({ ...bundle,
+      large_record_action: { ...bundle.large_record_action, index: 1 } });
+    return materialize(bundle);
+  };
+  await expect(h.run(h.options)).rejects.toThrow();
+  expect(await db.pg_record_rows.count()).toBe(0); expect((await state()).cursor).toMatch(/^initial:/);
+  expect((await state()).device.pendingAck).toBeNull();
+  expect(h.remote.client.mock.calls.some(c => c[2].operation === 'ack')).toBe(false);
+  expect(await db.sync_state.where('key').startsWith('record-large-assembly').count()).toBe(0);
+  if (scenario === 'interrupt') { h.ports.readChunk = read; await h.run(h.options); expect((await state()).converged).toBe(true); }
+});
+
+it('verifies large records in native HTTP contexts without SubtleCrypto', async () => {
+  const h = await largeHarness(), original = globalThis.crypto;
+  vi.stubGlobal('crypto', { getRandomValues: original.getRandomValues.bind(original) });
+  try { await h.run(h.options); expect((await state()).converged).toBe(true); }
+  finally { vi.stubGlobal('crypto', original); }
+});
+
+it('retries lost large-record acknowledgement with the durable exact receipts', async () => {
+  const h = await largeHarness(), client = h.ports.client; let lost = true;
+  h.ports.client = async (...args) => {
+    const result = await client(...args);
+    if (args[2].largeRecordReceipts && lost) { lost = false; throw new Error('lost large ack'); }
+    return result;
+  };
+  await expect(h.run(h.options)).rejects.toThrow('lost large ack');
+  const committed = await state(); expect(committed.device.pendingAck.largeRecordReceipts).toBeTruthy();
+  await h.run(h.options);
+  expect(h.ports.readChunk).toHaveBeenCalledTimes(h.manifest.chunk_count);
+  expect(h.remote.client.mock.calls.filter(c => c[2].largeRecordReceipts)).toHaveLength(2);
+  expect((await state()).device.pendingAck).toBeNull();
+});
+
+it.each(['commit', 'revocation', 'source', 'conflict'])('preserves downloads and never skips a large record during %s recovery', async scenario => {
+  const h = await largeHarness(), read = h.ports.readChunk, materialize = h.ports.materialize, client = h.ports.client;
+  await db.chat_messages.put({ record_id: 'retained', body: 'download', sync_status: 'synced', pg_backend: true });
+  let fail = true;
+  h.ports.readChunk = async (...args) => {
+    if (fail && args[4] === 1 && ['revocation', 'source'].includes(scenario)) {
+      fail = false; throw failure(scenario === 'revocation' ? 'record_access_required' : 'large_record_changed', scenario === 'revocation' ? 403 : 409);
+    }
+    return read(...args);
+  };
+  h.ports.materialize = async bundle => materialize(scenario === 'commit' && bundle.large_record_action?.type === 'finish'
+    ? { ...bundle, local_apply_options: { ...bundle.local_apply_options, beforeCommit: () => { throw new Error('large local commit failed'); } } } : bundle);
+  h.ports.client = async (...args) => {
+    if (scenario === 'conflict' && fail && args[2].largeRecordReceipts) { fail = false; throw failure('checkpoint_conflict'); }
+    return client(...args);
+  };
+  if (['commit', 'revocation'].includes(scenario)) {
+    await expect(h.run(h.options)).rejects.toThrow();
+    expect(h.remote.client.mock.calls.some(c => c[2].operation === 'ack')).toBe(false);
+    expect((await state()).device.pendingAck).toBeNull();
+  } else {
+    await h.run(h.options); expect((await state()).converged).toBe(true);
+    expect(h.remote.client.mock.calls.filter(c => c[2].operation === 'register')).toHaveLength(2);
+  }
+  expect((await db.chat_messages.get('retained')).body).toBe('download');
+  expect(await db.sync_state.where('key').startsWith('record-large-assembly').count()).toBe(0);
+});
+
 describe('capability negotiation', () => {
+  it('negotiates only the advertised finite-boundary extension, independently of chunk support', async () => {
+    const ctx = { ...context, sessionNpub: crypto.randomUUID() };
+    expect(await discoverRecordCapabilities(ctx, async () => ({ record_sync: {
+      device_checkpoints: true, protocol_versions: [1, 2], extensions: ['bounded_snapshot_v1', 'chunked_v1'],
+    } }))).toEqual({ protocolVersion: 2, extension: 'bounded_snapshot_v1', largeRecords: 'chunked_v1' });
+  });
   it.each([undefined, { protocol_versions: [1], device_checkpoints: false }, { protocol_versions: [1, 2], device_checkpoints: true }])('discovers %j once', async record_sync => {
     const ctx = { ...context, sessionNpub: crypto.randomUUID() }, read = vi.fn(async () => ({ record_sync }));
     const expected = record_sync?.device_checkpoints ? 2 : 1;
@@ -73,6 +219,88 @@ describe('capability negotiation', () => {
     const denied = vi.fn(async () => { throw failure('auth', 401); }); const ctx2 = { ...context, sessionNpub: crypto.randomUUID() };
     await expect(discoverRecordProtocol(ctx2, denied)).rejects.toThrow('auth'); await expect(discoverRecordProtocol(ctx2, denied)).rejects.toThrow('auth'); expect(denied).toHaveBeenCalledTimes(2);
   });
+});
+
+it('commits a finite handover certificate and repeats negotiation on every dependent page', async () => {
+  const h = harness(), read = h.ports.readPage;
+  h.ports.readPage = async (...args) => {
+    expect(args[1].extension).toBe('bounded_snapshot_v1');
+    const page = await read(...args);
+    return { ...page, handover: page.has_more ? boundedFixture.pending : boundedFixture.complete };
+  };
+  await h.run({ extension: 'bounded_snapshot_v1' });
+  expect((await state()).handover).toEqual(boundedFixture.complete);
+  expect((await state()).converged).toBe(true);
+  expect((await state()).device.pendingAck).toBeNull();
+});
+
+it('persists negotiated intent before downloading and refuses downgrade across restart and reset', async () => {
+  const h = harness();
+  h.remote.page.mockRejectedValueOnce(new Error('interrupted before first page'));
+  await expect(h.run({ extension: boundedFixture.extension })).rejects.toThrow('interrupted');
+  const committed = await state();
+  expect(committed.device.extension).toBe(boundedFixture.extension);
+  await expect(h.run()).rejects.toThrow('extension is unavailable');
+  expect(h.remote.page).toHaveBeenCalledTimes(1);
+  await h.ports.materialize({ protocol_version: 2, reset_authority: true, local_apply_options: {
+    preserveViews: true, retainDownloads: true, deviceScope: committed.device.scope,
+    expectedCursor: committed.cursor, expectedGeneration: committed.localGeneration,
+  } });
+  expect((await state()).device.extension).toBe(boundedFixture.extension);
+  await expect(h.run()).rejects.toThrow('extension is unavailable');
+});
+
+it('traverses empty pages and grant catchup, repairing a concurrent delete without stale resurrection', async () => {
+  const h = harness(), read = h.ports.readPage; let index = 0;
+  h.ports.readPage = async (...args) => {
+    const page = await read(...args); index++;
+    return { ...page, changes: index === 1 ? [] : index === 2 ? fixture.one_message_delta.changes
+      : [...fixture.explicit_delete.changes, ...fixture.one_message_delta.changes],
+      has_more: index < 3, access_revision: '3', retention_policy: 'retain_downloaded',
+      access_changes: index === 2 ? [{ family: 'message', resource_type: 'channel',
+        resource_id: fixture.one_message_delta.changes[0].row.channel_id, status: 'granted' }] : [],
+      handover: index < 3 ? boundedFixture.pending : boundedFixture.complete };
+  };
+  const progress = vi.fn();
+  await h.run({ extension: boundedFixture.extension, onProgress: progress });
+  expect(h.remote.page).toHaveBeenCalledTimes(3);
+  expect(progress.mock.calls.filter(([event]) => event.stage === 'complete')).toHaveLength(1);
+  const change = fixture.explicit_delete.changes[0];
+  expect((await db.pg_record_rows.get(`${change.family}:${change.id}`)).operation).toBe('delete');
+  expect(await db.chat_messages.get(change.id)).toBeUndefined();
+  expect((await state()).handover).toEqual(boundedFixture.complete);
+  expect(h.remote.client.mock.calls.filter(c => c[2].operation === 'ack')).toHaveLength(3);
+});
+
+it('accepts an authority-gain repair target only with a newer access revision', async () => {
+  const h = harness(), read = h.ports.readPage;
+  h.ports.readPage = async (...args) => {
+    const page = await read(...args);
+    return { ...page, handover: { target_position: page.has_more ? '10' : '11',
+      through_position: page.has_more ? '9' : '11', complete: !page.has_more,
+      authority_epoch: 'epoch', access_revision: page.has_more ? '1' : '2' } };
+  };
+  await h.run({ extension: boundedFixture.extension });
+  expect((await state()).handover.target_position).toBe('11');
+  expect((await state()).converged).toBe(true);
+});
+
+it.each(['missing', 'premature', 'epoch', 'target', 'manifest', 'entries'])('fails closed on invalid negotiated %s without ack or fallback', async scenario => {
+  const h = harness(), read = h.ports.readPage;
+  h.ports.readPage = async (...args) => {
+    const page = await read(...args);
+    const handover = { target_position: '10', through_position: page.has_more ? '9' : '10',
+      complete: !page.has_more, authority_epoch: 'epoch', access_revision: '1' };
+    if (scenario === 'missing') return page;
+    if (scenario === 'premature') handover.complete = true;
+    if (scenario === 'epoch') handover.authority_epoch = 'other';
+    if (scenario === 'target' && !page.has_more) handover.target_position = '11';
+    return { ...page, handover, ...(scenario === 'manifest' ? { large_records: [{ manifest_id: 'unsupported' }] } : {}),
+      ...(scenario === 'entries' ? { access_changes: Array.from({ length: 200 }, () => ({})) } : {}) };
+  };
+  await expect(h.run({ extension: 'bounded_snapshot_v1' })).rejects.toThrow();
+  expect(h.remote.client.mock.calls.filter(c => c[2].operation === 'ack')).toHaveLength(scenario === 'target' ? 1 : 0);
+  expect((await state()).converged).not.toBe(true);
 });
 
 it('adopts a populated v1 cache through a new snapshot, preserving pending writes and handover', async () => {
@@ -138,9 +366,50 @@ it.each(['reset_required', 'history_pruned', 'client_expired', 'client_not_regis
 
 it('retains revoked downloads and keeps pending commands for recovery', async () => {
   const h = harness(); await h.run(); await db.pending_writes.add({ record_id: 'pending' });
+  await db.chat_messages.put({ record_id: 'pending', body: 'draft', sync_status: 'pending' });
+  const downloads = await db.chat_messages.toArray();
+  const old = await state();
   h.remote.page.mockRejectedValueOnce(failure('workspace_membership_required', 403));
   await expect(h.run()).rejects.toThrow('workspace_membership_required');
   expect(await db.pg_record_rows.count()).toBe(17); expect(await db.chat_messages.count()).toBeGreaterThan(0); expect(await db.pending_writes.count()).toBe(1); expect((await state()).accessLost).toBe(true);
+  expect(await db.chat_messages.toArray()).toEqual(downloads);
+  expect((await state()).cursor).toBe(old.cursor);
+  expect((await state()).device.clientId).toBe(old.device.clientId);
+  // Repeated denial preserves cache identity and canonical downloads, but marks
+  // future network authority lost. A new authorised page clears that status.
+  h.remote.page.mockRejectedValueOnce(failure('record_access_required', 403));
+  await expect(h.run()).rejects.toThrow('record_access_required');
+  expect(await db.pg_record_rows.count()).toBe(17);
+  expect((await state()).device.clientId).toBe(old.device.clientId);
+  await h.run();
+  expect((await state()).accessLost).toBe(false);
+  expect(await db.pg_record_rows.count()).toBe(17);
+  expect(await db.pending_writes.count()).toBe(1);
+});
+
+it.each(['actors', 'access'])('rejects byte overflow from %s sidecars before any local commit or ack', async sidecar => {
+  const h = harness(), read = h.ports.readPage;
+  h.ports.readPage = async (...args) => {
+    const page = await read(...args);
+    return sidecar === 'actors'
+      ? { ...page, actors: [{ actor_id: 'huge', npub: 'viewer', kind: 'human', display_name: 'x'.repeat(1048576) }] }
+      : { ...page, access: { details: 'x'.repeat(1048576) } };
+  };
+  await expect(h.run()).rejects.toThrow('byte bound');
+  expect(await db.pg_record_rows.count()).toBe(0);
+  expect((await state()).device.pendingAck).toBeNull();
+  expect(h.remote.client.mock.calls.some(c => c[2].operation === 'ack')).toBe(false);
+});
+
+it.each(['record_too_large', 'body interrupted'])('keeps durable progress and reports %s without fallback or completion', async code => {
+  const h = harness(); await h.run(); const committed = await state();
+  const progress = vi.fn();
+  h.remote.page.mockRejectedValueOnce(code === 'record_too_large' ? failure(code, 413) : new Error(code));
+  await expect(h.run({ onProgress: progress })).rejects.toThrow(code);
+  expect(await state()).toEqual(committed);
+  expect(progress.mock.calls.some(([event]) => event.stage === 'complete')).toBe(false);
+  expect(h.remote.client.mock.calls.filter(c => c[2].operation === 'register')).toHaveLength(1);
+  await h.run(); expect(h.remote.page.mock.calls.at(-1)[1].cursor).toBe(committed.cursor);
 });
 
 it('does not downgrade or endlessly register on capacity and authentication errors', async () => {
