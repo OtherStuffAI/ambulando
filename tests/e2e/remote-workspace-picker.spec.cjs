@@ -47,3 +47,51 @@ test('PG picker shows and selects every workspace under the same owner', async (
   await expect(page.locator('.connect-workspace-diagnostics')).toContainText('4 returned');
   await expect(page.locator('.connect-workspace-diagnostics')).toContainText('fetched 4; mapped 4; visible rows 4');
 });
+
+test('empty PG discovery guides an existing member back to the invited identity', async ({ page }) => {
+  await page.setViewportSize({ width: 1024, height: 768 });
+  await page.route('**/*', (route) => {
+    const { hostname } = new URL(route.request().url());
+    return ['127.0.0.1', 'localhost'].includes(hostname) ? route.continue() : route.abort();
+  });
+  await page.goto('/');
+  await page.waitForFunction(() => Boolean(window.Alpine?.store?.('chat')));
+  const npub = 'npub1' + 'q'.repeat(58);
+  await page.evaluate((npub) => {
+    const store = window.Alpine.store('chat');
+    store.session = { npub };
+    store.connectStep = 2;
+    store.connectPgOnboardingStep = 2;
+    store.showConnectModal = true;
+    store.connectWorkspacesBusy = false;
+    store.connectWorkspacesError = null;
+    store.connectWorkspaces = [];
+  }, npub);
+
+  const identity = page.getByTestId('connect-pg-session-identity');
+  const empty = page.getByTestId('connect-pg-workspace-empty');
+  await expect(identity).toContainText(npub);
+  await expect(empty).toContainText('No workspaces are available to this signed-in identity');
+  await expect(empty).toContainText('compare the npub above');
+  await expect(empty).toContainText('ask the owner to check your workspace access');
+  await page.setViewportSize({ width: 390, height: 844 });
+  const bounds = await identity.boundingBox();
+  expect(bounds.x).toBeGreaterThanOrEqual(0);
+  expect(bounds.x + bounds.width).toBeLessThanOrEqual(390);
+
+  await page.evaluate(() => { window.Alpine.store('chat').connectWorkspacesBusy = true; });
+  await expect(empty).toBeHidden();
+  await page.evaluate(() => {
+    const store = window.Alpine.store('chat');
+    store.connectWorkspacesBusy = false;
+    store.connectWorkspacesError = 'Request failed';
+  });
+  await expect(empty).toBeHidden();
+  await page.evaluate(() => { window.Alpine.store('chat').connectWorkspacesError = null; });
+  await empty.getByRole('button', { name: 'Sign out to use another identity' }).click();
+  await expect(page.locator('.auth-panel')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Sign Up', exact: true })).toBeVisible();
+  await expect(page.locator('.auth-panel')).toContainText('Sign in with the Nostr identity that was added');
+  expect(await page.evaluate(() => window.Alpine.store('chat').session)).toBeNull();
+  expect(await page.evaluate(() => window.Alpine.store('chat').showConnectModal)).toBe(false);
+});

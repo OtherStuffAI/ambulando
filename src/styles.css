@@ -1630,6 +1630,7 @@ button:disabled {
   color: var(--muted-foreground);
 }
 .connect-workspace-loading, .connect-workspace-empty { text-align:center; color:var(--muted-foreground); padding:1rem 0; }
+.connect-workspace-identity { overflow-wrap:anywhere; }
 .connect-workspace-diagnostics {
   color: var(--muted-foreground);
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;

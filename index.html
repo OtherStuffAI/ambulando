@@ -565,6 +565,7 @@
           :disabled="$store.chat.isLoggingIn"
           @click="$store.chat.login('extension')">Browser Extension</button>
       </div>
+      <p class="auth-description">Already a workspace member? Sign in with the Nostr identity that was added. Sign Up creates an identity on this device when none is saved.</p>
       <p class="auth-extension-hint" x-show="!$store.chat.hasExtensionSigner()">
         Waiting for NIP-07 extension injection. On mobile this can appear a moment after the page loads.
       </p>
@@ -784,7 +785,8 @@
               <section class="connect-onboarding-card">
                 <div x-show="$store.chat.connectPgOnboardingStep === 2">
                   <div class="connect-copy">
-                    <p>Select an existing workspace or create a new one.</p>
+                    <p>Select a workspace you can access with your signed-in Nostr identity, or create a new one.</p>
+                    <p class="connect-workspace-identity" data-testid="connect-pg-session-identity">Signed in as <code x-text="$store.chat.session?.npub || ''"></code></p>
                   </div>
                   <div class="connect-workspace-list" data-testid="connect-pg-workspace-list">
                     <template x-for="ws in $store.chat.connectWorkspaces" :key="ws.workspaceId || ws.workspace_id || ws.identity?.workspace_id || ws.workspace_owner_npub || ws.workspaceOwnerNpub">
@@ -795,12 +797,15 @@
                     </template>
                   </div>
                   <p class="connect-workspace-loading" x-show="$store.chat.connectWorkspacesBusy">Loading workspaces...</p>
-                  <p
+                  <div
                     class="connect-workspace-empty"
+                    data-testid="connect-pg-workspace-empty"
                     x-show="$store.chat.connectWorkspaces.length === 0 && !$store.chat.connectWorkspacesBusy && !$store.chat.connectWorkspacesError"
                   >
-                    No workspaces found on this Tower. Create one below.
-                  </p>
+                    <p>No workspaces are available to this signed-in identity on this Tower.</p>
+                    <p>If you were added to an existing workspace, compare the npub above with the one its owner added. If they differ, sign in with the added identity. If they match, ask the owner to check your workspace access.</p>
+                    <button class="connect-back-link" type="button" @click="$store.chat.showConnectModal = false; $store.chat.logout()">Sign out to use another identity</button>
+                  </div>
                   <p
                     class="connect-workspace-diagnostics"
                     x-show="$store.chat.connectWorkspaceRequestDiagnostics && !$store.chat.connectWorkspacesBusy"
