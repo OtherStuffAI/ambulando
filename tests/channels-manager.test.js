@@ -3190,6 +3190,42 @@ describe('channel grants transient recovery', () => {
     const store = openStore({ refreshGroups: vi.fn().mockRejectedValue(new Error('Directory unavailable')) });
     await store.preparePgChannelAccessPanel();
     expect(getTowerPgChannelGrants).toHaveBeenCalledTimes(1);
-    expect(store.channelGrantsError).toBe('Directory unavailable');
+    expect(store.channelGrantsError).toBeNull();
+    expect(store.channelSettingsError).toBe('Channel access directory: Directory unavailable');
+  });
+});
+
+
+describe('channel grants request context ownership', () => {
+  it.each(['channel', 'workspace'])('starts a replacement %s read while the old request is in flight', async (change) => {
+    const store = createPgGrantStore();
+    let finishOld, finishNew;
+    getTowerPgChannelGrants.mockImplementationOnce(() => new Promise((resolve) => { finishOld = resolve; }))
+      .mockImplementationOnce(() => new Promise((resolve) => { finishNew = resolve; }));
+    const old = store.refreshChannelGrants();
+    if (change === 'channel') store.selectedChannelId = 'channel-2';
+    else store.currentWorkspace = { ...store.currentWorkspace, workspaceId: 'workspace-2' };
+    const replacement = store.refreshChannelGrants();
+    expect(getTowerPgChannelGrants).toHaveBeenCalledTimes(2);
+    finishOld({ grants: [{ principal_id: 'stale' }] });
+    await old;
+    expect(store.channelGrantsLoading).toBe(true);
+    expect(store.channelGrants.some((grant) => grant.principal_id === 'stale')).toBe(false);
+    finishNew({ grants: [{ principal_id: 'current' }] });
+    await replacement;
+    expect(store.channelGrantsLoading).toBe(false);
+    expect(store.channelGrants[0].principal_id).toBe('current');
+  });
+
+  it.each([new TypeError('Invalid request configuration'), new Error('Signing timeout'), new Error('Unknown failure')])('leaves unknown/signing errors for explicit refresh: %s', async (error) => {
+    vi.useFakeTimers();
+    try {
+      const store = createPgGrantStore({ showChannelSettingsModal: true });
+      getTowerPgChannelGrants.mockRejectedValue(error);
+      await store.refreshChannelGrants();
+      await vi.advanceTimersByTimeAsync(120000);
+      expect(getTowerPgChannelGrants).toHaveBeenCalledTimes(1);
+      expect(store.channelGrantsError).toBe(error.message);
+    } finally { vi.useRealTimers(); }
   });
 });

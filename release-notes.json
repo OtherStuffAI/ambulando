@@ -3991,6 +3991,13 @@
       "notes": [
         "Channel access retries temporary connection failures while settings remain open, preserves cached grants and the actual error, and no longer blames every loading failure on signing."
       ]
+    },
+    {
+      "buildNumber": 2405,
+      "label": "Channel access refresh during workspace changes",
+      "notes": [
+        "Refresh the newly selected channel even when an older request is still loading. Keep directory failures separate from loaded grants and leave signing failures for explicit refresh."
+      ]
     }
   ]
 }

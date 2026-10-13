@@ -974,6 +974,7 @@ export function buildChannelAccessGrantPayloads(rows = []) {
 
 // Keep timers outside Alpine's reactive state; one recovery timer per store.
 const channelGrantRecovery = new WeakMap();
+const channelGrantReads = new WeakMap();
 
 function channelGrantReadContext(store) {
   const { workspaceId, baseUrl, appNpub } = resolveTowerPgWorkspaceContext(store);
@@ -983,7 +984,8 @@ function channelGrantReadContext(store) {
 function transientChannelGrantError(error) {
   if (error?.retryable === false) return false;
   if (error?.status != null) return [408, 429, 500, 502, 503, 504].includes(Number(error.status));
-  return error instanceof TypeError || /load failed|failed to fetch|network|connection|timeout/i.test(error?.message || '');
+  if (/sign|auth|bunker|permission/i.test(`${error?.code || ''} ${error?.message || ''}`)) return false;
+  return /load failed|failed to fetch|network|connection|timeout/i.test(error?.message || '');
 }
 
 export const channelsManagerMixin = {
@@ -2112,7 +2114,7 @@ export const channelsManagerMixin = {
     }
     const directoryFailure = results.slice(0, 2).find((result) => result.status === 'rejected');
     if (directoryFailure && !this.channelGrantsError) {
-      this.channelGrantsError = directoryFailure.reason?.message || 'Failed to load channel access directory';
+      this.channelSettingsError = `Channel access directory: ${directoryFailure.reason?.message || 'Failed to load users and groups'}`;
     }
   },
 
@@ -2166,9 +2168,11 @@ export const channelsManagerMixin = {
     if (!isTowerPgBackendMode()) return [];
     const channelId = String(this.selectedChannelId || '').trim();
     if (!channelId) return [];
-    if (this.channelGrantsLoading) return this.getSelectedChannelGrantRows(channelId);
-    if (!recovery) this.cancelChannelGrantRecovery();
     const context = channelGrantReadContext(this);
+    if (channelGrantReads.get(this)?.context === context) return this.getSelectedChannelGrantRows(channelId);
+    if (!recovery) this.cancelChannelGrantRecovery();
+    const request = { context };
+    channelGrantReads.set(this, request);
     this.channelGrantsLoading = true;
     this.channelGrantsError = null;
     try {
@@ -2190,7 +2194,10 @@ export const channelsManagerMixin = {
         ? (this.channelGrants || [])
         : embeddedChannelGrants(this.selectedChannel || {});
     } finally {
-      this.channelGrantsLoading = false;
+      if (channelGrantReads.get(this) === request) {
+        channelGrantReads.delete(this);
+        this.channelGrantsLoading = false;
+      }
     }
   },
 
