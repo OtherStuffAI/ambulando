@@ -76,7 +76,7 @@ Native WKWebView testing rejected an earlier loopback HTTP fetch proposal from
 HTTPS pages; v2 therefore transports bytes through the native message channel.
 
 `detachWorker(worker)` cancels its native requests before worker replacement or
-shutdown, so old streams cannot survive worker recovery. `attachWorker(worker)` transfers `{type:'wingman-tower-transport-port', port}`.
+shutdown, so old streams cannot survive worker recovery. `attachWorker(worker)` transfers `{type:'wingman-fips-transport-port', port}`; the consumer also accepts the previous `wingman-tower-transport-port` message during compatibility.
 The Flight Deck worker sends `request` (`id`, exact `url`, `method`, header pairs,
 `bodyBase64`), then one `pull` per response chunk, or `cancel`. Replies are
 `headers` (`status`, header pairs), `chunk` (`bodyBase64`), `end` or `error`.
@@ -93,6 +93,15 @@ exact mesh endpoint with the existing cursor parameters; only the transport
 worker event/batch/acknowledgement logic. Cursor keys and materialization remain
 bound to the logical Tower/workspace, so switching transports creates no second
 sync owner. HTTPS continues to use browser EventSource.
+
+Native document suspension emits `wingman-fips-transport-revoked` after closing
+its grants, streams and ports. Flight Deck marks the selected FIPS route
+unavailable and invalidates pending pairing. A replacement provider's
+`wingman-fips-transport-ready` event re-pairs the saved exact endpoint, validates
+Tower identity, and attaches the existing sync worker to the new port. Only then
+does the normal foreground hook wake TowerSyncService. Late pairing from a
+revoked document cannot replace the current route. No local data, connection
+preference or workspace cursor is discarded and no public fallback is used.
 
 Connection responses may describe their incoming mesh URL. Only known locator
 fields (`tower_base_url`, service `base_url`, workspace list/descriptor locators)
