@@ -36,6 +36,7 @@ async function installTower(page, state) {
     if (grants && ['POST', 'PUT', 'DELETE'].includes(request.method())) {
       const write = { method: request.method(), channel: grants[1], principal: grants[2] ? `${grants[2]}:${grants[3]}` : null, body: request.postDataJSON() };
       state.writes.push(write);
+      if (state.holdWrites) await state.holdWrites;
       const deny = state.denyChannels.has(grants[1]);
       return deny ? json(DENIED.status, DENIED.body) : json(200, { grant: { ...AGENTS_KEY, ...(write.body || {}) } });
     }
@@ -58,6 +59,9 @@ for (const width of [1280, 390]) {
     await page.goto('/');
     const fixture = buildGroupsAccessFixture();
     await seedGroupsAccess(page, fixture);
+    // Startup errors from unrelated hidden WApp editors are reported separately;
+    // this flow must not add any of its own.
+    errors.length = 0;
     mkdirSync(EVIDENCE_DIR, { recursive: true });
 
     const tabs = page.getByRole('tablist', { name: 'Groups and members' });
@@ -115,6 +119,14 @@ for (const width of [1280, 390]) {
     const groupDialog = page.getByRole('dialog', { name: 'New group' });
     await expect(groupDialog).toBeVisible();
     await expect(groupDialog.getByPlaceholder('e.g. Team, Clients, Reviewers')).toBeFocused();
+    // The close control sits inside the dialog card, not at the page corner.
+    const dialogBox = await groupDialog.boundingBox();
+    const closeBox = await groupDialog.getByRole('button', { name: 'Close new group' }).boundingBox();
+    expect(closeBox.x).toBeGreaterThanOrEqual(dialogBox.x);
+    expect(closeBox.y).toBeGreaterThanOrEqual(dialogBox.y);
+    expect(closeBox.x + closeBox.width).toBeLessThanOrEqual(dialogBox.x + dialogBox.width);
+    expect(closeBox.y + closeBox.height).toBeLessThanOrEqual(dialogBox.y + dialogBox.height);
+    await page.screenshot({ path: `${EVIDENCE_DIR}/after-new-group-dialog-${width}.png` });
     for (let index = 0; index < 8; index += 1) {
       await page.keyboard.press('Tab');
       expect(await groupDialog.evaluate((el) => el.contains(document.activeElement))).toBe(true);
@@ -155,17 +167,62 @@ for (const width of [1280, 390]) {
     await expect(page.getByTestId('access-summary')).toHaveText('Agents will get Contribute access in 5 channels.');
     await page.screenshot({ path: `${EVIDENCE_DIR}/after-access-${width}.png` });
 
+    // A visible command palette still owns Escape: clear the query, then close.
+    await accessTab.focus();
+    await page.keyboard.press('ControlOrMeta+k');
+    const palette = page.locator('[data-command-palette-input]');
+    await expect(palette).toBeVisible();
+    await palette.fill('beacon');
+    await page.keyboard.press('Escape');
+    await expect(palette).toHaveValue('');
+    await expect(palette).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(palette).toBeHidden();
+    await expect(accessTab).toBeFocused();
+    await expect(count).toHaveText('5 of 10 selected');
+
     // Closing while current access is still loading discards that read; reopening reaches ready.
+    // The hidden palette must not swallow the native dialog cancel request.
     const dialog = page.getByTestId('access-preview-dialog');
     let releaseReads;
     state.holdReads = new Promise((resolve) => { releaseReads = resolve; });
-    await review.click();
+    await review.focus();
+    await review.press('Enter');
     await expect(dialog.getByText('Checking current access…')).toBeVisible();
+    await expect(dialog).toHaveAttribute('aria-busy', 'true');
     await expect(dialog.getByRole('button', { name: /Apply to/ })).toBeDisabled();
     await page.keyboard.press('Escape');
     await expect(dialog).toBeHidden();
+    await expect(review).toBeFocused();
     state.holdReads = null;
     releaseReads();
+    // Late reads from the cancelled preview must not reopen it or write anything.
+    await expect.poll(() => state.reads.length).toBe(5);
+    await page.waitForTimeout(250);
+    await expect(dialog).toBeHidden();
+    expect(state.writes).toHaveLength(0);
+    state.reads.length = 0;
+
+    // Close and reopen with reads still pending: the late first read cannot complete the new preview.
+    state.holdReads = new Promise((resolve) => { releaseReads = resolve; });
+    await review.click();
+    await expect(dialog.getByText('Checking current access…')).toBeVisible();
+    await dialog.getByRole('button', { name: 'Cancel' }).click();
+    await expect(dialog).toBeHidden();
+    const staleRelease = releaseReads;
+    state.holdReads = new Promise((resolve) => { releaseReads = resolve; });
+    await review.click();
+    await expect(dialog.getByText('Checking current access…')).toBeVisible();
+    staleRelease();
+    await page.waitForTimeout(250);
+    await expect(dialog.getByText('Checking current access…')).toBeVisible();
+    await expect(dialog.getByRole('button', { name: /Apply to/ })).toBeDisabled();
+    state.holdReads = null;
+    releaseReads();
+    await expect(dialog.getByRole('button', { name: 'Apply to 3 channels' })).toBeEnabled();
+    await page.keyboard.press('Escape');
+    await expect(dialog).toBeHidden();
+    expect(state.writes).toHaveLength(0);
     state.reads.length = 0;
 
     // Preview reads only; it never writes.
@@ -183,17 +240,30 @@ for (const width of [1280, 390]) {
     await page.screenshot({ path: `${EVIDENCE_DIR}/after-preview-${width}.png` });
     await page.keyboard.press('Escape');
     await expect(dialog).toBeHidden();
+    await expect(review).toBeFocused();
     expect(state.writes).toHaveLength(0);
 
-    // Confirmed apply: exact targets and payloads; partial failure is reported per channel.
+    // Confirmed apply: exact targets and payloads; Escape cannot close the dialog mid-write;
+    // partial failure is reported per channel.
     await review.click();
+    let releaseWrites;
+    state.holdWrites = new Promise((resolve) => { releaseWrites = resolve; });
     await dialog.getByRole('button', { name: 'Apply to 3 channels' }).click();
+    await expect(dialog.getByRole('button', { name: 'Applying…' })).toBeDisabled();
+    await expect(dialog.getByRole('button', { name: 'Cancel' })).toBeDisabled();
+    await page.keyboard.press('Escape');
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(150);
+    await expect(dialog).toBeVisible();
+    expect(await dialog.evaluate((el) => el.open && el.matches(':modal'))).toBe(true);
+    state.holdWrites = null;
+    releaseWrites();
     const results = page.getByTestId('access-results');
     await expect(results.getByRole('alert')).toHaveText('1 of 5 channels failed. The others were updated.');
     await expect(results.locator('li.is-failed')).toContainText('You need Manage access on this channel to do that.');
-    expect(state.writes).toEqual([
-      { method: 'POST', channel: 'ch-dialogue', principal: null, body: { principal_type: 'group', principal_id: 'group-agents', access_level: 'contribute' } },
+    expect([...state.writes].sort((a, b) => a.channel.localeCompare(b.channel))).toEqual([
       { method: 'PUT', channel: 'ch-architecture', principal: 'group:group-agents', body: { access_level: 'contribute' } },
+      { method: 'POST', channel: 'ch-dialogue', principal: null, body: { principal_type: 'group', principal_id: 'group-agents', access_level: 'contribute' } },
       { method: 'POST', channel: 'ch-tower', principal: null, body: { principal_type: 'group', principal_id: 'group-agents', access_level: 'contribute' } },
     ]);
     await page.screenshot({ path: `${EVIDENCE_DIR}/after-partial-failure-${width}.png` });

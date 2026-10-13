@@ -3621,6 +3621,14 @@
       "notes": [
         "Negotiate finite record-sync handover and verified bounded chunks for large records when Tower supports them. Retain downloaded records and drafts during same-cache permission and checkpoint repair."
       ]
+    },
+    {
+      "buildNumber": 2348,
+      "label": "Reliable channel access cancellation",
+      "notes": [
+        "Press Escape to cancel the channel access review while current access is still being checked or once it is ready; the command palette only handles Escape while it is open.",
+        "Keep the review open while changes are being applied, and keep the close button inside the New group and Edit group dialogs."
+      ]
     }
   ]
 }

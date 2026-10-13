@@ -15548,6 +15548,7 @@ html.wingman-iphone-webview .chat-channel-tab-scroll * {
 /* ── New group modal ── */
 
 .new-group-modal {
+  position: relative;
   width: min(92vw, 460px);
   padding: 1.25rem;
 }
