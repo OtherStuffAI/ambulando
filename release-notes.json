@@ -3899,6 +3899,26 @@
       "notes": [
         "Installed napplets appear in Toolbox and MyApps without opening the Organisation Data Catalogue first. Workspace changes and access failures clear the installed list; closing a napplet keeps its launcher available."
       ]
+    },
+    {
+      "buildNumber": 2392,
+      "label": "Collapsible channel scopes",
+      "notes": [
+        "Collapse or reopen each scope’s channels with the arrow beside its heading. Your browser remembers each workspace and scope independently, while the selected channel stays open."
+      ]
+    },
+    {
+      "buildNumber": 2393,
+      "label": "Validated sidebar and installed-app checkpoint",
+      "notes": [],
+      "noUserVisibleChanges": true
+    },
+    {
+      "buildNumber": 2394,
+      "label": "Installed app sign-in activation",
+      "notes": [
+        "Installed-app discovery waits for the workspace cache to open during sign-in."
+      ]
     }
   ]
 }

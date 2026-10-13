@@ -58,10 +58,11 @@ export const orgDataMixin = {
     if (!c.sessionNpub || !c.workspaceId || !c.dbKey) return;
     if (runtime?.pending) { if (force) runtime.invalidated = true; return runtime.pending; }
     if (!force && runtime?.authorizedAt && Date.now() - runtime.authorizedAt < 30000) return;
+    let db;
+    try { db = getWorkspaceDb(); } catch { return; } // Activation opens Dexie before discovery can read.
     const service = this.getTowerSyncService();
     if (!service) return;
     if (!runtime) {
-      const db = getWorkspaceDb();
       runtime = { context, db, authorizedAt: 0 };
       INSTALLATIONS.set(this, runtime);
       runtime.subscription = liveQuery(() => db.org_data.get(orgDataInstallationsPartition(c))).subscribe({

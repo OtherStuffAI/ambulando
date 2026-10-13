@@ -1,12 +1,12 @@
 // @vitest-environment jsdom
 import 'fake-indexeddb/auto';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { openWorkspaceDb, getWorkspaceDb } from '../src/db.js';
+import { openWorkspaceDb, getWorkspaceDb, closeWorkspaceDb } from '../src/db.js';
 import { orgDataMixin } from '../src/org-data/manager.js';
 import { orgDataContext, orgDataInstallationsPartition } from '../src/org-data/projection.js';
 let store;
 beforeEach(async () => { await openWorkspaceDb('installs-' + crypto.randomUUID()).open(); });
-afterEach(async () => { store?.disposeOrgDataInstallations(); await getWorkspaceDb().delete(); });
+afterEach(async () => { store?.disposeOrgDataInstallations(); try { await getWorkspaceDb().delete(); } catch { /* unopened activation */ } });
 function setup(load) {
   const s = { session: { npub: 'reader' }, workspaceDbKey: 'db', currentWorkspace: { workspaceId: 'workspace', workspaceOwnerNpub: 'owner', directHttpsUrl: 'http://localhost:3100', appNpub: 'app' }, getTowerSyncService: () => ({ ensureLoaded: load }) };
   Object.defineProperties(s, Object.getOwnPropertyDescriptors(orgDataMixin)); store = s; return s;
@@ -42,4 +42,12 @@ it.each(['workspace', 'signer', 'backend'])('rejects a late %s context result an
   if (kind === 'backend') s.currentWorkspace = { ...s.currentWorkspace, directHttpsUrl: 'http://localhost:3101' };
   finish(); await pending; expect(s.orgDataInstallations).toEqual([]);
   s.disposeOrgDataInstallations(); expect(s.orgDataInstallationContext).toBe('');
+});
+
+it('waits for the workspace database to open during sign-in and then discovers on activation', async () => {
+ const load=vi.fn(async (_family,_key,{requestId})=>persist(s,requestId));const s=setup(load);
+ await getWorkspaceDb().delete();closeWorkspaceDb();
+ await expect(s.loadOrgDataInstallations()).resolves.toBeUndefined();expect(load).not.toHaveBeenCalled();
+ await openWorkspaceDb('activated-'+crypto.randomUUID()).open();
+ await s.loadOrgDataInstallations();expect(s.orgDataInstallations).toHaveLength(1);
 });

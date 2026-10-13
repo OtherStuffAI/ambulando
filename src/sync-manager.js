@@ -3432,6 +3432,7 @@ export const syncManagerMixin = {
     // explicit manual/full reconciliation opens its own progress dialog.
     if (this.session?.npub && this.backendUrl && this.workspaceOwnerNpub) {
       this.getTowerSyncService()?.start({ runSoon: runSoon && !this.syncBackoffMs });
+      void this.loadOrgDataInstallations?.();
     }
   },
 

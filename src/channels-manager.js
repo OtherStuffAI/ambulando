@@ -1031,6 +1031,38 @@ export const channelsManagerMixin = {
     );
   },
 
+  // Device-only disclosure preferences; no Tower mutation or channel navigation.
+  sidebarScopeExpansion: {},
+
+  sidebarScopePreferenceKey(scopeId) {
+    const { workspaceId } = resolveTowerPgWorkspaceContext(this);
+    return workspaceId && scopeId
+      ? `ambulando:scope-channels:${encodeURIComponent(workspaceId)}:${encodeURIComponent(scopeId)}`
+      : '';
+  },
+
+  isSidebarScopeExpanded(scopeId) {
+    const key = this.sidebarScopePreferenceKey(scopeId);
+    if (!key) return true;
+    if (Object.hasOwn(this.sidebarScopeExpansion, key)) return this.sidebarScopeExpansion[key];
+    try {
+      // Only the explicit JSON boolean false collapses; malformed values expand.
+      return localStorage.getItem(key) !== 'false';
+    } catch {
+      return true;
+    }
+  },
+
+  toggleSidebarScope(scopeId) {
+    const key = this.sidebarScopePreferenceKey(scopeId);
+    if (!key) return;
+    const expanded = !this.isSidebarScopeExpanded(scopeId);
+    this.sidebarScopeExpansion = { ...this.sidebarScopeExpansion, [key]: expanded };
+    try { localStorage.setItem(key, JSON.stringify(expanded)); } catch {
+      // Keep the current session usable when browser storage is unavailable.
+    }
+  },
+
   get sidebarScopeChannelGroups() {
     return buildSidebarScopeChannelGroups(this.scopes, this.channels);
   },

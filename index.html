@@ -1320,6 +1320,18 @@
                 <span class="sidebar-scope-heading-row">
                   <button
                     type="button"
+                    class="sidebar-scope-collapse"
+                    :aria-expanded="$store.chat.isSidebarScopeExpanded(group.scope.record_id)"
+                    :aria-controls="'sidebar-scope-channels-' + group.scope.record_id"
+                    :aria-label="($store.chat.isSidebarScopeExpanded(group.scope.record_id) ? 'Collapse ' : 'Expand ') + (group.scope.title || $store.chat.getScopeLabel(group.scope.record_id) || group.scope.record_id) + ' channels'"
+                    @click.stop="$store.chat.toggleSidebarScope(group.scope.record_id)"
+                  >
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <path :d="$store.chat.isSidebarScopeExpanded(group.scope.record_id) ? 'm6 9 6 6 6-6' : 'm9 6 6 6-6 6'"></path>
+                    </svg>
+                  </button>
+                  <button
+                    type="button"
                     class="sidebar-scope-heading-control"
                     :class="{ active: $store.chat.pgContextScopeId === group.scope.record_id && $store.chat.pgContextHomeSelected }"
                     :aria-current="$store.chat.pgContextScopeId === group.scope.record_id && $store.chat.pgContextHomeSelected ? 'page' : null"
@@ -1342,7 +1354,9 @@
                   </button>
                 </span>
               </h2>
-              <div class="sidebar-scope-channel-list">
+              <div class="sidebar-scope-channel-list"
+                :id="'sidebar-scope-channels-' + group.scope.record_id"
+                x-show="$store.chat.isSidebarScopeExpanded(group.scope.record_id)">
                 <template x-for="channel in group.channels" :key="`sidebar-channel-${channel.record_id}`">
                   <div
                     class="sidebar-scope-channel-row"
