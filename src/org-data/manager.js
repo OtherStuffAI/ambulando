@@ -134,7 +134,11 @@ export const orgDataMixin = {
       this.orgDataHostError = state.error || '';
       this.orgDataBundleVisible = state.status === 'ready' && runtime.ready;
       this.orgDataRetainDraft = state.retainDraft === true && runtime.ready;
-      if (state.status === 'error' && !state.retainDraft) this.orgDataInstallations = [];
+      if (state.status === 'error' && !state.retainDraft) {
+        const discovery = INSTALLATIONS.get(this);
+        if (discovery) discovery.authorizedAt = 0;
+        this.orgDataInstallations = []; this.orgDataInstallationContext = '';
+      }
       if (runtime.bundle) state = { ...state, projection: runtime.capabilities.includes('org_data.read') ? state.projection : undefined };
       if (runtime.ready) runtime.frame?.contentWindow?.postMessage({ version: 1, session: runtime.session, type: 'state', ...state }, '*');
     };

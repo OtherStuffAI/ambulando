@@ -37,7 +37,7 @@ async function encode(body, signal) {
 }
 
 export function acceptNativeTowerPort(message) {
-  if (message?.type !== 'wingman-tower-transport-port' || !message.port) return false;
+  if (!['wingman-fips-transport-port', 'wingman-tower-transport-port'].includes(message?.type) || !message.port) return false;
   if (port) {
     for (const request of pending.values()) request.fail(failure('WMapp transport was replaced.'));
     port.close();

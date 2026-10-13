@@ -6,6 +6,7 @@ import { nip19 } from 'nostr-tools';
 const STORAGE_KEY = 'flightdeck:tower-transports:v1';
 let connections = new Map();
 let savedPreferences = new Map();
+let transportGeneration = 0;
 
 function transportError(message) {
   return Object.assign(new Error(message), { code: 'fips_unavailable' });
@@ -91,7 +92,18 @@ export function exportTowerTransports() {
 }
 
 export function importTowerTransports(snapshot = []) {
+  transportGeneration++;
   connections = new Map(snapshot.map(({ logicalTower, ...connection }) => [logicalTower, connection]));
+}
+
+export function suspendTowerTransports() {
+  transportGeneration++;
+  for (const [tower, connection] of connections) {
+    if (connection.mode !== 'fips') continue;
+    connections.set(tower, { mode: 'fips', endpoint: connection.endpoint,
+      serviceNpub: connection.serviceNpub, error: 'FIPS document capability was revoked.' });
+    void Promise.resolve().then(() => connection.handle?.disconnect?.()).catch(() => {});
+  }
 }
 
 export async function connectTowerBridge(logicalTower, endpoint, expectedServiceNpub, {
@@ -127,9 +139,11 @@ export async function connectTowerBridge(logicalTower, endpoint, expectedService
 }
 
 export async function initializeTowerTransports(options = {}) {
+  const generation = ++transportGeneration;
   const db = await preferenceDb();
   await migratePreferences(db, options.storage);
   const rows = await db.tower_transport_preferences.toArray();
+  if (generation !== transportGeneration) return;
   const preferences = Object.fromEntries(rows.map(({ logicalTower, ...preference }) => [logicalTower, preference]));
   savedPreferences = new Map(Object.entries(preferences));
   const windowObject = globalThis.window;
@@ -146,6 +160,7 @@ export async function initializeTowerTransports(options = {}) {
       windowObject.addEventListener('wingman-fips-transport-ready', ready, { once: true });
     });
   }
+  if (generation !== transportGeneration) return;
   connections = new Map();
   await Promise.all(Object.entries(preferences).map(async ([logicalTower, preference]) => {
     if (preference.mode !== 'fips') return;
@@ -153,8 +168,14 @@ export async function initializeTowerTransports(options = {}) {
     // may silently use HTTPS while a saved FIPS preference reconnects.
     connections.set(logicalTower, { mode: 'fips', endpoint: preference.endpoint, serviceNpub: preference.serviceNpub, error: 'FIPS bridge is connecting.' });
     try {
-      connections.set(logicalTower, await connectTowerBridge(logicalTower, preference.endpoint, preference.serviceNpub, options));
+      const connection = await connectTowerBridge(logicalTower, preference.endpoint, preference.serviceNpub, options);
+      if (generation !== transportGeneration) {
+        await connection.handle.disconnect();
+        return;
+      }
+      connections.set(logicalTower, connection);
     } catch (error) {
+      if (generation !== transportGeneration) return;
       connections.set(logicalTower, { mode: 'fips', endpoint: preference.endpoint, serviceNpub: preference.serviceNpub, error: `FIPS unavailable: ${error.message}` });
     }
   }));

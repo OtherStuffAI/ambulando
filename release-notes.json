@@ -3919,6 +3919,21 @@
       "notes": [
         "Installed-app discovery waits for the workspace cache to open during sign-in."
       ]
+    },
+    {
+      "buildNumber": 2395,
+      "label": "Native iPhone connection recovery",
+      "notes": [
+        "Ambulando in the native iPhone app re-pairs selected FIPS services after suspension with fresh permissions, retaining local drafts and the selected connection.",
+        "Background recovery reconnects the existing sync worker through the universal native transport without falling back to public HTTPS."
+      ]
+    },
+    {
+      "buildNumber": 2396,
+      "label": "Installed app authority checks",
+      "notes": [
+        "Denied napplet reads clear installed-app authority immediately, including retained browser cache updates."
+      ]
     }
   ]
 }

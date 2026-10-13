@@ -177,6 +177,37 @@ describe('worker-only sync enforcement', () => {
     }
   });
 
+  it('replaces a revoked provider port on the same worker and republishes selected transport', () => {
+    const originalWindow = globalThis.window;
+    const oldProvider = { version: 2, attachWorker: vi.fn(), detachWorker: vi.fn() };
+    const newProvider = { version: 2, attachWorker: vi.fn(), detachWorker: vi.fn() };
+    const messages = [];
+    const terminate = vi.fn();
+    globalThis.window = { fipsTransport: oldProvider };
+    globalThis.Worker = class {
+      addEventListener() {} removeEventListener() {} terminate = terminate;
+      postMessage(message) { messages.push(message); }
+    };
+    const connection = { logicalTower: 'https://backend.example.com', mode: 'fips', error: 'Pairing denied' };
+    try {
+      client.connectSSE('owner', 'viewer', connection.logicalTower, 'workspace');
+      const worker = oldProvider.attachWorker.mock.calls[0][0];
+      globalThis.window.fipsTransport = newProvider;
+      importTowerTransports([connection]);
+      client.refreshNativeSyncWorkerTransport();
+      expect(oldProvider.detachWorker).toHaveBeenCalledWith(worker);
+      expect(newProvider.attachWorker).toHaveBeenCalledWith(worker);
+      expect(terminate).not.toHaveBeenCalled();
+      expect(messages).toContainEqual({ type: 'sync-worker:tower-transports', towerTransports: [connection] });
+      client.shutdownSyncWorker();
+      expect(newProvider.detachWorker).toHaveBeenCalledWith(worker);
+    } finally {
+      importTowerTransports([]);
+      if (originalWindow === undefined) delete globalThis.window;
+      else globalThis.window = originalWindow;
+    }
+  });
+
   it('sends the selected transport before starting SSE even if optional key export fails', () => {
     const messages = [];
     globalThis.Worker = class {

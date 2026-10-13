@@ -3,10 +3,10 @@ import 'fake-indexeddb/auto';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { openWorkspaceDb, getWorkspaceDb, closeWorkspaceDb } from '../src/db.js';
 import { orgDataMixin } from '../src/org-data/manager.js';
-import { orgDataContext, orgDataInstallationsPartition } from '../src/org-data/projection.js';
+import { orgDataContext, orgDataPartition, orgDataInstallationsPartition } from '../src/org-data/projection.js';
 let store;
 beforeEach(async () => { await openWorkspaceDb('installs-' + crypto.randomUUID()).open(); });
-afterEach(async () => { store?.disposeOrgDataInstallations(); try { await getWorkspaceDb().delete(); } catch { /* unopened activation */ } });
+afterEach(async () => { store?.closeOrgData(true); store?.disposeOrgDataInstallations(); document.body.replaceChildren(); try { await getWorkspaceDb().delete(); } catch { /* unopened activation */ } });
 function setup(load) {
   const s = { session: { npub: 'reader' }, workspaceDbKey: 'db', currentWorkspace: { workspaceId: 'workspace', workspaceOwnerNpub: 'owner', directHttpsUrl: 'http://localhost:3100', appNpub: 'app' }, getTowerSyncService: () => ({ ensureLoaded: load }) };
   Object.defineProperties(s, Object.getOwnPropertyDescriptors(orgDataMixin)); store = s; return s;
@@ -50,4 +50,36 @@ it('waits for the workspace database to open during sign-in and then discovers o
  await expect(s.loadOrgDataInstallations()).resolves.toBeUndefined();expect(load).not.toHaveBeenCalled();
  await openWorkspaceDb('activated-'+crypto.randomUUID()).open();
  await s.loadOrgDataInstallations();expect(s.orgDataInstallations).toHaveLength(1);
+});
+
+function modal() {
+ document.body.innerHTML='<dialog id="org-data-modal"><button data-napplet-close></button><iframe></iframe></dialog>';
+ const dialog=document.querySelector('dialog');dialog.showModal=()=>{dialog.open=true};dialog.close=()=>{dialog.open=false};
+}
+async function snapshot(s,requestId) {
+ const metadata=await getWorkspaceDb().org_data.get(orgDataInstallationsPartition(orgDataContext(s)));
+ await getWorkspaceDb().org_data.put({key:orgDataPartition(orgDataContext(s)),request_id:requestId,types:[],records:{},capabilities:{},identities:{},installations:metadata?.installations||[]});
+}
+it('launch waits for pending discovery and the open modal exclusively owns SSE reauthorization', async () => {
+ modal();let release;const load=vi.fn(async (family,_key,{requestId})=>{
+  if(family==='org-data-installations'){await new Promise(r=>release=r);await persist(s,requestId);}
+  else await snapshot(s,requestId);
+ });const s=setup(load);const discovery=s.loadOrgDataInstallations();
+ await vi.waitFor(()=>expect(release).toBeTypeOf('function'));const launch=s.openOrgData();
+ expect(load).toHaveBeenCalledTimes(1);release();await discovery;await launch;
+ await vi.waitFor(()=>expect(s.orgDataHostStatus).toBe('ready'));
+ await s.loadOrgDataInstallations({force:true});expect(load).toHaveBeenCalledTimes(2);
+ await s.syncOrgData();await vi.waitFor(()=>expect(s.orgDataHostStatus).toBe('ready'));
+ expect(load.mock.calls.map(c=>c[0])).toEqual(['org-data-installations','org-data','org-data']);
+ s.closeOrgData(true);expect(s.orgDataInstallations).toHaveLength(1);
+});
+it('modal read denial revokes discovery authority even if a retained metadata row emits again', async () => {
+ modal();let denied=false;const load=vi.fn(async (family,_key,{requestId})=>{
+  if(denied)throw {status:403};
+  if(family==='org-data-installations')await persist(s,requestId);else await snapshot(s,requestId);
+ });const s=setup(load);await s.loadOrgDataInstallations();await s.openOrgData();
+ await vi.waitFor(()=>expect(s.orgDataHostStatus).toBe('ready'));denied=true;await s.syncOrgData();
+ expect(s.orgDataHostStatus).toBe('error');expect(s.orgDataInstallations).toEqual([]);
+ await persist(s,'retained-cache');await new Promise(r=>setTimeout(r,100));
+ expect(s.orgDataInstallations).toEqual([]);expect(s.orgDataInstallationContext).toBe('');
 });

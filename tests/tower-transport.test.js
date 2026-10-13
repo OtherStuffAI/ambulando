@@ -4,6 +4,7 @@ import {
   connectTowerBridge, exportTowerTransports, getTowerTransport, importTowerTransports,
   initializeTowerTransports, normalizeFipsEndpoint, resolveTowerSigningUrl,
   saveTowerTransportPreference, towerFetch,
+  suspendTowerTransports,
 } from '../src/tower-transport.js';
 import { getSharedDb } from '../src/db.js';
 import { NativeTowerEventSource } from '../src/tower-event-source.js';
@@ -36,6 +37,28 @@ beforeEach(async () => {
 afterEach(() => { importTowerTransports([]); vi.unstubAllGlobals(); });
 
 describe('paired Tower transport', () => {
+  it('rejects late pairing across suspension and retains the FIPS selection without public fallback', async () => {
+    const native = bridge();
+    let resolveHealth;
+    native.fetch.mockImplementationOnce(() => new Promise(resolve => { resolveHealth = resolve; }));
+    await saveTowerTransportPreference(logicalTower, connection);
+    const initializing = initializeTowerTransports({ transport: native });
+    await vi.waitFor(() => expect(resolveHealth).toBeTypeOf('function'));
+    suspendTowerTransports();
+    const publicFetch = vi.fn();
+    vi.stubGlobal('fetch', publicFetch);
+    resolveHealth(Response.json({ service_npub: serviceNpub }));
+    await initializing;
+    expect(native.disconnect).toHaveBeenCalledTimes(1);
+    expect(getTowerTransport(logicalTower)).toMatchObject({ mode: 'fips', error: expect.any(String) });
+    await expect(towerFetch(`${logicalTower}/api/read`)).rejects.toThrow('revoked');
+    expect(publicFetch).not.toHaveBeenCalled();
+    const fresh = bridge();
+    await initializeTowerTransports({ transport: fresh });
+    expect(getTowerTransport(logicalTower).handle).toBeTruthy();
+    expect(fresh.connect).toHaveBeenCalledTimes(1);
+  });
+
   it('accepts exact mesh origins and rejects public targets, userinfo, query/path and invalid npubs', () => {
     expect(normalizeFipsEndpoint(`${endpoint}/`)).toBe(endpoint);
     for (const bad of [logicalTower, 'http://npub1bad.fips:41080', `${endpoint}/api`, `${endpoint}?target=x`, endpoint.replace('http://', 'http://user@'), endpoint.replace('http:', 'https:')]) {
