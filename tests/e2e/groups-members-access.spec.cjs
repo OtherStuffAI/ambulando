@@ -39,10 +39,15 @@ async function installTower(page, state) {
       const deny = state.denyChannels.has(grants[1]);
       return deny ? json(DENIED.status, DENIED.body) : json(200, { grant: { ...AGENTS_KEY, ...(write.body || {}) } });
     }
+    if (members && request.method() === 'GET' && state.memberRecords) {
+      return json(200, { members: state.memberRecords });
+    }
     if (members && request.method() === 'POST') {
       state.memberWrites.push(request.postDataJSON());
       if (state.denyMembers) return json(DENIED.status, { code: 'permission_denied', required_permission: 'workspace.members.manage' });
-      return json(200, { member: { actor: { actor_id: 'actor-new', npub: request.postDataJSON().member_npub } } });
+      const member = { actor: { actor_id: 'actor-new', npub: request.postDataJSON().member_npub, kind: 'human', display_name: 'New Member' }, membership: { role: 'member' } };
+      if (state.memberRecords) state.memberRecords.push(member);
+      return json(200, { member });
     }
     return serveBuiltFlightDeck(route);
   });
@@ -227,3 +232,46 @@ for (const width of [1280, 390]) {
     expect(errors).toEqual([]);
   });
 }
+
+
+test('saved member reaches channel and scope pickers while onboarding is stalled', async ({ page }) => {
+  const fixture = buildGroupsAccessFixture();
+  const state = { reads: [], writes: [], memberWrites: [], blocked: [], denyChannels: new Set(), denyMembers: false,
+    memberRecords: fixture.people.map(person => ({ actor: { ...person, display_name: person.name, kind: person.kind || 'human' }, membership: { role: person.role } })),
+  };
+  await installTower(page, state);
+  await page.goto('/');
+  await page.waitForFunction(() => Boolean(window.Alpine?.store('chat')) && window.Alpine.store('chat').routeSyncPaused === false);
+  await page.evaluate(() => { window.memberRefresh = window.Alpine.store('chat').refreshTowerPgWorkspaceMembers; });
+  await seedGroupsAccess(page, fixture);
+  await page.evaluate(() => {
+    const s = window.Alpine.store('chat');
+    // Use the real canonical roster read and Dexie writer. The isolated fixture
+    // disables workspace subscriptions, so project its returned rows explicitly.
+    s.refreshTowerPgWorkspaceMembers = async options => {
+      const members = await window.memberRefresh.call(s, options);
+      s.pgWorkspaceMembers = members;
+      return members;
+    };
+    s.publishPgOnboardingAnnouncementForGrant = () => new Promise(() => {});
+  });
+  await page.getByRole('button', { name: 'Add member', exact: true }).click();
+  const newcomer = nip19.npubEncode(getPublicKey(generateSecretKey()));
+  await page.getByLabel('Add a member by npub').fill(newcomer);
+  await page.getByRole('button', { name: 'Add member', exact: true }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Member added.' })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => {
+    const s = window.Alpine.store('chat');
+    return {
+      pending: s.groupEditPending,
+      channel: s.pgChannelGrantActorOptions.some(p => p.actorId === 'actor-new'),
+      scope: s.scopeWizardAccessPrincipalOptions.some(p => p.id === 'actor-new'),
+      scopeAccess: s.scopeAccessCandidates.some(p => p.id === 'actor-new'),
+    };
+  })).toEqual({ pending: false, channel: true, scope: true, scopeAccess: true });
+  expect(state.memberWrites).toHaveLength(1);
+  await page.getByLabel('Add a member by npub').fill(newcomer);
+  await page.getByRole('button', { name: 'Add member', exact: true }).click();
+  await expect(page.getByRole('alert').filter({ hasText: 'already a member' })).toBeVisible();
+  expect(state.memberWrites).toHaveLength(1);
+});

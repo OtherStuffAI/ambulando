@@ -4207,7 +4207,7 @@ export const channelsManagerMixin = {
   },
 
   async addPgWorkspaceMember() {
-    if (!isTowerPgBackendMode()) return;
+    if (!isTowerPgBackendMode() || this.groupEditPending) return;
     this.pgWorkspaceMemberAddNotice = '';
     if (!this.canAdminWorkspace) {
       this.pgWorkspaceMemberAddError = 'Only workspace admins can add members.';
@@ -4227,24 +4227,38 @@ export const channelsManagerMixin = {
     try {
       const { workspaceId, baseUrl, appNpub } = resolveTowerPgWorkspaceContext(this);
       if (!workspaceId || !baseUrl) throw new Error('Flight Deck PG workspace is not connected');
+      const workspace = this.currentWorkspace;
       await createTowerPgWorkspaceMember(this, workspaceId, {
         member_npub: memberNpub,
         role: 'member',
         kind: 'human',
       }, { baseUrl, appNpub });
-      if (typeof this.publishPgOnboardingAnnouncementForGrant === 'function') {
-        await this.publishPgOnboardingAnnouncementForGrant({
-          recipientNpub: memberNpub,
-          grantId: `${workspaceId}:workspace:${memberNpub}`,
-          reason: 'added_to_workspace_or_group',
-        });
-      }
       this.pgWorkspaceMemberNpub = '';
       this.pgWorkspaceMemberAddNotice = 'Member added. Give them access with a group or channel access.';
       this.scheduleGroupsRefresh({ force: true, minIntervalMs: 0 }, 'PG group write');
       Promise.resolve()
         .then(() => this.refreshTowerPgWorkspaceMembers?.({ force: true, limit: 200 }))
-        .catch(() => {});
+        .catch((error) => {
+          flightDeckLog('warn', 'groups', 'Member saved but workspace member refresh failed', {
+            error: error?.message || String(error),
+          });
+        });
+      // Membership is already saved. Discovery publication must not hold the
+      // access editor or defer the canonical roster refresh while a signer waits.
+      if (typeof this.publishPgOnboardingAnnouncementForGrant === 'function') {
+        Promise.resolve()
+          .then(() => this.publishPgOnboardingAnnouncementForGrant({
+            recipientNpub: memberNpub,
+            workspace,
+            grantId: `${workspaceId}:workspace:${memberNpub}`,
+            reason: 'added_to_workspace_or_group',
+          }))
+          .catch((error) => {
+            flightDeckLog('warn', 'groups', 'Member saved but onboarding announcement failed', {
+              error: error?.message || String(error),
+            });
+          });
+      }
     } catch (error) {
       this.pgWorkspaceMemberAddError = error?.code === 'permission_denied'
         ? describePgPermissionDenied(error, 'add workspace members')

@@ -1382,6 +1382,23 @@ describe('Tower PG API helpers', () => {
     expect(createNip98AuthHeader).not.toHaveBeenCalled();
   });
 
+  it('bounds member signer preparation and never sends a late membership mutation', async () => {
+    vi.useFakeTimers();
+    const { createNip98AuthHeader } = await import('../src/auth/nostr.js');
+    const api = await import('../src/api.js');
+    let completeAuth;
+    createNip98AuthHeader.mockImplementationOnce(() => new Promise(resolve => { completeAuth = resolve; }));
+    const adding = api.createTowerPgWorkspaceMember('workspace-1', { member_npub: 'npub1new', role: 'member' }, { baseUrl: 'https://tower.example' });
+    const rejected = expect(adding).rejects.toMatchObject({ code: 'auth_timeout' });
+    await vi.advanceTimersByTimeAsync(45_000);
+    await rejected;
+    completeAuth('late-auth');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+    await api.createTowerPgWorkspaceMember('workspace-1', { member_npub: 'npub1new', role: 'member' }, { baseUrl: 'https://tower.example' });
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+  });
+
   it('keeps workspace-key auth bounded and does not fetch when signing does not settle', async () => {
     vi.useFakeTimers();
     const { createNip98AuthHeaderForSecret } = await import('../src/auth/nostr.js');

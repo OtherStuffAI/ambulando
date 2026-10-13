@@ -2635,11 +2635,51 @@ describe('channels-manager pure utilities', () => {
       });
       expect(publishPgOnboardingAnnouncementForGrant).toHaveBeenCalledWith({
         recipientNpub,
+        workspace: store.currentWorkspace,
         grantId: `workspace-1:workspace:${recipientNpub}`,
         reason: 'added_to_workspace_or_group',
       });
       expect(store.pgWorkspaceMemberNpub).toBe('');
       expect(store.refreshGroups).toHaveBeenCalledWith({ force: true, minIntervalMs: 0 });
+    });
+
+    it('unblocks saved membership and roster refresh while onboarding never resolves', async () => {
+      const recipientNpub = `npub1${'q'.repeat(58)}`;
+      const refresh = vi.fn().mockResolvedValue([]);
+      const store = createPgGrantStore({
+        canAdminWorkspace: true, pgWorkspaceMemberNpub: recipientNpub,
+        refreshTowerPgWorkspaceMembers: refresh,
+        publishPgOnboardingAnnouncementForGrant: vi.fn(() => new Promise(() => {})),
+      });
+      await store.addPgWorkspaceMember();
+      await Promise.resolve();
+      expect(store.groupEditPending).toBe(false);
+      expect(store.pgWorkspaceMemberNpub).toBe('');
+      expect(store.pgWorkspaceMemberAddNotice).toContain('Member added');
+      expect(refresh).toHaveBeenCalledWith({ force: true, limit: 200 });
+      expect(store.refreshGroups).toHaveBeenCalled();
+    });
+
+    it('ignores repeat clicks while the membership write is pending', async () => {
+      let saved;
+      createTowerPgWorkspaceMember.mockImplementationOnce(() => new Promise(resolve => { saved = resolve; }));
+      const store = createPgGrantStore({ canAdminWorkspace: true, pgWorkspaceMemberNpub: `npub1${'q'.repeat(58)}` });
+      const first = store.addPgWorkspaceMember();
+      await store.addPgWorkspaceMember();
+      expect(createTowerPgWorkspaceMember).toHaveBeenCalledTimes(1);
+      saved({});
+      await first;
+    });
+
+    it('clears loading on permission denial without announcing or clearing the member input', async () => {
+      createTowerPgWorkspaceMember.mockRejectedValueOnce(Object.assign(new Error('Denied'), { code: 'permission_denied' }));
+      const npub = `npub1${'q'.repeat(58)}`;
+      const store = createPgGrantStore({ canAdminWorkspace: true, pgWorkspaceMemberNpub: npub });
+      await store.addPgWorkspaceMember();
+      expect(store.groupEditPending).toBe(false);
+      expect(store.pgWorkspaceMemberAddError).toBeTruthy();
+      expect(store.pgWorkspaceMemberNpub).toBe(npub);
+      expect(store.publishPgOnboardingAnnouncementForGrant).not.toHaveBeenCalled();
     });
 
     it('offers workspace members that are not already in the PG group', () => {

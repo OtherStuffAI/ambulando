@@ -115,11 +115,13 @@ async function createAuthHeaderForIntendedUrl(requestUrl, method, body = null, o
   const priority = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(normalizedMethod) ? 'high' : 'normal';
   const timeoutMessage = `NIP-98 signing timed out for ${normalizedMethod} ${requestUrl}`;
   if (!workspaceSecret) {
-    return createNip98AuthHeader(requestUrl, method, body ?? null, {
+    // Bound signer discovery, public-key lookup and queue wait as well as the
+    // event signature. A late auth result must never send an expired mutation.
+    return withTimeout(createNip98AuthHeader(requestUrl, method, body ?? null, {
       signTimeoutMs: authTimeoutMs,
       timeoutMessage,
       priority,
-    });
+    }), authTimeoutMs, timeoutMessage);
   }
   return withTimeout(
     createNip98AuthHeaderForSecret(requestUrl, method, body ?? null, workspaceSecret),

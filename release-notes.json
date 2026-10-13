@@ -3864,6 +3864,27 @@
         "Remote channel and scope renames update downloaded navigation without a resync.",
         "Group saves resolve every removal before changing membership; unavailable identities keep your selection open with a clear retry message."
       ]
+    },
+    {
+      "buildNumber": 2385,
+      "label": "Responsive workspace member addition",
+      "notes": [
+        "Adding a workspace member releases loading and refreshes access choices without waiting for the optional onboarding announcement. Stalled announcement signing reports a retryable error."
+      ]
+    },
+    {
+      "buildNumber": 2386,
+      "label": "Onboarding timeout wording",
+      "notes": [
+        "Onboarding timeout messages identify encryption or signing and offer an announcement retry."
+      ]
+    },
+    {
+      "buildNumber": 2387,
+      "label": "Bound workspace member signer preparation",
+      "notes": [
+        "A stalled browser signer lookup or signing queue now times out instead of holding workspace member addition indefinitely. Late signer results cannot send the expired membership request."
+      ]
     }
   ]
 }
