@@ -13,7 +13,7 @@ backend/service, app, workspace, owner and viewer. liveQuery supplies Alpine and
 the host bridge. There is no independent UI polling. Bundled code uses the host for data; published JavaScript is trusted privileged code, not network-isolated.
 SSE emits payload-free org-data invalidations; the existing background fallback
 also reauthorizes an open host. During an ordinary background authority check,
-a previously authorized capability-free installed document stays mounted and visible, preserving
+a previously authorized installed document stays mounted and visible, preserving
 scroll, filters and expanded rows; it receives no new projection until the read
 completes and writes stay blocked. Denial, error or context change still destroys
 the document immediately. Explicit refresh keeps its deliberate loading behavior. Superseded requests, disposed services and context changes cannot commit
@@ -87,8 +87,8 @@ message keys. Intents:
 Host responses are `type:'state'`, `status:loading|ready|error`, `view`, and an
 explicit read projection only when the bundle declares `org_data.read`.
 Initial loading, explicit refresh and read errors hide installed content.
-Background checks retain a capability-free bundle’s last authorized document
-until their outcome; live-bridge bundles keep their existing loading behavior.
+Background checks retain an installed bundle’s last authorized document
+until their outcome; live-bridge bundles retain broader dataset, field, reference and identity invalidation checks. Writes remain blocked while authorization is pending.
 Capability-free bundles compare their selected immutable installation and read
 authority, so unrelated organisation records or other installations do not
 replace the document. Bundles using live bridge capabilities retain the broader

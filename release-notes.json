@@ -3941,6 +3941,13 @@
       "notes": [
         "Background access checks preserve scrolling, filters and expanded evidence in unchanged installed snapshots. Denied access and changed installations still clear or replace the document."
       ]
+    },
+    {
+      "buildNumber": 2398,
+      "label": "Stable editing in installed apps",
+      "notes": [
+        "Installed apps using the native data bridge stay mounted during background access checks and saves. Permission, context and installation changes still invalidate the document; writes wait for authorization."
+      ]
     }
   ]
 }

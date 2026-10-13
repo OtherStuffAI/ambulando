@@ -265,7 +265,7 @@ export const orgDataMixin = {
     const controller = new AbortController(), requestId = crypto.randomUUID(), view = runtime.view;
     const prior = runtime.authority;
     const retaining = preserveDraft && (runtime.dirty || runtime.writing) && !!prior && !runtime.blocked;
-    runtime.keepBundleVisible = preserveDraft && runtime.bundle?.capabilities.length === 0
+    runtime.keepBundleVisible = preserveDraft && !!runtime.bundle
       && runtime.ready && !!prior && !runtime.blocked;
     runtime.authorizing = true;
     runtime.request = controller;

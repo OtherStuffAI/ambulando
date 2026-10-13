@@ -59,8 +59,11 @@ it('does not retain a missing installation/read grant or narrow a live-bridge au
  expect(sameInstalledOrgDataAuthority(p,{...p,capabilities:{read:true,write:false}},{...metadata,capabilities:['org_data.read']})).toBe(false);
 });
 
-it('keeps live-bridge bundles hidden during pending background reads',async()=>{
- const s=await host(['org_data.read']);s.pause=true;const read=s.syncOrgData();
- await vi.waitFor(()=>expect(s.pending).toHaveLength(1));expect(s.orgDataBundleVisible).toBe(false);
- s.pending.shift().resolve();await read;await vi.waitFor(()=>expect(s.orgDataHostStatus).toBe('ready'));
+it('keeps live-bridge bundles mounted during pending reads without weakening authority checks',async()=>{
+ const s=await host(['org_data.read','org_data.write']),frame=document.querySelector('iframe');s.pause=true;const read=s.syncOrgData();
+ await vi.waitFor(()=>expect(s.pending).toHaveLength(1));expect(s.orgDataBundleVisible).toBe(true);
+ const command=vi.fn();s.getTowerSyncService=()=>({ensureLoaded:s.load,command});
+ await s.writeOrgData({path:'types/people/records/x',method:'PATCH',body:{}});expect(command).not.toHaveBeenCalled();
+ s.pending.shift().resolve();await read;await vi.waitFor(()=>expect(s.orgDataHostStatus).toBe('ready'));expect(document.querySelector('iframe')).toBe(frame);
+ s.pause=false;s.payload.capabilities={read:true,write:false};await s.syncOrgData();await vi.waitFor(()=>expect(s.orgDataHostStatus).toBe('ready'));expect(document.querySelector('iframe')).not.toBe(frame);expect(s.orgDataFrameReady).toBe(false);
 });
