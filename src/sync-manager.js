@@ -365,6 +365,7 @@ export const syncManagerMixin = {
         'hosting-billing': { freshMs: 60000, load: (_id, options) => hydrateHostingBilling(this, options), materialize: result => result },
         'scope-order': { freshMs: 30000, load: (_id, options) => hydrateScopeOrder(this, options) },
         'org-data-permissions': { trackFreshness: false, load: (_key, options) => readOrgDataPermissions(this, options) },
+        'org-data-installations': { trackFreshness: false, load: (_key, options) => hydrateOrgData(this, { ...options, catalogue: true }) },
         'org-data': { trackFreshness: false, load: (_key, options) => hydrateOrgData(this, options) },
         'message-activity': {
           trackFreshness: false,
@@ -3206,7 +3207,10 @@ export const syncManagerMixin = {
           hydrationStartedAt,
           messageIds: events.filter((event) => event?.entity_type === 'message').map((event) => event?.entity_id).filter(Boolean),
         });
-        if (this.orgDataOpen && events.some(e => ['org_data','workspace_member','group','channel_grant','scope_access'].includes(e?.entity_type))) await this.syncOrgData?.();
+        if (events.some(e => ['org_data','workspace_member','group','channel_grant','scope_access'].includes(e?.entity_type))) {
+          if (this.orgDataOpen) await this.syncOrgData?.();
+          else await this.loadOrgDataInstallations?.({ force: true });
+        }
         const replayBurst = events.length > PG_SSE_TARGETED_EVENT_LIMIT;
         const targetedOnlyEvents = replayBurst
           ? events.filter((event) => PG_SSE_TARGETED_ONLY_ENTITY_TYPES.has(String(event?.entity_type || '').trim()))
@@ -3468,6 +3472,7 @@ export const syncManagerMixin = {
         await (this.requestTowerSyncFamily?.('workspace-bootstrap') ?? this.runTowerPgWorkspaceSync());
         if (this.towerUsageOpen) await this.refreshHostingBilling?.();
         if (this.orgDataOpen) await this.syncOrgData?.();
+        else await this.loadOrgDataInstallations?.();
         this.markTowerReachabilityRecovered?.('background-sync-success', {
           refresh: false,
           fallbackUsable: this.sseStatus !== 'connected',

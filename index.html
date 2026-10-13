@@ -11484,6 +11484,7 @@
     </div>
     <iframe :title="$store.chat.messageActivityDisplayTitle + ' dashboard'" sandbox="allow-scripts" referrerpolicy="no-referrer" :src="$store.chat.messageActivitySrc || 'about:blank'"></iframe>
   </dialog>
+  <div hidden x-effect="const context = $store.chat.orgDataInstallationsContextKey; const section = $store.chat.navSection; queueMicrotask(() => { if (context === $store.chat.orgDataInstallationsContextKey) $store.chat.loadOrgDataInstallations(); })"></div>
   <dialog id="org-data-modal" class="message-activity-modal" :class="{ 'thread-full': $store.chat.orgDataFull }" aria-labelledby="org-data-title" data-testid="org-data-modal"
     x-effect="if ($store.chat.orgDataOpen && $store.chat.orgDataOpenedContext !== $store.chat.orgDataContextKey) $store.chat.closeOrgData(true)"
     @keydown.escape="$store.chat.handleOrgDataEscape($event)" @cancel.prevent="$store.chat.handleOrgDataEscape($event)" @close="!$el.open && $store.chat.orgDataOpen && $store.chat.closeOrgData()"

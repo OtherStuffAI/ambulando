@@ -57,8 +57,15 @@ using dedicated `napplet.publish` / `napplet.install` grants and explicit
 `trusted_code_acknowledged:true` for both operations. The catalogue lists the
 immutable version, declared capabilities, permitted datasets and navigation risk
 before the install acknowledgement. Built-in code remains repository-controlled. There is no claim of NIP-5D
-conformance. Installed launchers appear in Toolbox following the authorised
-catalogue read; reload can discover them from Catalogue → Static napplets.
+conformance. Installed launchers load on workspace activation and Toolbox/MyApps navigation,
+without opening a catalogue or modal. Discovery uses the existing typed catalogue read and a metadata-only row
+in the worker-validated Dexie projection and full backend/app/workspace/owner/viewer partition. Cached
+rows wait for a successful current authority read. Navigation reuses a 30-second
+fresh read; SSE invalidations force reauthorization and background fallback
+refreshes stale discovery. Modal close preserves the launcher list. Context
+changes and denied/failed reads clear it; launch always reauthorizes through the
+existing host. Full record snapshots are reserved for the modal. Only one discovery read is active per context, and launch waits
+for it before starting its own request-bound read.
 
 Bridge v1 uses `{version:1,session,type,...}`. For installed bundles the session
 is `window.nappletSession`; built-ins use their URL fragment. The host accepts

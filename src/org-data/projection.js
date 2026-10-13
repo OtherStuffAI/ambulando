@@ -2,6 +2,7 @@ import { messageActivityContext, messageActivityLifecycle, messageActivityPartit
 export const orgDataContext = messageActivityContext;
 export const orgDataLifecycle = messageActivityLifecycle;
 export const orgDataPartition = messageActivityPartition;
+export const orgDataInstallationsPartition = c => `installations:${orgDataPartition(c)}`;
 import { normalizeOrgSnapshot } from './normalize.js';
 export function normalizeOrgData(payload, c, requestId) { return { ...normalizeOrgSnapshot(payload, c, requestId), key: orgDataPartition(c) }; }
 export function projectOrgData(row) { return { bundles: row.bundles, types: row.types, records: row.records, capabilities: row.capabilities, identities: row.identities, changes: row.changes, installations: row.installations?.map(({html,...b}) => b) };  }

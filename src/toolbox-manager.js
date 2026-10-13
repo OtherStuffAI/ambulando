@@ -102,7 +102,7 @@ export const toolboxMixin = {
       { placementId: 'napplet:tower-usage', title: 'Tower Usage',
         description: 'Stored bytes in the selected Tower workspace', appType: 'Napplet' },
       ...[['catalogue','Organisation Data Catalogue'],['people','People'],['chart','Organisation chart'],['holidays','Holiday viewer']].map(([view,title]) => ({ placementId: 'napplet:org-data-' + view, title, description: 'Shared organisation data', appType: 'Napplet', orgDataView: view })),
-      ...(this.orgDataInstallationContext && this.orgDataInstallationContext === this.orgDataContextKey ? (this.orgDataInstallations || []) : []).map(b => ({ placementId: 'napplet:bundle-' + b.key, title: b.title, description: 'Installed static napplet · version ' + b.version, appType: 'Napplet', orgDataView: 'bundle:' + b.key })),
+      ...(this.orgDataInstallationContext && this.orgDataInstallationContext === this.orgDataInstallationsContextKey ? (this.orgDataInstallations || []) : []).map(b => ({ placementId: 'napplet:bundle-' + b.key, title: b.title, description: 'Installed static napplet · version ' + b.version, appType: 'Napplet', orgDataView: 'bundle:' + b.key })),
     ].map((app, index) => {
       const placement = this.appPlacement(app);
       return { ...app, ...(app.appType === 'Napplet' ? { icon_url: placement.iconUrl || '', title: String(placement.displayTitle || '').trim() || app.title } : {}), launcherPosition: placement.position ?? index + 1 };

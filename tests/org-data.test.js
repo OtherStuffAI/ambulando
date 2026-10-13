@@ -50,3 +50,13 @@ it('draft authority comparison retains ordinary value conflicts and rejects narr
  changed.capabilities.write=false;expect(sameOrgDataAuthority(before,changed)).toBe(false);
  const narrowed=structuredClone(before);narrowed.types=[];narrowed.records={};expect(sameOrgDataAuthority(before,narrowed)).toBe(false);
 });
+
+it('discovers installations through catalogue without fetching or overwriting full records', async () => {
+ const store=makeStore(),db=getWorkspaceDb();
+ await hydrateOrgData(store,{requestId:'full'},{read:async()=>payload()});
+ const read=vi.fn(async()=>{const p=payload();delete p.complete;delete p.records;return p;});
+ await hydrateOrgData(store,{requestId:'catalogue',catalogue:true},{read});
+ expect(read).toHaveBeenCalledWith('workspace','catalogue',expect.any(Object));
+ const row=await db.org_data.get(orgDataPartition(orgDataContext(store)));
+ expect(row.request_id).toBe('full');expect(row.records.people).toHaveLength(1);
+});

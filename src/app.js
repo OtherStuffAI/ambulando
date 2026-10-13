@@ -2319,6 +2319,7 @@ export function initApp() {
 
     async init() {
       this.initDiagnosticsLifecycle();
+      this.initOrgDataInstallations();
       this.initDocEditLeaseLifecycle?.();
       this.initReadAloud();
       if (typeof window !== 'undefined' && !this.chatImagePreviewCleanupHandler) {

@@ -3892,6 +3892,13 @@
       "notes": [
         "Unread completed tasks stay in the Deck Inbox until explicitly read. Deck and Recent Channels use their own persisted thread attention; newly loaded documents refresh unread indicators without changing read state."
       ]
+    },
+    {
+      "buildNumber": 2391,
+      "label": "Installed apps in Toolbox",
+      "notes": [
+        "Installed napplets appear in Toolbox and MyApps without opening the Organisation Data Catalogue first. Workspace changes and access failures clear the installed list; closing a napplet keeps its launcher available."
+      ]
     }
   ]
 }

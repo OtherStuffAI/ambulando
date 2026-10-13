@@ -1,7 +1,7 @@
-import { normalizeOrgSnapshotAsync } from './normalize.js';
-export function normalizeOrgDataInWorker(payload, c, requestId, signal) {
+import { normalizeOrgSnapshotAsync, normalizeOrgCatalogueAsync } from './normalize.js';
+export function normalizeOrgDataInWorker(payload, c, requestId, signal, catalogue = false) {
   // Unit tests have no Worker; production browsers use the isolated normalizer.
-  if (typeof Worker === 'undefined') return normalizeOrgSnapshotAsync(payload, c, requestId);
+  if (typeof Worker === 'undefined') return (catalogue ? normalizeOrgCatalogueAsync : normalizeOrgSnapshotAsync)(payload, c, requestId);
   return new Promise((resolve, reject) => {
     const worker = new Worker(new URL('./projection-worker.js', import.meta.url), { type: 'module' });
     const finish = (error, row) => { clearTimeout(timeout); signal?.removeEventListener('abort', abort); worker.terminate(); if (error) reject(error); else resolve(row); };
@@ -13,6 +13,6 @@ export function normalizeOrgDataInWorker(payload, c, requestId, signal) {
     signal?.addEventListener('abort', abort, { once: true });
     // Only the public authority tuple goes to this worker, never signing state.
     const context = Object.fromEntries(['workspaceId','workspaceOwnerNpub','appNpub','tower','service'].map(k => [k, c[k]]));
-    worker.postMessage({ payload, context, requestId });
+    worker.postMessage({ payload, context, requestId, catalogue });
   });
 }
