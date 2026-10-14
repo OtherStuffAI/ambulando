@@ -2334,6 +2334,7 @@
                 </div>
               </div>
               <div class="deck-card-scroll" aria-label="Inbox cards" tabindex="0">
+              <p class="inbox-read-notice" x-show="$store.chat.pinnedThreadsError" x-cloak x-text="$store.chat.pinnedThreadsError" role="status" aria-live="polite"></p>
               <p class="inbox-read-notice" x-show="$store.chat.inboxReadNotice" x-cloak x-text="$store.chat.inboxReadNotice" role="status" aria-live="polite"></p>
               <div class="attention-card-list flightdeck-summary-card-list" x-show="$store.chat.visibleAutopilotOverviewInbox.length > 0">
                 <template x-for="item in $store.chat.visibleAutopilotOverviewInbox" :key="`${item.inboxKind}:${item.id || item.recordId || item.object_id}`">
@@ -2368,8 +2369,8 @@
               </div>
             </section>
 
-            <div class="deck-right-stack" data-testid="deck-right-stack">
-            <section class="flightdeck-summary-panel flightdeck-summary-panel-pinned deck-column" data-deck-column="pinned" data-testid="deck-pinned-threads" aria-label="Pinned threads" x-effect="$store.chat.syncPinnedThreadsContext($store.chat.pinnedThreadsPartition)">
+            <div class="deck-right-stack" data-testid="deck-right-stack" :class="{ 'has-pinned-threads': $store.chat.pinnedThreads.length > 0 }">
+            <section class="flightdeck-summary-panel flightdeck-summary-panel-pinned deck-column" data-deck-column="pinned" data-testid="deck-pinned-threads" x-show="$store.chat.pinnedThreads.length > 0" aria-label="Pinned threads" x-effect="$store.chat.syncPinnedThreadsContext($store.chat.pinnedThreadsPartition)">
               <div class="autopilot-panel-heading" data-deck-mobile-sticky-heading><h3>Pinned threads</h3></div>
               <div class="deck-card-scroll" tabindex="0" aria-label="Pinned thread list">
                 <p class="settings-field-help" x-show="$store.chat.pinnedThreads.length === 0">Pin threads from Inbox to keep them here across scopes.</p>

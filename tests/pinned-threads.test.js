@@ -1,5 +1,6 @@
 import { beforeEach, expect, it, vi } from 'vitest';
 import { getSettings, getSharedDb, openWorkspaceDb, saveSettings, saveThreadPin, getPinnedThreadRows, upsertMessage } from '../src/db.js';
+import { autopilotOverviewManagerMixin } from '../src/autopilot-overview-manager.js';
 import { pinnedThreadsMixin } from '../src/pinned-threads.js';
 let db;
 function store() {
@@ -73,4 +74,17 @@ it('orders by pin time rather than activity and reports save failures without op
   expect(s.pinnedThreads.map(r=>r.id)).toEqual(['second','thread']);
   const fail=vi.spyOn(getSharedDb().app_settings,'add').mockRejectedValueOnce(new Error('Storage failed'));
   await s.toggleThreadPin(pin); expect(s.pinnedThreadsError).toBe('Storage failed'); expect(s.isThreadPinned('thread')).toBe(true); fail.mockRestore();
+});
+
+it('only includes the mobile pin page while pins exist and returns to Inbox after last unpin', () => {
+  const s=store(); const cards=Object.getOwnPropertyDescriptor(autopilotOverviewManagerMixin,'deckMobileCards').get;
+  expect(cards.call(s).map(row=>row.id)).not.toContain('pinned');
+  s.pinnedThreadsContext=s.pinnedThreadsPartition;
+  s.pinnedThreadRows=[{...pin,pinnedAt:'2026-10-01'}];
+  expect(cards.call(s).map(row=>row.id)).toContain('pinned');
+  s.pinnedThreadRows=[]; s.deckMobileColumn='pinned'; s.deckMobileTrack={}; s.deckMobileMediaQuery={matches:true}; s.positionDeckMobileCard=vi.fn();
+  vi.stubGlobal('requestAnimationFrame',callback=>callback());
+  s.syncPinnedThreadsLayout();
+  expect(s.deckMobileColumn).toBe('inbox'); expect(s.positionDeckMobileCard).toHaveBeenCalledWith('inbox');
+  vi.unstubAllGlobals();
 });

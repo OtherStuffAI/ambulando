@@ -2,7 +2,8 @@
 
 Pinned threads keep conversations visible after reading them. The desktop Deck
 sidebar shows a compact list above Feeds; the mobile Deck pager has its own
-Pinned threads page. Inbox chat rows have a native pin button with a pressed
+Pinned threads page while pins exist. The empty panel and mobile page are hidden.
+On desktop the panel fits its rows, showing up to ten before scrolling. Inbox chat rows have a native pin button with a pressed
 state. Each pinned row shows its current title and relative activity time with
 the existing unread background, plus an unpin button. Opening uses the existing
 Deck thread modal and channel resolver, including destinations in another scope.

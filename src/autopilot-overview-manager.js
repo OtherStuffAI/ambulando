@@ -840,7 +840,10 @@ export const autopilotOverviewManagerMixin = {
   deckThreadChannelRequestId: 0,
   deckThreadTowerId: '',
   deckMobileColumn: 'inbox',
-  deckMobileCards: DECK_MOBILE_CARDS,
+  get deckMobileCards() {
+    const hasPins = Boolean(this.pinnedThreads?.length);
+    return memoizedProjection(this, 'mobile-cards', [hasPins], () => DECK_MOBILE_CARDS.filter(card => card.id !== 'pinned' || hasPins));
+  },
   deckMobileInitialized: false,
   deckMobileTrack: null,
   deckMobileHelloMarker: null,

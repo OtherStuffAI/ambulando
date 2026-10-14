@@ -4053,6 +4053,13 @@
       "label": "Pinned threads review checkpoint",
       "notes": [],
       "noUserVisibleChanges": true
+    },
+    {
+      "buildNumber": 2414,
+      "label": "Compact pinned threads",
+      "notes": [
+        "The Pinned threads panel appears only when you have pins and fits its rows, showing up to ten before scrolling. Its mobile page disappears when the last pin is removed."
+      ]
     }
   ]
 }

@@ -38,10 +38,21 @@ export const pinnedThreadsMixin = {
     if (!partition || !getCurrentWorkspaceDbKey()) return;
     const db = getWorkspaceDb();
     const subscription = liveQuery(async () => getPinnedThreadRows(db, (await getSettings())?.threadPins?.[partition])).subscribe({
-      next: rows => { if (this.pinnedThreadsPartition === partition && subscriptions.get(this)?.key === queryKey) this.pinnedThreadRows = rows; },
+      next: rows => {
+        if (this.pinnedThreadsPartition !== partition || subscriptions.get(this)?.key !== queryKey) return;
+        const countChanged = this.pinnedThreadRows.length !== rows.length;
+        this.pinnedThreadRows = rows;
+        if (countChanged) this.syncPinnedThreadsLayout();
+      },
       error: () => { if (this.pinnedThreadsPartition === partition) this.pinnedThreadsError = 'Could not load pinned threads. Switch workspace to retry.'; },
     });
     subscriptions.set(this, { key: queryKey, subscription });
+  },
+  syncPinnedThreadsLayout() {
+    if (!this.deckMobileTrack || !this.deckMobileMediaQuery?.matches) return;
+    const selected = this.deckMobileColumn === 'pinned' && !this.pinnedThreads.length ? 'inbox' : this.deckMobileColumn;
+    this.deckMobileColumn = selected;
+    requestAnimationFrame(() => { if (this.deckMobileMediaQuery?.matches) this.positionDeckMobileCard?.(selected); });
   },
   isThreadPinned(id) { return this.pinnedThreads.some(row => row.id === id); },
   async toggleThreadPin(thread) {

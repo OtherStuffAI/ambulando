@@ -10,7 +10,7 @@ let bundle;
 test.beforeAll(async () => {
   bundle = (await build({ bundle:true, write:false, format:'esm', logLevel:'silent',
     define:{__FLIGHT_DECK_PG_APP_NPUB__:JSON.stringify('npub1test')},
-    stdin:{resolveDir:path.resolve(__dirname,'../..'), contents:`export { openWorkspaceDb, upsertMessage } from './src/db.js'; export { pinnedThreadsMixin } from './src/pinned-threads.js';`} })).outputFiles[0].text;
+    stdin:{resolveDir:path.resolve(__dirname,'../..'), contents:`export { openWorkspaceDb, upsertMessage, saveThreadPin } from './src/db.js'; export { pinnedThreadsMixin } from './src/pinned-threads.js';`} })).outputFiles[0].text;
 });
 async function setup(page) {
   await page.route('**/*', route => new URL(route.request().url()).pathname === '/__pins.js'
@@ -37,6 +37,7 @@ async function setup(page) {
       await m.upsertMessage(source);
       await m.upsertMessage({...source,record_id:source.pg_thread_id,pg_record_type:'thread',pg_source_message_id:source.record_id});
     }
+    window.pinActualOpenDeckThread=s.openDeckThread;
     s.openDeckThread=async (channel,id,options) => {window.pinOpened={channel,id,options};return true;};
     s.pgContextSelectedChannelId='all'; s.selectedBoardId='__all__';
     s.deckInboxEnabled=true; s.navSection='status';
@@ -59,7 +60,7 @@ for(const width of [375,1440]) for(const theme of ['light','dark']) test(`person
   const inbox=page.locator('[data-deck-column="inbox"]');
   const pins=page.locator('[data-deck-column="pinned"]');
   const inboxOrder=await inbox.locator('.attention-card-title').allTextContents();
-  await expect(pins).toContainText('Pin threads from Inbox');
+  await expect(pins).toBeHidden();
   const button=inbox.locator('.flightdeck-summary-card-chat').filter({hasText:'Return to this conversation'}).locator('.thread-pin-button');
   await button.focus(); await button.press('Enter');
   await expect(button).toHaveAttribute('aria-pressed','true');
@@ -89,6 +90,18 @@ for(const width of [375,1440]) for(const theme of ['light','dark']) test(`person
   expect(await pins.locator('.pinned-thread-row').first().evaluate(el=>getComputedStyle(el).backgroundColor)).not.toBe('rgba(0, 0, 0, 0)');
   await pins.getByRole('button',{name:/Renamed across scopes/}).first().click();
   expect(await page.evaluate(()=>window.pinOpened)).toMatchObject({channel:'other-channel',id:'source-b',options:{towerThreadId:'thread-b'}});
+  await page.evaluate(async()=>{
+    const s=window.Alpine.store('chat');
+    s.openDeckThread=window.pinActualOpenDeckThread;
+    s.messages=await window.pinProbeDb.chat_messages.toArray(); s.fileMessages=s.messages;
+    s.sendThreadReply=()=>{ window.pinReply={channel:s.activeThreadChannelId,thread:s.activeThreadId,body:document.querySelector('.thread-input-bar [data-chat-composer="thread"]').textContent}; };
+  });
+  await pins.getByRole('button',{name:/Renamed across scopes/}).first().click();
+  const composer=page.locator('.thread-input-bar [data-chat-composer="thread"]');
+  await expect(composer).toBeVisible(); await composer.fill('Reply from another scope');
+  await page.locator('.thread-reply-btn').click();
+  expect(await page.evaluate(()=>window.pinReply)).toEqual({channel:'other-channel',thread:'source-b',body:'Reply from another scope'});
+  await page.evaluate(()=>window.Alpine.store('chat').closeDeckThread({syncRoute:false}));
   await page.evaluate(async()=>window.pinProbeDb.pg_resource_attention.update('thread:thread-b',{unread:0}));
   await expect(pins.locator('.pinned-thread-row').first()).not.toHaveClass(/inbox-unread/);
   await screenshot(page,`pinned-${width}-${theme}`);
@@ -104,11 +117,43 @@ for(const width of [375,1440]) for(const theme of ['light','dark']) test(`person
   await expect(pins.locator('.pinned-thread-row')).toHaveCount(1);
   await pins.getByRole('button',{name:'Unpin Return to this conversation',exact:true}).press('Space');
   await expect(pins.locator('.pinned-thread-row')).toHaveCount(0);
-  await expect(pins).toContainText('Pin threads from Inbox');
+  await expect(pins).toBeHidden();
   if(width<769) {
     await page.getByRole('button',{name:'Show Feed',exact:true}).click();
     await expect.poll(()=>page.locator('[data-deck-column="wapp-updates"]').evaluate(el=>Math.abs(el.getBoundingClientRect().left-document.querySelector('[data-deck-columns-track]').getBoundingClientRect().left)<2)).toBe(true);
     await page.getByRole('button',{name:'Show Inbox',exact:true}).click();
   }
   console.log('PINNED_THREADS_EVIDENCE',JSON.stringify({width,theme,localIndexedDBReload:true,unreadUpdates:true,crossScopeRouting:true,inboxOrderPreserved:true,unavailableUnpin:true}));
+});
+
+test('desktop pin panel fits its rows and scrolls after ten',async({page})=>{
+  await page.setViewportSize({width:1440,height:1000}); await setup(page);
+  const panel=page.locator('[data-deck-column="pinned"]');
+  await expect(panel).toBeHidden();
+  await page.evaluate(async()=>{
+    const m=await import('/__pins.js'),s=window.Alpine.store('chat');
+    for(let i=0;i<12;i++) {
+      await m.upsertMessage({record_id:`sizing-${i}`,channel_id:'sol-channel',title:`Pinned sizing thread ${i}`,record_state:'active',updated_at:'2026-10-14T00:00:00Z'});
+      await m.saveThreadPin(s.pinnedThreadsPartition,{id:`sizing-${i}`,channelId:'sol-channel'},true);
+    }
+  });
+  await expect(panel.locator('.pinned-thread-row')).toHaveCount(12);
+  await expect(panel).toBeVisible();
+  await expect.poll(()=>panel.locator('.deck-card-scroll').evaluate(el=>el.clientHeight)).toBeGreaterThanOrEqual(480);
+  const large=await panel.locator('.deck-card-scroll').evaluate(el=>({height:el.clientHeight,scroll:el.scrollHeight}));
+  expect(large.height).toBeLessThanOrEqual(488); expect(large.scroll).toBeGreaterThan(large.height);
+  expect(large.height).toBeGreaterThanOrEqual(480);
+  await screenshot(page,'pinned-desktop-12-scroll');
+  await page.evaluate(async()=>{
+    const m=await import('/__pins.js'),s=window.Alpine.store('chat');
+    for(let i=1;i<12;i++) await m.saveThreadPin(s.pinnedThreadsPartition,{id:`sizing-${i}`,channelId:'sol-channel'},false);
+  });
+  await expect(panel.locator('.pinned-thread-row')).toHaveCount(1);
+  await expect.poll(async()=>(await panel.boundingBox()).height).toBeLessThan(120);
+  const oneRowHeight=(await panel.boundingBox()).height;
+  expect(oneRowHeight).toBeLessThan(120);
+  console.log('PINNED_SIZING_EVIDENCE',JSON.stringify({rows:12,listHeight:large.height,scrollHeight:large.scroll,oneRowPanelHeight:oneRowHeight}));
+  await screenshot(page,'pinned-desktop-1-row');
+  await panel.getByRole('button',{name:'Unpin Pinned sizing thread 0',exact:true}).click();
+  await expect(panel).toBeHidden();
 });
