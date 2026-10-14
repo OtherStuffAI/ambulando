@@ -4060,6 +4060,13 @@
       "notes": [
         "The Pinned threads panel appears only when you have pins and fits its rows, showing up to ten before scrolling. Its mobile page disappears when the last pin is removed."
       ]
+    },
+    {
+      "buildNumber": 2415,
+      "label": "Subtle thread pin controls",
+      "notes": [
+        "Use a faint pin outline and a filled pin when selected, without a highlighted box or border."
+      ]
     }
   ]
 }
