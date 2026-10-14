@@ -1,3 +1,4 @@
+import { nostrNotificationsMixin } from './feed/nostr-manager.js';
 import { hostingBillingMixin } from './hosting-billing.js';
 import { showEditorMountFailure } from './docs/editor/editor-mount-failure.js';
 import { createDiagnosticOperation, finishDiagnosticOperation, emitDiagnostic } from './diagnostics-events.js';
@@ -10438,6 +10439,7 @@ export function initApp() {
     threadLiveActivityManagerMixin,
     notificationsManagerMixin,
     subscribedReaderMixin,
+    nostrNotificationsMixin,
     messageActivityMixin,
     orgDataMixin,
     hostingBillingMixin,

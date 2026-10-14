@@ -1,12 +1,9 @@
+import { PUBLIC_NOSTR_RELAYS } from './nostr-relays.js';
 import { nip19, SimplePool } from 'nostr-tools';
 import { cacheProfile, getCachedProfile } from './db.js';
 
 const PROFILE_KIND = 0;
-const RELAYS = [
-  'wss://relay.primal.net',
-  'wss://nos.lol',
-  'wss://purplepag.es',
-];
+const RELAYS = PUBLIC_NOSTR_RELAYS;
 const FETCH_TIMEOUT_MS = 2500;
 const PER_RELAY_TIMEOUT_MS = 1200;
 

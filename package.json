@@ -25,9 +25,11 @@
     "test:feed:sync": "vitest run tests/feed-reader.test.js tests/feed-api.test.js tests/pg-read-hydrator.test.js tests/pg-record-delta.test.js tests/sync-manager.test.js tests/sse-sync-lifecycle.test.js tests/tower-pg-materialization-worker-client.test.js tests/tower-pg-materialization-worker-runner.test.js && playwright test tests/e2e/pg-console-transactions.spec.cjs tests/e2e/subscribed-feed.spec.cjs"
   },
   "dependencies": {
+    "@noble/curves": "2.0.1",
     "@noble/hashes": "2.0.1",
     "@nostr-superbased/browser": "0.1.0",
     "@nostr-superbased/core": "0.1.0",
+    "@scure/base": "2.0.0",
     "@tiptap/core": "^3.27.1",
     "@tiptap/extension-image": "^3.27.1",
     "@tiptap/extension-link": "^3.27.1",

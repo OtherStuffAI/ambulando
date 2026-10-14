@@ -1239,6 +1239,7 @@ export const sectionLiveQueryMixin = {
       return;
     }
 
+    this.startNostrNotifications?.();
     resumeContextTreeView(this);
     resumePipelineViewer(this);
     syncLiveQuerySet(this, state.workspace, buildWorkspaceSpecs(this));
@@ -1258,6 +1259,7 @@ export const sectionLiveQueryMixin = {
     disposeContextTreeView(this);
     disposePipelineViewer(this);
     this.disposeSubscribedReader?.();
+    this.disposeNostrNotifications?.();
     const state = getSectionState(this);
     stopBucket(this, state.workspace);
     stopBucket(this, state.detail);
@@ -1268,6 +1270,7 @@ export const sectionLiveQueryMixin = {
     disposeContextTreeView(this);
     disposePipelineViewer(this);
     this.disposeSubscribedReader?.();
+    this.disposeNostrNotifications?.();
     const state = getSectionState(this);
     stopBucket(this, state.shared);
     stopBucket(this, state.workspace);

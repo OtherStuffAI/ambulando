@@ -4081,6 +4081,39 @@
       "notes": [
         "Native browser signing pauses after document revocation and resumes with a fresh host provider. Stale signing callbacks are rejected, while cached records and pending edits remain intact."
       ]
+    },
+    {
+      "buildNumber": 2418,
+      "label": "Public Nostr notifications in Feeds",
+      "notes": [
+        "Feeds now includes incoming public Nostr mentions, replies, reactions, reposts and validated zap receipts. Filter sources and mark notifications read, saved or dismissed on this device."
+      ]
+    },
+    {
+      "buildNumber": 2419,
+      "label": "Nostr notification validation checkpoint",
+      "notes": [],
+      "noUserVisibleChanges": true
+    },
+    {
+      "buildNumber": 2420,
+      "label": "Readable and complete Nostr catch-up",
+      "notes": [
+        "Nostr notifications show actor profile names when available. Bounded catch-up queues retain bursts and finish before relay rotation, with historical bounds checked on this device."
+      ]
+    },
+    {
+      "buildNumber": 2421,
+      "label": "Nostr notification review checkpoint",
+      "notes": [],
+      "noUserVisibleChanges": true
+    },
+    {
+      "buildNumber": 2422,
+      "label": "Nostr receipt sender validation",
+      "notes": [
+        "Incoming zaps use the payer’s identity to distinguish external payments from self activity, including self-hosted receipt providers."
+      ]
     }
   ]
 }

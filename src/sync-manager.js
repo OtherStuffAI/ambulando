@@ -610,6 +610,7 @@ export const syncManagerMixin = {
     this._towerSyncService = null;
     service?.dispose(reason);
     this.disposeSubscribedReader?.();
+    this.disposeNostrNotifications?.();
     this.backgroundSyncTimer = null;
     this.agentActivityRecoveryStartedAt = 0;
     this.agentActivityRecoveryError = '';

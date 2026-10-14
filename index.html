@@ -2397,6 +2397,8 @@
                 </div>
               </div>
               <div class="wapp-updates-body deck-card-scroll feeds-reader" aria-label="Feeds">
+                <label class="settings-field-help">Show <select aria-label="Feed source filter" x-model="$store.chat.feedSourceFilter"><option value="all">All activity</option><option value="feeds">Subscribed feeds</option><option value="nostr">Nostr notifications</option></select></label>
+                <p class="settings-field-help" role="status" x-show="$store.chat.nostrNotificationStatus && $store.chat.feedSourceFilter !== 'feeds'" x-text="$store.chat.nostrNotificationStatus"></p>
                 <p class="error-text" role="status" x-show="$store.chat.subscribedFeedError" x-text="$store.chat.subscribedFeedError"></p>
                 <div class="feed-source-panel" x-show="sourcesOpen" x-cloak><div class="feed-source-heading"><strong>Sources</strong><button type="button" class="doc-actions-toggle" aria-label="Close sources" @click="sourcesOpen = false">×</button></div><p class="settings-field-help" x-show="!$store.chat.subscribedFeedSources.length">No sources yet. Add a feed with +.</p><template x-for="source in $store.chat.subscribedFeedSources" :key="source.key"><div class="feed-source-row"><strong x-text="source.title || source.source.url || source.source.feed_id"></strong><small x-text="$store.chat.feedSourceStatus(source.id)"></small><button type="button" class="btn-secondary btn-compact" @click="$store.chat.setFeedSubscriptionStatus(source, source.status === 'active' ? 'unsubscribed' : 'active')" x-text="source.status === 'active' ? 'Unsubscribe' : 'Resubscribe'"></button></div></template></div>
                 <div class="wapp-update-list"><template x-for="item in $store.chat.visibleSubscribedFeedItems" :key="item.key"><article class="wapp-update-card" :class="{ 'wapp-update-unread': !item.read }">
@@ -2411,6 +2413,7 @@
                     </div>
                   </span></div>
                   <button type="button" class="feed-headline" :disabled="!item.url" @click.stop="$store.chat.openFeedItem(item)" x-text="item.title || 'Untitled item'"></button>
+                  <small x-show="item.origin === 'nostr'" x-text="item.actorName || item.actorNpub" :title="item.actorNpub || ''" style="overflow-wrap: anywhere"></small>
                   <p class="feed-item-text" x-text="item.summary || item.text"></p>
                   <template x-for="(attachment, index) in item.attachments" :key="index"><small class="feed-attachment" x-text="`${attachment.title || 'Attachment'} · ${attachment.mime_type}${attachment.duration_in_seconds != null ? ' · ' + attachment.duration_in_seconds + ' seconds' : ''}`"></small></template>
                   <small x-show="item.pending">State pending sync</small>

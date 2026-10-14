@@ -10,7 +10,7 @@ const RUNTIMES = new WeakMap();
 export const subscribedReaderMixin = {
   subscribedFeedItems: [], subscribedFeedSources: [], subscribedFeedStatus: [], subscribedFeedError: '',
   feedManualGeneration: 0, feedAddOpen: false, feedManualBusy: false, feedManualStatus: '', publicFeedDraft: '', showDismissedFeeds: false,
-  get visibleSubscribedFeedItems() { return this.subscribedFeedItems.filter(i => this.showDismissedFeeds || !i.dismissed).slice(0, 500); },
+  get visibleSubscribedFeedItems() { return [...(this.feedSourceFilter === 'nostr' ? [] : this.subscribedFeedItems), ...(this.feedSourceFilter === 'feeds' ? [] : this.visibleNostrNotifications || [])].filter(i => this.showDismissedFeeds || !i.dismissed).sort((a, b) => String(b.published).localeCompare(String(a.published))).slice(0, 500); },
   startSubscribedReader() {
     const c = readerContext(this); if (!c.workspaceId || !c.readerActorId || !this.session) return;
     const context = feedContextKey(c), prior = RUNTIMES.get(this);
@@ -110,6 +110,7 @@ export const subscribedReaderMixin = {
     });
   },
   async setFeedFlag(item, field, value) {
+    if (item.origin === 'nostr') return this.setNostrFeedFlag(item, field, value);
     if (!['read', 'dismissed', 'saved'].includes(field)) return;
     await this.runFeedIntent(async () => {
       const runtime = RUNTIMES.get(this); if (!runtime) throw new Error('reader_identity_pending');
@@ -124,6 +125,7 @@ export const subscribedReaderMixin = {
     window.open(url, '_blank', 'noopener,noreferrer');
   },
   async refreshSubscribedFeed() {
+    this.refreshNostrNotifications?.();
     await this.runFeedIntent(async () => { await this.activateFeeds(); await this.requestTowerSyncFamily('feed-reader', '', { force: true }); const runtime = RUNTIMES.get(this); if (!runtime) return; await Promise.allSettled(this.subscribedFeedSources.filter(s => s.status === 'active').map(s => runtime.source.refresh(s.id, { revalidate: true }))); });
   },
   feedSourceStatus(id) { const status = this.subscribedFeedStatus.find(s => s.subscription_id === id); const errors = { unsafe_graph_target: 'The source graph binding does not match this workspace registration. Ask the app maintainer to check its feed setup.', unsupported_source_transport: 'This app has no registered FIPS feed endpoint. Choose HTTPS for this connection.', registry_revoked: 'This app or Autopilot connection is no longer available. Reconnect in Agents, then retry.', feed_http_401: 'The source needs fresh reader authentication. Sign in and refresh.', feed_http_403: 'The source denied access to your reader identity. Check its reader permissions.', feed_http_404: 'This app does not expose the selected feed.', source_unavailable: 'The source is unavailable. Check its connection and retry.', feed_timeout: 'The source request timed out. Refresh to retry.' }; return (errors[status?.error] || status?.error) || (status?.stale ? 'Stale' : status?.last_success ? `Updated ${new Date(status.last_success).toLocaleTimeString()}` : 'Waiting for source'); },
