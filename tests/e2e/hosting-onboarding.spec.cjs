@@ -31,13 +31,25 @@ for (const width of [1280, 390, 320]) {
     await expect(hosted).toBeVisible();
     await expect(byo).toBeVisible();
     const h = await hosted.boundingBox(), b = await byo.boundingBox();
-    if (width > 700) { expect(h.x).toBeLessThan(b.x); expect(Math.abs(h.y - b.y)).toBeLessThan(2); }
-    else { expect(b.y).toBeGreaterThanOrEqual(h.y + h.height); }
+    expect(b.y).toBeGreaterThanOrEqual(h.y + h.height);
+    expect(Math.abs(h.width - b.width)).toBeLessThan(2);
     await expect(hosted).toContainText('USD $5 credit');
     await expect(hosted).toContainText('paused if the amount due is unpaid');
     await capture(page, `initial-cards-${width}`);
     const input = byo.locator('input');
+    const summary = byo.locator('summary');
+    await expect(input).toBeHidden();
+    await summary.focus();
+    await page.keyboard.press('Enter');
+    await expect(summary).toBeFocused();
+    await expect(input).toBeVisible();
     await input.fill('https://my-tower.example');
+    await summary.focus();
+    await page.keyboard.press('Space');
+    await expect(input).toBeHidden();
+    await expect(summary).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(input).toHaveValue('https://my-tower.example');
     const popupPromise = context.waitForEvent('page');
     await hosted.getByRole('link', { name: 'Privacy Policy (draft)' }).click();
     const popup = await popupPromise;

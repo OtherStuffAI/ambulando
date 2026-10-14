@@ -715,8 +715,8 @@
                 <p class="connect-hosted-availability">Continue to check availability and create your hosted workspace. Payments use Stripe test mode.</p>
                 <p class="auth-error" role="status" aria-live="polite" x-show="$store.chat.connectHostedNotice" x-text="$store.chat.connectHostedNotice"></p>
               </section>
-            <section class="connect-onboarding-card connect-byo-card">
-              <h3 x-show="$store.chat.isTowerPgMode">BYO Tower</h3>
+            <details class="connect-onboarding-card connect-byo-card" :open="!$store.chat.isTowerPgMode">
+              <summary class="connect-byo-summary" x-show="$store.chat.isTowerPgMode">BYO Tower</summary>
               <p x-show="$store.chat.isTowerPgMode">Connect your existing Tower using its URL or workspace descriptor.</p>
               <div class="connect-hosts-list">
                 <template x-for="host in $store.chat.mergedHostsList" :key="host.url">
@@ -738,7 +738,7 @@
                 </button>
               </form>
               <p class="auth-error" x-show="$store.chat.connectHostError" x-text="$store.chat.connectHostError"></p>
-            </section>
+            </details>
             </div>
           </div>
         </template>

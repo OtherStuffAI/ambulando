@@ -13,7 +13,7 @@ describe('Nstack onboarding and draft policies', () => {
   });
   it('offers public base-aware legal links in separate tabs and keeps BYO submit', () => {
     const html = readFileSync('index.html', 'utf8');
-    expect(html.indexOf('<h3>Host My Tower</h3>')).toBeLessThan(html.indexOf('>BYO Tower</h3>'));
+    expect(html.indexOf('<h3>Host My Tower</h3>')).toBeLessThan(html.indexOf('>BYO Tower</summary>'));
     for (const page of ['privacy', 'terms']) {
       expect(html).toContain(`href="%BASE_URL%legal/${page}.html" target="_blank" rel="noopener"`);
       expect(readFileSync(`legal/${page}.html`, 'utf8')).toContain(`data-legal-page="${page}"`);

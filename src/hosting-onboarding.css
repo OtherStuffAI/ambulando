@@ -1,4 +1,4 @@
-.connect-host-options-pg { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:20px; align-items:start; }
+.connect-host-options-pg { display:grid; grid-template-columns:minmax(0,1fr); gap:20px; align-items:start; }
 .connect-host-options-pg .connect-onboarding-card { min-width:0; margin:0; }
 .connect-host-options h3 { margin:0 0 12px; font-size:20px; }
 .connect-hosted-card p, .connect-byo-card > p { line-height:1.55; overflow-wrap:anywhere; }
@@ -7,4 +7,9 @@
 .connect-legal-links a { color:var(--foreground); text-decoration:underline; text-underline-offset:3px; }
 .connect-hosted-availability, .connect-legal-links small { color:var(--muted-foreground); }
 .connect-hosted-card .auth-option { width:100%; }
-@media (max-width:700px) { .connect-host-options-pg { grid-template-columns:minmax(0,1fr); } }
+/* Native details keeps hidden controls out of keyboard navigation and preserves drafts. */
+.connect-host-options-pg .connect-hosted-card { border-color:var(--primary); background:var(--accent); }
+.connect-hosted-card h3 { font-size:24px; }
+.connect-byo-summary { cursor:pointer; font-weight:600; min-height:44px; align-content:center; color:var(--foreground); }
+.connect-byo-summary:focus-visible { outline:2px solid var(--ring); outline-offset:4px; border-radius:4px; }
+.connect-byo-card[open] .connect-byo-summary { margin-bottom:12px; }

@@ -1,8 +1,11 @@
 # Nstack hosting onboarding and draft legal pages
 
-The first Tower connection screen offers Host My Tower on the left and BYO
-Tower on the right, stacking below 700px. BYO retains known-host selection,
-URL/descriptor input and the existing Connect submit handler.
+The first Tower connection screen offers a full-width, emphasized Host My Tower
+card above a collapsed BYO Tower drawer on desktop and mobile. The native
+`details`/`summary` drawer supports Enter and Space, keeps focus on its summary
+when toggled, and preserves entered values while collapsed. BYO retains known-host
+selection, URL/descriptor input and the existing Connect submit handler. Legacy
+SuperBased connection mode keeps its input visible.
 
 Other Stuff’s proposed Nstack offer is USD $5 per GB per month, with a USD $5
 credit against the first month’s 1 GB and an unpaid-account pause. The new

@@ -4012,6 +4012,13 @@
       "notes": [
         "Read downloaded chats immediately while workspace updates and checkpoint recovery run. Keep retained channels and conversations available through refresh and reconnection without clearing device storage."
       ]
+    },
+    {
+      "buildNumber": 2408,
+      "label": "Host My Tower leads workspace setup",
+      "notes": [
+        "Start workspace setup with a prominent Host My Tower card. Expand BYO Tower underneath to connect an existing Tower; entered values, pricing and legal links are preserved."
+      ]
     }
   ]
 }
