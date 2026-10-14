@@ -1060,7 +1060,7 @@ describe('PG workspace manager mode', () => {
     new TypeError('Failed to fetch'),
     new DOMException('The operation timed out', 'TimeoutError'),
     Object.assign(new Error('Bad gateway'), { status: 502 }),
-  ])('hydrates the saved workspace on refresh after a transient failure: %s', async (failure) => {
+  ])('hydrates the saved workspace on refresh without waiting for a possible transient failure: %s', async (failure) => {
     const workspace = {
       workspaceKey: 'pg:saved', workspaceOwnerNpub: 'npub1owner',
       directHttpsUrl: 'https://tower.example', pgSessionNpub: 'npub1user', pgBackendMode: true,
@@ -1076,7 +1076,7 @@ describe('PG workspace manager mode', () => {
     expect(store.loadLocalWorkspaceCoreData).toHaveBeenCalledWith({ syncRoute: false });
     expect(store.startWorkspaceLiveQueries).toHaveBeenCalled();
     expect(store.selectedWorkspaceKey).toBe(workspace.workspaceKey);
-    expect(store.superbasedError).toContain('Updates unavailable');
+    expect(store.verifyPgDescriptor).not.toHaveBeenCalled();
     expect(store.rememberVerifiedPgWorkspace).not.toHaveBeenCalled();
   });
 
@@ -1308,5 +1308,27 @@ describe('legacy recovery notice activation', () => {
     } finally {
       vi.unstubAllGlobals();
     }
+  });
+});
+
+describe('downloaded workspace activation', () => {
+  it('opens the same reader cache before a delayed verification can respond', async () => {
+    const workspace = { workspaceKey: 'pg:saved', workspaceOwnerNpub: 'owner',
+      pgSessionNpub: 'npub1user', pgBackendMode: true, directHttpsUrl: 'https://tower.example' };
+    const verify = vi.fn(() => new Promise(() => {}));
+    const store = await buildStore({ knownWorkspaces: [workspace], selectedWorkspaceKey: workspace.workspaceKey,
+      currentWorkspaceOwnerNpub: 'owner', verifyPgDescriptor: verify, rememberVerifiedPgWorkspace: vi.fn(),
+      loadLocalWorkspaceCoreData: vi.fn().mockResolvedValue(undefined) });
+    await store.selectWorkspace(workspace.workspaceKey, { refresh: false });
+    expect(store.loadLocalWorkspaceCoreData).toHaveBeenCalled();
+    expect(verify).not.toHaveBeenCalled();
+    expect(store.startWorkspaceLiveQueries).toHaveBeenCalled();
+  });
+  it('still verifies new selections and refuses another reader cache', async () => {
+    const store = await buildStore({ selectedWorkspaceKey: 'selected', verifyPgWorkspaceForSelection: vi.fn().mockRejectedValue(new Error('Denied')) });
+    for (const workspace of [{ workspaceKey: 'new', pgSessionNpub: 'npub1user' }, { workspaceKey: 'selected', pgSessionNpub: 'other' }]) {
+      await expect(store.ensurePgWorkspaceAvailable(workspace, { allowCached: true, useCachedImmediately: true })).rejects.toThrow('Denied');
+    }
+    expect(store.verifyPgWorkspaceForSelection).toHaveBeenCalledTimes(2);
   });
 });

@@ -1031,3 +1031,21 @@ describe('channel Docs shell entry', () => {
     } finally { globalThis.window = originalWindow; }
   });
 });
+
+describe('downloaded route before delayed control plane', () => {
+  it('restores the route and completes bootstrap while remote hydration is unresolved', async () => {
+    const shell = createShellState();
+    shell.selectedWorkspaceKey = 'pg:workspace';
+    shell.currentWorkspaceOwnerNpub = 'owner';
+    shell.loadLocalWorkspaceCoreData = vi.fn().mockResolvedValue({});
+    shell.startWorkspaceLiveQueries = vi.fn();
+    shell.ensureTowerPgControlPlaneHydrated = vi.fn(() => new Promise(() => {}));
+    shell.readStoredTaskBoardId = () => null; shell.readStoredCollapsedSections = () => ({});
+    shell.validateSelectedBoardId = vi.fn(); shell.applyRouteFromLocation = vi.fn().mockResolvedValue();
+    shell.refreshSyncStatus = vi.fn().mockResolvedValue(); shell.refreshStatusRecentChanges = vi.fn().mockResolvedValue();
+    await shell.bootstrapSelectedWorkspace();
+    expect(shell.applyRouteFromLocation).toHaveBeenCalled();
+    expect(shell.ensureTowerPgControlPlaneHydrated).toHaveBeenCalled();
+    expect(shell.applyRouteFromLocation.mock.invocationCallOrder[0]).toBeLessThan(shell.ensureTowerPgControlPlaneHydrated.mock.invocationCallOrder[0]);
+  });
+});

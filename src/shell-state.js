@@ -760,7 +760,7 @@ export function createShellState(options = {}) {
       if (!this.selectedWorkspaceKey && !this.currentWorkspaceOwnerNpub) return;
       if (isTowerPgBackendMode()) {
         if (this.session?.npub && typeof this.ensurePgWorkspaceAvailable === 'function') {
-          const verifiedWorkspace = await this.ensurePgWorkspaceAvailable(this.currentWorkspace, { allowCached: true });
+          const verifiedWorkspace = await this.ensurePgWorkspaceAvailable(this.currentWorkspace, { allowCached: true, useCachedImmediately: true });
           if (!verifiedWorkspace) return;
         }
         await this.ensureWorkspaceSessionKey();
@@ -770,8 +770,6 @@ export function createShellState(options = {}) {
           this.localWorkspaceCoreLoadedForKey = workspaceKey;
         }
         this.startWorkspaceLiveQueries?.();
-        await this.ensureTowerPgControlPlaneHydrated?.({ force: true, syncRoute: false });
-        await this.resumePgTaskWriteQueue?.();
       } else {
         await this.ensureWorkspaceSessionKey();
         await this.refreshGroups({ maxAgeMs: this.GROUP_KEY_REFRESH_MAX_AGE_MS });
@@ -785,6 +783,27 @@ export function createShellState(options = {}) {
       this.collapsedSections = this.readStoredCollapsedSections();
       this.validateSelectedBoardId();
       await this.applyRouteFromLocation();
+      if (isTowerPgBackendMode()) {
+        // Restore downloaded navigation and the route before waiting for Tower.
+        // The service still authorizes and fences each future read/write.
+        const workspaceKey = this.currentWorkspaceKey;
+        const generation = this._workspaceSelectionGeneration;
+        const actor = this.session?.npub;
+        const isCurrent = () => this.currentWorkspaceKey === workspaceKey
+          && this._workspaceSelectionGeneration === generation && this.session?.npub === actor;
+        void Promise.resolve().then(async () => {
+          if (!isCurrent()) return;
+          if (actor && this.ensurePgWorkspaceAvailable) {
+            const verified = await this.ensurePgWorkspaceAvailable(this.currentWorkspace);
+            if (!verified || !isCurrent()) return;
+          }
+          await this.ensureTowerPgControlPlaneHydrated?.({ force: true, syncRoute: false });
+          if (isCurrent()) await this.resumePgTaskWriteQueue?.();
+        })
+          .catch(error => flightDeckLog('warn', 'workspace', 'background control-plane refresh failed; using downloaded chats', {
+            error: error?.message || String(error),
+          }));
+      }
       await this.refreshSyncStatus();
       if (this.navSection === 'status') {
         await this.refreshStatusRecentChanges({ force: true });
@@ -1331,7 +1350,7 @@ export function createShellState(options = {}) {
           this.currentWorkspaceOwnerNpub = this.knownWorkspaces[0].workspaceOwnerNpub;
         }
         if (this.selectedWorkspaceKey || this.currentWorkspaceOwnerNpub) {
-          await this.selectWorkspace(this.selectedWorkspaceKey || this.currentWorkspaceOwnerNpub, { refresh: false });
+          await this.selectWorkspace(this.selectedWorkspaceKey || this.currentWorkspaceOwnerNpub, { refresh: false, useCachedImmediately: false });
         }
 
         // A denied/failed selection must not mount or replay retained state.

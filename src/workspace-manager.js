@@ -1382,7 +1382,7 @@ export const workspaceManagerMixin = {
     if (!workspace) return;
     if (isTowerPgBackendMode() && workspace.pgBackendMode && !options.pgVerified && !options.skipPgVerification) {
       try {
-        workspace = await this.ensurePgWorkspaceAvailable(workspace, { allowCached: options.refresh === false });
+        workspace = await this.ensurePgWorkspaceAvailable(workspace, { allowCached: options.refresh === false, useCachedImmediately: options.refresh === false && options.useCachedImmediately !== false });
       } catch (error) {
         if (this._workspaceSelectionRequest !== selectionGeneration) return;
         const detail = error?.message || 'Workspace access verification failed';
@@ -1690,8 +1690,14 @@ export const workspaceManagerMixin = {
     ) || null;
   },
 
-  async ensurePgWorkspaceAvailable(workspace, { allowCached = false } = {}) {
+  async ensurePgWorkspaceAvailable(workspace, { allowCached = false, useCachedImmediately = false } = {}) {
     if (!workspace || this.isPgWorkspaceForgottenThisLoad(workspace)) return null;
+    // Only reopen the selected partition already bound to this reader. This is
+    // local download access; descriptor verification remains mandatory for new
+    // selections, and Tower authorizes all subsequent network operations.
+    if (allowCached && useCachedImmediately && this.session?.npub
+      && workspace.pgSessionNpub === this.session.npub
+      && workspace.workspaceKey && workspace.workspaceKey === this.selectedWorkspaceKey) return workspace;
     try {
       return await this.verifyPgWorkspaceForSelection(workspace);
     } catch (error) {

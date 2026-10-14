@@ -4005,6 +4005,13 @@
       "notes": [
         "Lighten the document editing outline to an almost-white grey."
       ]
+    },
+    {
+      "buildNumber": 2407,
+      "label": "Saved chats stay readable during sync",
+      "notes": [
+        "Read downloaded chats immediately while workspace updates and checkpoint recovery run. Keep retained channels and conversations available through refresh and reconnection without clearing device storage."
+      ]
     }
   ]
 }

@@ -2069,6 +2069,19 @@ describe('channels-manager pure utilities', () => {
       expect(store.selectedChannelId).toBeNull();
     });
 
+    it.each(['stale', 'access-lost'])('keeps downloaded %s channel and its Deck thread readable', async status => {
+      const channel = { record_id: 'channel-1', pg_backend: true, pg_access_status: status, can_read: false, readable: false };
+      const store = createStore({ channels: [channel], selectedChannelId: 'channel-1',
+        currentWorkspace: { pgBackendMode: true }, navSection: 'status', activeThreadId: 'root', deckThreadChannelId: 'channel-1' });
+      await channelsManagerMixin.applyChannels.call(store, [channel], { syncRoute: false });
+      expect(store.channels).toEqual([channel]);
+      expect(store.selectedChannelId).toBe('channel-1');
+      expect(store.closeThread).not.toHaveBeenCalled();
+      await channelsManagerMixin.applyChannels.call(store, [{ ...channel, record_state: 'deleted' }], { syncRoute: false });
+      expect(store.channels).toEqual([]);
+      expect(store.closeThread).toHaveBeenCalled();
+    });
+
     it('applies saved channel order when channels load', async () => {
       isTowerPgBackendMode.mockReturnValue(false);
       const store = createStore({ channelOrder: ['ch3', 'ch1'] });

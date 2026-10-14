@@ -3037,8 +3037,8 @@ export const channelsManagerMixin = {
       : null;
     const deckThreadAccessLost = Boolean(activeDeckThreadChannel && (
       String(activeDeckThreadChannel.record_state || 'active') === 'deleted'
-      || activeDeckThreadChannel.can_read === false
-      || activeDeckThreadChannel.readable === false
+      || (!['stale', 'access-lost'].includes(activeDeckThreadChannel.pg_access_status)
+        && (activeDeckThreadChannel.can_read === false || activeDeckThreadChannel.readable === false))
     ));
     const preserveDeckThread = Boolean(activeDeckThreadChannelId && !deckThreadAccessLost);
     const previousSelectedChannelId = String(this.selectedChannelId || '').trim();
@@ -3053,7 +3053,8 @@ export const channelsManagerMixin = {
       : null;
     const pgChannelVisibilityAuthoritative = Boolean(isTowerPgBackendMode() || this.currentWorkspace?.pgBackendMode);
     const visibleChannels = pgChannelVisibilityAuthoritative
-      ? allChannels.filter((channel) => channel.record_state !== 'deleted' && channel.can_read !== false && channel.readable !== false)
+      ? allChannels.filter((channel) => channel.record_state !== 'deleted'
+        && (['stale', 'access-lost'].includes(channel.pg_access_status) || (channel.can_read !== false && channel.readable !== false)))
       : filterChannelsForViewer(allChannels, this.session?.npub, this.workspaceOwnerNpub, this.groups);
     const savedChannelOrder = Array.isArray(this.channelOrder)
       ? this.channelOrder.map((id) => String(id || '').trim()).filter(Boolean)
@@ -3073,6 +3074,9 @@ export const channelsManagerMixin = {
       String(channel?.updated_at || ''),
       String(channel?.version ?? ''),
       String(channel?.record_state || ''),
+      String(channel?.pg_access_status || ''),
+      String(channel?.can_read ?? ''),
+      String(channel?.readable ?? ''),
     ].join('|'))) {
       this.channels = nextChannels;
     }
@@ -3279,7 +3283,8 @@ export const channelsManagerMixin = {
   },
 
   async selectChannel(recordId, options = {}) {
-    if (this.rememberPgRecoveryDestination?.('channel', recordId)) return false;
+    const downloadedChannel = (this.channels || []).find(row => row.record_id === recordId && row.record_state !== 'deleted');
+    if (!downloadedChannel && this.rememberPgRecoveryDestination?.('channel', recordId)) return false;
     const callerIsCurrent = () => !options.isCurrent || options.isCurrent();
     if (!callerIsCurrent()) return;
     const channelId = String(recordId || '').trim();

@@ -177,3 +177,36 @@ Membership denial marks access lost without discarding canonical rows, cursor or
 device identity; it does not authorize future reads or writes. Assembly commits
 reject an access-loss change during download. Explicit content tombstones still
 delete records, and viewer/backend replacement remains a cache-isolation boundary.
+
+## Local chat visibility during recovery
+
+Checkpoint recovery pending state describes network convergence, not local chat
+readiness. Chat and Deck message live queries remain subscribed while resetting,
+snapshot reconciliation and omission retirement run. A downloaded channel can
+be selected immediately from the current reader's partition; an unknown channel
+still records recovery intent until its routing metadata arrives. Explicit
+content tombstones remain authoritative for deletion.
+
+Startup reopens only the selected workspace already bound to the restored
+signer, loads its Dexie navigation and restores the route before remote control
+plane hydration. New workspace selections and explicit login still verify the
+workspace. Background bootstrap verifies access, hydrates the control plane and
+then resumes durable task writes, guarded against workspace or signer changes.
+Retained read access does not grant future Tower reads or writes. Retained stale
+or access-lost channel descriptors must survive both the recovery projection and
+the channel presentation filter; their access status is part of UI equality.
+
+`retained-chat-recovery.spec.cjs` exercises production channel selection, shell
+bootstrap and local detail subscriptions against seeded IndexedDB with a
+20-second delayed synthetic Tower read. It checks reload, reconnect, checkpoint
+repair, new remote rows, explicit tombstones and denied future reads. The
+additive-access browser fixture separately exercises service and worker network
+materialization for v1 and v2. These fixtures do not diagnose a specific device's
+checkpoint or establish its deployed Tower capabilities.
+
+`retained-inbox-sync.spec.cjs` mounts the complete production store and the actual
+Inbox template, including its context effect and loading/empty branch. It seeds
+local conversations, holds descriptor/control-plane responses, and checks that
+Inbox cards and Recent Channels agree before responses arrive and through
+repair, reconnect and reload. New conversations merge into the Inbox and
+explicit message tombstones disappear without waiting for network convergence.

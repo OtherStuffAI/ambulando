@@ -821,7 +821,8 @@ async function queryTaskBoard(store, ownerNpub) {
 }
 
 function buildDetailSpecs(store) {
-  if (store.pgNavigationRecoveryPending) return [];
+  // Recovery fences remote materialization, not downloaded chat reads.
+  if (store.pgNavigationRecoveryPending && !['chat', 'status'].includes(store.navSection)) return [];
   const ownerNpub = String(store?.workspaceOwnerNpub || '').trim();
   const workspaceKey = currentWorkspaceKey(store);
   if (!ownerNpub) return [];

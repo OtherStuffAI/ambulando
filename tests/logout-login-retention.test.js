@@ -167,9 +167,12 @@ it('canonical login bootstrap resumes durable task intent only after access and 
   store.readStoredCollapsedSections = () => ({});
   store.navSection = 'chat'; store.selectedChannelId = null;
   await createShellState().bootstrapSelectedWorkspace.call(store);
-  expect(order).toEqual(['verified-control-plane', 'resume-intent']);
+  await vi.waitFor(() => expect(order).toEqual(['verified-control-plane', 'resume-intent']));
   store.verifyPgWorkspaceForSelection.mockRejectedValueOnce(new Error('workspace_membership_required'));
-  await expect(createShellState().bootstrapSelectedWorkspace.call(store)).rejects.toThrow('workspace_membership_required');
+  store.ensureTowerPgControlPlaneHydrated.mockClear();
+  await createShellState().bootstrapSelectedWorkspace.call(store);
+  await vi.waitFor(() => expect(store.verifyPgWorkspaceForSelection).toHaveBeenCalledTimes(2));
+  expect(store.ensureTowerPgControlPlaneHydrated).not.toHaveBeenCalled();
   expect(store.resumePgTaskWriteQueue).toHaveBeenCalledTimes(1);
 });
 

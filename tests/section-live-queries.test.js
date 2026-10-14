@@ -569,3 +569,14 @@ describe('section live query plan', () => {
     expect(store.refreshDocuments).toHaveBeenCalled();
   });
 });
+
+// Checkpoint repair must not suspend the local chat subscription.
+describe('retained chat during checkpoint recovery', () => {
+  it.each(['chat', 'status'])('keeps downloaded %s messages subscribed while recovery is pending', (navSection) => {
+    const store = { workspaceOwnerNpub: 'owner', currentWorkspaceKey: 'workspace', navSection,
+      selectedChannelId: 'channel', activeThreadId: 'root', deckThreadChannelId: 'channel',
+      pgNavigationRecoveryPending: true };
+    const plan = getSectionLiveQueryPlan(store);
+    expect(plan.detail.some(key => key.startsWith(navSection === 'chat' ? 'chat:messages:' : 'deck:messages:'))).toBe(true);
+  });
+});
