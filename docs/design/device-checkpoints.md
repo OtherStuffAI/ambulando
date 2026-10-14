@@ -210,3 +210,22 @@ local conversations, holds descriptor/control-plane responses, and checks that
 Inbox cards and Recent Channels agree before responses arrive and through
 repair, reconnect and reload. New conversations merge into the Inbox and
 explicit message tombstones disappear without waiting for network convergence.
+
+## Interrupted bounded page recovery
+
+The bounded handover certificate and opaque cursor commit together only after
+all 32-row chunks of a wire page finish. A prefix retains the preceding
+certificate. Otherwise an interrupted first delta of a new round pairs its new
+incomplete target with the previous completed-round cursor; Tower can repin that
+cursor on retry after content writes, correctly triggering the target-drift guard.
+Replayed terminal snapshot pages can likewise choose a later handover target.
+
+Before resuming a negotiated bounded download with `applyingPage`, the service
+replaces the device generation through the existing preserved-view reset and
+fetches a fresh authorized snapshot. This also repairs prefixes persisted by
+older clients. Cached records and pending local writes survive; stale responses
+remain fenced by client identity, generation, cursor and authority epoch.
+Target regression, null replacement and target growth without a newer access
+revision still fail closed within an uninterrupted round. Retry updates and
+Full sync share this recovery; neither clears site storage. The affected older
+build needs the corrected client loaded before these actions can repair it.

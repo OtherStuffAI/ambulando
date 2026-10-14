@@ -4067,6 +4067,13 @@
       "notes": [
         "Use a faint pin outline and a filled pin when selected, without a highlighted box or border."
       ]
+    },
+    {
+      "buildNumber": 2416,
+      "label": "Recover interrupted workspace updates",
+      "notes": [
+        "Interrupted workspace updates recover through a fresh authorized snapshot while keeping downloaded records and pending local changes."
+      ]
     }
   ]
 }

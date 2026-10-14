@@ -285,7 +285,7 @@ it('accepts an authority-gain repair target only with a newer access revision', 
   expect((await state()).converged).toBe(true);
 });
 
-it.each(['missing', 'premature', 'epoch', 'target', 'manifest', 'entries'])('fails closed on invalid negotiated %s without ack or fallback', async scenario => {
+it.each(['missing', 'premature', 'epoch', 'target', 'target-null', 'target-regression', 'target-newer-regression', 'manifest', 'entries'])('fails closed on invalid negotiated %s without ack or fallback', async scenario => {
   const h = harness(), read = h.ports.readPage;
   h.ports.readPage = async (...args) => {
     const page = await read(...args);
@@ -295,11 +295,16 @@ it.each(['missing', 'premature', 'epoch', 'target', 'manifest', 'entries'])('fai
     if (scenario === 'premature') handover.complete = true;
     if (scenario === 'epoch') handover.authority_epoch = 'other';
     if (scenario === 'target' && !page.has_more) handover.target_position = '11';
+    if (scenario === 'target-null' && !page.has_more) { handover.target_position = null; handover.complete = false; page.has_more = true; }
+    if (scenario.startsWith('target-') && scenario.includes('regression') && !page.has_more) {
+      handover.target_position = '8';
+      if (scenario === 'target-newer-regression') handover.access_revision = '2';
+    }
     return { ...page, handover, ...(scenario === 'manifest' ? { large_records: [{ manifest_id: 'unsupported' }] } : {}),
       ...(scenario === 'entries' ? { access_changes: Array.from({ length: 200 }, () => ({})) } : {}) };
   };
   await expect(h.run({ extension: 'bounded_snapshot_v1' })).rejects.toThrow();
-  expect(h.remote.client.mock.calls.filter(c => c[2].operation === 'ack')).toHaveLength(scenario === 'target' ? 1 : 0);
+  expect(h.remote.client.mock.calls.filter(c => c[2].operation === 'ack')).toHaveLength(scenario.startsWith('target') ? 1 : 0);
   expect((await state()).converged).not.toBe(true);
 });
 
@@ -573,4 +578,63 @@ it('generates a random canonical nonzero v4 cache UUID without secure-origin ran
   const first = createDeviceCacheId(random), second = createDeviceCacheId(random);
   expect(canonicalClientId(first)).toBe(true); expect(first).not.toBe(second);
   expect(first[14]).toBe('4'); expect('89ab').toContain(first[19]);
+});
+
+it.each([false, true])('repairs an interrupted bounded delta prefix, including old poisoned certificates (%s)', async legacy => {
+  const h = harness(), read = h.ports.readPage;
+  let target = '10';
+  h.ports.readPage = async (...args) => {
+    const page = await read(...args);
+    return { ...page, handover: { target_position: target, through_position: page.has_more ? '9' : target,
+      complete: !page.has_more, authority_epoch: 'epoch', access_revision: '1' } };
+  };
+  await h.run({ extension: boundedFixture.extension });
+  const before = await state();
+  target = '11';
+  const original = fixture.one_message_delta.changes[0];
+  const changes = Array.from({ length: 40 }, () => {
+    const id = crypto.randomUUID();
+    return { ...original, id, row: { ...original.row, id } };
+  });
+  await expect(applyPgRecordChanges(store, { ...fixture.one_message_delta, protocol_version: 2,
+    client_id: before.device.clientId, checkpoint_revision: before.device.revision,
+    changes, has_more: true, next_cursor: 'uncommitted-page', handover: { target_position: target, through_position: target,
+      complete: false, authority_epoch: 'epoch', access_revision: '1' } }, {
+    expectedCursor: before.cursor, expectedGeneration: before.localGeneration,
+    deviceScope: before.device.scope, authorityEpoch: 'epoch', boundedExtension: boundedFixture.extension,
+    beforeCommit: () => { throw new Error('interrupted final chunk'); },
+  })).rejects.toThrow('interrupted final chunk');
+  const interrupted = await state();
+  expect(interrupted.cursor).toBe(before.cursor);
+  expect(interrupted.handover).toEqual(before.handover);
+  expect(interrupted.applyingPage).toBeTruthy();
+  expect(await db.chat_messages.get(changes[0].id)).toBeTruthy();
+  if (legacy) await db.sync_state.put({ key, value: { ...interrupted,
+    handover: { ...interrupted.handover, target_position: '11', complete: false } } });
+  await db.chat_messages.put({ record_id: 'draft', body: 'keep local intent', sync_status: 'pending' });
+  await db.pending_writes.add({ record_id: 'draft' });
+  target = '12';
+  if (legacy) {
+    // Ordinary retry from the preceding cursor fails closed on the poisoned
+    // target. Recovery must replace authority, never accept this drift.
+    await expect(applyPgRecordChanges(store, { ...fixture.one_message_delta, protocol_version: 2,
+      client_id: before.device.clientId, checkpoint_revision: before.device.revision,
+      changes: [], has_more: false, next_cursor: 'unsafe-retry', handover: {
+        target_position: target, through_position: target, complete: true,
+        authority_epoch: 'epoch', access_revision: '1',
+      } }, { expectedCursor: before.cursor, deviceScope: before.device.scope,
+        authorityEpoch: 'epoch', boundedExtension: boundedFixture.extension,
+      })).rejects.toThrow('Bounded snapshot target changed');
+    expect((await state()).cursor).toBe(before.cursor);
+  }
+  await h.run({ extension: boundedFixture.extension });
+  const repaired = await state();
+  expect(repaired.device.clientId).not.toBe(before.device.clientId);
+  expect(repaired.localGeneration).toBe(before.localGeneration + 1);
+  expect(repaired.handover.target_position).toBe('12');
+  expect(repaired.converged).toBe(true);
+  expect(repaired.applyingPage).toBeNull();
+  expect((await db.chat_messages.get('draft')).body).toBe('keep local intent');
+  expect(await db.pending_writes.where('record_id').equals('draft').count()).toBe(1);
+  expect(await db.chat_messages.get(changes[0].id)).toBeTruthy();
 });

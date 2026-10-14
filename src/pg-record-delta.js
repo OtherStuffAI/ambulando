@@ -488,7 +488,9 @@ async function applyRecordPage(store, page, options = {}) {
     if (options.beforeCommit) await options.beforeCommit();
     const nextState = { ...state, accessPartitions, accessRevision: page.access_revision || state.accessRevision, contextDirty: page.has_more || options.partialPage ? contextDirty : false, viewBaselineInitialized: options.viewBaselineInitialized || state.viewBaselineInitialized || false, legacyFallbackActive: false, resetting: false, accessLost: options.partialPage ? Boolean(state.accessLost) : false, cursor: retirementPending || options.partialPage ? state.cursor : page.next_cursor, applyingPage: options.partialPage ? { nextCursor: page.next_cursor, through: options.pageOffset } : null, generation, incrementalSnapshot: true, snapshotRetirement: retirementPending ? state.snapshotRetirement || { tableIndex: 0, after: null, nextCursor: page.next_cursor } : null, snapshotId: page.mode === 'snapshot' ? page.snapshot_id : state.snapshotId,
       snapshotFamilies: page.mode === 'snapshot' ? page.families.filter(f => PG_RECORD_DELTA_FAMILIES.includes(f)) : state.snapshotFamilies,
-      handover: options.boundedExtension === 'bounded_snapshot_v1' ? page.handover : null,
+      // A certificate describes the whole wire page, just like its cursor.
+      // Publishing it for a prefix can bind the preceding cursor to a new target.
+      handover: options.partialPage ? state.handover : options.boundedExtension === 'bounded_snapshot_v1' ? page.handover : null,
       snapshotComplete: page.snapshot_complete || state.snapshotComplete || false,
       snapshotReconciliationPending: page.mode === 'snapshot' ? true
         : (page.has_more || retirementPending) ? state.snapshotReconciliationPending === true : false,

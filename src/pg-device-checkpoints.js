@@ -157,6 +157,10 @@ export async function syncDeviceRecords({ context, options, readState, materiali
     await replace((!inspection.owner || inspection.owner.scope === scope)
       && (!state?.device || state.device.scope === scope));
   }
+  // Interrupted prefixes keep the preceding opaque cursor. Tower may repin a
+  // completed round on replay; older clients also saved that prefix's target.
+  // Re-authorize through a fresh snapshot instead of accepting target drift.
+  if (options.extension === 'bounded_snapshot_v1' && state.applyingPage) await replace(true);
   const retireObsolete = async () => {
     for (const obsolete of state.obsoleteDevices || []) {
       if (obsolete.scope !== scope || obsolete.clientId === state.device.clientId || !canonicalClientId(obsolete.clientId)) continue;
