@@ -56,3 +56,18 @@ it('keeps the snapshot retirement cursor on the pin primary key rather than the 
  const mapped=mapThreadPin(row,context);
  expect(mapped.key).toBe(mapped.record_id);expect(mapped.key).not.toBe(mapped.actor_id);
 });
+
+it('projects typed resources with canonical titles and attention, and scopes operations by type plus id',async()=>{
+ await db.channels.put({record_id:'channel',record_state:'active'});
+ await db.tasks.put({record_id:'same',title:'Current task',pg_channel_id:'channel',record_state:'active',updated_at:'2026-10-02'});
+ await db.documents.put({record_id:'same',title:'Current document',pg_channel_id:'channel',pg_record_type:'doc',record_state:'active',updated_at:'2026-10-03'});
+ await db.pg_resource_attention.put({record_id:'task:same',unread:1});
+ await queueThreadPin(db,context,{id:'same',type:'task'},true);await queueThreadPin(db,context,{id:'same',type:'document'},true);
+ let projection=await readThreadPinProjection(db,context,'typed');
+ expect(projection.rows.map(r=>r.title).sort()).toEqual(['Current document','Current task']);
+ expect(projection.rows.find(r=>r.type==='task').persistedUnread).toBe(true);
+ const ops=await db.thread_pin_outbox.toArray();expect(ops.map(r=>r.body.expected_row_version)).toEqual([0,0]);
+ await applyThreadPinOperation(store,{action:'reject',seq:ops[0].seq,mutationId:ops[0].body.mutation_id,error:'Task conflict'},db);
+ expect((await db.thread_pin_outbox.toArray()).map(r=>r.resourceType)).toEqual(['document']);
+ await db.documents.update('same',{record_state:'deleted'});projection=await readThreadPinProjection(db,context,'typed');expect(projection.rows[0]).toMatchObject({title:'Document unavailable',unavailable:true});
+});

@@ -88,3 +88,17 @@ it('only includes the mobile pin page while pins exist and returns to Inbox afte
   expect(s.deckMobileColumn).toBe('inbox'); expect(s.positionDeckMobileCard).toHaveBeenCalledWith('inbox');
   vi.unstubAllGlobals();
 });
+
+it('opens task/document pins through the established internal record navigation without changing read or edit state on pin',async()=>{
+ const s=store();s.handleMentionNavigate=vi.fn().mockResolvedValue(true);s.pinnedThreadsContext=s.pinnedThreadsPartition;
+ s.pinnedThreadRows=[{id:'task',type:'task',pinnedAt:'2026-10-01',unavailable:false},{id:'doc',type:'document',pinnedAt:'2026-10-02',unavailable:false}];
+ await s.openPinnedThread(s.pinnedThreads[0]);await s.openPinnedThread(s.pinnedThreads[1]);
+ expect(s.handleMentionNavigate).toHaveBeenCalledWith('doc','doc');expect(s.handleMentionNavigate).toHaveBeenCalledWith('task','task');
+ s.pinnedThreadRows[0].unavailable=true;expect(await s.openPinnedThread(s.pinnedThreadRows[0])).toBe(false);
+ expect(s.isThreadPinned('task')).toBe(false);expect(s.isPersonalPinned('task','task')).toBe(true);
+});
+
+it('keeps the canonical thread identity when an Inbox navigation row also carries a source record id',async()=>{
+ const s=store();await s.toggleThreadPin({...pin,recordId:'source'});
+ expect(Object.keys((await getSettings()).threadPins[s.pinnedThreadsPartition])).toEqual(['thread']);
+});

@@ -24,6 +24,9 @@ This is a recent rebrand of Flight Deck.
 - **Chat in context.** Use channels and threads to discuss work, share
   attachments, mention people or agents, and follow working updates. Inbox
   brings attention back to conversations that need you.
+- **Keep personal pins.** Keep conversations, tasks and documents in one list
+  across scopes. Updated Tower connections synchronize the list between devices;
+  older connections preserve selections on this device until support is available.
 - **Track tasks.** Organize work in lists and boards, assign responsibility,
   track state, dates and dependencies, and keep descriptions and comments with
   the task.

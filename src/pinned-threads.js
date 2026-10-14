@@ -25,9 +25,9 @@ export const pinnedThreadsMixin = {
   get pinnedThreads() {
     if (this.pinnedThreadsContext !== this.pinnedThreadsPartition) return [];
     return this.pinnedThreadRows.map(row => ({ ...row, isUnread: !row.unavailable && (row.persistedUnread ?? (this.isTowerPgMode
-      ? Boolean(this._unreadThreadItems?.[row.id] || this.inboxUnreadThreads?.[row.id])
+      ? (!row.type || row.type === 'thread') && Boolean(this._unreadThreadItems?.[row.id] || this.inboxUnreadThreads?.[row.id])
       : Boolean(this._unreadChannels?.[row.channelId]))) }))
-      .sort((a, b) => b.pinnedAt.localeCompare(a.pinnedAt) || a.id.localeCompare(b.id));
+      .sort((a, b) => b.pinnedAt.localeCompare(a.pinnedAt) || (a.key || a.id).localeCompare(b.key || b.id));
   },
   syncPinnedThreadsContext(partition) {
     const queryKey = JSON.stringify([partition, getCurrentWorkspaceDbKey(), resolvePgReaderActorId(this)]);
@@ -62,27 +62,33 @@ export const pinnedThreadsMixin = {
     this.deckMobileColumn = selected;
     requestAnimationFrame(() => { if (this.deckMobileMediaQuery?.matches) this.positionDeckMobileCard?.(selected); });
   },
-  isThreadPinned(id) { return this.pinnedThreads.some(row => row.id === id); },
-  async toggleThreadPin(thread) {
+  isPersonalPinned(type, id) { return this.pinnedThreads.some(row => (row.type || 'thread') === type && row.id === id); },
+  isThreadPinned(id) { return this.isPersonalPinned('thread', id); },
+  toggleThreadPin(thread) { return this.togglePersonalPin(thread, 'thread'); },
+  async togglePersonalPin(resource, type = resource?.type || 'thread') {
+    const thread = { ...resource, type, id: type === 'thread' ? resource?.id || resource?.recordId || resource?.record_id : resource?.recordId || resource?.record_id || resource?.id, channelId: resource?.channelId || resource?.pg_channel_id || resource?.channel_id || '' };
     const partition = this.pinnedThreadsPartition;
-    const key = JSON.stringify([partition, thread.id]);
+    const key = JSON.stringify([partition, type, thread.id]);
     if (this.threadPinSaving[key]) return;
     this.threadPinSaving = { ...this.threadPinSaving, [key]: true };
-    const pinned = !this.isThreadPinned(thread.id);
+    const pinned = !this.isPersonalPinned(type, thread.id);
     try {
       if (this.isTowerPgMode && resolveTowerPgWorkspaceContext(this).workspaceId) {
         const db = getWorkspaceDb(), context = threadPinContext(this);
         if ((await db.sync_state.get(threadPinSupportKey(context)))?.value !== true) {
-          if (await db.sync_state.get(threadPinMigrationKey(partition))) await queueThreadPin(db, context, thread, pinned);
+          if (type !== 'thread' || await db.sync_state.get(threadPinMigrationKey(partition))) await queueThreadPin(db, context, thread, pinned, type);
           else await saveThreadPin(partition, thread, pinned);
           this.pinnedThreadsError = 'Pins are saved on this device until Tower supports pin synchronization.';
           return;
         }
-        await queueThreadPin(db, context, thread, pinned);
+        await queueThreadPin(db, context, thread, pinned, type);
         void this.requestTowerSyncFamily?.('thread-pins').catch(error => {
           if (partition === this.pinnedThreadsPartition) this.pinnedThreadsError = error.message || 'Pin synchronization failed.';
         });
-      } else await saveThreadPin(partition, thread, pinned);
+      } else {
+        if (type !== 'thread') throw new Error('Pin tasks and documents from a connected Tower workspace.');
+        await saveThreadPin(partition, thread, pinned);
+      }
       if (partition === this.pinnedThreadsPartition) this.pinnedThreadsError = '';
     } catch (error) {
       if (partition === this.pinnedThreadsPartition) this.pinnedThreadsError = error.message || 'Could not save pin. Try again.';
@@ -93,7 +99,9 @@ export const pinnedThreadsMixin = {
     }
   },
   async openPinnedThread(thread) {
-    if (thread.unavailable || !this.isThreadPinned(thread.id)) return false;
+    const type = thread.type || 'thread';
+    if (thread.unavailable || !this.isPersonalPinned(type, thread.id)) return false;
+    if (type !== 'thread') return this.handleMentionNavigate(type === 'document' ? 'doc' : 'task', thread.id);
     return this.openAutopilotOverviewThread(thread);
   },
 };

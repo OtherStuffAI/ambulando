@@ -38,7 +38,8 @@ const FAMILY = {
   resource_view_state: ['resource_view_states', (row) => ({ ...row, record_id: `${row.resource_type}:${row.resource_id}`, sync_status: 'synced' })],
   feed_subscription: ['feed_subscriptions', row => row],
   feed_item_state: ['feed_item_states', row => row],
-  thread_pin: ['thread_pins', row => row],
+  personal_pin: ['thread_pins', row => row],
+  thread_pin: ['thread_pins', row => row], // historical cursor alias
 };
 export const PG_RECORD_DELTA_FAMILIES = [...Object.keys(FAMILY), 'task_assignment'];
 const TOWER_WINS_LOCAL_ASSET_CONFLICT_FAMILIES = new Set(['file', 'file_folder']);
@@ -55,7 +56,7 @@ export function isTowerWinsLocalAssetConflict(conflict = {}) {
 }
 export function validatePgRecordPage(page, workspaceId, options = {}) {
   if (![1, 2].includes(page?.protocol_version) || !['snapshot', 'delta'].includes(page.mode)
-    || !Array.isArray(page.families) || !PG_RECORD_DELTA_FAMILIES.filter(f => !f.startsWith('feed_') && !f.startsWith('context_') && !['scope_order','thread_pin'].includes(f)).every(f => page.families.includes(f))
+    || !Array.isArray(page.families) || !PG_RECORD_DELTA_FAMILIES.filter(f => !f.startsWith('feed_') && !f.startsWith('context_') && !['scope_order','thread_pin','personal_pin'].includes(f)).every(f => page.families.includes(f))
     || !Array.isArray(page.changes) || page.changes.length > 200
     || typeof page.next_cursor !== 'string' || !page.next_cursor || typeof page.has_more !== 'boolean') {
     throw new Error('Invalid Tower record-delta v1 page');
@@ -227,7 +228,7 @@ async function applyRecordPage(store, page, options = {}) {
     const state = (await db.sync_state.get(cursorKey))?.value || { cursor: null };
     if (resolvePgReaderActorId(store)) {
       const reader = threadPinContext(store);
-      await db.sync_state.put({ key: threadPinSupportKey(reader), value: page.families.includes('thread_pin') });
+      await db.sync_state.put({ key: threadPinSupportKey(reader), value: page.families.includes('personal_pin') });
     }
     if (options.boundedExtension === 'bounded_snapshot_v1' && state.handover?.target_position !== null
       && state.handover?.target_position !== undefined && !state.handover.complete
@@ -334,7 +335,7 @@ async function applyRecordPage(store, page, options = {}) {
         }
         applied++; return;
       }
-      if (raw.family === 'thread_pin') {
+      if (['personal_pin','thread_pin'].includes(raw.family)) {
         const reader = threadPinContext(store);
         if (raw.operation === 'delete') await table.delete(localId);
         else {

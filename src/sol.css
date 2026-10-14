@@ -579,3 +579,7 @@ code, pre { font-family:var(--font-code); }
   .flightdeck-summary-panel-pinned .pinned-thread-row { height: 48px; margin-bottom: 0; }
   .deck-right-stack > .flightdeck-summary-panel-pinned > .deck-card-scroll { flex: 0 1 auto; max-height: 488px; }
 }
+
+.pinned-item-type { display: inline-flex; align-items: center; flex: 0 0 16px; width: 16px; color: var(--text-muted); }
+.pinned-item-type svg { width: 16px; height: 16px; }
+.pinned-thread-open .attention-card-title { flex: 1; }

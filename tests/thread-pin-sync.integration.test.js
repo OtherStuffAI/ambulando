@@ -8,7 +8,7 @@ import { openWorkspaceDb, createWorkspaceDb, saveSettings, getSettings } from '.
 import { TowerSyncService } from '../src/tower-sync-service.js';
 import { prepareThreadPinCommand, synchronizeThreadPins } from '../src/thread-pin-sync.js';
 import { applyThreadPinOperation, queueThreadPin, readThreadPinProjection, threadPinContext, threadPinSupportKey } from '../src/thread-pin-store.js';
-import { getTowerPgRecordSync, putTowerPgThreadPin } from '../src/api.js';
+import { getTowerPgRecordSync, putTowerPgThreadPin, putTowerPgPersonalPin } from '../src/api.js';
 import { applyPgRecordChanges, recordDeltaCursorKey } from '../src/pg-record-delta.js';
 import { storeCredentials, clearCredentials } from '../src/auth/secure-store.js';
 import { setMemoryPubkey, clearMemoryCredentials } from '../src/auth/nostr.js';
@@ -54,13 +54,13 @@ describe.skipIf(!process.env.RECORD_TEST_PORT)('two isolated clients against rea
     setMemoryPubkey(pubkey); setActiveSessionNpub(npub);
     await storeCredentials({ method: 'extension', pubkey });
   }
-  function makeClient(name, actor = 0) {
+  function makeClient(name, actor = 0, workspaceId = backend.workspaceId) {
     const workspaceDbKey = `pin-integration-${name}-${Date.now()}`;
     const db = createWorkspaceDb(workspaceDbKey);
     const store = { session: { npub: backend.npubs[actor] }, currentViewerNpub: backend.npubs[actor], backendUrl: backend.baseUrl,
       workspaceDbKey, _workspaceSelectionGeneration: 1, pinnedThreadsPartition: `legacy-${name}`,
-      currentWorkspace: { workspaceId: backend.workspaceId, appNpub: backend.npubs[0], directHttpsUrl: backend.baseUrl,
-        pgMe: { actor: { actor_id: backend.actorIds[actor], npub: backend.npubs[actor] }, identity: { workspace_id: backend.workspaceId } } },
+      currentWorkspace: { workspaceId, appNpub: backend.npubs[0], directHttpsUrl: backend.baseUrl,
+        pgMe: { actor: { actor_id: backend.actorIds[actor], npub: backend.npubs[actor] }, identity: { workspace_id: workspaceId } } },
       buildTowerPgMaterializationStoreSnapshot() { return this; },
       runTowerPgWorkspaceSync: async () => {},
     };
@@ -78,7 +78,7 @@ describe.skipIf(!process.env.RECORD_TEST_PORT)('two isolated clients against rea
     let page, pages = 0;
     do {
       if (++pages > 30) throw Error("Pin fixture snapshot did not converge");
-      page = await getTowerPgRecordSync(backend.workspaceId, { baseUrl: backend.baseUrl, appNpub: backend.npubs[0], cursor });
+      page = await getTowerPgRecordSync(client.context.workspaceId, { baseUrl: backend.baseUrl, appNpub: backend.npubs[0], cursor });
       await applyPgRecordChanges(client.store, page);
       cursor = page.next_cursor;
     } while (page.has_more);
@@ -149,4 +149,26 @@ describe.skipIf(!process.env.RECORD_TEST_PORT)('two isolated clients against rea
     expect((await readThreadPinProjection(a.db,differentBackend,'no-legacy')).rows).toEqual([]);
     console.log('PIN_SYNC_REAL_HTTP unavailable removal, actor-private records and backend partition verified');
   }, 30000);
+  it('syncs tasks and documents in the same list, independently of a thread with the same UUID', async () => {
+    const [a,b]=clients;await login(0);await pull(a);await pull(b);
+    const task={id:backend.taskId,type:'task',channelId:backend.channelId},doc={id:backend.documentId,type:'document',channelId:backend.channelId};
+    const beforeA=await a.db.resource_view_states.toArray();const beforeTasks=await a.db.tasks.toArray();const beforeDocs=await a.db.documents.toArray();
+    await Promise.all([queueThreadPin(a.db,a.context,task,true),queueThreadPin(b.db,b.context,doc,true)]);
+    await flush(a);await flush(b);await pull(a);await pull(b);
+    for(const client of clients){const rows=(await projection(client)).rows;expect(rows.some(r=>r.type==='task'&&r.id===task.id)).toBe(true);expect(rows.some(r=>r.type==='document'&&r.id===doc.id)).toBe(true);expect(rows.some(r=>r.type==='thread'&&r.id===task.id)).toBe(true);}
+    const foreign=makeClient('other-workspace',0,backend.otherWorkspaceId);await foreign.db.open();await pull(foreign);expect((await projection(foreign)).rows).toEqual([]);
+    for(const type of ['thread','task','document'])await expect(putTowerPgPersonalPin(backend.otherWorkspaceId,type,task.id,{pinned:true,expected_row_version:0,mutation_id:crypto.randomUUID()},foreign.context)).rejects.toMatchObject({status:404});
+    foreign.service.dispose();await a.db.open();
+    await queueThreadPin(a.db,a.context,task,false);await flush(a);await pull(b);
+    expect((await projection(b)).rows.some(r=>r.type==='task'&&r.id===task.id)).toBe(false);
+    expect((await projection(b)).rows.some(r=>r.type==='document'&&r.id===doc.id)).toBe(true);
+    b.db.close();await b.db.open();await pull(b);expect((await projection(b)).rows.some(r=>r.type==='document'&&r.id===doc.id)).toBe(true);
+    await a.db.open();expect(await a.db.resource_view_states.toArray()).toEqual(beforeA);expect(await a.db.tasks.toArray()).toEqual(beforeTasks);expect(await a.db.documents.toArray()).toEqual(beforeDocs);
+    // Same-resource stale offline intent conflicts; independent types remain intact.
+    await queueThreadPin(a.db,a.context,doc,false);await queueThreadPin(b.db,b.context,doc,false);await flush(b);await flush(a);await pull(a);
+    expect((await projection(a)).rows.some(r=>r.type==='document'&&r.id===doc.id)).toBe(false);expect((await projection(a)).error).toContain('another device');
+    await login(1);await expect(putTowerPgPersonalPin(backend.workspaceId,'document',doc.id,{pinned:true,expected_row_version:0,mutation_id:crypto.randomUUID()},a.context)).rejects.toMatchObject({status:403});await login(0);
+    console.log('PIN_SYNC_REAL_HTTP thread/task/document typed independence, propagation, reload, privacy, conflicts and unchanged read/edit state verified');
+  },30000);
+
 });

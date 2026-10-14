@@ -320,6 +320,10 @@ export function createWorkspaceDb(workspaceDbKey) {
   db.version(35).stores({ org_data: '&key' });
   db.version(38).stores({ nostr_notifications: '&key, context, id', nostr_notification_states: '&key, context' });
   db.version(39).stores({ thread_pins: '&record_id, context, [context+thread_id]', thread_pin_outbox: '++seq, context, [context+threadId]' });
+  db.version(40).stores({ thread_pins: '&record_id, context, [context+thread_id], [context+resource_type+resource_id]', thread_pin_outbox: '++seq, context, [context+threadId], [context+targetKey]' }).upgrade(async tx => {
+    await tx.thread_pins.toCollection().modify(row => { row.key = row.record_id; row.resource_type ||= 'thread'; row.resource_id ||= row.thread_id; });
+    await tx.thread_pin_outbox.toCollection().modify(row => { row.resourceType ||= 'thread'; row.targetKey ||= `${row.resourceType}:${row.threadId}`; });
+  });
   db.version(37).stores({ hosting_billing: '&key' });
   db.version(36).stores({ scope_orders: '&record_id, workspace_id', pg_archived_targets: '&key, family, id' });
   const commentFields = activityIndexFields;

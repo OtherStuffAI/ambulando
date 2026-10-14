@@ -70,8 +70,8 @@ for(const width of [375,1440]) for(const theme of ['light','dark']) test(`person
   await expect(pins.locator('.pinned-thread-row')).toHaveCount(2);
   expect(await inbox.locator('.attention-card-title').allTextContents()).toEqual(inboxOrder);
   if(width<769) {
-    await page.getByRole('button',{name:'Show Pinned threads',exact:true}).click();
-    await expect(page.getByRole('button',{name:'Show Pinned threads',exact:true})).toHaveAttribute('aria-current','page');
+    await page.getByRole('button',{name:'Show Pinned items',exact:true}).click();
+    await expect(page.getByRole('button',{name:'Show Pinned items',exact:true})).toHaveAttribute('aria-current','page');
     await expect.poll(()=>pins.evaluate(el=>Math.abs(el.getBoundingClientRect().left-document.querySelector('[data-deck-columns-track]').getBoundingClientRect().left)<2)).toBe(true);
   } else {
     const p=await pins.boundingBox(), f=await page.locator('[data-deck-column="wapp-updates"]').boundingBox();
@@ -109,10 +109,10 @@ for(const width of [375,1440]) for(const theme of ['light','dark']) test(`person
   // Reinstall the fixture without clearing browser IndexedDB; persistence is real.
   await setup(page);
   await expect(pins.locator('.pinned-thread-row')).toHaveCount(2);
-  if(width<769) await page.getByRole('button',{name:'Show Pinned threads',exact:true}).click();
+  if(width<769) await page.getByRole('button',{name:'Show Pinned items',exact:true}).click();
   await page.evaluate(async()=>window.pinProbeDb.channels.update('other-channel',{record_state:'deleted'}));
   await expect(pins).toContainText('Thread unavailable');
-  await expect(pins.getByRole('button',{name:'Thread unavailable',exact:true})).toBeDisabled();
+  await expect(pins.getByRole('button',{name:'Thread: Thread unavailable',exact:true})).toBeDisabled();
   await pins.getByRole('button',{name:'Unpin Thread unavailable',exact:true}).click();
   await expect(pins.locator('.pinned-thread-row')).toHaveCount(1);
   await pins.getByRole('button',{name:'Unpin Return to this conversation',exact:true}).press('Space');

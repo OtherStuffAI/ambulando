@@ -1,7 +1,7 @@
 import { putPersonalThreadPin } from './tower-command-intents.js';
 import { getSettings, getWorkspaceDb } from './db.js';
 import { threadPinContext, threadPinSupportKey } from './thread-pin-store.js';
-import { putTowerPgThreadPin } from './api.js';
+import { putTowerPgPersonalPin } from './api.js';
 
 async function materialize(store, input) {
   return store.getTowerSyncService().materialize('workspace-bundle', { thread_pin_operation: input }, {
@@ -13,7 +13,7 @@ export function prepareThreadPinCommand(store, input) {
   if (context.key !== input.context) throw new Error('Pin reader changed');
   return {
     entityKey: `thread-pin:${context.key}:${input.seq}`,
-    execute: () => putTowerPgThreadPin(context.workspaceId, input.threadId, input.body, context),
+    execute: () => putTowerPgPersonalPin(context.workspaceId, input.resourceType || 'thread', input.threadId, input.body, context),
     reconcile: async result => {
       await materialize(store, { action: 'ack', seq: input.seq, mutationId: input.body.mutation_id, pin: result.pin });
       return result;

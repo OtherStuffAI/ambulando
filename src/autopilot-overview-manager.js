@@ -818,7 +818,7 @@ export function buildRecentChannels(threads = [], { limit = 10 } = {}) {
 const DECK_MOBILE_CARDS = Object.freeze([
   { id: 'hello-links', label: 'Hello and Links' },
   { id: 'inbox', label: 'Inbox' },
-  { id: 'pinned', label: 'Pinned threads' },
+  { id: 'pinned', label: 'Pinned items' },
   { id: 'wapp-updates', label: 'Feed' },
   { id: 'recent', label: 'Recent' },
 ]);

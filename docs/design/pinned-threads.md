@@ -1,8 +1,8 @@
-# Personal pinned threads
+# Personal pinned items
 
-Pinned threads keep conversations visible after reading them. The desktop Deck
+Personal pins keep conversations, tasks and documents visible after reading them. The desktop Deck
 sidebar shows a compact list above Feeds; the mobile Deck pager has its own
-Pinned threads page while pins exist. The empty panel and mobile page are hidden.
+Pinned items page while pins exist. The empty panel and mobile page are hidden.
 On desktop the panel fits its rows, showing up to ten before scrolling. Inbox chat rows have a native pin button with a pressed
 state. Each pinned row shows its current title and relative activity time with
 the existing unread background, plus an unpin button. Opening uses the existing
@@ -14,7 +14,7 @@ read receipts and title changes update the row without moving it. Unpinning and
 pinning again places the thread first. Pin operations do not modify thread
 records, read positions, Inbox order or shared record outboxes.
 
-Selections now synchronize through Tower's typed personal `thread_pin` family.
+Selections now synchronize through Tower's typed personal `personal_pin` family.
 The authenticated canonical actor and workspace own each per-thread row; the
 browser additionally partitions backend/app/workspace/reader state. Pins and
 retained unpin tombstones recover via the existing record snapshots/deltas and
@@ -25,7 +25,7 @@ show a device-only notice. Migration waits for support, so missing routes cannot
 discard old pins.
 
 Dexie `thread_pins` stores canonical rows and `thread_pin_outbox` stores immutable
-per-thread operations. Pending changes appear immediately through liveQuery.
+per-type, per-resource operations. Pending changes appear immediately through liveQuery.
 The existing materialization worker prepares migration and reconciles command
 acknowledgements; ordinary record pages materialize the new family there too.
 Transport responses, local canonical rows and rendered pin cards stay distinct.
@@ -37,7 +37,7 @@ Repeated migration and a stale device cannot resurrect an intentional unpin.
 Imports of missing/inaccessible threads retain UUIDs only and display unavailable.
 Clearing browser data loses unsent work; acknowledged pins remain on Tower.
 
-CAS applies independently per thread. Two independent pins merge. Same-thread
+CAS applies independently per resource type and ID. Two independent pins merge. Same-thread
 races have one accepted revision and one conflict. Offline retries keep the exact
 mutation ID and base revision, replaying the original acknowledgement after a lost
 response. A conflict discards that request and its dependent local toggles,
@@ -66,3 +66,27 @@ tests/e2e/pinned-threads.spec.cjs renders production templates/styles and exerci
 production pin code using isolated browser IndexedDB and seeded records. Those
 checks establish local behavior, not authenticated Tower delivery or physical
 phone/browser behavior. The normal performance baseline remains required.
+
+
+Tasks and documents use the same list and synchronization owner. Their Inbox
+cards and persisted detail headers have the same faint pin control; the selected
+state fills the pin without a box. Cards carry type icons and typed accessible
+names. Type/ID keys prevent collisions when different resource tables contain the
+same UUID. Pin actions store IDs only, never draft titles, bodies or assignments.
+Task/document rows use canonical Dexie titles and personalized attention. Normal
+internal-reference navigation handles opening, scope changes, drafts and reads;
+pinning itself does not open, mark read, acquire a lease or change edit mode.
+
+The v40 Dexie upgrade adds typed indexes and upgrades the thread checkpoint's
+rows/outbox atomically, retaining mutation IDs, base versions and tombstones.
+Tower's idempotent migration retains row UUIDs, versions, receipts and cursor
+epochs while current rows move to the personal_pin family. Legacy journal rows
+remain immutable and readable. New task/document pins are explicit local
+operations, retained on this device if the connected Tower lacks the contract.
+
+Verification includes the real HTTP/Postgres two-client test in
+`tests/thread-pin-sync.integration.test.js`, v39 cache migration in
+`tests/personal-pin-upgrade.test.js`, typed projections in
+`tests/thread-pin-store.test.js`, and task/document browser controls and existing
+open paths in `tests/e2e/personal-pins.spec.cjs`. Cross-device runtime activation
+must be reported separately from these disposable production-route tests.

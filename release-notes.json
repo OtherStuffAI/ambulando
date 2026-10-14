@@ -4134,6 +4134,26 @@
       "label": "Pin snapshot recovery validation",
       "notes": [],
       "noUserVisibleChanges": true
+    },
+    {
+      "buildNumber": 2426,
+      "label": "Pin conversations, tasks and documents",
+      "notes": [
+        "Keep threads, tasks and documents in one personal pinned list across scopes and devices. Pins use the same subtle controls and synchronize when Tower supports personal pins."
+      ]
+    },
+    {
+      "buildNumber": 2427,
+      "label": "Personal pin navigation",
+      "notes": [
+        "Pinned tasks and documents open through their existing detail views, including destinations in another scope."
+      ]
+    },
+    {
+      "buildNumber": 2428,
+      "label": "Personal pin accessibility and verification",
+      "notes": [],
+      "noUserVisibleChanges": true
     }
   ]
 }

@@ -2348,12 +2348,12 @@
                     </template>
                     <template x-if="item.inboxKind === 'task'">
                       <div class="attention-card flightdeck-summary-card flightdeck-summary-card-task" :class="{ 'flightdeck-summary-card-inbox-unread': item.isUnread, 'flightdeck-summary-card-inbox-working': item.isWorking, 'task-title-long': $store.chat.isLongTaskTitle(item.title) }" :style="{ '--task-status-color': $store.chat.resolveTaskBoardColumnColor(item) }" role="link" tabindex="0" @click="if ($store.chat.shouldOpenDeckCard($event)) $store.chat.openAutopilotOverviewTask(item)" @keydown.enter.prevent="if ($store.chat.shouldOpenDeckCard($event)) $store.chat.openAutopilotOverviewTask(item)" @keydown.space.prevent="if ($store.chat.shouldOpenDeckCard($event)) $store.chat.openAutopilotOverviewTask(item)" aria-label="Open selected task">
-                        <span class="attention-card-icon" aria-hidden="true" x-html="$store.chat.getAttentionIconSvg('task')"></span><span class="attention-card-content"><span class="inbox-card-heading"><span class="attention-card-kicker" :title="`Task · ${item.subtitle}`" x-text="`Task · ${item.subtitle}`"></span><span class="attention-card-time" x-text="$store.chat.formatRelativeTime(item.inboxActivityAt)"></span></span><span class="attention-card-title deck-card-inline-title" :class="$store.chat.getTaskTitleLengthClass(item.title)" x-html="$store.chat.renderDeckCardText(item.title)"></span><span class="attention-card-subtitle" x-text="item.reason"></span></span><span class="attention-card-meta"><template x-if="item.taskState === 'review'"><button type="button" class="attention-card-mark-read" :title="item.taskState === 'review' ? 'Mark done' : 'Mark read'" :aria-label="item.taskState === 'review' ? 'Mark done' : 'Mark read'" data-deck-card-action x-show="item.isUnread" x-cloak @click.stop.prevent="$store.chat.markDeckReviewTaskDone(item.recordId)" @keydown.enter.stop @keydown.space.stop>Mark done</button></template><button type="button" class="attention-card-mark-read" title="Mark read" aria-label="Mark read" data-deck-card-action x-show="item.isUnread" x-cloak @click.stop.prevent="$store.chat.markDeckResourceRead('task', item.recordId)" @keydown.enter.stop @keydown.space.stop>Mark read</button></span>
+                        <span class="attention-card-icon" aria-hidden="true" x-html="$store.chat.getAttentionIconSvg('task')"></span><span class="attention-card-content"><span class="inbox-card-heading"><span class="attention-card-kicker" :title="`Task · ${item.subtitle}`" x-text="`Task · ${item.subtitle}`"></span><span class="attention-card-time" x-text="$store.chat.formatRelativeTime(item.inboxActivityAt)"></span></span><span class="attention-card-title deck-card-inline-title" :class="$store.chat.getTaskTitleLengthClass(item.title)" x-html="$store.chat.renderDeckCardText(item.title)"></span><span class="attention-card-subtitle" x-text="item.reason"></span></span><span class="attention-card-meta"><button type="button" class="thread-pin-button" data-deck-card-action data-testid="personal-pin-task" :class="{ active: $store.chat.isPersonalPinned('task', item.recordId) }" :aria-pressed="$store.chat.isPersonalPinned('task', item.recordId).toString()" :aria-label="($store.chat.isPersonalPinned('task', item.recordId) ? 'Unpin ' : 'Pin ') + (item.title || 'Untitled task')" title="Pin task" @click.stop.prevent="$store.chat.togglePersonalPin(item, 'task')" @keydown.enter.stop @keydown.space.stop><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m16 3 5 5-4 1-3 5-4-4 5-3zM10 14l-7 7"/></svg></button><template x-if="item.taskState === 'review'"><button type="button" class="attention-card-mark-read" :title="item.taskState === 'review' ? 'Mark done' : 'Mark read'" :aria-label="item.taskState === 'review' ? 'Mark done' : 'Mark read'" data-deck-card-action x-show="item.isUnread" x-cloak @click.stop.prevent="$store.chat.markDeckReviewTaskDone(item.recordId)" @keydown.enter.stop @keydown.space.stop>Mark done</button></template><button type="button" class="attention-card-mark-read" title="Mark read" aria-label="Mark read" data-deck-card-action x-show="item.isUnread" x-cloak @click.stop.prevent="$store.chat.markDeckResourceRead('task', item.recordId)" @keydown.enter.stop @keydown.space.stop>Mark read</button></span>
                       </div>
                     </template>
                     <template x-if="item.inboxKind === 'document'">
                       <div class="attention-card flightdeck-summary-card flightdeck-summary-card-doc" :class="{ 'flightdeck-summary-card-inbox-unread': item.isUnread, 'flightdeck-summary-card-inbox-working': item.isWorking }" role="link" tabindex="0" @click="if ($store.chat.shouldOpenDeckCard($event)) $store.chat.openAutopilotOverviewDocument(item)" @keydown.enter.prevent="if ($store.chat.shouldOpenDeckCard($event)) $store.chat.openAutopilotOverviewDocument(item)" @keydown.space.prevent="if ($store.chat.shouldOpenDeckCard($event)) $store.chat.openAutopilotOverviewDocument(item)" aria-label="Open selected document">
-                        <span class="attention-card-icon" aria-hidden="true" x-html="$store.chat.getAttentionIconSvg('doc')"></span><span class="attention-card-content"><span class="inbox-card-heading"><span class="attention-card-kicker">Document</span><span class="attention-card-time" x-text="$store.chat.formatRelativeTime(item.inboxActivityAt)"></span></span><span class="attention-card-title deck-card-inline-title" x-html="$store.chat.renderDeckCardText(item.title)"></span><span class="attention-card-subtitle" x-text="item.reason"></span></span><span class="attention-card-meta"><button type="button" class="attention-card-mark-read" :title="item.taskState === 'review' ? 'Mark done' : 'Mark read'" :aria-label="item.taskState === 'review' ? 'Mark done' : 'Mark read'" data-deck-card-action x-show="item.isUnread" x-cloak @click.stop.prevent="$store.chat.markDeckResourceRead('document', item.recordId)" @keydown.enter.stop @keydown.space.stop>Mark read</button><span class="attention-card-action">Open doc</span></span>
+                        <span class="attention-card-icon" aria-hidden="true" x-html="$store.chat.getAttentionIconSvg('doc')"></span><span class="attention-card-content"><span class="inbox-card-heading"><span class="attention-card-kicker">Document</span><span class="attention-card-time" x-text="$store.chat.formatRelativeTime(item.inboxActivityAt)"></span></span><span class="attention-card-title deck-card-inline-title" x-html="$store.chat.renderDeckCardText(item.title)"></span><span class="attention-card-subtitle" x-text="item.reason"></span></span><span class="attention-card-meta"><button type="button" class="thread-pin-button" data-deck-card-action data-testid="personal-pin-document" :class="{ active: $store.chat.isPersonalPinned('document', item.recordId) }" :aria-pressed="$store.chat.isPersonalPinned('document', item.recordId).toString()" :aria-label="($store.chat.isPersonalPinned('document', item.recordId) ? 'Unpin ' : 'Pin ') + (item.title || 'Untitled document')" title="Pin document" @click.stop.prevent="$store.chat.togglePersonalPin(item, 'document')" @keydown.enter.stop @keydown.space.stop><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m16 3 5 5-4 1-3 5-4-4 5-3zM10 14l-7 7"/></svg></button><button type="button" class="attention-card-mark-read" :title="item.taskState === 'review' ? 'Mark done' : 'Mark read'" :aria-label="item.taskState === 'review' ? 'Mark done' : 'Mark read'" data-deck-card-action x-show="item.isUnread" x-cloak @click.stop.prevent="$store.chat.markDeckResourceRead('document', item.recordId)" @keydown.enter.stop @keydown.space.stop>Mark read</button><span class="attention-card-action">Open doc</span></span>
                       </div>
                     </template>
                     <template x-if="item.inboxKind === 'file'">
@@ -2370,15 +2370,15 @@
             </section>
 
             <div class="deck-right-stack" data-testid="deck-right-stack" :class="{ 'has-pinned-threads': $store.chat.pinnedThreads.length > 0 }">
-            <section class="flightdeck-summary-panel flightdeck-summary-panel-pinned deck-column" data-deck-column="pinned" data-testid="deck-pinned-threads" x-show="$store.chat.pinnedThreads.length > 0" aria-label="Pinned threads" x-effect="$store.chat.syncPinnedThreadsContext($store.chat.pinnedThreadsPartition)">
-              <div class="autopilot-panel-heading" data-deck-mobile-sticky-heading><h3>Pinned threads</h3></div>
-              <div class="deck-card-scroll" tabindex="0" aria-label="Pinned thread list">
-                <p class="settings-field-help" x-show="$store.chat.pinnedThreads.length === 0">Pin threads from Inbox to keep them here across scopes.</p>
+            <section class="flightdeck-summary-panel flightdeck-summary-panel-pinned deck-column" data-deck-column="pinned" data-testid="deck-pinned-threads" x-show="$store.chat.pinnedThreads.length > 0" aria-label="Pinned items" x-effect="$store.chat.syncPinnedThreadsContext($store.chat.pinnedThreadsPartition)">
+              <div class="autopilot-panel-heading" data-deck-mobile-sticky-heading><h3>Pinned items</h3></div>
+              <div class="deck-card-scroll" tabindex="0" aria-label="Pinned item list">
+                <p class="settings-field-help" x-show="$store.chat.pinnedThreads.length === 0">Pin conversations, tasks and documents to keep them here across scopes.</p>
                 <p class="settings-field-help" role="status" x-show="$store.chat.pinnedThreadsError" x-text="$store.chat.pinnedThreadsError"></p>
-                <template x-for="pin in $store.chat.pinnedThreads" :key="pin.id">
+                <template x-for="pin in $store.chat.pinnedThreads" :key="pin.key || pin.id">
                   <div class="pinned-thread-row" :class="{ 'flightdeck-summary-card-inbox-unread': pin.isUnread }">
-                    <button type="button" class="pinned-thread-open" :disabled="pin.unavailable" @click="$store.chat.openPinnedThread(pin)" :title="pin.title"><span class="attention-card-title" x-text="pin.title"></span><time class="attention-card-time" :datetime="pin.activityAt" x-text="pin.unavailable ? '' : $store.chat.formatRelativeTime(pin.activityAt)"></time></button>
-                    <button type="button" class="thread-pin-button active" :aria-label="'Unpin ' + pin.title" title="Unpin thread" @click="$store.chat.toggleThreadPin(pin)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m16 3 5 5-4 1-3 5-4-4 5-3zM10 14l-7 7"/></svg></button>
+                    <button type="button" class="pinned-thread-open" :aria-label="(pin.type === 'task' ? 'Task' : pin.type === 'document' ? 'Document' : 'Thread') + ': ' + pin.title" :disabled="pin.unavailable" @click="$store.chat.openPinnedThread(pin)" :title="pin.title"><span class="pinned-item-type" :aria-label="pin.type || 'thread'" x-html="$store.chat.getAttentionIconSvg(pin.type === 'task' ? 'task' : pin.type === 'document' ? 'doc' : 'chat')"></span><span class="attention-card-title" x-text="pin.title"></span><time class="attention-card-time" :datetime="pin.activityAt" x-text="pin.unavailable ? '' : $store.chat.formatRelativeTime(pin.activityAt)"></time></button>
+                    <button type="button" class="thread-pin-button active" :aria-label="'Unpin ' + pin.title" :title="'Unpin ' + (pin.type || 'thread')" @click="$store.chat.togglePersonalPin(pin)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m16 3 5 5-4 1-3 5-4-4 5-3zM10 14l-7 7"/></svg></button>
                   </div>
                 </template>
               </div>
@@ -3330,6 +3330,7 @@
                   </div>
                 </div>
                 <div class="task-detail-actions">
+                  <button type="button" class="thread-pin-button" data-deck-card-action data-testid="personal-pin-task" x-show="$store.chat.isTowerPgMode && $store.chat.editingTask?.pg_backend" x-effect="$store.chat.syncPinnedThreadsContext($store.chat.pinnedThreadsPartition)" :class="{ active: $store.chat.isPersonalPinned('task', $store.chat.editingTask?.record_id) }" :aria-pressed="$store.chat.isPersonalPinned('task', $store.chat.editingTask?.record_id).toString()" :aria-label="($store.chat.isPersonalPinned('task', $store.chat.editingTask?.record_id) ? 'Unpin ' : 'Pin ') + ($store.chat.editingTask?.title || 'Untitled task')" title="Pin task" @click.stop.prevent="$store.chat.togglePersonalPin($store.chat.editingTask, 'task')" @keydown.enter.stop @keydown.space.stop><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m16 3 5 5-4 1-3 5-4-4 5-3zM10 14l-7 7"/></svg></button>
                   <button
                     type="button"
                     class="task-copy-btn task-modal-expand-btn task-desktop-action"
@@ -3374,7 +3375,7 @@
                   <button
                     type="button"
                     class="task-copy-btn task-desktop-action"
-                    @click="if ($store.chat.editingTask?.record_id) $store.chat.copyTaskLink($store.chat.editingTask.record_id)"
+                    @click="if ($store.chat.editingTask?.record_id) $store.chat.copyTaskLink($store.chat.editingTask?.record_id)"
                     x-text="$store.chat.editingTask?.record_id && $store.chat.copiedTaskLinkId === $store.chat.editingTask.record_id ? 'Copied link' : 'Copy link'"
                   ></button>
                   <div class="doc-actions-menu task-actions-menu" x-data="{ open: false }" @click.outside="open = false" @keydown.escape.stop="open = false; $refs.toggle.focus()">
@@ -3389,7 +3390,7 @@
                       <div class="task-phone-actions">
                         <p class="task-menu-title" x-text="$store.chat.editingTask.title || 'Untitled task'"></p>
                         <button type="button" x-show="$store.chat.isTaskDetailEditing() && (!$store.chat.isTowerPgMode || $store.chat.taskDraftDirty)" :disabled="$store.chat.taskDetailSaving" @click="$store.chat.cancelTaskDetailEdit(); open = false" x-text="$store.chat.isTowerPgMode ? 'Discard' : 'Cancel'"></button>
-                        <button type="button" @click="if ($store.chat.editingTask?.record_id) $store.chat.copyTaskLink($store.chat.editingTask.record_id); open = false" x-text="$store.chat.copiedTaskLinkId === $store.chat.editingTask?.record_id ? 'Copied link' : 'Copy link'"></button>
+                        <button type="button" @click="if ($store.chat.editingTask?.record_id) $store.chat.copyTaskLink($store.chat.editingTask?.record_id); open = false" x-text="$store.chat.copiedTaskLinkId === $store.chat.editingTask?.record_id ? 'Copied link' : 'Copy link'"></button>
                         <button type="button" x-show="$store.chat.chatTaskModalOpen" @click="$store.chat.toggleChatTaskModalFullScreen(); open = false" x-text="$store.chat.chatTaskModalFullScreen ? 'Exit full screen' : 'Full screen'"></button>
                         <button type="button" x-show="$store.chat.chatTaskModalOpen" @click="$store.chat.openChatTaskFullPage(); open = false">Open full page</button>
                         <button type="button" x-show="$store.chat.getPrimaryTaskAssigneeNpub($store.chat.editingTask)" :disabled="$store.chat.taskDetailSaving || $store.chat.taskDetailCheckoutPending" @click="if ($store.chat.isTaskDetailEditing() || await $store.chat.enterTaskDetailEditMode()) await $store.chat.clearEditingTaskAssignee(); open = false">Clear task assignee</button>
@@ -3422,7 +3423,7 @@
 	                        x-show="!$store.chat.isTowerPgMode"
 	                        @click="if ($store.chat.editingTask?.record_id) $store.chat.openRecordStatusModal({ familyId: 'task', recordId: $store.chat.editingTask.record_id, label: $store.chat.editingTask.title || 'Task' }); open = false"
 	                      >Check status</button>
-                      <button type="button" class="doc-actions-delete" @click="if($store.chat.editingTask?.record_id && confirm('Delete this task?')) $store.chat.deleteTask($store.chat.editingTask.record_id); open = false">Delete task</button>
+                      <button type="button" class="doc-actions-delete" @click="if($store.chat.editingTask?.record_id && confirm('Delete this task?')) $store.chat.deleteTask($store.chat.editingTask?.record_id); open = false">Delete task</button>
                     </div>
                   </div>
                 <button type="button" class="task-back-btn task-modal-close-btn" x-show="$store.chat.chatTaskModalOpen" @click="$store.chat.closeChatTaskModal()" title="Close task" aria-label="Close task">&times;</button>
@@ -3744,11 +3745,11 @@
                   <!-- Subtasks -->
                   <div
                     class="subtask-list-field"
-                    x-show="$store.chat.isTaskDetailEditing() || ($store.chat.editingTask?.record_id && $store.chat.getSubtasks($store.chat.editingTask.record_id).length > 0)"
+                    x-show="$store.chat.isTaskDetailEditing() || ($store.chat.editingTask?.record_id && $store.chat.getSubtasks($store.chat.editingTask?.record_id).length > 0)"
                   >
                     <label class="task-field-label">Subtasks</label>
                     <div class="subtask-list">
-                      <template x-for="st in ($store.chat.editingTask?.record_id ? $store.chat.getSubtasks($store.chat.editingTask.record_id) : [])" :key="st.record_id">
+                      <template x-for="st in ($store.chat.editingTask?.record_id ? $store.chat.getSubtasks($store.chat.editingTask?.record_id) : [])" :key="st.record_id">
                         <div class="subtask-row" @click="$store.chat.openTaskDetail(st.record_id)">
                           <span class="progress-dot" :style="`background: ${$store.chat.stateColor(st.state)}`"></span>
                           <span class="subtask-title" :class="$store.chat.getTaskTitleLengthClass(st.title)" x-text="st.title"></span>
@@ -3760,10 +3761,10 @@
                           <input
                             type="text"
                             x-model="$store.chat.newSubtaskTitle"
-                            @keydown.enter.prevent="if ($store.chat.editingTask?.record_id) $store.chat.addSubtask($store.chat.editingTask.record_id)"
+                            @keydown.enter.prevent="if ($store.chat.editingTask?.record_id) $store.chat.addSubtask($store.chat.editingTask?.record_id)"
                             placeholder="Add subtask..."
                           />
-                          <button type="button" @click="if ($store.chat.editingTask?.record_id) $store.chat.addSubtask($store.chat.editingTask.record_id)">+</button>
+                          <button type="button" @click="if ($store.chat.editingTask?.record_id) $store.chat.addSubtask($store.chat.editingTask?.record_id)">+</button>
                         </div>
                       </template>
                     </div>
@@ -3830,7 +3831,7 @@
                       x-init="$store.chat.initMentionComposer($el, 'task-comment')"
                       x-effect="$store.chat.syncMentionComposerFromModel($el, 'task-comment', $store.chat.newTaskCommentBody)"
                       @input="$store.chat.syncMentionComposerModel($event.currentTarget); $store.chat.handleMentionInput($event.currentTarget, $event)"
-                      @keydown="$store.chat.handleComposerKeydown($event, () => { if ($store.chat.editingTask?.record_id) $store.chat.addTaskComment($store.chat.editingTask.record_id); })"
+                      @keydown="$store.chat.handleComposerKeydown($event, () => { if ($store.chat.editingTask?.record_id) $store.chat.addTaskComment($store.chat.editingTask?.record_id); })"
                       @paste="$store.chat.handleMentionComposerPaste($event, 'task-comment')"
                     ></div>
                     <p id="task-comment-markdown-help" class="task-comment-markdown-help">Markdown supported: headings, lists, links, and ``` fenced code boxes. Shift+Enter adds a line.</p>
@@ -3838,7 +3839,7 @@
                       <button type="button" class="audio-trigger-btn" @click="$store.chat.openAudioRecorder('task-comment')" title="Record voice note">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
                       </button>
-                      <button type="button" @click="if ($store.chat.editingTask?.record_id) $store.chat.addTaskComment($store.chat.editingTask.record_id)" :disabled="!$store.chat.editingTask?.record_id || ((!$store.chat.newTaskCommentBody.trim() && $store.chat.taskCommentAudioDrafts.length === 0) || $store.chat.containsInlineImageUploadToken($store.chat.newTaskCommentBody))">Post</button>
+                      <button type="button" @click="if ($store.chat.editingTask?.record_id) $store.chat.addTaskComment($store.chat.editingTask?.record_id)" :disabled="!$store.chat.editingTask?.record_id || ((!$store.chat.newTaskCommentBody.trim() && $store.chat.taskCommentAudioDrafts.length === 0) || $store.chat.containsInlineImageUploadToken($store.chat.newTaskCommentBody))">Post</button>
                     </div>
                   </div>
                   <div class="audio-draft-list" x-show="$store.chat.taskCommentAudioDrafts.length > 0">
@@ -5284,6 +5285,7 @@
                               : ($store.chat.docEditAccessState === 'blocked' ? 'Retry' : 'Edit'))))"
                       >Edit</button>
                     </div>
+                    <button type="button" class="thread-pin-button" data-deck-card-action data-testid="personal-pin-document" x-show="$store.chat.isTowerPgMode && $store.chat.selectedDocument?.pg_backend && $store.chat.selectedDocument?.pg_record_type !== 'file'" x-effect="$store.chat.syncPinnedThreadsContext($store.chat.pinnedThreadsPartition)" :class="{ active: $store.chat.isPersonalPinned('document', $store.chat.selectedDocument?.record_id) }" :aria-pressed="$store.chat.isPersonalPinned('document', $store.chat.selectedDocument?.record_id).toString()" :aria-label="($store.chat.isPersonalPinned('document', $store.chat.selectedDocument?.record_id) ? 'Unpin ' : 'Pin ') + ($store.chat.selectedDocument?.title || 'Untitled document')" title="Pin document" @click.stop.prevent="$store.chat.togglePersonalPin($store.chat.selectedDocument, 'document')" @keydown.enter.stop @keydown.space.stop><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m16 3 5 5-4 1-3 5-4-4 5-3zM10 14l-7 7"/></svg></button>
                     <button
                       type="button"
                       class="doc-invocation-btn"

@@ -3241,7 +3241,7 @@ export const syncManagerMixin = {
         const deltaRequested = targetRecoveryRequired || fallbackRefreshRequested
           || replayBurst
           || Number(eventResult?.fallbackEvents || 0) > 0;
-        const recentEventDelta = !events.some(event => ['context_component', 'context_reference', 'scope_order', 'thread_pin'].includes(event?.entity_type) || (['scope', 'channel'].includes(event?.entity_type) && event?.operation === 'archived')) && !targetRecoveryRequired && deltaRequested
+        const recentEventDelta = !events.some(event => ['context_component', 'context_reference', 'scope_order', 'thread_pin', 'personal_pin'].includes(event?.entity_type) || (['scope', 'channel'].includes(event?.entity_type) && event?.operation === 'archived')) && !targetRecoveryRequired && deltaRequested
           && Date.now() - Number(this.towerPgLastReplayDeltaAt || 0) < 30_000;
         const ranWorkspaceDelta = deltaRequested && !recentEventDelta;
         if (ranWorkspaceDelta) {
