@@ -1,3 +1,4 @@
+import { synchronizeThreadPins } from './thread-pin-sync.js';
 import { hydrateHostingBilling } from './hosting-billing.js';
 import { canLoadPgTarget } from './pg-archive-state.js';
 import { hydrateScopeOrder } from './scope-order.js';
@@ -363,6 +364,7 @@ export const syncManagerMixin = {
       workspaceKey,
       families: {
         'hosting-billing': { freshMs: 60000, load: (_id, options) => hydrateHostingBilling(this, options), materialize: result => result },
+        'thread-pins': { trackFreshness: false, load: () => synchronizeThreadPins(this) },
         'scope-order': { freshMs: 30000, load: (_id, options) => hydrateScopeOrder(this, options) },
         'org-data-permissions': { trackFreshness: false, load: (_key, options) => readOrgDataPermissions(this, options) },
         'org-data-installations': { trackFreshness: false, load: (_key, options) => hydrateOrgData(this, { ...options, catalogue: true }) },
@@ -911,7 +913,10 @@ export const syncManagerMixin = {
           store: this.buildTowerPgMaterializationStoreSnapshot(),
         }),
       });
-      if (isCurrent()) this.finishStartupSyncProgress();
+      if (isCurrent()) {
+        await synchronizeThreadPins(this);
+        this.finishStartupSyncProgress();
+      }
       // Every committed workspace pull is connectivity evidence, including
       // startup and SSE catch-up pulls outside the background polling tick.
       if (connectionKey && connectionKey === this.buildSSEConnectionKey() && !service.disposed) {
@@ -3236,7 +3241,7 @@ export const syncManagerMixin = {
         const deltaRequested = targetRecoveryRequired || fallbackRefreshRequested
           || replayBurst
           || Number(eventResult?.fallbackEvents || 0) > 0;
-        const recentEventDelta = !events.some(event => ['context_component', 'context_reference', 'scope_order'].includes(event?.entity_type) || (['scope', 'channel'].includes(event?.entity_type) && event?.operation === 'archived')) && !targetRecoveryRequired && deltaRequested
+        const recentEventDelta = !events.some(event => ['context_component', 'context_reference', 'scope_order', 'thread_pin'].includes(event?.entity_type) || (['scope', 'channel'].includes(event?.entity_type) && event?.operation === 'archived')) && !targetRecoveryRequired && deltaRequested
           && Date.now() - Number(this.towerPgLastReplayDeltaAt || 0) < 30_000;
         const ranWorkspaceDelta = deltaRequested && !recentEventDelta;
         if (ranWorkspaceDelta) {

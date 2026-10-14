@@ -3052,7 +3052,7 @@ export async function hydrateTowerPgEventUpdates(store, events = [], deps = {}) 
       attentionStateChanged = true;
     }
 
-    if (entityType === 'scope_order' || (['scope', 'channel'].includes(entityType) && trimText(event?.operation) === 'archived')) {
+    if (['scope_order','thread_pin'].includes(entityType) || (['scope', 'channel'].includes(entityType) && trimText(event?.operation) === 'archived')) {
       // These hints reconcile through the canonical journal only; no list or
       // content hydration is needed for a private preference or tombstone.
       fallbackEvents += 1;

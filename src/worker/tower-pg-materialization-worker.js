@@ -1,3 +1,4 @@
+import { applyThreadPinOperation } from '../thread-pin-store.js';
 import { openWorkspaceDb } from '../db.js';
 import { hydrateTowerPgSyncBundle } from '../pg-read-hydrator.js';
 
@@ -33,6 +34,7 @@ async function applyBundle(message) {
   }
   boundWorkspaceKey = workspaceKey;
   openWorkspaceDb(workspaceDbKey);
+  if (message.bundle?.thread_pin_operation) return applyThreadPinOperation(message.store || {}, message.bundle.thread_pin_operation);
   return hydrateTowerPgSyncBundle(message.store || {}, message.bundle || {});
 }
 

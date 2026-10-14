@@ -135,3 +135,4 @@ export const setTowerPgFileBlossom = (store, ...args) => issue(store, 'file-blos
 export const setTowerPgAttachmentBlossom = (store, ...args) => issue(store, 'attachment-blossom.set', { args, entityId: `${args[1]}:${args[2]}` }, crypto.randomUUID());
 
 export const putTowerPgScopeOrder = (store, ...args) => issueTypedApi(store, 'scope-order.put', args, args[1]?.mutation_id);
+export const putPersonalThreadPin = (store, input) => issue(store, 'thread-pin.put', input, input.body.mutation_id);

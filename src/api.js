@@ -2819,3 +2819,8 @@ export async function hostingBillingRequest(workspaceId, operation, { baseUrl = 
   const response = await signedTowerPgFetch(path, { baseUrl, appNpub, signal, method, useWorkspaceKey: false, ...(body === undefined ? {} : { body }) });
   return json(response, { requestUrl: resolveTowerPgUrl(path, baseUrl), method, prefix: 'Hosting billing' });
 }
+
+export async function putTowerPgThreadPin(workspaceId, threadId, body, { baseUrl = _baseUrl, appNpub = FLIGHT_DECK_PG_APP_NPUB, signal } = {}) {
+  const requestPath = `/api/v4/flightdeck-pg/workspaces/${encodeURIComponent(workspaceId)}/me/thread-pins/${encodeURIComponent(threadId)}`;
+  return json(await signedTowerPgFetch(requestPath, { method: 'PUT', body, baseUrl, appNpub, signal, useWorkspaceKey: false }), { requestUrl: resolveTowerPgUrl(requestPath, baseUrl), method: 'PUT', prefix: 'Personal thread pin' });
+}

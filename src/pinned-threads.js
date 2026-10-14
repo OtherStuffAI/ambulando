@@ -1,3 +1,5 @@
+import { resolvePgReaderActorId } from './pg-reader-identity.js';
+import { queueThreadPin, readThreadPinProjection, threadPinContext, threadPinSupportKey, threadPinMigrationKey } from './thread-pin-store.js';
 import { resolveTowerPgWorkspaceContext } from './pg-workspace-context.js';
 import { liveQuery } from 'dexie';
 import { getSettings, getWorkspaceDb, getCurrentWorkspaceDbKey, getPinnedThreadRows, saveThreadPin } from './db.js';
@@ -28,7 +30,7 @@ export const pinnedThreadsMixin = {
       .sort((a, b) => b.pinnedAt.localeCompare(a.pinnedAt) || a.id.localeCompare(b.id));
   },
   syncPinnedThreadsContext(partition) {
-    const queryKey = JSON.stringify([partition, getCurrentWorkspaceDbKey()]);
+    const queryKey = JSON.stringify([partition, getCurrentWorkspaceDbKey(), resolvePgReaderActorId(this)]);
     if (subscriptions.get(this)?.key === queryKey) return;
     subscriptions.get(this)?.subscription?.unsubscribe();
     this.pinnedThreadRows = [];
@@ -37,11 +39,17 @@ export const pinnedThreadsMixin = {
     subscriptions.set(this, { key: queryKey });
     if (!partition || !getCurrentWorkspaceDbKey()) return;
     const db = getWorkspaceDb();
-    const subscription = liveQuery(async () => getPinnedThreadRows(db, (await getSettings())?.threadPins?.[partition])).subscribe({
-      next: rows => {
+    const subscription = liveQuery(async () => {
+      if (this.isTowerPgMode && resolveTowerPgWorkspaceContext(this).workspaceId) {
+        return readThreadPinProjection(db, threadPinContext(this), partition);
+      }
+      return { rows: await getPinnedThreadRows(db, (await getSettings())?.threadPins?.[partition]), error: '' };
+    }).subscribe({
+      next: ({ rows, error }) => {
         if (this.pinnedThreadsPartition !== partition || subscriptions.get(this)?.key !== queryKey) return;
         const countChanged = this.pinnedThreadRows.length !== rows.length;
         this.pinnedThreadRows = rows;
+        this.pinnedThreadsError = error;
         if (countChanged) this.syncPinnedThreadsLayout();
       },
       error: () => { if (this.pinnedThreadsPartition === partition) this.pinnedThreadsError = 'Could not load pinned threads. Switch workspace to retry.'; },
@@ -62,7 +70,19 @@ export const pinnedThreadsMixin = {
     this.threadPinSaving = { ...this.threadPinSaving, [key]: true };
     const pinned = !this.isThreadPinned(thread.id);
     try {
-      await saveThreadPin(partition, thread, pinned);
+      if (this.isTowerPgMode && resolveTowerPgWorkspaceContext(this).workspaceId) {
+        const db = getWorkspaceDb(), context = threadPinContext(this);
+        if ((await db.sync_state.get(threadPinSupportKey(context)))?.value !== true) {
+          if (await db.sync_state.get(threadPinMigrationKey(partition))) await queueThreadPin(db, context, thread, pinned);
+          else await saveThreadPin(partition, thread, pinned);
+          this.pinnedThreadsError = 'Pins are saved on this device until Tower supports pin synchronization.';
+          return;
+        }
+        await queueThreadPin(db, context, thread, pinned);
+        void this.requestTowerSyncFamily?.('thread-pins').catch(error => {
+          if (partition === this.pinnedThreadsPartition) this.pinnedThreadsError = error.message || 'Pin synchronization failed.';
+        });
+      } else await saveThreadPin(partition, thread, pinned);
       if (partition === this.pinnedThreadsPartition) this.pinnedThreadsError = '';
     } catch (error) {
       if (partition === this.pinnedThreadsPartition) this.pinnedThreadsError = error.message || 'Could not save pin. Try again.';

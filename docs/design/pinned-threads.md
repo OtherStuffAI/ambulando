@@ -14,13 +14,40 @@ read receipts and title changes update the row without moving it. Unpinning and
 pinning again places the thread first. Pin operations do not modify thread
 records, read positions, Inbox order or shared record outboxes.
 
-Selections live in the existing shared Dexie app_settings preference row. Atomic
-transactions patch only the selected partition and preserve unrelated settings
-and other tabs' pins. The partition includes backend, app, workspace, signed-in
-session and actual reader. Pins survive browser reloads, but do not synchronize
-between devices: Tower's existing personal preferences describe other specific
-resources and do not support thread pins. No new Tower contract is introduced.
-Clearing browser data removes these local selections.
+Selections now synchronize through Tower's typed personal `thread_pin` family.
+The authenticated canonical actor and workspace own each per-thread row; the
+browser additionally partitions backend/app/workspace/reader state. Pins and
+retained unpin tombstones recover via the existing record snapshots/deltas and
+actor-private SSE hints. TowerSyncService remains the only network/update owner.
+No UI polling or second synchronization lifecycle is added. The record family
+list negotiates support; older Tower connections retain legacy pins locally and
+show a device-only notice. Migration waits for support, so missing routes cannot
+discard old pins.
+
+Dexie `thread_pins` stores canonical rows and `thread_pin_outbox` stores immutable
+per-thread operations. Pending changes appear immediately through liveQuery.
+The existing materialization worker prepares migration and reconciles command
+acknowledgements; ordinary record pages materialize the new family there too.
+Transport responses, local canonical rows and rendered pin cards stay distinct.
+
+Legacy app_settings partitions remain intact. An atomic local migration marker
+and import queue preserve each device's old selections. Tower imports only absent
+actor/thread pairs; existing pins and permanent unpin tombstones take precedence.
+Repeated migration and a stale device cannot resurrect an intentional unpin.
+Imports of missing/inaccessible threads retain UUIDs only and display unavailable.
+Clearing browser data loses unsent work; acknowledged pins remain on Tower.
+
+CAS applies independently per thread. Two independent pins merge. Same-thread
+races have one accepted revision and one conflict. Offline retries keep the exact
+mutation ID and base revision, replaying the original acknowledgement after a lost
+response. A conflict discards that request and its dependent local toggles,
+recovers canonical state and shows an actionable notice; it never silently rebases
+stale intent. Users can explicitly pin again after recovery. Temporary failures
+retain pending work for the existing sync/reload retry path. Unavailable pins
+remain removable. Read receipts and Inbox ordering are unaffected.
+
+See Tower's `docs/contract/personal-thread-pins-v1.md` for the typed request,
+authorization, permanent tombstone and idempotency contract.
 
 A workspace-bound liveQuery reads the selected identifiers, canonical thread and
 source rows, channel, latest indexed reply and persisted attention. This is
@@ -32,7 +59,7 @@ opening and retain an unpin action; cached titles are not displayed in that stat
 A later local hydration can restore a missing row. Pinning does not initiate a
 second network synchronization owner.
 
-Verification: tests/pinned-threads.test.js exercises real Dexie preferences,
+Verification: tests/pinned-threads.test.js exercises real Dexie legacy preferences,
 liveQuery updates, reader/workspace boundaries, indexed replies, unavailable
 records, navigation dispatch and unchanged thread/read/outbox records.
 tests/e2e/pinned-threads.spec.cjs renders production templates/styles and exercises

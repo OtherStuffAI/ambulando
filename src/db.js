@@ -197,7 +197,7 @@ const WORKSPACE_STORES_V29 = {
   workspace_agents: '&id, workspace_id, connection_id, agent_id, agent_npub, sort_order, is_visible, archived_at, updated_at, [connection_id+sort_order]',
 };
 
-function createWorkspaceDb(workspaceDbKey) {
+export function createWorkspaceDb(workspaceDbKey) {
   const db = new Dexie(`wingman-fd-ws-${workspaceDbKey}`);
   const WORKSPACE_STORES_V2 = {
     workspace_settings: '&workspace_owner_npub, record_id, updated_at',
@@ -319,6 +319,7 @@ function createWorkspaceDb(workspaceDbKey) {
   db.version(34).stores({ message_activity: '&key, context, range' });
   db.version(35).stores({ org_data: '&key' });
   db.version(38).stores({ nostr_notifications: '&key, context, id', nostr_notification_states: '&key, context' });
+  db.version(39).stores({ thread_pins: '&record_id, context, [context+thread_id]', thread_pin_outbox: '++seq, context, [context+threadId]' });
   db.version(37).stores({ hosting_billing: '&key' });
   db.version(36).stores({ scope_orders: '&record_id, workspace_id', pg_archived_targets: '&key, family, id' });
   const commentFields = activityIndexFields;

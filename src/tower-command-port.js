@@ -1,3 +1,4 @@
+import { prepareThreadPinCommand } from './thread-pin-sync.js';
 import { markPgTargetArchived } from './pg-archive-state.js';
 import { mapScopeOrder } from './scope-order.js';
 import { prepareOrgDataCommand } from './org-data/tower.js';
@@ -52,7 +53,7 @@ export const TOWER_WORKSPACE_COMMAND_CONTRACT = Object.freeze({
     'document.create', 'document.update', 'document.delete', 'document.move',
     'document-comment.create', 'document-comment.update', 'document-comment.delete',
     'message.create', 'message.update', 'message.delete',
-    'thread.branch',
+    'thread.branch', 'thread-pin.put',
     'file.create', 'file.update', 'file-folder.create', 'audio-note.create',
     'scope-order.put', 'scope.create', 'scope.update', 'scope.delete',
     'channel.create', 'channel.update', 'channel.delete',
@@ -148,6 +149,7 @@ async function reconcileTypedCommand(name, result, { owner = '', args = [] } = {
 }
 
 export function prepareTowerWorkspaceCommand(store, name, input = {}) {
+  if (name === 'thread-pin.put') return prepareThreadPinCommand(store, input);
   if (name === 'org-data.write') return prepareOrgDataCommand(store, input);
   if (['context.create', 'context.update', 'context.attach', 'context.unlink', 'context.delete'].includes(name)) {
     return {
