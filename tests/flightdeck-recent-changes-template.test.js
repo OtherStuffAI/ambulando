@@ -62,7 +62,7 @@ describe('flight deck summary template', () => {
     const styles = readFileSync(STYLES_PATH, 'utf8');
     const inbox = html.slice(
       html.indexOf('data-testid="flightdeck-summary-inbox"'),
-      html.indexOf('<div class="flightdeck-summary-grid"')
+      html.indexOf('<div class="deck-right-stack"')
     );
 
     expect(inbox.match(/'flightdeck-summary-card-inbox-unread': item\.isUnread/g)).toHaveLength(3);

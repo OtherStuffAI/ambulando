@@ -1199,6 +1199,7 @@ export const sectionLiveQueryMixin = {
   },
 
   startWorkspaceLiveQueries() {
+    this.syncPinnedThreadsContext?.(this.pinnedThreadsPartition);
     void this.activateFeeds?.();
     const state = getSectionState(this);
     if (typeof this.startSharedLiveQueries === 'function') {
@@ -1253,6 +1254,7 @@ export const sectionLiveQueryMixin = {
   },
 
   stopWorkspaceLiveQueries() {
+    this.stopPinnedThreads?.();
     disposeContextTreeView(this);
     disposePipelineViewer(this);
     this.disposeSubscribedReader?.();
@@ -1262,6 +1264,7 @@ export const sectionLiveQueryMixin = {
   },
 
   stopAllLiveQueries() {
+    this.stopPinnedThreads?.();
     disposeContextTreeView(this);
     disposePipelineViewer(this);
     this.disposeSubscribedReader?.();

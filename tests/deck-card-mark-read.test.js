@@ -41,7 +41,7 @@ describe('Deck card Mark read action', () => {
     expect(inboxTask).toContain("markDeckResourceRead('task', item.recordId)");
   });
 
-  it('keeps card keyboard opening guarded while retaining the normal Open affordances', () => {
+  it('keeps card keyboard opening guarded without redundant chat/task pills', () => {
     const html = readFileSync(INDEX_PATH, 'utf8');
     const inbox = html.slice(
       html.indexOf('data-testid="flightdeck-summary-inbox"'),
@@ -50,8 +50,8 @@ describe('Deck card Mark read action', () => {
 
     expect(inbox.match(/@keydown\.enter\.prevent="if \(\$store\.chat\.shouldOpenDeckCard\(\$event\)\)/g)).toHaveLength(3);
     expect(inbox.match(/@keydown\.space\.prevent="if \(\$store\.chat\.shouldOpenDeckCard\(\$event\)\)/g)).toHaveLength(3);
-    expect(inbox).toContain('<span class="attention-card-action">Open chat</span>');
-    expect(inbox).toContain('<span class="attention-card-action">Open task</span>');
+    expect(html).not.toContain('<span class="attention-card-action">Open chat</span>');
+    expect(html).not.toContain('<span class="attention-card-action">Open task</span>');
     expect(inbox).toContain('<span class="attention-card-action">Open doc</span>');
   });
 

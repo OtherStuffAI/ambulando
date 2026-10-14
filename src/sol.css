@@ -561,3 +561,17 @@ code, pre { font-family:var(--font-code); }
   .mobile-sidebar-backdrop { top:var(--sol-visual-top, 0px); }
   .app-shell:has(.sidebar-mobile-open) .page-header { z-index:40; }
 }
+
+/* Personal pins share the existing Deck pager; desktop keeps a compact list. */
+.thread-pin-button { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; width: 44px; min-height: 44px; padding: 0; color: var(--text-muted); background: transparent; border: 1px solid transparent; border-radius: 8px; }
+.thread-pin-button.active { color: var(--primary); background: var(--secondary); border-color: currentColor; }
+.thread-pin-button:focus-visible, .pinned-thread-open:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
+.pinned-thread-row { display: flex; align-items: center; gap: 4px; border-radius: 8px; margin-bottom: 4px; }
+.pinned-thread-row.flightdeck-summary-card-inbox-unread { background: var(--unread-pastel-red); }
+.pinned-thread-open { flex: 1; min-width: 0; min-height: 44px; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px; text-align: left; color: inherit; background: transparent; border: 0; }
+.pinned-thread-open .attention-card-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pinned-thread-open .attention-card-time { flex-shrink: 0; }
+@media (min-width: 769px) {
+  .deck-right-stack { grid-template-rows: minmax(7rem, 0.65fr) minmax(10rem, 1fr) minmax(10rem, 1fr); }
+  .deck-right-stack > .flightdeck-summary-panel-pinned { min-height: 0; }
+}

@@ -607,6 +607,42 @@ export async function saveAppPlacement(partition, entryId, shown, orderedIds = [
   });
 }
 
+// Personal thread pins are browser-local preferences, never shared record writes.
+export async function saveThreadPin(partition, thread, pinned) {
+  if (!partition || !thread?.id || !thread?.channelId) throw new Error('Choose a workspace and sign in before pinning.');
+  return sharedDb.transaction('rw', sharedDb.app_settings, async () => {
+    const existing = await getSettings();
+    const preferences = { ...existing?.threadPins };
+    const pins = { ...preferences[partition] };
+    if (pinned) pins[thread.id] = { id: thread.id, rootRecordId: thread.rootRecordId || thread.id, channelId: thread.channelId, pinnedAt: new Date().toISOString() };
+    else delete pins[thread.id];
+    preferences[partition] = pins;
+    if (existing) await sharedDb.app_settings.update(existing.id, { threadPins: preferences });
+    else await sharedDb.app_settings.add({ threadPins: preferences });
+  });
+}
+
+export async function getPinnedThreadRows(db, pins) {
+  return Promise.all(Object.values(pins || {}).map(async pin => {
+    const [canonical, root, channel, attention, latest, authority] = await Promise.all([
+      db.chat_messages.get(pin.id), db.chat_messages.get(pin.rootRecordId),
+      db.channels.get(pin.channelId), db.pg_resource_attention.get(`thread:${pin.id}`),
+      db.chat_messages.where('[cache_parent+cache_recent+cache_time+record_id]')
+        .between([pin.id, 1, Dexie.minKey, Dexie.minKey], [pin.id, 1, '\uffff', Dexie.maxKey]).reverse().first(),
+      db.pg_record_rows.bulkGet([`thread:${pin.id}`, `channel:${pin.channelId}`]),
+    ]);
+    const row = canonical || root;
+    const archived = await db.pg_archived_targets.bulkGet([`channel:${pin.channelId}`, `scope:${channel?.scope_id || channel?.pg_scope_id || channel?.scope_l1_id || ''}`]);
+    const unavailable = !row || !channel || row.channel_id !== pin.channelId
+      || archived.some(Boolean) || authority.some(r => r?.operation === 'delete' || r?.row?.deleted_at)
+      || [row, channel].some(r => ['deleted', 'archived'].includes(r.record_state) || ['stale', 'access-lost'].includes(r.pg_access_status) || r.can_read === false || r.readable === false);
+    const activityAt = [row?.updated_at, root?.updated_at, latest?.updated_at].filter(Boolean).sort().at(-1) || '';
+    return { ...pin, rootRecordId: canonical?.pg_parent_thread_id ? pin.id : (canonical?.pg_source_message_id || pin.rootRecordId),
+      title: unavailable ? 'Thread unavailable' : (canonical?.title || root?.title || root?.subject || root?.body || 'Untitled thread'),
+      activityAt, unavailable, persistedUnread: attention ? Boolean(attention.unread) : null };
+  }));
+}
+
 // ---------------------------------------------------------------------------
 // workspace_settings helpers — workspace DB
 // ---------------------------------------------------------------------------
