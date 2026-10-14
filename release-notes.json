@@ -3629,6 +3629,13 @@
         "Press Escape to cancel the channel access review while current access is still being checked or once it is ready; the command palette only handles Escape while it is open.",
         "Keep the review open while changes are being applied, and keep the close button inside the New group and Edit group dialogs."
       ]
+    },
+    {
+      "buildNumber": 2349,
+      "label": "Cleaner Feeds widget",
+      "notes": [
+        "Keep feed content in focus, with refresh, dismissed items and source management in the Feed options menu. Use each item’s menu to mark read, save or dismiss."
+      ]
     }
   ]
 }
