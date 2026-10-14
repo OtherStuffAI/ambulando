@@ -4074,6 +4074,13 @@
       "notes": [
         "Interrupted workspace updates recover through a fresh authorized snapshot while keeping downloaded records and pending local changes."
       ]
+    },
+    {
+      "buildNumber": 2417,
+      "label": "Recover native browser signing safely",
+      "notes": [
+        "Native browser signing pauses after document revocation and resumes with a fresh host provider. Stale signing callbacks are rejected, while cached records and pending edits remain intact."
+      ]
     }
   ]
 }

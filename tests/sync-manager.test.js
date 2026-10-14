@@ -26,7 +26,7 @@ import {
 import { syncManagerMixin } from '../src/sync-manager.js';
 import { TowerSyncService } from '../src/tower-sync-service.js';
 import { getSyncFamilyHash } from '../src/sync-families.js';
-import { createNip98AuthHeader, createNip98AuthHeaderForSecret } from '../src/auth/nostr.js';
+import { nativeSignerRecoveryError, createNip98AuthHeader, createNip98AuthHeaderForSecret } from '../src/auth/nostr.js';
 import { getActiveWorkspaceKeySecretForAuth } from '../src/crypto/workspace-keys.js';
 import { isTowerPgBackendMode } from '../src/backend-mode.js';
 import {
@@ -115,6 +115,7 @@ vi.mock('../src/sync-worker-client.js', () => ({
 }));
 
 vi.mock('../src/auth/nostr.js', () => ({
+  nativeSignerRecoveryError: vi.fn(() => null),
   createNip98AuthHeader: vi.fn(async () => 'Nostr eyJraW5kIjoyNzIzNX0='),
   createNip98AuthHeaderForSecret: vi.fn(async () => 'Nostr eyJzZWNyZXQiOnRydWV9'),
 }));
@@ -3700,4 +3701,22 @@ it('does not bypass workspace failure backoff for an SSE catchup scheduling hint
   const store = createStore({ getTowerSyncService: () => service, syncBackoffMs: 16000 });
   store.scheduleBackgroundSync(50);
   expect(service.scheduleFallback).toHaveBeenCalledWith(16000);
+});
+
+
+it('keeps a revoked native document paused without starting another pull and resumes after replacement', async () => {
+  const { fn, store } = bindMethod('runTowerPgWorkspaceSync', { session: { npub: 'npub1viewer', method: 'extension' } });
+  const failure = Object.assign(new Error('Browser signing paused. Keep stored data intact.'), { code: 'native_signer_document_revoked' });
+  syncTowerPgWorkspace.mockRejectedValueOnce(failure);
+  await expect(fn()).rejects.toBe(failure);
+  expect(store.startupSyncProgress).toMatchObject({ active: false, stage: 'signing-paused', visible: true });
+  expect(syncManagerMixin.startupSyncProgressLabel.call(store)).toBe('Browser signing paused');
+  nativeSignerRecoveryError.mockReturnValue(failure);
+  await expect(fn()).rejects.toBe(failure);
+  expect(syncTowerPgWorkspace).toHaveBeenCalledTimes(1);
+  expect(store.startupSyncProgress.active).toBe(false);
+  nativeSignerRecoveryError.mockReturnValue(null);
+  syncTowerPgWorkspace.mockResolvedValueOnce({ applied: 0, pages: 1 });
+  await fn();
+  expect(store.startupSyncProgress).toMatchObject({ active: false, visible: false, error: null });
 });

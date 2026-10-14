@@ -1,5 +1,6 @@
 import { nip19 } from 'nostr-tools';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { setExtensionSignerBridge } from '../src/auth/nostr.js';
 import { getSyncState, setSyncState } from '../src/db.js';
 
 vi.mock('../src/worker/sync-worker.js', () => ({
@@ -106,6 +107,19 @@ describe('sync worker SSE handshake integration', () => {
       ...overrides,
     };
   }
+
+  it('settles rejected worker signer calls with their native recovery code', async () => {
+    const bridge = setExtensionSignerBridge.mock.calls.at(-1)[0];
+    const request = bridge.getPublicKey();
+    const assertion = expect(request).rejects.toMatchObject({ message: 'Browser signing paused', code: 'native_signer_document_revoked' });
+    const auth = posted.find(message => message.type === 'sync-worker:auth-request');
+    dispatch({ type: 'sync-worker:auth-response', authId: auth.authId, ok: false, error: { message: 'Browser signing paused', code: 'native_signer_document_revoked' } });
+    await assertion;
+    const recovered = bridge.getPublicKey();
+    const next = posted.filter(message => message.type === 'sync-worker:auth-request').at(-1);
+    dispatch({ type: 'sync-worker:auth-response', authId: next.authId, ok: true, value: 'restored-public-key' });
+    await expect(recovered).resolves.toBe('restored-public-key');
+  });
 
   it('runs native SSE under the existing worker and recovers only its committed logical-workspace cursor', async () => {
     const endpoint = `http://${nip19.npubEncode('12'.repeat(32))}.fips:41080`;

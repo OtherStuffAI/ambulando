@@ -64,6 +64,8 @@ import {
   decodeNsec,
   getAutoLoginMethod,
   getMemoryPubkey,
+  getExtensionPublicKey,
+  nativeSignerRecoveryError,
   hexToBytes,
   pubkeyToNpub,
   setAutoLogin,
@@ -409,4 +411,58 @@ describe('auth/nostr helpers', () => {
     const npub = await pubkeyToNpub('a'.repeat(64));
     expect(npub.startsWith('npub1')).toBe(true);
   });
+});
+
+
+describe('native signer document lifetime', () => {
+  it('pauses a revoked provider until the host supplies a replacement, preserving the stored session', async () => {
+    storedCreds = { method: 'extension', pubkey: 'a'.repeat(64) };
+    const provider = { __wingman: true, getPublicKey: vi.fn().mockRejectedValue(new Error('Signer document revoked.')), signEvent: vi.fn() };
+    window.nostr = provider;
+    await expect(getExtensionPublicKey()).rejects.toMatchObject({ code: 'native_signer_document_revoked' });
+    await expect(getExtensionPublicKey()).rejects.toMatchObject({ code: 'native_signer_document_revoked' });
+    expect(provider.getPublicKey).toHaveBeenCalledTimes(1);
+    expect(storedCreds).toEqual({ method: 'extension', pubkey: 'a'.repeat(64) });
+    window.nostr = { __wingman: true, getPublicKey: vi.fn().mockResolvedValue('a'.repeat(64)), signEvent: vi.fn() };
+    expect(nativeSignerRecoveryError()).toBeNull();
+    await expect(getExtensionPublicKey()).resolves.toBe('a'.repeat(64));
+  });
+
+  it('rejects late native signatures and queued work from a superseded provider', async () => {
+    let finish;
+    const oldProvider = { __wingman: true, signEvent: vi.fn(() => new Promise(resolve => { finish = resolve; })) };
+    window.nostr = oldProvider;
+    const first = signEventWithExtension({ kind: 27235 });
+    await Promise.resolve();
+    const queued = signEventWithExtension({ kind: 27235 });
+    const replacement = { __wingman: true, signEvent: vi.fn().mockResolvedValue({ pubkey: 'a'.repeat(64) }) };
+    window.nostr = replacement;
+    finish({ pubkey: 'a'.repeat(64) });
+    await expect(first).rejects.toMatchObject({ code: 'native_signer_document_revoked' });
+    await expect(queued).rejects.toMatchObject({ code: 'native_signer_document_revoked' });
+    expect(oldProvider.signEvent).toHaveBeenCalledTimes(1);
+    expect(replacement.signEvent).not.toHaveBeenCalled();
+    await expect(signEventWithExtension({ kind: 27235 })).resolves.toEqual({ pubkey: 'a'.repeat(64) });
+  });
+
+  it('does not classify Tower or ordinary extension revocation as native document recovery', async () => {
+    const rejection = new Error('signer_revoked');
+    window.nostr = { __wingman: true, getPublicKey: vi.fn().mockRejectedValue(rejection) };
+    await expect(getExtensionPublicKey()).rejects.toBe(rejection);
+    expect(nativeSignerRecoveryError()).toBeNull();
+    window.nostr = { getPublicKey: vi.fn().mockRejectedValue(new Error('Signer document revoked.')) };
+    await expect(getExtensionPublicKey()).rejects.toThrow('Signer document revoked.');
+    expect(nativeSignerRecoveryError()).toBeNull();
+  });
+});
+
+
+it('rejects a replacement native provider belonging to another session identity', async () => {
+  storedCreds = { method: 'extension', pubkey: 'a'.repeat(64) };
+  setMemoryPubkey('a'.repeat(64));
+  const signEvent = vi.fn();
+  window.nostr = { __wingman: true, getPublicKey: vi.fn().mockResolvedValue('b'.repeat(64)), signEvent };
+  await expect(createNip98AuthHeader('https://tower.test/api', 'GET')).rejects.toThrow('signer pubkey changed');
+  expect(signEvent).not.toHaveBeenCalled();
+  expect(storedCreds.pubkey).toBe('a'.repeat(64));
 });

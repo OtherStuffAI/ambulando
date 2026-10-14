@@ -740,6 +740,7 @@ function serializeError(error) {
   }
   return {
     name: error.name || 'Error',
+    code: error.code || null,
     message: error.message || String(error),
     stack: error.stack || '',
   };
@@ -765,6 +766,13 @@ function requestExtensionAuth(method, params = {}) {
       params,
     });
   });
+}
+
+function deserializeWorkerError(error) {
+  const reconstructed = new Error(error?.message || 'Sync worker signing failed');
+  if (typeof error?.name === 'string') reconstructed.name = error.name;
+  if (typeof error?.code === 'string') reconstructed.code = error.code;
+  return reconstructed;
 }
 
 function handleAuthResponse(message) {

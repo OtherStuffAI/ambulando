@@ -21,10 +21,44 @@ let memoryBunkerSigner = null;
 let memoryBunkerUri = null;
 let extensionSignerBridge = null;
 const DEFAULT_EXTENSION_SIGN_TIMEOUT_MS = 10_000;
+const revokedNativeProviders = new WeakSet();
+
+export function nativeSignerRecoveryError() {
+  const provider = globalThis.window?.nostr;
+  if (!provider || !revokedNativeProviders.has(provider)) return null;
+  const error = new Error('Browser signing paused. Return to the WM browser and reload this page if signing does not resume. Keep stored data intact.');
+  error.code = 'native_signer_document_revoked';
+  return error;
+}
+
+// The native host alone can mint document capabilities. Never revive a revoked
+// provider, switch identities, or accept a late result from its predecessor.
+async function withNip07Provider(provider, run) {
+  const blocked = nativeSignerRecoveryError();
+  if (blocked) throw blocked;
+  try {
+    if (provider?.__wingman && (window.nostr !== provider || revokedNativeProviders.has(provider))) {
+      throw new Error('Signer document revoked.');
+    }
+    const result = await run();
+    if (provider?.__wingman && window.nostr !== provider) {
+      throw new Error('Signer document revoked.');
+    }
+    return result;
+  } catch (error) {
+    if (provider?.__wingman && error?.message === 'Signer document revoked.') {
+      revokedNativeProviders.add(provider);
+      const recovery = nativeSignerRecoveryError();
+      if (recovery) throw recovery;
+      throw Object.assign(new Error('Browser signing changed. Retry with the current browser signer.'), { code: 'native_signer_document_revoked' });
+    }
+    throw error;
+  }
+}
 
 function extensionSignerReady() {
   return typeof window !== 'undefined'
-    ? Boolean(window.nostr?.getPublicKey && window.nostr?.signEvent)
+    ? Boolean(!nativeSignerRecoveryError() && window.nostr?.getPublicKey && window.nostr?.signEvent)
       || Boolean(extensionSignerBridge?.getPublicKey && extensionSignerBridge?.signEvent)
     : Boolean(extensionSignerBridge?.getPublicKey && extensionSignerBridge?.signEvent);
 }
@@ -167,14 +201,12 @@ function signerTimeout(promise, timeoutMs, message) {
 }
 
 function serialNip07SignEvent(event, options = {}) {
-  const run = () => signerTimeout(
-    window.nostr.signEvent({
-      ...event,
-      created_at: Math.floor(Date.now() / 1000),
-    }),
-    options.timeoutMs,
-    options.timeoutMessage || 'NIP-07 signing timed out.',
-  );
+  const provider = window.nostr;
+  const run = () => withNip07Provider(provider, () => signerTimeout(
+      provider.signEvent({ ...event, created_at: Math.floor(Date.now() / 1000) }),
+      options.timeoutMs,
+      options.timeoutMessage || 'NIP-07 signing timed out.',
+    ));
   return scheduleNip07Sign(run, options.priority);
 }
 
@@ -268,7 +300,9 @@ export function getPubkeyFromEvent(event) {
 
 export async function getExtensionPublicKey() {
   if (typeof window !== 'undefined' && window.nostr?.getPublicKey) {
-    return window.nostr.getPublicKey();
+    const provider = window.nostr;
+    if (!provider.__wingman) return provider.getPublicKey();
+    return withNip07Provider(provider, () => signerTimeout(provider.getPublicKey(), DEFAULT_EXTENSION_SIGN_TIMEOUT_MS, 'NIP-07 public-key lookup timed out.'));
   }
   if (extensionSignerBridge?.getPublicKey) {
     return extensionSignerBridge.getPublicKey();
@@ -408,6 +442,8 @@ export async function createNip98AuthHeader(url, method, body = null, options = 
   }
 
   if (authMethod === 'extension') {
+    const recoveryError = nativeSignerRecoveryError();
+    if (recoveryError) throw recoveryError;
     const available = await waitForExtensionSigner();
     if (!available) {
       throw new Error('No NIP-07 browser extension found.');
@@ -493,6 +529,8 @@ export async function signNostrEvent(eventTemplate) {
   }
 
   if (authMethod === 'extension') {
+    const recoveryError = nativeSignerRecoveryError();
+    if (recoveryError) throw recoveryError;
     const available = await waitForExtensionSigner();
     if (!available) throw new Error('No NIP-07 browser extension found.');
     const currentPubkey = await getExtensionPublicKey();
@@ -545,16 +583,19 @@ async function withAuthSecret() {
   const authMethod = creds?.method;
 
   if (authMethod === 'extension') {
+    const recoveryError = nativeSignerRecoveryError();
+    if (recoveryError) throw recoveryError;
     const available = await waitForExtensionSigner();
     if (!available) throw new Error('No NIP-07 browser extension found.');
     if (!extensionNip44Ready()) throw new Error('NIP-07 signer does not expose NIP-44 encryption.');
     const pubkeyHex = getMemoryPubkey() || creds.pubkey || await getExtensionPublicKey();
     if (typeof window !== 'undefined' && window.nostr?.nip44?.encrypt && window.nostr?.nip44?.decrypt) {
+      const provider = window.nostr;
       return {
         method: 'extension',
         pubkeyHex,
-        encrypt: async (peerPubkeyHex, plaintext) => window.nostr.nip44.encrypt(peerPubkeyHex, plaintext),
-        decrypt: async (peerPubkeyHex, ciphertext) => window.nostr.nip44.decrypt(peerPubkeyHex, ciphertext),
+        encrypt: async (peerPubkeyHex, plaintext) => withNip07Provider(provider, () => provider.nip44.encrypt(peerPubkeyHex, plaintext)),
+        decrypt: async (peerPubkeyHex, ciphertext) => withNip07Provider(provider, () => provider.nip44.decrypt(peerPubkeyHex, ciphertext)),
       };
     }
     if (extensionSignerBridge?.encrypt && extensionSignerBridge?.decrypt) {

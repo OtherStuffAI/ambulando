@@ -67,7 +67,7 @@ import {
   disconnectSSE,
   setSSEStatusCallback,
 } from './sync-worker-client.js';
-import { createNip98AuthHeader, createNip98AuthHeaderForSecret } from './auth/nostr.js';
+import { nativeSignerRecoveryError, createNip98AuthHeader, createNip98AuthHeaderForSecret } from './auth/nostr.js';
 import { validateSSESigningUrl } from './sse-stream-protocol.js';
 import { getActiveWorkspaceKeySecretForAuth } from './crypto/workspace-keys.js';
 import { flightDeckLog, flightDeckTrace, flightDeckSyncFailure } from './logging.js';
@@ -790,7 +790,7 @@ export const syncManagerMixin = {
     if (this.startupSyncProgress?.active && this.startupSyncProgress.connectionKey === connectionKey) return;
     if (this.startupSyncProgressTimer) clearTimeout(this.startupSyncProgressTimer);
     const startedAt = Date.now();
-    const previousError = this.startupSyncProgress?.connectionKey === connectionKey
+    const previousError = this.startupSyncProgress?.stage !== 'signing-paused' && this.startupSyncProgress?.connectionKey === connectionKey
       ? this.startupSyncProgress.error || null : null;
     this.startupSyncProgress = {
       connectionKey,
@@ -841,7 +841,7 @@ export const syncManagerMixin = {
       Object.assign(this.startupSyncProgress, {
         active: false,
         visible: true,
-        stage: 'error',
+        stage: error?.code === 'native_signer_document_revoked' ? 'signing-paused' : 'error',
         elapsedMs,
         error: error?.message || String(error),
       });
@@ -885,6 +885,13 @@ export const syncManagerMixin = {
 
   async performTowerPgWorkspaceSync(options = {}) {
     const connectionKey = this.buildSSEConnectionKey();
+    const signingError = this.session?.method === 'extension' ? nativeSignerRecoveryError() : null;
+    if (signingError) {
+      // Retain the failed page and cache while the host replaces its provider.
+      if (this.startupSyncProgress?.connectionKey !== connectionKey) this.beginStartupSyncProgress();
+      this.finishStartupSyncProgress(signingError);
+      throw signingError;
+    }
     this.beginStartupSyncProgress();
     const progress = this.startupSyncProgress;
     const isCurrent = () => connectionKey === this.buildSSEConnectionKey() && this.startupSyncProgress === progress;
@@ -933,6 +940,7 @@ export const syncManagerMixin = {
 
   startupSyncProgressLabel() {
     const progress = this.startupSyncProgress || {};
+    if (progress.stage === 'signing-paused') return 'Browser signing paused';
     if (progress.error && progress.active) return 'Retrying updates…';
     if (progress.stage === 'opening') return 'Opening workspace…';
     if (progress.stage === 'recovery') return 'Recovering workspace updates…';

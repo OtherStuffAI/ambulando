@@ -83,3 +83,29 @@ describes account/team setup and provisioning. The
 [Background Tasks framework](https://developer.apple.com/documentation/backgroundtasks)
 is the supported boundary for separately implemented background jobs; it is
 not enabled merely by embedding a WebView.
+
+## Browser signer recovery
+
+The WM browser's exact `Signer document revoked.` rejection means its injected
+NIP-07 document capability was invalidated. It is distinct from a Tower response
+revoking server signer authorization. Ambulando remembers the rejected native
+provider for that page lifetime, rejects queued and late results belonging to
+old providers, and pauses workspace pulls until the host replaces `window.nostr`.
+The stored session, cached rows, outbox and download checkpoint remain intact.
+Native public-key lookup is bounded; rejection across the sync worker bridge
+must settle the caller and preserve the recovery error code.
+
+Only the native host can restore capability: validate the live top-level origin,
+identity and document epoch, install a fresh provider, then signal foreground
+recovery (currently `focus`). A focus event alone does not revive the old
+provider. If native reinjection fails or WebKit terminates, foreground the browser
+and reload the page using the same origin; do not clear site data or log out as
+recovery. A real Tower authorization rejection remains an authorization failure.
+A fresh provider still undergoes the existing session-public-key comparisons.
+
+Browser regression tests establish provider replacement, stale callback rejection
+and worker error settlement. Device acceptance separately requires background /
+resume and signing in WMapp, including failed reinjection, account changes and
+concurrent requests from tabs. Worker requests use the main page's signer queue;
+iframes must obtain their own host-authorized capability and cannot revive or
+borrow the top-level document's token.

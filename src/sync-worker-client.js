@@ -108,6 +108,7 @@ function serializeWorkerError(error) {
   if (!error) return { name: 'Error', message: 'Sync worker failed' };
   return {
     name: error.name || 'Error',
+    code: error.code || null,
     message: error.message || String(error),
     stack: error.stack || '',
   };
@@ -190,6 +191,7 @@ function deserializeWorkerError(error) {
   const message = typeof error.message === 'string' && error.message ? error.message : 'Sync worker failed';
   const reconstructed = new Error(message);
   if (typeof error.name === 'string') reconstructed.name = error.name;
+  if (typeof error.code === 'string') reconstructed.code = error.code;
   if (typeof error.stack === 'string') reconstructed.stack = error.stack;
   return reconstructed;
 }
