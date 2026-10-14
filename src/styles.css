@@ -25650,3 +25650,16 @@ button.task-desc-toggle:focus-visible {
     flex: 1;
   }
 }
+
+/* Keep reader controls beside content and reveal secondary actions on demand. */
+.feed-options-menu { margin-left:auto; }
+.feed-options-menu .doc-actions-toggle, .feed-item-menu .doc-actions-toggle { min-width:32px; min-height:32px; font-size:20px; }
+.doc-actions-popover.feed-options-popover, .doc-actions-popover.feed-item-popover { min-width:170px; max-width:calc(100vw - 32px); }
+.feed-options-popover [role="menuitemcheckbox"] { display:flex; justify-content:space-between; gap:16px; }
+.feed-item-source { min-width:0; overflow-wrap:anywhere; }
+.feed-item-menu { flex-shrink:0; }
+.feed-source-panel { margin-bottom:12px; padding:8px; border:1px solid var(--border); border-radius:var(--radius-panel); }
+.feed-source-heading { display:flex; justify-content:space-between; align-items:center; }
+.feeds-reader .wapp-update-card { position:relative; }
+.feeds-reader .wapp-update-card:has(.feed-item-menu [aria-expanded="true"]) { z-index:2; min-height:180px; }
+@media (max-width:600px) { .feed-options-menu .doc-actions-toggle, .feed-item-menu .doc-actions-toggle { min-width:36px; min-height:36px; } }

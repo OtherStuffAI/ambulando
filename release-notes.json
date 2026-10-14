@@ -4019,6 +4019,13 @@
       "notes": [
         "Start workspace setup with a prominent Host My Tower card. Expand BYO Tower underneath to connect an existing Tower; entered values, pricing and legal links are preserved."
       ]
+    },
+    {
+      "buildNumber": 2409,
+      "label": "Cleaner Feeds widget",
+      "notes": [
+        "Focus on feed content, with refresh, dismissed items and source management in the widget menu. Use each item’s menu to mark read, save or dismiss."
+      ]
     }
   ]
 }

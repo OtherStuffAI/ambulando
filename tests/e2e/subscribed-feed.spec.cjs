@@ -21,7 +21,7 @@ for (const viewport of [{ width: 1440, height: 1000 }, { width: 390, height: 844
       s.subscribedFeedSources = [{ id: 'sub', key: 'sub', title: 'Book fixture', status: 'active', source: { kind: 'public', url: 'https://feed.example.invalid/feed.json' } }];
       s.subscribedFeedStatus = [{ subscription_id: 'sub', stale: true, error: 'source_unavailable' }];
       s.subscribedFeedItems = [{ key: 'item', id: 'edition:1', subscription_id: 'sub', title: 'Exact headline', source_title: 'Book fixture', url, summary: '<img src="https://tracking.example.invalid/pixel" onerror="window.bad=true">Inert summary', text: '', published: '', attachments: [{ title: 'Podcast', mime_type: 'audio/mpeg', duration_in_seconds: 30 }], read: false, saved: false, dismissed: false }];
-      window.feedOpens = []; window.feedFlags = []; window.open = (...args) => { window.feedOpens.push(args); return null; };
+      window.feedRefreshes = 0; s.refreshSubscribedFeed = () => { window.feedRefreshes++; }; s.setFeedSubscriptionStatus = (source, status) => { source.status = status; }; window.feedOpens = []; window.feedFlags = []; window.open = (...args) => { window.feedOpens.push(args); return null; };
       s.setFeedFlag = (item, field, value) => { window.feedFlags.push({ field, value }); item[field] = value; };
 
     }, { url: headlineUrl });
@@ -29,7 +29,36 @@ for (const viewport of [{ width: 1440, height: 1000 }, { width: 390, height: 844
     const body = page.locator('.feeds-reader'); await expect(body).toBeVisible();
     await expect(body.getByText('Exact headline', { exact: true })).toBeVisible();
     await expect(body.locator('img, iframe, audio, video')).toHaveCount(0); expect(destinations).toEqual([]);
-    await body.getByRole('button', { name: 'Mark read', exact: true }).click(); await body.getByRole('button', { name: 'Save', exact: true }).click();
+    const options = page.locator('.feed-options-menu').getByRole('button', { name: 'Feed options', exact: true });
+    await expect(body.getByRole('menuitem', { name: 'Mark read', exact: true })).toBeHidden();
+    await expect(body.getByText('Sources', { exact: true })).toBeHidden();
+    await options.click(); await page.getByRole('menuitem', { name: 'Refresh', exact: true }).click();
+    expect(await page.evaluate(() => window.feedRefreshes)).toBe(1);
+    await options.click(); await page.getByRole('menuitemcheckbox', { name: 'Show dismissed', exact: true }).click();
+    expect(await page.evaluate(() => window.Alpine.store('chat').showDismissedFeeds)).toBe(true);
+    await options.click(); await page.getByRole('menuitem', { name: 'Manage sources', exact: true }).click();
+    await expect(body.getByText('Sources', { exact: true })).toBeVisible();
+    await body.getByRole('button', { name: 'Unsubscribe', exact: true }).click();
+    await expect(body.getByRole('button', { name: 'Resubscribe', exact: true })).toBeVisible();
+    await body.getByRole('button', { name: 'Resubscribe', exact: true }).click();
+    await body.getByRole('button', { name: 'Close sources', exact: true }).click();
+    const actions = body.getByRole('button', { name: 'Actions for Exact headline', exact: true });
+    await actions.click(); await expect(body.getByRole('menuitem', { name: 'Mark read', exact: true })).toBeFocused();
+    await page.keyboard.press('ArrowDown'); await expect(body.getByRole('menuitem', { name: 'Save', exact: true })).toBeFocused();
+    await page.keyboard.press('Escape'); await expect(actions).toBeFocused();
+    await actions.click(); await body.getByRole('menuitem', { name: 'Mark read', exact: true }).click();
+    await actions.click(); await body.getByRole('menuitem', { name: 'Save', exact: true }).click();
+    await actions.click(); await expect(body.getByRole('menu')).toBeVisible(); const menuBounds = await body.getByRole('menu').boundingBox();
+    expect(menuBounds.x).toBeGreaterThanOrEqual(0); expect(menuBounds.x + menuBounds.width).toBeLessThanOrEqual(viewport.width);
+    await body.locator('.feed-item-source').click(); await expect(body.getByRole('menu')).toBeHidden();
+    // Even a short final card can reveal its menu inside the scroll viewport.
+    await body.evaluate(el => { el.style.maxHeight = '150px'; el.style.overflowY = 'auto'; });
+    await page.evaluate(() => { window.Alpine.store('chat').subscribedFeedItems[0].summary = 'Short summary'; });
+    await actions.click(); const dismiss = body.getByRole('menuitem', { name: 'Dismiss', exact: true });
+    await dismiss.scrollIntoViewIfNeeded(); await expect(dismiss).toBeInViewport();
+    expect(await dismiss.evaluate(el => { const r = el.getBoundingClientRect(); return el.contains(document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2)); })).toBe(true);
+    await page.keyboard.press('Escape'); await body.evaluate(el => { el.style.maxHeight = ''; el.style.overflowY = ''; });
+    if (process.env.FEED_WIDGET_SCREENSHOTS) await page.locator('[data-testid="deck-wapp-updates"]').screenshot({ path: `/tmp/sol-feed-widget-after-${viewport.width}.png` });
     expect(await page.evaluate(() => window.feedOpens.length)).toBe(0); expect(destinations).toEqual([]);
     await body.getByRole('button', { name: 'Exact headline', exact: true }).click();
     expect(await page.evaluate(() => window.feedOpens)).toEqual([[headlineUrl, '_blank', 'noopener,noreferrer']]);
