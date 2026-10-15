@@ -27,7 +27,7 @@ import {
 } from './crypto/workspace-keys.js';
 import { parseRouteLocation } from './route-helpers.js';
 import { normalizeEnabledFlightDeckSection } from './disabled-surfaces.js';
-import { normalizeTaskSortMode } from './task-board-state.js';
+import { ALL_TASK_BOARD_ID, normalizeTaskSortMode } from './task-board-state.js';
 import {
   normalizeBackendUrl,
 } from './utils/state-helpers.js';
@@ -1022,6 +1022,16 @@ export function createShellState(options = {}) {
             } else {
               this.closeThread?.({ syncRoute: false });
             }
+          }
+          if (route.section === 'status' && !Object.entries(route.params).some(([key, value]) =>
+            value && !['workspacekey', 'workspaceid', 'token'].includes(key))) {
+            // A destination-free Home route is workspace-wide, even if storage
+            // or closing a conversation restored an earlier project context.
+            // Canonical scoped URLs retain intentional navigation/history.
+            this.selectedBoardId = ALL_TASK_BOARD_ID;
+            this.selectedChannelId = null;
+            this.focusMessageId = null;
+            this.persistSelectedBoardId(this.selectedBoardId);
           }
         } else if (this.navSection === 'workroom') {
           if (route.params.workroomid && typeof this.openWorkroomDetail === 'function') {

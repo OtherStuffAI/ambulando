@@ -4161,6 +4161,13 @@
       "notes": [
         "Load public Nostr notifications with Applesauce, recipient inbox relays and bounded fallback. Show loading, empty and relay-access results while preserving saved, read and dismissed notifications."
       ]
+    },
+    {
+      "buildNumber": 2430,
+      "label": "Start at Home across projects",
+      "notes": [
+        "Open Home with scope All on a normal app launch, showing activity across accessible projects in the current workspace. Explicit project and conversation links keep their destination."
+      ]
     }
   ]
 }

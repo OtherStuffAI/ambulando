@@ -43,6 +43,21 @@ status badges and actual avatars may stay rounded. Keyboard focus uses `--ring`.
 surfaces. Existing close/Escape handlers and busy guards remain authoritative.
 Nonmodal calendars/popovers retain their existing keyboard primitives.
 
+## Default Home entry
+
+Opening the app root, a workspace root, or Home (`flight-deck`, `status` or
+`notifications`) without a destination selects scope All (`__all__`). The Home
+overview then shows activity across the accessible projects materialized in that
+workspace, even when device storage remembers a previous project or channel.
+The route is replaced with the canonical Home URL carrying scope All, so reload
+and browser history retain that overview without adding a history entry.
+
+Explicit scope/group and conversation parameters, and other section/detail
+links, continue through their existing navigation handlers. Intentional scope
+and channel changes still persist and write their context into the URL. All
+means all accessible activity in the selected workspace; it does not combine
+workspaces or change Tower authority or local materialization rules.
+
 ## Optional views
 
 Settings → Deck layout includes independent Show Agents and Show Context options
