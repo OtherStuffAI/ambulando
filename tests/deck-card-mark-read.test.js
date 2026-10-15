@@ -13,16 +13,21 @@ describe('Deck card Mark read action', () => {
       html.indexOf('data-testid="flightdeck-summary-inbox"'),
       html.indexOf('data-testid="flightdeck-summary-files"'),
     );
-    const actions = summary.match(/<button type="button" class="attention-card-mark-read"[^>]*>Mark read<\/button>/g) || [];
+    const actions = summary.match(/<button type="button" class="attention-card-mark-read"[^>]*>[\s\S]*?<\/button>/g) || [];
+    const readActions = actions.filter((action) => action.includes('aria-label="Mark read"'));
 
-    expect(actions).toHaveLength(6);
-    expect(actions.every((action) => action.includes('data-deck-card-action'))).toBe(true);
-    expect(actions.every((action) => action.includes('x-show=') && action.includes('.isUnread'))).toBe(true);
-    expect(actions.every((action) => action.includes('@click.stop.prevent='))).toBe(true);
-    expect(actions.every((action) => action.includes('@keydown.enter.stop') && action.includes('@keydown.space.stop'))).toBe(true);
-    expect(actions.filter((action) => action.includes("markDeckResourceRead('thread'"))).toHaveLength(2);
-    expect(actions.filter((action) => action.includes("markDeckResourceRead('task'"))).toHaveLength(2);
-    expect(actions.filter((action) => action.includes("markDeckResourceRead('document'"))).toHaveLength(2);
+    expect(actions).toHaveLength(7);
+    expect(readActions).toHaveLength(6);
+    expect(readActions.every((action) => action.includes('title="Mark read"'))).toBe(true);
+    expect(readActions.every((action) => action.includes('data-icon="mail-open"'))).toBe(true);
+    expect(readActions.every((action) => !action.includes('>Mark read<'))).toBe(true);
+    expect(readActions.every((action) => action.includes('data-deck-card-action'))).toBe(true);
+    expect(readActions.every((action) => action.includes('x-show=') && action.includes('.isUnread'))).toBe(true);
+    expect(readActions.every((action) => action.includes('@click.stop.prevent='))).toBe(true);
+    expect(readActions.every((action) => action.includes('@keydown.enter.stop') && action.includes('@keydown.space.stop'))).toBe(true);
+    expect(readActions.filter((action) => action.includes("markDeckResourceRead('thread'"))).toHaveLength(2);
+    expect(readActions.filter((action) => action.includes("markDeckResourceRead('task'"))).toHaveLength(2);
+    expect(readActions.filter((action) => action.includes("markDeckResourceRead('document'"))).toHaveLength(2);
 
     const fileCard = summary.slice(
       summary.indexOf("item.inboxKind === 'file'"),
@@ -36,7 +41,9 @@ describe('Deck card Mark read action', () => {
     );
     expect(inboxTask).toContain('<template x-if="item.taskState === \'review\'">');
     expect(inboxTask).toContain('markDeckReviewTaskDone(item.recordId)');
-    expect(inboxTask).toContain('>Mark done</button>');
+    expect(inboxTask).toContain('title="Mark done" aria-label="Mark done"');
+    expect(inboxTask).toContain('data-icon="square-check"');
+    expect(inboxTask).not.toContain('>Mark done<');
     expect(inboxTask).not.toContain('<template x-if="item.taskState !== \'review\'">');
     expect(inboxTask).toContain("markDeckResourceRead('task', item.recordId)");
   });
@@ -55,12 +62,14 @@ describe('Deck card Mark read action', () => {
     expect(inbox).toContain('<span class="attention-card-action">Open doc</span>');
   });
 
-  it('uses a compact focus-visible control and permits narrow metadata wrapping', () => {
+  it('uses icon-only 44px controls, visible focus and non-wrapping Inbox metadata', () => {
     const styles = readFileSync(STYLES_PATH, 'utf8');
 
-    expect(styles).toMatch(/\.attention-card-mark-read\s*\{[^}]*min-height:\s*1\.7rem;[^}]*font-size:\s*0\.7rem;[^}]*white-space:\s*nowrap;/s);
+    expect(styles).toMatch(/\.attention-card-mark-read\s*\{[^}]*width:\s*44px;[^}]*min-width:\s*44px;[^}]*height:\s*44px;[^}]*min-height:\s*44px;/s);
+    expect(styles).toMatch(/\.attention-card-action-icon\s*\{[^}]*width:\s*24px;[^}]*height:\s*24px;[^}]*stroke:\s*currentColor;/s);
     expect(styles).toMatch(/\.attention-card-mark-read:focus-visible\s*\{[^}]*outline:\s*2px solid var\(--ring\);/s);
-    expect(styles).toMatch(/@media \(max-width: 720px\)[\s\S]*?\.attention-card-meta\s*\{[^}]*flex-wrap:\s*wrap;/s);
+    expect(styles).toMatch(/\.attention-card-meta\s*\{[^}]*flex-wrap:\s*nowrap;/s);
+    expect(styles).toMatch(/@media \(max-width: 767px\)[\s\S]*?\.flightdeck-summary-panel-inbox \.attention-card-meta\s*\{[^}]*flex-wrap:\s*nowrap;/s);
   });
 
   it('dispatches each supported family to exactly one focused read helper', async () => {

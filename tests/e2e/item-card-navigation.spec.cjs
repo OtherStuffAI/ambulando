@@ -46,14 +46,14 @@ for (const width of [375, 1440]) for (const deck of [true, false]) {
     });
     if (deck && width < 769) await page.getByRole('button', { name: 'Show Inbox', exact: true }).click();
     for (const kind of ['chat', 'task']) {
-      const read = root.locator(`.flightdeck-summary-card-${kind}`).first().locator('button.attention-card-mark-read').filter({ hasText: /^Mark read$/ });
+      const read = root.locator(`.flightdeck-summary-card-${kind}`).first().getByRole('button', { name: 'Mark read', exact: true });
       await read.focus();
       await read.click();
       await expect.poll(() => page.evaluate(() => window.cardReceipts.length)).toBe(kind === 'chat' ? 1 : 2);
       expect(await page.evaluate(() => Boolean(window.Alpine.store('chat').activeThreadId || window.Alpine.store('chat').showTaskDetail))).toBe(false);
     }
     if (deck) {
-      await root.locator('button.attention-card-mark-read').filter({ hasText: /^Mark done$/ }).press('Space');
+      await root.getByRole('button', { name: 'Mark done', exact: true }).press('Space');
       await expect.poll(() => page.evaluate(() => window.Alpine.store('chat').tasks[0].state)).toBe('done');
       expect(await page.evaluate(() => window.Alpine.store('chat').showTaskDetail)).toBe(false);
     }

@@ -42,7 +42,7 @@ for(const width of [320,375,390,430,900,1440])for(const theme of ['light','dark'
  expect(metrics.overflow).toBe(false);
  if(width<769){expect(metrics.card.height).toBeLessThanOrEqual(84);expect(metrics.fullRows).toBeGreaterThanOrEqual(4);expect(metrics.toolbar.height).toBeLessThanOrEqual(width>360?64:110);
   for(const button of await page.locator('.inbox-panel-heading button:visible').all()){const b=await button.boundingBox();expect(b.width).toBeGreaterThanOrEqual(44);expect(b.height).toBeGreaterThanOrEqual(44);expect(b.x).toBeGreaterThanOrEqual(0);expect(b.x+b.width).toBeLessThanOrEqual(width);}
-  const actions=cards.nth(1).locator('.attention-card-mark-read');for(const action of await actions.all()){const b=await action.boundingBox();expect(b.width).toBe(44);expect(b.height).toBe(44);expect(await action.evaluate(n=>getComputedStyle(n,'::before').width)).toBe('24px');}
+  const actions=cards.nth(1).locator('.attention-card-mark-read');for(const action of await actions.all()){const b=await action.boundingBox();expect(b.width).toBe(44);expect(b.height).toBe(44);expect(await action.locator('svg').getAttribute('data-icon')).toMatch(/^(mail-open|square-check)$/);expect(await action.textContent()).toBe('');}
   const search=page.locator('#deck-inbox-search');
   if(width>360)expect(await search.evaluate(n=>getComputedStyle(n).backgroundImage)).not.toBe('none');
   await search.focus();await expect(search).toBeFocused();expect((await search.boundingBox()).width).toBeGreaterThan(width*.6);

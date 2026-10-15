@@ -6,6 +6,7 @@ async function openFixture(page, routeInstalled = false, preserveRouting = false
   await page.waitForFunction(() => window.Alpine?.store?.('chat')?.routeSyncPaused === false);
   await page.evaluate(preserveRouting => {
     const s = window.Alpine.store('chat');
+    window.fixtureStartWorkspaceLiveQueries = s.startWorkspaceLiveQueries;
     for (const key of ['startWorkspaceLiveQueries', 'stopTaskCommentsLiveQuery', 'startTaskCommentsLiveQuery', 'syncRoute', 'performSync', 'requestTowerSyncFamily', 'scheduleStorageImageHydration', 'markTaskRead', 'scheduleDocAutosave', 'clearInactiveSectionData']) if (key !== 'syncRoute' || !preserveRouting) s[key] = () => {};
     s.openConnectModal = () => {};
     s.showConnectModal = false;

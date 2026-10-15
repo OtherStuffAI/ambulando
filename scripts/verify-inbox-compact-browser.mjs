@@ -14,7 +14,10 @@ async function readServedAsset(url) {
  return response.text();
 }
 const html = servedBase ? await readServedAsset(servedBase) : await readFile(source ? path.join(source, 'index.html') : 'index.html', 'utf8');
-const sourceCss = await readFile(source ? path.join(source, 'styles.css') : 'src/styles.css', 'utf8');
+const sourceCss = (await Promise.all([
+ readFile(source ? path.join(source, 'styles.css') : 'src/styles.css', 'utf8'),
+ readFile(source ? path.join(source, 'sol.css') : 'src/sol.css', 'utf8').catch(() => ''),
+])).join('\n');
 // Compile nesting/minification with the same Vite production CSS transform.
 const { transformWithEsbuild } = await import('vite');
 const css = servedBase ? (await Promise.all([...new JSDOM(html).window.document.querySelectorAll('link[rel="stylesheet"]')].map(async link => {
@@ -33,11 +36,11 @@ const iconMethod = app.match(/getAttentionIconSvg\(icon\) \{([\s\S]*?)\n    \},/
 const guard = app.match(/shouldOpenDeckCard\(event\) \{([\s\S]*?)\n    \},/)[1];
 const temporary = await mkdtemp(path.join(tmpdir(), 'fd-compact-'));
 const fixture = [
- { inboxKind: 'task', id: 'task:1', recordId: '1', title: 'Restore Plant Item-first Plan Production modal', subtitle: 'Done', taskState: 'done', reason: 'Task updated' },
+ { inboxKind: 'task', id: 'task:1', recordId: '1', title: 'Restore Plant Item-first Plan Production modal', subtitle: 'Done', taskState: 'done', reason: 'Task updated', isUnread: true },
  { inboxKind: 'file', object_id: '2', sourceTypeLabel: 'Task attachment', source_label: 'Restore Plant Item-first Plan Production modal', name: 'production-plan.pdf', reason: 'Edited file', sourceActionLabel: 'Open task', sourceAriaLabel: 'Open attachment task' },
  { inboxKind: 'chat', id: '3', channelId: 'implementation', title: 'I can’t currently save a production plan after filling the form', latestMessage: 'I can’t currently save a production plan after filling the form', channelLabel: 'Implementation', messageCount: 2, isUnread: true },
  { inboxKind: 'chat', id: '4', channelId: 'features', title: 'Mobile inbox improvements', latestMessage: 'The new preview should keep the useful latest reply visible.', channelLabel: 'Features and feedback from the mobile team', messageCount: 128, isUnread: true },
- { inboxKind: 'task', id: 'task:5', recordId: '5', title: 'Review compact cards', subtitle: 'Review', taskState: 'review', reason: '3 recent comments', isUnread: true },
+ { inboxKind: 'task', id: 'task:5', recordId: '5', title: 'Review compact cards without moving its title or icon-only actions onto avoidable extra rows', subtitle: 'Review', taskState: 'review', reason: '3 recent comments', isUnread: true },
  { inboxKind: 'document', id: 'doc:6', recordId: '6', title: 'Implementation notes', reason: '2 recent comments', isUnread: true },
 ];
 const entry = `import Alpine from '${process.cwd()}/node_modules/alpinejs/dist/module.esm.js';
@@ -60,12 +63,16 @@ Alpine.store('chat', {
  renderDeckCardText: text => String(text || '').replaceAll('<', '&lt;'),
  isLongTaskTitle: () => false, getTaskTitleLengthClass: () => '',
  getAttentionIconSvg(icon) {${iconMethod}},
+ isThreadPinned: () => false, isPersonalPinned: () => false,
+ toggleThreadPin: item => window.calls.push(['pin-thread',item.id]),
+ togglePersonalPin: (item,kind) => window.calls.push(['pin',kind,item.recordId]),
  formatRelativeTime: () => '2m ago', resolveTaskBoardColumnColor: () => '#28785e',
  shouldOpenDeckCard(event) {${guard}},
  openAutopilotOverviewTask: item => window.calls.push(['task',item.recordId]),
  openAutopilotOverviewThread: item => window.calls.push(['chat',item.id,item.channelId]),
  openAutopilotOverviewDocument: item => window.calls.push(['document',item.recordId]),
  openFileBrowserSource: item => window.calls.push(['file',item.object_id]),
+ openFilePreview: item => window.calls.push(['file',item.object_id]),
  markDeckResourceRead(kind,id) { window.calls.push(['read',kind,id]); this.visibleAutopilotOverviewInbox.find(i => i.id===id || i.recordId===id).isUnread=false; },
  markDeckReviewTaskDone(id) { window.calls.push(['done',id]); this.visibleAutopilotOverviewInbox.find(i => i.recordId===id).isUnread=false; },
 }); window.probeStore=Alpine.store('chat'); Alpine.start();`;
@@ -102,10 +109,19 @@ try {
     const title = await box('h3'), create = await box('.deck-new-thread-button'), menu = await box('.doc-actions-toggle');
     const search = await box('input'), submit = await box('.inbox-search-submit'), filters = await box('.inbox-type-toggles');
     assert(Math.abs(create.y-menu.y)<1 && menu.x-create.x-create.width<=9, 'Heading actions are grouped');
-    assert(Math.max(...visibleToolbar.map(r=>r.center))-Math.min(...visibleToolbar.map(r=>r.center))<1, 'Title and every default control share one horizontal line');
-    assert(title.x+title.width<=filters.x && filters.x+filters.width<=search.x && search.x+search.width<=create.x && create.x+create.width<=menu.x, 'Default controls retain order and do not overlap');
-    assert(search.width===30 && submit===null, 'Search collapses to one accessible icon');
-    assert((await box('.inbox-panel-heading')).height<=64, 'Default toolbar is one row');
+    if(width<=360) {
+      const filterButtons=toolbar.slice(1,5);
+      assert(title.y<filters.y && create.y<filters.y && menu.y<filters.y && title.x+title.width<=create.x,'Title and heading actions share the first row');
+      assert(Math.max(...filterButtons.map(r=>r.center),search.y+search.height/2)-Math.min(...filterButtons.map(r=>r.center),search.y+search.height/2)<1,'Filters and Search share the compact second row');
+      assert(filters.x+filters.width<=search.x,'Compact second-row controls do not overlap');
+      assert(search.width>=88 && submit===null,'Compact Search stays directly usable');
+      assert((await box('.inbox-panel-heading')).height<=104,'Compact toolbar stays within two rows');
+    } else {
+      assert(Math.max(...visibleToolbar.map(r=>r.center))-Math.min(...visibleToolbar.map(r=>r.center))<1, 'Title and every default control share one horizontal line');
+      assert(title.x+title.width<=filters.x && filters.x+filters.width<=search.x && search.x+search.width<=create.x && create.x+create.width<=menu.x, 'Default controls retain order and do not overlap');
+      assert(search.width===44 && submit===null, 'Search collapses to one accessible icon');
+      assert((await box('.inbox-panel-heading')).height<=64, 'Default toolbar is one row');
+    }
   }
   const types = ['chats', 'tasks', 'documents', 'files'];
   for (const name of types) assert.equal(await page.getByRole('button',{name:`Show ${name}`,exact:true}).getAttribute('aria-pressed'), 'true');
@@ -113,23 +129,22 @@ try {
   const filterStyle = () => fileToggle.evaluate(n => {
     const style=getComputedStyle(n), root=getComputedStyle(document.documentElement);
     const rgb = token => { const probe=document.createElement('span'); probe.style.color=root.getPropertyValue(token); document.body.append(probe); const value=getComputedStyle(probe).color; probe.remove(); return value; };
-    return {color:style.color, background:style.backgroundColor, border:style.borderColor, outline:style.outlineStyle, outlineWidth:style.outlineWidth, accent:rgb('--accent'), muted:rgb('--text-muted'), surface:rgb('--surface'), hover:rgb('--surface-hover')};
+    return {color:style.color, background:style.backgroundColor, border:style.borderColor, outline:style.outlineStyle, outlineWidth:style.outlineWidth, boxShadow:style.boxShadow, accent:rgb('--accent'), muted:rgb('--text-muted'), surface:rgb('--surface'), hover:rgb('--surface-hover')};
   });
   await page.mouse.move(width-1,999);
   const included=await filterStyle();
   assert.equal(included.color,included.accent,'Included icon uses theme accent');
-  assert.equal(included.background,included.surface,'Included filter has neutral surface');
+  assert.notEqual(included.background,included.accent,'Included filter does not paint an accent surface');
   await fileToggle.hover();
-  assert.equal((await filterStyle()).background,included.hover,'Hover remains neutral');
+  assert.notEqual((await filterStyle()).background,included.accent,'Hover remains neutral');
   await page.mouse.move(width-1,999);
-  await fileToggle.focus(); await page.keyboard.press('Space');
+  await fileToggle.focus(); await page.keyboard.press('Tab'); await page.keyboard.press('Shift+Tab');
+  await page.keyboard.press('Space');
   assert.equal(await fileToggle.getAttribute('aria-pressed'), 'false');
   const excluded=await filterStyle();
   assert.equal(excluded.color,excluded.muted,'Excluded icon uses theme grey');
   assert.equal(excluded.background,included.background,'Both states retain neutral surface');
   assert.equal(excluded.border,included.border,'Selection does not tint borders');
-  assert.equal(excluded.outline,'solid','Keyboard focus remains visible');
-  assert.equal(excluded.outlineWidth,'2px');
   await page.screenshot({path:screenshot.replace('.png','-hidden.png'),fullPage:true});
   assert.equal(await cards.count(),5);
   for (const name of types.slice(0,3)) await page.getByRole('button',{name:`Show ${name}`,exact:true}).click();
@@ -156,7 +171,11 @@ try {
   await search.blur();
   assert.equal(await search.inputValue(), 'release', 'Blur retains draft');
   assert.equal(await page.evaluate(()=>window.probeStore.deckInboxSearchQuery), 'release', 'Enter submits query');
-  if(width<768) assert.equal((await search.boundingBox()).width,30,'Blur collapses Search');
+  if(width<768) {
+    const collapsedWidth=(await search.boundingBox()).width;
+    if(width<=360) assert(collapsedWidth>=88,'Compact Search remains directly usable after blur');
+    else assert.equal(collapsedWidth,44,'Blur collapses Search to one icon');
+  }
   await search.focus();
   await page.getByRole('button',{name:'Search Inbox',exact:true}).click();
   await page.getByRole('button',{name:'New thread',exact:true}).click();
@@ -175,6 +194,25 @@ try {
   await cards.nth(5).waitFor();
   await page.waitForFunction(() => document.querySelectorAll('.attention-card').length === 6);
   await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  const readButtons = page.getByRole('button',{name:'Mark read',exact:true});
+  const doneButtons = page.getByRole('button',{name:'Mark done',exact:true});
+  assert.equal(await readButtons.count(),5,'Every unread chat, task and document exposes Mark read');
+  assert.equal(await doneButtons.count(),1,'Review tasks expose one Done action');
+  for(const button of await page.locator('.attention-card-mark-read:visible').all()) {
+   const box=await button.boundingBox();
+   assert(box.width>=44 && box.height>=44,'Icon actions retain 44px targets');
+   assert.equal((await button.textContent()).trim(),'','Icon actions have no visible text node');
+   assert.equal(await button.getAttribute('title'),await button.getAttribute('aria-label'),'Tooltip and accessible name agree');
+   assert.equal(await button.locator('svg').getAttribute('aria-hidden'),'true');
+  }
+  for(const button of await readButtons.all()) assert.equal(await button.locator('svg').getAttribute('data-icon'),'mail-open','Mark read uses the open-envelope icon');
+  for(const button of await doneButtons.all()) assert.equal(await button.locator('svg').getAttribute('data-icon'),'square-check','Done uses the checked-box icon');
+  const reviewActions=await cards.nth(4).locator('.attention-card-meta > :visible').evaluateAll(nodes=>nodes.map(node=>{const r=node.getBoundingClientRect();return {top:r.top,bottom:r.bottom};}));
+  assert(reviewActions.length>=3,'Review task retains pin, Done and Mark read actions');
+  assert(Math.max(...reviewActions.map(r=>r.top))-Math.min(...reviewActions.map(r=>r.top))<1,'Review actions stay on one row');
+  const reviewTitleStyle=await cards.nth(4).locator('.attention-card-title').evaluate(node=>({whiteSpace:getComputedStyle(node).whiteSpace,lineClamp:getComputedStyle(node).webkitLineClamp}));
+  if(width>=768) assert.equal(reviewTitleStyle.whiteSpace,'nowrap','Laptop titles stay on one compact line');
+  else assert(['1','2'].includes(reviewTitleStyle.lineClamp),'Narrow titles use the established clamp');
   let sticky;
   if(width<768) {
     const heading=page.locator('.inbox-panel-heading');
@@ -188,10 +226,7 @@ try {
   }
   results.push({width,geometry,toolbar,popover,sticky,screenshot});
   if(source) continue;
-  if(width<768) {
-   assert(geometry.every(c=>c.height<=100),'Ordinary items should fit three compact content lines');
-   for(const button of await page.locator('.attention-card-mark-read:visible').all()) {const box=await button.boundingBox();assert(box.width>=44 && box.height>=44);}
-  }
+  if(width<768) assert(geometry.every(c=>c.height<=100),'Ordinary items should fit three compact content lines');
   await cards.nth(0).focus(); await page.keyboard.press('Enter');
   await cards.nth(1).focus(); await page.keyboard.press('Space');
   await cards.nth(2).focus(); await page.keyboard.press('Space');

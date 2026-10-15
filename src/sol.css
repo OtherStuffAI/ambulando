@@ -445,22 +445,13 @@ code, pre { font-family:var(--font-code); }
   .inbox-panel-heading h3 { font-size:13px; letter-spacing:0; }
   .flightdeck-summary-panel-inbox .attention-card { padding:6px; gap:6px; min-height:76px; }
   .flightdeck-summary-panel-inbox .attention-card-content { gap:2px; }
-  .flightdeck-summary-panel-inbox .flightdeck-summary-card-task.task-title-long { grid-template-columns:28px minmax(0,1fr) auto; }
-  .flightdeck-summary-panel-inbox .flightdeck-summary-card-task.task-title-long .attention-card-meta { grid-column:3; }
   .flightdeck-summary-panel-inbox .attention-card-title { font-size:13px; line-height:17px; }
   .flightdeck-summary-panel-inbox .attention-card-kicker,
   .flightdeck-summary-panel-inbox .attention-card-time { font-size:10px; line-height:12px; }
   .flightdeck-summary-panel-inbox .attention-card-subtitle { font-size:12px; line-height:15px; }
   .flightdeck-summary-panel-inbox .attention-card-mark-read {
     width:44px; height:44px; min-width:44px; padding:10px;
-    border:0; background:transparent; box-shadow:none; font-size:0;
-  }
-  .flightdeck-summary-panel-inbox .attention-card-mark-read::before {
-    content:''; display:block; width:24px; height:24px; background:currentColor;
-    mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8'%3E%3Ccircle cx='12' cy='12' r='9'/%3E%3Cpath d='m7 12 3 3 7-7'/%3E%3C/svg%3E") center/contain no-repeat;
-  }
-  .flightdeck-summary-panel-inbox .attention-card-mark-read[aria-label="Mark done"]::before {
-    mask-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8'%3E%3Crect x='3' y='3' width='18' height='18' rx='3'/%3E%3Cpath d='m7 12 3 3 7-7'/%3E%3C/svg%3E");
+    border:0; background:transparent; box-shadow:none;
   }
 }
 @media (min-width:361px) and (max-width:768px) {

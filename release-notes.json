@@ -4195,6 +4195,13 @@
       "label": "Native image compatibility verification",
       "notes": [],
       "noUserVisibleChanges": true
+    },
+    {
+      "buildNumber": 2435,
+      "label": "Icon-only Inbox actions",
+      "notes": [
+        "Inbox cards keep pin, Done and Mark read actions on one compact icon row. Mark read uses an open envelope, Done uses a checked box, and accessible names and tooltips remain."
+      ]
     }
   ]
 }
