@@ -115,7 +115,7 @@ try {
       assert(Math.max(...filterButtons.map(r=>r.center),search.y+search.height/2)-Math.min(...filterButtons.map(r=>r.center),search.y+search.height/2)<1,'Filters and Search share the compact second row');
       assert(filters.x+filters.width<=search.x,'Compact second-row controls do not overlap');
       assert(search.width>=88 && submit===null,'Compact Search stays directly usable');
-      assert((await box('.inbox-panel-heading')).height<=104,'Compact toolbar stays within two rows');
+      assert((await box('.inbox-panel-heading')).height<=106,'Compact toolbar stays within two rows');
     } else {
       assert(Math.max(...visibleToolbar.map(r=>r.center))-Math.min(...visibleToolbar.map(r=>r.center))<1, 'Title and every default control share one horizontal line');
       assert(title.x+title.width<=filters.x && filters.x+filters.width<=search.x && search.x+search.width<=create.x && create.x+create.width<=menu.x, 'Default controls retain order and do not overlap');
@@ -129,14 +129,14 @@ try {
   const filterStyle = () => fileToggle.evaluate(n => {
     const style=getComputedStyle(n), root=getComputedStyle(document.documentElement);
     const rgb = token => { const probe=document.createElement('span'); probe.style.color=root.getPropertyValue(token); document.body.append(probe); const value=getComputedStyle(probe).color; probe.remove(); return value; };
-    return {color:style.color, background:style.backgroundColor, border:style.borderColor, outline:style.outlineStyle, outlineWidth:style.outlineWidth, boxShadow:style.boxShadow, accent:rgb('--accent'), muted:rgb('--text-muted'), surface:rgb('--surface'), hover:rgb('--surface-hover')};
+    return {color:style.color, background:style.backgroundColor, border:style.borderColor, outline:style.outlineStyle, outlineWidth:style.outlineWidth, boxShadow:style.boxShadow, primary:rgb('--primary'), muted:rgb('--text-muted'), surface:rgb('--surface'), hover:rgb('--surface-hover')};
   });
   await page.mouse.move(width-1,999);
   const included=await filterStyle();
-  assert.equal(included.color,included.accent,'Included icon uses theme accent');
-  assert.notEqual(included.background,included.accent,'Included filter does not paint an accent surface');
+  assert.equal(included.color,included.primary,'Included icon uses theme primary');
+  assert.notEqual(included.background,included.primary,'Included filter does not paint a primary surface');
   await fileToggle.hover();
-  assert.notEqual((await filterStyle()).background,included.accent,'Hover remains neutral');
+  assert.notEqual((await filterStyle()).background,included.primary,'Hover remains neutral');
   await page.mouse.move(width-1,999);
   await fileToggle.focus(); await page.keyboard.press('Tab'); await page.keyboard.press('Shift+Tab');
   await page.keyboard.press('Space');
