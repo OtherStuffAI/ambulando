@@ -96,6 +96,18 @@ export function deriveDeckThreadCreateTitle(value) {
   return visible.split(' ').slice(0, 10).join(' ').slice(0, 120).trim() || 'Untitled thread';
 }
 
+function inboxThreadTitleCandidate(message, { isMetadata, isThreadRoot }) {
+  const title = normalizeString(message.title || message.subject);
+  const body = normalizeString(message.body);
+  const explicitTitle = message.pg_thread_has_explicit_title === true
+    || (message.pg_thread_has_explicit_title !== false && title && title !== body && title !== 'Untitled thread');
+  if (explicitTitle) return { title, priority: isMetadata ? 4 : 3 };
+  if (isThreadRoot && !isMetadata) {
+    return { title: deriveDeckThreadCreateTitle(body || title) || 'Untitled thread', priority: 2 };
+  }
+  return { title: 'Untitled thread', priority: isMetadata ? 1 : 0 };
+}
+
 function isKeyLikeDisplay(value) {
   const text = normalizeString(value);
   return /^npub1/i.test(text)
@@ -381,7 +393,7 @@ export function buildAutopilotOverviewThreads({
     const isMetadata = message.pg_record_type === 'thread';
     const isPersistedThread = isMetadata || Boolean(normalizeString(message.title) && message.pg_thread_id && !message.parent_message_id);
     const isThreadRoot = !message.parent_message_id || message.record_id === threadId || isPersistedThread;
-    const rootTitle = normalizeString(message.title || message.subject || message.body);
+    const titleCandidate = inboxThreadTitleCandidate(message, { isMetadata, isThreadRoot });
 
     if (!existing) {
       threadRows.set(threadId, {
@@ -389,7 +401,8 @@ export function buildAutopilotOverviewThreads({
         channelId: message.channel_id,
         channelLabel: overviewChannelLabel(channel, { getChannelLabel, getParticipants, getSenderName, sessionNpub }),
         scopeId: channelScopeId || null,
-        title: rootTitle || '(empty thread)',
+        title: titleCandidate.title,
+        titlePriority: titleCandidate.priority,
         latestMessage: isMetadata ? '' : normalizeString(message.body),
         latestMessageUpdatedAt: isMetadata ? '' : message.updated_at || '',
         latestMessageSender: isMetadata ? '' : message.sender_npub || '',
@@ -418,14 +431,13 @@ export function buildAutopilotOverviewThreads({
     existing.isUnread = existing.isUnread || (resourceViewStateMode
       ? unreadThreadMap?.[threadId] === true
       : unreadChannelMap?.[message.channel_id] === true);
-    if (isPersistedThread && rootTitle && (isMetadata || !existing.hasMetadataTitle)) {
-      existing.title = rootTitle;
-      existing.hasPersistedTitle = true;
-      existing.hasMetadataTitle = isMetadata;
-    } else if (isThreadRoot && rootTitle && !existing.hasPersistedTitle) {
-      existing.title = rootTitle;
-      existing.rootRecordId = message.record_id;
+    if (titleCandidate.priority > existing.titlePriority) {
+      existing.title = titleCandidate.title;
+      existing.titlePriority = titleCandidate.priority;
     }
+    if (isPersistedThread && titleCandidate.priority >= 3) existing.hasPersistedTitle = true;
+    if (isMetadata) existing.hasMetadataTitle = true;
+    if (isThreadRoot && !isMetadata && !existing.isBranch) existing.rootRecordId = message.record_id;
     if (!isMetadata && (messageTs > existingTs || (messageTs === existingTs && String(message.record_id).localeCompare(String(existing.id)) > 0))) {
       existing.latestMessage = normalizeString(message.body);
       existing.latestMessageUpdatedAt = message.updated_at || '';
@@ -433,7 +445,7 @@ export function buildAutopilotOverviewThreads({
     }
   }
 
-  return [...threadRows.values()].sort((left, right) => {
+  return [...threadRows.values()].map(({ titlePriority: _titlePriority, ...row }) => row).sort((left, right) => {
     const ts = timestampMs(right.latestMessageUpdatedAt) - timestampMs(left.latestMessageUpdatedAt);
     if (ts !== 0) return ts;
     return String(left.id || '').localeCompare(String(right.id || ''));

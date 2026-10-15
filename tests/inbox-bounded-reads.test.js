@@ -56,6 +56,20 @@ it('uses native sparse task/document scope prefixes and limits content candidate
   } finally { metrics.restore(); }
 }, 60000);
 
+it('returns canonical source rows with grouped latest-message Inbox activity', async () => {
+  await db.channels.put({ record_id: 'channel', owner_npub: 'owner' });
+  const rawThread = { id: 'thread', channel_id: 'channel', source_message_id: 'source', title: '', latest: 'Streaming response' };
+  const context = { workspaceOwnerNpub: 'owner', threadById: new Map([['thread', rawThread]]) };
+  await db.chat_messages.bulkPut([
+    mapPgThreadToLocal(rawThread, context),
+    mapPgMessageToLocal({ id: 'source', channel_id: 'channel', thread_id: 'thread', body: 'Canonical opening message', updated_at: '2026-10-15T01:00:00Z' }, context),
+    mapPgMessageToLocal({ id: 'reply', channel_id: 'channel', thread_id: 'thread', body: 'Streaming response', updated_at: '2026-10-15T01:01:00Z' }, context),
+  ]);
+
+  const page = await getChannelActivityWindow(['channel'], { limit: 10, groupThreads: true });
+  expect(page.rows.map(row => row.record_id)).toEqual(expect.arrayContaining(['thread', 'source', 'reply']));
+});
+
 it('upgrades an ownerless v25 cache without losing messages, commands, drafts or cursor', async () => {
   const key = 'inbox-v25-upgrade';
   const old = new Dexie(`wingman-fd-ws-${key}`);

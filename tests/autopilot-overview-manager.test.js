@@ -190,6 +190,62 @@ describe('autopilot overview manager', () => {
     expect(inbox[0]).toMatchObject({ inboxKind: 'chat', title: 'Persisted thread title' });
   });
 
+  it('keeps the explicit thread title stable while the latest reply streams', () => {
+    const metadata = {
+      record_id: 'thread-stream', channel_id: 'chan-a', pg_thread_id: 'thread-stream',
+      pg_record_type: 'thread', pg_source_message_id: 'source-stream',
+      pg_thread_has_explicit_title: true, title: 'Stable planning title', body: 'Stable planning title',
+      updated_at: '2026-10-15T01:00:00.000Z',
+    };
+    const source = {
+      record_id: 'source-stream', channel_id: 'chan-a', pg_thread_id: 'thread-stream',
+      pg_thread_has_explicit_title: true, title: 'Stable planning title', body: 'Original request',
+      updated_at: '2026-10-15T01:00:00.000Z',
+    };
+    const reply = {
+      record_id: 'reply-stream', channel_id: 'chan-a', pg_thread_id: 'thread-stream',
+      parent_message_id: 'source-stream', body: 'Partial streamed answer', updated_at: '2026-10-15T01:01:00.000Z',
+    };
+
+    const partial = buildAutopilotOverviewThreads({ channels, messages: [reply, metadata, source] })[0];
+    const complete = buildAutopilotOverviewThreads({
+      channels,
+      messages: [{ ...reply, body: 'Completed streamed answer with substantially more detail', updated_at: '2026-10-15T01:02:00.000Z' }, source, metadata],
+    })[0];
+
+    expect(partial).toMatchObject({ title: 'Stable planning title', latestMessage: 'Partial streamed answer' });
+    expect(complete).toMatchObject({ title: 'Stable planning title', latestMessage: 'Completed streamed answer with substantially more detail' });
+  });
+
+  it('uses a concise source-message fallback and never promotes a reply to title', () => {
+    const metadata = {
+      record_id: 'thread-legacy', channel_id: 'chan-a', pg_thread_id: 'thread-legacy',
+      pg_record_type: 'thread', pg_source_message_id: 'source-legacy',
+      pg_thread_has_explicit_title: false, title: 'Untitled thread', body: 'Untitled thread',
+    };
+    const source = {
+      record_id: 'source-legacy', channel_id: 'chan-a', pg_thread_id: 'thread-legacy',
+      pg_thread_has_explicit_title: false,
+      title: '@[Support Agent](mention:agent:npub1support) Please investigate the mobile inbox title using the canonical opening request before any later response',
+      body: '@[Support Agent](mention:agent:npub1support) Please investigate the mobile inbox title using the canonical opening request before any later response',
+      updated_at: '2026-10-15T01:00:00.000Z',
+    };
+    const reply = {
+      record_id: 'reply-legacy', channel_id: 'chan-a', pg_thread_id: 'thread-legacy',
+      parent_message_id: 'source-legacy',
+      body: '@[Task](mention:task:task-1) streaming reply must remain preview-only',
+      updated_at: '2026-10-15T01:01:00.000Z',
+    };
+
+    const row = buildAutopilotOverviewThreads({ channels, messages: [reply, metadata, source] })[0];
+    expect(row.title).toBe('Please investigate the mobile inbox title using the canonical opening');
+    expect(row.latestMessage).toBe(reply.body);
+    expect(row.rootRecordId).toBe('source-legacy');
+
+    expect(buildAutopilotOverviewThreads({ channels, messages: [reply, metadata] })[0])
+      .toMatchObject({ title: 'Untitled thread', latestMessage: reply.body });
+  });
+
   it('keeps the source-message identity when a Deck snapshot contains only thread replies', () => {
     const rows = buildAutopilotOverviewThreads({
       channels,

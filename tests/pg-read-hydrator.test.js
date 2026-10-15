@@ -462,6 +462,18 @@ describe('PG read hydrator', () => {
       pg_backend: true,
       pg_record_type: 'thread',
       pg_source_message_id: 'message-1',
+      pg_thread_has_explicit_title: true,
+    });
+  });
+
+  it('does not materialize latest reply text as a missing thread title', () => {
+    expect(mapPgThreadToLocal({
+      id: 'legacy-thread', channel_id: 'channel-1', source_message_id: 'message-1',
+      title: '', latest: 'A long streaming reply that must stay in the preview',
+    })).toMatchObject({
+      title: 'Untitled thread',
+      body: 'Untitled thread',
+      pg_thread_has_explicit_title: false,
     });
   });
 

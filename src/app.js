@@ -136,7 +136,7 @@ import {
   normalizeTaskSortMode,
   WEEKDAY_OPTIONS,
 } from './task-board-state.js';
-import { renderDeckCardTextToHtml, renderMarkdownToHtml } from './markdown.js';
+import { renderDeckCardTextToHtml, renderDeckCardTextToPlainText, renderMarkdownToHtml } from './markdown.js';
 import {
   canonicalActorMentions,
   composerCaretOffset,
@@ -10399,6 +10399,10 @@ export function initApp() {
 
     renderDeckCardText(text) {
       return renderDeckCardTextToHtml(text);
+    },
+
+    renderDeckCardPlainText(text) {
+      return renderDeckCardTextToPlainText(text);
     },
 
     // createBotDm, deleteSelectedChannel, sendMessage, sendThreadReply, deleteActiveThread — in chatMessageManagerMixin

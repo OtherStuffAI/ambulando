@@ -948,12 +948,8 @@ export const syncManagerMixin = {
     const progress = this.startupSyncProgress || {};
     if (progress.stage === 'signing-paused') return 'Browser signing paused';
     if (progress.error && progress.active) return 'Retrying updates…';
-    if (progress.stage === 'opening') return 'Opening workspace…';
-    if (progress.stage === 'recovery') return 'Recovering workspace updates…';
-    if (progress.stage === 'receiving') return progress.page > 1 ? `Receiving changes (page ${progress.page})…` : 'Receiving changes…';
-    if (progress.stage === 'applying') return progress.mode === 'snapshot' ? 'Applying workspace snapshot…' : progress.mode === 'delta' ? 'Applying new changes…' : 'Applying updates…';
     if (progress.stage === 'error') return 'Update stalled';
-    return 'Updating…';
+    return 'Syncing';
   },
 
   startupSyncProgressMeta() {
@@ -3660,7 +3656,7 @@ export const syncManagerMixin = {
   lastSyncTimeLabel() {
     if (this.isTowerPgMode) {
       if (this.avatarConnectionStatus === 'tower-pg-connected') return 'Live';
-      if (this.avatarConnectionStatus === 'syncing') return 'In progress';
+      if (this.avatarConnectionStatus === 'syncing') return '';
       return 'Local cache';
     }
     if (this.syncSession.state === 'disabled' || this.syncStatus === 'disabled') return 'Encrypted sync off';

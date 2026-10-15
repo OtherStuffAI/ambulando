@@ -1768,7 +1768,7 @@ describe('PG workspace startup progress', () => {
       expect(store.startupSyncProgress.visible).toBe(false);
       vi.advanceTimersByTime(1);
       expect(store.startupSyncProgress).toMatchObject({ active: true, visible: true, stage: 'receiving', page: 1 });
-      expect(syncManagerMixin.startupSyncProgressLabel.call(store)).toBe('Receiving changes…');
+      expect(syncManagerMixin.startupSyncProgressLabel.call(store)).toBe('Syncing');
       expect(syncManagerMixin.startupSyncProgressMeta.call(store)).toBe('Page 1');
 
       resolveSync({ applied: 4, pages: 1 });
@@ -1799,7 +1799,7 @@ describe('PG workspace startup progress', () => {
 
     expect(store.showAvatarMenu).toBe(false);
     expect(store.startupSyncProgress).toMatchObject({ active: true, visible: true, page: 2, applied: 50 });
-    expect(syncManagerMixin.startupSyncProgressLabel.call(store)).toBe('Receiving changes (page 2)…');
+    expect(syncManagerMixin.startupSyncProgressLabel.call(store)).toBe('Syncing');
     expect(syncManagerMixin.startupSyncProgressMeta.call(store)).toBe('Page 2 · 50 changes applied');
   });
 

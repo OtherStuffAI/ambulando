@@ -218,6 +218,18 @@ export function renderDeckCardTextToHtml(source) {
   return html + escapeHtml(text.slice(offset));
 }
 
+export function renderDeckCardTextToPlainText(source) {
+  return String(source ?? '')
+    .replace(/@?\[([^\]\n]+)\]\(mention:([a-z]+):([^\s)]+)\)/gi, (_match, label, type) => (
+      ['person', 'agent'].includes(String(type).toLowerCase()) ? `@${label}` : label
+    ))
+    .replace(/!\[([^\]\n]*)\]\([^)]*\)/g, '$1')
+    .replace(/\[([^\]\n]+)\]\([^)]*\)/g, '$1')
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 function escapeMarkdownLabel(value) {
   return String(value ?? '').replace(/([\\\[\]])/g, '\\$1');
 }

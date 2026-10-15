@@ -455,7 +455,6 @@ test('preserves editing and navigation during reconnect, retries and lazy asset 
   });
   expect(result).toMatchObject({ identity: 'preserved', focused: true, offset: 6, channel: before.channel, thread: THREAD_ID, error: 'Transient network failure' });
   expect(result.scroll).toBe(before.scroll);
-  await page.context().setOffline(false);
   await expect(composer).toHaveText('draft survives retry');
   await expect(page.locator('.catchup-overlay, .startup-sync-status, #flightdeck-asset-recovery-failed')).toHaveCount(0);
   await composer.press('End');
@@ -465,6 +464,7 @@ test('preserves editing and navigation during reconnect, retries and lazy asset 
   await page.locator('.avatar-chip').click();
   await expect(page.getByRole('button', { name: 'Retry updates', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Reload after saving drafts' })).toBeVisible();
+  await page.context().setOffline(false);
   await page.evaluate(() => {
     const store = window.Alpine.store('chat');
     store.beginStartupSyncProgress();

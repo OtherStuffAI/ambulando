@@ -2122,7 +2122,9 @@ export async function getChannelActivityWindow(channelIds, options = {}) {
   hasMore ||= selected.length > limit;
   const rows = selected.slice(0, limit);
   if (options.groupThreads) {
-    const roots = await db.chat_messages.bulkGet([...new Set(rows.flatMap(row => [row.pg_thread_id, row.parent_message_id]).filter(Boolean))]);
+    const roots = (await db.chat_messages.bulkGet([...new Set(rows.flatMap(row => [row.pg_thread_id, row.parent_message_id]).filter(Boolean))])).filter(Boolean);
+    const sourceRoots = (await db.chat_messages.bulkGet([...new Set(roots.map(row => row.pg_source_message_id).filter(Boolean))]))
+      .filter(row => row && !['deleted', 'archived'].includes(row.record_state));
     const selectedIds = new Set(rows.map(row => row.pg_thread_id || row.parent_message_id || row.record_id));
     const latestContent = new Set();
     const matchingContent = new Set();
@@ -2132,7 +2134,7 @@ export async function getChannelActivityWindow(channelIds, options = {}) {
       if (row.pg_record_type !== 'thread' && !latestContent.has(id)) { latestContent.add(id); rows.push(row); }
       if (options.search && !matchingContent.has(id) && options.matches?.(row)) { matchingContent.add(id); rows.push(row); }
     }
-    rows.push(...roots.filter(row => row && !['deleted', 'archived'].includes(row.record_state)));
+    rows.push(...roots.filter(row => !['deleted', 'archived'].includes(row.record_state)), ...sourceRoots);
   }
   return { rows: [...new Map(rows.map(row => [row.record_id, row])).values()], hasMore };
 }

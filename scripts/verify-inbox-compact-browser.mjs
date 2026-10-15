@@ -39,12 +39,13 @@ const fixture = [
  { inboxKind: 'task', id: 'task:1', recordId: '1', title: 'Restore Plant Item-first Plan Production modal', subtitle: 'Done', taskState: 'done', reason: 'Task updated', isUnread: true },
  { inboxKind: 'file', object_id: '2', sourceTypeLabel: 'Task attachment', source_label: 'Restore Plant Item-first Plan Production modal', name: 'production-plan.pdf', reason: 'Edited file', sourceActionLabel: 'Open task', sourceAriaLabel: 'Open attachment task' },
  { inboxKind: 'chat', id: '3', channelId: 'implementation', title: 'I can’t currently save a production plan after filling the form', latestMessage: 'I can’t currently save a production plan after filling the form', channelLabel: 'Implementation', messageCount: 2, isUnread: true },
- { inboxKind: 'chat', id: '4', channelId: 'features', title: 'Mobile inbox improvements', latestMessage: 'The new preview should keep the useful latest reply visible.', channelLabel: 'Features and feedback from the mobile team', messageCount: 128, isUnread: true },
+ { inboxKind: 'chat', id: '4', channelId: 'features', title: 'Mobile inbox improvements', latestMessage: '@[Compact card task](mention:task:task-4) The new preview should stay on one line even while a long streaming response keeps adding words that must never replace the stable title.', channelLabel: 'Features and feedback from the mobile team', messageCount: 128, isUnread: true },
  { inboxKind: 'task', id: 'task:5', recordId: '5', title: 'Review compact cards without moving its title or icon-only actions onto avoidable extra rows', subtitle: 'Review', taskState: 'review', reason: '3 recent comments', isUnread: true },
  { inboxKind: 'document', id: 'doc:6', recordId: '6', title: 'Implementation notes', reason: '2 recent comments', isUnread: true },
 ];
 const entry = `import Alpine from '${process.cwd()}/node_modules/alpinejs/dist/module.esm.js';
 import { autopilotOverviewManagerMixin as inboxMethods, filterAutopilotOverviewInbox } from '${process.cwd()}/src/autopilot-overview-manager.js';
+import { renderDeckCardTextToPlainText } from '${process.cwd()}/src/markdown.js';
 window.calls=[];
 Alpine.store('chat', {
  deckInboxType: 'all', deckInboxSearchDraft: '', deckInboxSearchQuery: '', unreadTasks: 1, unreadDocs: 1, unreadChat: 1, unreadDeck: 3,
@@ -61,6 +62,7 @@ Alpine.store('chat', {
  get visibleAutopilotOverviewInbox() { return this.filteredAutopilotOverviewInbox; },
  hasMoreAutopilotOverviewInbox: false,
  renderDeckCardText: text => String(text || '').replaceAll('<', '&lt;'),
+ renderDeckCardPlainText: renderDeckCardTextToPlainText,
  isLongTaskTitle: () => false, getTaskTitleLengthClass: () => '',
  getAttentionIconSvg(icon) {${iconMethod}},
  isThreadPinned: () => false, isPersonalPinned: () => false,
@@ -220,6 +222,15 @@ try {
   const reviewTitleStyle=await cards.nth(4).locator('.attention-card-title').evaluate(node=>({whiteSpace:getComputedStyle(node).whiteSpace,lineClamp:getComputedStyle(node).webkitLineClamp}));
   if(width>=768) assert.equal(reviewTitleStyle.whiteSpace,'nowrap','Laptop titles stay on one compact line');
   else assert(['1','2'].includes(reviewTitleStyle.lineClamp),'Narrow titles use the established clamp');
+  const chatTitle = cards.nth(3).locator('.attention-card-title');
+  const chatPreview = cards.nth(3).locator('.deck-card-inline-preview');
+  assert.equal(await chatTitle.textContent(), 'Mobile inbox improvements', 'Chat title remains the stable thread title');
+  assert.equal(await chatTitle.locator('.mention-pill').count(), 0, 'Chat title never contains mention pills');
+  assert.equal(await chatPreview.locator('.mention-pill').count(), 0, 'Chat preview renders mention-rich text without pills');
+  const chatStyle=await chatTitle.evaluate(node=>({whiteSpace:getComputedStyle(node).whiteSpace,overflow:getComputedStyle(node).overflow,textOverflow:getComputedStyle(node).textOverflow}));
+  assert.equal(chatStyle.whiteSpace,'nowrap','Chat title stays on one line at mobile and desktop widths');
+  assert.equal(chatStyle.overflow,'hidden');
+  assert.equal(chatStyle.textOverflow,'ellipsis');
   let sticky;
   if(width<768) {
     const heading=page.locator('.inbox-panel-heading');

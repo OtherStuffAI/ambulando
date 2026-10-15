@@ -9,6 +9,8 @@ describe('avatar startup receive progress presentation', () => {
     expect(html).not.toContain('class="startup-sync-status"');
     expect(html).not.toContain('class="catchup-overlay"');
     expect(html).not.toContain('x-if="$store.chat.catchUpSyncActive"');
+    expect(html).not.toContain('class="workspace-recovery-status"');
+    expect(html).not.toContain('Rechecking workspace access and restoring navigation');
     expect(html).toContain('x-show="$store.chat.showSyncProgressModal"');
   });
 
@@ -20,6 +22,8 @@ describe('avatar startup receive progress presentation', () => {
     expect(html).toContain('class="avatar-menu-section startup-sync-progress-panel" x-show="$store.chat.startupSyncProgress.visible" role="status" aria-live="polite"');
     expect(html).toContain('x-text="$store.chat.startupSyncProgressLabel()"');
     expect(html).toContain('x-text="$store.chat.startupSyncProgressMeta()"');
+    expect(html).not.toContain('Cached workspace remains available while Ambulando updates.');
+    expect(html).toContain('x-show="$store.chat.startupSyncProgress.error" x-text="$store.chat.startupSyncProgress.error"');
     expect(html).toContain('@click="$store.chat.retryStartupSync()">Retry updates</button>');
   });
 

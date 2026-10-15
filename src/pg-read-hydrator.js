@@ -555,14 +555,13 @@ export function mapPgThreadToLocal(thread, {
   const recordId = trimText(thread?.id || thread?.record_id);
   const updatedAt = isoTimestamp(thread?.updated_at || thread?.created_at);
   const title = trimText(thread?.title);
-  const latest = trimText(thread?.latest);
   return {
     record_id: recordId,
     owner_npub: trimText(workspaceOwnerNpub),
     channel_id: trimText(thread?.channel_id),
     parent_message_id: null,
-    title: title || latest || 'Untitled thread',
-    body: title || latest || 'Untitled thread',
+    title: title || 'Untitled thread',
+    body: title || 'Untitled thread',
     attachments: [],
     sender_npub: resolveSenderNpub(thread, actorNpubByActorId)
       || trimText(senderNpub),
@@ -581,6 +580,7 @@ export function mapPgThreadToLocal(thread, {
     pg_client_request_id: trimText(thread?.client_request_id) || null,
     pg_metadata: thread?.metadata && typeof thread.metadata === 'object' && !Array.isArray(thread.metadata) ? thread.metadata : {},
     pg_thread_id: recordId || null,
+    pg_thread_has_explicit_title: Boolean(title),
     activity_version: activityVersion(thread?.activity_version),
     pg_archived_at: trimText(thread?.archived_at) || null,
   };
@@ -633,6 +633,7 @@ export function mapPgMessageToLocal(message, {
     pg_scope_id: trimText(message?.scope_id),
     pg_thread_id: threadId || null,
     pg_thread_version: isThreadSourceMessage ? rowVersion(thread?.row_version || thread?.version) : null,
+    pg_thread_has_explicit_title: isThreadSourceMessage ? Boolean(trimText(thread?.title)) : undefined,
     pg_thread_activity_version: isThreadSourceMessage ? activityVersion(thread?.activity_version) : null,
     pg_archived_at: isThreadSourceMessage ? (trimText(thread?.archived_at) || null) : null,
     pg_created_by_actor_id: trimText(message?.created_by_actor_id),

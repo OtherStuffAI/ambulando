@@ -19,7 +19,8 @@ for (const width of [1280, 390]) {
       s.chatPresentationCache = new Map([['ch-dialogue', { messages: s.messages }]]);
     });
     await page.evaluate(() => Alpine.store('chat').applyPgNavigationProjection({ generation: 2, pending: true, scopes: [], channels: [] }));
-    await expect(page.getByRole('status').filter({ hasText: 'Rechecking workspace access' })).toBeVisible();
+    await expect(page.getByText('Rechecking workspace access', { exact: false })).toHaveCount(0);
+    expect(await page.evaluate(() => Alpine.store('chat').pgNavigationRecoveryPending)).toBe(true);
     await expect(page.getByText('Revoked private body', { exact: true })).toHaveCount(0);
     expect(await page.evaluate(() => {
       const s = Alpine.store('chat'); return { board: s.selectedBoardId, channel: s.selectedChannelId, messages: s.messages.length, input: s.messageInput, cache: s.chatPresentationCache.size };
@@ -28,7 +29,7 @@ for (const width of [1280, 390]) {
     expect(await page.evaluate(() => Alpine.store('chat').selectedChannelId)).toBeNull();
     await page.evaluate(fx => Alpine.store('chat').applyPgNavigationProjection({ generation: 2, pending: false, scopes: fx.scopes, channels: fx.channels }), fixture);
     expect(await page.evaluate(() => ({ channel: Alpine.store('chat').selectedChannelId, draft: Alpine.store('chat').messageInput }))).toEqual({ channel: 'ch-dialogue', draft: 'Recoverable membership draft' });
-    await expect(page.getByRole('status').filter({ hasText: 'Rechecking workspace access' })).toBeHidden();
+    await expect(page.getByText('Rechecking workspace access', { exact: false })).toHaveCount(0);
     // Another authoritative replacement definitively revokes this destination.
     await page.evaluate(() => Alpine.store('chat').applyPgNavigationProjection({ generation: 3, pending: true, scopes: [], channels: [] }));
     await page.evaluate(() => Alpine.store('chat').applyPgNavigationProjection({ generation: 3, pending: false, scopes: [], channels: [] }));

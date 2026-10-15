@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { renderDeckCardTextToHtml } from '../src/markdown.js';
+import { renderDeckCardTextToHtml, renderDeckCardTextToPlainText } from '../src/markdown.js';
 
 const INDEX_PATH = resolve(process.cwd(), 'index.html');
 const STYLES_PATH = resolve(process.cwd(), 'src/styles.css');
@@ -244,6 +244,20 @@ describe('flight deck summary template', () => {
     expect(html).toContain('class="attention-card-title deck-card-inline-title" :class="$store.chat.getTaskTitleLengthClass(task.title)" x-html="$store.chat.renderDeckCardText(task.title)"');
     expect(html).toContain('class="attention-card-title deck-card-inline-title" x-html="$store.chat.renderDeckCardText(doc.title)"');
     expect(styles).toMatch(/\.deck-card-inline-title \.mention-pill,[\s\S]*\.deck-card-inline-preview \.mention-pill\s*\{[^}]*max-width:[^}]*overflow:\s*hidden;[^}]*text-overflow:\s*ellipsis;/s);
+  });
+
+  it('renders Inbox chat titles and previews as compact plain text', () => {
+    const html = readFileSync(INDEX_PATH, 'utf8');
+    const solStyles = readFileSync(resolve(process.cwd(), 'src/sol.css'), 'utf8');
+    const inbox = html.slice(html.indexOf('item.inboxKind === \'chat\''), html.indexOf('item.inboxKind === \'task\''));
+
+    expect(inbox).toContain('x-text="$store.chat.renderDeckCardPlainText(item.title)"');
+    expect(inbox).toContain('x-text="$store.chat.renderDeckCardPlainText(item.latestMessage)"');
+    expect(inbox).not.toContain('x-html="$store.chat.renderDeckCardText(item.title)"');
+    expect(renderDeckCardTextToPlainText('@[Support Agent](mention:agent:npub1support) See @[Task](mention:task:task-1)\nfor [details](https://example.test)'))
+      .toBe('@Support Agent See Task for details');
+    expect(solStyles).toMatch(/\.flightdeck-summary-card-chat \.attention-card-title\s*\{[^}]*display:block;[^}]*white-space:nowrap;[^}]*text-overflow:ellipsis;/s);
+    expect(solStyles).toMatch(/\.flightdeck-summary-card-chat \.deck-card-inline-preview\s*\{[^}]*overflow:hidden;[^}]*white-space:nowrap;[^}]*text-overflow:ellipsis;/s);
   });
 
   it('keeps Deck card content inline and plain while preserving mention pills', () => {

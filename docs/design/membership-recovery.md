@@ -26,10 +26,14 @@ workspace switches persist them in the old partition before opening the new one.
 Repeated interruptions must not overwrite saved intent with the empty composer.
 A missing selected scope must not broaden the task list to other scopes.
 
+Routine replacement does not render a page-level recovery message. The avatar
+activity treatment shows `Syncing`, with detailed progress available from its
+profile disclosure. Actionable sync failures and browser re-authentication remain
+visible there.
+
 This changes presentation only. It does not bypass epoch checks, delay revocation,
 retry uncertain writes, clear the entire database or eliminate the initial full
 snapshot. Pending commands remain governed by existing conflict/outbox handling.
-The recovery banner does not claim completion or estimate a duration.
 
 ## Proposal requiring Tower and product approval
 

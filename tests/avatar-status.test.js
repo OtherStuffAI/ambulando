@@ -21,13 +21,17 @@ describe('avatar status component state', () => {
   });
 
   it('returns syncing status while PG connection work is active', () => {
-    expect(resolveAvatarConnectionStatus({
+    const store = {
       isTowerPgMode: true,
       currentWorkspace: { pgBackendMode: true },
       backendUrl: 'https://tower.example',
       session: { npub: 'npub1user' },
       connectWorkspacesBusy: true,
-    }, { navigator: { onLine: true } })).toBe('syncing');
+    };
+
+    expect(resolveAvatarConnectionStatus(store, { navigator: { onLine: true } })).toBe('syncing');
+    expect(avatarConnectionLabel({ ...store, avatarConnectionStatus: 'syncing' })).toBe('Syncing');
+    expect(avatarConnectionTitle({ ...store, avatarConnectionStatus: 'syncing' })).toBe('Syncing');
   });
 
   it('returns local-only status for offline PG workspaces', () => {
@@ -65,7 +69,7 @@ describe('avatar status component state', () => {
       isTowerPgMode: true,
       avatarConnectionStatus: 'tower-pg-connected',
       startupSyncProgress: { active: true, visible: true, stage: 'receiving' },
-    })).toBe('Receiving updates — open progress');
+    })).toBe('Syncing');
 
     expect(avatarControlTitle({
       isTowerPgMode: true,

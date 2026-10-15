@@ -52,8 +52,7 @@ for (const width of [320,375,390,430,900,1440]) {
         for (const r of toolbar) { expect(r.width,r.label).toBeGreaterThanOrEqual(44); expect(r.height,r.label).toBeGreaterThanOrEqual(44); expect(r.x).toBeGreaterThanOrEqual(0); expect(r.right).toBeLessThanOrEqual(width); }
         for (const r of pager) { expect(r.width).toBeGreaterThanOrEqual(44); expect(r.height).toBe(44); }
         expect(cards[0].height).toBeLessThanOrEqual(110);
-        const gap = await page.evaluate(() => document.querySelector('[data-deck-column="inbox"]').getBoundingClientRect().top-document.querySelector('.workspace-recovery-status').getBoundingClientRect().bottom);
-        expect(gap).toBeLessThanOrEqual(12);
+        await expect(page.locator('.workspace-recovery-status')).toHaveCount(0);
         const search=page.locator('#deck-inbox-search');
         await search.fill('mobile implementation');
         await search.press('Enter');

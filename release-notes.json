@@ -4209,6 +4209,32 @@
       "notes": [
         "Inbox document and attachment cards now use compact open and preview icons instead of word-labelled actions at laptop and phone widths, while preserving tooltips, accessible names and whole-card navigation."
       ]
+    },
+    {
+      "buildNumber": 2437,
+      "label": "Quieter workspace syncing",
+      "notes": [
+        "Routine workspace recovery no longer shows a full-width message above Inbox. The profile activity indicator says Syncing while detailed progress and actionable failures remain available in its disclosure."
+      ]
+    },
+    {
+      "buildNumber": 2438,
+      "label": "Stable compact chat cards",
+      "notes": [
+        "Inbox chat cards keep their thread title while replies stream. Latest-message previews stay separate, plain and one line on phones, so mentions and long responses cannot expand a card into a transcript."
+      ]
+    },
+    {
+      "buildNumber": 2439,
+      "label": "Combined release verification",
+      "notes": [],
+      "noUserVisibleChanges": true
+    },
+    {
+      "buildNumber": 2440,
+      "label": "Managed runtime verification",
+      "notes": [],
+      "noUserVisibleChanges": true
     }
   ]
 }

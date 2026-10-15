@@ -67,7 +67,7 @@ export function avatarControlTitle(store = {}) {
     return 'Update stalled — open progress and retry';
   }
   if (startupProgress.visible && startupProgress.active) {
-    return 'Receiving updates — open progress';
+    return 'Syncing';
   }
   return avatarConnectionTitle(store);
 }

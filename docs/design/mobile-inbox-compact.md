@@ -1,14 +1,16 @@
 # Compact mobile Inbox
 
-Inbox items keep context and relative time on their first line, title on their second, and activity reason or chat preview/message count on their third. Identical chat titles and previews are shown once. Long context labels ellipsize; their complete text remains in the DOM and title attribute. Source records, read state, and routing are unchanged.
+Inbox items keep context and relative time on their first line, title on their second, and activity reason or chat preview/message count on their third. Identical chat titles and previews are shown once. Chat headings always use the explicit thread title; legacy threads without one use a concise fallback derived from the canonical source message, never the latest reply. Long context labels ellipsize; their complete text remains in the DOM and title attribute. Source records, read state, and routing are unchanged.
 
-Cards use icon-only actions at every width so labels do not force titles or controls onto avoidable extra rows. Mark read uses an open envelope, Done uses a checked box, document opening uses the established external-link icon, file/image preview uses an eye, and pin keeps its established outline/filled treatment. Tooltips and accessible names retain the action text, while the controls keep 44px minimum targets and visible keyboard focus. Below 768px, cards use smaller record icons, tighter spacing, and the existing two-line title clamp. Existing whole-card click, Enter, and Space navigation remains available.
+Chat titles and latest-message previews render as plain compact text in Inbox, so mention/reference markup cannot introduce pills or extra rows. At phone widths both are single-line ellipsized fields. Streaming changes only the secondary preview and activity time; the heading remains stable. Task and document title behavior is unchanged.
+
+Cards use icon-only actions at every width so labels do not force titles or controls onto avoidable extra rows. Mark read uses an open envelope, Done uses a checked box, document opening uses the established external-link icon, file/image preview uses an eye, and pin keeps its established outline/filled treatment. Tooltips and accessible names retain the action text, while the controls keep 44px minimum targets and visible keyboard focus. Below 768px, cards use smaller record icons and tighter spacing. Chat titles stay on one line; the existing two-line clamp remains available to other record types. Existing whole-card click, Enter, and Space navigation remains available.
 
 ## Verification
 
 Run `node scripts/verify-inbox-compact-browser.mjs`. This renders the actual source Inbox template and Ambulando styles in Chromium using intercepted requests only, with no server or backend access. Synthetic task, attachment, duplicate/distinct chat preview, review task, and document rows cover 320, 375, 390, 430, and 1440px widths. It checks overflow, card height, open-envelope/checked-box icon selection, accessible names/tooltips, one-row action layout, title clamping, action targets, keyboard activation, read highlight clearing, and callback dispatch. Callback destinations are instrumented; this is not a live backend navigation test. Existing Inbox history and bulk-read unit tests cover the production behavior.
 
-The initial comparison measured mobile cards at 76px versus 113–161px before, and desktop cards at approximately 78px. Local screenshots and JSON measurements are emitted under `/tmp/flightdeck-inbox-*`.
+The initial comparison measured mobile cards at 76px versus 113–161px before, and desktop cards at approximately 78px. The stable-title regression fixture keeps a mention-rich streaming preview at 76px on 320–430px viewports and about 80px on desktop. Local screenshots and JSON measurements are emitted under `tmp/docs/handoffs/flightdeck-inbox-*`.
 
 The full suite at implementation time passed 3666/3668 tests; failures were an unrelated chat file picker attribute-order assertion and a 10-second materialization responsiveness timeout. The responsiveness test passed in isolation. Focused Inbox history, bulk-read, and release-note tests passed (48 tests). Build 1911 and asset verification passed. The public-source check reports pre-existing private handoff documents. A live iPhone/Safari smoke check remains: WebKit was not installed in the available browser cache.
 
@@ -44,14 +46,16 @@ Ambulando's `src/sol.css` overrides the legacy one-row toolbar at widths up to
 768px. Inbox title/create/menu share a row, and four 44px filters plus Search
 share the next. Focus expands Search into its own row. This retains independent
 filters, native input behavior, keyboard focus and unclipped menus without
-reducing touch targets to fit a single row. Titles allow two lines, preserving
-more useful preview text; shorter cards retain the 76px minimum.
+reducing touch targets to fit a single row. Chat titles and previews are each
+one ellipsized line; task and document titles retain their existing clamp.
+Shorter cards retain the 76px minimum.
 
 The phone app header is 60px, with a 44px profile control, and the scope/channel
 rows use tighter surrounding spacing. Sol's hidden bottom section switcher has
-no reserved content height. Recovery notices stay in normal flow, with an 8px
-bottom margin; Deck no longer adds 24px above Inbox or an invisible Hello-card
-gap. Recovery visibility and authentication/sync behavior are unchanged.
+no reserved content height. Routine workspace recovery does not add a page-level
+notice above Inbox; the avatar reports `Syncing` and retains explicit progress
+and actionable failures in its profile disclosure. Deck no longer adds 24px
+above Inbox or an invisible Hello-card gap.
 
 Deck pager buttons are 44px square transparent hit areas with 8px dots (10px
 for the active card), rather than painting a tiny-width button whose global
