@@ -101,10 +101,21 @@ extension NoteTests {
         let destination = Connection(origin:"https://notes.example",workspace:UUID().uuidString,app:NostrCodec.npub(Data(repeating:11,count:32)),signer:signer,channel:UUID().uuidString,label:"Synthetic workspace")
         let state = root.appendingPathComponent("state.json")
         var local = LocalNotes(); local.connection = destination; local.draft.text = "https://youtu.be/dQw4w9WgXcQ?si=tracking&t=42"
+        // PostgreSQL BIGINT storage sizes arrive as decimal JSON strings.
+        // A completed image must pass reconciliation before sending or retrying.
+        let imageBytes = Data(repeating: 1, count: 118)
+        var image = NoteImage(bytes: imageBytes)
+        image.object = UUID().uuidString
+        image.upload = "https://notes.example/api/v4/storage/" + image.object!
+        image.complete = true
+        local.draft.images = [image]
         try JSONEncoder().encode(local).write(to:state)
         let config = URLSessionConfiguration.ephemeral; config.protocolClasses = [MockProtocol.self]; let session = URLSession(configuration:config)
         var requests: [[String:Any]] = []
         MockProtocol.handler = { request in
+            if request.url!.path == "/api/v4/storage/" + image.object! {
+                return ["completed_at":"2026-10-15T03:00:00Z","sha256_hex":NostrCodec.hash(imageBytes),"size_bytes":"118","is_public":false]
+            }
             if request.httpMethod == "POST" {
                 var bytes = request.httpBody ?? Data()
                 if let stream = request.httpBodyStream {
@@ -128,6 +139,8 @@ extension NoteTests {
         guard requests.count == 2 else { XCTFail("Expected two message requests: \(notes.notice ?? "no notice")"); return }; XCTAssertEqual(requests[0]["client_request_id"] as? String,requests[1]["client_request_id"] as? String)
         XCTAssertEqual(requests[1]["body"] as? String,"https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=42")
         XCTAssertNotNil(requests[1]["message_signature"])
+        let attachments = (requests[1]["metadata"] as? [String:Any])?["attachments"] as? [[String:Any]]
+        XCTAssertEqual(attachments?.first?["storage_object_id"] as? String, image.object)
         XCTAssertTrue(notes.draft.text.isEmpty); XCTAssertNotEqual(notes.draft.id,local.draft.id)
         await notes.history(); XCTAssertEqual(notes.messages.map(\.id),["browser-message","phone-message"])
         identity.lock(); await notes.history(); XCTAssertNotNil(notes.notice)

@@ -1,6 +1,6 @@
 # Note to self for iPhone
 
-Version 0.1, build 2. Open `NoteToSelf.xcodeproj`, scheme `NoteToSelf`, on iOS 18 or later. This dedicated SwiftUI app shares a private Flight Deck conversation through nStack; its drafts are not a replacement for Tower history.
+Version 0.1, build 3. Open `NoteToSelf.xcodeproj`, scheme `NoteToSelf`, on iOS 18 or later. This dedicated SwiftUI app shares a private Flight Deck conversation through nStack; its drafts are not a replacement for Tower history.
 
 In Settings, import your identity and choose a PIN, enter your HTTPS nStack origin, discover your workspaces, then select the same workspace and identity used in Flight Deck. Selecting a workspace opens or reuses your self conversation. Tower must support singleton DMs. Compose accepts text, photos, image files and the explicit Paste image button. History reads all canonical message pages, refreshes while the app is active, and supports replies in existing note threads. Pull to refresh after another client sends a note. The initial history view does not force a scroll jump when messages refresh.
 

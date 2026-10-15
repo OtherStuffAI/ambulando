@@ -107,7 +107,11 @@ final class NoteStore: ObservableObject {
                     _ = try await api.request(origin:destination.origin,path:"/api/v4/storage/" + object + "/complete",method:"POST",body:["sha256_hex":NostrCodec.hash(image.bytes),"size_bytes":image.bytes.count])
                 }
                 let completed = try await api.request(origin:destination.origin,path:"/api/v4/storage/" + object)
-                guard completed["sha256_hex"] as? String == NostrCodec.hash(image.bytes), (completed["size_bytes"] as? NSNumber)?.intValue == image.bytes.count, completed["is_public"] as? Bool == false, completed["completed_at"] is String else { throw NoteError.malformed }
+                // Tower's PostgreSQL BIGINT metadata is a decimal JSON string;
+                // retain compatibility with backends that emit a JSON number.
+                let sizeMatches = (completed["size_bytes"] as? String) == String(image.bytes.count)
+                    || (completed["size_bytes"] as? NSNumber) == NSNumber(value: image.bytes.count)
+                guard completed["sha256_hex"] as? String == NostrCodec.hash(image.bytes), sizeMatches, completed["is_public"] as? Bool == false, completed["completed_at"] is String else { throw NoteError.malformed }
                 local.draft.images[i].complete = true; try persist()
             }
             try assertIdentity(destination)

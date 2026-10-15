@@ -4189,6 +4189,12 @@
       "notes": [
         "Existing legacy direct messages remain reusable while Tower-backed Note to self uses canonical server-side conversation reuse."
       ]
+    },
+    {
+      "buildNumber": 2434,
+      "label": "Native image compatibility verification",
+      "notes": [],
+      "noUserVisibleChanges": true
     }
   ]
 }
