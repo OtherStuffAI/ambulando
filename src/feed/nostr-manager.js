@@ -71,6 +71,7 @@ export const nostrNotificationsMixin = {
       current = () => RUNTIMES.get(this) === runtime && partition(this) === context;
     RUNTIMES.set(this, runtime);
     this.nostrNotificationContext = context;
+    this.nostrNotificationStatus = 'Loading recent Nostr notifications…';
     runtime.subscription = this.createLiveSubscription(
       async () => {
         const [rows, states] = await Promise.all([

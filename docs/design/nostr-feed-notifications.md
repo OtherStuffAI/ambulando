@@ -8,15 +8,30 @@ share deliberate safe headline navigation and read/save/dismiss controls. Nostr 
 are device-local; subscribed-feed flags continue through Tower.
 
 A dedicated module worker owns relay discovery, subscriptions, signature checks,
-target retrieval and zap-provider requests. It uses nostr-tools and the existing
-public profile relays, with bounded workspace relay hints and verified kind 10002
-read-relay discovery. It requests seven days, at most 200 events per relay, and
+target retrieval and zap-provider requests. It uses Applesauce RelayPool, EventStore and address/event loaders for public
+retrieval, with nostr-tools signature and notification validation. Profile indexes
+are discovery/actor-lookup relays; notification inboxes use verified kind 10002 read
+relays (at most four), plus bounded Primal/Damus fallback. URLs are canonicalized
+before applying the six-relay cap so trailing slash variants cannot displace inboxes.
+Write-only NIP-65 entries are excluded. Event-target relay hints are honored within
+the same bound. Public retrieval attaches no signer and does not wait for relay auth.
+Public startup depends on the human identity and an open local database, independently
+of workspace-owner metadata arriving from Tower. It requests seven days, at most 200 events per relay, and
 processes at most 500 unique candidates with four concurrent validations per cycle.
 Subscription rotation normally occurs every five minutes; a retained burst finishes
 before rotation, so slow lookups cannot discard its queue. Client-side normalization
 rejects candidates outside the seven-day historical window even when a relay ignores
-the requested filter. Target queries are capped at 500 per cycle and time out at 2.5
-seconds. Initial discovery and subscription catch-up have bounded timeouts. Refresh
+the requested filter. Target queries are capped at 500 per cycle. Applesauce loaders batch/coalesce requests
+and reuse verified events; a request ends within four seconds, with an outer 4.5-second
+loader deadline. Actor lookups can finish on the first verified result. Per-cycle
+in-memory stores are disposed on rotation; the short-lived context store retains
+expiration-tagged events without scheduling NIP-40 expiry timers. Existing notification
+admission/normalization semantics remain unchanged.
+Initial discovery and subscription catch-up have bounded timeouts. Per-relay
+OPEN/EVENT/EOSE/CLOSED/ERROR outcomes distinguish unavailable transport from verified
+emptiness. An eight-second catch-up deadline reports partial access; validation
+continues draining before completion is shown. Cached cards stay visible on failures.
+The existing Feed Refresh action retries both Nostr and subscribed sources. Refresh
 restarts Nostr independently of Tower/source errors; outages retain cache.
 
 Verified event signatures are necessary. Unsupported kinds, private DMs and self-
@@ -64,3 +79,12 @@ Local flags do not converge across devices. Automated signed fixtures and simula
 browser checks do not establish authenticated human/live relay acceptance.
 
 Protocol references: [NIP-25 reactions](https://github.com/nostr-protocol/nips/blob/master/25.md), [NIP-18 reposts](https://github.com/nostr-protocol/nips/blob/master/18.md), [NIP-57 zap receipts](https://github.com/nostr-protocol/nips/blob/master/57.md), and [BOLT11 invoices](https://github.com/lightning/bolts/blob/master/11-payment-encoding.md).
+
+
+Retrieval API references: [getting started](https://applesauce.build/introduction/getting-started.html),
+[current relay pool](https://applesauce.build/loading/relays/pool.html), and
+[address/event loaders](https://applesauce.build/typedoc/modules/applesauce-loaders.html).
+The former `/overview/relays.html` documentation path is unavailable; use the current
+loading/relays documentation and the installed 6.2 package declarations. Live public
+reads can validate transport and browser ingestion without signing in as the human;
+that evidence must remain distinct from authenticated human acceptance.

@@ -43,11 +43,15 @@
     "@tiptap/pm": "^3.27.1",
     "@tiptap/starter-kit": "^3.27.1",
     "alpinejs": "^3.14.8",
+    "applesauce-core": "^6.2.0",
+    "applesauce-loaders": "^6.2.0",
+    "applesauce-relay": "^6.2.1",
     "dexie": "^4.0.10",
     "diff": "^8.0.4",
     "highlight.js": "^11.11.1",
     "marked": "^17.0.4",
-    "nostr-tools": "^2.17.0"
+    "nostr-tools": "^2.17.0",
+    "rxjs": "^7.8.2"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.13",

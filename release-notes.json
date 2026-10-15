@@ -4154,6 +4154,13 @@
       "label": "Personal pin accessibility and verification",
       "notes": [],
       "noUserVisibleChanges": true
+    },
+    {
+      "buildNumber": 2429,
+      "label": "Reliable public Nostr loading",
+      "notes": [
+        "Load public Nostr notifications with Applesauce, recipient inbox relays and bounded fallback. Show loading, empty and relay-access results while preserving saved, read and dismissed notifications."
+      ]
     }
   ]
 }

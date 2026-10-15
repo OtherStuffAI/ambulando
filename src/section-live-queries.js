@@ -1224,6 +1224,9 @@ export const sectionLiveQueryMixin = {
       this.hasBootstrappedUnreadTracking = false;
     }
 
+    // Public notifications depend on the signed-in human and an open local DB,
+    // not Tower's workspace-owner metadata (which can arrive later).
+    this.startNostrNotifications?.();
     if (!ownerNpub) {
       disposeContextTreeView(this);
       disposePipelineViewer(this);
@@ -1239,7 +1242,6 @@ export const sectionLiveQueryMixin = {
       return;
     }
 
-    this.startNostrNotifications?.();
     resumeContextTreeView(this);
     resumePipelineViewer(this);
     syncLiveQuerySet(this, state.workspace, buildWorkspaceSpecs(this));

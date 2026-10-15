@@ -262,13 +262,13 @@ it('deduplicates multi-relay delivery, bounds work and closes subscriptions', as
   const close = vi.fn(),
     emit = vi.fn();
   const pool = {
-    querySync: vi.fn(async () => []),
-    subscribeMany: vi.fn((_r, _f, h) => {
+    query: vi.fn(async () => []),
+    subscribe: vi.fn((_r, _f, h) => {
       handlers = h;
       return { close };
     }),
     close: vi.fn(),
-    destroy: vi.fn(),
+    dispose: vi.fn(),
   };
   const service = new NostrNotificationService({ recipient: human, pool, emit });
   await service.start();
@@ -277,7 +277,7 @@ it('deduplicates multi-relay delivery, bounds work and closes subscriptions', as
   handlers.onevent(event);
   await vi.advanceTimersByTimeAsync(0);
   expect(emit).toHaveBeenCalledTimes(1);
-  expect(pool.subscribeMany.mock.calls[0][1]).toMatchObject({
+  expect(pool.subscribe.mock.calls[0][1]).toMatchObject({
     limit: 200,
     kinds: [1, 6, 7, 16, 9735],
   });
@@ -287,7 +287,7 @@ it('deduplicates multi-relay delivery, bounds work and closes subscriptions', as
   await Promise.resolve();
   expect(emit).toHaveBeenCalledTimes(1);
   expect(close).toHaveBeenCalled();
-  expect(pool.destroy).toHaveBeenCalled();
+  expect(pool.dispose).toHaveBeenCalled();
 });
 it('upserts without losing flags; isolates identity and rejects late writes', async () => {
   const db = new Dexie(`nostr-test-${crypto.randomUUID()}`);
@@ -461,8 +461,8 @@ it('bounds candidate and original-event work when a relay exceeds requested limi
   const close = vi.fn(),
     status = vi.fn();
   const pool = {
-    querySync: vi.fn(async () => []),
-    subscribeMany: (_r, _f, h) => {
+    query: vi.fn(async () => []),
+    subscribe: (_r, _f, h) => {
       handlers = h;
       return { close };
     },
@@ -479,7 +479,7 @@ it('bounds candidate and original-event work when a relay exceeds requested limi
   );
   for (let i = 0; i < 600; i++) await service.getEvent(i.toString(16).padStart(64, '0'));
   expect(service.targets.size).toBe(500);
-  expect(pool.querySync).toHaveBeenCalledTimes(502);
+  expect(pool.query).toHaveBeenCalledTimes(502);
   service.dispose();
 });
 
@@ -523,12 +523,12 @@ it('retains a signed catch-up burst with four concurrent validations and drains 
   );
   const emitted = [],
     pool = {
-      querySync: vi.fn((_relays, filter) =>
+      query: vi.fn((_relays, filter) =>
         filter.ids
           ? targetGate
           : Promise.resolve(filter.authors?.[0] === sender ? [actorProfile] : []),
       ),
-      subscribeMany: vi.fn((_r, _f, h) => {
+      subscribe: vi.fn((_r, _f, h) => {
         handlers = h;
         return { close: vi.fn() };
       }),
@@ -557,7 +557,7 @@ it('retains a signed catch-up burst with four concurrent validations and drains 
   expect(service.activeValidations).toBe(4);
   expect(service.queue).toHaveLength(36);
   await vi.advanceTimersByTimeAsync(5 * 60 * 1000);
-  expect(pool.subscribeMany).toHaveBeenCalledOnce(); // no loss at cycle boundary
+  expect(pool.subscribe).toHaveBeenCalledOnce(); // no loss at cycle boundary
   resolveTarget([own]);
   await vi.advanceTimersByTimeAsync(0);
   expect(emitted).toHaveLength(40);
@@ -565,11 +565,11 @@ it('retains a signed catch-up burst with four concurrent validations and drains 
   expect(emitted.every((row) => row.title === 'Reaction from Alice Example')).toBe(true);
   expect(service.activeValidations).toBe(0);
   expect(service.queue).toHaveLength(0);
-  expect(
-    pool.querySync.mock.calls.filter(([, filter]) => filter.authors?.[0] === sender),
-  ).toHaveLength(1);
+  expect(pool.query.mock.calls.filter(([, filter]) => filter.authors?.[0] === sender)).toHaveLength(
+    1,
+  );
   await vi.advanceTimersByTimeAsync(10000);
-  expect(pool.subscribeMany).toHaveBeenCalledTimes(2);
+  expect(pool.subscribe).toHaveBeenCalledTimes(2);
   service.dispose();
 });
 
@@ -603,8 +603,8 @@ it('rejects historical candidates client-side while allowing old verified origin
   let handlers;
   const emit = vi.fn(),
     pool = {
-      querySync: async () => [],
-      subscribeMany: (_r, _f, h) => {
+      query: async () => [],
+      subscribe: (_r, _f, h) => {
         handlers = h;
         return { close: vi.fn() };
       },
@@ -640,4 +640,20 @@ it('matches zap self-activity to the payer even when the recipient runs their ow
     ),
   );
   expect(await normalizeNostrNotification(selfPaid, human, deps)).toBeNull();
+});
+
+it('passes the signed original-event relay hint into bounded context retrieval', async () => {
+  const getEvent = vi.fn(async () => own);
+  const event = sign(
+    7,
+    [
+      ['e', own.id, 'wss://original.example/'],
+      ['p', human],
+    ],
+    '+',
+  );
+  expect(await normalizeNostrNotification(event, human, { getEvent })).toMatchObject({
+    type: 'Reaction',
+  });
+  expect(getEvent).toHaveBeenCalledWith(own.id, ['wss://original.example/']);
 });

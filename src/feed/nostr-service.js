@@ -1,7 +1,8 @@
 import { withNostrActorName } from './nostr-display.js';
-import { nip19, SimplePool } from 'nostr-tools';
+import { nip19 } from 'nostr-tools';
+import { NostrRelayClient } from './nostr-relay-client.js';
 import { bech32 } from '@scure/base';
-import { publicNostrRelays } from '../nostr-relays.js';
+import { publicNostrRelays, notificationInboxRelays, notificationRelays } from '../nostr-relays.js';
 import { normalizeNostrNotification, validPublicEvent } from './nostr-normalize.js';
 
 export function zapProviderUrl(profile) {
@@ -35,7 +36,7 @@ export class NostrNotificationService {
   constructor({
     recipient,
     relays = [],
-    pool = new SimplePool(),
+    pool = new NostrRelayClient(),
     fetchImpl = fetch,
     emit = () => {},
     status = () => {},
@@ -66,10 +67,8 @@ export class NostrNotificationService {
         : null;
     const relayEvent = latest(discovery[0], 10002),
       profileEvent = latest(discovery[1], 0);
-    this.relays = publicNostrRelays(
-      relayEvent?.tags.filter((t) => t[0] === 'r' && (!t[2] || t[2] === 'read')).map((t) => t[1]) ||
-        this.relays,
-    );
+    this.lookupRelays = this.relays;
+    this.relays = notificationInboxRelays(relayEvent);
     try {
       this.profile = JSON.parse(profileEvent?.content || '{}');
     } catch {
@@ -78,14 +77,15 @@ export class NostrNotificationService {
     this.cycle();
   }
   query(filter) {
-    return this.pool.querySync(this.relays, filter, { maxWait: 2500 });
+    return this.pool.query(this.relays, filter);
   }
-  getEvent(id) {
+  getEvent(id, hints = []) {
     if (!this.targets.has(id)) {
       if (this.targets.size >= 500 || this.disposed) return Promise.resolve(null);
       this.targets.set(
         id,
-        this.query({ ids: [id], limit: 1 })
+        this.pool
+          .query(notificationRelays([...hints, ...this.relays]), { ids: [id], limit: 1 })
           .then((events) => events.find((e) => e.id === id && validPublicEvent(e)) || null)
           .catch(() => null),
       );
@@ -98,7 +98,12 @@ export class NostrNotificationService {
       const pubkey = nip19.decode(npub).data;
       this.actorProfiles.set(
         npub,
-        this.query({ kinds: [0], authors: [pubkey], limit: 1 })
+        this.pool
+          .query(
+            publicNostrRelays(this.lookupRelays),
+            { kinds: [0], authors: [pubkey], limit: 1 },
+            { first: true },
+          )
           .then((events) => {
             const latest = events
               .filter(
@@ -173,8 +178,33 @@ export class NostrNotificationService {
     this.targets.clear();
     this.actorProfiles.clear();
     this.seen.clear();
+    this.pool.resetCache?.();
     this.providerAbort?.abort();
     this.provider = null;
+    let accepted = 0,
+      transport;
+    const report = () => {
+      if (this.disposed || this.generation !== generation) return;
+      if (!transport?.completed) {
+        if (transport && (transport.settled || transport.failed === transport.total))
+          this.status(
+            'Could not load Nostr notifications. Cached notifications remain; refresh to retry.',
+          );
+        return;
+      }
+      if (
+        pending ||
+        queue.length ||
+        (!accepted &&
+          !transport.settled &&
+          transport.completed + transport.failed < transport.total)
+      )
+        this.status('Loading recent Nostr notifications…');
+      else
+        this.status(
+          `${accepted ? 'Public Nostr · recent 7 days' : 'No verified public notifications in the recent 7 days.'}${transport.failed ? ' Some relays could not be reached; refresh to retry.' : ''}`,
+        );
+    };
     let processed = 0,
       pending = 0;
     const queue = (this.queue = []);
@@ -184,25 +214,28 @@ export class NostrNotificationService {
         pending++;
         this.activeValidations++;
         normalizeNostrNotification(event, this.recipient, {
-          getEvent: (id) => this.getEvent(id),
+          getEvent: (id, hints) => this.getEvent(id, hints),
           getZapProvider: () => this.getZapProvider(),
         })
           .then(async (row) => {
             if (!row || this.disposed || this.generation !== generation) return;
             const name = await this.getActorName(row.actorNpub);
-            if (!this.disposed && this.generation === generation)
+            if (!this.disposed && this.generation === generation) {
+              accepted++;
               this.emit(withNostrActorName(row, name));
+            }
           })
           .catch(() => {})
           .finally(() => {
             pending--;
             this.activeValidations--;
             drain();
+            report();
           });
       }
     };
     this.status('Connecting to public Nostr relays…');
-    this.subscription = this.pool.subscribeMany(
+    this.subscription = this.pool.subscribe(
       this.relays,
       {
         kinds: [1, 6, 7, 16, 9735],
@@ -211,10 +244,9 @@ export class NostrNotificationService {
         limit: 200,
       },
       {
-        maxWait: 5000,
-        oneose: () => {
-          if (!this.disposed && this.generation === generation)
-            this.status('Public Nostr · recent 7 days');
+        progress: (value) => {
+          transport = value;
+          report();
         },
         onclose: () => {
           if (!this.disposed && this.generation === generation)
@@ -248,8 +280,7 @@ export class NostrNotificationService {
     clearTimeout(this.timer);
     this.providerAbort?.abort();
     this.subscription?.close();
-    this.pool.close(this.relays);
-    this.pool.destroy?.();
+    this.pool.dispose?.();
     this.targets.clear();
     this.actorProfiles.clear();
     this.seen.clear();

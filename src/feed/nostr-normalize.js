@@ -122,7 +122,7 @@ export async function normalizeNostrNotification(
     if (!pTags.some((t) => t[1] === recipient)) return null;
     const reply =
       references.find((t) => t[3] === 'reply') || references.filter((t) => !t[3]).at(-1);
-    const target = reply && (await getEvent?.(reply[1]));
+    const target = reply && (await getEvent?.(reply[1], [reply[2]].filter(Boolean)));
     type =
       target?.id === reply?.[1] &&
       target?.pubkey === recipient &&
@@ -135,7 +135,13 @@ export async function normalizeNostrNotification(
     // NIP-25's final e/p tags identify the actual reaction target.
     targetId = tags(event, 'e').at(-1)?.[1];
     if (!HEX.test(targetId || '') || pTags.at(-1)?.[1] !== recipient) return null;
-    const target = await getEvent?.(targetId);
+    const target = await getEvent?.(
+      targetId,
+      tags(event, 'e')
+        .filter((t) => t[1] === targetId)
+        .map((t) => t[2])
+        .filter(Boolean),
+    );
     if (
       !target ||
       target.id !== targetId ||
@@ -200,7 +206,13 @@ export async function normalizeNostrNotification(
     if ((await getZapProvider?.()) !== event.pubkey) return null;
     targetId = only(request, 'e') || '';
     if (targetId) {
-      const target = await getEvent?.(targetId);
+      const target = await getEvent?.(
+        targetId,
+        tags(event, 'e')
+          .filter((t) => t[1] === targetId)
+          .map((t) => t[2])
+          .filter(Boolean),
+      );
       if (
         !target ||
         target.pubkey !== recipient ||

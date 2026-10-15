@@ -580,3 +580,22 @@ describe('retained chat during checkpoint recovery', () => {
     expect(plan.detail.some(key => key.startsWith(navSection === 'chat' ? 'chat:messages:' : 'deck:messages:'))).toBe(true);
   });
 });
+
+it('starts identity-scoped public notifications while workspace-owner metadata is pending', async () => {
+  const workspaceKey = 'notifications-before-owner-metadata';
+  openWorkspaceDb(workspaceKey);
+  try {
+    const store = {
+      currentWorkspaceKey: workspaceKey,
+      workspaceOwnerNpub: '',
+      startNostrNotifications: vi.fn(),
+      createLiveSubscription: vi.fn(),
+      stopLiveSubscription: vi.fn(),
+    };
+    sectionLiveQueryMixin.startWorkspaceLiveQueries.call(store);
+    expect(store.startNostrNotifications).toHaveBeenCalledOnce();
+    expect(store.createLiveSubscription).not.toHaveBeenCalled();
+  } finally {
+    await deleteWorkspaceDb(workspaceKey);
+  }
+});
