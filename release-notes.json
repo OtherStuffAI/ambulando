@@ -4168,6 +4168,13 @@
       "notes": [
         "Open Home with scope All on a normal app launch, showing activity across accessible projects in the current workspace. Explicit project and conversation links keep their destination."
       ]
+    },
+    {
+      "buildNumber": 2431,
+      "label": "Embedded Nostr worker startup repair",
+      "notes": [
+        "Start Nostr notifications reliably with persisted workspace relay settings. Worker startup and discovery failures now show a bounded Refresh retry while preserving cached cards and read, saved and dismissed flags."
+      ]
     }
   ]
 }

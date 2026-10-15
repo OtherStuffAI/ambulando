@@ -657,3 +657,115 @@ it('passes the signed original-event relay hint into bounded context retrieval',
   });
   expect(getEvent).toHaveBeenCalledWith(own.id, ['wss://original.example/']);
 });
+
+
+// A real postMessage structured clone rejects Alpine's persisted relay proxies.
+// Model that boundary here; the compiled WebKit test exercises Alpine itself.
+describe('notification worker startup and recovery', () => {
+  async function setup({ failPost = false } = {}) {
+    const { openWorkspaceDb } = await import('../src/db.js');
+    const db = openWorkspaceDb(`nostr-startup-${crypto.randomUUID()}`);
+    const workers = [];
+    vi.stubGlobal('window', new EventTarget());
+    vi.stubGlobal('Worker', class {
+      constructor() {
+        workers.push(this);
+        this.terminate = vi.fn();
+        this.postMessage = vi.fn((value) => {
+          if (failPost) throw new DOMException('Cannot clone', 'DataCloneError');
+          structuredClone(value);
+        });
+      }
+    });
+    const store = Object.defineProperties({}, Object.getOwnPropertyDescriptors(nostrNotificationsMixin));
+    store.currentWorkspaceKey = db.name.slice('wingman-fd-ws-'.length);
+    store.session = { npub: nip19.npubEncode(human) };
+    store.currentWorkspace = { relayUrls: new Proxy(['wss://relay.damus.io'], {}) };
+    const unsubscribe = vi.fn();
+    store.createLiveSubscription = (_query, emit) => {
+      store.project = emit;
+      return { unsubscribe };
+    };
+    const cleanup = async () => {
+      store.disposeNostrNotifications();
+      vi.useRealTimers();
+      vi.unstubAllGlobals();
+      await db.delete();
+    };
+    return { store, db, workers, unsubscribe, cleanup };
+  }
+
+  it.each([{ relays: [] }, { relays: ['wss://relay.damus.io'] }])('snapshots a persisted reactive relay array $relays for transport', async ({ relays }) => {
+    const fixture = await setup();
+    try {
+      fixture.store.currentWorkspace.relayUrls = new Proxy(relays, {});
+      expect(() => structuredClone(fixture.store.currentWorkspace.relayUrls)).toThrow();
+      fixture.store.startNostrNotifications();
+      expect(fixture.workers[0].postMessage).toHaveBeenCalledWith({ action: 'start', recipient: human, relays });
+      expect(fixture.workers[0].terminate).not.toHaveBeenCalled();
+      fixture.store.startNostrNotifications();
+      expect(fixture.workers).toHaveLength(1);
+    } finally { await fixture.cleanup(); }
+  });
+
+  it('reports a synchronous postMessage failure while retaining cached cards and flag writes', async () => {
+    const fixture = await setup({ failPost: true });
+    try {
+      const { store, db, workers, unsubscribe } = fixture;
+      store.startNostrNotifications();
+      expect(store.nostrNotificationStatus).toContain('Could not start Nostr worker');
+      expect(workers[0].terminate).toHaveBeenCalledOnce();
+      expect(unsubscribe).not.toHaveBeenCalled();
+      const row = await normalizeNostrNotification(sign(1, [['p', human]], 'Cached mention'), human, deps);
+      await persistNostrNotification(db, store.nostrNotificationContext, row);
+      const cached = await db.nostr_notifications.toArray();
+      store.project(cached);
+      await store.setNostrFeedFlag(cached[0], 'saved', true);
+      expect(store.visibleNostrNotifications).toHaveLength(1);
+      expect((await db.nostr_notification_states.get(cached[0].key)).saved).toBe(true);
+    } finally { await fixture.cleanup(); }
+  });
+
+  it.each(['boot', 'discovery', 'messageerror', 'error'])('bounds %s failure and ignores late worker results until Refresh', async (phase) => {
+    const fixture = await setup();
+    vi.useFakeTimers();
+    try {
+      const { store, workers, unsubscribe } = fixture;
+      store.startNostrNotifications();
+      if (phase === 'discovery') workers[0].onmessage({ data: { phase: 'discovery', status: 'Discovering public Nostr relays…' } });
+      if (phase === 'error') workers[0].onerror({});
+      else if (phase === 'messageerror') workers[0].onmessageerror({});
+      else vi.advanceTimersByTime(10000);
+      expect(workers[0].terminate).toHaveBeenCalledOnce();
+      expect(unsubscribe).not.toHaveBeenCalled();
+      expect(store.nostrNotificationStatus).toContain('refresh to retry');
+      const status = store.nostrNotificationStatus;
+      workers[0].onmessage({ data: { status: 'late success', row: { recipient: human } } });
+      expect(store.nostrNotificationStatus).toBe(status);
+      store.refreshNostrNotifications();
+      expect(workers).toHaveLength(2);
+      workers[1].onmessage({ data: { phase: 'discovery' } });
+      workers[1].onmessage({ data: { phase: 'listening', status: 'Connecting to public Nostr relays…' } });
+      vi.advanceTimersByTime(20000);
+      expect(workers[1].terminate).not.toHaveBeenCalled();
+      expect(store.nostrNotificationStatus).toBe('Connecting to public Nostr relays…');
+    } finally { await fixture.cleanup(); }
+  });
+
+  it('rejects a replaced database handle even when the identity partition is unchanged', async () => {
+    const fixture = await setup();
+    try {
+      const { closeWorkspaceDb, openWorkspaceDb } = await import('../src/db.js');
+      fixture.store.startNostrNotifications();
+      closeWorkspaceDb();
+      const replacement = openWorkspaceDb(fixture.store.currentWorkspaceKey);
+      fixture.workers[0].onmessage({ data: { status: 'stale database' } });
+      expect(fixture.store.nostrNotificationStatus).not.toBe('stale database');
+      fixture.store.startNostrNotifications();
+      expect(fixture.workers[0].terminate).toHaveBeenCalledOnce();
+      expect(fixture.workers).toHaveLength(2);
+      fixture.store.disposeNostrNotifications();
+      replacement.close();
+    } finally { await fixture.cleanup(); }
+  });
+});

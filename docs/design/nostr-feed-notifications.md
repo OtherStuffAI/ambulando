@@ -34,6 +34,18 @@ continues draining before completion is shown. Cached cards stay visible on fail
 The existing Feed Refresh action retries both Nostr and subscribed sources. Refresh
 restarts Nostr independently of Tower/source errors; outages retain cache.
 
+Worker startup sends a plain snapshot of workspace relay strings. Persisted
+workspace arrays are Alpine proxies (including empty arrays), which cannot cross
+the structured-clone boundary: passing them directly throws DataCloneError before
+the worker receives its start command. Startup dispatch is guarded. The worker
+announces module readiness, discovery and completion of discovery; the manager
+allows ten seconds for the start acknowledgement and ten more for discovery.
+Boot, dispatch, message and discovery failures terminate the worker and show an
+explicit Refresh recovery message, retaining the live local cache and flag writer.
+Refresh creates a new runtime; normal repeated live-query setup reuses the same
+identity/database runtime. Guards capture the actual database handle as well as
+the partition, rejecting results after a same-partition database reopen.
+
 Verified event signatures are necessary. Unsupported kinds, private DMs and self-
 authored events are excluded. A kind 1 p-tag identifies a mention; only a verified
 reply target belonging to the human makes it a Reply. Reactions use the final e/p

@@ -40,6 +40,7 @@ export class NostrNotificationService {
     fetchImpl = fetch,
     emit = () => {},
     status = () => {},
+    ready = () => {},
   }) {
     this.recipient = recipient;
     this.relays = publicNostrRelays(relays);
@@ -47,6 +48,7 @@ export class NostrNotificationService {
     this.fetch = fetchImpl;
     this.emit = emit;
     this.status = status;
+    this.ready = ready;
     this.disposed = false;
     this.seen = new Set();
     this.targets = new Map();
@@ -74,6 +76,7 @@ export class NostrNotificationService {
     } catch {
       this.profile = {};
     }
+    this.ready();
     this.cycle();
   }
   query(filter) {

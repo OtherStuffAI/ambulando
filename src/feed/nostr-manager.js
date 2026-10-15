@@ -55,9 +55,10 @@ export const nostrNotificationsMixin = {
       return;
     }
     const context = partition(this);
-    if (RUNTIMES.get(this)?.context === context) return;
-    this.disposeNostrNotifications();
     const db = getWorkspaceDb();
+    const existing = RUNTIMES.get(this);
+    if (existing?.context === context && existing.db === db) return;
+    this.disposeNostrNotifications();
     let worker;
     try {
       worker = new Worker(new URL('../worker/nostr-notifications-worker.js', import.meta.url), {
@@ -68,7 +69,11 @@ export const nostrNotificationsMixin = {
       return;
     }
     const runtime = { context, db, worker },
-      current = () => RUNTIMES.get(this) === runtime && partition(this) === context;
+      current = () =>
+        RUNTIMES.get(this) === runtime &&
+        partition(this) === context &&
+        isWorkspaceDbOpenForKey(this.currentWorkspaceKey) &&
+        getWorkspaceDb() === db;
     RUNTIMES.set(this, runtime);
     this.nostrNotificationContext = context;
     this.nostrNotificationStatus = 'Loading recent Nostr notifications…';
@@ -86,8 +91,25 @@ export const nostrNotificationsMixin = {
           this.nostrNotificationItems = rows.sort((a, b) => b.published.localeCompare(a.published));
       },
     );
+    const fail = (message) => {
+      if (!current() || runtime.failed) return;
+      runtime.failed = true;
+      clearTimeout(runtime.startupDeadline);
+      worker.terminate();
+      // Keep the live cache and flag writer attached until explicit retry/logout.
+      this.nostrNotificationStatus = message;
+    };
+    runtime.startupDeadline = setTimeout(() => {
+      fail('Nostr worker did not start. Cached notifications remain; refresh to retry.');
+    }, 10000);
     worker.onmessage = async ({ data }) => {
-      if (!current()) return;
+      if (!current() || runtime.failed) return;
+      if (data.phase === 'discovery') {
+        clearTimeout(runtime.startupDeadline);
+        runtime.startupDeadline = setTimeout(() => {
+          fail('Nostr relay discovery timed out. Cached notifications remain; refresh to retry.');
+        }, 10000);
+      } else if (data.phase === 'listening') clearTimeout(runtime.startupDeadline);
       if (data.status) this.nostrNotificationStatus = data.status;
       if (data.row?.recipient === recipient) {
         let row = data.row;
@@ -108,9 +130,10 @@ export const nostrNotificationsMixin = {
         });
       }
     };
-    worker.onerror = () => {
-      if (current()) this.nostrNotificationStatus = 'Nostr unavailable. Refresh to retry.';
-    };
+    worker.onerror = () =>
+      fail('Nostr worker unavailable. Cached notifications remain; refresh to retry.');
+    worker.onmessageerror = () =>
+      fail('Nostr worker message unavailable. Cached notifications remain; refresh to retry.');
     runtime.stop = (event) => {
       this.disposeNostrNotifications();
       if (event?.persisted)
@@ -120,16 +143,23 @@ export const nostrNotificationsMixin = {
     runtime.identityWatch = setInterval(() => {
       if (!current()) runtime.stop();
     }, 250);
-    worker.postMessage({
-      action: 'start',
-      recipient,
-      relays: this.currentWorkspace?.relayUrls || [],
-    });
+    try {
+      // Alpine wraps persisted workspace arrays in proxies. postMessage cannot
+      // clone those, even an empty relay array; send a plain transport snapshot.
+      const configuredRelays = this.currentWorkspace?.relayUrls;
+      const relays = Array.isArray(configuredRelays)
+        ? Array.from(configuredRelays).filter((relay) => typeof relay === 'string')
+        : [];
+      worker.postMessage({ action: 'start', recipient, relays });
+    } catch {
+      fail('Could not start Nostr worker. Cached notifications remain; refresh to retry.');
+    }
   },
   disposeNostrNotifications() {
     const runtime = RUNTIMES.get(this);
     RUNTIMES.delete(this);
     if (runtime) {
+      clearTimeout(runtime.startupDeadline);
       clearInterval(runtime.identityWatch);
       runtime.subscription?.unsubscribe();
       runtime.worker.terminate();

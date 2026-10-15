@@ -2,6 +2,56 @@ const { test, expect } = require('playwright/test');
 const { nip19, getPublicKey, generateSecretKey } = require('nostr-tools');
 test.setTimeout(45000);
 const human = nip19.npubEncode(getPublicKey(generateSecretKey()));
+const { devices } = require('playwright');
+test.use({
+  ...(process.env.PLAYWRIGHT_NOSTR_BROWSER === 'webkit'
+    ? { browserName: 'webkit', ...devices['iPhone 13'] }
+    : {}),
+  ...(process.env.PLAYWRIGHT_WEBKIT_EXECUTABLE
+    ? { launchOptions: { executablePath: process.env.PLAYWRIGHT_WEBKIT_EXECUTABLE } }
+    : {}),
+});
+const activateNostrFixture = async ({ npub, pubkey }) => {
+  const s = window.Alpine.store('chat');
+  s.stopBackgroundSync?.();
+  s.stopAllLiveQueries?.();
+  for (const method of [
+    'startSharedLiveQueries',
+    'syncRoute',
+    'performSync',
+    'ensureWorkspaceSessionKey',
+    'loadLocalWorkspaceCoreData',
+    'persistWorkspaceSettings',
+    'refreshWorkspaceSettings',
+    'refreshLegacyWorkspaceRecovery',
+    'syncWorkspaceProfileDraft',
+    'validateSelectedBoardId',
+    'activateFeeds',
+  ])
+    s[method] = () => {};
+  s.requestTowerSyncFamily = async () => {};
+  s.ensureBackgroundSync = () => {};
+  s.startWorkspaceLiveQueries = () => s.startNostrNotifications();
+  s.session = { npub, pubkey, method: 'extension' };
+  s.ownerNpub = npub;
+  s.navSection = 'status';
+  s.knownWorkspaces = [
+    {
+      workspaceKey: 'nostr-worker-fixture',
+      relayUrls: ['wss://relay.damus.io'],
+      workspaceId: '00000000-0000-4000-8000-000000000001',
+      workspaceOwnerNpub: npub,
+      directHttpsUrl: 'https://tower.example.invalid',
+      pgBackendMode: true,
+      pgSessionNpub: npub,
+    },
+  ];
+  await s.selectWorkspace('nostr-worker-fixture', { pgVerified: true });
+  s.showConnectModal = false;
+  s.showWorkspaceBootstrapModal = false;
+  s.startNostrNotifications();
+};
+
 for (const width of [1440, 390]) {
   test(`Nostr shares Feed filters and inert deliberate navigation ${width}`, async ({ page }) => {
     await page.setViewportSize({ width, height: 1000 });
@@ -107,7 +157,7 @@ for (const width of [1440, 390]) {
   });
 }
 
-test('signed relay fixtures traverse the compiled worker and Dexie and retain local flags', async ({
+test('signed relay fixtures traverse embedded worker and Dexie, retain flags and recover from hung boot', async ({
   page,
 }) => {
   const { finalizeEvent } = require('nostr-tools');
@@ -142,120 +192,88 @@ test('signed relay fixtures traverse the compiled worker and Dexie and retain lo
     if (!['127.0.0.1', 'localhost'].includes(url.hostname)) return route.abort();
     return route.continue();
   });
-  // Playwright WebSocket routing does not cover this dedicated module worker.
-  // Replace only its transport before importing the actual served worker bundle;
-  // signature validation, normalization, persistence and liveQuery stay real.
-  await page.addInitScript(
-    ({ incoming, profile, actor }) => {
-      const NativeWorker = window.Worker;
-      window.Worker = class extends NativeWorker {
-        constructor(url, options) {
-          if (!String(url).includes('nostr-notifications-worker')) {
-            super(url, options);
-            return;
-          }
-          const fixture = JSON.stringify({ incoming, profile, actor });
-          const transport = `
-          const fixture = ${fixture};
-          const messages = []; const buffer = event => messages.push(event);
-          self.addEventListener('message', buffer);
-          self.WebSocket = class {
-            static OPEN = 1; static CLOSED = 3;
-            constructor(url) { this.url = url; this.readyState = 0; setTimeout(() => { this.readyState = 1; this.onopen?.({}); }, 0); }
-            send(message) {
-              const request = JSON.parse(message); if (request[0] !== 'REQ') return;
-              const id = request[1], filter = request[2];
-              setTimeout(() => {
-                if (this.readyState !== 1) return;
-                const emit = value => this.onmessage?.({ data: JSON.stringify(value) });
-                if (filter.kinds?.includes(0)) emit(['EVENT', id, filter.authors?.[0] === fixture.incoming.pubkey ? fixture.actor : fixture.profile]);
-                if (filter.kinds?.includes(1)) { emit(['EVENT', id, fixture.incoming]); emit(['EVENT', id, fixture.incoming]); }
-                emit(['EOSE', id]);
-              }, 0);
-            }
-            close() { this.readyState = 3; this.onclose?.({}); }
-          };
-          await import(${JSON.stringify(String(url))});
-          self.removeEventListener('message', buffer);
-          for (const event of messages) self.onmessage?.(event);
-        `;
-          const blobUrl = URL.createObjectURL(new Blob([transport], { type: 'text/javascript' }));
-          super(blobUrl, options);
-          URL.revokeObjectURL(blobUrl);
+
+  // Keep native Worker construction and the normal URL. Replace only WebSocket
+  // in the served script; blob/dynamic-import wrappers change WebKit boot.
+  let hang = false;
+  await page.route('**/nostr-notifications-worker*', async route => {
+    if (hang) return route.fulfill({ contentType: 'text/javascript', body: 'self.onmessage = () => {};' });
+    const response = await route.fetch();
+    const transport = `
+      const fixture = ${JSON.stringify({ incoming, profile, actor })};
+      self.WebSocket = class {
+        static OPEN = 1; static CLOSED = 3;
+        constructor(url) { this.url = url; this.readyState = 0; setTimeout(() => { this.readyState = 1; this.onopen?.({}); }, 0); }
+        send(message) {
+          const request = JSON.parse(message); if (request[0] !== 'REQ') return;
+          const id = request[1], filter = request[2];
+          setTimeout(() => {
+            if (this.readyState !== 1) return;
+            const emit = value => this.onmessage?.({ data: JSON.stringify(value) });
+            if (filter.kinds?.includes(0)) emit(['EVENT', id, filter.authors?.[0] === fixture.incoming.pubkey ? fixture.actor : fixture.profile]);
+            if (filter.kinds?.includes(1)) { emit(['EVENT', id, fixture.incoming]); emit(['EVENT', id, fixture.incoming]); }
+            emit(['EOSE', id]);
+          }, 0);
         }
+        close() { this.readyState = 3; this.onclose?.({}); }
       };
-    },
-    { incoming, profile, actor },
-  );
-  await page.goto('/');
-  await page.waitForFunction(() => Boolean(window.Alpine?.store?.('chat')));
-  await page.waitForFunction(() => window.Alpine.store('chat').routeSyncPaused === false);
-  await page.evaluate(
-    async ({ npub, pubkey }) => {
-      const s = window.Alpine.store('chat');
-      s.stopBackgroundSync?.();
-      s.stopAllLiveQueries?.();
-      for (const method of [
-        'startSharedLiveQueries',
-        'syncRoute',
-        'performSync',
-        'ensureWorkspaceSessionKey',
-        'loadLocalWorkspaceCoreData',
-        'persistWorkspaceSettings',
-        'refreshWorkspaceSettings',
-        'refreshLegacyWorkspaceRecovery',
-        'syncWorkspaceProfileDraft',
-        'validateSelectedBoardId',
-        'activateFeeds',
-      ])
-        s[method] = () => {};
-      s.requestTowerSyncFamily = async () => {};
-      s.ensureBackgroundSync = () => {};
-      s.startWorkspaceLiveQueries = () => s.startNostrNotifications();
-      s.session = { npub, pubkey, method: 'extension' };
-      s.ownerNpub = npub;
-      s.navSection = 'status';
-      s.knownWorkspaces = [
-        {
-          workspaceKey: 'nostr-worker-fixture',
-          workspaceId: '00000000-0000-4000-8000-000000000001',
-          workspaceOwnerNpub: npub,
-          directHttpsUrl: 'https://tower.example.invalid',
-          pgBackendMode: true,
-          pgSessionNpub: npub,
-        },
-      ];
-      await s.selectWorkspace('nostr-worker-fixture', { pgVerified: true });
-      s.showConnectModal = false;
-      s.showWorkspaceBootstrapModal = false;
-      s.startNostrNotifications();
-    },
+    `;
+    await route.fulfill({ response, body: transport + '\n' + await response.text() });
+  });
+  await page.route('**/nostr-embedded-fixture', route => route.fulfill({
+    contentType: 'text/html',
+    body: '<meta name="viewport" content="width=device-width, initial-scale=1"><iframe src="/" style="width:100%;height:900px"></iframe>',
+  }));
+  await page.goto('/nostr-embedded-fixture');
+  const frame = page.frames().find(value => value.parentFrame());
+  await frame.waitForFunction(() => Boolean(window.Alpine?.store?.('chat')));
+  await frame.waitForFunction(() => window.Alpine.store('chat').routeSyncPaused === false);
+  await frame.evaluate(
+    activateNostrFixture,
     { npub, pubkey },
   );
-  const body = page.locator('.feeds-reader');
+  const body = frame.locator('.feeds-reader');
   await expect(body.getByText('Signed worker mention fixture', { exact: true })).toBeVisible();
-  expect(await page.evaluate(() => window.Alpine.store('chat').nostrNotificationItems.length)).toBe(
+  expect(await frame.evaluate(() => window.Alpine.store('chat').nostrNotificationItems.length)).toBe(
     1,
   );
   const actions = body.getByRole('button', { name: 'Actions for Mention from Alice Example' });
   await actions.click();
   await body.getByRole('menuitem', { name: 'Mark read', exact: true }).click();
   await expect
-    .poll(() => page.evaluate(() => window.Alpine.store('chat').nostrNotificationItems[0]?.read))
+    .poll(() => frame.evaluate(() => window.Alpine.store('chat').nostrNotificationItems[0]?.read))
     .toBe(true);
   await actions.click();
   await body.getByRole('menuitem', { name: 'Save', exact: true }).click();
   await expect
-    .poll(() => page.evaluate(() => window.Alpine.store('chat').nostrNotificationItems[0]?.saved))
+    .poll(() => frame.evaluate(() => window.Alpine.store('chat').nostrNotificationItems[0]?.saved))
     .toBe(true);
-  await page.evaluate(() => window.Alpine.store('chat').refreshNostrNotifications());
+  await frame.evaluate(async () => {
+    const s = window.Alpine.store('chat');
+    await s.setNostrFeedFlag(s.nostrNotificationItems[0], 'dismissed', true);
+    s.showDismissedFeeds = true;
+  });
+  hang = true;
+  await frame.evaluate(() => window.Alpine.store('chat').refreshNostrNotifications());
+  await expect(body.getByText('Nostr worker did not start. Cached notifications remain; refresh to retry.', { exact: true }))
+    .toBeVisible({ timeout: 15000 });
+  await expect(body.getByText('Signed worker mention fixture', { exact: true })).toBeVisible();
+  await expect.poll(() => frame.evaluate(() => {
+    const row = window.Alpine.store('chat').nostrNotificationItems[0];
+    return Boolean(row?.read && row?.saved && row?.dismissed);
+  })).toBe(true);
+  hang = false;
+  await frame.evaluate(() => window.Alpine.store('chat').refreshNostrNotifications());
+  await expect.poll(() => frame.evaluate(() => window.Alpine.store('chat').nostrNotificationStatus))
+    .toContain('Public Nostr');
+
   await expect(body.getByText('Signed worker mention fixture', { exact: true })).toBeVisible();
   await expect
-    .poll(() => page.evaluate(() => window.Alpine.store('chat').nostrNotificationItems[0]?.saved))
+    .poll(() => frame.evaluate(() => window.Alpine.store('chat').nostrNotificationItems[0]?.saved))
     .toBe(true);
 
-  await page.evaluate(() => window.Alpine.store('chat').logout());
-  expect(await page.evaluate(() => window.Alpine.store('chat').nostrNotificationItems.length)).toBe(
+  await frame.evaluate(() => window.Alpine.store('chat').logout());
+  expect(await frame.evaluate(() => window.Alpine.store('chat').nostrNotificationItems.length)).toBe(
     0,
   );
 });
