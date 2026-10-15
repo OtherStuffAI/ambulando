@@ -59,7 +59,16 @@ describe('Deck card Mark read action', () => {
     expect(inbox.match(/@keydown\.space\.prevent="if \(\$store\.chat\.shouldOpenDeckCard\(\$event\)\)/g)).toHaveLength(3);
     expect(html).not.toContain('<span class="attention-card-action">Open chat</span>');
     expect(html).not.toContain('<span class="attention-card-action">Open task</span>');
-    expect(inbox).toContain('<span class="attention-card-action">Open doc</span>');
+    expect(inbox).not.toMatch(/class="attention-card-action"[^>]*>\s*(?:Open|View)\b/);
+    expect(inbox).toContain('title="Open document" aria-hidden="true"');
+    expect(inbox).toContain('data-icon="external-link"');
+    expect(inbox).toContain('data-icon="eye"');
+    expect(inbox).toContain(':title="item.kind === \'image\' ? \'View image\' : \'View file\'"');
+    expect(html.match(/data-icon="external-link"/g)).toHaveLength(2);
+    expect(html.match(/data-icon="eye"/g)).toHaveLength(2);
+    expect(html).not.toContain('<span class="attention-card-action">Open doc</span>');
+    expect(html).not.toContain("x-text=\"item.kind === 'image' ? 'View image' : 'View file'\"");
+    expect(html).not.toContain("x-text=\"file.kind === 'image' ? 'View image' : 'View file'\"");
   });
 
   it('uses icon-only 44px controls, visible focus and non-wrapping Inbox metadata', () => {
@@ -67,6 +76,7 @@ describe('Deck card Mark read action', () => {
 
     expect(styles).toMatch(/\.attention-card-mark-read\s*\{[^}]*width:\s*44px;[^}]*min-width:\s*44px;[^}]*height:\s*44px;[^}]*min-height:\s*44px;/s);
     expect(styles).toMatch(/\.attention-card-action-icon\s*\{[^}]*width:\s*24px;[^}]*height:\s*24px;[^}]*stroke:\s*currentColor;/s);
+    expect(styles).toMatch(/\.attention-card-action\s*\{[^}]*width:\s*44px;[^}]*min-width:\s*44px;[^}]*height:\s*44px;[^}]*min-height:\s*44px;/s);
     expect(styles).toMatch(/\.attention-card-mark-read:focus-visible\s*\{[^}]*outline:\s*2px solid var\(--ring\);/s);
     expect(styles).toMatch(/\.attention-card-meta\s*\{[^}]*flex-wrap:\s*nowrap;/s);
     expect(styles).toMatch(/@media \(max-width: 767px\)[\s\S]*?\.flightdeck-summary-panel-inbox \.attention-card-meta\s*\{[^}]*flex-wrap:\s*nowrap;/s);

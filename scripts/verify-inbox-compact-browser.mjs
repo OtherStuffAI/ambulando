@@ -207,6 +207,13 @@ try {
   }
   for(const button of await readButtons.all()) assert.equal(await button.locator('svg').getAttribute('data-icon'),'mail-open','Mark read uses the open-envelope icon');
   for(const button of await doneButtons.all()) assert.equal(await button.locator('svg').getAttribute('data-icon'),'square-check','Done uses the checked-box icon');
+  const openActions = page.locator('.attention-card-action:visible');
+  assert.equal(await openActions.count(),2,'Document and file cards retain icon-only open/view affordances');
+  assert.deepEqual(await openActions.locator('svg').evaluateAll(nodes=>nodes.map(node=>node.getAttribute('data-icon')).sort()),['external-link','eye'],'Open document and view file use distinct established icons');
+  for(const action of await openActions.all()) assert.equal((await action.textContent()).trim(),'','Open/view affordances have no visible word label');
+  assert.equal(await cards.nth(1).getAttribute('title'),'View file','File card retains its tooltip');
+  assert.equal(await cards.nth(1).getAttribute('aria-label'),'Preview production-plan.pdf','File card retains its accessible name');
+  assert.equal(await cards.nth(5).locator('.attention-card-action').getAttribute('title'),'Open document','Document open icon retains its tooltip');
   const reviewActions=await cards.nth(4).locator('.attention-card-meta > :visible').evaluateAll(nodes=>nodes.map(node=>{const r=node.getBoundingClientRect();return {top:r.top,bottom:r.bottom};}));
   assert(reviewActions.length>=3,'Review task retains pin, Done and Mark read actions');
   assert(Math.max(...reviewActions.map(r=>r.top))-Math.min(...reviewActions.map(r=>r.top))<1,'Review actions stay on one row');

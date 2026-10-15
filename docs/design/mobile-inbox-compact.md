@@ -2,7 +2,7 @@
 
 Inbox items keep context and relative time on their first line, title on their second, and activity reason or chat preview/message count on their third. Identical chat titles and previews are shown once. Long context labels ellipsize; their complete text remains in the DOM and title attribute. Source records, read state, and routing are unchanged.
 
-Cards use icon-only actions at every width so labels do not force titles or controls onto avoidable extra rows. Mark read uses an open envelope, Done uses a checked box, and pin keeps its established outline/filled treatment. Tooltips and accessible names retain the action text, while the buttons keep 44px minimum targets and visible keyboard focus. Below 768px, cards use smaller record icons, tighter spacing, the existing two-line title clamp, and no separate Open pill. Existing whole-card click, Enter, and Space navigation remains available.
+Cards use icon-only actions at every width so labels do not force titles or controls onto avoidable extra rows. Mark read uses an open envelope, Done uses a checked box, document opening uses the established external-link icon, file/image preview uses an eye, and pin keeps its established outline/filled treatment. Tooltips and accessible names retain the action text, while the controls keep 44px minimum targets and visible keyboard focus. Below 768px, cards use smaller record icons, tighter spacing, and the existing two-line title clamp. Existing whole-card click, Enter, and Space navigation remains available.
 
 ## Verification
 

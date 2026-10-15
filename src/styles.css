@@ -6843,13 +6843,18 @@ button:disabled {
 }
 
 .attention-card-action {
-  padding: 0.32rem 0.5rem;
-  border-radius: 999px;
-  background: var(--muted);
-  color: var(--primary);
-  font-size: 0.72rem;
-  font-weight: 800;
-  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+  min-height: 44px;
+  padding: 10px;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--foreground);
+  flex: 0 0 auto;
 }
 
 .attention-card-mark-read {
@@ -24008,7 +24013,13 @@ button.task-desc-toggle:focus-visible {
   .flightdeck-summary-panel-inbox .attention-card-icon svg { width:1rem; height:1rem; }
   .flightdeck-summary-panel-inbox .attention-card-content { gap:0.18rem; }
   .flightdeck-summary-panel-inbox .attention-card-meta { grid-column:3; flex-wrap:nowrap; gap:0; }
-  .flightdeck-summary-panel-inbox .attention-card-action { display:none; }
+  .flightdeck-summary-panel-inbox .attention-card-action {
+    display: inline-flex;
+    min-width: 44px;
+    min-height: 44px;
+    padding: 10px;
+    width: 44px;
+  }
   .flightdeck-summary-panel-inbox .attention-card-mark-read {
     min-width: 44px;
     min-height: 44px;

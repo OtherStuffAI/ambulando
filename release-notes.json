@@ -4202,6 +4202,13 @@
       "notes": [
         "Inbox cards keep pin, Done and Mark read actions on one compact icon row. Mark read uses an open envelope, Done uses a checked box, and accessible names and tooltips remain."
       ]
+    },
+    {
+      "buildNumber": 2436,
+      "label": "Complete icon-only Inbox actions",
+      "notes": [
+        "Inbox document and attachment cards now use compact open and preview icons instead of word-labelled actions at laptop and phone widths, while preserving tooltips, accessible names and whole-card navigation."
+      ]
     }
   ]
 }
