@@ -4175,6 +4175,20 @@
       "notes": [
         "Start Nostr notifications reliably with persisted workspace relay settings. Worker startup and discovery failures now show a bounded Refresh retry while preserving cached cards and read, saved and dismissed flags."
       ]
+    },
+    {
+      "buildNumber": 2432,
+      "label": "Private Note to self",
+      "notes": [
+        "Select yourself in New DM to open Note to self on a supporting Tower. A dedicated native iPhone app shares the same conversation, with Compose, History, replies, private images and conservative link tracking cleanup."
+      ]
+    },
+    {
+      "buildNumber": 2433,
+      "label": "Self conversation compatibility",
+      "notes": [
+        "Existing legacy direct messages remain reusable while Tower-backed Note to self uses canonical server-side conversation reuse."
+      ]
     }
   ]
 }

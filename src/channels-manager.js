@@ -149,6 +149,12 @@ function traceChannelSelection(store, message, details = {}) {
  * the channel delivery groups.
  */
 export function filterChannelsForViewer(channels, viewerNpub, workspaceOwnerNpub, groups = []) {
+  // Self conversations never inherit visibility from workspace ownership or
+  // cached delivery groups when identities switch on the same browser.
+  channels = channels.filter(channel => {
+    const participants = [...new Set(channel?.participant_npubs || [])];
+    return !isDmChannel(channel) || participants.length !== 1 || participants[0] === viewerNpub;
+  });
   if (!viewerNpub || viewerNpub === workspaceOwnerNpub) return channels;
   const accessibleGroupRefs = new Set();
   for (const group of Array.isArray(groups) ? groups : []) {
@@ -578,7 +584,7 @@ async function ensureTowerPgDmChannel(store, targetNpub) {
   if (!workspaceId || !baseUrl) throw new Error('Flight Deck PG workspace is not connected.');
 
   const existing = findExistingDmChannel(store.channels || [], [memberNpub, cleanTargetNpub]);
-  if (existing?.record_id) {
+  if (existing?.record_id && memberNpub !== cleanTargetNpub) {
     await ensureTowerPgDmChannelGrant(store, {
       workspaceId,
       baseUrl,
@@ -597,13 +603,13 @@ async function ensureTowerPgDmChannel(store, targetNpub) {
     name: `DM: ${cleanTargetNpub}`,
     description: dmDescription,
     kind: 'dm',
-    participant_npubs: [memberNpub, cleanTargetNpub],
+    participant_npubs: [...new Set([memberNpub, cleanTargetNpub])],
   }, { baseUrl, appNpub });
   const channelRow = {
     ...mapPgChannelToLocal(result.channel, { workspaceOwnerNpub }),
     description: result.channel?.description || dmDescription,
     channel_type: 'dm',
-    participant_npubs: [memberNpub, cleanTargetNpub],
+    participant_npubs: [...new Set([memberNpub, cleanTargetNpub])],
   };
   await upsertChannel(channelRow);
   store.channels = [...(store.channels || []).filter((channel) => channel.record_id !== channelRow.record_id), channelRow];
@@ -3655,13 +3661,13 @@ export const channelsManagerMixin = {
     if (isTowerPgBackendMode()) {
       // DMs are member-to-member: suggest from the workspace member directory.
       const exclude = new Set(
-        [this.session?.npub, this.newChannelDmNpub]
+        [this.newChannelDmNpub]
           .map((value) => String(value || '').trim())
           .filter(Boolean),
       );
       const needle = String(this.newChannelDmNpub || '').trim().toLowerCase();
-      return (this.pgWorkspaceMembers || [])
-        .map((member) => String(member?.npub || '').trim())
+      return [...new Set([this.session?.npub, ...(this.pgWorkspaceMembers || []).map(member => member?.npub)].filter(Boolean))]
+        .map((npub) => String(npub || '').trim())
         .filter((npub) => npub && !exclude.has(npub))
         .filter((npub) => !needle
           || npub.toLowerCase().includes(needle)
@@ -3669,7 +3675,7 @@ export const channelsManagerMixin = {
         .slice(0, 8)
         .map((npub) => ({
           npub,
-          label: this.getSenderName?.(npub) || npub,
+          label: npub === this.session?.npub ? `${this.getSenderName?.(npub) || npub} (Note to self)` : this.getSenderName?.(npub) || npub,
           subtitle: this.getSenderSecondaryLabel?.(npub) || '',
           avatarUrl: this.getSenderAvatar?.(npub) || '',
         }));
@@ -3748,7 +3754,7 @@ export const channelsManagerMixin = {
 
     try {
       const existing = findExistingDmChannel(this.channels, [memberNpub, targetNpub]);
-      if (existing?.record_id) {
+      if (existing?.record_id && (memberNpub !== targetNpub || !isTowerPgBackendMode())) {
         if (isTowerPgBackendMode()) {
           await ensureTowerPgDmChannel(this, targetNpub);
         }

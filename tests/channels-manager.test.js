@@ -1200,6 +1200,11 @@ describe('channels-manager pure utilities', () => {
     expect(store.newChannelAccessDisabledReason).toBe('');
   });
 
+  it('offers the signed-in user for Note to self even if the directory page omits them', () => {
+    const store = applyChannelMixin({ session: { npub: 'me' }, newChannelDmNpub: '', pgWorkspaceMembers: [{ npub: 'other' }], getSenderName: npub => npub === 'me' ? 'Operator' : 'Other' });
+    expect(store.newChannelDmSuggestions[0]).toMatchObject({ npub: 'me', label: 'Operator (Note to self)' });
+  });
+
   it('opens DM creation from the DM-area New control on Home', async () => {
     const store = applyChannelMixin({
       selectedBoardId: DM_SCOPE_ID,
@@ -1910,6 +1915,13 @@ describe('channels-manager pure utilities', () => {
       { record_id: 'ch4', title: 'Open', participant_npubs: [] },
       { record_id: 'ch5', title: 'Legacy', participant_npubs: undefined },
     ];
+
+    it('never exposes a cached self conversation to another identity or workspace owner', () => {
+      const rows = [{ record_id: 'mine', kind: 'dm', participant_npubs: [VIEWER] }];
+      expect(filterChannelsForViewer(rows, OWNER, OWNER)).toEqual([]);
+      expect(filterChannelsForViewer(rows, OTHER, OWNER, [{ group_id: 'shared', member_npubs: [OTHER] }])).toEqual([]);
+      expect(filterChannelsForViewer(rows, VIEWER, OWNER)).toEqual(rows);
+    });
 
     it('workspace owner sees all channels', () => {
       const result = filterChannelsForViewer(channels, OWNER, OWNER);

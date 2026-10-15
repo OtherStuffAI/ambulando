@@ -1,3 +1,4 @@
+import { isNoteToSelf, sanitizeNoteImage } from '../src/note-to-self.js';
 import { readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
 import { test } from 'vitest';
@@ -10,6 +11,7 @@ function method(source, name, bindings) {
   const start = source.search(re) + 1;
   assert.ok(start, name);
   const end = source.indexOf('\n    },', start) + 7;
+  bindings = { isNoteToSelf, sanitizeNoteImage, ...bindings };
   return new Function(...Object.keys(bindings), `return ({${source.slice(start, end)}}).${name}`)(
     ...Object.values(bindings),
   );
@@ -27,6 +29,7 @@ function fixture(source = candidate, { delay, fail, accepted = true, metadataErr
   const wait = gate();
   let key = 'source';
   const bindings = {
+    isNoteToSelf, sanitizeNoteImage,
     isTowerPgBackendMode: () => true,
     buildStoragePrepareBody: (x) => x,
     prepareStorageObject: async () => {},

@@ -407,6 +407,11 @@ describe('PG read hydrator', () => {
     expect(target.applyWorkroomApprovals).not.toHaveBeenCalled();
   });
 
+  it('materializes singleton self participants without inventing a second identity', () => {
+    expect(mapPgChannelToLocal({ id: 'self-channel', scope_id: 'dm-scope', name: 'Note to self', kind: 'dm', participant_npubs: ['npub1self'] }, { workspaceOwnerNpub: 'npub1owner' }))
+      .toMatchObject({ record_id: 'self-channel', participant_npubs: ['npub1self'], channel_type: 'dm' });
+  });
+
   it('maps PG channels into existing local channel rows scoped to L1', () => {
     expect(mapPgChannelToLocal({
       id: 'channel-1',

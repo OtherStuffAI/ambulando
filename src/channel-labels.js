@@ -53,6 +53,7 @@ export function resolveChannelLabel(channel, { sessionNpub, getParticipants, get
 
   const participants = resolveChannelParticipants(channel, getParticipants, title);
   const viewerNpub = String(sessionNpub || '').trim();
+  if (isDirectMessage && participants.length === 1 && participants[0] === viewerNpub) return 'Note to self';
   const others = participants.filter((npub) => npub !== viewerNpub);
   if (others.length === 1) return resolveParticipantName(others[0], getSenderName);
   if (others.length > 1) {

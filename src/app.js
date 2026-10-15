@@ -1,3 +1,4 @@
+import { isNoteToSelf, sanitizeNoteImage } from './note-to-self.js';
 import { nostrNotificationsMixin } from './feed/nostr-manager.js';
 import { hostingBillingMixin } from './hosting-billing.js';
 import { showEditorMountFailure } from './docs/editor/editor-mount-failure.js';
@@ -9962,6 +9963,10 @@ export function initApp() {
       )));
       try {
         assertActive();
+        if (!retained && draft.kind === 'image' && isNoteToSelf(context === 'thread' ? this.activeThreadChannel : this.selectedChannel, this.session?.npub)) {
+          const clean = await sanitizeNoteImage(draft.file);
+          patchDraft({ file: clean, filename: clean.name, content_type: clean.type, size_bytes: clean.size });
+        }
         const bytes = new Uint8Array(await draft.file.arrayBuffer());
         if (!ownerNpub) throw new Error('Missing storage owner for attachment.');
         assertActive();

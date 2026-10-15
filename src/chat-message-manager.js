@@ -1,3 +1,4 @@
+import { cleanSharedText, isNoteToSelf } from './note-to-self.js';
 import { readLiveChatDraft, rebindChatComposer } from './chat-composer-draft.js';
 /**
  * Chat message management methods extracted from app.js.
@@ -2496,7 +2497,8 @@ export const chatMessageManagerMixin = {
 
     const msgId = String(options?.clientRequestId || '').trim() || crypto.randomUUID();
     const now = new Date().toISOString();
-    const body = hasBodyOverride ? bodyOverride : input.trim();
+    const rawBody = hasBodyOverride ? bodyOverride : input.trim();
+    const body = isNoteToSelf(channel, this.session?.npub) ? cleanSharedText(rawBody) : rawBody;
     const retryMentions = retrySourceMessage?.pg_metadata?.mentions || retrySourceMessage?.metadata?.mentions;
     const candidateMentions = retrySourceMessage
       ? (Array.isArray(retryMentions) ? retryMentions : [])
@@ -2719,7 +2721,8 @@ export const chatMessageManagerMixin = {
 
     const msgId = String(options?.clientRequestId || '').trim() || crypto.randomUUID();
     const now = new Date().toISOString();
-    const body = hasBodyOverride ? bodyOverride : this.threadInput.trim();
+    const rawBody = hasBodyOverride ? bodyOverride : this.threadInput.trim();
+    const body = isNoteToSelf(channel, this.session?.npub) ? cleanSharedText(rawBody) : rawBody;
     const retryMentions = retrySourceMessage?.pg_metadata?.mentions || retrySourceMessage?.metadata?.mentions;
     const candidateMentions = retrySourceMessage
       ? (Array.isArray(retryMentions) ? retryMentions : [])
