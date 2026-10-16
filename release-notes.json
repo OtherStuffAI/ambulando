@@ -3616,22 +3616,398 @@
       "noUserVisibleChanges": true
     },
     {
-      "buildNumber": 2347,
-      "label": "Bounded snapshot compatibility",
+      "buildNumber": 2342,
+      "label": "One Feeds reader",
       "notes": [
-        "Negotiate finite record-sync handover and verified bounded chunks for large records when Tower supports them. Retain downloaded records and drafts during same-cache permission and checkpoint repair."
+        "Read JSON Feed and RSS in one Feeds card. Paste a URL to validate and add a source without app discovery or transport setup.",
+        "Removed the legacy activity reader while preserving existing feed subscriptions and personal read, dismissed and saved state."
+      ]
+    },
+    {
+      "buildNumber": 2343,
+      "label": "Validated Feeds onboarding",
+      "notes": [
+        "Use one URL-only add-feed form, with automatic JSON Feed/RSS detection and source validation."
+      ]
+    },
+    {
+      "buildNumber": 2344,
+      "label": "Feeds reader validation checkpoint",
+      "notes": [],
+      "noUserVisibleChanges": true
+    },
+    {
+      "buildNumber": 2345,
+      "label": "Readable notification and preview controls",
+      "notes": [
+        "Improve update title, action, chevron, hover and keyboard focus contrast in both themes, including Updating feedback.",
+        "Make Copied feedback and image-preview captions and close controls readable with existing Ambulando colour pairs."
+      ]
+    },
+    {
+      "buildNumber": 2346,
+      "label": "Nstack hosting choices and draft legal pages",
+      "notes": [
+        "Choose Host My Tower or BYO Tower in workspace setup, with USD pricing, first-month credit and unpaid-account pause explained.",
+        "Read editable draft Other Stuff Privacy and Terms pages without signing in. Nstack subscription signup clearly reports awaiting activation."
+      ]
+    },
+    {
+      "buildNumber": 2347,
+      "label": "Rich document save integrity",
+      "notes": [
+        "Save rich documents containing fenced code without false visible-text errors. Preserve formatting and complete recovery drafts when retrying an actual editor mismatch."
       ]
     },
     {
       "buildNumber": 2348,
-      "label": "Reliable channel access cancellation",
+      "label": "Validated shared frontend checkpoint",
+      "notes": [],
+      "noUserVisibleChanges": true
+    },
+    {
+      "buildNumber": 2350,
+      "label": "Verified rich document recovery",
       "notes": [
-        "Press Escape to cancel the channel access review while current access is still being checked or once it is ready; the command palette only handles Escape while it is open.",
-        "Keep the review open while changes are being applied, and keep the close button inside the New group and Edit group dialogs."
+        "Keep native rich document formatting and comment anchors when retrying a stale editor snapshot. Clear the save integrity banner once text matches and preserve complete drafts on device."
       ]
     },
     {
-      "buildNumber": 2349,
+      "buildNumber": 2357,
+      "label": "USD hosting balance and Stripe test top-ups",
+      "notes": [
+        "Hosted workspaces share one customer balance with a single $5 welcome credit expiring after 30 days. Tower Usage displays balances, fractional hourly spending and transactions.",
+        "Stripe test top-ups require Tower configuration; live payments remain blocked pending payment validation and refunds/disputes. Existing workspaces are not automatically charged."
+      ]
+    },
+    {
+      "buildNumber": 2358,
+      "label": "Mobile views outside the drawer",
+      "notes": [
+        "Use the bottom navigation to switch mobile views. The drawer now keeps channels and workspaces together without duplicate view buttons."
+      ]
+    },
+    {
+      "buildNumber": 2359,
+      "label": "Compact mobile chat",
+      "notes": [
+        "Mobile mention pills fit surrounding text, including drafts. Thread titles and controls share one row, with long titles shortened visually and available in full on hover."
+      ]
+    },
+    {
+      "buildNumber": 2360,
+      "label": "Mobile title editing and hosted signup checks",
+      "notes": [
+        "Keep title editing usable beside compact mobile chat controls. Hosted workspace setup checks availability and requires acceptance of hosting terms before creation."
+      ]
+    },
+    {
+      "buildNumber": 2361,
+      "label": "Readable chat message actions",
+      "notes": [
+        "Message actions sit clear of prose with accessible touch targets. Sender metadata wraps safely, and Escape closes the action list and restores button focus."
+      ]
+    },
+    {
+      "buildNumber": 2362,
+      "label": "Message actions at enlarged text sizes",
+      "notes": [
+        "Keep long thread messages at their natural height so prose and message controls remain reachable when text is enlarged on desktop."
+      ]
+    },
+    {
+      "buildNumber": 2363,
+      "label": "Validated message action checkpoint",
+      "notes": [],
+      "noUserVisibleChanges": true
+    },
+    {
+      "buildNumber": 2364,
+      "label": "Protected hosted signup signing",
+      "notes": [
+        "Use an app-bound protected signing broker for hosted signup and check live signer and Tower route readiness before opening signup."
+      ]
+    },
+    {
+      "buildNumber": 2365,
+      "label": "Retained downloads and incremental channel access",
+      "notes": [
+        "Keep downloaded workspace content, navigation and drafts through access loss and checkpoint repair; show retained access status and pause forbidden queued writes.",
+        "Apply channel grants and newly authorized history through targeted updates without refreshing unrelated workspace collections."
+      ]
+    },
+    {
+      "buildNumber": 2366,
+      "label": "Retained context access",
+      "notes": [
+        "Keep downloaded scope context available after access loss, with a read-only notice and protected local drafts."
+      ]
+    },
+    {
+      "buildNumber": 2367,
+      "label": "Retained channel selection",
+      "notes": [
+        "Keep a downloaded channel selected when access status becomes read-only, preserving its thread and unsent composer."
+      ]
+    },
+    {
+      "buildNumber": 2368,
+      "label": "Compact mobile layout",
+      "notes": [
+        "Remove the blank band between the Deck page dots and bottom navigation while preserving touch targets and safe-area clearance.",
+        "Keep mobile task titles and actions in one compact row, with metadata on a second row and secondary actions in menus."
+      ]
+    },
+    {
+      "buildNumber": 2369,
+      "label": "Selected-message branch cutoff",
+      "notes": [
+        "Keep branch history through the selected message inclusive, excluding later parent replies after reload and in nested branches."
+      ]
+    },
+    {
+      "buildNumber": 2370,
+      "label": "More useful mobile page space",
+      "notes": [
+        "Keep Toolbox titles and Add together, and fit app visibility and actions into compact rows with full touch targets.",
+        "Bound phone Chat card titles to two lines and keep Files source tabs on one row at narrow widths."
+      ]
+    },
+    {
+      "buildNumber": 2371,
+      "label": "Keep large file counts readable",
+      "notes": [
+        "Allow large counts in phone Files source tabs to wrap within their touch targets while keeping ordinary counts on one row."
+      ]
+    },
+    {
+      "buildNumber": 2372,
+      "label": "Simple mobile context header",
+      "notes": [
+        "Show workspace, current scope and current channel in one compact mobile row. Use the side menu for navigation and utilities, and restore the header from full screen with a dedicated control."
+      ]
+    },
+    {
+      "buildNumber": 2373,
+      "label": "Restore mobile navigation focus",
+      "notes": [
+        "Return keyboard focus to the compact header after closing mobile navigation with Escape."
+      ]
+    },
+    {
+      "buildNumber": 2374,
+      "label": "Mobile drawer focus restoration",
+      "notes": [
+        "Keep focus on the mobile header opener after drawer accessibility cleanup finishes."
+      ]
+    },
+    {
+      "buildNumber": 2375,
+      "label": "Mobile fullscreen keyboard focus",
+      "notes": [
+        "Keep the fullscreen restore control and restored header reachable by keyboard after mobile layout updates."
+      ]
+    },
+    {
+      "buildNumber": 2376,
+      "label": "Mobile header controls corrected",
+      "notes": [
+        "Mobile branding and profile remain visible normally. Full screen keeps context and a separate navigation menu beside workspace home; workspace home shows all in the workspace."
+      ]
+    },
+    {
+      "buildNumber": 2377,
+      "label": "Mobile drawer above retained branding",
+      "notes": [
+        "Keep navigation drawer controls above the restored mobile branding row so Close navigation remains reachable by touch."
+      ]
+    },
+    {
+      "buildNumber": 2378,
+      "label": "Chat profile cards dismiss reliably",
+      "notes": [
+        "Close profile cards with X or clicks inside the surrounding thread, keep closed cards dismissed after Copy, and clear the card when switching or closing conversations."
+      ]
+    },
+    {
+      "buildNumber": 2379,
+      "label": "Mobile navigation starts with Home",
+      "notes": [
+        "Remove the five utility rows above Home in mobile navigation. Home, scopes, channels and the workspace switcher remain; Escape or the backdrop closes the drawer and returns focus to the menu button."
+      ]
+    },
+    {
+      "buildNumber": 2380,
+      "label": "Fullscreen drawer focus restoration",
+      "notes": [
+        "Return focus to the fullscreen menu button after closing mobile navigation with the backdrop, as well as Escape."
+      ]
+    },
+    {
+      "buildNumber": 2382,
+      "label": "Resilient document editor loading",
+      "notes": [
+        "Documents stay readable while editing loads. A failed editor download retries automatically once; if editing remains unavailable, content and drafts are preserved with a clear retry action."
+      ]
+    },
+    {
+      "buildNumber": 2383,
+      "label": "Preserve complete rich document fallback",
+      "notes": [
+        "Keep complete rich document content and local drafts available when editing cannot load, including when the saved plain-text preview is sparse."
+      ]
+    },
+    {
+      "buildNumber": 2384,
+      "label": "Incremental navigation and reliable group saves",
+      "notes": [
+        "Remote channel and scope renames update downloaded navigation without a resync.",
+        "Group saves resolve every removal before changing membership; unavailable identities keep your selection open with a clear retry message."
+      ]
+    },
+    {
+      "buildNumber": 2385,
+      "label": "Responsive workspace member addition",
+      "notes": [
+        "Adding a workspace member releases loading and refreshes access choices without waiting for the optional onboarding announcement. Stalled announcement signing reports a retryable error."
+      ]
+    },
+    {
+      "buildNumber": 2386,
+      "label": "Onboarding timeout wording",
+      "notes": [
+        "Onboarding timeout messages identify encryption or signing and offer an announcement retry."
+      ]
+    },
+    {
+      "buildNumber": 2387,
+      "label": "Bound workspace member signer preparation",
+      "notes": [
+        "A stalled browser signer lookup or signing queue now times out instead of holding workspace member addition indefinitely. Late signer results cannot send the expired membership request."
+      ]
+    },
+    {
+      "buildNumber": 2388,
+      "label": "Deck unread consistency",
+      "notes": [
+        "Unread completed tasks stay in the Deck Inbox until explicitly read. Deck and Recent Channels use their own persisted thread attention; newly loaded documents refresh unread indicators without changing read state."
+      ]
+    },
+    {
+      "buildNumber": 2391,
+      "label": "Installed apps in Toolbox",
+      "notes": [
+        "Installed napplets appear in Toolbox and MyApps without opening the Organisation Data Catalogue first. Workspace changes and access failures clear the installed list; closing a napplet keeps its launcher available."
+      ]
+    },
+    {
+      "buildNumber": 2392,
+      "label": "Collapsible channel scopes",
+      "notes": [
+        "Collapse or reopen each scope’s channels with the arrow beside its heading. Your browser remembers each workspace and scope independently, while the selected channel stays open."
+      ]
+    },
+    {
+      "buildNumber": 2393,
+      "label": "Validated sidebar and installed-app checkpoint",
+      "notes": [],
+      "noUserVisibleChanges": true
+    },
+    {
+      "buildNumber": 2394,
+      "label": "Installed app sign-in activation",
+      "notes": [
+        "Installed-app discovery waits for the workspace cache to open during sign-in."
+      ]
+    },
+    {
+      "buildNumber": 2395,
+      "label": "Native iPhone connection recovery",
+      "notes": [
+        "Ambulando in the native iPhone app re-pairs selected FIPS services after suspension with fresh permissions, retaining local drafts and the selected connection.",
+        "Background recovery reconnects the existing sync worker through the universal native transport without falling back to public HTTPS."
+      ]
+    },
+    {
+      "buildNumber": 2396,
+      "label": "Installed app authority checks",
+      "notes": [
+        "Denied napplet reads clear installed-app authority immediately, including retained browser cache updates."
+      ]
+    },
+    {
+      "buildNumber": 2397,
+      "label": "Stable Project Register browsing",
+      "notes": [
+        "Background access checks preserve scrolling, filters and expanded evidence in unchanged installed snapshots. Denied access and changed installations still clear or replace the document."
+      ]
+    },
+    {
+      "buildNumber": 2398,
+      "label": "Stable editing in installed apps",
+      "notes": [
+        "Installed apps using the native data bridge stay mounted during background access checks and saves. Permission, context and installation changes still invalidate the document; writes wait for authorization."
+      ]
+    },
+    {
+      "buildNumber": 2399,
+      "label": "Reliable mobile thread close",
+      "notes": [
+        "Close Deck conversations reliably after opening a direct thread link. Return to the Deck without deleting messages or losing an unsent reply; normal Back navigation stays available."
+      ]
+    },
+    {
+      "buildNumber": 2400,
+      "label": "Installed apps in the launcher",
+      "notes": [
+        "Remove the six automatic napplet launcher entries. Personal WApps and currently authorized workspace-installed napplets remain available."
+      ]
+    },
+    {
+      "buildNumber": 2401,
+      "label": "Bounded sync and reliable access cancellation",
+      "notes": [
+        "Negotiate finite sync handover and verified chunks for large records when Tower supports them, preserving retained downloads and local drafts through permission changes.",
+        "Press Escape to cancel channel access review while loading or ready. Keep the review open during writes and group close controls inside their dialogs."
+      ]
+    },
+    {
+      "buildNumber": 2402,
+      "label": "Workspace discovery identity guidance",
+      "notes": [
+        "Show the full signed-in Nostr identity when choosing a Tower workspace. Explain missing member access and offer sign-out to use the invited identity."
+      ]
+    },
+    {
+      "buildNumber": 2403,
+      "label": "Subtle document editing border",
+      "notes": [
+        "Use a thin, very faint grey outline when editing a document page."
+      ]
+    },
+    {
+      "buildNumber": 2404,
+      "label": "Channel access recovery after temporary outages",
+      "notes": [
+        "Channel access retries temporary connection failures while settings remain open, preserves cached grants and the actual error, and no longer blames every loading failure on signing."
+      ]
+    },
+    {
+      "buildNumber": 2405,
+      "label": "Channel access refresh during workspace changes",
+      "notes": [
+        "Refresh the newly selected channel even when an older request is still loading. Keep directory failures separate from loaded grants and leave signing failures for explicit refresh."
+      ]
+    },
+    {
+      "buildNumber": 2406,
+      "label": "Lighter document edit outline",
+      "notes": [
+        "Lighten the document editing outline to an almost-white grey."
+      ]
+    },
+    {
+      "buildNumber": 2407,
       "label": "Cleaner Feeds widget",
       "notes": [
         "Keep feed content in focus, with refresh, dismissed items and source management in the Feed options menu. Use each item’s menu to mark read, save or dismiss."

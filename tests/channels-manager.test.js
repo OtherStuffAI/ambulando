@@ -2635,11 +2635,51 @@ describe('channels-manager pure utilities', () => {
       });
       expect(publishPgOnboardingAnnouncementForGrant).toHaveBeenCalledWith({
         recipientNpub,
+        workspace: store.currentWorkspace,
         grantId: `workspace-1:workspace:${recipientNpub}`,
         reason: 'added_to_workspace_or_group',
       });
       expect(store.pgWorkspaceMemberNpub).toBe('');
       expect(store.refreshGroups).toHaveBeenCalledWith({ force: true, minIntervalMs: 0 });
+    });
+
+    it('unblocks saved membership and roster refresh while onboarding never resolves', async () => {
+      const recipientNpub = `npub1${'q'.repeat(58)}`;
+      const refresh = vi.fn().mockResolvedValue([]);
+      const store = createPgGrantStore({
+        canAdminWorkspace: true, pgWorkspaceMemberNpub: recipientNpub,
+        refreshTowerPgWorkspaceMembers: refresh,
+        publishPgOnboardingAnnouncementForGrant: vi.fn(() => new Promise(() => {})),
+      });
+      await store.addPgWorkspaceMember();
+      await Promise.resolve();
+      expect(store.groupEditPending).toBe(false);
+      expect(store.pgWorkspaceMemberNpub).toBe('');
+      expect(store.pgWorkspaceMemberAddNotice).toContain('Member added');
+      expect(refresh).toHaveBeenCalledWith({ force: true, limit: 200 });
+      expect(store.refreshGroups).toHaveBeenCalled();
+    });
+
+    it('ignores repeat clicks while the membership write is pending', async () => {
+      let saved;
+      createTowerPgWorkspaceMember.mockImplementationOnce(() => new Promise(resolve => { saved = resolve; }));
+      const store = createPgGrantStore({ canAdminWorkspace: true, pgWorkspaceMemberNpub: `npub1${'q'.repeat(58)}` });
+      const first = store.addPgWorkspaceMember();
+      await store.addPgWorkspaceMember();
+      expect(createTowerPgWorkspaceMember).toHaveBeenCalledTimes(1);
+      saved({});
+      await first;
+    });
+
+    it('clears loading on permission denial without announcing or clearing the member input', async () => {
+      createTowerPgWorkspaceMember.mockRejectedValueOnce(Object.assign(new Error('Denied'), { code: 'permission_denied' }));
+      const npub = `npub1${'q'.repeat(58)}`;
+      const store = createPgGrantStore({ canAdminWorkspace: true, pgWorkspaceMemberNpub: npub });
+      await store.addPgWorkspaceMember();
+      expect(store.groupEditPending).toBe(false);
+      expect(store.pgWorkspaceMemberAddError).toBeTruthy();
+      expect(store.pgWorkspaceMemberNpub).toBe(npub);
+      expect(store.publishPgOnboardingAnnouncementForGrant).not.toHaveBeenCalled();
     });
 
     it('offers workspace members that are not already in the PG group', () => {
@@ -2901,11 +2941,8 @@ describe('channels-manager pure utilities', () => {
           permissions: permissionsForPgChannelCapacity('viewer'),
         }],
       });
-      let finishMaterialization;
-      hydrateTowerPgScopes.mockImplementationOnce(() => new Promise((resolve) => {
-        finishMaterialization = resolve;
-      }));
-      const store = createPgGrantStore({ canAdminWorkspace: true, channelGrants: [] });
+      const requestTowerSyncFamily = vi.fn(async () => ({}));
+      const store = createPgGrantStore({ canAdminWorkspace: true, channelGrants: [], requestTowerSyncFamily });
 
       await store.createChannelGrant();
 
@@ -2922,14 +2959,8 @@ describe('channels-manager pure utilities', () => {
       expect(store.channelGrantsNotice).toBe('Channel access updated.');
 
       await flushMicrotasks();
-      expect(hydrateTowerPgScopes).toHaveBeenCalledWith(store);
-      expect(hydrateTowerPgChannels).not.toHaveBeenCalled();
-      finishMaterialization();
-      await flushMicrotasks();
-      expect(hydrateTowerPgChannels).toHaveBeenCalledWith(store);
-      expect(hydrateTowerPgTasks).toHaveBeenCalledWith(store);
-      expect(hydrateTowerPgDocumentsAndFiles).toHaveBeenCalledWith(store);
-      expect(hydrateTowerPgAudioNotes).toHaveBeenCalledWith(store);
+      expect(requestTowerSyncFamily).toHaveBeenCalledWith('channel', 'channel-1', { force: true });
+      for (const read of [hydrateTowerPgScopes, hydrateTowerPgChannels, hydrateTowerPgTasks, hydrateTowerPgDocumentsAndFiles, hydrateTowerPgAudioNotes]) expect(read).not.toHaveBeenCalled();
     });
   });
 });
@@ -3069,5 +3100,132 @@ describe('PG channel lifecycle controls', () => {
     expect(state.showChannelSettingsModal).toBe(false);
     expect(state.channelDeleteConfirmArmed).toBe(false);
     expect(updateTowerPgChannel).not.toHaveBeenCalled();
+  });
+});
+
+
+describe('channel grants transient recovery', () => {
+  const openStore = (overrides = {}) => createPgGrantStore({
+    showChannelSettingsModal: true,
+    channelGrantsChannelId: 'channel-1',
+    closeChannelScopePicker: vi.fn(),
+    ...overrides,
+  });
+
+  it('retains cache and actual 502 detail, then recovers while settings stay open', async () => {
+    vi.useFakeTimers();
+    try {
+      const store = openStore();
+      const cached = store.channelGrants;
+      getTowerPgChannelGrants.mockRejectedValueOnce(Object.assign(new Error('Tower startup migrations unavailable'), { status: 502 }))
+        .mockResolvedValueOnce({ grants: [{ principal_type: 'group', principal_id: 'retained', permissions: ['channel.read'] }] });
+      await store.refreshChannelGrants();
+      expect(store.channelGrants).toBe(cached);
+      expect(store.channelGrantsError).toBe('Tower startup migrations unavailable');
+      await vi.advanceTimersByTimeAsync(1999);
+      expect(getTowerPgChannelGrants).toHaveBeenCalledTimes(1);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(store.channelGrantsError).toBeNull();
+      expect(store.channelGrants[0].principal_id).toBe('retained');
+      await vi.advanceTimersByTimeAsync(120000);
+      expect(getTowerPgChannelGrants).toHaveBeenCalledTimes(2);
+    } finally { vi.useRealTimers(); }
+  });
+
+  it('caps retry frequency and stops on close, without overlapping reads', async () => {
+    vi.useFakeTimers();
+    try {
+      const store = openStore();
+      getTowerPgChannelGrants.mockRejectedValue(Object.assign(new Error('Bad gateway'), { status: 502 }));
+      await store.refreshChannelGrants();
+      await vi.advanceTimersByTimeAsync(60000);
+      expect(getTowerPgChannelGrants).toHaveBeenCalledTimes(6);
+      await vi.advanceTimersByTimeAsync(30000);
+      expect(getTowerPgChannelGrants).toHaveBeenCalledTimes(7);
+      store.closeChannelSettings();
+      await vi.advanceTimersByTimeAsync(120000);
+      expect(getTowerPgChannelGrants).toHaveBeenCalledTimes(7);
+      let finish;
+      getTowerPgChannelGrants.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
+      const pending = store.refreshChannelGrants();
+      await store.refreshChannelGrants();
+      expect(getTowerPgChannelGrants).toHaveBeenCalledTimes(8);
+      finish({ grants: [] });
+      await pending;
+    } finally { vi.useRealTimers(); }
+  });
+
+  it.each([401, 403, 404])('does not retry authority/resource failure %s', async (status) => {
+    vi.useFakeTimers();
+    try {
+      const store = openStore();
+      getTowerPgChannelGrants.mockRejectedValue(Object.assign(new Error('Actual denied detail'), { status }));
+      await store.refreshChannelGrants();
+      await vi.advanceTimersByTimeAsync(120000);
+      expect(getTowerPgChannelGrants).toHaveBeenCalledTimes(1);
+      expect(store.channelGrantsError).toBe('Actual denied detail');
+    } finally { vi.useRealTimers(); }
+  });
+
+  it('discards superseded responses and cancels retries after workspace/channel changes', async () => {
+    vi.useFakeTimers();
+    try {
+      const store = openStore();
+      let finish;
+      getTowerPgChannelGrants.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
+      const pending = store.refreshChannelGrants();
+      store.selectedChannelId = 'channel-2';
+      finish({ grants: [{ principal_id: 'wrong-channel' }] });
+      await pending;
+      expect(store.channelGrantsChannelId).toBe('channel-1');
+      getTowerPgChannelGrants.mockRejectedValue(new TypeError('Load failed'));
+      await store.refreshChannelGrants();
+      store.currentWorkspace = { ...store.currentWorkspace, workspaceId: 'workspace-2' };
+      await vi.advanceTimersByTimeAsync(120000);
+      expect(getTowerPgChannelGrants).toHaveBeenCalledTimes(2);
+    } finally { vi.useRealTimers(); }
+  });
+
+  it('still reads grants when the directory read fails', async () => {
+    const store = openStore({ refreshGroups: vi.fn().mockRejectedValue(new Error('Directory unavailable')) });
+    await store.preparePgChannelAccessPanel();
+    expect(getTowerPgChannelGrants).toHaveBeenCalledTimes(1);
+    expect(store.channelGrantsError).toBeNull();
+    expect(store.channelSettingsError).toBe('Channel access directory: Directory unavailable');
+  });
+});
+
+
+describe('channel grants request context ownership', () => {
+  it.each(['channel', 'workspace'])('starts a replacement %s read while the old request is in flight', async (change) => {
+    const store = createPgGrantStore();
+    let finishOld, finishNew;
+    getTowerPgChannelGrants.mockImplementationOnce(() => new Promise((resolve) => { finishOld = resolve; }))
+      .mockImplementationOnce(() => new Promise((resolve) => { finishNew = resolve; }));
+    const old = store.refreshChannelGrants();
+    if (change === 'channel') store.selectedChannelId = 'channel-2';
+    else store.currentWorkspace = { ...store.currentWorkspace, workspaceId: 'workspace-2' };
+    const replacement = store.refreshChannelGrants();
+    expect(getTowerPgChannelGrants).toHaveBeenCalledTimes(2);
+    finishOld({ grants: [{ principal_id: 'stale' }] });
+    await old;
+    expect(store.channelGrantsLoading).toBe(true);
+    expect(store.channelGrants.some((grant) => grant.principal_id === 'stale')).toBe(false);
+    finishNew({ grants: [{ principal_id: 'current' }] });
+    await replacement;
+    expect(store.channelGrantsLoading).toBe(false);
+    expect(store.channelGrants[0].principal_id).toBe('current');
+  });
+
+  it.each([new TypeError('Invalid request configuration'), new Error('Signing timeout'), new Error('Unknown failure')])('leaves unknown/signing errors for explicit refresh: %s', async (error) => {
+    vi.useFakeTimers();
+    try {
+      const store = createPgGrantStore({ showChannelSettingsModal: true });
+      getTowerPgChannelGrants.mockRejectedValue(error);
+      await store.refreshChannelGrants();
+      await vi.advanceTimersByTimeAsync(120000);
+      expect(getTowerPgChannelGrants).toHaveBeenCalledTimes(1);
+      expect(store.channelGrantsError).toBe(error.message);
+    } finally { vi.useRealTimers(); }
   });
 });

@@ -390,6 +390,22 @@ export function buildUnsignedOnboardingAnnouncementEvent({
   return event;
 }
 
+// Expire each signer stage before continuing to publication. A late signer
+// response cannot publish an event after the UI has offered a retry.
+async function awaitOnboardingSigner(operation, stage) {
+  let timer;
+  try {
+    return await Promise.race([
+      Promise.resolve().then(operation),
+      new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error(`Onboarding ${stage} timed out. Retry the announcement.`)), 45_000);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export async function publishOnboardingAnnouncement({
   recipientNpub,
   recipientPubkeyHex,
@@ -439,7 +455,7 @@ export async function publishOnboardingAnnouncement({
     workspaceServiceNpub: locator.identity.workspace_service_npub,
     appNpub: payload.app.app_npub,
   });
-  const encrypted = await encryptForNpub(recipient, JSON.stringify(payload));
+  const encrypted = await awaitOnboardingSigner(() => encryptForNpub(recipient, JSON.stringify(payload)), 'encryption');
   const unsigned = buildUnsignedOnboardingAnnouncementEvent({
     issuerPubkeyHex: issuerHex,
     recipientPubkeyHex: recipientHex,
@@ -448,7 +464,7 @@ export async function publishOnboardingAnnouncement({
     content: encrypted,
     createdAt: Math.floor(new Date(now).getTime() / 1000),
   });
-  const signed = await signEvent(unsigned);
+  const signed = await awaitOnboardingSigner(() => signEvent(unsigned), 'signing');
   const relays = onboardingAnnouncementRelayUrls(relayUrls, workspace?.relayUrls || [], payload.service.relay_urls || []);
   const pool = poolFactory();
   try {

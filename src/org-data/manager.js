@@ -1,11 +1,12 @@
 import { liveQuery } from 'dexie';
 import { getWorkspaceDb } from '../db.js';
-import { orgDataContext, orgDataLifecycle, orgDataPartition, projectOrgData, sandboxBundle } from '../org-data/projection.js';
+import { orgDataContext, orgDataLifecycle, orgDataPartition, orgDataInstallationsPartition, projectOrgData, sandboxBundle } from '../org-data/projection.js';
 import { validOrgDataRequest } from './bridge.js';
 
 import { orgDataPermissionsMixin } from './permissions.js';
 
 const RUNTIMES = new WeakMap();
+const INSTALLATIONS = new WeakMap();
 export const orgDataMixin = {
   ...orgDataPermissionsMixin,
   get orgDataPermissionRows() {
@@ -32,7 +33,87 @@ export const orgDataMixin = {
   orgDataOpenedContext: '',
   get orgDataContextKey() { return orgDataLifecycle(orgDataContext(this)); },
 
+  initOrgDataInstallations() {
+    window.addEventListener('pagehide', () => this.disposeOrgDataInstallations());
+    void this.loadOrgDataInstallations();
+  },
+
+  disposeOrgDataInstallations() {
+    const runtime = INSTALLATIONS.get(this);
+    runtime?.controller?.abort(); runtime?.subscription?.unsubscribe();
+    INSTALLATIONS.delete(this);
+    this.orgDataInstallations = []; this.orgDataInstallationContext = '';
+  },
+
+  get orgDataInstallationsContextKey() {
+    const c = orgDataContext(this);
+    return JSON.stringify([orgDataPartition(c), c.generation]);
+  },
+
+  async loadOrgDataInstallations({ force = false } = {}) {
+    if (this.orgDataOpen) return; // The open host owns reauthorization.
+    const context = this.orgDataInstallationsContextKey, c = orgDataContext(this);
+    let runtime = INSTALLATIONS.get(this);
+    if (runtime?.context !== context) { this.disposeOrgDataInstallations(); runtime = null; }
+    if (!c.sessionNpub || !c.workspaceId || !c.dbKey) return;
+    if (runtime?.pending) { if (force) runtime.invalidated = true; return runtime.pending; }
+    if (!force && runtime?.authorizedAt && Date.now() - runtime.authorizedAt < 30000) return;
+    let db;
+    try { db = getWorkspaceDb(); } catch { return; } // Activation opens Dexie before discovery can read.
+    const service = this.getTowerSyncService();
+    if (!service) return;
+    if (!runtime) {
+      runtime = { context, db, authorizedAt: 0 };
+      INSTALLATIONS.set(this, runtime);
+      runtime.subscription = liveQuery(() => db.org_data.get(orgDataInstallationsPartition(c))).subscribe({
+        next: row => {
+          if (INSTALLATIONS.get(this) !== runtime || this.orgDataInstallationsContextKey !== context) return;
+          if (!row) { runtime.authorizedAt = 0; this.orgDataInstallations = []; return; }
+          // Cached rows are not authority: wait for a successful current read.
+          if (!runtime.authorizedAt) return;
+          this.orgDataInstallations = projectOrgData(row).installations || [];
+          this.orgDataInstallationContext = context;
+        },
+        error: () => { if (INSTALLATIONS.get(this) === runtime) this.disposeOrgDataInstallations(); },
+      });
+    }
+    const controller = new AbortController(), requestId = crypto.randomUUID();
+    runtime.controller = controller;
+    const current = () => INSTALLATIONS.get(this) === runtime && this.orgDataInstallationsContextKey === context && !controller.signal.aborted;
+    this.orgDataInstallations = [];
+    runtime.authorizedAt = 0;
+    runtime.pending = (async () => {
+      let timeout;
+      try {
+        await Promise.race([
+          service.ensureLoaded('org-data-installations', `installations:${requestId}`, { force: true, requestId, signal: controller.signal }),
+          new Promise((_, reject) => { timeout = setTimeout(() => reject(new Error('Installed napplets loading timed out')), 45000); }),
+        ]);
+        if (!current()) return;
+        const row = await runtime.db.org_data.get(orgDataInstallationsPartition(c));
+        if (!current()) return;
+        if (!row || row.request_id !== requestId) throw new Error('Installed napplets were not loaded');
+        runtime.authorizedAt = Date.now();
+        this.orgDataInstallationContext = context;
+        this.orgDataInstallations = projectOrgData(row).installations || [];
+      } catch {
+        if (current()) { runtime.authorizedAt = 0; this.orgDataInstallations = []; this.orgDataInstallationContext = ''; }
+      } finally {
+        clearTimeout(timeout);
+        if (current()) {
+          runtime.pending = null;
+          if (runtime.invalidated) { runtime.invalidated = false; void this.loadOrgDataInstallations({ force: true }); }
+        }
+        controller.abort();
+      }
+    })();
+    return runtime.pending;
+  },
+
   async openOrgData({ opener = null, view = 'catalogue' } = {}) {
+    const context = this.orgDataContextKey;
+    while (INSTALLATIONS.get(this)?.pending) await INSTALLATIONS.get(this).pending;
+    if (context !== this.orgDataContextKey) return;
     const existing = RUNTIMES.get(this);
     if (this.orgDataOpen && existing?.context === this.orgDataContextKey && this.orgDataView === view) {
       document.querySelector('#org-data-modal [data-napplet-close]')?.focus();
@@ -51,9 +132,14 @@ export const orgDataMixin = {
       runtime.state = state;
       this.orgDataHostStatus = state.status;
       this.orgDataHostError = state.error || '';
-      this.orgDataBundleVisible = state.status === 'ready' && runtime.ready;
+      this.orgDataBundleVisible = runtime.ready && (state.status === 'ready'
+        || state.status === 'loading' && runtime.keepBundleVisible === true);
       this.orgDataRetainDraft = state.retainDraft === true && runtime.ready;
-      if (state.status !== 'ready') this.orgDataInstallations = [];
+      if (state.status === 'error' && !state.retainDraft) {
+        const discovery = INSTALLATIONS.get(this);
+        if (discovery) discovery.authorizedAt = 0;
+        this.orgDataInstallations = []; this.orgDataInstallationContext = '';
+      }
       if (runtime.bundle) state = { ...state, projection: runtime.capabilities.includes('org_data.read') ? state.projection : undefined };
       if (runtime.ready) runtime.frame?.contentWindow?.postMessage({ version: 1, session: runtime.session, type: 'state', ...state }, '*');
     };
@@ -179,6 +265,8 @@ export const orgDataMixin = {
     const controller = new AbortController(), requestId = crypto.randomUUID(), view = runtime.view;
     const prior = runtime.authority;
     const retaining = preserveDraft && (runtime.dirty || runtime.writing) && !!prior && !runtime.blocked;
+    runtime.keepBundleVisible = preserveDraft && !!runtime.bundle
+      && runtime.ready && !!prior && !runtime.blocked;
     runtime.authorizing = true;
     runtime.request = controller;
     const current = () => RUNTIMES.get(this) === runtime && !controller.signal.aborted
@@ -200,7 +288,7 @@ export const orgDataMixin = {
         // opened between those emissions. Every reauthorization has a new ID.
         runtime.deliveredRequestId = requestId;
         const unchanged = retaining && sameOrgDataAuthority(prior, projection);
-        if (retaining && !unchanged || runtime.bundle && prior && !sameOrgDataAuthority(prior, projection)) { this.clearOrgDataDocument(runtime); runtime.bundle = null; }
+        if (retaining && !unchanged || runtime.bundle && prior && !sameInstalledOrgDataAuthority(prior, projection, runtime.bundle)) { this.clearOrgDataDocument(runtime); runtime.bundle = null; }
         runtime.authority = projection; runtime.authorizing = false; runtime.blocked = false;
         if (runtime.documentCleared) {
           runtime.documentCleared = false; runtime.ready = false; runtime.session = crypto.randomUUID();
@@ -208,7 +296,7 @@ export const orgDataMixin = {
           this.orgDataSrc = view.startsWith('bundle:') ? 'about:blank' : `/napplets/org-data/v1/index.html?session=${runtime.session}#${runtime.session}`;
         }
         if (!runtime.ready) this.armOrgDataReadyTimeout(runtime);
-        this.orgDataInstallations = projection.installations || []; this.orgDataInstallationContext = runtime.context;
+        this.orgDataInstallations = projection.installations || []; this.orgDataInstallationContext = this.orgDataInstallationsContextKey;
         if (view.startsWith('bundle:')) {
           const bundle = result.bundles?.find(b => b.key === view.slice(7));
           if (!bundle) { this.clearOrgDataDocument(runtime); runtime.send({ status: 'error', view, error: 'Installed napplet unavailable.' }); return; }
@@ -265,7 +353,7 @@ export const orgDataMixin = {
       runtime.frame.replaceWith(replacement); runtime.frame = replacement;
     }
     this.orgDataSrc = 'about:blank'; this.orgDataSrcdoc = '<!doctype html>';
-    this.orgDataBundleVisible = false; this.orgDataInstallations = [];
+    this.orgDataBundleVisible = false;
   },
 
   closeOrgData(force = false) {
@@ -301,4 +389,15 @@ export function sameOrgDataAuthority(before, after) {
     installations: p.installations,
   });
   return signature(before) === signature(after);
+}
+
+// Capability-free bundles contain their own immutable snapshot. Organisation
+// records or grants unrelated to that installation cannot replace its document.
+// Bundles using the live bridge retain the existing broader authority checks.
+export function sameInstalledOrgDataAuthority(before, after, bundle) {
+  if (bundle.capabilities.length) return sameOrgDataAuthority(before, after);
+  if (before.capabilities?.read !== true || after.capabilities?.read !== true) return false;
+  const installed = p => p.installations?.find(b => b.key === bundle.key);
+  const previous = installed(before), current = installed(after);
+  return !!previous && !!current && JSON.stringify(previous) === JSON.stringify(current);
 }

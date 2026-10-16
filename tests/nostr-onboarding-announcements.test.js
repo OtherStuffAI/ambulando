@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { FLIGHT_DECK_PG_APP_NPUB } from '../src/app-identity.js';
 import { generateLocalIdentity } from '../src/auth/nostr.js';
 import {
@@ -76,6 +76,31 @@ async function validPayload(overrides = {}) {
 }
 
 describe('Nostr kind 33357 onboarding announcements', () => {
+  it.each(['encryption', 'signing'])('expires stalled %s before publication even if the signer resolves late', async (stage) => {
+    vi.useFakeTimers();
+    let finish;
+    const stalled = new Promise(resolve => { finish = resolve; });
+    const poolFactory = vi.fn();
+    let started;
+    const stageStarted = new Promise(resolve => { started = resolve; });
+    try {
+      const publication = publishOnboardingAnnouncement({
+        recipientNpub: recipient.npub, issuerNpub: issuer.npub, issuerPubkeyHex: issuer.pubkey,
+        workspace, agentConnect, appNpub: app.npub, appPubkeyHex,
+        encryptForNpub: () => { if (stage === 'encryption') { started(); return stalled; } return Promise.resolve('encrypted'); },
+        signEvent: () => { started(); return stalled; },
+        poolFactory,
+      });
+      const rejected = expect(publication).rejects.toThrow(`Onboarding ${stage} timed out`);
+      await stageStarted;
+      await vi.advanceTimersByTimeAsync(45_000);
+      await rejected;
+      finish(stage === 'signing' ? { id: 'late' } : 'late encryption');
+      await Promise.resolve();
+      expect(poolFactory).not.toHaveBeenCalled();
+    } finally { vi.useRealTimers(); }
+  });
+
   it('defaults to Primal first without retired or local relays', () => {
     const relays = onboardingAnnouncementRelayUrls();
     expect(relays[0]).toBe('wss://relay.primal.net');

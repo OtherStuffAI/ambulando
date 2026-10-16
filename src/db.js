@@ -120,6 +120,7 @@ const WORKSPACE_STORES_V18 = {
 const WORKSPACE_STORES_V19 = {
   ...WORKSPACE_STORES_V18,
   wapp_publishing_grants: '&wapp_installation_id, app_id, publisher_npub, status, updated_at',
+  // Dormant history slots: do not delete user data when retiring the activity reader.
   wapp_activity_items: 'record_id, workspace_id, wapp_installation_id, category, channel_id, state, unread, muted, priority, occurred_at, updated_at',
   wapp_activity_mutes: '&record_id, target_type, target_value, updated_at, &[target_type+target_value]',
 };
@@ -317,6 +318,7 @@ function createWorkspaceDb(workspaceDbKey) {
   // Read-only authority snapshots, partitioned by viewer/workspace/range.
   db.version(34).stores({ message_activity: '&key, context, range' });
   db.version(35).stores({ org_data: '&key' });
+  db.version(37).stores({ hosting_billing: '&key' });
   db.version(36).stores({ scope_orders: '&record_id, workspace_id', pg_archived_targets: '&key, family, id' });
   const commentFields = activityIndexFields;
   db.documents.hook('creating', (_key, row) => { Object.assign(row, commentFields(row)); });
@@ -714,7 +716,12 @@ export async function replaceChannelsForOwner(ownerNpub, channels = []) {
     .filter((channel) => channel?.record_id);
   const db = wsDb();
   return db.transaction('rw', db.channels, async () => {
-    await db.channels.where('owner_npub').equals(ownerNpub).delete();
+    const retained = await db.channels.where('owner_npub').equals(ownerNpub).toArray();
+    const incoming = new Set(rows.map(row => row.record_id));
+    for (const row of retained) if (!incoming.has(row.record_id)) {
+      if (row.pg_backend) await db.channels.update(row.record_id, { pg_access_status: 'stale' });
+      else await db.channels.delete(row.record_id);
+    }
     if (rows.length > 0) await db.channels.bulkPut(rows);
     return rows.length;
   });
@@ -827,7 +834,8 @@ export async function replacePgDocumentsForChannel(channelId, documents = []) {
       .filter((document) => document?.pg_backend === true && document?.pg_channel_id === channelId)
       .map((document) => document.record_id)
       .filter(Boolean);
-    if (pgDocumentIds.length > 0) await db.documents.bulkDelete(pgDocumentIds);
+    const incoming = new Set(rows.map(row => row.record_id));
+    for (const id of pgDocumentIds) if (!incoming.has(id)) await db.documents.update(id, { pg_access_status: 'stale' });
     if (rows.length > 0) await db.documents.bulkPut(rows);
     return rows.length;
   });
@@ -947,7 +955,8 @@ export async function replacePgFileFoldersForChannel(channelId, folders = []) {
     .filter((folder) => folder?.record_id);
   const db = wsDb();
   return db.transaction('rw', db.file_folders, async () => {
-    await db.file_folders.where('channel_id').equals(normalizedChannelId).delete();
+    const incoming = new Set(rows.map(row => row.record_id));
+    await db.file_folders.where('channel_id').equals(normalizedChannelId).filter(row => !incoming.has(row.record_id)).modify({ pg_access_status: 'stale' });
     if (rows.length > 0) await db.file_folders.bulkPut(rows);
     return rows.length;
   });
@@ -1062,9 +1071,13 @@ export async function getThreadMessagePresentationWindow(channelId, rootId, opti
   const coverage = await db.sync_state.get(`thread-history-page:${threadId}`);
   const lineage = threadHistoryLineage(thread);
   const effectiveIds = mergeThreadHistoryIds(thread?.pg_effective_message_ids || [],
-    coverage?.value?.lineage === lineage ? coverage.value.messageIds : []).slice(-limit);
-  const effective = effectiveIds.length ? await db.chat_messages.bulkGet(effectiveIds) : [];
-  const clampedEffectiveIds = clampBranchEffectiveMessageIds(effectiveIds, effective.filter(Boolean), thread);
+    coverage?.value?.lineage === lineage ? coverage.value.messageIds : []);
+  // Keep the boundary in membership metadata until after clamping. Only the
+  // bounded tail needs ownership values to distinguish live child replies.
+  const tailIds = effectiveIds.slice(-limit);
+  const tailRows = tailIds.length ? await db.chat_messages.bulkGet(tailIds) : [];
+  const clampedEffectiveIds = clampBranchEffectiveMessageIds(effectiveIds, tailRows.filter(Boolean), thread).slice(-limit);
+  const effective = clampedEffectiveIds.length ? await db.chat_messages.bulkGet(clampedEffectiveIds) : [];
   const sourceId = thread?.pg_source_message_id;
   const source = sourceId && sourceId !== rootId ? await db.chat_messages.get(sourceId) : null;
   const parent = root || thread;
@@ -1078,7 +1091,8 @@ export async function getThreadMessagePresentationWindow(channelId, rootId, opti
   for (const [index, row] of candidates.entries()) {
     if (revoked(authority[index + 2])) continue;
     // Indexed own-thread replies remain live; inherited rows require membership.
-    if (row.pg_thread_id && row.pg_thread_id !== threadId && !clampedEffectiveIds.includes(row.record_id)) continue;
+    const owningThreadId = row.pg_owning_thread_id || row.pg_thread_id;
+    if (owningThreadId && owningThreadId !== threadId && !clampedEffectiveIds.includes(row.record_id)) continue;
     if (!row || row.channel_id !== channelId || row.record_state === 'deleted' || row.record_id === rootId || row.pg_record_type === 'thread') continue;
     rows.set(row.record_id, { ...row, parent_message_id: rootId });
   }
@@ -1278,7 +1292,8 @@ export async function replacePgMessagesForChannel(channelId, messages = [], opti
         .map((message) => message.record_id)
         .filter((recordId) => recordId && !protectedIds.has(recordId) && !reconciledRecordIds.has(recordId))
       : [];
-    const deleteIds = [...new Set([...supersededOptimisticIds, ...omittedIds])];
+    for (const id of omittedIds) await db.chat_messages.update(id, { pg_access_status: 'stale' });
+    const deleteIds = [...new Set(supersededOptimisticIds)];
     const existingById = new Map(existing.map((message) => [message.record_id, message]));
     const canonical = await db.pg_record_rows.bulkGet(reconciledRows.map(row => `${row.pg_record_type === 'thread' ? 'thread' : 'message'}:${row.record_id}`));
     const changedRows = reconciledRows.filter((message, index) => (
@@ -1571,74 +1586,6 @@ export async function replaceWorkspaceMembers(workspaceId, members = []) {
   });
 }
 
-export async function replaceWappActivityItems(items = [], options = {}) {
-  const db = wsDb();
-  const rows = (Array.isArray(items) ? items : [])
-    .map((item) => sanitizeForStorage(item))
-    .filter((item) => String(item?.record_id || '').trim());
-  return db.transaction('rw', db.wapp_activity_items, async () => {
-    if (options.authoritative === false) {
-      if (rows.length > 0) await db.wapp_activity_items.bulkPut(rows);
-      return rows;
-    }
-    return reconcileAuthoritativeRows(db.wapp_activity_items, rows, 'record_id');
-  });
-}
-
-export async function upsertWappActivityItem(item) {
-  const row = sanitizeForStorage(item);
-  if (!String(row?.record_id || '').trim()) throw new Error('WApp activity item requires record_id');
-  await wsDb().wapp_activity_items.put(row);
-  return row;
-}
-
-export async function getWappActivityItems() {
-  return wsDb().wapp_activity_items.orderBy('occurred_at').reverse().toArray();
-}
-
-export async function replaceWappActivityMutes(mutes = []) {
-  const db = wsDb();
-  const rows = (Array.isArray(mutes) ? mutes : [])
-    .map((mute) => sanitizeForStorage(mute))
-    .filter((mute) => String(mute?.record_id || '').trim());
-  return db.transaction('rw', db.wapp_activity_mutes, async () => {
-    return reconcileAuthoritativeRows(db.wapp_activity_mutes, rows, 'record_id');
-  });
-}
-
-export async function getWappActivityMutes() {
-  return wsDb().wapp_activity_mutes.toArray();
-}
-
-export async function deleteWappActivityMute(recordId) {
-  const id = String(recordId || '').trim();
-  if (!id) return;
-  await wsDb().wapp_activity_mutes.delete(id);
-}
-
-export async function upsertWappActivityMute(mute) {
-  const row = sanitizeForStorage(mute);
-  if (!String(row?.record_id || '').trim()) throw new Error('WApp activity mute requires record_id');
-  await wsDb().wapp_activity_mutes.put(row);
-  return row;
-}
-
-export async function getWappActivityProjection() {
-  const [items, mutes] = await Promise.all([
-    getWappActivityItems(),
-    getWappActivityMutes(),
-  ]);
-  const mutedTargets = new Set(mutes.map((mute) => `${mute?.target_type}:${mute?.target_value}`));
-  const projectedItems = items.map((item) => ({
-    ...item,
-    muted: item?.muted === true
-      || mutedTargets.has(`installation:${item?.wapp_installation_id}`)
-      || mutedTargets.has(`category:${item?.category}`),
-  }));
-  const unread = projectedItems.filter((item) => item.unread === true && !item.dismissed_at && item.muted !== true).length;
-  return { items: projectedItems, counts: { unread }, mutes };
-}
-
 // ---------------------------------------------------------------------------
 // groups — workspace DB
 // ---------------------------------------------------------------------------
@@ -1784,8 +1731,6 @@ export async function runWorkspaceSyncTransaction(callback) {
     db.wapps,
     db.workspace_members,
     db.wapp_publishing_grants,
-    db.wapp_activity_items,
-    db.wapp_activity_mutes,
     db.autopilot_connections,
     db.workspace_agents,
     db.sync_state,
@@ -1811,7 +1756,6 @@ export async function deleteTowerPgSyncTombstones(tombstones = []) {
       case 'audio_note': await db.audio_notes.delete(entityId); break;
       case 'daily_note': await db.daily_notes.delete(entityId); break;
       case 'personal_wapp': await db.wapps.delete(entityId); break;
-      case 'wapp_activity_item': await db.wapp_activity_items.delete(entityId); break;
       case 'autopilot_connection': await db.autopilot_connections.delete(entityId); break;
       case 'workspace_agent': await db.workspace_agents.delete(entityId); break;
       default: break;
@@ -1943,27 +1887,27 @@ export async function migrateLegacyAutopilotLaunchers(workspaceId, entries = [])
 export async function reconcileTowerPgSnapshot(manifest = {}) {
   const db = wsDb();
   const seen = (family) => new Set(Array.isArray(manifest?.[family]) ? manifest[family] : []);
-  const deleteOmitted = async (table, family, predicate = (row) => row?.pg_backend === true) => {
+  const retainOmitted = async (table, family, predicate = (row) => row?.pg_backend === true) => {
     const accepted = seen(family);
     const ids = (await table.toArray())
       .filter(predicate)
       .filter((row) => row?.sync_status !== 'pending' && row?.sync_status !== 'failed')
       .map((row) => String(row?.record_id || '').trim())
       .filter((id) => id && !accepted.has(id));
-    if (ids.length > 0) await table.bulkDelete(ids);
+    for (const id of ids) await table.update(id, { pg_access_status: 'stale' });
   };
-  await deleteOmitted(db.scopes, 'scopes');
-  await deleteOmitted(db.channels, 'channels');
-  await deleteOmitted(db.chat_messages, 'messages');
-  await deleteOmitted(db.tasks, 'tasks');
-  await deleteOmitted(db.comments, 'comments');
-  await deleteOmitted(db.documents, 'documents');
-  await deleteOmitted(db.file_folders, 'folders');
-  await deleteOmitted(db.audio_notes, 'audio_notes');
-  await deleteOmitted(db.daily_notes, 'daily_notes');
-  await deleteOmitted(db.wapps, 'personal_wapps', (row) => row?.pg_backend === true || Boolean(row?.pg_personal_wapp_id));
-  await deleteOmitted(db.autopilot_connections, 'autopilot_connections');
-  await deleteOmitted(db.workspace_agents, 'workspace_agents');
+  await retainOmitted(db.scopes, 'scopes');
+  await retainOmitted(db.channels, 'channels');
+  await retainOmitted(db.chat_messages, 'messages');
+  await retainOmitted(db.tasks, 'tasks');
+  await retainOmitted(db.comments, 'comments');
+  await retainOmitted(db.documents, 'documents');
+  await retainOmitted(db.file_folders, 'folders');
+  await retainOmitted(db.audio_notes, 'audio_notes');
+  await retainOmitted(db.daily_notes, 'daily_notes');
+  await retainOmitted(db.wapps, 'personal_wapps', (row) => row?.pg_backend === true || Boolean(row?.pg_personal_wapp_id));
+  await retainOmitted(db.autopilot_connections, 'autopilot_connections');
+  await retainOmitted(db.workspace_agents, 'workspace_agents');
 }
 
 export async function deleteSyncState(key) {
@@ -2059,7 +2003,7 @@ export async function getOwnerActivityWindow(tableName, ownerNpub, options = {})
     if (options.matches) {
       const field = options.channelId ? 'channel' : options.scopeIds ? 'scope' : 'owner';
       const values = options.channelId ? [options.channelId] : options.scopeIds || [ownerNpub];
-      const states = ['new', 'ready', 'in_progress', 'blocked', 'review', 'done'];
+      const states = options.taskStates || ['new', 'ready', 'in_progress', 'blocked', 'review', 'done'];
       if (options.search && !options.scopeIds && !options.channelId) {
         const token = options.search.slice(0, 3);
         const candidates = await wsDb().tasks.where('cache_search_tokens').equals(token).limit(limit + 1).toArray();
@@ -2247,7 +2191,7 @@ export async function replacePgTasksForChannel(channelId, tasks = [], options = 
       if (!sameLogicalValue(prior, { ...canonical, ...taskIndexFields(canonical) })) changed.push(canonical);
     }
     if (options.authoritative === true) for (const row of existing) {
-      if (row.pg_backend && !incoming.has(row.record_id) && !protectedRow(row)) deletes.add(row.record_id);
+      if (row.pg_backend && !incoming.has(row.record_id)) await db.tasks.update(row.record_id, { pg_access_status: 'stale' });
     }
     if (deletes.size) await db.tasks.bulkDelete([...deletes]);
     if (changed.length) await db.tasks.bulkPut(changed);
@@ -2397,7 +2341,7 @@ export async function replacePgCommentsForTarget(targetRecordId, comments = [], 
     const pgCommentIds = existing
       .filter((comment) => comment?.pg_backend === true && !protectedIds.has(comment.record_id))
       .filter((comment) => !authoritativeRecordIds.has(comment.record_id))
-      .filter((comment) => options.authoritative === true || authoritativeClientIds.has(comment.pg_client_record_id || comment.record_id))
+      .filter((comment) => authoritativeClientIds.has(comment.pg_client_record_id || comment.record_id))
       .map((comment) => comment.record_id);
     const byId = new Map(existing.map((row) => [row.record_id, row]));
     const changed = reconciledRows.filter((row) => !protectedIds.has(row.record_id) && Number(byId.get(row.record_id)?.version || 0) <= Number(row.version || 0)
@@ -2806,7 +2750,8 @@ export async function replacePgAudioNotesForChannel(channelId, audioNotes = []) 
       .filter((audioNote) => audioNote?.pg_backend === true && audioNote?.pg_channel_id === channelId)
       .map((audioNote) => audioNote.record_id)
       .filter(Boolean);
-    if (pgAudioNoteIds.length > 0) await db.audio_notes.bulkDelete(pgAudioNoteIds);
+    const incoming = new Set(rows.map(row => row.record_id));
+    for (const id of pgAudioNoteIds) if (!incoming.has(id)) await db.audio_notes.update(id, { pg_access_status: 'stale' });
     if (rows.length > 0) await db.audio_notes.bulkPut(rows);
     return rows.length;
   });
@@ -2857,7 +2802,12 @@ export async function replaceScopesForOwner(ownerNpub, scopes = []) {
     .filter((scope) => scope?.record_id);
   const db = wsDb();
   return db.transaction('rw', db.scopes, async () => {
-    await db.scopes.where('owner_npub').equals(ownerNpub).delete();
+    const retained = await db.scopes.where('owner_npub').equals(ownerNpub).toArray();
+    const incoming = new Set(rows.map(row => row.record_id));
+    for (const row of retained) if (!incoming.has(row.record_id)) {
+      if (row.pg_backend) await db.scopes.update(row.record_id, { pg_access_status: 'stale' });
+      else await db.scopes.delete(row.record_id);
+    }
     if (rows.length > 0) await db.scopes.bulkPut(rows);
     return rows.length;
   });

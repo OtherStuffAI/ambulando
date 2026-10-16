@@ -1,3 +1,4 @@
+import { messageActivityContext, messageActivityPartition } from './message-activity/projection.js';
 import { getTowerPgStorageUsage } from './api.js';
 import { resolveTowerPgWorkspaceContext } from './pg-workspace-context.js';
 
@@ -85,6 +86,7 @@ export const towerUsageMixin = {
     if (typeof window !== 'undefined') window.addEventListener('pagehide', this._towerUsagePageHide);
     dialog?.showModal();
     dialog?.querySelector('[data-napplet-close]')?.focus();
+    void this.refreshHostingBilling?.();
     return this.refreshTowerUsage();
   },
   toggleTowerUsagePresentation() {
@@ -108,6 +110,7 @@ export const towerUsageMixin = {
     else this.closeTowerUsage();
   },
   closeTowerUsage() {
+    this.closeHostingBilling?.();
     this.towerUsageOpen = false;
     this.towerUsageFull = false;
     this.towerUsageMenuOpen = false;
@@ -132,6 +135,7 @@ export const towerUsageMixin = {
     this._towerUsageOpener = null;
   },
   syncTowerUsageContext() {
+    if (this.towerUsageOpen && this._hostingBillingKey !== messageActivityPartition(messageActivityContext(this))) void this.refreshHostingBilling?.();
     if (this.towerUsageOpen && this.towerUsageContext !== this.towerUsageCurrentContext) return this.refreshTowerUsage();
   },
   async refreshTowerUsage() {

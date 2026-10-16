@@ -48,11 +48,11 @@ A `409 reset_required` invalidates the download cursor and increments the local
 authority generation. It discards staging, preserves view rows, and starts a new
 snapshot. Generic 401/403, transport failures, malformed pages, and missing
 endpoints are not revocation evidence. A typed `workspace_membership_required`
-403 immediately hides authority while preserving recoverable commands outside
-view tables. Resource visibility loss is reconciled at the complete authorized
+403 marks retained downloads access-lost while preserving the cursor,
+client identity, canonical rows, visible content and local commands. Resource visibility loss is reconciled at the complete authorized
 snapshot/handover; explicit delta tombstones apply immediately. Omitted pending
 edits to previously authorized canonical records are retained as recovery
-conflicts, with their outbox intact, rather than shown without authority.
+conflicts, with their outbox intact, while remaining visible as retained, stale downloads.
 
 Scope/channel collection reads require valid arrays and row identities, reject
 pagination and potentially capped lists, and verify workspace identity before
@@ -130,8 +130,8 @@ For a specific session, capture the requested cursor, response code and page
 a replacement can legitimately reacquire newly accessible historical records.
 
 V1 reset recovery preserves cached presentation rows until authorized handover.
-V2 device reset recovery currently replaces with `preserveViews: false`, so its
-rows must republish during replacement. This investigation does not establish
+The current client preserves v2 views and canonical rows during repair.
+Membership loss records access status without replacing the cursor or client. This investigation does not establish
 which protocol the reported browser negotiated, and does not claim v2 cached
 navigation continuity or live-device acceptance.
 
@@ -148,7 +148,7 @@ registered v1/v2 readers in an isolated database, then distinguish brand-new
 scope/channel records from access changes to existing records. Do not simply
 ignore reset responses or stop grant reconciliation in Flight Deck: new access
 may include old history absent from the journal after the saved cursor, and
-revocation must remove previously authorized data. Test new-resource creation,
+revocation must deny future forbidden operations while retaining downloaded data. Test new-resource creation,
 existing-history grants, group/actor changes, archive/deletion, changes racing a
 snapshot and both protocols before narrowing epoch invalidation. Tower owns
 that authority decision; no shared contract change is made here.
@@ -502,3 +502,5 @@ present, and page mode remains delta. This isolates client behavior; it does not
 remove or bypass the installed Tower creation/grant epoch reset policy. Real
 new-resource creation may still require an authorized replacement. Historical
 channel/long-sync incidents remain unclassified without matched wire evidence.
+
+The additive access extension described in [device checkpoints](device-checkpoints.md#retained-downloads-and-additive-access) supersedes omission retirement and permission-driven purging in the historical investigation above. Tower supplies family-specific access metadata and targeted older-history delta pages on existing cursors.

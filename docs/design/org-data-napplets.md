@@ -12,8 +12,11 @@ The result persists in the workspace Dexie `org_data` projection, partitioned by
 backend/service, app, workspace, owner and viewer. liveQuery supplies Alpine and
 the host bridge. There is no independent UI polling. Bundled code uses the host for data; published JavaScript is trusted privileged code, not network-isolated.
 SSE emits payload-free org-data invalidations; the existing background fallback
-also reauthorizes an open host. Loading/error never renders an old snapshot as
-current. Superseded requests, disposed services and context changes cannot commit
+also reauthorizes an open host. During an ordinary background authority check,
+a previously authorized installed document stays mounted and visible, preserving
+scroll, filters and expanded rows; it receives no new projection until the read
+completes and writes stay blocked. Denial, error or context change still destroys
+the document immediately. Explicit refresh keeps its deliberate loading behavior. Superseded requests, disposed services and context changes cannot commit
 late results. The projection is not an encrypted sync family or an outbox queue.
 
 The host follows [Message activity](message-activity-napplet.md): native dialog,
@@ -57,8 +60,15 @@ using dedicated `napplet.publish` / `napplet.install` grants and explicit
 `trusted_code_acknowledged:true` for both operations. The catalogue lists the
 immutable version, declared capabilities, permitted datasets and navigation risk
 before the install acknowledgement. Built-in code remains repository-controlled. There is no claim of NIP-5D
-conformance. Installed launchers appear in Toolbox following the authorised
-catalogue read; reload can discover them from Catalogue → Static napplets.
+conformance. Installed launchers load on workspace activation and Toolbox/MyApps navigation,
+without opening a catalogue or modal. Discovery uses the existing typed catalogue read and a metadata-only row
+in the worker-validated Dexie projection and full backend/app/workspace/owner/viewer partition. Cached
+rows wait for a successful current authority read. Navigation reuses a 30-second
+fresh read; SSE invalidations force reauthorization and background fallback
+refreshes stale discovery. Modal close preserves the launcher list. Context
+changes and denied/failed reads clear it; launch always reauthorizes through the
+existing host. Full record snapshots are reserved for the modal. Only one discovery read is active per context, and launch waits
+for it before starting its own request-bound read.
 
 Bridge v1 uses `{version:1,session,type,...}`. For installed bundles the session
 is `window.nappletSession`; built-ins use their URL fragment. The host accepts
@@ -76,8 +86,13 @@ message keys. Intents:
 
 Host responses are `type:'state'`, `status:loading|ready|error`, `view`, and an
 explicit read projection only when the bundle declares `org_data.read`.
-The host hides installed bundle content while loading or after read errors,
-so the frame cannot keep a stale authorised view visible. Failed reads/errors omit records and destroy the document. During reauthorization
+Initial loading, explicit refresh and read errors hide installed content.
+Background checks retain an installed bundle’s last authorized document
+until their outcome; live-bridge bundles retain broader dataset, field, reference and identity invalidation checks. Writes remain blocked while authorization is pending.
+Capability-free bundles compare their selected immutable installation and read
+authority, so unrelated organisation records or other installations do not
+replace the document. Bundles using live bridge capabilities retain the broader
+dataset/field/reference/identity authority checks. Failed reads/errors omit records and destroy the document. During reauthorization
 and after an authorised conflict, `retainDraft:true` preserves controlled forms;
 it never permits a draft to bypass the authority read.
 Write paths are restricted to bootstrap, definitions, typed records and the

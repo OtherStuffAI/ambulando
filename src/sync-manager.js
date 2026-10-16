@@ -1,3 +1,4 @@
+import { hydrateHostingBilling } from './hosting-billing.js';
 import { canLoadPgTarget } from './pg-archive-state.js';
 import { hydrateScopeOrder } from './scope-order.js';
 import { hydrateOrgData, readOrgDataPermissions } from './org-data/tower.js';
@@ -108,7 +109,6 @@ import {
   hydrateTowerPgTaskComments,
   hydrateTowerPgThreadMessages,
   readTowerPgThreadHistoryPage,
-  hydrateTowerPgWappActivity,
   hydrateTowerPgWappPublishingGrants,
   hydrateTowerPgWorkroom,
   hydrateTowerPgWorkroomParticipants,
@@ -141,8 +141,6 @@ const PG_SSE_TARGETED_ONLY_ENTITY_TYPES = new Set([
   'response_activity',
   'reaction',
   'resource_view_state',
-  'wapp_activity_item',
-  'wapp_activity_mute',
   'personal_agent_settings',
   'workroom',
   'workroom_event',
@@ -364,8 +362,10 @@ export const syncManagerMixin = {
     this._towerSyncService = replaceTowerSyncService(this._towerSyncService, {
       workspaceKey,
       families: {
+        'hosting-billing': { freshMs: 60000, load: (_id, options) => hydrateHostingBilling(this, options), materialize: result => result },
         'scope-order': { freshMs: 30000, load: (_id, options) => hydrateScopeOrder(this, options) },
         'org-data-permissions': { trackFreshness: false, load: (_key, options) => readOrgDataPermissions(this, options) },
+        'org-data-installations': { trackFreshness: false, load: (_key, options) => hydrateOrgData(this, { ...options, catalogue: true }) },
         'org-data': { trackFreshness: false, load: (_key, options) => hydrateOrgData(this, options) },
         'message-activity': {
           trackFreshness: false,
@@ -376,16 +376,6 @@ export const syncManagerMixin = {
         'workspace-bootstrap': {
           load: (_id, options) => this.runTowerPgWorkspaceSync(options),
           materialize: (result) => result,
-        },
-        'wapp-activity': {
-          freshMs: WAPP_FAMILY_FRESH_MS,
-          load: (_id, options) => hydrateTowerPgWappActivity(this, options),
-          materialize: (result) => result,
-        },
-        'wapp-mutes': {
-          freshMs: WAPP_FAMILY_FRESH_MS,
-          load: (_id, options) => hydrateTowerPgWappActivity(this, options),
-          materialize: (result) => result?.mutes || [],
         },
         'wapp-publishing-grants': {
           freshMs: WAPP_FAMILY_FRESH_MS,
@@ -665,8 +655,6 @@ export const syncManagerMixin = {
       case 'workroom': return hydrateTowerPgWorkroom(this, id, options);
       case 'workroom-participants': return hydrateTowerPgWorkroomParticipants(this, id, options);
       case 'workspace': return this.runTowerPgWorkspaceSync(options);
-      case 'wapp-activity': return hydrateTowerPgWappActivity(this, options);
-      case 'wapp-mutes': return hydrateTowerPgWappActivity(this, options).then((result) => result.mutes || []);
       case 'wapp-publishing-grants': return hydrateTowerPgWappPublishingGrants(this, options);
       case 'drive-shares': return hydrateDriveShares(this);
       case 'personal-wapps': return hydrateTowerPgPersonalWapps(this, options);
@@ -1256,9 +1244,9 @@ export const syncManagerMixin = {
       policy,
       checkoutId,
       checkoutMissing,
-      syncBlocker: checkoutMissing
-        ? 'checkout_required write is missing checkout_id'
-        : '',
+      syncBlocker: row?.authorization_blocked
+        ? `Access denied; local intent retained. Explicitly retry after access changes. ${row.sync_error || ''}`
+        : checkoutMissing ? 'checkout_required write is missing checkout_id' : '',
     };
   },
 
@@ -3219,7 +3207,10 @@ export const syncManagerMixin = {
           hydrationStartedAt,
           messageIds: events.filter((event) => event?.entity_type === 'message').map((event) => event?.entity_id).filter(Boolean),
         });
-        if (this.orgDataOpen && events.some(e => ['org_data','workspace_member','group','channel_grant','scope_access'].includes(e?.entity_type))) await this.syncOrgData?.();
+        if (events.some(e => ['org_data','workspace_member','group','channel_grant','scope_access'].includes(e?.entity_type))) {
+          if (this.orgDataOpen) await this.syncOrgData?.();
+          else await this.loadOrgDataInstallations?.({ force: true });
+        }
         const replayBurst = events.length > PG_SSE_TARGETED_EVENT_LIMIT;
         const targetedOnlyEvents = replayBurst
           ? events.filter((event) => PG_SSE_TARGETED_ONLY_ENTITY_TYPES.has(String(event?.entity_type || '').trim()))
@@ -3256,20 +3247,11 @@ export const syncManagerMixin = {
           await this.requestTowerSyncFamily('channel-agent-activities', channelId, { channelId, force: true, recover: true });
         }
         if (fallbackRefreshRequested) await this.recoverVisibleAgentActivities();
-        const refreshWappActivity = events.some((event) => (
-          String(event?.entity_type || '').trim() === 'wapp_activity_item'
-        ));
         const refreshPersonalAgents = events.some((event) => (
           String(event?.entity_type || '').trim() === 'personal_agent_settings'
         ));
         if (refreshPersonalAgents) {
           await this.refreshWorkspaceSettings({ overwriteInput: !this.wingmanHarnessDirty });
-        }
-        if (refreshWappActivity && typeof this.reconcileWappActivity === 'function') {
-          const workspaceId = String(this.currentWorkspace?.workspaceId || this.currentWorkspace?.workspace_id || '').trim();
-          await (workspaceId
-            ? this.requestTowerSyncFamily?.('wapp-activity')
-            : this.reconcileWappActivity());
         }
         flightDeckTrace('message-timing', 'targeted hydration completed', {
           hydrationStartedAt,
@@ -3450,6 +3432,7 @@ export const syncManagerMixin = {
     // explicit manual/full reconciliation opens its own progress dialog.
     if (this.session?.npub && this.backendUrl && this.workspaceOwnerNpub) {
       this.getTowerSyncService()?.start({ runSoon: runSoon && !this.syncBackoffMs });
+      void this.loadOrgDataInstallations?.();
     }
   },
 
@@ -3488,7 +3471,9 @@ export const syncManagerMixin = {
           });
         }
         await (this.requestTowerSyncFamily?.('workspace-bootstrap') ?? this.runTowerPgWorkspaceSync());
+        if (this.towerUsageOpen) await this.refreshHostingBilling?.();
         if (this.orgDataOpen) await this.syncOrgData?.();
+        else await this.loadOrgDataInstallations?.();
         this.markTowerReachabilityRecovered?.('background-sync-success', {
           refresh: false,
           fallbackUsable: this.sseStatus !== 'connected',
@@ -3645,6 +3630,17 @@ export const syncManagerMixin = {
     if (s.phase === 'applying' || s.phase === 'done') return 100;
     if (s.phase === 'checking') return 5;
     return 0;
+  },
+
+  get retainedDownloadNotice() {
+    if (!this.isTowerPgMode) return '';
+    if (this.pgRetainedAccessLost) return 'Workspace access lost. Downloads remain available for reading and local drafts remain on this device. Tower will deny forbidden reads and writes.';
+    const rows = this.navSection === 'docs' || this.navSection === 'files' ? this.documents || []
+      : this.navSection === 'tasks' ? this.tasks || []
+      : [...(this.messages || []), ...(this.channels || []).filter(row => row.record_id === this.selectedChannelId)];
+    if (rows.some(row => row.pg_access_status === 'access-lost')) return 'Access lost for retained downloads in this view. Keep reading cached content; Tower must authorize future reads and writes. Local drafts are preserved.';
+    if (rows.some(row => row.pg_access_status === 'stale')) return 'Retained downloads in this view may be stale. Tower must confirm access before future changes.';
+    return '';
   },
 
   lastSyncTimeLabel() {
@@ -3849,11 +3845,6 @@ export const syncManagerMixin = {
         ?? this.runTowerPgWorkspaceSync());
       pulled = Number(result?.applied || 0);
       await this.ensureTowerPgControlPlaneHydrated?.({ force: true, syncRoute: false });
-      const workspaceKey = String(this.currentWorkspaceKey || '').trim();
-      const needsWappBootstrap = this.wappActivityReconciledWorkspaceKey !== workspaceKey;
-      if ((manual || !this.isSSEConnected || needsWappBootstrap) && typeof this.reconcileWappActivity === 'function') {
-        await this.reconcileWappActivity({ force: manual });
-      }
       if (this.canAdminWorkspace && typeof this.refreshWappPublishingGrants === 'function') {
         await this.refreshWappPublishingGrants();
       }

@@ -885,6 +885,18 @@ describe('PG write adapter', () => {
     expect(child).toMatchObject({ record_id: 'child-thread', pg_parent_thread_id: 'parent-thread', pg_branch_point_message_id: 'message-2' });
   });
 
+  it('sends the inherited selected message boundary against the active branch', async () => {
+    const api = await import('../src/api.js');
+    api.createTowerPgThreadBranch.mockResolvedValue({ thread: { id: 'nested', channel_id: 'channel-1',
+      parent_thread_id: 'branch', branch_point_message_id: 'm3', row_version: 1 } });
+    const child = await branchTowerPgThreadFromMessage(store(), { record_id: 'm3', channel_id: 'channel-1',
+      pg_thread_id: 'ancestor', pg_owning_thread_id: 'ancestor', pg_inherited: true },
+    { parentThreadId: 'branch', clientRequestId: 'branch:nested' });
+    expect(api.createTowerPgThreadBranch).toHaveBeenCalledWith('workspace-1', 'channel-1', 'branch',
+      expect.objectContaining({ branch_point_message_id: 'm3', client_request_id: 'branch:nested' }), expect.anything());
+    expect(child).toMatchObject({ pg_parent_thread_id: 'branch', pg_branch_point_message_id: 'm3' });
+  });
+
   it('passes a stable client request id when creating a reply in an existing thread', async () => {
     const api = await import('../src/api.js');
     api.createTowerPgChannelMessage.mockResolvedValue({

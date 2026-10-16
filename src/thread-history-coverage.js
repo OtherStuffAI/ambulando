@@ -51,11 +51,11 @@ export function clampBranchEffectiveMessageIds(ids = [], rows = [], thread = {})
     const row = rowsById.get(id);
     const rowThreadId = String(row?.pg_thread_id ?? row?.thread_id ?? '').trim();
     const owningThreadId = String(row?.pg_owning_thread_id ?? row?.owning_thread_id ?? rowThreadId).trim();
-    return rowThreadId === threadId || owningThreadId === threadId;
+    return owningThreadId === threadId;
   });
 }
 
 // Shared by history materialization and local reopen freshness checks.
 export function threadHistoryAuthority(state) {
-  return JSON.stringify([state?.incrementalSnapshot && state?.snapshotReconciliationPending ? state.generation : state?.cursor || null, state?.localGeneration || 0, Boolean(state?.resetting), Boolean(state?.staging), Boolean(state?.snapshotRetirement), state?.commandRevision || null]);
+  return JSON.stringify([state?.incrementalSnapshot && state?.snapshotReconciliationPending ? state.generation : state?.cursor || null, state?.localGeneration || 0, Boolean(state?.resetting), Boolean(state?.staging), Boolean(state?.snapshotRetirement), state?.commandRevision || null, state?.accessRevision || null, Boolean(state?.accessLost)]);
 }

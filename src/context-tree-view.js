@@ -25,7 +25,7 @@ export function createContextTreeView(deps = {}) {
   const view = {
     levelPreset: 'All', branchLevels: [],
     viewMode: preference(), outlineScroll: 0, outlineRows: [], outlineHeight: 0,
-    hasContext: false, status: 'unloaded', components: [], references: [], selectedId: '', focusedId: '', collapsed: [],
+    hasContext: false, retainedStatus: 'current', status: 'unloaded', components: [], references: [], selectedId: '', focusedId: '', collapsed: [],
     layout: layoutContextTree([]), scale: 1, panX: 0, panY: 0, viewportWidth: 800, viewportHeight: 500,
     nodeSearch: '', nodeSearchOpen: false, nodeSearchIndex: 0,
     get nodeResults() { return contextSearchChoices(this.components,this.nodeSearch).map(row=>({...row,subtitle:row.path})); },
@@ -120,6 +120,7 @@ export function createContextTreeView(deps = {}) {
         next: snapshot => {
           if (!active()) return;
           this.status = snapshot.status;
+          this.retainedStatus = snapshot.downloadStatus || 'current';
           this.capabilities = snapshot.capabilities || {read:false,manage:false};
           if (!this.canManage) this.clearEditor();
           this.components = ['complete', 'loading'].includes(snapshot.status) ? snapshot.components : [];

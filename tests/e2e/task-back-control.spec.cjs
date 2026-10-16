@@ -60,6 +60,13 @@ for (const width of [1280, 390, 320]) {
     expect(bb.x + bb.width).toBeLessThanOrEqual(tb.x);
     expect(Math.abs(bb.y + bb.height / 2 - tb.y - tb.height / 2)).toBeLessThan(2);
     expect(tb.width).toBeGreaterThan(120);
+    if (width < 769) {
+      const bounds = await header.boundingBox();
+      expect(bounds.height).toBeLessThanOrEqual(49);
+      const metadata = await page.locator('.task-record-heading').boundingBox();
+      expect(metadata.height).toBeLessThanOrEqual(49);
+      console.log('SOL_TASK_FRONT_MATTER', JSON.stringify({ width, theme, headerHeight: bounds.height, metadataHeight: metadata.height }));
+    }
     for (const button of await header.locator('button:visible').all()) {
       const box = await button.boundingBox();
       expect(box.x).toBeGreaterThanOrEqual(0);
@@ -71,20 +78,26 @@ for (const width of [1280, 390, 320]) {
     expect(focus.outline).not.toBe('none'); expect(focus.width).toBeGreaterThan(0);
     await page.keyboard.press('Tab'); await expect(title).toBeFocused();
     await title.press('Tab'); await expect(header.getByRole('button', { name: 'Save', exact: true })).toBeFocused();
+    if (width < 769) await header.getByRole('button', { name: 'More actions' }).click();
     await header.getByRole('button', { name: 'Discard', exact: true }).click();
     await expect(title).toHaveValue('A readable task record');
     await title.fill(longTitle);
     await page.evaluate(() => { Alpine.store('chat').taskDetailSaving = true; });
     await expect(header.getByRole('button', { name: 'Saving...', exact: true })).toBeDisabled();
+    if (width < 769) await header.getByRole('button', { name: 'More actions' }).click();
     await expect(header.getByRole('button', { name: 'Discard', exact: true })).toBeDisabled();
+    if (width < 769) await page.keyboard.press('Escape');
     await page.evaluate(() => { Alpine.store('chat').taskDetailSaving = false; });
     await header.getByRole('button', { name: 'Save', exact: true }).click();
     await expect.poll(() => page.evaluate(() => window.taskSavedPatch?.title)).toBe(longTitle);
     await page.evaluate(() => Alpine.store('chat').openTaskDetail('layout-task'));
     await expect(title).toHaveValue(longTitle);
+    if (width < 769) await header.getByRole('button', { name: 'More actions' }).click();
     await header.getByRole('button', { name: 'Copy link', exact: true }).click();
+    if (width < 769) await header.getByRole('button', { name: 'More actions' }).click();
     await expect(header.getByRole('button', { name: 'Copied link', exact: true })).toBeVisible();
     expect(await page.evaluate(() => navigator.clipboard.readText())).toContain('layout-task');
+    if (width < 769) await page.keyboard.press('Escape');
     const menu = header.getByRole('button', { name: 'More actions' });
     await menu.focus(); await page.keyboard.press('Enter');
     await expect(header.getByRole('button', { name: 'Move to…', exact: true })).toBeVisible();
@@ -100,6 +113,22 @@ for (const width of [1280, 390, 320]) {
     const readBounds = await header.getByRole('heading').boundingBox();
     expect(readBounds.x).toBeGreaterThan(bb.x + bb.width);
     expect(readBounds.x + readBounds.width).toBeLessThanOrEqual(width);
+    if (width < 769) {
+      expect((await header.boundingBox()).height).toBeLessThanOrEqual(49);
+      await page.evaluate(() => {
+        const s = Alpine.store('chat');
+        s.editingTask.assigned_to_npubs = ['npub1fixture'];
+        s.getSenderName = () => 'A very long assignee name that stays available in the identity card';
+        s.editingTask.tags = 'design,accessibility,review,long-tag';
+        s.editingTask.scheduled_for = '2026-10-31';
+      });
+      await expect.poll(async () => (await page.locator('.task-record-heading').boundingBox()).height).toBeLessThanOrEqual(49);
+      await expect(header.getByRole('heading')).toHaveText(longTitle);
+      await header.getByRole('button', { name: 'More actions' }).click();
+      await expect(header.locator('.task-menu-title')).toHaveText(longTitle);
+      await page.keyboard.press('Escape');
+      if (process.env.SOL_EVIDENCE_DIR) await page.screenshot({ path: `${process.env.SOL_EVIDENCE_DIR}/assigned-read-${width}-${theme}.png`, fullPage: true });
+    }
     const actionsBounds = await header.locator('.task-detail-actions').boundingBox();
     expect(readBounds.x + readBounds.width <= actionsBounds.x + 1 || readBounds.y + readBounds.height <= actionsBounds.y + 1).toBe(true);
     if (process.env.SOL_EVIDENCE_DIR) await page.screenshot({ path: `${process.env.SOL_EVIDENCE_DIR}/read-${width}-${theme}.png`, fullPage: true });
@@ -115,6 +144,7 @@ for (const width of [1280, 390, 320]) {
     await expect(page.locator('.task-detail-panel')).toHaveCount(0);
     await page.evaluate(() => Alpine.store('chat').openTaskDetail('layout-task'));
     await expect(title).toHaveValue('Draft retained by Back');
+    if (width < 769) await header.getByRole('button', { name: 'More actions' }).click();
     await header.getByRole('button', { name: 'Discard', exact: true }).click();
     await expect(title).toHaveValue(longTitle);
     // Exercise the actual history return branch with an origin route in browser history.

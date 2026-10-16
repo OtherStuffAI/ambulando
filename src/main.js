@@ -7,8 +7,10 @@ import './pipeline-viewer.css';
 import { createContextTreeView } from './context-tree-view.js';
 import { installStableHtml } from './stable-html.js';
 import { initializeTowerTransports } from './tower-transport.js';
+import { installNativeTransportLifecycle } from './native-transport-lifecycle.js';
 import './styles.css';
 import './sol.css';
+import './hosting-onboarding.css';
 import { initApp } from './app.js';
 import { maybePerformHardReset } from './hard-reset.js';
 import { startVersionCheck } from './version-check.js';
@@ -26,6 +28,7 @@ installSolAccessibility(Alpine);
 async function boot() {
   if (await maybePerformHardReset()) return;
   await initializeTowerTransports();
+  installNativeTransportLifecycle();
   installStableHtml(Alpine);
   Alpine.data('pipelineViewerView', () => createPipelineViewerView());
   Alpine.data('contextTreeView', () => createContextTreeView());

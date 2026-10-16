@@ -33,7 +33,7 @@ describe.skipIf(!fixturePath)('production WMapp JS / Flight Deck worker contract
     };
     const context = {
       window, location: { origin: 'https://flightdeck.example' }, Request, Response,
-      ReadableStream, AbortController, DOMException, Headers, Event, Uint8Array, atob, btoa, setTimeout, clearTimeout,
+      ReadableStream, AbortController, DOMException, Headers, Event, EventTarget, Uint8Array, atob, btoa, setTimeout, clearTimeout,
       MessageChannel: class extends MessageChannel { constructor() { super(); ports.push(this.port1, this.port2); } },
       WingmanGrasp: { postMessage(raw) {
         const message = JSON.parse(raw);

@@ -8,6 +8,8 @@ import { sectionLiveQueryMixin } from '../src/section-live-queries.js';
 function store() {
   const s = { currentWorkspaceKey: 'tower/workspace-a', currentPgActorId: 'alice',
     currentViewerNpub: 'npubAlice',
+    orgDataInstallationsContextKey: 'authorized-context', orgDataInstallationContext: 'authorized-context',
+    orgDataInstallations: [{ key: 'register', title: 'Project Register', version: 1 }],
     visiblePersonalWapps: [{ record_id: 'artifact', title: 'Artifacts', launch_url: 'https://app.invalid/', sort_order: 5 }],
     closePersonalWappsOverlay: vi.fn(), openOrgData: vi.fn(), openMessageActivity: vi.fn(), openTowerUsage: vi.fn(), openPersonalWapp: vi.fn() };
   Object.defineProperties(s, Object.getOwnPropertyDescriptors(toolboxMixin));
@@ -17,7 +19,7 @@ beforeEach(async () => { await getSharedDb().app_settings.clear(); });
 
 it('defaults existing entries to Apps, deduplicates IDs and preserves launcher fields', () => {
   const s = store(); s.visiblePersonalWapps.push(s.visiblePersonalWapps[0]);
-  expect(s.visibleApps.map(app => app.placementId)).toEqual(['wapp:artifact', 'napplet:message-activity', 'napplet:tower-usage', 'napplet:org-data-catalogue', 'napplet:org-data-people', 'napplet:org-data-chart', 'napplet:org-data-holidays']);
+  expect(s.visibleApps.map(app => app.placementId)).toEqual(['wapp:artifact', 'napplet:bundle-register']);
   expect(s.visibleApps[0]).toMatchObject({ launch_url: 'https://app.invalid/', sort_order: 5 });
 });
 
@@ -27,28 +29,28 @@ it('persists each type across recreated stores without losing settings or concur
   await s.setAppPlacement(s.toolboxApps[0], false);
   await s.setAppPlacement(s.toolboxApps[1], false);
   const restored = store(); restored.appPlacementPreferences = (await getSettings()).appPlacements;
-  expect(restored.visibleApps.map(row => row.placementId)).toEqual(['napplet:tower-usage', 'napplet:org-data-catalogue', 'napplet:org-data-people', 'napplet:org-data-chart', 'napplet:org-data-holidays']);
-  restored.currentWorkspaceKey = 'tower/workspace-b'; expect(restored.visibleApps).toHaveLength(7);
+  expect(restored.visibleApps.map(row => row.placementId)).toEqual([]);
+  restored.currentWorkspaceKey = 'tower/workspace-b'; expect(restored.visibleApps).toHaveLength(2);
   restored.currentWorkspaceKey = s.currentWorkspaceKey;
-  restored.currentPgActorId = 'bob'; expect(restored.visibleApps).toHaveLength(7);
+  restored.currentPgActorId = 'bob'; expect(restored.visibleApps).toHaveLength(2);
   await Promise.all([
     saveAppPlacement(s.appPlacementPartition, 'wapp:other', false),
-    saveAppPlacement(restored.appPlacementPartition, 'napplet:message-activity', false),
+    saveAppPlacement(restored.appPlacementPartition, 'napplet:bundle-register', false),
   ]);
   const settings = await getSettings();
   expect(settings.backendUrl).toBe('https://tower.invalid');
   expect(settings.appPlacements[s.appPlacementPartition]).toEqual({
-    'wapp:artifact': { shown: false, visibility: 'everywhere' }, 'napplet:message-activity': { shown: false, visibility: 'everywhere' }, 'wapp:other': false,
+    'wapp:artifact': { shown: false, visibility: 'everywhere' }, 'napplet:bundle-register': { shown: false, visibility: 'everywhere' }, 'wapp:other': false,
   });
-  expect(settings.appPlacements[restored.appPlacementPartition]['napplet:message-activity']).toBe(false);
+  expect(settings.appPlacements[restored.appPlacementPartition]['napplet:bundle-register']).toBe(false);
 });
 
 it('routes each launch through the existing behavior and rejects hidden or missing registrations', async () => {
   const s = store(); const [wapp, napplet] = s.toolboxApps;
   s.openApp(wapp); expect(s.openPersonalWapp).toHaveBeenCalledWith(wapp);
-  s.openApp(napplet); expect(s.openMessageActivity).toHaveBeenCalledOnce();
+  s.openApp(napplet); expect(s.openOrgData).toHaveBeenCalledWith({ opener: null, view: 'bundle:register' });
   await s.setAppPlacement(napplet, false); s.openApp(napplet);
-  expect(s.openMessageActivity).toHaveBeenCalledOnce();
+  expect(s.openOrgData).toHaveBeenCalledOnce();
   s.visiblePersonalWapps = []; s.openApp(wapp); expect(s.openPersonalWapp).toHaveBeenCalledOnce();
 });
 
@@ -63,8 +65,8 @@ it('publishes saved preferences from the shared live query after context changes
   for (const [query, next] of listeners) {
     const value = await query(); if (!Array.isArray(value)) next(value);
   }
-  expect(s.visibleApps).toHaveLength(7);
-  s.currentWorkspaceKey = 'tower/workspace-a'; expect(s.visibleApps.map(app => app.appType)).toEqual(Array(6).fill('Napplet'));
+  expect(s.visibleApps).toHaveLength(2);
+  s.currentWorkspaceKey = 'tower/workspace-a'; expect(s.visibleApps.map(app => app.appType)).toEqual(['Napplet']);
   s.stopSharedLiveQueries();
 });
 
@@ -93,8 +95,8 @@ it('finishes an in-flight save only in its captured workspace partition', async 
   const saving = s.setAppPlacement(s.toolboxApps[1], false);
   s.currentWorkspaceKey = 'tower/workspace-b';
   await saving;
-  expect(s.visibleApps).toHaveLength(7); expect(s.appPlacementNotice).toBe('');
-  expect((await getSettings()).appPlacements[partition]['napplet:message-activity'].shown).toBe(false);
+  expect(s.visibleApps).toHaveLength(2); expect(s.appPlacementNotice).toBe('');
+  expect((await getSettings()).appPlacements[partition]['napplet:bundle-register'].shown).toBe(false);
 });
 
 
@@ -133,7 +135,7 @@ it('migrates legacy hidden bool on edit without losing hidden state and moves na
   s.personalWappFormIconUrl = 'https://app.invalid/icon.png'; s.personalAppFormPosition = 1;
   await s.saveAppEditorPlacement(app.placementId);
   expect(s.toolboxApps[0]).toMatchObject({ placementId: app.placementId, icon_url: 'https://app.invalid/icon.png' });
-  expect(s.visibleApps.map(app => app.appType)).toEqual(['WApp', ...Array(5).fill('Napplet')]);
+  expect(s.visibleApps.map(app => app.appType)).toEqual(['WApp']);
 });
 
  it('persists custom napplet title without changing identity, metadata or other viewers', async () => {
@@ -143,38 +145,45 @@ it('migrates legacy hidden bool on edit without losing hidden state and moves na
   s.personalAppFormShown = false; s.personalAppFormVisibility = 'channel'; s.personalAppFormChannelId = 'channel-a';
   await s.saveAppEditorPlacement(app.placementId);
   const restored = store(); restored.appPlacementPreferences = (await getSettings()).appPlacements;
-  expect(restored.toolboxApps.find(app => app.appType === 'Napplet')).toMatchObject({ title: 'My activity', placementId: 'napplet:message-activity', icon_url: 'icon.png' });
+  expect(restored.toolboxApps.find(app => app.appType === 'Napplet')).toMatchObject({ title: 'My activity', placementId: 'napplet:bundle-register', icon_url: 'icon.png' });
   expect(restored.appPlacement(app)).toMatchObject({ shown: false, visibility: 'channel', channelId: 'channel-a', displayTitle: 'My activity' });
-  expect(restored.messageActivityDisplayTitle).toBe('My activity');
-  restored.currentPgActorId = 'bob'; expect(restored.messageActivityDisplayTitle).toBe('Message activity');
-  restored.currentPgActorId = 'alice'; restored.currentWorkspaceKey = 'another'; expect(restored.messageActivityDisplayTitle).toBe('Message activity');
+  expect(restored.toolboxApps.find(row => row.placementId === app.placementId).title).toBe('My activity');
+  restored.currentPgActorId = 'bob'; expect(restored.toolboxApps.find(row => row.placementId === app.placementId).title).toBe('Project Register');
+  restored.currentPgActorId = 'alice'; restored.currentWorkspaceKey = 'another'; expect(restored.toolboxApps.find(row => row.placementId === app.placementId).title).toBe('Project Register');
   s.personalWappFormTitle = '  ';
   await expect(s.saveAppEditorPlacement(app.placementId)).rejects.toThrow('Title is required');
   expect((await getSettings()).appPlacements[s.appPlacementPartition][app.placementId].displayTitle).toBe('My activity');
 });
 
-it('launches Tower Usage everywhere by default and keeps its editor identity separate', async () => {
-  const s = store(), app = s.toolboxApps.find(row => row.placementId === 'napplet:tower-usage');
-  expect(app.title).toBe('Tower Usage');
-  for (const scope of ['scope-a', 'scope-b', null]) {
-    s.pgContextScopeId = scope; s.openApp(app);
+const removedIds = ['napplet:message-activity', 'napplet:tower-usage',
+  ...['catalogue', 'people', 'chart', 'holidays'].map(view => 'napplet:org-data-' + view)];
+
+it('never restores the six defaults from saved preferences without installation records', async () => {
+  const s = store(); s.orgDataInstallations = []; s.visiblePersonalWapps = [];
+  for (const id of removedIds) await saveAppPlacement(s.appPlacementPartition, id, { shown: true, position: 1 });
+  const saved = (await getSettings()).appPlacements;
+  s.appPlacementPreferences = saved;
+  for (const workspace of ['tower/workspace-a', 'tower/workspace-b', 'other-tower/workspace-a']) {
+    s.currentWorkspaceKey = workspace;
+    expect(s.toolboxApps).toEqual([]); expect(s.visibleApps).toEqual([]);
+    for (const placementId of removedIds) s.openApp({ placementId, appType: 'Napplet' });
   }
-  expect(s.openTowerUsage).toHaveBeenCalledTimes(3);
-  s.prepareAppPlacementEditor(app);
-  expect(s.personalAppEditingPlacementId).toBe('napplet:tower-usage');
-  s.personalWappFormTitle = 'Storage'; s.personalWappFormIconUrl = '';
-  await s.saveAppEditorPlacement(s.personalAppEditingPlacementId);
-  expect(s.toolboxApps.find(row => row.placementId === app.placementId).title).toBe('Storage');
-  expect(s.messageActivityDisplayTitle).toBe('Message activity');
-  await s.setAppPlacement(app, false); s.openApp(app);
-  expect(s.openTowerUsage).toHaveBeenCalledTimes(3);
+  expect(s.openMessageActivity).not.toHaveBeenCalled();
+  expect(s.openTowerUsage).not.toHaveBeenCalled(); expect(s.openOrgData).not.toHaveBeenCalled();
+  expect((await getSettings()).appPlacements).toEqual(saved);
 });
 
-it('launches each default organisation napplet with its own stable placement identity',()=>{
- const s=store();
- for(const view of ['catalogue','people','chart','holidays']){
-  const app=s.toolboxApps.find(a=>a.placementId==='napplet:org-data-'+view);
-  expect(app).toMatchObject({orgDataView:view,appType:'Napplet'});
-  s.openApp(app);expect(s.openOrgData).toHaveBeenLastCalledWith({opener:null,view});
- }
+it('retains WApps while suppressing installations until their current context is authorized', () => {
+  const s = store();
+  expect(s.toolboxApps[1]).toMatchObject({ placementId: 'napplet:bundle-register', orgDataView: 'bundle:register' });
+  for (const context of ['', 'previous-workspace']) {
+    s.orgDataInstallationContext = context;
+    expect(s.visibleApps.map(row => row.placementId)).toEqual(['wapp:artifact']);
+    s.openApp({ placementId: 'napplet:bundle-register', appType: 'Napplet', orgDataView: 'bundle:register' });
+  }
+  expect(s.openOrgData).not.toHaveBeenCalled();
+  s.orgDataInstallationContext = s.orgDataInstallationsContextKey;
+  s.openApp(s.toolboxApps[1]);
+  expect(s.openOrgData).toHaveBeenCalledWith({ opener: null, view: 'bundle:register' });
+  for (const id of removedIds) expect(s.toolboxApps.some(row => row.placementId === id)).toBe(false);
 });

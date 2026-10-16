@@ -88,13 +88,13 @@ describe('Tower canonical record-delta v1 consumer',()=>{
   });
 });
 
-it('retires an old generation only after the terminal snapshot and delta handover',async()=>{
+it('marks retained old downloads stale only after the terminal snapshot and delta handover',async()=>{
   await db.chat_messages.put({record_id:'old',channel_id:'old-channel',pg_backend:true,sync_status:'synced'});
   await db.chat_messages.put({record_id:'pending-old',channel_id:'old-channel',pg_backend:true,sync_status:'pending'});
   await applyPgRecordChanges(store,{...fixture.canonical_upserts,next_cursor:'snapshot-end'},{expectedCursor:null});
   expect(await db.chat_messages.get('old')).toBeTruthy();
   await applyPgRecordChanges(store,page([],'handover'),{expectedCursor:'snapshot-end'});
-  expect(await db.chat_messages.get('old')).toBeUndefined();
+  expect(await db.chat_messages.get('old')).toMatchObject({ pg_access_status: 'stale' });
   expect(await db.chat_messages.get('pending-old')).toBeTruthy();
 });
 
@@ -468,7 +468,7 @@ it('limits Feed omission authority to advertised snapshot families and still hon
   await resetPgRecordAuthority(reader, { preserveViews: true });
   await applyPgRecordChanges(reader, { ...fixture.canonical_upserts, families, partitions_complete: families });
   await applyPgRecordChanges(reader, { ...page([], 'supported-empty-handover'), families });
-  expect(await db.feed_subscriptions.count()).toBe(0);
+  expect(await db.feed_subscriptions.count()).toBe(1);
   await applyPgRecordChanges(reader, { ...page([change], 'feed-returned'), families });
   await applyPgRecordChanges(reader, { ...page([{ ...change, version: '2', operation: 'delete', row: null }], 'feed-deleted'), families });
   expect(await db.feed_subscriptions.count()).toBe(0);
@@ -540,4 +540,37 @@ it('repairs an existing assignment projection without moving the cursor, receipt
   await db.tasks.update(task.id,{assigned_to_npub:'npub1draft',assigned_to_npubs:['npub1draft'],sync_status:'pending'});
   await rebuildPgRecordSummaries(store);
   expect((await db.tasks.get(task.id)).assigned_to_npubs).toEqual(['npub1draft']);
+});
+describe.each(['scope','channel'])('unversioned %s navigation freshness', family => {
+  const base = fixture.canonical_upserts.changes.find(c => c.family === family);
+  const rename = (version, name) => {
+    const row = {...base.row, name};delete row.row_version;delete row.version;
+    return {...base,version,row};
+  };
+  const table = () => db.table(family === 'scope' ? 'scopes' : 'channels');
+  it('projects a fresh rename and rejects duplicate and stale journal delivery exactly', async () => {
+    await applyPgRecordChanges(store,page([rename('9007199254740992','Original')],'one'));
+    await applyPgRecordChanges(store,page([rename('9007199254740993','Renamed')],'two'));
+    expect((await table().get(base.id)).title).toBe('Renamed');
+    for (const [version,cursor] of [['9007199254740993','duplicate'],['9007199254740992','stale']]) {
+      expect((await applyPgRecordChanges(store,page([rename(version,'Wrong')],cursor))).applied).toBe(0);
+      expect((await table().get(base.id)).title).toBe('Renamed');
+    }
+  });
+  it.each(['pending','failed','command'])('preserves %s local intent while advancing canonical freshness', async kind => {
+    await applyPgRecordChanges(store,page([rename('10','Original')],'one'));
+    await table().update(base.id,{title:'Local draft',sync_status:kind === 'command' ? 'synced' : kind});
+    if(kind === 'command') await db.pending_writes.add({record_id:base.id,envelope:{name:'Local draft'}});
+    await applyPgRecordChanges(store,page([rename('11','Remote rename')],'two'));
+    expect((await table().get(base.id)).title).toBe('Local draft');
+    expect((await db.pg_record_rows.get(`${family}:${base.id}`)).row.name).toBe('Remote rename');
+    expect(await db.pg_record_conflicts.get(`${family}:${base.id}`)).toBeTruthy();
+    if(kind === 'command') expect(await db.pending_writes.count()).toBe(1);
+  });
+  it('rejects a rename from another workspace before changing navigation', async () => {
+    await applyPgRecordChanges(store,page([rename('10','Original')],'one'));
+    const foreign=rename('11','Foreign');foreign.workspace_id='other';foreign.row.workspace_id='other';
+    await expect(applyPgRecordChanges(store,page([foreign],'two'))).rejects.toThrow('Invalid Tower');
+    expect((await table().get(base.id)).title).toBe('Original');
+  });
 });

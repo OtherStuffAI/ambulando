@@ -32,7 +32,8 @@ async function assertAssemblyAuthority(db, store, options, page) {
   const state = (await db.sync_state.get(recordDeltaCursorKey(store)))?.value;
   if (!state?.device || state.device.clientId !== page.client_id || state.device.scope !== options.deviceScope
     || state.device.authorityEpoch !== options.authorityEpoch || state.cursor !== options.expectedCursor
-    || Number(state.localGeneration || 0) !== options.expectedGeneration) throw new Error('Large record cache authority changed');
+    || Number(state.localGeneration || 0) !== options.expectedGeneration
+    || Object.hasOwn(options, 'expectedAccessLost') && Boolean(state.accessLost) !== options.expectedAccessLost) throw new Error('Large record cache authority changed');
 }
 
 // Executed only in the existing materialisation worker. One assembly per physical

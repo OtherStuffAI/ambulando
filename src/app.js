@@ -1,3 +1,4 @@
+import { hostingBillingMixin } from './hosting-billing.js';
 import { showEditorMountFailure } from './docs/editor/editor-mount-failure.js';
 import { createDiagnosticOperation, finishDiagnosticOperation, emitDiagnostic } from './diagnostics-events.js';
 import { orgDataMixin } from './org-data/manager.js';
@@ -666,6 +667,7 @@ export function initApp() {
     connectShowTokenFallback: false,
     knownHosts: [],
     showAgentConnectModal: false,
+    pgRetainedAccessLost: false,
     syncStatus: 'synced',
     syncSession: {
       state: 'synced',
@@ -2317,6 +2319,7 @@ export function initApp() {
 
     async init() {
       this.initDiagnosticsLifecycle();
+      this.initOrgDataInstallations();
       this.initDocEditLeaseLifecycle?.();
       this.initReadAloud();
       if (typeof window !== 'undefined' && !this.chatImagePreviewCleanupHandler) {
@@ -3234,6 +3237,12 @@ export function initApp() {
       this.navCollapsed = !this.navCollapsed;
     },
 
+    get mobileHeaderChannelTitle() {
+      const channelId = this.isTowerPgMode ? this.pgContextSelectedChannelId : this.selectedChannelId;
+      const channel = (this.channels || []).find((row) => row.record_id === channelId);
+      return channel ? (this.getChannelLabel(channel) || channel.name || 'Untitled channel') : 'No channel selected';
+    },
+
     toggleAppHeaderHidden() {
       this.appHeaderHidden = !this.appHeaderHidden;
     },
@@ -3439,6 +3448,7 @@ export function initApp() {
       this.docRichEditorAdapter?.refreshWikiLinks?.();
       this.refreshOpenDocFromLatestDocument({ force: false });
       this.updatePageTitle();
+      this.scheduleTowerPgUnreadProjectionRefresh?.();
     },
 
     async refreshDocuments() {
@@ -10428,6 +10438,7 @@ export function initApp() {
     subscribedReaderMixin,
     messageActivityMixin,
     orgDataMixin,
+    hostingBillingMixin,
     toolboxMixin,
     towerUsageMixin,
     wappPublishingManagerMixin,

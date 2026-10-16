@@ -64,9 +64,6 @@ export const putTowerPgWappPublishingGrant = (store, ...args) => issueTypedApi(s
 export const disableTowerPgWappPublishingGrant = (store, ...args) => issueTypedApi(store, 'wapp-publishing-grant.disable', args, args[1]);
 export const revokeTowerPgWappPublishingGrant = (store, ...args) => issueTypedApi(store, 'wapp-publishing-grant.revoke', args, args[1]);
 export const rotateTowerPgWappPublishingGrant = (store, ...args) => issueTypedApi(store, 'wapp-publishing-grant.rotate', args, args[1]);
-export const patchTowerPgWappActivityUserState = (store, ...args) => issueTypedApi(store, 'wapp-activity.patch', args, args[1]);
-export const putTowerPgWappActivityMute = (store, ...args) => issueTypedApi(store, 'wapp-activity-mute.put', args, `${args[1]}:${args[2]}`);
-export const deleteTowerPgWappActivityMute = (store, ...args) => issueTypedApi(store, 'wapp-activity-mute.delete', args, `${args[1]}:${args[2]}`);
 export const getTowerPgWappDelegations = (store, ...args) => issueTypedApi(store, 'wapp-delegation.list', args, 'delegations');
 export const createTowerPgWappDelegation = (store, ...args) => issueTypedApi(store, 'wapp-delegation.create', args, args[1]?.delegate_actor_id || crypto.randomUUID());
 export const revokeTowerPgWappDelegation = (store, ...args) => issueTypedApi(store, 'wapp-delegation.revoke', args, args[1]);

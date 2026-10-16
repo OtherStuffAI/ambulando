@@ -3,14 +3,10 @@ import {
   clearRuntimeData,
   clearRuntimeFamilies,
   getRecentWappChangesSince,
-  getWappActivityItems,
-  getWappActivityMutes,
   getWappPublishingGrants,
   getWappById,
   getWappsByOwner,
   openWorkspaceDb,
-  replaceWappActivityItems,
-  replaceWappActivityMutes,
   replaceWappPublishingGrants,
   upsertWapp,
 } from '../src/db.js';
@@ -90,59 +86,31 @@ describe('wapp db helpers', () => {
 
   it('replaces authoritative Tower WApp publishing materializations and removes stale rows', async () => {
     await replaceWappPublishingGrants([{ wapp_installation_id: 'install-old', status: 'active' }]);
-    await replaceWappActivityItems([{ record_id: 'item-old', occurred_at: '2026-08-01T00:00:00.000Z' }]);
-    await replaceWappActivityMutes([{ record_id: 'category:old', target_type: 'category', target_value: 'old' }]);
 
     await replaceWappPublishingGrants([{ wapp_installation_id: 'install-new', status: 'disabled' }]);
-    await replaceWappActivityItems([{ record_id: 'item-new', occurred_at: '2026-08-02T00:00:00.000Z' }]);
-    await replaceWappActivityMutes([{ record_id: 'installation:install-new', target_type: 'installation', target_value: 'install-new' }]);
 
     expect((await getWappPublishingGrants()).map((row) => row.wapp_installation_id)).toEqual(['install-new']);
-    expect((await getWappActivityItems()).map((row) => row.record_id)).toEqual(['item-new']);
-    expect((await getWappActivityMutes()).map((row) => row.target_value)).toEqual(['install-new']);
 
     await clearRuntimeData();
     expect(await getWappPublishingGrants()).toEqual([]);
-    expect(await getWappActivityItems()).toEqual([]);
-    expect(await getWappActivityMutes()).toEqual([]);
   });
 
   it('does not rewrite unchanged authoritative WApp materializations', async () => {
     const db = openWorkspaceDb(TEST_OWNER);
     const mutations = [];
-    for (const tableName of ['wapp_publishing_grants', 'wapp_activity_items', 'wapp_activity_mutes']) {
+    for (const tableName of ['wapp_publishing_grants']) {
       const table = db.table(tableName);
       table.hook('creating', (_key, row) => mutations.push(['creating', tableName, row]));
       table.hook('updating', (changes, _key, row) => mutations.push(['updating', tableName, changes, row]));
       table.hook('deleting', (key, row) => mutations.push(['deleting', tableName, key, row]));
     }
     const grants = [{ wapp_installation_id: 'install-1', status: 'active', updated_at: '2026-08-04T00:00:00.000Z' }];
-    const items = [{ record_id: 'item-1', title: 'Ready', occurred_at: '2026-08-04T00:00:00.000Z' }];
-    const mutes = [{ record_id: 'category:lead', target_type: 'category', target_value: 'lead' }];
     await replaceWappPublishingGrants(grants);
-    await replaceWappActivityItems(items);
-    await replaceWappActivityMutes(mutes);
     mutations.length = 0;
 
     await replaceWappPublishingGrants(grants);
-    await replaceWappActivityItems(items);
-    await replaceWappActivityMutes(mutes);
 
     expect(mutations).toEqual([]);
   });
 
-  it('merges a bounded WApp activity refresh without deleting older cached rows', async () => {
-    await replaceWappActivityItems([
-      { record_id: 'item-old', occurred_at: '2026-08-01T00:00:00.000Z' },
-      { record_id: 'item-current', title: 'Before', occurred_at: '2026-08-04T00:00:00.000Z' },
-    ]);
-
-    await replaceWappActivityItems([
-      { record_id: 'item-current', title: 'After', occurred_at: '2026-08-04T00:00:00.000Z' },
-    ], { authoritative: false });
-
-    const rows = await getWappActivityItems();
-    expect(rows.map((row) => row.record_id).sort()).toEqual(['item-current', 'item-old']);
-    expect(rows.find((row) => row.record_id === 'item-current')?.title).toBe('After');
-  });
 });

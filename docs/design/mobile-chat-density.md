@@ -6,8 +6,10 @@ uses 14px with 1.45 line height on phones; the editable draft and title input
 remain 16px to avoid Safari input-focus zoom. Desktop and tablet rules remain
 outside the phone overrides.
 
-The title shows at most two lines within a 44px rename target. Five header
-actions fit in a second 44px row, with smaller icons inside their hit areas.
+The title ellipsizes on one line within a 44px rename target, beside the five
+44px header actions. Its full text remains in the DOM and title tooltip. Inline
+mention and composer tokens are exempt from standalone touch-target sizing and
+fit the surrounding text line. Title editing may use a second row for its form.
 Title editing, sequence navigation, thread menu, resize and close retain their
 existing handlers. A bounded header scrolls if title-edit errors need more room;
 the menu floats outside that scroll box.

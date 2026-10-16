@@ -398,6 +398,36 @@ async function fetchTowerDiscovery(url, fallbackLabel = '') {
 // ---------------------------------------------------------------------------
 
 export const connectSettingsManagerMixin = {
+  connectHostedNotice: '',
+
+  connectHostedTermsAccepted: false,
+
+  async connectRequestHostedTower() {
+    if (this.connectHostBusy) return;
+    this.connectHostedNotice = '';
+    this.connectHostError = null;
+    if (!this.session?.npub) {
+      this.connectHostedNotice = 'Sign in with your Nostr identity before creating a hosted workspace.';
+      return;
+    }
+    this.connectHostBusy = true;
+    let config;
+    try {
+      config = await hostedSignupConfig();
+      if (!config) {
+        this.connectHostedNotice = 'Hosted signup is temporarily unavailable. No workspace has been created and no payment has been taken. Retry later or connect an existing Tower using BYO Tower.';
+        return;
+      }
+    } catch {
+      this.connectHostedNotice = 'Unable to check hosted signup availability. Retry or connect an existing Tower using BYO Tower.';
+      return;
+    } finally {
+      this.connectHostBusy = false;
+    }
+    this.connectHostedTermsAccepted = false;
+    await this.connectToPgHost(config.tower_public_base_url, 'Other Stuff hosted Tower', config);
+  },
+
 
   backendOverrideDraft: null,
   towerTransportMode: 'https',
@@ -758,6 +788,7 @@ export const connectSettingsManagerMixin = {
     this.connectHostTowerName = '';
     this.connectHostTowerDescription = '';
     this.connectHostError = null;
+    this.connectHostedNotice = '';
     this.connectHostBusy = false;
     this.connectManualUrl = '';
     this.connectWorkspaces = [];
@@ -769,6 +800,7 @@ export const connectSettingsManagerMixin = {
     this.connectHostedConfig = null;
     this.connectHostedIntent = null;
     this.connectHostedPhase = 'idle';
+    this.connectHostedTermsAccepted = false;
     this.resetConnectPgBootstrapState();
     this.connectTokenInput = '';
     this.connectShowTokenFallback = false;
@@ -879,7 +911,7 @@ export const connectSettingsManagerMixin = {
   },
 
   connectPgWizardSummary() {
-    if (this.connectHostedConfig) return 'Hosted Free includes 1 GB (1,000,000,000 bytes). Payment required: no. Terms version: hosted-free-v1.';
+    if (this.connectHostedConfig) return 'USD $5 per decimal GB per 720 hours, with one $5 customer welcome credit expiring after 30 days. Paid credits do not expire. Terms: hosted-usd-v1.';
     if (this.connectCreatingWorkspace) {
       return 'Flight Deck is creating the workspace, spaces, channel grants, and local materialized view.';
     }
@@ -900,6 +932,7 @@ export const connectSettingsManagerMixin = {
 
   connectPgCanContinue() {
     if (this.connectCreatingWorkspace) return false;
+    if (this.connectHostedConfig) return Boolean(trimText(this.connectNewWorkspaceName)) && this.connectHostedTermsAccepted;
     if (this.connectPgOnboardingStep === 2) return Boolean(trimText(this.connectNewWorkspaceName));
     if (this.connectPgOnboardingStep === 5) return this.connectPgBootstrapCounts().scopes > 0;
     return true;
@@ -1030,7 +1063,7 @@ export const connectSettingsManagerMixin = {
     await this.connectToHost(this.connectManualUrl, '');
   },
 
-  async connectToPgHost(hostUrl, hostLabel) {
+  async connectToPgHost(hostUrl, hostLabel, hostedConfig = null) {
     if (!this.session?.npub) {
       this.connectHostError = 'Sign in first';
       return;
@@ -1047,9 +1080,10 @@ export const connectSettingsManagerMixin = {
       const towerName = trimText(service.name);
       const towerDescription = trimText(service.description);
       this.connectHostUrl = this.backendUrl;
-      this.connectHostedConfig = null;
+      this.connectHostedConfig = hostedConfig;
+      this.connectHostedTermsAccepted = false;
       try {
-        const config = await hostedSignupConfig();
+        const config = hostedConfig || await hostedSignupConfig();
         if (config && normalizeBackendUrl(config.tower_public_base_url) === this.backendUrl) this.connectHostedConfig = config;
       } catch { /* A self-hosted Tower can still use its existing admin setup path. */ }
       this.connectHostLabel = towerName || trimText(hostLabel) || this.backendUrl;
@@ -1449,6 +1483,10 @@ export const connectSettingsManagerMixin = {
   async connectCreateHostedWorkspace() {
     if (this.connectCreatingWorkspace) return;
     if (!this.session?.npub) { this.connectWorkspacesError = 'Sign in first'; return; }
+    if (!this.connectHostedConfig || !this.connectHostedTermsAccepted) {
+      this.connectWorkspacesError = 'Accept the hosted terms before creating a workspace.';
+      return;
+    }
     let intent;
     try {
       const name = trimText(this.connectNewWorkspaceName);
@@ -1483,6 +1521,7 @@ export const connectSettingsManagerMixin = {
       const workspace = await this.connectSelectPgWorkspace(listed);
       if (this.connectWorkspacesError) throw new Error(this.connectWorkspacesError);
       this.connectHostedPhase = 'success';
+      this.openTowerUsage?.();
       this.connectHostedIntent = null;
       this.connectNewWorkspaceName = '';
       return workspace;
@@ -1516,6 +1555,8 @@ export const connectSettingsManagerMixin = {
   },
 
   connectGoBack() {
+    this.connectHostedConfig = null;
+    this.connectHostedTermsAccepted = false;
     this.connectStep = 1;
     this.connectPgOnboardingStep = 1;
     this.connectPgSelectedScopeIndex = 0;

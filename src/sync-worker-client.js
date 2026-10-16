@@ -32,6 +32,19 @@ function supportsWorker() {
   return typeof Worker !== 'undefined';
 }
 
+export function refreshNativeSyncWorkerTransport() {
+  try { detachNativeWorker?.(); } catch { /* revoked provider already closed */ }
+  detachNativeWorker = null;
+  if (!workerInstance) return;
+  const transport = globalThis.window?.fipsTransport;
+  if (transport?.version >= 2 && transport.available !== false) {
+    transport.attachWorker(workerInstance);
+    const worker = workerInstance;
+    detachNativeWorker = () => transport.detachWorker?.(worker);
+  }
+  syncKeysToWorker(workerInstance);
+}
+
 function createWorkerInstance() {
   if (!supportsWorker()) return null;
   try {

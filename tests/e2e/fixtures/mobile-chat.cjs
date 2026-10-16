@@ -1,12 +1,12 @@
 const { expect } = require('playwright/test');
 const { serveBuiltFlightDeck } = require('./serve-built-flightdeck.cjs');
-async function openFixture(page, routeInstalled = false) {
+async function openFixture(page, routeInstalled = false, preserveRouting = false) {
   if (!routeInstalled) await page.route('**/*', route => serveBuiltFlightDeck(route));
   await page.goto('/');
   await page.waitForFunction(() => window.Alpine?.store?.('chat')?.routeSyncPaused === false);
-  await page.evaluate(() => {
+  await page.evaluate(preserveRouting => {
     const s = window.Alpine.store('chat');
-    for (const key of ['startWorkspaceLiveQueries', 'stopTaskCommentsLiveQuery', 'startTaskCommentsLiveQuery', 'syncRoute', 'performSync', 'requestTowerSyncFamily', 'scheduleStorageImageHydration', 'markTaskRead', 'scheduleDocAutosave', 'clearInactiveSectionData']) s[key] = () => {};
+    for (const key of ['startWorkspaceLiveQueries', 'stopTaskCommentsLiveQuery', 'startTaskCommentsLiveQuery', 'syncRoute', 'performSync', 'requestTowerSyncFamily', 'scheduleStorageImageHydration', 'markTaskRead', 'scheduleDocAutosave', 'clearInactiveSectionData']) if (key !== 'syncRoute' || !preserveRouting) s[key] = () => {};
     s.openConnectModal = () => {};
     s.showConnectModal = false;
     s.showWorkspaceBootstrapModal = false;
@@ -32,7 +32,7 @@ async function openFixture(page, routeInstalled = false) {
     s.loadTaskComments = async () => s.applyTaskComments([{ ...row, record_id: 'sol-comment', sender_npub: 'npub1solfixture', body: 'Review the fixture before approving the redesign.' }]);
     s.navSection = 'chat';
     s.openThread('sol-thread', { preserveChannelContext: true, scrollToLatest: false, syncRoute: false });
-  });
+  }, preserveRouting);
   await expect(page.locator('div.chat-thread-panel')).toBeVisible();
 }
 

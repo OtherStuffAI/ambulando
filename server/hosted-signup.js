@@ -1,5 +1,5 @@
-import { createHash, randomUUID } from 'node:crypto';
-import { finalizeEvent, getPublicKey, nip19, verifyEvent } from 'nostr-tools';
+import { createHash } from 'node:crypto';
+import { nip19, verifyEvent } from 'nostr-tools';
 
 export const SIGNUP_PATH = '/api/hosted/workspaces';
 export const TOWER_PATH = '/api/v4/flightdeck-pg/hosted/workspaces';
@@ -17,23 +17,6 @@ export function towerSignupUrl(base) {
   const url = new URL(base);
   if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash || url.pathname !== '/') throw new Error('Invalid Tower public base URL');
   return new URL(TOWER_PATH, url).href;
-}
-
-export function createSiteSigner(nsec, expectedNpub = SITE_NPUB) {
-  if (!nsec) throw new Error('Flight Deck site signer is unavailable');
-  let secret;
-  try {
-    const decoded = nip19.decode(nsec);
-    if (decoded.type !== 'nsec' || !(decoded.data instanceof Uint8Array)) throw new Error();
-    secret = decoded.data;
-    if (nip19.npubEncode(getPublicKey(secret)) !== expectedNpub) throw new Error();
-  } catch {
-    throw new Error('Flight Deck site signer identity mismatch');
-  }
-  return (url, hash, userEventId, now) => finalizeEvent({
-    kind: 27235, created_at: now, content: randomUUID(),
-    tags: [['u', url], ['method', 'POST'], ['payload', hash], ['user_event_id', userEventId]],
-  }, secret);
 }
 
 function exactTag(event, name) {
@@ -65,7 +48,7 @@ function validBody(bytes) {
       || typeof body.workspace_name !== 'string' || body.workspace_name !== body.workspace_name.trim()
       || body.workspace_name.length < 1 || body.workspace_name.length > 80
       || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(body.idempotency_key)
-      || body.terms_version !== 'hosted-free-v1') return false;
+      || body.terms_version !== 'hosted-usd-v1') return false;
     return true;
   } catch { return false; }
 }
@@ -110,9 +93,15 @@ export function createHostedSignupHandler({ towerUrl, sign, siteNpub = SITE_NPUB
     if (actorEntries.length >= 12) return fail(429, 'signup_rate_limited');
     recent.set(`${event.pubkey}:${event.id}`, time + 120);
     let attestation;
-    try { attestation = sign(target, hash, event.id, now()); }
+    try { attestation = JSON.parse(JSON.stringify(await sign(target, hash, event.id, now(), { payload: decoder.decode(bytes), userEvent: event }))); }
     catch { return fail(503, 'site_signer_unavailable'); }
-    if (!attestation || !verifyEvent(attestation) || nip19.npubEncode(attestation.pubkey) !== siteNpub) return fail(503, 'site_signer_unavailable');
+    let validAttestation = false;
+    try { validAttestation = Boolean(attestation && verifyEvent(attestation)); } catch { /* Fail closed for malformed signer responses. */ }
+    if (!validAttestation || nip19.npubEncode(attestation.pubkey) !== siteNpub
+      || attestation.kind !== 27235 || !Number.isInteger(attestation.created_at)
+      || Math.abs(now() - attestation.created_at) > MAX_AGE
+      || exactTag(attestation, 'u') !== target || exactTag(attestation, 'method') !== 'POST'
+      || exactTag(attestation, 'payload') !== hash || exactTag(attestation, 'user_event_id') !== event.id) return fail(503, 'site_signer_unavailable');
     try {
       const upstream = await fetchImpl(target, {
         method: 'POST', body: bytes, redirect: 'error', signal: AbortSignal.timeout(10000),

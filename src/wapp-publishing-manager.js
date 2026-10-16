@@ -1,10 +1,7 @@
 import {
   createTowerPgPersonalWapp,
   createTowerPgScopeChannel,
-  deleteTowerPgWappActivityMute,
   disableTowerPgWappPublishingGrant,
-  patchTowerPgWappActivityUserState,
-  putTowerPgWappActivityMute,
   putTowerPgWappPublishingGrant,
   revokeTowerPgWappPublishingGrant,
   rotateTowerPgWappPublishingGrant,
@@ -13,17 +10,12 @@ import {
 import {
   mapPgChannelToLocal,
   mapPgPersonalWappToLocal,
-  mapPgWappActivityItemToLocal,
-  mapPgWappActivityMuteToLocal,
   mapPgWappPublishingGrantToLocal,
   resolveTowerPgWorkspaceContext,
 } from './wapp-command-support.js';
 import {
   upsertChannel,
   upsertWapp,
-  upsertWappActivityItem,
-  upsertWappActivityMute,
-  deleteWappActivityMute,
   upsertWappPublishingGrant,
 } from './db.js';
 import { isTowerPgBackendMode } from './backend-mode.js';
@@ -111,112 +103,12 @@ export function normalizeHttpsOrigins(value) {
   return uniqueStrings(origins);
 }
 
-export function approvedWappOpenTarget(item, grants = []) {
-  const rawUrl = text(item?.open_url);
-  if (!rawUrl || item?.open_links_disabled === true || ['withdrawn', 'resolved'].includes(text(item?.state))) return null;
-  let parsed;
-  try {
-    parsed = new URL(rawUrl);
-  } catch {
-    return null;
-  }
-  if (parsed.protocol !== 'https:' || parsed.username || parsed.password) return null;
-  const itemOrigins = uniqueStrings(item?.registered_open_origins);
-  const grant = (Array.isArray(grants) ? grants : [])
-    .find((entry) => text(entry?.wapp_installation_id) === text(item?.wapp_installation_id));
-  const itemGrantStatus = text(item?.grant_status);
-  const grantStatus = text(grant?.status);
-  if (
-    ['revoked', 'disabled'].includes(itemGrantStatus)
-    || ['revoked', 'disabled'].includes(grantStatus)
-    || grant?.disable_open_links === true
-  ) return null;
-  if (item?.open_url_allowed === true) {
-    return { url: rawUrl, hostname: parsed.hostname, origin: parsed.origin };
-  }
-  const authoritativeItemOrigins = itemOrigins.length > 0 && Boolean(itemGrantStatus || item?.open_url_allowed === true);
-  const authoritativeGrantOrigins = grant?.grant_authoritative === true
-    ? (Array.isArray(grant.registered_open_origins) ? grant.registered_open_origins : [])
-    : [];
-  const approvedOrigins = new Set(normalizeHttpsOrigins([
-    ...(authoritativeItemOrigins ? itemOrigins : []),
-    ...authoritativeGrantOrigins,
-  ]));
-  if (!approvedOrigins.has(parsed.origin)) return null;
-  return { url: rawUrl, hostname: parsed.hostname, origin: parsed.origin };
-}
-
-export function resolveWappActivityOpenTarget(item, grants = [], visibleWapps = []) {
-  const approvedTarget = approvedWappOpenTarget(item, grants);
-  if (approvedTarget) return { ...approvedTarget, target_type: 'activity' };
-
-  const grant = (Array.isArray(grants) ? grants : [])
-    .find((entry) => text(entry?.wapp_installation_id) === text(item?.wapp_installation_id));
-  const status = text(item?.grant_status || grant?.status);
-  if (
-    item?.open_links_disabled === true
-    || ['withdrawn', 'resolved'].includes(text(item?.state))
-    || ['revoked', 'disabled'].includes(status)
-    || grant?.disable_open_links === true
-  ) return null;
-
-  const installationId = text(item?.wapp_installation_id);
-  const appId = text(item?.app_id);
-  const wappId = text(item?.wapp_id);
-  const launcher = (Array.isArray(visibleWapps) ? visibleWapps : []).find((wapp) => {
-    const metadata = extractWappPublishingMetadata(wapp);
-    return (installationId && metadata.wapp_installation_id === installationId)
-      || (appId && metadata.app_id === appId)
-      || (wappId && metadata.wapp_id === wappId);
-  });
-  const url = normalizePersonalWappLaunchUrl(launcher?.launch_url);
-  if (!url) return null;
-  const parsed = new URL(url);
-  return { url, hostname: parsed.hostname, origin: parsed.origin, target_type: 'launcher' };
-}
-
-export function filterWappActivityItems(items = [], filters = {}) {
-  const source = text(filters.source);
-  const category = text(filters.category);
-  const channel = text(filters.channel);
-  const unreadOnly = filters.unread === true;
-  return (Array.isArray(items) ? items : [])
-    .filter((item) => !item?.dismissed_at && item?.muted !== true)
-    .filter((item) => !unreadOnly || item?.unread === true)
-    .filter((item) => !source || text(item?.wapp_installation_id) === source)
-    .filter((item) => !category || text(item?.category) === category)
-    .filter((item) => !channel || text(item?.channel_id) === channel)
-    .sort((left, right) => {
-      const timeDelta = Date.parse(right?.occurred_at || right?.updated_at || 0) - Date.parse(left?.occurred_at || left?.updated_at || 0);
-      if (Number.isFinite(timeDelta) && timeDelta !== 0) return timeDelta;
-      return text(left?.record_id).localeCompare(text(right?.record_id));
-    });
-}
-
 function unwrapGrant(result) {
   return result?.grant || result?.publishing_grant || result;
 }
 
-function unwrapItem(result) {
-  return result?.item || result?.activity_item || result;
-}
-
-const wappActivityReconciledAt = new WeakMap();
-
 export const wappPublishingManagerMixin = {
   wappPublishingGrants: [],
-  wappActivityItems: [],
-  wappActivityCounts: {},
-  wappActivityMutes: [],
-  wappActivityLoading: false,
-  wappActivityBootstrapping: true,
-  wappActivityError: '',
-  wappActivityFilterUnread: false,
-  wappActivityFilterSource: '',
-  wappActivityFilterCategory: '',
-  wappActivityFilterChannel: '',
-  wappActivityDismissAllBusy: false,
-  wappActivityDismissNotice: '',
   wappPublishingLoading: false,
   wappPublishingEditorOpen: false,
   wappPublishingEditorSaving: false,
@@ -243,38 +135,6 @@ export const wappPublishingManagerMixin = {
 
   applyWappPublishingGrants(grants = []) {
     this.wappPublishingGrants = Array.isArray(grants) ? grants : [];
-  },
-
-  applyWappActivityItems(items = []) {
-    this.wappActivityItems = Array.isArray(items) ? items : [];
-  },
-
-  applyWappActivityCounts(counts = {}) {
-    this.wappActivityCounts = objectValue(counts);
-  },
-
-  applyWappActivityMutes(mutes = []) {
-    this.wappActivityMutes = Array.isArray(mutes) ? mutes : [];
-  },
-
-  applyWappActivityProjection(projection = {}) {
-    this.applyWappActivityItems(projection.items);
-    this.applyWappActivityCounts(projection.counts);
-    this.applyWappActivityMutes(projection.mutes);
-    this.wappActivityBootstrapping = false;
-    this.wappActivityLoading = false;
-  },
-
-  resetWappActivityProjection() {
-    this.wappActivityItems = [];
-    this.wappActivityCounts = {};
-    this.wappActivityMutes = [];
-    this.wappActivityError = '';
-    this.wappActivityLoading = false;
-    this.wappActivityBootstrapping = true;
-    this.wappActivityReconciledWorkspaceKey = '';
-    this.wappActivityDismissAllBusy = false;
-    this.wappActivityDismissNotice = '';
   },
 
   get wappPublishingInstallations() {
@@ -349,48 +209,6 @@ export const wappPublishingManagerMixin = {
       .sort((left, right) => left.label.localeCompare(right.label));
   },
 
-  get filteredWappActivityItems() {
-    return filterWappActivityItems(this.wappActivityItems, {
-      unread: this.wappActivityFilterUnread,
-      source: this.wappActivityFilterSource,
-      category: this.wappActivityFilterCategory,
-      channel: this.wappActivityFilterChannel,
-    });
-  },
-
-  get hasActiveWappActivityFilters() {
-    return this.wappActivityFilterUnread === true
-      || Boolean(text(this.wappActivityFilterSource))
-      || Boolean(text(this.wappActivityFilterCategory))
-      || Boolean(text(this.wappActivityFilterChannel));
-  },
-
-  clearWappActivityFilters() {
-    this.wappActivityFilterUnread = false;
-    this.wappActivityFilterSource = '';
-    this.wappActivityFilterCategory = '';
-    this.wappActivityFilterChannel = '';
-  },
-
-  get wappActivitySources() {
-    const byId = new Map();
-    for (const item of (this.wappActivityItems || [])) {
-      const id = text(item?.wapp_installation_id);
-      if (id) byId.set(id, text(item?.source_name) || id);
-    }
-    return [...byId.entries()].map(([id, label]) => ({ id, label })).sort((a, b) => a.label.localeCompare(b.label));
-  },
-
-  get wappActivityCategories() {
-    return uniqueStrings((this.wappActivityItems || []).map((item) => item?.category)).sort();
-  },
-
-  get wappActivityUnreadCount() {
-    return (this.wappActivityItems || [])
-      .filter((item) => item?.unread && !item?.dismissed_at && !item?.muted)
-      .length;
-  },
-
   async refreshWappPublishingGrants() {
     if (!isTowerPgBackendMode() || !this.canAdminWorkspace) return [];
     this.wappPublishingLoading = true;
@@ -399,34 +217,6 @@ export const wappPublishingManagerMixin = {
     } finally {
       this.wappPublishingLoading = false;
     }
-  },
-
-  async reconcileWappActivity(options = {}) {
-    if (!isTowerPgBackendMode()) return { items: [], counts: {}, mutes: [] };
-    const context = resolveTowerPgWorkspaceContext(this);
-    if (!context.workspaceId || !context.baseUrl) {
-      return { items: [], counts: {}, mutes: [], deferred: true };
-    }
-    const workspaceKey = text(this.currentWorkspaceKey);
-    const refresh = (async () => {
-      try {
-        const [result] = await Promise.all([
-          this.requestTowerSyncFamily?.('wapp-activity', '', options),
-          this.requestTowerSyncFamily?.('personal-wapps', '', options).catch(() => this.wapps || []),
-        ]);
-        const currentContext = resolveTowerPgWorkspaceContext(this);
-        if (currentContext.workspaceId === context.workspaceId && currentContext.baseUrl === context.baseUrl) {
-          wappActivityReconciledAt.set(this, { at: Date.now(), workspaceKey });
-          this.wappActivityReconciledWorkspaceKey = workspaceKey;
-        }
-        return result;
-      } catch (error) {
-        this.wappActivityError = error?.message || 'Could not refresh Feed.';
-        return { items: [], counts: {}, mutes: [] };
-      } finally {
-      }
-    })();
-    return refresh;
   },
 
   async openWappPublishingEditor(installation) {
@@ -784,152 +574,4 @@ export const wappPublishingManagerMixin = {
     }
   },
 
-  async updateWappActivityUserState(item, patch) {
-    const itemId = text(item?.record_id);
-    const context = resolveTowerPgWorkspaceContext(this);
-    if (!itemId || !context.workspaceId) {
-      this.wappActivityError = 'Could not update this Feed item because the workspace is not ready.';
-      return false;
-    }
-    this.wappActivityError = '';
-    try {
-      const result = await patchTowerPgWappActivityUserState(this, context.workspaceId, itemId, patch, {
-        baseUrl: context.baseUrl,
-        appNpub: context.appNpub,
-      });
-      const returnedState = objectValue(result?.state || result?.user_state);
-      const next = mapPgWappActivityItemToLocal({ ...item, ...returnedState });
-      if (next.record_id) {
-        await upsertWappActivityItem(next);
-      }
-      return true;
-    } catch (error) {
-      this.wappActivityError = error?.reason || error?.message || 'Could not update this WApp item.';
-      return false;
-    }
-  },
-
-  markWappActivityRead(item) {
-    return this.updateWappActivityUserState(item, { read: true });
-  },
-
-  markWappActivityUnread(item) {
-    return this.updateWappActivityUserState(item, { read: false });
-  },
-
-  async dismissWappActivity(item) {
-    const itemId = text(item?.record_id);
-    if (!itemId) {
-      this.wappActivityError = 'Could not dismiss this Feed item.';
-      return false;
-    }
-
-    const previousItems = this.wappActivityItems;
-    const dismissedAt = new Date().toISOString();
-    this.wappActivityItems = (this.wappActivityItems || []).map((entry) => (
-      text(entry?.record_id) === itemId ? { ...entry, dismissed_at: dismissedAt } : entry
-    ));
-
-    const persisted = await this.updateWappActivityUserState(item, { dismissed: true });
-    if (persisted) return true;
-
-    const current = (this.wappActivityItems || []).find((entry) => text(entry?.record_id) === itemId);
-    if (!current || current.dismissed_at === dismissedAt) this.wappActivityItems = previousItems;
-    this.wappActivityDismissNotice = 'Dismissal failed. The Feed item has been restored.';
-    return false;
-  },
-
-  async dismissAllWappActivity() {
-    if (this.wappActivityDismissAllBusy) return { ok: false, count: 0 };
-    const items = [...this.filteredWappActivityItems];
-    this.wappActivityDismissNotice = '';
-    if (items.length === 0) {
-      this.wappActivityDismissNotice = 'Feed is already clear.';
-      return { ok: true, count: 0 };
-    }
-
-    this.wappActivityDismissAllBusy = true;
-    try {
-      const results = await Promise.all(items.map((item) => this.dismissWappActivity(item)));
-      const count = results.filter(Boolean).length;
-      if (count === items.length) {
-        this.wappActivityDismissNotice = `${count} ${count === 1 ? 'item' : 'items'} dismissed.`;
-        return { ok: true, count };
-      }
-      this.wappActivityDismissNotice = count > 0
-        ? `${count} of ${items.length} items dismissed.`
-        : 'Could not dismiss Feed items.';
-      return { ok: false, count };
-    } finally {
-      this.wappActivityDismissAllBusy = false;
-    }
-  },
-
-  async setWappActivityMute(targetType, targetValue, muted = true) {
-    const context = resolveTowerPgWorkspaceContext(this);
-    if (!context.workspaceId || !text(targetValue)) return;
-    try {
-      if (muted) {
-        const result = await putTowerPgWappActivityMute(this, context.workspaceId, targetType, targetValue, {}, {
-          baseUrl: context.baseUrl,
-          appNpub: context.appNpub,
-        });
-        const mute = mapPgWappActivityMuteToLocal(result?.mute || result);
-        if (mute.record_id) await upsertWappActivityMute(mute);
-      } else {
-        await deleteTowerPgWappActivityMute(this, context.workspaceId, targetType, targetValue, {
-          baseUrl: context.baseUrl,
-          appNpub: context.appNpub,
-        });
-        await deleteWappActivityMute(`${text(targetType)}:${text(targetValue)}`);
-      }
-    } catch (error) {
-      this.wappActivityError = error?.reason || error?.message || 'Could not update WApp mute settings.';
-    }
-  },
-
-  getWappActivityOpenTarget(item) {
-    return resolveWappActivityOpenTarget(item, this.wappPublishingInstallations, this.visiblePersonalWapps);
-  },
-
-  wappActivityChannelLabel(item) {
-    const channel = (this.channels || []).find((entry) => text(entry?.record_id) === text(item?.channel_id));
-    return text(item?.channel_title) || (channel ? text(this.getChannelLabel?.(channel) || channel.title || channel.name) : '');
-  },
-
-  wappActivityMuteLabel(mute) {
-    if (mute?.target_type === 'category') return `Category: ${text(mute.target_value)}`;
-    const installation = this.wappPublishingInstallations.find((entry) => entry.wapp_installation_id === text(mute?.target_value));
-    return `Source: ${text(installation?.display_name || mute?.target_value)}`;
-  },
-
-  openWappActivityLink(item) {
-    const target = this.getWappActivityOpenTarget(item);
-    if (!target || typeof window === 'undefined') return false;
-    window.open(target.url, '_blank', 'noopener,noreferrer');
-    if (item?.unread) void this.markWappActivityRead(item);
-    return true;
-  },
-
-  async openWappActivityChannel(item) {
-    const channelId = text(item?.channel_id);
-    const visible = (this.channels || []).some((channel) => text(channel?.record_id) === channelId && channel.record_state !== 'deleted');
-    if (!channelId || !visible) return false;
-    this.navigateTo('chat', { syncRoute: false, skipChatChannelSelection: true });
-    await this.selectChannel(channelId, { syncRoute: false, scrollToLatest: false, backgroundRemoteRefresh: true });
-    if (text(this.selectedChannelId) !== channelId) return false;
-    this.syncRoute?.();
-    if (item?.unread) void this.markWappActivityRead(item);
-    return true;
-  },
-
-  wappActivitySourceTreatment(item) {
-    const grant = this.wappPublishingInstallations.find((entry) => entry.wapp_installation_id === text(item?.wapp_installation_id));
-    const status = text(item?.grant_status || grant?.status);
-    if (status === 'revoked') return 'Source revoked';
-    if (status === 'disabled') return 'Publishing disabled';
-    if (item?.state === 'withdrawn') return 'Withdrawn';
-    if (item?.state === 'resolved') return 'Resolved';
-    return 'Verified WApp';
-  },
 };

@@ -84,15 +84,14 @@ describe('record protocol rollback', () => {
     expect(read.mock.calls[2][1].cursor).toBe('v1-partial');
   });
 
-  it('purges revoked authority on 403 and never requests legacy, including on the next run', async () => {
+  it('retains revoked downloads on 403 and never requests legacy, including on the next run', async () => {
     await seed('delta');
     const read = vi.fn().mockRejectedValue(Object.assign(unsupported(403), { responseText: JSON.stringify({ code: 'workspace_membership_required', error: 'Actor is not a member' }) }));
     const deps = ports(read);
     await expect(syncTowerPgWorkspace(store, { forceSnapshot: true }, deps)).rejects.toMatchObject({ status: 403 });
-    expect(await db.pg_record_rows.count()).toBe(0);
-    expect(await db.chat_messages.count()).toBe(0);
+    expect(await db.pg_record_rows.count()).toBeGreaterThan(0);
+    expect(await db.chat_messages.count()).toBeGreaterThan(0);
     expect(await db.pending_writes.count()).toBe(1);
-    expect(await db.pg_record_conflicts.count()).toBeGreaterThan(0);
     read.mockRejectedValue(unsupported(404));
     await expect(syncTowerPgWorkspace(store, {}, deps)).rejects.toMatchObject({ status: 404 });
     expect(deps.getTowerPgWorkspaceSync).not.toHaveBeenCalled();

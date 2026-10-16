@@ -149,6 +149,8 @@ export const onboardingAnnouncementsManagerMixin = {
     if (!isTowerPgBackendMode() || !workspace?.pgBackendMode) return null;
     const cleanRecipient = trimText(recipientNpub);
     const retryInput = { recipientNpub: cleanRecipient, workspace, grantId, reason };
+    const existing = (this.pgOnboardingAnnouncementStatuses || []).find((entry) => entry.key === statusKey(retryInput));
+    if (existing?.status === 'publishing') return existing;
     if (!this.session?.npub || !this.session?.pubkey) {
       return this.rememberOnboardingAnnouncementStatus({
         ...retryInput,

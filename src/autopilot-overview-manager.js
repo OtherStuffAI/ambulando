@@ -66,7 +66,7 @@ function memoizedProjection(store, key, references, build) {
 
 function shouldIncludeInboxTask(row = {}) {
   const state = normalizeString(row.taskState || row.state).toLowerCase();
-  return !isTerminalTaskState(state);
+  return !isTerminalTaskState(state) || (DECK_COMPLETED_TASK_STATES.has(state) && row.isUnread === true);
 }
 
 export function normalizeInboxSearchText(value) {
@@ -469,7 +469,8 @@ export function buildAutopilotOverviewTasks({
 
   for (const task of Array.isArray(tasks) ? tasks : []) {
     if (!task?.record_id || task.record_state === 'deleted') continue;
-    if (DECK_COMPLETED_TASK_STATES.has(normalizeString(task.state).toLowerCase())) continue;
+    if (DECK_COMPLETED_TASK_STATES.has(normalizeString(task.state).toLowerCase())
+      && unreadTaskMap?.[task.record_id] !== true) continue;
     const match = rowMatchesContext(task, context, scopesMap);
     if (!match.matches) {
       if (match.missing) hiddenMissingContext += 1;
@@ -1274,15 +1275,17 @@ export const autopilotOverviewManagerMixin = {
   },
 
   closeDeckThread(options = {}) {
+    if (this.messageEdit?.context === 'thread' && this.messageEdit.submitting) return false;
     const returnContext = this.deckThreadReturnContext;
     const canGoBack = options.fromRoute !== true
       && typeof window !== 'undefined'
-      && window.history?.state?.deckThreadModal === true;
+      && window.history?.state?.deckThreadModal === true
+      && Boolean(window.history.state.deckThreadModalOrigin);
     if (canGoBack) {
       window.history.back();
       return true;
     }
-    this.closeThread({ syncRoute: false });
+    if (this.closeThread({ syncRoute: false }) === false) return false;
     this.restoreDeckReturnContext(returnContext);
     this.deckThreadReturnContext = null;
     this.deckThreadChannelId = '';

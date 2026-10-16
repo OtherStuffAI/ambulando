@@ -49,3 +49,10 @@ export async function normalizeOrgSnapshotAsync(payload, c, requestId) {
  }
  return row;
 }
+
+// Catalogue is a complete authorized list, without organisation record rows.
+export async function normalizeOrgCatalogueAsync(payload, c, requestId) {
+  if (!Array.isArray(payload?.installations)) throw new Error('Invalid organisation data catalogue');
+  const row = await normalizeOrgSnapshotAsync({ ...payload, complete: true, records: [] }, c, requestId);
+  return { request_id: requestId, installations: row.installations.map(({ html, ...metadata }) => metadata) };
+}

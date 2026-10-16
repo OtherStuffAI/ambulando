@@ -48,6 +48,29 @@ async function openFixture(page) {
   await expect(page.locator('div.chat-thread-panel')).toBeVisible();
 }
 
+test('Deck renders unread completed work and dismisses it through the real card control', async ({ page }) => {
+  await openFixture(page);
+  await page.evaluate(() => {
+    const s = window.Alpine.store('chat');
+    s.closeThread({ syncRoute: false });
+    s.navSection = 'status';
+    s.tasks = [{ ...s.tasks[0], record_id: 'unread-completed', title: 'Completed work awaiting a read', state: 'done' }];
+    s._unreadTaskItems = { 'unread-completed': true };
+    s._unreadChannels = { 'sol-channel': true };
+    s.markTaskRead = async id => {
+      s._unreadTaskItems = { ...s._unreadTaskItems, [id]: false };
+      s._unreadChannels = {};
+      return true;
+    };
+  });
+  const card = page.locator('.flightdeck-summary-card-inbox-unread').filter({ hasText: 'Completed work awaiting a read' });
+  await expect(card).toBeVisible();
+  await capture(page, 'unread-completed-before-read');
+  await card.getByRole('button', { name: 'Mark read', exact: true }).click();
+  await expect(card).toHaveCount(0);
+  expect(await page.evaluate(() => window.Alpine.store('chat').tasks[0].state)).toBe('done');
+});
+
 
 async function assertTouchTargets(locator, label) {
   const sizes = await locator.evaluateAll(nodes => nodes.map(node => ({ label: node.getAttribute('aria-label') || node.textContent.trim(), width: node.getBoundingClientRect().width, height: node.getBoundingClientRect().height })));
@@ -442,7 +465,7 @@ for (const width of [1440, 1280, 390]) for (const theme of ['light', 'dark']) {
     expect(installed.name).toBe('Ambulando');
     expect(installed.short_name).toBe('Ambulando');
     await page.getByRole('button', { name: 'Toggle navigation', exact: true }).click();
-    const nav = width > 768 ? page.locator('.sol-horizontal-navigation:visible') : page.locator('.sidebar .expanded-sidebar-section-switcher:visible');
+    const nav = width > 768 ? page.locator('.sol-horizontal-navigation:visible') : page.locator('#sol-primary-navigation.sidebar-mobile-open');
     await expect(nav).toBeVisible();
     expect(await page.locator('.expanded-sidebar-section-switcher:visible').count()).toBe(1);
     if (width > 768) {
@@ -483,7 +506,23 @@ for (const width of [1440, 1280, 900, 390, 320]) for (const theme of ['light', '
   test(`tagline and tab render review: ${theme} ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 });
     await openFixture(page);
-    await page.evaluate(theme => { const s = Alpine.store('chat'); s.closeThread({ syncRoute: false }); Alpine.store('appearance').setTheme(theme); }, theme);
+    await page.evaluate(theme => {
+      const s = Alpine.store('chat');
+      s.closeThread({ syncRoute: false });
+      Alpine.store('appearance').setTheme(theme);
+      // Home requires a selected workspace; use synthetic navigation records.
+      if (innerWidth <= 768) {
+        s.isTowerPgMode = true; s.pgBackendMode = true;
+        s.selectedWorkspaceKey = 'tagline-fixture';
+        s.knownWorkspaces = [{ workspaceKey: 'tagline-fixture', workspaceId: 'tagline-fixture', name: 'Synthetic workspace',
+          pgBackendMode: true, pgMe: { actor: { actor_id: 'reader', npub: 'npub1solfixture' } },
+          directHttpsUrl: 'http://127.0.0.1:3100', workspaceOwnerNpub: 'synthetic-owner' }];
+        s.scopesLoaded = true;
+        s.scopes = [{ record_id: 'tagline-scope', title: 'Review scope', level: 'l1', record_state: 'active' }];
+        s.channels = [{ record_id: 'tagline-channel', title: 'Review channel', scope_id: 'tagline-scope', record_state: 'active' }];
+        s.selectedBoardId = '__pg_channel__:tagline-channel';
+      }
+    }, theme);
     const tagline = page.locator('.brand-copy p');
     await expect(tagline).toBeVisible();
     await expect(tagline).toHaveText('Solvitur Ambulando');
@@ -504,20 +543,27 @@ for (const width of [1440, 1280, 900, 390, 320]) for (const theme of ['light', '
     }
     await capture(page, `tagline-${theme}-${width}-compact`);
     await page.getByRole('button', { name:'Toggle navigation', exact:true }).click();
-    const nav = width > 768 ? page.locator('.sol-horizontal-navigation:visible') : page.locator('.sidebar .expanded-sidebar-section-switcher:visible');
+    const nav = width > 768 ? page.locator('.sol-horizontal-navigation:visible') : page.locator('#sol-primary-navigation.sidebar-mobile-open');
     await expect(page.locator('.sidebar .sol-sidebar-brand')).toHaveCount(0);
     await expect(page.locator('.brand-logo')).toBeVisible();
     await expect(nav).toBeVisible();
-    const tabs = await nav.locator('.expanded-sidebar-section-switcher-btn').evaluateAll(nodes => nodes.map(node => ({ text:node.textContent.trim(), before:getComputedStyle(node,'::before').content, after:getComputedStyle(node,'::after').content, svgs:node.querySelectorAll('svg').length })));
-    for (const tab of tabs) { expect(tab.svgs).toBe(1); expect(['none','normal','""']).toContain(tab.before); expect(['none','normal','""']).toContain(tab.after); }
-    const lock = nav.getByRole('button', { name:'Lock Chat view', exact:true });
-    await expect(lock).toBeVisible();
-    await expect(lock).toHaveAttribute('aria-pressed','false');
-    await lock.click();
-    await expect(lock).toHaveAttribute('aria-pressed','true');
-    await lock.click();
-    await expect(lock).toHaveAttribute('aria-pressed','false');
-    await capture(page, `tagline-${theme}-${width}-expanded-chat`);
+    let tabs = [];
+    if (width > 768) {
+      tabs = await nav.locator('.expanded-sidebar-section-switcher-btn').evaluateAll(nodes => nodes.map(node => ({ text:node.textContent.trim(), before:getComputedStyle(node,'::before').content, after:getComputedStyle(node,'::after').content, svgs:node.querySelectorAll('svg').length })));
+      for (const tab of tabs) { expect(tab.svgs).toBe(1); expect(['none','normal','""']).toContain(tab.before); expect(['none','normal','""']).toContain(tab.after); }
+      const lock = nav.getByRole('button', { name:'Lock Chat view', exact:true });
+      await expect(lock).toBeVisible();
+      await expect(lock).toHaveAttribute('aria-pressed','false');
+      await lock.click();
+      await expect(lock).toHaveAttribute('aria-pressed','true');
+      await lock.click();
+      await expect(lock).toHaveAttribute('aria-pressed','false');
+      await capture(page, `tagline-${theme}-${width}-expanded-chat`);
+    } else {
+      await expect(nav.locator('.mobile-navigation-tools')).toHaveCount(0);
+      await expect(nav.locator('.sidebar-workspace-overview')).toBeVisible();
+      await expect(page.locator('.mobile-scope-switcher')).toBeHidden();
+    }
     if (width > 768) {
       for (const label of ['Tasks','Docs','Files']) {
         await nav.getByRole('button', { name:label, exact:true }).click();
@@ -747,3 +793,49 @@ test('optional Agents and Context persist independently and restore navigation w
     if (JSON.stringify(s.channels) !== channels) throw new Error('Preference change altered channel data');
   });
 });
+
+for (const [width, height] of [[320, 700], [390, 844], [390, 600], [720, 900]]) {
+  for (const safeArea of [0, 34]) {
+    test(`Deck dots meet bottom navigation at ${width}x${height}, safe area ${safeArea}`, async ({ page }) => {
+      await page.setViewportSize({ width, height });
+      await openFixture(page);
+      // Chromium does not expose iOS insets. Substitute only the bottom env()
+      // value in the loaded production styles, retaining their cascade order.
+      const styles = await page.evaluate(inset => [...document.styleSheets]
+        .map(sheet => [...sheet.cssRules].map(rule => rule.cssText).join('\n'))
+        .join('\n').replaceAll(/env\(safe-area-inset-bottom(?:,\s*0px)?\)/g, `${inset}px`), safeArea);
+      await page.addStyleTag({ content: styles });
+      await page.evaluate(() => {
+        const s = window.Alpine.store('chat');
+        s.closeThread({ syncRoute: false });
+        s.deckInboxEnabled = true;
+        s.navigateTo('status', { syncRoute: false });
+      });
+      const dots = page.locator('.deck-mobile-pagination');
+      await expect(dots).toBeVisible();
+      await assertTouchTargets(dots.locator('button'), 'Deck dots');
+      await assertTouchTargets(page.locator('.mobile-section-switcher-btn:visible'), 'bottom navigation');
+      const geometry = await page.evaluate(() => {
+        const dots = document.querySelector('.deck-mobile-pagination').getBoundingClientRect();
+        const bar = document.querySelector('.mobile-section-switcher');
+        const navigation = bar.getBoundingClientRect();
+        return { gap: navigation.top - dots.bottom, navigationHeight: navigation.height, safeArea: parseFloat(getComputedStyle(bar).paddingBottom) };
+      });
+      expect(Math.abs(geometry.gap)).toBeLessThanOrEqual(1);
+      expect(geometry.navigationHeight).toBe(45 + safeArea);
+      expect(geometry.safeArea).toBe(safeArea);
+      console.log('SOL_DECK_SPACING', JSON.stringify({ width, height, ...geometry }));
+      await capture(page, `deck-spacing-${width}-${height}-safe-${safeArea}`);
+      const buttons = dots.locator('button');
+      await buttons.last().click();
+      await expect(buttons.last()).toHaveAttribute('aria-current', 'page');
+      await buttons.first().focus();
+      await page.keyboard.press('Enter');
+      await expect(buttons.first()).toHaveAttribute('aria-current', 'page');
+      // Native horizontal scrolling is the Deck's page-swipe path.
+      await page.locator('[data-deck-columns-track]').evaluate(node => { node.scrollLeft = node.scrollWidth; node.dispatchEvent(new Event('scroll')); });
+      await expect(buttons.last()).toHaveAttribute('aria-current', 'page');
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    });
+  }
+}

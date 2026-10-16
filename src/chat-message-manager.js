@@ -1843,6 +1843,7 @@ export const chatMessageManagerMixin = {
   },
 
   openThread(recordId, options = {}) {
+    if (recordId !== this.activeThreadId) this.closeIdentityCard?.();
     if (options.saveDraft !== false) this.saveChatComposerDraft?.('thread');
     const message = this.messages.find((item) => item.record_id === recordId) || null;
     if (
@@ -1940,6 +1941,7 @@ export const chatMessageManagerMixin = {
 
   closeThread(options = {}) {
     if (this.messageEdit?.context === 'thread' && this.messageEdit.submitting) return false;
+    this.closeIdentityCard?.();
     this.stopReadAloud?.();
     this.stopThreadLiveActivity?.();
     if (this.messageEdit?.context === 'thread') this.cancelMessageEdit();

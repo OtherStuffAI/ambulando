@@ -96,6 +96,23 @@ describe('onboarding announcements manager', () => {
     return store;
   }
 
+  it('keeps a single pending publication and retries only the announcement after failure', async () => {
+    let reject;
+    publishOnboardingAnnouncementMock.mockImplementationOnce(() => new Promise((_, fail) => { reject = fail; }));
+    const store = await bindStore();
+    const pending = store.publishPgOnboardingAnnouncementForGrant({ recipientNpub: 'npub1recipient', grantId: 'grant-1' });
+    const entry = store.pgOnboardingAnnouncementStatuses[0];
+    await store.retryPgOnboardingAnnouncement(entry.key);
+    expect(publishOnboardingAnnouncementMock).toHaveBeenCalledTimes(1);
+    reject(new Error('Onboarding encryption timed out'));
+    await pending;
+    expect(store.pgOnboardingAnnouncementStatuses[0].status).toBe('failed');
+    publishOnboardingAnnouncementMock.mockResolvedValueOnce({ event: { id: 'retried' }, acceptedRelays: [] });
+    await store.retryPgOnboardingAnnouncement(entry.key);
+    expect(publishOnboardingAnnouncementMock).toHaveBeenCalledTimes(2);
+    expect(store.pgOnboardingAnnouncementStatuses[0].status).toBe('published');
+  });
+
   it('records published announcement status after a Tower grant', async () => {
     publishOnboardingAnnouncementMock.mockResolvedValue({
       event: { id: 'event-1' },

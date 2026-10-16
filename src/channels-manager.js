@@ -972,6 +972,22 @@ export function buildChannelAccessGrantPayloads(rows = []) {
 // Mixin — methods that use `this` (the Alpine store)
 // ---------------------------------------------------------------------------
 
+// Keep timers outside Alpine's reactive state; one recovery timer per store.
+const channelGrantRecovery = new WeakMap();
+const channelGrantReads = new WeakMap();
+
+function channelGrantReadContext(store) {
+  const { workspaceId, baseUrl, appNpub } = resolveTowerPgWorkspaceContext(store);
+  return JSON.stringify([workspaceId, baseUrl, appNpub, store.selectedChannelId]);
+}
+
+function transientChannelGrantError(error) {
+  if (error?.retryable === false) return false;
+  if (error?.status != null) return [408, 429, 500, 502, 503, 504].includes(Number(error.status));
+  if (/sign|auth|bunker|permission/i.test(`${error?.code || ''} ${error?.message || ''}`)) return false;
+  return /load failed|failed to fetch|network|connection|timeout/i.test(error?.message || '');
+}
+
 export const channelsManagerMixin = {
   get newChannelScopeOptions() {
     return (this.scopes || [])
@@ -1029,6 +1045,38 @@ export const channelsManagerMixin = {
       this.pgContextScope || this.selectedBoardScope,
       this.scopesMap,
     );
+  },
+
+  // Device-only disclosure preferences; no Tower mutation or channel navigation.
+  sidebarScopeExpansion: {},
+
+  sidebarScopePreferenceKey(scopeId) {
+    const { workspaceId } = resolveTowerPgWorkspaceContext(this);
+    return workspaceId && scopeId
+      ? `ambulando:scope-channels:${encodeURIComponent(workspaceId)}:${encodeURIComponent(scopeId)}`
+      : '';
+  },
+
+  isSidebarScopeExpanded(scopeId) {
+    const key = this.sidebarScopePreferenceKey(scopeId);
+    if (!key) return true;
+    if (Object.hasOwn(this.sidebarScopeExpansion, key)) return this.sidebarScopeExpansion[key];
+    try {
+      // Only the explicit JSON boolean false collapses; malformed values expand.
+      return localStorage.getItem(key) !== 'false';
+    } catch {
+      return true;
+    }
+  },
+
+  toggleSidebarScope(scopeId) {
+    const key = this.sidebarScopePreferenceKey(scopeId);
+    if (!key) return;
+    const expanded = !this.isSidebarScopeExpanded(scopeId);
+    this.sidebarScopeExpansion = { ...this.sidebarScopeExpansion, [key]: expanded };
+    try { localStorage.setItem(key, JSON.stringify(expanded)); } catch {
+      // Keep the current session usable when browser storage is unavailable.
+    }
   },
 
   get sidebarScopeChannelGroups() {
@@ -1901,6 +1949,7 @@ export const channelsManagerMixin = {
 
   closeChannelSettings() {
     if (this.channelRenameSaving || this.channelDeleteSubmitting) return;
+    this.cancelChannelGrantRecovery();
     this.closeChannelScopePicker();
     this.channelDeleteConfirmArmed = false;
     this.channelSettingsNotice = '';
@@ -2045,23 +2094,53 @@ export const channelsManagerMixin = {
   },
 
   async preparePgChannelAccessPanel() {
+    this.cancelChannelGrantRecovery();
+    const context = channelGrantReadContext(this);
     this.channelGrantsError = null;
-    try {
-      await Promise.all([
-        this.refreshGroups({ force: true, minIntervalMs: 0 }),
-        this.refreshTowerPgWorkspaceMembers?.({ force: true, limit: 200 }) ?? Promise.resolve([]),
-      ]);
-      this.resetChannelGrantDraft();
-      this.resetChannelBulkGrantDraft();
-      if (this.canAttemptSelectedPgChannelGrantRead) {
-        await this.refreshChannelGrants();
-      } else {
-        this.channelGrantsChannelId = String(this.selectedChannelId || '').trim() || null;
-        this.channelGrants = embeddedChannelGrants(this.selectedChannel || {});
-      }
-    } catch (error) {
-      this.channelGrantsError = error?.message || 'Failed to load channel access';
+    // Directory failures must not prevent the independent grants read.
+    const results = await Promise.allSettled([
+      this.refreshGroups({ force: true, minIntervalMs: 0 }),
+      this.refreshTowerPgWorkspaceMembers?.({ force: true, limit: 200 }) ?? Promise.resolve([]),
+      this.canAttemptSelectedPgChannelGrantRead ? this.refreshChannelGrants() : Promise.resolve([]),
+    ]);
+    if (context !== channelGrantReadContext(this) || !this.showChannelSettingsModal) return;
+    const grantError = this.channelGrantsError;
+    this.resetChannelGrantDraft();
+    this.resetChannelBulkGrantDraft();
+    this.channelGrantsError = grantError;
+    if (!this.canAttemptSelectedPgChannelGrantRead) {
+      this.channelGrantsChannelId = String(this.selectedChannelId || '').trim() || null;
+      this.channelGrants = embeddedChannelGrants(this.selectedChannel || {});
     }
+    const directoryFailure = results.slice(0, 2).find((result) => result.status === 'rejected');
+    if (directoryFailure && !this.channelGrantsError) {
+      this.channelSettingsError = `Channel access directory: ${directoryFailure.reason?.message || 'Failed to load users and groups'}`;
+    }
+  },
+
+  cancelChannelGrantRecovery() {
+    const recovery = channelGrantRecovery.get(this);
+    if (recovery?.timer) clearTimeout(recovery.timer);
+    channelGrantRecovery.delete(this);
+  },
+
+  scheduleChannelGrantRecovery(error, context) {
+    if (!transientChannelGrantError(error) || !this.showChannelSettingsModal
+      || !this.canAttemptSelectedPgChannelGrantRead || context !== channelGrantReadContext(this)) return;
+    const previous = channelGrantRecovery.get(this);
+    if (previous?.timer) clearTimeout(previous.timer);
+    const delay = Math.min((previous?.delay || 1000) * 2, 30_000);
+    const recovery = { delay, timer: null };
+    recovery.timer = setTimeout(() => {
+      recovery.timer = null;
+      if (!this.showChannelSettingsModal || !this.canAttemptSelectedPgChannelGrantRead
+        || context !== channelGrantReadContext(this)) {
+        this.cancelChannelGrantRecovery();
+        return;
+      }
+      this.refreshChannelGrants({ recovery: true });
+    }, delay);
+    channelGrantRecovery.set(this, recovery);
   },
 
   async cacheSelectedChannelGrants(channelId, grants = []) {
@@ -2085,28 +2164,40 @@ export const channelsManagerMixin = {
     );
   },
 
-  async refreshChannelGrants() {
+  async refreshChannelGrants({ recovery = false } = {}) {
     if (!isTowerPgBackendMode()) return [];
     const channelId = String(this.selectedChannelId || '').trim();
     if (!channelId) return [];
+    const context = channelGrantReadContext(this);
+    if (channelGrantReads.get(this)?.context === context) return this.getSelectedChannelGrantRows(channelId);
+    if (!recovery) this.cancelChannelGrantRecovery();
+    const request = { context };
+    channelGrantReads.set(this, request);
     this.channelGrantsLoading = true;
     this.channelGrantsError = null;
     try {
       const { workspaceId, baseUrl, appNpub } = resolveTowerPgWorkspaceContext(this);
       if (!workspaceId || !baseUrl) throw new Error('Flight Deck PG workspace is not connected');
       const result = await getTowerPgChannelGrants(workspaceId, channelId, { baseUrl, appNpub });
+      if (context !== channelGrantReadContext(this)) return [];
+      this.cancelChannelGrantRecovery();
       this.channelGrants = Array.isArray(result?.grants) ? result.grants : [];
       this.channelGrantsChannelId = channelId;
       await this.cacheSelectedChannelGrants(channelId, this.channelGrants);
       await this.materializeSelectedDmParticipantsFromChannelGrants();
       return this.channelGrants;
     } catch (error) {
+      if (context !== channelGrantReadContext(this)) return [];
       this.channelGrantsError = error?.message || 'Failed to load channel grants';
+      this.scheduleChannelGrantRecovery(error, context);
       return this.channelGrantsChannelId === channelId
         ? (this.channelGrants || [])
         : embeddedChannelGrants(this.selectedChannel || {});
     } finally {
-      this.channelGrantsLoading = false;
+      if (channelGrantReads.get(this) === request) {
+        channelGrantReads.delete(this);
+        this.channelGrantsLoading = false;
+      }
     }
   },
 
@@ -2370,21 +2461,18 @@ export const channelsManagerMixin = {
     return Boolean(this.canManageSelectedPgChannelGrants && !grant?.inherited && grant?.capacity !== 'custom');
   },
 
-  async refreshPgChannelAccessMaterialization() {
+  async refreshPgChannelAccessMaterialization({ channelIds = [] } = {}) {
     if (!isTowerPgBackendMode()) return;
-    await this.requestTowerSyncFamily?.('scopes', '', { force: true });
-    await this.requestTowerSyncFamily?.('channels', '', { force: true });
-    await Promise.all([
-      this.requestTowerSyncFamily?.('tasks', '', { force: true }),
-      this.requestTowerSyncFamily?.('documents', '', { force: true }),
-      hydrateTowerPgAudioNotes(this),
-    ]);
+    // The record journal owns content and historic access catchup. A grant
+    // hint refreshes only affected channel descriptors, never workspace lists.
+    const ids = [...new Set(channelIds.map(String).filter(Boolean))];
+    await Promise.all(ids.map(id => this.requestTowerSyncFamily?.('channel', id, { force: true })));
   },
 
-  schedulePgChannelAccessMaterializationRefresh() {
+  schedulePgChannelAccessMaterializationRefresh(channelId = this.selectedChannelId) {
     if (!isTowerPgBackendMode()) return;
     Promise.resolve()
-      .then(() => this.refreshPgChannelAccessMaterialization())
+      .then(() => this.refreshPgChannelAccessMaterialization({ channelIds: channelId ? [channelId] : [] }))
       .catch((error) => {
         flightDeckLog('warn', 'settings', 'PG channel access materialization refresh failed', {
           error: error?.message || String(error),
@@ -4031,6 +4119,17 @@ export const channelsManagerMixin = {
         for (const member of this.pgWorkspaceMembers || []) {
           if (member?.npub && member?.actor_id) actorIdByNpub.set(member.npub, member.actor_id);
         }
+        // Resolve the complete removal plan before additions or announcements.
+        const removals = membersToRemove.map((npub) => ({
+          npub,
+          actorId: String(actorIdByNpub.get(npub)
+            || group.members?.find((member) => member.npub === npub)?.actor_id
+            || '').trim(),
+        }));
+        const unresolved = removals.filter((member) => !member.actorId);
+        if (unresolved.length) {
+          throw new Error(`Cannot remove ${unresolved.map((member) => member.npub).join(', ')}: member identity is unavailable. Refresh the workspace members and retry; your selection is kept.`);
+        }
         for (const memberNpub of membersToAdd) {
           const selectedMember = members.find((member) => member.npub === memberNpub);
           await createTowerPgWorkspaceMember(this, workspaceId, {
@@ -4049,13 +4148,8 @@ export const channelsManagerMixin = {
             });
           }
         }
-        for (const memberNpub of membersToRemove) {
-          const actorId = actorIdByNpub.get(memberNpub)
-            || group.members?.find((member) => member.npub === memberNpub)?.actor_id
-            || '';
-          if (actorId) {
-            await removeTowerPgWorkspaceGroupMember(this, workspaceId, group.group_id, actorId, { baseUrl, appNpub });
-          }
+        for (const { actorId } of removals) {
+          await removeTowerPgWorkspaceGroupMember(this, workspaceId, group.group_id, actorId, { baseUrl, appNpub });
         }
         await this.rememberPeople(desiredMembers, 'pg-group');
         this.scheduleGroupsRefresh({ force: true, minIntervalMs: 0 }, 'PG group write');
@@ -4204,7 +4298,7 @@ export const channelsManagerMixin = {
   },
 
   async addPgWorkspaceMember() {
-    if (!isTowerPgBackendMode()) return;
+    if (!isTowerPgBackendMode() || this.groupEditPending) return;
     this.pgWorkspaceMemberAddNotice = '';
     if (!this.canAdminWorkspace) {
       this.pgWorkspaceMemberAddError = 'Only workspace admins can add members.';
@@ -4224,24 +4318,38 @@ export const channelsManagerMixin = {
     try {
       const { workspaceId, baseUrl, appNpub } = resolveTowerPgWorkspaceContext(this);
       if (!workspaceId || !baseUrl) throw new Error('Flight Deck PG workspace is not connected');
+      const workspace = this.currentWorkspace;
       await createTowerPgWorkspaceMember(this, workspaceId, {
         member_npub: memberNpub,
         role: 'member',
         kind: 'human',
       }, { baseUrl, appNpub });
-      if (typeof this.publishPgOnboardingAnnouncementForGrant === 'function') {
-        await this.publishPgOnboardingAnnouncementForGrant({
-          recipientNpub: memberNpub,
-          grantId: `${workspaceId}:workspace:${memberNpub}`,
-          reason: 'added_to_workspace_or_group',
-        });
-      }
       this.pgWorkspaceMemberNpub = '';
       this.pgWorkspaceMemberAddNotice = 'Member added. Give them access with a group or channel access.';
       this.scheduleGroupsRefresh({ force: true, minIntervalMs: 0 }, 'PG group write');
       Promise.resolve()
         .then(() => this.refreshTowerPgWorkspaceMembers?.({ force: true, limit: 200 }))
-        .catch(() => {});
+        .catch((error) => {
+          flightDeckLog('warn', 'groups', 'Member saved but workspace member refresh failed', {
+            error: error?.message || String(error),
+          });
+        });
+      // Membership is already saved. Discovery publication must not hold the
+      // access editor or defer the canonical roster refresh while a signer waits.
+      if (typeof this.publishPgOnboardingAnnouncementForGrant === 'function') {
+        Promise.resolve()
+          .then(() => this.publishPgOnboardingAnnouncementForGrant({
+            recipientNpub: memberNpub,
+            workspace,
+            grantId: `${workspaceId}:workspace:${memberNpub}`,
+            reason: 'added_to_workspace_or_group',
+          }))
+          .catch((error) => {
+            flightDeckLog('warn', 'groups', 'Member saved but onboarding announcement failed', {
+              error: error?.message || String(error),
+            });
+          });
+      }
     } catch (error) {
       this.pgWorkspaceMemberAddError = error?.code === 'permission_denied'
         ? describePgPermissionDenied(error, 'add workspace members')

@@ -1,7 +1,7 @@
 import { nip19 } from 'nostr-tools';
 import { beforeEach, afterEach, it, expect, vi } from 'vitest';
 import { openWorkspaceDb } from '../src/db.js';
-import { registeredFeedApps, manualFeedApp, resolveSubscriptionSource, validateGraphTargets } from '../src/feed/transport.js';
+import { registeredFeedApps, resolveFeedUrlSource, resolveSubscriptionSource, validateGraphTargets } from '../src/feed/transport.js';
 import { feedContextKey, feedRowKey } from '../src/feed/store.js';
 const npub = nip19.npubEncode('11'.repeat(32));
 const c = { baseUrl: 'https://tower.example', workspaceId: 'workspace', readerActorId: 'reader', workspaceOwnerNpub: 'owner' };
@@ -12,13 +12,6 @@ const target = label => `https://tower.example/api/v4/graph/nodes?workspace_owne
 let db;
 beforeEach(async () => { db = await openWorkspaceDb(`manual-${crypto.randomUUID()}`); await db.autopilot_connections.put(connection); await db.wapps.put(structuredClone(row)); await db.groups.put({ group_id: 'group' }); });
 afterEach(async () => { await db.delete(); });
-it('accepts only the exact registered home/edition link and portable Tower binding', async () => {
-  const apps = await registeredFeedApps([connection], c, { db });
-  for (const link of ['https://book.example', 'https://book.example/feed/editions', 'https://book.example/feed/']) expect(manualFeedApp(link, apps).installation_id).toBe(source.installation_id);
-  for (const link of ['https://book.example/feed/editions?owner=other', 'https://book.example/#story', 'https://book.example/other']) expect(() => manualFeedApp(link, apps)).toThrow('invalid_manual_feed_url');
-  expect(() => manualFeedApp('https://evil.example/', apps)).toThrow('manual_feed_unregistered');
-  expect(() => manualFeedApp('https://book.example/', [...apps, ...apps])).toThrow('manual_feed_unregistered');
-});
 it('rejects archived launchers/connections, workspace changes and malformed pins', async () => {
   for (const replacement of [{ status: 'archived' }, { pg_workspace_id: 'other' }, { metadata: { feed_binding: { ...row.metadata.feed_binding, graph_source_app_npub: 'untrusted' } } }]) {
     await db.wapps.put({ ...row, ...replacement }); expect(await registeredFeedApps([connection], c, { db })).toEqual([]);
@@ -49,4 +42,22 @@ it('removal of a formerly pinned launcher denies reload rather than reverting to
 it('preserves selected native FIPS instead of signing or fetching registered HTTPS', async () => {
   await db.feed_connection_transports.put({ key: JSON.stringify([feedContextKey(c), connection.id]), transport: 'fips' }); const sign = vi.fn(), fetchImpl = vi.fn();
   await expect(resolveSubscriptionSource({ id: 'sub', source }, undefined, c, { db, sign, fetchImpl })).rejects.toThrow('unsupported_source_transport'); expect(sign).not.toHaveBeenCalled(); expect(fetchImpl).not.toHaveBeenCalled();
+});
+
+it('does not reinterpret a removed private binding as public onboarding', async () => {
+  await db.wapps.put({ ...row, status: 'archived' });
+  await expect(resolveFeedUrlSource('https://book.example/feed/editions', undefined, c, { db })).rejects.toThrow('authenticated_feed_unavailable');
+});
+it('selects only an exact authorized feed URL from the trusted source list', async () => {
+  const sign = vi.fn(async () => 'Nostr reader');
+  const fetchImpl = vi.fn(async url => url.endsWith('/api/feed/read-targets') ? Response.json({ graph_read_targets: { stories: target('Story'), history: target('Reference') } }) : Response.json({ contract_version: 1, feeds: [{ id: 'editions', title: 'Editions', description: '', endpoint: '/feed/editions', format: 'jsonfeed-1.1' }], next_cursor: null }));
+  const result = await resolveFeedUrlSource('https://book.example/feed/editions', undefined, c, { db, sign, fetchImpl });
+  expect(result.source).toEqual(source); expect(result.binding.url).toBe('https://book.example/feed/editions');
+  await expect(resolveFeedUrlSource('https://book.example/', undefined, c, { db, sign, fetchImpl })).rejects.toThrow('authenticated_feed_unavailable');
+  expect(fetchImpl.mock.calls.every(([url]) => !url.includes('/api/wapps'))).toBe(true);
+});
+it('never converts denied signed source access into a public request', async () => {
+  const fetchImpl = vi.fn(async () => new Response('', { status: 403 }));
+  await expect(resolveFeedUrlSource('https://book.example/feed/editions', undefined, c, { db, sign: async () => 'Nostr reader', fetchImpl })).rejects.toMatchObject({ status: 403 });
+  expect(fetchImpl).toHaveBeenCalledTimes(1);
 });

@@ -213,14 +213,15 @@ describe('authorized cache continuity', () => {
     expect(await counts()).toEqual(before);
   });
 
-  it('purges definitive membership revocation, preserving commands outside visible tables', async () => {
+  it('retains definitive membership loss and commands in their original partition', async () => {
     await db.chat_messages.put({ record_id: 'draft', sync_status: 'pending', pg_backend: true });
     await db.pending_writes.add({ record_id: 'draft', envelope: {} });
     const error = Object.assign(failure(403), { responseText: JSON.stringify({ code: 'workspace_membership_required', error: 'Actor is not a member', identity: { workspace_id: workspaceId } }) });
     await expect(syncTowerPgWorkspace(store, {}, ports(async () => { throw error; }))).rejects.toThrow();
-    expect(await counts()).toEqual([0, 0, 0]);
+    expect(await counts()).toEqual([1, 1, 3]);
     expect(await db.pending_writes.count()).toBe(1);
-    expect(await db.pg_record_conflicts.get('reset:chat_messages:draft')).toBeTruthy();
+    expect((await db.sync_state.get(recordDeltaCursorKey(store))).value.accessLost).toBe(true);
+    expect(await db.chat_messages.get('draft')).toMatchObject({ sync_status: 'pending' });
   });
 
   it('rejects a revocation response for another workspace without clearing this partition', async () => {
@@ -230,22 +231,22 @@ describe('authorized cache continuity', () => {
     expect(await counts()).toEqual(before);
   });
 
-  it('retires revoked collections only at the complete authorized empty handover', async () => {
+  it('retains omitted downloads after a complete authorized empty handover', async () => {
     const read = vi.fn().mockRejectedValueOnce(reset()).mockResolvedValueOnce(snapshot([], 'empty'))
       .mockImplementationOnce(async () => { expect((await counts()).every(n => n > 0)).toBe(true); return delta(); });
     await syncTowerPgWorkspace(store, {}, ports(read));
-    expect(await counts()).toEqual([0, 0, 0]);
-    expect(await db.pg_resource_attention.count()).toBe(0);
+    expect(await counts()).toEqual([1, 1, 2]);
+    expect(await db.pg_resource_attention.count()).toBe(3);
     expect(await db.pg_attention_counts.count()).toBe(0);
   });
 
-  it('hides an omitted authorized pending edit while preserving recovery and its outbox', async () => {
+  it('keeps an omitted pending edit visible with recovery and its outbox', async () => {
     const id = fixture.one_message_delta.changes[0].id;
     await db.chat_messages.update(id, { sync_status: 'pending', body: 'draft' });
     await db.pending_writes.add({ record_id: id, envelope: {} });
     const read = vi.fn().mockRejectedValueOnce(reset()).mockResolvedValueOnce(snapshot([])).mockResolvedValueOnce(delta());
     await syncTowerPgWorkspace(store, {}, ports(read));
-    expect(await db.chat_messages.get(id)).toBeUndefined();
+    expect(await db.chat_messages.get(id)).toMatchObject({ body: 'draft', pg_access_status: 'stale' });
     expect(await db.pending_writes.count()).toBe(1);
     expect((await db.pg_record_conflicts.get(`reset:chat_messages:${id}`)).local.body).toBe('draft');
   });
@@ -374,9 +375,10 @@ it('resumes interrupted bounded omission retirement without advancing the termin
   expect(state.cursor).toBe('snapshot-end');
   expect(state.snapshotReconciliationPending).toBe(true);
   expect(state.snapshotRetirement.after).toBeTruthy();
-  expect(await db.scopes.count()).toBeLessThan(241);
+  expect(await db.scopes.count()).toBe(241);
+  expect(await db.scopes.filter(row => row.pg_access_status === 'stale').count()).toBeGreaterThan(0);
   await applyPgRecordChanges(store, delta(), { expectedCursor: 'snapshot-end' });
-  expect(await counts()).toEqual([0, 0, 0]);
+  expect(await counts()).toEqual([241, 1, 2]);
   expect((await db.sync_state.get(recordDeltaCursorKey(store))).value).toMatchObject({ cursor: 'handover', snapshotReconciliationPending: false, snapshotRetirement: null });
 });
 
@@ -467,7 +469,7 @@ it('recovers an omitted pending typed view even when its journal tags were repla
   await resetPgRecordAuthority(store, { preserveViews: true });
   await applyPgRecordChanges(store, snapshot([]));
   await applyPgRecordChanges(store, delta());
-  expect(await db.chat_messages.get(change.id)).toBeUndefined();
+  expect(await db.chat_messages.get(change.id)).toMatchObject({ body: 'typed local draft', pg_access_status: 'stale' });
   expect((await db.pg_record_conflicts.get(`reset:chat_messages:${change.id}`)).local.body).toBe('typed local draft');
   expect(await db.pending_writes.where('record_id').equals(change.id).count()).toBe(1);
 });

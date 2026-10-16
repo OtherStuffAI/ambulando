@@ -1382,6 +1382,23 @@ describe('Tower PG API helpers', () => {
     expect(createNip98AuthHeader).not.toHaveBeenCalled();
   });
 
+  it('bounds member signer preparation and never sends a late membership mutation', async () => {
+    vi.useFakeTimers();
+    const { createNip98AuthHeader } = await import('../src/auth/nostr.js');
+    const api = await import('../src/api.js');
+    let completeAuth;
+    createNip98AuthHeader.mockImplementationOnce(() => new Promise(resolve => { completeAuth = resolve; }));
+    const adding = api.createTowerPgWorkspaceMember('workspace-1', { member_npub: 'npub1new', role: 'member' }, { baseUrl: 'https://tower.example' });
+    const rejected = expect(adding).rejects.toMatchObject({ code: 'auth_timeout' });
+    await vi.advanceTimersByTimeAsync(45_000);
+    await rejected;
+    completeAuth('late-auth');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+    await api.createTowerPgWorkspaceMember('workspace-1', { member_npub: 'npub1new', role: 'member' }, { baseUrl: 'https://tower.example' });
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+  });
+
   it('keeps workspace-key auth bounded and does not fetch when signing does not settle', async () => {
     vi.useFakeTimers();
     const { createNip98AuthHeaderForSecret } = await import('../src/auth/nostr.js');
@@ -1491,12 +1508,6 @@ describe('Tower PG API helpers', () => {
 
     await api.getTowerPgWappPublishingGrants('workspace-1', { appNpub: 'flightdeck_pg' });
     await api.putTowerPgWappPublishingGrant('workspace-1', 'installation-1', grantBody, { appNpub: 'flightdeck_pg' });
-    await api.getTowerPgWappActivityItems('workspace-1', {
-      appNpub: 'flightdeck_pg', unread: true, installationId: 'installation-1', category: 'lead', channelId: 'channel-1', cursor: 'next', limit: 25,
-    });
-    await api.patchTowerPgWappActivityUserState('workspace-1', 'item-1', { read: true }, { appNpub: 'flightdeck_pg' });
-    await api.putTowerPgWappActivityMute('workspace-1', 'category', 'lead follow-up', {}, { appNpub: 'flightdeck_pg' });
-    await api.deleteTowerPgWappActivityMute('workspace-1', 'category', 'lead follow-up', { appNpub: 'flightdeck_pg' });
 
     expect(globalThis.fetch).toHaveBeenNthCalledWith(1,
       'https://tower.example/api/v4/flightdeck-pg/workspaces/workspace-1/wapp-publishing-grants',
@@ -1506,43 +1517,21 @@ describe('Tower PG API helpers', () => {
       'https://tower.example/api/v4/flightdeck-pg/workspaces/workspace-1/wapp-publishing-grants/installation-1',
       expect.objectContaining({ method: 'PUT', body: JSON.stringify(grantBody) }),
     );
-    expect(globalThis.fetch).toHaveBeenNthCalledWith(3,
-      'https://tower.example/api/v4/flightdeck-pg/workspaces/workspace-1/wapp-activity/items?unread=true&installation_id=installation-1&category=lead&channel_id=channel-1&cursor=next&limit=25&include_resolved=true',
-      expect.objectContaining({ method: 'GET' }),
-    );
-    expect(globalThis.fetch).toHaveBeenNthCalledWith(4,
-      'https://tower.example/api/v4/flightdeck-pg/workspaces/workspace-1/wapp-activity/items/item-1/user-state',
-      expect.objectContaining({ method: 'PATCH', body: JSON.stringify({ read: true }) }),
-    );
-    expect(globalThis.fetch).toHaveBeenNthCalledWith(5,
-      'https://tower.example/api/v4/flightdeck-pg/workspaces/workspace-1/wapp-activity/mutes/category/lead%20follow-up',
-      expect.objectContaining({ method: 'PUT', body: JSON.stringify({}) }),
-    );
-    expect(globalThis.fetch).toHaveBeenNthCalledWith(6,
-      'https://tower.example/api/v4/flightdeck-pg/workspaces/workspace-1/wapp-activity/mutes/category/lead%20follow-up',
-      expect.objectContaining({ method: 'DELETE' }),
-    );
   });
 
-  it('covers WApp grant lifecycle, item detail, counts, and mute reads', async () => {
+  it('covers WApp grant lifecycle', async () => {
     const api = await import('../src/api.js');
     api.setBaseUrl('https://tower.example');
     await api.getTowerPgWappPublishingGrant('workspace-1', 'installation-1', { appNpub: 'flightdeck_pg' });
     await api.disableTowerPgWappPublishingGrant('workspace-1', 'installation-1', { disabled: true }, { appNpub: 'flightdeck_pg' });
     await api.revokeTowerPgWappPublishingGrant('workspace-1', 'installation-1', { disable_open_links: true }, { appNpub: 'flightdeck_pg' });
     await api.rotateTowerPgWappPublishingGrant('workspace-1', 'installation-1', { current_publisher_npub: 'old', new_publisher_npub: 'new', nonce: 'n', expires_at: '2026-08-03T01:00:00Z' }, { appNpub: 'flightdeck_pg' });
-    await api.getTowerPgWappActivityItem('workspace-1', 'item-1', { appNpub: 'flightdeck_pg' });
-    await api.getTowerPgWappActivityCounts('workspace-1', { appNpub: 'flightdeck_pg' });
-    await api.getTowerPgWappActivityMutes('workspace-1', { appNpub: 'flightdeck_pg' });
 
     expect(globalThis.fetch.mock.calls.map(([url, options]) => [url, options.method])).toEqual([
       ['https://tower.example/api/v4/flightdeck-pg/workspaces/workspace-1/wapp-publishing-grants/installation-1', 'GET'],
       ['https://tower.example/api/v4/flightdeck-pg/workspaces/workspace-1/wapp-publishing-grants/installation-1/disable', 'POST'],
       ['https://tower.example/api/v4/flightdeck-pg/workspaces/workspace-1/wapp-publishing-grants/installation-1/revoke', 'POST'],
       ['https://tower.example/api/v4/flightdeck-pg/workspaces/workspace-1/wapp-publishing-grants/installation-1/rotate', 'POST'],
-      ['https://tower.example/api/v4/flightdeck-pg/workspaces/workspace-1/wapp-activity/items/item-1', 'GET'],
-      ['https://tower.example/api/v4/flightdeck-pg/workspaces/workspace-1/wapp-activity/counts', 'GET'],
-      ['https://tower.example/api/v4/flightdeck-pg/workspaces/workspace-1/wapp-activity/mutes', 'GET'],
     ]);
   });
 });

@@ -257,14 +257,14 @@
     </div>
   </div>
   <main class="app-shell" x-sol-viewport>
-    <template x-if="$store.chat.identityCardProfile">
+    <template x-if="$store.chat.identityCard.open && $store.chat.identityCardProfile">
       <div
         class="identity-card-popover"
         x-show="$store.chat.identityCard.open"
         x-cloak
         x-transition
-        @click.outside="$store.chat.closeIdentityCard()"
-        :style="`left: ${$store.chat.identityCard.x}px; top: ${$store.chat.identityCard.y}px;`"
+        @click.outside.capture="$store.chat.closeIdentityCard()"
+        :style="{ left: `${$store.chat.identityCard.x}px`, top: `${$store.chat.identityCard.y}px` }"
       >
         <button type="button" class="identity-card-close" @click="$store.chat.closeIdentityCard()" aria-label="Close profile card">&times;</button>
         <div class="identity-card-header">
@@ -380,6 +380,10 @@
           </template>
         </button>
         <div id="profile-avatar-menu" class="avatar-menu" role="region" aria-label="Profile and workspace actions" tabindex="-1" x-sol-menu="$store.chat.showAvatarMenu" x-show="$store.chat.showAvatarMenu" @click.outside="$store.chat.showAvatarMenu = false">
+          <div class="avatar-menu-section" x-show="$store.chat.retainedDownloadNotice">
+            <span class="avatar-menu-label">Retained downloads</span>
+            <span role="status" x-text="$store.chat.retainedDownloadNotice"></span>
+          </div>
           <div class="avatar-menu-header">
             <span class="avatar-menu-name" x-text="$store.chat.displayName"></span>
           </div>
@@ -515,19 +519,17 @@
         </section>
       </div>
     </header>
+    <div class="startup-sync-progress-panel" role="status" x-show="$store.chat.retainedDownloadNotice" x-cloak x-text="$store.chat.retainedDownloadNotice"></div>
 
-    <div
-      class="mobile-scope-switcher"
-      x-show="$store.chat.isLoggedIn && !$store.chat.mobileNavOpen"
-    >
+    <div class="mobile-scope-switcher" :class="{ 'mobile-context-focused': $store.chat.appHeaderHidden }" x-show="$store.chat.isLoggedIn && !$store.chat.mobileNavOpen" x-cloak>
       <div class="mobile-scope-context-controls">
-        <button
-          type="button"
-          class="mobile-scope-workspace-avatar-btn"
-          @click="$store.chat.openAllScopesOverview()"
-          title="All scopes overview"
-          aria-label="All scopes overview"
-        >
+        <button type="button" class="mobile-menu-btn mobile-context-menu" x-show="$store.chat.appHeaderHidden"
+          @click="$store.chat.togglePrimaryNav()" aria-label="Toggle navigation" aria-controls="sol-primary-navigation" :aria-expanded="String($store.chat.mobileNavOpen)">
+          <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+        </button>
+        <button type="button" class="mobile-scope-workspace-avatar-btn mobile-context-home"
+          @click="$store.chat.openAllScopesOverview()" :title="'Show all in ' + $store.chat.currentWorkspaceName"
+          :aria-label="'Show all in ' + $store.chat.currentWorkspaceName">
           <template x-if="$store.chat.currentWorkspaceAvatarUrl">
             <img class="mobile-scope-workspace-avatar" :src="$store.chat.currentWorkspaceAvatarUrl" alt="" />
           </template>
@@ -535,16 +537,13 @@
             <span class="mobile-scope-workspace-avatar mobile-scope-workspace-avatar-fallback avatar-fallback" x-text="$store.chat.currentWorkspaceInitials"></span>
           </template>
         </button>
-        <button
-          type="button"
-          class="mobile-scope-trigger"
-          @click="$store.chat.openCommandPaletteScopeSwitcher($event)"
-          aria-label="Current scope"
-        >
-          <span>Scope: </span><strong x-text="$store.chat.focusScopeTitle"></strong>
+        <span class="mobile-context-name" :title="$store.chat.focusScopeTitle" :aria-label="'Current scope: ' + $store.chat.focusScopeTitle" x-text="$store.chat.focusScopeTitle"></span>
+        <span class="mobile-context-divider" aria-hidden="true">|</span>
+        <span class="mobile-context-name" :title="$store.chat.mobileHeaderChannelTitle" :aria-label="'Current channel: ' + $store.chat.mobileHeaderChannelTitle" x-text="$store.chat.mobileHeaderChannelTitle"></span>
+        <button type="button" class="chat-channel-header-icon-btn mobile-context-fullscreen" @click="$store.chat.toggleAppHeaderHidden(); $nextTick(() => requestAnimationFrame(() => document.querySelector('.mobile-context-fullscreen')?.focus()))" :title="$store.chat.appHeaderHidden ? 'Show header' : 'Full screen'" :aria-label="$store.chat.appHeaderHidden ? 'Show header' : 'Full screen'" :aria-pressed="String($store.chat.appHeaderHidden)">
+          <svg x-show="!$store.chat.appHeaderHidden" aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+          <svg x-show="$store.chat.appHeaderHidden" aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="14" y1="10" x2="21" y2="3"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
         </button>
-        <button type="button" class="mobile-scope-workspace-avatar-btn" x-show="$store.chat.canAccessScopeSettings" @click="$store.chat.openScopeManagement()" title="Manage scopes" aria-label="Manage scopes">…</button>
-        <span class="mobile-scope-row-spacer" x-show="!$store.chat.canAccessScopeSettings" aria-hidden="true"></span>
       </div>
     </div>
 
@@ -566,6 +565,7 @@
           :disabled="$store.chat.isLoggingIn"
           @click="$store.chat.login('extension')">Browser Extension</button>
       </div>
+      <p class="auth-description">Already a workspace member? Sign in with the Nostr identity that was added. Sign Up creates an identity on this device when none is saved.</p>
       <p class="auth-extension-hint" x-show="!$store.chat.hasExtensionSigner()">
         Waiting for NIP-07 extension injection. On mobile this can appear a moment after the page loads.
       </p>
@@ -703,7 +703,21 @@
               </div>
               <p x-text="$store.chat.isTowerPgMode ? 'Choose a Tower host or paste a workspace descriptor. Ambulando opens into an empty workspace shell, then builds the selected spaces through Tower.' : 'Choose a host or enter a custom URL.'"></p>
             </div>
-            <section class="connect-onboarding-card">
+            <div class="connect-host-options" :class="{ 'connect-host-options-pg': $store.chat.isTowerPgMode }">
+              <section class="connect-onboarding-card connect-hosted-card" x-show="$store.chat.isTowerPgMode">
+                <h3>Host My Tower</h3>
+                <p>Hosting provided by Other Stuff on <strong>nstack.otherstuff.ai</strong>.</p>
+                <p class="connect-hosted-price">USD $5 <span>per GB per month</span></p>
+                <p>First 1 GB free for one month: a <strong>USD $5 credit</strong> against your first month’s 1 GB. Additional usage is payable; the credit does not renew.</p>
+                <p>After the credit, 1 GB costs USD $5 per month. Your account is paused if the amount due is unpaid. No automatic charge is assumed.</p>
+                <p class="connect-legal-links"><a href="%BASE_URL%legal/privacy.html" target="_blank" rel="noopener">Privacy Policy (draft)</a> · <a href="%BASE_URL%legal/terms.html" target="_blank" rel="noopener">Terms (draft)</a><br><small>Opens in a new tab; your workspace setup stays here.</small></p>
+                <button class="auth-option" type="button" @click="$store.chat.connectRequestHostedTower()" :disabled="$store.chat.connectHostBusy"><span x-text="$store.chat.connectHostBusy ? 'Checking hosting…' : 'Host My Tower'"></span></button>
+                <p class="connect-hosted-availability">Continue to check availability and create your hosted workspace. Payments use Stripe test mode.</p>
+                <p class="auth-error" role="status" aria-live="polite" x-show="$store.chat.connectHostedNotice" x-text="$store.chat.connectHostedNotice"></p>
+              </section>
+            <section class="connect-onboarding-card connect-byo-card">
+              <h3 x-show="$store.chat.isTowerPgMode">BYO Tower</h3>
+              <p x-show="$store.chat.isTowerPgMode">Connect your existing Tower using its URL or workspace descriptor.</p>
               <div class="connect-hosts-list">
                 <template x-for="host in $store.chat.mergedHostsList" :key="host.url">
                   <button type="button" class="connect-host-row" @click="$store.chat.connectToHost(host.url, host.towerName || host.label || host.url)" :disabled="$store.chat.connectHostBusy">
@@ -715,7 +729,7 @@
               </div>
               <form class="connect-manual-form" @submit.prevent="$store.chat.connectByo()">
                 <label>
-                  <span x-text="$store.chat.isTowerPgMode ? 'BYO Tower PG' : 'BYO SuperBased'"></span>
+                  <span x-text="$store.chat.isTowerPgMode ? 'Tower URL or workspace descriptor' : 'BYO SuperBased'"></span>
                   <input type="text" x-model="$store.chat.connectManualUrl" :placeholder="$store.chat.isTowerPgMode ? 'URL or workspace descriptor JSON' : 'URL or connection token'" :disabled="$store.chat.connectHostBusy" />
                 </label>
                 <button class="auth-option" type="submit" :disabled="$store.chat.connectHostBusy || !$store.chat.connectManualUrl.trim()">
@@ -725,6 +739,7 @@
               </form>
               <p class="auth-error" x-show="$store.chat.connectHostError" x-text="$store.chat.connectHostError"></p>
             </section>
+            </div>
           </div>
         </template>
 
@@ -734,7 +749,7 @@
             <div class="connect-wizard-top">
               <p class="connect-modal-eyebrow">New workspace</p>
               <h2 x-text="$store.chat.isTowerPgMode ? $store.chat.connectPgWizardTitle() : 'Select Workspace'"></h2>
-              <div class="connect-wizard-steps" x-show="$store.chat.isTowerPgMode" aria-label="Onboarding progress">
+              <div class="connect-wizard-steps" x-show="$store.chat.isTowerPgMode && !$store.chat.connectHostedConfig" aria-label="Onboarding progress">
                 <template x-for="step in [1, 2, 3, 4, 5]" :key="step">
                   <span :class="{ active: $store.chat.connectPgOnboardingStep === step }" x-text="step"></span>
                 </template>
@@ -770,7 +785,8 @@
               <section class="connect-onboarding-card">
                 <div x-show="$store.chat.connectPgOnboardingStep === 2">
                   <div class="connect-copy">
-                    <p>Select an existing workspace or create a new one.</p>
+                    <p>Select a workspace you can access with your signed-in Nostr identity, or create a new one.</p>
+                    <p class="connect-workspace-identity" data-testid="connect-pg-session-identity">Signed in as <code x-text="$store.chat.session?.npub || ''"></code></p>
                   </div>
                   <div class="connect-workspace-list" data-testid="connect-pg-workspace-list">
                     <template x-for="ws in $store.chat.connectWorkspaces" :key="ws.workspaceId || ws.workspace_id || ws.identity?.workspace_id || ws.workspace_owner_npub || ws.workspaceOwnerNpub">
@@ -781,12 +797,15 @@
                     </template>
                   </div>
                   <p class="connect-workspace-loading" x-show="$store.chat.connectWorkspacesBusy">Loading workspaces...</p>
-                  <p
+                  <div
                     class="connect-workspace-empty"
+                    data-testid="connect-pg-workspace-empty"
                     x-show="$store.chat.connectWorkspaces.length === 0 && !$store.chat.connectWorkspacesBusy && !$store.chat.connectWorkspacesError"
                   >
-                    No workspaces found on this Tower. Create one below.
-                  </p>
+                    <p>No workspaces are available to this signed-in identity on this Tower.</p>
+                    <p>If you were added to an existing workspace, compare the npub above with the one its owner added. If they differ, sign in with the added identity. If they match, ask the owner to check your workspace access.</p>
+                    <button class="connect-back-link" type="button" @click="$store.chat.showConnectModal = false; $store.chat.logout()">Sign out to use another identity</button>
+                  </div>
                   <p
                     class="connect-workspace-diagnostics"
                     x-show="$store.chat.connectWorkspaceRequestDiagnostics && !$store.chat.connectWorkspacesBusy"
@@ -796,7 +815,8 @@
                     <label><span>New workspace name</span><input type="text" x-model="$store.chat.connectNewWorkspaceName" placeholder="My workspace" maxlength="80" autocomplete="off" /></label>
                     <label x-show="!$store.chat.connectHostedConfig"><span>Description</span><input type="text" x-model="$store.chat.connectNewWorkspaceDescription" placeholder="Optional" /></label>
                   </div>
-                  <p class="connect-hosted-policy" x-show="$store.chat.connectHostedConfig">Hosted Free: 1 GB allowance (1,000,000,000 bytes). Payment required: no. Terms version: hosted-free-v1. Creating a workspace records acceptance of this version.</p>
+                  <p class="connect-hosted-policy" x-show="$store.chat.connectHostedConfig">Hosting: USD $5 per decimal GB per 720 hours. One $5 welcome credit per customer, expiring after 30 days; shared across workspaces. Paid credits do not expire. Terms: hosted-usd-v1.</p>
+                  <label x-show="$store.chat.connectHostedConfig"><input type="checkbox" x-model="$store.chat.connectHostedTermsAccepted" :disabled="$store.chat.connectCreatingWorkspace" /> <span>I accept the <a href="%BASE_URL%legal/terms.html" target="_blank" rel="noopener">Terms (draft)</a> and have read the <a href="%BASE_URL%legal/privacy.html" target="_blank" rel="noopener">Privacy Policy (draft)</a> for hosted-usd-v1.</span></label>
                 </div>
 
                 <div class="connect-choice-grid" x-show="!$store.chat.connectHostedConfig && $store.chat.connectPgOnboardingStep === 3">
@@ -1198,88 +1218,9 @@
     </div>
 
     <div class="app-layout" x-show="$store.chat.isLoggedIn">
-      <div class="mobile-sidebar-backdrop" x-show="$store.chat.mobileNavOpen" @click="$store.chat.mobileNavOpen = false"></div>
-      <nav id="sol-primary-navigation" aria-label="Workspace navigation" :role="$store.chat.mobileNavOpen ? 'dialog' : 'navigation'" :aria-modal="$store.chat.mobileNavOpen ? 'true' : null" x-sol-dialog="$store.chat.mobileNavOpen" :inert="$store.chat.mobileViewport && !$store.chat.mobileNavOpen" @keydown.escape.stop="if ($store.chat.mobileNavOpen) { $store.chat.mobileNavOpen = false; document.querySelector('.mobile-menu-btn')?.focus() }" class="sidebar" :class="{ 'sidebar-collapsed': $store.chat.navCollapsed, 'sidebar-mobile-open': $store.chat.mobileNavOpen }">
-              <nav
-                class="expanded-sidebar-section-switcher"
-                x-show="$store.chat.mobileNavOpen"
-                x-cloak
-                aria-label="Product sections"
-              >
-                <button type="button" class="expanded-sidebar-section-switcher-btn" :class="{ 'expanded-sidebar-section-switcher-btn-active': $store.chat.navSection === 'status' }" :aria-current="$store.chat.navSection === 'status' ? 'page' : null" @click="$store.chat.navigateTo('status')">
-                  <span class="expanded-sidebar-section-icon" aria-hidden="true"><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="/ambulando/icons.svg#layout-dashboard" /></svg></span>
-                  <span>Deck</span>
-                </button>
-                <button type="button" class="expanded-sidebar-section-switcher-btn" :class="{ 'expanded-sidebar-section-switcher-btn-active': $store.chat.navSection === 'chat' }" :aria-current="$store.chat.navSection === 'chat' ? 'page' : null" @click="$store.chat.navigateTo('chat')">
-                  <span class="expanded-sidebar-section-icon" aria-hidden="true"><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="/ambulando/icons.svg#message-square" /></svg></span>
-                  <span>Chat</span>
-                </button>
-                <button type="button" class="view-lock-button"
-                  x-cloak x-show="$store.chat.canLockCurrentView && $store.chat.navSection === 'chat'"
-                  :class="{ 'view-lock-button-locked': $store.chat.isCurrentViewLocked }"
-                  :aria-pressed="$store.chat.isCurrentViewLocked"
-                  aria-label="Lock Chat view"
-                  :title="$store.chat.isCurrentViewLocked ? 'Unlock Chat view' : 'Keep Chat when changing scope or channel'"
-                  @click.stop="$store.chat.toggleCurrentViewLock()">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                    <rect x="5" y="10" width="14" height="11" rx="2"></rect>
-                    <path :d="$store.chat.isCurrentViewLocked ? 'M8 10V6a4 4 0 0 1 8 0v4' : 'M8 10V6a4 4 0 0 1 8 0'"></path>
-                  </svg>
-                </button>
-                <button type="button" class="expanded-sidebar-section-switcher-btn" :class="{ 'expanded-sidebar-section-switcher-btn-active': $store.chat.navSection === 'tasks' }" :aria-current="$store.chat.navSection === 'tasks' ? 'page' : null" @click="$store.chat.navigateTo('tasks')">
-                  <span class="expanded-sidebar-section-icon" aria-hidden="true"><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="/ambulando/icons.svg#list-todo" /></svg></span>
-                  <span>Tasks</span>
-                </button>
-                <button type="button" class="view-lock-button"
-                  x-cloak x-show="$store.chat.canLockCurrentView && $store.chat.navSection === 'tasks'"
-                  :class="{ 'view-lock-button-locked': $store.chat.isCurrentViewLocked }"
-                  :aria-pressed="$store.chat.isCurrentViewLocked"
-                  aria-label="Lock Tasks view"
-                  :title="$store.chat.isCurrentViewLocked ? 'Unlock Tasks view' : 'Keep Tasks when changing scope or channel'"
-                  @click.stop="$store.chat.toggleCurrentViewLock()">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                    <rect x="5" y="10" width="14" height="11" rx="2"></rect>
-                    <path :d="$store.chat.isCurrentViewLocked ? 'M8 10V6a4 4 0 0 1 8 0v4' : 'M8 10V6a4 4 0 0 1 8 0'"></path>
-                  </svg>
-                </button>
-                <button type="button" class="expanded-sidebar-section-switcher-btn" :class="{ 'expanded-sidebar-section-switcher-btn-active': $store.chat.navSection === 'docs' }" :aria-current="$store.chat.navSection === 'docs' ? 'page' : null" @click="$store.chat.navigateTo('docs')">
-                  <span class="expanded-sidebar-section-icon" aria-hidden="true"><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="/ambulando/icons.svg#file-text" /></svg></span>
-                  <span>Docs</span>
-                </button>
-                <button type="button" class="view-lock-button"
-                  x-cloak x-show="$store.chat.canLockCurrentView && $store.chat.navSection === 'docs'"
-                  :class="{ 'view-lock-button-locked': $store.chat.isCurrentViewLocked }"
-                  :aria-pressed="$store.chat.isCurrentViewLocked"
-                  aria-label="Lock Docs view"
-                  :title="$store.chat.isCurrentViewLocked ? 'Unlock Docs view' : 'Keep Docs when changing scope or channel'"
-                  @click.stop="$store.chat.toggleCurrentViewLock()">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                    <rect x="5" y="10" width="14" height="11" rx="2"></rect>
-                    <path :d="$store.chat.isCurrentViewLocked ? 'M8 10V6a4 4 0 0 1 8 0v4' : 'M8 10V6a4 4 0 0 1 8 0'"></path>
-                  </svg>
-                </button>
-                <button type="button" class="expanded-sidebar-section-switcher-btn" :class="{ 'expanded-sidebar-section-switcher-btn-active': $store.chat.navSection === 'files' }" :aria-current="$store.chat.navSection === 'files' ? 'page' : null" @click="$store.chat.navigateTo('files')">
-                  <span class="expanded-sidebar-section-icon" aria-hidden="true"><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="/ambulando/icons.svg#files" /></svg></span>
-                  <span>Files</span>
-                </button>
-                <button type="button" class="view-lock-button"
-                  x-cloak x-show="$store.chat.canLockCurrentView && $store.chat.navSection === 'files'"
-                  :class="{ 'view-lock-button-locked': $store.chat.isCurrentViewLocked }"
-                  :aria-pressed="$store.chat.isCurrentViewLocked"
-                  aria-label="Lock Files view"
-                  :title="$store.chat.isCurrentViewLocked ? 'Unlock Files view' : 'Keep Files when changing scope or channel'"
-                  @click.stop="$store.chat.toggleCurrentViewLock()">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                    <rect x="5" y="10" width="14" height="11" rx="2"></rect>
-                    <path :d="$store.chat.isCurrentViewLocked ? 'M8 10V6a4 4 0 0 1 8 0v4' : 'M8 10V6a4 4 0 0 1 8 0'"></path>
-                  </svg>
-                </button>
-                <button type="button" class="expanded-sidebar-section-switcher-btn" x-show="$store.chat.agentsEnabled" x-cloak :class="{ 'expanded-sidebar-section-switcher-btn-active': $store.chat.navSection === 'agents' }" :aria-current="$store.chat.navSection === 'agents' ? 'page' : null" @click="$store.chat.navigateTo('agents')">
-                  <span class="expanded-sidebar-section-icon" aria-hidden="true"><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="/ambulando/icons.svg#bot" /></svg></span><span>Agents</span>
-                </button>
-                <button type="button" class="expanded-sidebar-section-switcher-btn" x-show="$store.chat.contextEnabled" x-cloak :class="{ 'expanded-sidebar-section-switcher-btn-active': $store.chat.navSection === 'context' }" :aria-current="$store.chat.navSection === 'context' ? 'page' : null" @click="$store.chat.navigateTo('context')"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="9" y="2" width="6" height="5" rx="1"/><path d="M12 7v5M4 17v-5h16v5"/><rect x="1" y="17" width="6" height="5" rx="1"/><rect x="17" y="17" width="6" height="5" rx="1"/></svg><span>Context</span></button>
-                <button type="button" class="expanded-sidebar-section-switcher-btn" aria-label="Toolbox" :class="{ 'expanded-sidebar-section-switcher-btn-active': $store.chat.navSection === 'toolbox' }" :aria-current="$store.chat.navSection === 'toolbox' ? 'page' : null" @click="$store.chat.navigateTo('toolbox')"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="18" height="14" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 12h18M10 10v4h4v-4"/></svg><span>Toolbox</span></button>
-              </nav>
+      <div class="mobile-sidebar-backdrop" x-show="$store.chat.mobileNavOpen" @click="$store.chat.mobileNavOpen = false; $nextTick(() => requestAnimationFrame(() => document.querySelector($store.chat.appHeaderHidden ? '.mobile-context-menu' : '.page-header .mobile-menu-btn')?.focus()))"></div>
+      <nav id="sol-primary-navigation" aria-label="Workspace navigation" :role="$store.chat.mobileNavOpen ? 'dialog' : 'navigation'" :aria-modal="$store.chat.mobileNavOpen ? 'true' : null" x-sol-dialog="$store.chat.mobileNavOpen" :inert="$store.chat.mobileViewport && !$store.chat.mobileNavOpen" @keydown.escape.stop="if ($store.chat.mobileNavOpen) { $store.chat.mobileNavOpen = false; $nextTick(() => requestAnimationFrame(() => document.querySelector($store.chat.appHeaderHidden ? '.mobile-context-menu' : '.page-header .mobile-menu-btn')?.focus())) }" class="sidebar" :class="{ 'sidebar-collapsed': $store.chat.navCollapsed, 'sidebar-mobile-open': $store.chat.mobileNavOpen }">
+
         <ul class="sidebar-nav" x-show="$store.chat.navCollapsed && !$store.chat.mobileNavOpen">
           <li :class="{ active: $store.chat.navSection === 'status' }"><button type="button" class="sol-nav-button" aria-label="Deck" @click="$store.chat.navigateTo('status')">
             <span class="sidebar-icon" aria-hidden="true">
@@ -1384,6 +1325,18 @@
                 <span class="sidebar-scope-heading-row">
                   <button
                     type="button"
+                    class="sidebar-scope-collapse"
+                    :aria-expanded="$store.chat.isSidebarScopeExpanded(group.scope.record_id)"
+                    :aria-controls="'sidebar-scope-channels-' + group.scope.record_id"
+                    :aria-label="($store.chat.isSidebarScopeExpanded(group.scope.record_id) ? 'Collapse ' : 'Expand ') + (group.scope.title || $store.chat.getScopeLabel(group.scope.record_id) || group.scope.record_id) + ' channels'"
+                    @click.stop="$store.chat.toggleSidebarScope(group.scope.record_id)"
+                  >
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <path :d="$store.chat.isSidebarScopeExpanded(group.scope.record_id) ? 'm6 9 6 6 6-6' : 'm9 6 6 6-6 6'"></path>
+                    </svg>
+                  </button>
+                  <button
+                    type="button"
                     class="sidebar-scope-heading-control"
                     :class="{ active: $store.chat.pgContextScopeId === group.scope.record_id && $store.chat.pgContextHomeSelected }"
                     :aria-current="$store.chat.pgContextScopeId === group.scope.record_id && $store.chat.pgContextHomeSelected ? 'page' : null"
@@ -1406,7 +1359,9 @@
                   </button>
                 </span>
               </h2>
-              <div class="sidebar-scope-channel-list">
+              <div class="sidebar-scope-channel-list"
+                :id="'sidebar-scope-channels-' + group.scope.record_id"
+                x-show="$store.chat.isSidebarScopeExpanded(group.scope.record_id)">
                 <template x-for="channel in group.channels" :key="`sidebar-channel-${channel.record_id}`">
                   <div
                     class="sidebar-scope-channel-row"
@@ -1859,7 +1814,7 @@
                   <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="/ambulando/icons.svg#bot" /></svg>
                 </button>
               </div>
-              <div class="mobile-section-switcher-item" x-show="$store.chat.contextEnabled" x-cloak><button type="button" class="mobile-section-switcher-btn" aria-label="Context" title="Context" :class="{ 'mobile-section-switcher-btn-active': $store.chat.navSection === 'context' }" @click="$store.chat.navigateTo('context')"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="9" y="2" width="6" height="5" rx="1"/><path d="M12 7v5M4 17v-5h16v5"/><rect x="1" y="17" width="6" height="5" rx="1"/><rect x="17" y="17" width="6" height="5" rx="1"/></svg></button></div>
+              <div class="mobile-section-switcher-item" x-show="$store.chat.contextEnabled" x-cloak><button type="button" class="mobile-section-switcher-btn" aria-label="Context" title="Context" :aria-current="$store.chat.navSection === 'context' ? 'page' : null" :class="{ 'mobile-section-switcher-btn-active': $store.chat.navSection === 'context' }" @click="$store.chat.navigateTo('context')"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="9" y="2" width="6" height="5" rx="1"/><path d="M12 7v5M4 17v-5h16v5"/><rect x="1" y="17" width="6" height="5" rx="1"/><rect x="17" y="17" width="6" height="5" rx="1"/></svg></button></div>
               <div class="mobile-section-switcher-item"><button type="button" class="mobile-section-switcher-btn" aria-label="Toolbox" title="Toolbox" :class="{ 'mobile-section-switcher-btn-active': $store.chat.navSection === 'toolbox' }" :aria-current="$store.chat.navSection === 'toolbox' ? 'page' : null" @click="$store.chat.navigateTo('toolbox')"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="18" height="14" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 12h18M10 10v4h4v-4"/></svg></button></div>
             </nav>
           </div>
@@ -1899,6 +1854,7 @@
                 <button type="button" @click="loadTree()" :disabled="status === 'loading'">Reload</button>
               </div>
             </header>
+            <p class="context-tree-notice" role="status" x-show="retainedStatus === 'access-lost'">Access lost. Downloaded context is retained for reading; editing requires Tower access.</p>
             <p class="context-tree-notice" role="status" x-show="notice" x-text="notice"></p>
             <p class="context-tree-notice" role="alert" x-show="editError && !dialogOpen" x-text="editError"></p>
             <div class="context-tree-panes">
@@ -2413,12 +2369,11 @@
             </section>
 
             <div class="deck-right-stack" data-testid="deck-right-stack">
-            <section class="flightdeck-summary-panel flightdeck-summary-panel-wapp-updates deck-column" data-deck-column="wapp-updates" data-testid="deck-wapp-updates" aria-label="Feed" x-data="{ sourcesOpen: false }">
+            <section class="flightdeck-summary-panel flightdeck-summary-panel-wapp-updates deck-column" data-deck-column="wapp-updates" data-testid="deck-wapp-updates" aria-label="Feeds" x-data="{ sourcesOpen: false }">
               <div class="autopilot-panel-heading wapp-updates-heading" data-deck-mobile-sticky-heading>
-                <div class="wapp-updates-heading-title"><h3>Feed</h3></div>
-                <select class="feed-view-select" aria-label="Feed view" :value="$store.chat.subscribedFeedView" @change="$store.chat.selectSubscribedFeedView($event.target.value)"><option value="legacy">Legacy</option><option value="subscribed">Subscribed</option></select>
+                <div><h3>Feeds</h3></div>
                 <button type="button" class="btn-secondary btn-compact" aria-label="Add feed" @click="$store.chat.openFeedAdd()">+</button>
-                <div class="doc-actions-menu feed-options-menu" x-show="$store.chat.subscribedFeedView === 'subscribed'" x-data="{ open: false }" @click.outside="open = false" @keydown.escape.stop.prevent="open = false; $el.closest('.doc-actions-menu').querySelector('[aria-haspopup]').focus()" @focusout="if (!$el.contains($event.relatedTarget)) open = false">
+                <div class="doc-actions-menu feed-options-menu" x-data="{ open: false }" @click.outside="open = false" @keydown.escape.stop.prevent="open = false; $el.closest('.doc-actions-menu').querySelector('[aria-haspopup]').focus()" @focusout="if (!$el.contains($event.relatedTarget)) open = false">
                   <button type="button" class="doc-actions-toggle" aria-label="Feed options" title="Feed options" aria-haspopup="menu" :aria-expanded="open.toString()" x-ref="trigger" @click="const menu = $event.currentTarget.closest('.doc-actions-menu'); open = !open; if (open) $nextTick(() => requestAnimationFrame(() => menu.querySelector('[role=menu] button').focus()))">⋯</button>
                   <div class="doc-actions-popover feed-options-popover" x-show="open" x-cloak role="menu" aria-label="Feed options" @keydown.arrow-down.prevent="const buttons = [...$el.querySelectorAll('button')]; buttons[(buttons.indexOf(document.activeElement) + 1) % buttons.length].focus()" @keydown.arrow-up.prevent="const buttons = [...$el.querySelectorAll('button')]; buttons[(buttons.indexOf(document.activeElement) + buttons.length - 1) % buttons.length].focus()">
                     <button type="button" role="menuitem" x-ref="first" @click="$store.chat.refreshSubscribedFeed(); open = false; $el.closest('.doc-actions-menu').querySelector('[aria-haspopup]').focus()">Refresh</button>
@@ -2426,93 +2381,8 @@
                     <button type="button" role="menuitem" :aria-expanded="sourcesOpen.toString()" @click="sourcesOpen = !sourcesOpen; open = false; $el.closest('.doc-actions-menu').querySelector('[aria-haspopup]').focus()">Manage sources</button>
                   </div>
                 </div>
-                <div class="wapp-updates-heading-actions">
-                  <span class="wapp-updates-count" x-show="$store.chat.subscribedFeedView === 'legacy' && $store.chat.wappActivityUnreadCount > 0" x-text="$store.chat.wappActivityUnreadCount" aria-label="Unread Feed items"></span>
-                  <div
-                    class="doc-actions-menu wapp-updates-filter-menu"
-                    x-show="$store.chat.subscribedFeedView === 'legacy'"
-                    x-data="{ filtersOpen: false }"
-                    @click.outside="filtersOpen = false"
-                    @keydown.escape.stop.prevent="filtersOpen = false; $nextTick(() => $refs.filterTrigger?.focus())"
-                  >
-                    <button
-                      type="button"
-                      class="doc-actions-toggle wapp-updates-filter-trigger"
-                      :class="{ 'wapp-updates-filter-trigger-active': $store.chat.hasActiveWappActivityFilters }"
-                      title="Feed options"
-                      aria-label="Feed options"
-                      aria-haspopup="dialog"
-                      :aria-expanded="filtersOpen.toString()"
-                      x-ref="filterTrigger"
-                      @click="filtersOpen = !filtersOpen; if (filtersOpen) $nextTick(() => $refs.firstFilter?.focus())"
-                    >
-                      <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="5" r="1.8"></circle><circle cx="12" cy="12" r="1.8"></circle><circle cx="12" cy="19" r="1.8"></circle></svg>
-                      <span class="wapp-updates-filter-active-dot" x-show="$store.chat.hasActiveWappActivityFilters" x-cloak aria-hidden="true"></span>
-                    </button>
-                    <div class="doc-actions-popover wapp-updates-filter-popover" x-show="filtersOpen" x-cloak x-transition role="dialog" aria-label="Feed options">
-                      <div class="wapp-updates-filters" role="group" aria-label="Filter Feed">
-                        <label><span>Show</span><select x-ref="firstFilter" :value="$store.chat.wappActivityFilterUnread ? 'unread' : 'all'" @change="$store.chat.wappActivityFilterUnread = $event.target.value === 'unread'"><option value="all">All</option><option value="unread">Unread</option></select></label>
-                        <label><span>Source</span><select x-model="$store.chat.wappActivityFilterSource"><option value="">All sources</option><template x-for="source in $store.chat.wappActivitySources" :key="source.id"><option :value="source.id" x-text="source.label"></option></template></select></label>
-                        <label><span>Category</span><select x-model="$store.chat.wappActivityFilterCategory"><option value="">All categories</option><template x-for="category in $store.chat.wappActivityCategories" :key="category"><option :value="category" x-text="category"></option></template></select></label>
-                        <label><span>Channel</span><select x-model="$store.chat.wappActivityFilterChannel"><option value="">All channels</option><template x-for="channel in $store.chat.channels.filter((entry) => entry.record_state !== 'deleted')" :key="channel.record_id"><option :value="channel.record_id" x-text="$store.chat.getChannelLabel(channel)"></option></template></select></label>
-                      </div>
-                      <button type="button" class="wapp-updates-clear-filters" :disabled="!$store.chat.hasActiveWappActivityFilters" @click="$store.chat.clearWappActivityFilters()">Clear filters</button>
-                      <button type="button" class="wapp-updates-dismiss-all" :disabled="$store.chat.wappActivityDismissAllBusy || $store.chat.filteredWappActivityItems.length === 0" @click="$store.chat.dismissAllWappActivity(); filtersOpen = false" x-text="$store.chat.wappActivityDismissAllBusy ? 'Dismissing…' : 'Dismiss all'">Dismiss all</button>
-                    </div>
-                  </div>
-                </div>
               </div>
-
-              <div class="wapp-updates-body deck-card-scroll" aria-label="Feed" tabindex="0" x-show="$store.chat.subscribedFeedView === 'legacy'">
-                <p class="error-text" x-show="$store.chat.wappActivityError" x-text="$store.chat.wappActivityError"></p>
-                <div class="wapp-update-list" x-show="$store.chat.filteredWappActivityItems.length > 0">
-                  <template x-for="item in $store.chat.filteredWappActivityItems" :key="item.record_id">
-                    <article class="wapp-update-card" :class="[`wapp-update-priority-${item.priority}`, { 'wapp-update-unread': item.unread, 'wapp-update-retained': ['withdrawn', 'resolved'].includes(item.state) || ['revoked', 'disabled'].includes(item.grant_status) }]">
-                      <div class="wapp-update-meta">
-                        <span class="wapp-update-source"><span aria-hidden="true">✓</span><span x-text="item.source_name"></span></span>
-                        <span class="wapp-update-meta-actions">
-                          <time x-text="$store.chat.formatRelativeTime(item.occurred_at || item.updated_at)"></time>
-                          <button type="button" class="wapp-update-dismiss" data-deck-card-action title="Dismiss" :aria-label="`Dismiss ${item.title || 'Feed item'}`" @click.stop.prevent="$store.chat.dismissWappActivity(item)" @keydown.enter.stop @keydown.space.stop>
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg>
-                          </button>
-                        </span>
-                      </div>
-                      <h4 x-text="item.title"></h4>
-                      <p class="wapp-update-summary" x-text="item.summary"></p>
-                      <div class="wapp-update-status" x-show="$store.chat.wappActivitySourceTreatment(item) !== 'Verified WApp' || ['warning', 'high', 'urgent'].includes(item.priority)" x-cloak aria-label="WApp activity status">
-                        <span x-show="$store.chat.wappActivitySourceTreatment(item) !== 'Verified WApp'" x-text="$store.chat.wappActivitySourceTreatment(item)"></span>
-                        <span x-show="['warning', 'high', 'urgent'].includes(item.priority)" x-text="`${item.priority} priority`"></span>
-                      </div>
-                      <div class="wapp-update-footer">
-                        <button class="wapp-update-context" type="button" x-show="$store.chat.wappActivityChannelLabel(item)" x-cloak @click="$store.chat.openWappActivityChannel(item)" :disabled="!$store.chat.channels.some((channel) => channel.record_id === item.channel_id && channel.record_state !== 'deleted')" x-text="`# ${$store.chat.wappActivityChannelLabel(item)}`"></button>
-                        <div class="wapp-update-actions">
-                          <button type="button" class="wapp-update-view" x-show="$store.chat.getWappActivityOpenTarget(item)" x-cloak @click="$store.chat.openWappActivityLink(item)" :aria-label="`View ${item.title || 'WApp activity'}`">View</button>
-                          <div class="doc-actions-menu wapp-update-actions-menu" x-data="{ open: false }" @click.outside="open = false" @keydown.escape.stop.prevent="open = false; $nextTick(() => $refs.actionTrigger?.focus())">
-                            <button type="button" class="doc-actions-toggle wapp-update-actions-trigger" title="More actions" :aria-label="`More actions for ${item.title || 'WApp activity'}`" aria-haspopup="menu" :aria-expanded="open.toString()" x-ref="actionTrigger" @click="open = !open; if (open) $nextTick(() => $refs.firstAction?.focus())">
-                              <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="5" r="1.8"></circle><circle cx="12" cy="12" r="1.8"></circle><circle cx="12" cy="19" r="1.8"></circle></svg>
-                            </button>
-                            <div class="doc-actions-popover wapp-update-actions-popover" x-show="open" x-cloak x-transition role="menu" :aria-label="`Actions for ${item.title || 'WApp activity'}`">
-                              <button type="button" role="menuitem" x-ref="firstAction" x-show="item.unread" @click="$store.chat.markWappActivityRead(item); open = false">Mark read</button>
-                              <button type="button" role="menuitem" x-ref="firstAction" x-show="!item.unread" @click="$store.chat.markWappActivityUnread(item); open = false">Mark unread</button>
-                              <button type="button" role="menuitem" @click="$store.chat.dismissWappActivity(item); open = false">Dismiss</button>
-                              <button type="button" role="menuitem" @click="$store.chat.setWappActivityMute('installation', item.wapp_installation_id, true); open = false">Mute source</button>
-                              <button type="button" role="menuitem" x-show="item.category" @click="$store.chat.setWappActivityMute('category', item.category, true); open = false">Mute category</button>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </article>
-                  </template>
-                </div>
-                <p class="settings-field-help" x-show="!$store.chat.wappActivityBootstrapping && $store.chat.filteredWappActivityItems.length === 0" x-text="$store.chat.hasActiveWappActivityFilters ? 'No Feed items match these filters.' : 'Your Feed is clear.'">Your Feed is clear.</p>
-                <p class="settings-field-help" x-show="$store.chat.wappActivityBootstrapping && $store.chat.filteredWappActivityItems.length === 0">Loading Feed…</p>
-                <p class="settings-field-help" x-show="$store.chat.wappActivityDismissNotice" x-cloak x-text="$store.chat.wappActivityDismissNotice" role="status" aria-live="polite"></p>
-                <details class="wapp-update-mutes" x-show="$store.chat.wappActivityMutes.length > 0">
-                  <summary x-text="`${$store.chat.wappActivityMutes.length} muted ${$store.chat.wappActivityMutes.length === 1 ? 'filter' : 'filters'}`"></summary>
-                  <template x-for="mute in $store.chat.wappActivityMutes" :key="mute.record_id"><div><span x-text="$store.chat.wappActivityMuteLabel(mute)"></span><button type="button" @click="$store.chat.setWappActivityMute(mute.target_type, mute.target_value, false)">Unmute</button></div></template>
-                </details>
-              </div>
-                          <div class="wapp-updates-body deck-card-scroll subscribed-feed" x-show="$store.chat.subscribedFeedView === 'subscribed'" x-cloak aria-label="Subscribed feeds">
+              <div class="wapp-updates-body deck-card-scroll feeds-reader" aria-label="Feeds">
                 <p class="error-text" role="status" x-show="$store.chat.subscribedFeedError" x-text="$store.chat.subscribedFeedError"></p>
                 <div class="feed-source-panel" x-show="sourcesOpen" x-cloak><div class="feed-source-heading"><strong>Sources</strong><button type="button" class="doc-actions-toggle" aria-label="Close sources" @click="sourcesOpen = false">×</button></div><p class="settings-field-help" x-show="!$store.chat.subscribedFeedSources.length">No sources yet. Add a feed with +.</p><template x-for="source in $store.chat.subscribedFeedSources" :key="source.key"><div class="feed-source-row"><strong x-text="source.title || source.source.url || source.source.feed_id"></strong><small x-text="$store.chat.feedSourceStatus(source.id)"></small><button type="button" class="btn-secondary btn-compact" @click="$store.chat.setFeedSubscriptionStatus(source, source.status === 'active' ? 'unsubscribed' : 'active')" x-text="source.status === 'active' ? 'Unsubscribe' : 'Resubscribe'"></button></div></template></div>
                 <div class="wapp-update-list"><template x-for="item in $store.chat.visibleSubscribedFeedItems" :key="item.key"><article class="wapp-update-card" :class="{ 'wapp-update-unread': !item.read }">
@@ -2531,7 +2401,7 @@
                   <template x-for="(attachment, index) in item.attachments" :key="index"><small class="feed-attachment" x-text="`${attachment.title || 'Attachment'} · ${attachment.mime_type}${attachment.duration_in_seconds != null ? ' · ' + attachment.duration_in_seconds + ' seconds' : ''}`"></small></template>
                   <small x-show="item.pending">State pending sync</small>
                 </article></template></div>
-                <p class="settings-field-help" x-show="!$store.chat.visibleSubscribedFeedItems.length">No subscribed items. Add a feed with +.</p>
+                <p class="settings-field-help" x-show="!$store.chat.visibleSubscribedFeedItems.length">No items yet. Add a feed with + or refresh your sources.</p>
               </div>
 </section>
 
@@ -3425,12 +3295,12 @@
                 </div>
               <div class="task-detail-header">
                 <div class="task-header-title">
-                  <button type="button" class="task-back-btn" x-show="!$store.chat.chatTaskModalOpen" @click="$store.chat.returnFromTaskDetail()">
+                  <button type="button" class="task-back-btn" aria-label="Back" x-show="!$store.chat.chatTaskModalOpen" @click="$store.chat.returnFromTaskDetail()">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
-                    Back
+                    <span class="task-back-label">Back</span>
                   </button>
                   <div class="task-header-title-content">
-                    <h1 class="task-detail-title-display" x-show="!$store.chat.isTaskDetailEditing()" :class="$store.chat.getTaskTitleLengthClass($store.chat.editingTask.title)" x-text="$store.chat.editingTask.title || 'Untitled task'"></h1>
+                    <h1 class="task-detail-title-display" :title="$store.chat.editingTask.title" x-show="!$store.chat.isTaskDetailEditing()" :class="$store.chat.getTaskTitleLengthClass($store.chat.editingTask.title)" x-text="$store.chat.editingTask.title || 'Untitled task'"></h1>
                     <textarea
                       class="task-detail-title"
                       rows="1"
@@ -3447,7 +3317,7 @@
                 <div class="task-detail-actions">
                   <button
                     type="button"
-                    class="task-copy-btn task-modal-expand-btn"
+                    class="task-copy-btn task-modal-expand-btn task-desktop-action"
                     x-show="$store.chat.chatTaskModalOpen"
                     @click="$store.chat.toggleChatTaskModalFullScreen()"
                     :title="$store.chat.chatTaskModalFullScreen ? 'Exit full screen' : 'Full screen'"
@@ -3458,7 +3328,7 @@
                   </button>
                   <button
                     type="button"
-                    class="task-copy-btn"
+                    class="task-copy-btn task-desktop-action"
                     x-show="$store.chat.chatTaskModalOpen"
                     @click="$store.chat.openChatTaskFullPage()"
                   >Open full page</button>
@@ -3480,7 +3350,7 @@
                   ></button>
                   <button
                     type="button"
-                    class="task-copy-btn"
+                    class="task-copy-btn task-desktop-action"
                     x-show="$store.chat.isTaskDetailEditing() && (!$store.chat.isTowerPgMode || $store.chat.taskDraftDirty)"
                     @click="$store.chat.cancelTaskDetailEdit()"
                     :disabled="$store.chat.taskDetailSaving"
@@ -3488,7 +3358,7 @@
                   ></button>
                   <button
                     type="button"
-                    class="task-copy-btn"
+                    class="task-copy-btn task-desktop-action"
                     @click="if ($store.chat.editingTask?.record_id) $store.chat.copyTaskLink($store.chat.editingTask.record_id)"
                     x-text="$store.chat.editingTask?.record_id && $store.chat.copiedTaskLinkId === $store.chat.editingTask.record_id ? 'Copied link' : 'Copy link'"
                   ></button>
@@ -3501,6 +3371,15 @@
                       </svg>
                     </button>
                     <div class="doc-actions-popover" x-show="open" x-cloak x-transition>
+                      <div class="task-phone-actions">
+                        <p class="task-menu-title" x-text="$store.chat.editingTask.title || 'Untitled task'"></p>
+                        <button type="button" x-show="$store.chat.isTaskDetailEditing() && (!$store.chat.isTowerPgMode || $store.chat.taskDraftDirty)" :disabled="$store.chat.taskDetailSaving" @click="$store.chat.cancelTaskDetailEdit(); open = false" x-text="$store.chat.isTowerPgMode ? 'Discard' : 'Cancel'"></button>
+                        <button type="button" @click="if ($store.chat.editingTask?.record_id) $store.chat.copyTaskLink($store.chat.editingTask.record_id); open = false" x-text="$store.chat.copiedTaskLinkId === $store.chat.editingTask?.record_id ? 'Copied link' : 'Copy link'"></button>
+                        <button type="button" x-show="$store.chat.chatTaskModalOpen" @click="$store.chat.toggleChatTaskModalFullScreen(); open = false" x-text="$store.chat.chatTaskModalFullScreen ? 'Exit full screen' : 'Full screen'"></button>
+                        <button type="button" x-show="$store.chat.chatTaskModalOpen" @click="$store.chat.openChatTaskFullPage(); open = false">Open full page</button>
+                        <button type="button" x-show="$store.chat.getPrimaryTaskAssigneeNpub($store.chat.editingTask)" :disabled="$store.chat.taskDetailSaving || $store.chat.taskDetailCheckoutPending" @click="if ($store.chat.isTaskDetailEditing() || await $store.chat.enterTaskDetailEditMode()) await $store.chat.clearEditingTaskAssignee(); open = false">Clear task assignee</button>
+                      </div>
+
                   <span
                     class="task-detail-mode-pill"
                     :class="$store.chat.isTaskDetailEditing() ? 'task-detail-mode-edit' : 'task-detail-mode-view'"
@@ -3575,7 +3454,7 @@
                       type="text"
                       x-model="$store.chat.taskAssigneeQuery"
                       @input="suggestionsOpen = true; $store.chat.handleTaskAssigneeInput($event.target.value)"
-                      placeholder="Type a name or npub"
+                      :placeholder="$store.chat.mobileViewport ? 'Assign' : 'Type a name or npub'"
                     />
                     <ul class="docs-share-suggestions" x-ref="assigneeSuggestions" @keydown.escape.stop="$refs.assigneeInput.focus(); suggestionsOpen = false" x-show="suggestionsOpen && !$store.chat.getPrimaryTaskAssigneeNpub($store.chat.editingTask) && $store.chat.isTaskDetailEditing() && $store.chat.taskAssigneeSuggestions.length > 0">
                       <template x-for="person in $store.chat.taskAssigneeSuggestions" :key="`task-assignee-${person.npub}`">
@@ -3598,8 +3477,8 @@
                   </div>
 
                 <div class="task-date-picker" x-data="{ open: false, anchor: '', active: '', close() { this.open = false; this.$refs.trigger.focus(); }, show() { this.anchor = this.active = $store.chat.taskDateAnchor($store.chat.editingTask.scheduled_for); this.open = true; this.$nextTick(() => requestAnimationFrame(() => this.focusDay())); }, focusDay() { this.$refs.days.querySelector('[data-date=&quot;' + this.active + '&quot;]')?.focus(); }, move(step, view = 'day') { this.active = $store.chat.shiftTaskDate(this.active, view, step); this.anchor = this.active; this.$nextTick(() => requestAnimationFrame(() => this.focusDay())); } }" @click.outside="open = false" @focusout="if ($event.relatedTarget && !$el.contains($event.relatedTarget)) open = false" @keydown.escape.prevent.stop="close()">
-                  <button type="button" class="task-bar-control" x-ref="trigger" aria-label="Schedule task" aria-haspopup="dialog" :aria-expanded="open" :disabled="$store.chat.taskDetailSaving || $store.chat.taskDetailCheckoutPending" @click="open ? close() : show()" @keydown.arrow-down.prevent="show()">
-                    <span class="task-bar-icon" x-html="$store.chat.getAttentionIconSvg('calendar')"></span><span x-text="$store.chat.editingTask.scheduled_for ? $store.chat.formatTaskDueDate($store.chat.editingTask.scheduled_for) : 'No date'"></span>
+                  <button type="button" class="task-bar-control" :title="$store.chat.editingTask.scheduled_for ? $store.chat.formatTaskDueDate($store.chat.editingTask.scheduled_for) : 'No date'" x-ref="trigger" aria-label="Schedule task" aria-haspopup="dialog" :aria-expanded="open" :disabled="$store.chat.taskDetailSaving || $store.chat.taskDetailCheckoutPending" @click="open ? close() : show()" @keydown.arrow-down.prevent="show()">
+                    <span class="task-bar-icon" x-html="$store.chat.getAttentionIconSvg('calendar')"></span><span class="task-date-label" x-text="$store.chat.editingTask.scheduled_for ? $store.chat.formatTaskDueDate($store.chat.editingTask.scheduled_for) : 'No date'"></span>
                   </button>
                   <div class="task-bar-popover task-date-popover" x-show="open" x-cloak role="dialog" aria-label="Schedule task calendar">
                     <div class="task-calendar-navigation"><button type="button" aria-label="Previous month" @click="anchor = active = $store.chat.shiftTaskDate(anchor, 'month', -1)">‹</button><strong aria-live="polite" x-text="$store.chat.taskDateCalendar(anchor).label"></strong><button type="button" aria-label="Next month" @click="anchor = active = $store.chat.shiftTaskDate(anchor, 'month', 1)">›</button></div>
@@ -3611,9 +3490,10 @@
                   </div>
                 </div>
                 <div class="task-tag-area task-detail-meta-row" aria-label="Task tags" x-data="{ open: false, query: '', index: 0, close() { this.open = false; this.$refs.add.focus(); }, async add(tag) { this.$refs.search.focus(); if (await $store.chat.changeEditingTaskTag(tag)) { this.query = ''; this.index = 0; this.$refs.search.focus(); } } }" @click.outside="open = false" @focusout="if ($event.relatedTarget && !$el.contains($event.relatedTarget)) open = false" @keydown.escape.prevent.stop="close()">
-                  <template x-for="tag in [...new Set($store.chat.getTaskTags($store.chat.editingTask))]" :key="tag"><span class="task-bar-tag"><span x-text="tag"></span><button type="button" :aria-label="'Remove tag ' + tag" :disabled="$store.chat.taskDetailSaving || $store.chat.taskDetailCheckoutPending" @click="await $store.chat.changeEditingTaskTag(tag, true); $refs.add.focus()">×</button></span></template>
-                  <button type="button" x-ref="add" class="task-bar-control" aria-haspopup="dialog" :aria-expanded="open" :disabled="$store.chat.taskDetailSaving || $store.chat.taskDetailCheckoutPending" @click="open = !open; if (open) $nextTick(() => requestAnimationFrame(() => $refs.search.focus()))"><span aria-hidden="true">＋</span> Add tag</button>
+                  <template x-for="tag in [...new Set($store.chat.getTaskTags($store.chat.editingTask))]" :key="tag"><span class="task-bar-tag task-desktop-tag"><span x-text="tag"></span><button type="button" :aria-label="'Remove tag ' + tag" :disabled="$store.chat.taskDetailSaving || $store.chat.taskDetailCheckoutPending" @click="await $store.chat.changeEditingTaskTag(tag, true); $refs.add.focus()">×</button></span></template>
+                  <button type="button" x-ref="add" class="task-bar-control" aria-label="Add tag" :title="'Tags: ' + ($store.chat.editingTask.tags || 'none')" aria-haspopup="dialog" :aria-expanded="open" :disabled="$store.chat.taskDetailSaving || $store.chat.taskDetailCheckoutPending" @click="open = !open; if (open) $nextTick(() => requestAnimationFrame(() => $refs.search.focus()))"><span aria-hidden="true">＋</span><span class="task-add-tag-label">Add tag</span></button>
                   <div class="task-bar-popover task-tag-popover" role="dialog" aria-label="Add task tags" x-show="open" x-cloak>
+                    <div class="task-phone-tags"><template x-for="tag in [...new Set($store.chat.getTaskTags($store.chat.editingTask))]" :key="tag"><span class="task-bar-tag"><span x-text="tag"></span><button type="button" :aria-label="'Remove tag ' + tag" :disabled="$store.chat.taskDetailSaving || $store.chat.taskDetailCheckoutPending" @click="await $store.chat.changeEditingTaskTag(tag, true); $refs.search.focus()">×</button></span></template></div>
                     <input type="text" x-ref="search" aria-label="Find or create tag" x-model="query" @input="index = 0" placeholder="Find or create tag" @keydown.arrow-down.prevent="index = Math.min(index + 1, $store.chat.taskTagOptions(query).length - 1)" @keydown.arrow-up.prevent="index = Math.max(0, index - 1)" @keydown.enter.prevent="if ($store.chat.taskTagOptions(query)[index]) add($store.chat.taskTagOptions(query)[index]); else if (query.trim()) add(query)" />
                     <div class="task-tag-options"><template x-for="(tag, i) in (open ? $store.chat.taskTagOptions(query) : [])" :key="tag"><button type="button" :class="{ 'tag-option-active': index === i }" @click="add(tag)" x-text="tag"></button></template></div>
                     <button type="button" class="task-tag-create" x-show="query.trim()" @click="add(query)">Add <span x-text="query"></span></button>
@@ -4284,8 +4164,8 @@
 
                 <template x-for="(msg, index) in $store.chat.visibleMainFeedMessages" :key="msg.record_id">
                   <article class="chat-post channel-thread-card" :class="{ 'chat-post-focused': $store.chat.isFocusedMessage(msg.record_id), 'chat-post-unread': $store.chat.isMessageUnread(msg), 'chat-post-thread-unread': $store.chat.isRootThreadUnread(msg) }" :data-message-id="msg.record_id" tabindex="0" role="link" :aria-label="`Open ${$store.chat.getThreadCardTitle(msg)} conversation`" @keydown.enter.prevent="$store.chat.openThread(msg.record_id)" @keydown.space.prevent="$store.chat.openThread(msg.record_id)">
-                    <div class="chat-msg-actions-menu" @click.outside="$store.chat.isMessageActionsMenuOpen(msg.record_id) && $store.chat.closeMessageActionsMenu()">
-                      <button type="button" class="chat-msg-actions-toggle" title="Message actions" aria-label="Message actions" @click.stop="$store.chat.toggleMessageActionsMenu(msg.record_id)">
+                    <div class="chat-msg-actions-menu" @keydown.enter.stop @keydown.space.stop @keydown.escape.stop.prevent="$store.chat.closeMessageActionsMenu(); $el.querySelector('.chat-msg-actions-toggle').focus()" @click.outside="$store.chat.isMessageActionsMenuOpen(msg.record_id) && $store.chat.closeMessageActionsMenu()">
+                      <button type="button" class="chat-msg-actions-toggle" title="Message actions" aria-label="Message actions" :aria-expanded="$store.chat.isMessageActionsMenuOpen(msg.record_id).toString()" @click.stop="$store.chat.toggleMessageActionsMenu(msg.record_id)">
                         <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
                           <circle cx="12" cy="5" r="1.8"></circle>
                           <circle cx="12" cy="12" r="1.8"></circle>
@@ -4317,7 +4197,7 @@
                         <span class="channel-thread-card-kicker" x-show="$store.chat.isRootThreadUnread(msg)" x-cloak>Unread activity</span>
                         <span class="channel-thread-card-count" x-text="$store.chat.getThreadMessageCount(msg.record_id) + ' ' + ($store.chat.getThreadMessageCount(msg.record_id) === 1 ? 'message' : 'messages')"></span>
                       </div>
-                      <h3 x-text="$store.chat.getThreadCardTitle(msg)"></h3>
+                      <h3 :title="$store.chat.getThreadCardTitle(msg)" x-text="$store.chat.getThreadCardTitle(msg)"></h3>
                     </div>
                     <div class="chat-post-header channel-thread-card-author">
                       <button type="button" class="identity-avatar-button" @click.stop="$store.chat.openIdentityCard($event, msg.sender_npub)" :title="$store.chat.getSenderName(msg.sender_npub)">
@@ -4489,7 +4369,7 @@
               @keydown.escape.window="($store.chat.activeThreadId || $store.chat.deckThreadComposerOpen) && !$store.chat.chatTaskModalOpen && !$store.chat.chatDocModalOpen && ($store.chat.deckThreadComposerOpen ? $store.chat.closeDeckThreadComposer() : $store.chat.closeVisibleThread())"
             >
             <div class="chat-thread-panel" :class="{ 'thread-full': $store.chat.threadSize === 'full', 'thread-create-mode': $store.chat.deckThreadComposerOpen }" role="dialog" aria-modal="true" x-sol-dialog :aria-label="$store.chat.deckThreadComposerOpen ? 'Create thread' : 'Thread'" @keydown.window="$store.chat.handleDeckThreadNavigationKeydown($event)" @touchstart.passive="$store.chat.beginDeckThreadSwipe($event)" @touchend.passive="$store.chat.endDeckThreadSwipe($event)" @touchcancel.passive="$store.chat.endDeckThreadSwipe($event)">
-              <div class="thread-header">
+              <div class="thread-header" :class="{ 'thread-title-editing': !$store.chat.deckThreadComposerOpen && $store.chat.threadTitleEditing }">
                 <button type="button" class="thread-create-back" x-show="$store.chat.deckThreadComposerOpen && $store.chat.deckThreadComposerRouted" x-cloak @click="$store.chat.backDeckThreadComposerToRouting()">Back</button>
                 <div class="thread-header-copy">
                   <label class="thread-create-title" x-show="$store.chat.deckThreadComposerOpen" x-cloak>
@@ -4501,7 +4381,7 @@
                     class="thread-title-display"
                     x-show="!$store.chat.deckThreadComposerOpen && !$store.chat.threadTitleEditing"
                     @click="$store.chat.startThreadTitleEdit()"
-                    title="Rename thread"
+                    :title="$store.chat.getActiveThreadTitle()"
                     aria-label="Rename thread title"
                     x-text="$store.chat.getActiveThreadTitle()"
                   ></button>
@@ -4565,30 +4445,6 @@
                 >Load all messages in thread</button>
                 <template x-if="$store.chat.getThreadParentMessage() && $store.chat.getThreadParentMessage().pg_record_type !== 'thread'">
                   <div class="thread-message" :class="{ 'thread-message-focused': $store.chat.isFocusedMessage($store.chat.getThreadParentMessage()?.record_id) }" :data-thread-message-id="$store.chat.getThreadParentMessage()?.record_id || ''">
-                    <div class="chat-msg-actions-menu" @click.outside="$store.chat.isMessageActionsMenuOpen($store.chat.getThreadParentMessage()?.record_id) && $store.chat.closeMessageActionsMenu()">
-                      <button type="button" class="chat-msg-actions-toggle" title="Message actions" aria-label="Message actions" @click.stop="$store.chat.toggleMessageActionsMenu($store.chat.getThreadParentMessage()?.record_id)">
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
-                          <circle cx="12" cy="5" r="1.8"></circle>
-                          <circle cx="12" cy="12" r="1.8"></circle>
-                          <circle cx="12" cy="19" r="1.8"></circle>
-                        </svg>
-                      </button>
-                      <div class="chat-msg-actions-popover" x-show="$store.chat.isMessageActionsMenuOpen($store.chat.getThreadParentMessage()?.record_id)" x-cloak x-transition>
-                        <button type="button" :data-record-id="$store.chat.getThreadParentMessage()?.record_id || ''" data-source-surface="thread_parent" data-chat-get-it-done="true">Get it done</button>
-                        <button type="button" x-show="$store.chat.canResendMessage($store.chat.getThreadParentMessage())" :disabled="$store.chat.isMessageResendPending($store.chat.getThreadParentMessage()?.record_id)" @click.stop.prevent="$store.chat.resendFailedMessage($store.chat.getThreadParentMessage()?.record_id)" x-text="$store.chat.isMessageResendPending($store.chat.getThreadParentMessage()?.record_id) ? 'Resending…' : 'Resend'"></button>
-                        <button type="button" x-show="$store.chat.canEditMessage($store.chat.getThreadParentMessage())" @click.stop.prevent="$store.chat.startMessageEdit($store.chat.getThreadParentMessage()?.record_id)">Edit</button>
-                        <button type="button" x-show="$store.chat.canBranchFromMessage($store.chat.getThreadParentMessage())" :disabled="$store.chat.isBranchFromMessageSubmitting($store.chat.getThreadParentMessage()?.record_id)" @click.stop.prevent="$store.chat.branchFromMessage($store.chat.getThreadParentMessage()?.record_id)" x-text="$store.chat.isBranchFromMessageSubmitting($store.chat.getThreadParentMessage()?.record_id) ? 'Branching…' : 'Branch from here'"></button>
-                        <button type="button" @click.stop.prevent="$store.chat.copyMessageRawText($store.chat.getThreadParentMessage()?.record_id)">Copy message</button>
-                        <button type="button" x-show="$store.chat.hasThreadAutopilotSessionLink($store.chat.getThreadParentMessage())" @click.stop.prevent="$store.chat.openThreadAutopilotSession($store.chat.getThreadParentMessage())">Autopilot Link</button>
-                        <button type="button" @click.stop.prevent="$store.chat.copyThreadRawText($store.chat.getThreadParentMessage()?.record_id)">Copy thread</button>
-                        <button type="button" @click.stop.prevent="$store.chat.copyFlightDeckReference('chat', $store.chat.buildChatMessageFlightDeckReferenceId($store.chat.getThreadParentMessage()?.record_id), 'Chat thread'); $store.chat.closeMessageActionsMenu()">FD Ref</button>
-                        <button type="button" x-show="$store.chat.isTowerPgMode && !$store.chat.isChatThreadArchived($store.chat.getThreadParentMessage()?.record_id)" :disabled="$store.chat.isChatThreadArchiveSubmitting($store.chat.getThreadParentMessage()?.record_id)" @click.stop.prevent="$store.chat.archiveChatThreadByParentId($store.chat.getThreadParentMessage()?.record_id, true)" x-text="$store.chat.isChatThreadArchiveSubmitting($store.chat.getThreadParentMessage()?.record_id, 'archive') ? 'Archiving...' : 'Archive thread'"></button>
-                        <button type="button" x-show="$store.chat.isTowerPgMode && $store.chat.isChatThreadArchived($store.chat.getThreadParentMessage()?.record_id)" :disabled="$store.chat.isChatThreadArchiveSubmitting($store.chat.getThreadParentMessage()?.record_id)" @click.stop.prevent="$store.chat.archiveChatThreadByParentId($store.chat.getThreadParentMessage()?.record_id, false)" x-text="$store.chat.isChatThreadArchiveSubmitting($store.chat.getThreadParentMessage()?.record_id, 'unarchive') ? 'Unarchiving...' : 'Unarchive thread'"></button>
-                        <button type="button" class="chat-msg-actions-danger" @click.stop.prevent="$store.chat.openChatDeleteConfirm('message', $store.chat.getThreadParentMessage()?.record_id)">Delete message</button>
-                        <button type="button" class="chat-msg-actions-danger" @click.stop.prevent="$store.chat.openChatDeleteConfirm('thread', $store.chat.getThreadParentMessage()?.record_id)">Delete thread</button>
-                        <button type="button" x-show="!$store.chat.isTowerPgMode" @click.stop.prevent="$store.chat.inspectMessageSyncStatus($store.chat.getThreadParentMessage()?.record_id)">Check sync status</button>
-                      </div>
-                    </div>
                     <span
                       class="thread-status-dot"
                       :class="$store.chat.getThreadParentMessage()?.sync_status === 'synced' ? 'thread-status-dot-synced' : $store.chat.getThreadParentMessage()?.sync_status === 'failed' ? 'thread-status-dot-failed' : 'thread-status-dot-pending'"
@@ -4605,10 +4461,36 @@
                     </button>
                     <div class="thread-msg-body">
                       <div class="thread-msg-header">
-                        <span class="chat-sender" x-text="$store.chat.getSenderName($store.chat.getThreadParentMessage()?.sender_npub)"></span>
-                        <span class="chat-archived-badge" x-show="$store.chat.isChatThreadArchived($store.chat.getThreadParentMessage()?.record_id)" x-cloak>Archived</span>
-                        <span class="chat-time" x-text="new Date($store.chat.getThreadParentMessage()?.updated_at || '').toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })"></span>
-                        <span class="chat-edited-indicator" x-show="$store.chat.isMessageEdited($store.chat.getThreadParentMessage())" x-cloak>edited</span>
+                        <div class="thread-msg-metadata">
+                          <span class="chat-sender" x-text="$store.chat.getSenderName($store.chat.getThreadParentMessage()?.sender_npub)"></span>
+                          <span class="chat-archived-badge" x-show="$store.chat.isChatThreadArchived($store.chat.getThreadParentMessage()?.record_id)" x-cloak>Archived</span>
+                          <span class="chat-time" x-text="new Date($store.chat.getThreadParentMessage()?.updated_at || '').toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })"></span>
+                          <span class="chat-edited-indicator" x-show="$store.chat.isMessageEdited($store.chat.getThreadParentMessage())" x-cloak>edited</span>
+                        </div>
+                        <div class="chat-msg-actions-menu" @keydown.enter.stop @keydown.space.stop @keydown.escape.stop.prevent="$store.chat.closeMessageActionsMenu(); $el.querySelector('.chat-msg-actions-toggle').focus()" @click.outside="$store.chat.isMessageActionsMenuOpen($store.chat.getThreadParentMessage()?.record_id) && $store.chat.closeMessageActionsMenu()">
+                          <button type="button" class="chat-msg-actions-toggle" title="Message actions" aria-label="Message actions" :aria-expanded="$store.chat.isMessageActionsMenuOpen($store.chat.getThreadParentMessage()?.record_id).toString()" @click.stop="$store.chat.toggleMessageActionsMenu($store.chat.getThreadParentMessage()?.record_id)">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
+                              <circle cx="12" cy="5" r="1.8"></circle>
+                              <circle cx="12" cy="12" r="1.8"></circle>
+                              <circle cx="12" cy="19" r="1.8"></circle>
+                            </svg>
+                          </button>
+                          <div class="chat-msg-actions-popover" x-show="$store.chat.isMessageActionsMenuOpen($store.chat.getThreadParentMessage()?.record_id)" x-cloak x-transition>
+                            <button type="button" :data-record-id="$store.chat.getThreadParentMessage()?.record_id || ''" data-source-surface="thread_parent" data-chat-get-it-done="true">Get it done</button>
+                            <button type="button" x-show="$store.chat.canResendMessage($store.chat.getThreadParentMessage())" :disabled="$store.chat.isMessageResendPending($store.chat.getThreadParentMessage()?.record_id)" @click.stop.prevent="$store.chat.resendFailedMessage($store.chat.getThreadParentMessage()?.record_id)" x-text="$store.chat.isMessageResendPending($store.chat.getThreadParentMessage()?.record_id) ? 'Resending…' : 'Resend'"></button>
+                            <button type="button" x-show="$store.chat.canEditMessage($store.chat.getThreadParentMessage())" @click.stop.prevent="$store.chat.startMessageEdit($store.chat.getThreadParentMessage()?.record_id)">Edit</button>
+                            <button type="button" x-show="$store.chat.canBranchFromMessage($store.chat.getThreadParentMessage())" :disabled="$store.chat.isBranchFromMessageSubmitting($store.chat.getThreadParentMessage()?.record_id)" @click.stop.prevent="$store.chat.branchFromMessage($store.chat.getThreadParentMessage()?.record_id)" x-text="$store.chat.isBranchFromMessageSubmitting($store.chat.getThreadParentMessage()?.record_id) ? 'Branching…' : 'Branch from here'"></button>
+                            <button type="button" @click.stop.prevent="$store.chat.copyMessageRawText($store.chat.getThreadParentMessage()?.record_id)">Copy message</button>
+                            <button type="button" x-show="$store.chat.hasThreadAutopilotSessionLink($store.chat.getThreadParentMessage())" @click.stop.prevent="$store.chat.openThreadAutopilotSession($store.chat.getThreadParentMessage())">Autopilot Link</button>
+                            <button type="button" @click.stop.prevent="$store.chat.copyThreadRawText($store.chat.getThreadParentMessage()?.record_id)">Copy thread</button>
+                            <button type="button" @click.stop.prevent="$store.chat.copyFlightDeckReference('chat', $store.chat.buildChatMessageFlightDeckReferenceId($store.chat.getThreadParentMessage()?.record_id), 'Chat thread'); $store.chat.closeMessageActionsMenu()">FD Ref</button>
+                            <button type="button" x-show="$store.chat.isTowerPgMode && !$store.chat.isChatThreadArchived($store.chat.getThreadParentMessage()?.record_id)" :disabled="$store.chat.isChatThreadArchiveSubmitting($store.chat.getThreadParentMessage()?.record_id)" @click.stop.prevent="$store.chat.archiveChatThreadByParentId($store.chat.getThreadParentMessage()?.record_id, true)" x-text="$store.chat.isChatThreadArchiveSubmitting($store.chat.getThreadParentMessage()?.record_id, 'archive') ? 'Archiving...' : 'Archive thread'"></button>
+                            <button type="button" x-show="$store.chat.isTowerPgMode && $store.chat.isChatThreadArchived($store.chat.getThreadParentMessage()?.record_id)" :disabled="$store.chat.isChatThreadArchiveSubmitting($store.chat.getThreadParentMessage()?.record_id)" @click.stop.prevent="$store.chat.archiveChatThreadByParentId($store.chat.getThreadParentMessage()?.record_id, false)" x-text="$store.chat.isChatThreadArchiveSubmitting($store.chat.getThreadParentMessage()?.record_id, 'unarchive') ? 'Unarchiving...' : 'Unarchive thread'"></button>
+                            <button type="button" class="chat-msg-actions-danger" @click.stop.prevent="$store.chat.openChatDeleteConfirm('message', $store.chat.getThreadParentMessage()?.record_id)">Delete message</button>
+                            <button type="button" class="chat-msg-actions-danger" @click.stop.prevent="$store.chat.openChatDeleteConfirm('thread', $store.chat.getThreadParentMessage()?.record_id)">Delete thread</button>
+                            <button type="button" x-show="!$store.chat.isTowerPgMode" @click.stop.prevent="$store.chat.inspectMessageSyncStatus($store.chat.getThreadParentMessage()?.record_id)">Check sync status</button>
+                          </div>
+                        </div>
                       </div>
                       <div class="thread-msg-text">
                         <template x-if="$store.chat.isHangCallInvitation($store.chat.getThreadParentMessage())">
@@ -4676,26 +4558,6 @@
 
                 <template x-for="reply in $store.chat.visibleThreadMessages" :key="reply.record_id">
                   <div class="thread-message" :class="{ 'thread-message-focused': $store.chat.isFocusedMessage(reply.record_id) }" data-thread-reply :data-thread-message-id="reply.record_id">
-                    <div class="chat-msg-actions-menu" @click.outside="$store.chat.isMessageActionsMenuOpen(reply.record_id) && $store.chat.closeMessageActionsMenu()">
-                      <button type="button" class="chat-msg-actions-toggle" title="Message actions" aria-label="Message actions" @click.stop="$store.chat.toggleMessageActionsMenu(reply.record_id)">
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
-                          <circle cx="12" cy="5" r="1.8"></circle>
-                          <circle cx="12" cy="12" r="1.8"></circle>
-                          <circle cx="12" cy="19" r="1.8"></circle>
-                        </svg>
-                      </button>
-                      <div class="chat-msg-actions-popover" x-show="$store.chat.isMessageActionsMenuOpen(reply.record_id)" x-cloak x-transition>
-                        <button type="button" x-show="!reply.read_only" :data-record-id="reply.record_id" data-source-surface="thread_reply" data-chat-get-it-done="true">Get it done</button>
-                        <button type="button" x-show="$store.chat.canResendMessage(reply)" :disabled="$store.chat.isMessageResendPending(reply.record_id)" @click.stop.prevent="$store.chat.resendFailedMessage(reply.record_id)" x-text="$store.chat.isMessageResendPending(reply.record_id) ? 'Resending…' : 'Resend'"></button>
-                        <button type="button" x-show="$store.chat.canEditMessage(reply)" @click.stop.prevent="$store.chat.startMessageEdit(reply.record_id)">Edit</button>
-                        <button type="button" x-show="$store.chat.canBranchFromMessage(reply)" :disabled="$store.chat.isBranchFromMessageSubmitting(reply.record_id)" @click.stop.prevent="$store.chat.branchFromMessage(reply.record_id)" x-text="$store.chat.isBranchFromMessageSubmitting(reply.record_id) ? 'Branching…' : 'Branch from here'"></button>
-                        <button type="button" @click.stop.prevent="$store.chat.copyMessageRawText(reply.record_id)">Copy message</button>
-                        <button type="button" x-show="$store.chat.hasThreadAutopilotSessionLink(reply)" @click.stop.prevent="$store.chat.openThreadAutopilotSession(reply)">Autopilot Link</button>
-                        <button type="button" @click.stop.prevent="$store.chat.copyFlightDeckReference('chat', $store.chat.buildChatMessageFlightDeckReferenceId(reply.record_id), 'Chat reply'); $store.chat.closeMessageActionsMenu()">FD Ref</button>
-                        <button type="button" x-show="!reply.read_only" class="chat-msg-actions-danger" @click.stop.prevent="$store.chat.openChatDeleteConfirm('message', reply.record_id)">Delete message</button>
-                        <button type="button" x-show="!$store.chat.isTowerPgMode" @click.stop.prevent="$store.chat.inspectMessageSyncStatus(reply.record_id)">Check sync status</button>
-                      </div>
-                    </div>
                     <span
                       class="thread-status-dot"
                       :class="reply.sync_status === 'synced' ? 'thread-status-dot-synced' : reply.sync_status === 'failed' ? 'thread-status-dot-failed' : 'thread-status-dot-pending'"
@@ -4711,10 +4573,32 @@
                     </button>
                     <div class="thread-msg-body">
                       <div class="thread-msg-header">
-                        <span class="chat-sender" x-text="$store.chat.getSenderName(reply.sender_npub)"></span>
-                        <span class="chat-time" x-text="new Date(reply.updated_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })"></span>
-                        <span class="chat-archived-badge" x-show="reply.read_only" x-cloak>Inherited · read-only</span>
-                        <span class="chat-edited-indicator" x-show="$store.chat.isMessageEdited(reply)" x-cloak>edited</span>
+                        <div class="thread-msg-metadata">
+                          <span class="chat-sender" x-text="$store.chat.getSenderName(reply.sender_npub)"></span>
+                          <span class="chat-time" x-text="new Date(reply.updated_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })"></span>
+                          <span class="chat-archived-badge" x-show="reply.read_only" x-cloak>Inherited · read-only</span>
+                          <span class="chat-edited-indicator" x-show="$store.chat.isMessageEdited(reply)" x-cloak>edited</span>
+                        </div>
+                        <div class="chat-msg-actions-menu" @keydown.enter.stop @keydown.space.stop @keydown.escape.stop.prevent="$store.chat.closeMessageActionsMenu(); $el.querySelector('.chat-msg-actions-toggle').focus()" @click.outside="$store.chat.isMessageActionsMenuOpen(reply.record_id) && $store.chat.closeMessageActionsMenu()">
+                          <button type="button" class="chat-msg-actions-toggle" title="Message actions" aria-label="Message actions" :aria-expanded="$store.chat.isMessageActionsMenuOpen(reply.record_id).toString()" @click.stop="$store.chat.toggleMessageActionsMenu(reply.record_id)">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
+                              <circle cx="12" cy="5" r="1.8"></circle>
+                              <circle cx="12" cy="12" r="1.8"></circle>
+                              <circle cx="12" cy="19" r="1.8"></circle>
+                            </svg>
+                          </button>
+                          <div class="chat-msg-actions-popover" x-show="$store.chat.isMessageActionsMenuOpen(reply.record_id)" x-cloak x-transition>
+                            <button type="button" x-show="!reply.read_only" :data-record-id="reply.record_id" data-source-surface="thread_reply" data-chat-get-it-done="true">Get it done</button>
+                            <button type="button" x-show="$store.chat.canResendMessage(reply)" :disabled="$store.chat.isMessageResendPending(reply.record_id)" @click.stop.prevent="$store.chat.resendFailedMessage(reply.record_id)" x-text="$store.chat.isMessageResendPending(reply.record_id) ? 'Resending…' : 'Resend'"></button>
+                            <button type="button" x-show="$store.chat.canEditMessage(reply)" @click.stop.prevent="$store.chat.startMessageEdit(reply.record_id)">Edit</button>
+                            <button type="button" x-show="$store.chat.canBranchFromMessage(reply)" :disabled="$store.chat.isBranchFromMessageSubmitting(reply.record_id)" @click.stop.prevent="$store.chat.branchFromMessage(reply.record_id)" x-text="$store.chat.isBranchFromMessageSubmitting(reply.record_id) ? 'Branching…' : 'Branch from here'"></button>
+                            <button type="button" @click.stop.prevent="$store.chat.copyMessageRawText(reply.record_id)">Copy message</button>
+                            <button type="button" x-show="$store.chat.hasThreadAutopilotSessionLink(reply)" @click.stop.prevent="$store.chat.openThreadAutopilotSession(reply)">Autopilot Link</button>
+                            <button type="button" @click.stop.prevent="$store.chat.copyFlightDeckReference('chat', $store.chat.buildChatMessageFlightDeckReferenceId(reply.record_id), 'Chat reply'); $store.chat.closeMessageActionsMenu()">FD Ref</button>
+                            <button type="button" x-show="!reply.read_only" class="chat-msg-actions-danger" @click.stop.prevent="$store.chat.openChatDeleteConfirm('message', reply.record_id)">Delete message</button>
+                            <button type="button" x-show="!$store.chat.isTowerPgMode" @click.stop.prevent="$store.chat.inspectMessageSyncStatus(reply.record_id)">Check sync status</button>
+                          </div>
+                        </div>
                       </div>
                       <div class="thread-msg-text">
                         <template x-if="$store.chat.isHangCallInvitation(reply)">
@@ -5587,13 +5471,16 @@
                     </svg>
                     <div class="doc-preview-surface">
                       <div role="status" aria-live="polite" x-cloak x-show="!$store.chat.isSelectedDocContentReadyForEditor() || ['loading', 'error'].includes($store.chat.docRichEditorLoadState)">
-                        <p x-text="$store.chat.docRichEditorLoadError || ($store.chat.selectedDocument?.content_storage_status === 'error' ? 'Preview only — complete document unavailable. Reconnect and retry to edit.' : 'Preview only — loading complete document…')"></p>
+                        <p x-text="$store.chat.docRichEditorLoadError || (!$store.chat.isSelectedDocContentReadyForEditor() ? ($store.chat.selectedDocument?.content_storage_status === 'error' ? 'Preview only — complete document unavailable. Reconnect and retry to edit.' : 'Preview only — loading complete document…') : 'Preparing editing…')"></p>
                         <button type="button" class="btn-secondary" x-show="$store.chat.docRichEditorLoadState === 'error' || !$store.chat.isSelectedDocContentReadyForEditor()" :disabled="$store.chat.docRichEditorLoadState !== 'error' && ($store.chat.docEditDraftDirty || $store.chat.docLocalDraft)" @click="$store.chat.retrySelectedDocLoading()">Try again</button>
-                        <button type="button" class="btn-secondary" x-show="$store.chat.docRichEditorLoadState === 'error'" @click="$store.chat.docEditorMode = 'preview'">Read without editor</button>
                       </div>
+                      <template x-if="$store.chat.docEditorMode === 'rich' && $store.chat.docRichEditorLoadState !== 'ready'">
+                        <div class="doc-block-editor-surface" data-doc-editor-fallback x-html="$store.chat.renderMarkdown($store.chat.getDocEditorFallbackContent())" x-effect="$store.chat.getDocEditorFallbackContent(); $nextTick(() => $store.chat.scheduleStorageImageHydration())"></div>
+                      </template>
                       <template x-if="$store.chat.docEditorMode === 'rich'">
                         <div
                           class="doc-rich-editor"
+                          x-show="$store.chat.docRichEditorLoadState === 'ready'"
                           x-init="$nextTick(() => $store.chat.mountDocRichEditor($el))"
                           x-effect="$store.chat.docEditorMode; $store.chat.selectedDocument?.version; $store.chat.observeSelectedDocAuthoritativeVersion(); if ($store.chat.docEditorMode === 'rich') $nextTick(() => $store.chat.mountDocRichEditor($el))"
                         ></div>
@@ -10051,6 +9938,7 @@
           <div class="doc-modal-card new-group-modal" role="dialog" aria-modal="true" x-sol-dialog aria-labelledby="edit-group-modal-title" tabindex="-1" x-effect="$store.chat.syncGroupDialogFocus($el, $store.chat.showEditGroupModal)" @keydown.tab="$store.chat.trapGroupDialogFocus($event)">
             <button class="modal-close" type="button" aria-label="Close edit group" @click="$store.chat.closeEditGroupModal()" :disabled="$store.chat.groupEditPending">&times;</button>
             <h3 id="edit-group-modal-title">Edit group</h3>
+            <p class="error-text" role="alert" x-show="$store.chat.error" x-text="$store.chat.error"></p>
             <p class="new-group-hint">Rename the group and manage who can use it for sharing.</p>
 
             <label class="docs-field-label">Name</label>
@@ -10289,7 +10177,7 @@
               <p class="settings-success" x-show="$store.chat.channelGrantsNotice" x-text="$store.chat.channelGrantsNotice"></p>
               <p class="groups-subtitle channel-access-error" x-show="$store.chat.channelGrantsError" x-text="$store.chat.channelGrantsError"></p>
               <p class="groups-empty channel-grants-empty" x-show="!$store.chat.channelGrantsLoading && !$store.chat.channelGrantsError && $store.chat.channelGrantRows.length === 0">No channel grants loaded.</p>
-              <p class="groups-empty channel-grants-empty" x-show="!$store.chat.channelGrantsLoading && $store.chat.channelGrantsError && $store.chat.channelGrantRows.length === 0">Channel grants could not be loaded. Retry refresh when signing is available.</p>
+              <p class="groups-empty channel-grants-empty" x-show="!$store.chat.channelGrantsLoading && $store.chat.channelGrantsError && $store.chat.channelGrantRows.length === 0">Channel grants could not be loaded. Refresh to try again. Temporary connection failures retry automatically while settings are open.</p>
 
               <div class="channel-grants-list" x-show="$store.chat.channelGrantRows.length > 0">
                 <template x-for="grant in $store.chat.channelGrantRows" :key="grant.key">
@@ -11084,22 +10972,17 @@
         </div>
 
 
-        <div class="doc-modal-backdrop wapp-management-editor-backdrop" x-show="$store.chat.feedAddOpen" x-cloak @click.self="$store.chat.closeFeedAdd()" @keydown.escape="$store.chat.closeFeedAdd()">
-          <div class="doc-modal-card wapp-management-editor-modal feed-add-dialog" role="dialog" aria-modal="true" x-sol-dialog aria-labelledby="feed-add-title"><header><h3 id="feed-add-title">Add feed</h3><button type="button" class="icon-btn" aria-label="Close add feed" @click="$store.chat.closeFeedAdd()">×</button></header><div class="wapp-management-editor-body">
-            <p class="settings-field-help">Choose an app from the Autopilot connections in Agents, then choose its feed.</p>
-            <template x-for="connection in $store.chat.feedConnections" :key="connection.id">
-              <label><span x-text="connection.https_endpoint || connection.display_name"></span><select aria-label="Connection transport" :value="$store.chat.feedConnectionChoices[connection.id]" @change="$store.chat.setFeedConnectionTransport(connection.id, $event.target.value)" :disabled="$store.chat.feedAddBusy"><option value="https" :disabled="!connection.https_endpoint">HTTPS</option><option value="fips" :disabled="!connection.fips_endpoint">FIPS</option></select></label>
-            </template>
-            <template x-if="$store.chat.feedAddBusy"><p role="status" aria-live="polite" x-text="$store.chat.feedAddStatus || 'Loading…'"></p></template>
-            <template x-for="error in $store.chat.feedDiscoveryErrors" :key="error.connection_id"><p class="error-text" role="alert"><strong x-text="error.connection_name"></strong><span x-text="' — ' + error.error"></span></p></template>
-            <p class="settings-field-help" x-show="!$store.chat.feedAddBusy && !$store.chat.feedConnections.length && !$store.chat.subscribedFeedError">No connected Autopilots yet. Add a connection in Agents, then retry.</p>
-            <label><span>Connected app</span><select aria-label="Feed app" :value="$store.chat.feedSelectedApp" @change="$store.chat.chooseFeedApp($event.target.value)" :disabled="$store.chat.feedAddBusy || !$store.chat.feedApps.length"><option value="">Choose an authorised app</option><template x-for="app in $store.chat.feedApps" :key="app.key"><option :value="app.key" x-text="`${app.connection.https_endpoint || app.connection.display_name} · ${app.title}`"></option></template></select></label>
-            <p class="settings-field-help" x-show="!$store.chat.feedAddBusy && $store.chat.feedConnections.length && !$store.chat.feedApps.length && !$store.chat.feedDiscoveryErrors.length && !$store.chat.subscribedFeedError">No apps are available to your identity on these connections.</p>
-            <p class="settings-field-help" x-show="$store.chat.feedSelectedApp && !$store.chat.feedAddBusy && !$store.chat.feedChoices.length && !$store.chat.subscribedFeedError">This app has no available feeds.</p>
-            <template x-for="feed in $store.chat.feedChoices" :key="feed.id"><div class="feed-choice"><div><strong x-text="feed.title"></strong><p class="settings-field-help" x-text="feed.description"></p></div><button type="button" class="btn-primary" @click="$store.chat.subscribeSelectedFeed(feed)" :disabled="$store.chat.feedAddBusy" :aria-label="'Subscribe to ' + feed.title">Subscribe</button></div></template>
-            <hr><p role="status" aria-live="polite" x-show="$store.chat.feedManualBusy" x-text="$store.chat.feedManualStatus"></p><label>Feed link<input type="url" aria-label="Feed link" x-model="$store.chat.publicFeedDraft" placeholder="https://example.org/feed.json"></label><label>Format<select x-model="$store.chat.publicFeedFormat"><option value="book-of-sand">Book of Sand (authenticated)</option><option value="jsonfeed-1.1">JSON Feed 1.1</option><option value="rss">RSS / podcast</option></select></label>
-            <p class="settings-field-help">Book of Sand links use your signed-in reader and the workspace’s registered source. Public JSON/RSS feeds need direct browser CORS. Connection transport choices are saved on this device; FIPS never falls back to HTTPS. Attachments are metadata only.</p><button type="button" class="btn-primary" @click="$store.chat.subscribePublicFeed()" :disabled="$store.chat.feedManualBusy || !$store.chat.publicFeedDraft.trim()">Subscribe to link</button><p class="error-text" role="alert" x-show="$store.chat.subscribedFeedError" x-text="$store.chat.subscribedFeedError"></p>
-          </div><footer><button type="button" class="btn-secondary" @click="$store.chat.closeFeedAdd()">Cancel</button><button type="button" class="btn-secondary" @click="$store.chat.feedSelectedApp ? $store.chat.chooseFeedApp($store.chat.feedSelectedApp) : $store.chat.openFeedAdd()" :disabled="$store.chat.feedAddBusy">Retry</button></footer></div>
+        <div class="doc-modal-backdrop" x-show="$store.chat.feedAddOpen" x-cloak @click.self="$store.chat.closeFeedAdd()" @keydown.escape="$store.chat.closeFeedAdd()">
+          <form class="doc-modal-card wapp-management-editor-modal feed-add-dialog" role="dialog" aria-modal="true" x-sol-dialog aria-labelledby="feed-add-title" @submit.prevent="$store.chat.subscribePublicFeed()">
+            <header><h3 id="feed-add-title">Add feed</h3><button type="button" class="icon-btn" aria-label="Close add feed" @click="$store.chat.closeFeedAdd()">×</button></header>
+            <div class="wapp-management-editor-body">
+              <label>Feed URL<input type="url" aria-label="Feed URL" x-model="$store.chat.publicFeedDraft" placeholder="https://example.org/feed.json" required></label>
+              <p class="settings-field-help">Paste a JSON Feed or RSS URL. The source must allow access from this browser.</p>
+              <p role="status" aria-live="polite" x-show="$store.chat.feedManualBusy" x-text="$store.chat.feedManualStatus"></p>
+              <p class="error-text" role="alert" x-show="$store.chat.subscribedFeedError" x-text="$store.chat.subscribedFeedError"></p>
+            </div>
+            <footer><button type="button" class="btn-secondary" @click="$store.chat.closeFeedAdd()">Cancel</button><button type="submit" class="btn-primary" :disabled="$store.chat.feedManualBusy || !$store.chat.publicFeedDraft.trim()" x-text="$store.chat.feedManualBusy ? 'Checking…' : 'Add feed'">Add feed</button></footer>
+          </form>
         </div>
         <div class="doc-modal-backdrop wapp-management-editor-backdrop" x-show="$store.chat.wappInstallEditorOpen" x-cloak @click.self="$store.chat.wappInstallEditorOpen = false"><div class="doc-modal-card wapp-management-editor-modal" role="dialog" aria-modal="true" x-sol-dialog aria-labelledby="wapp-intent-title" data-testid="wapp-activation-dialog"><header><h3 id="wapp-intent-title">Activate a managed WApp</h3><button type="button" class="icon-btn" aria-label="Close WApp activation" @click="$store.chat.wappInstallEditorOpen = false">×</button></header><div class="wapp-management-editor-body"><p class="settings-field-help">Your browser identity signs the exact Tower intent. Autopilot can only claim the selected immutable app, version, URL, Feed destination, and <code>activity.publish</code>.</p><label><span>Managed app</span><select aria-label="Managed Autopilot app" data-testid="wapp-activation-app" :value="$store.chat.wappInstallDraft?.app_id" @change="$store.chat.selectWappActivationApp($event.target.value)" :disabled="$store.chat.wappActivationLoading"><option value="" x-text="$store.chat.wappActivationLoading ? 'Discovering apps…' : 'Choose an app'"></option><template x-for="app in $store.chat.wappActivationApps" :key="app.app_id"><option :value="app.app_id" x-text="app.title"></option></template></select></label><div class="wapp-management-filter-grid"><label><span>Immutable version</span><input aria-label="Immutable app version" readonly x-model="$store.chat.wappInstallDraft.app_version" /></label><label><span>Stable installation</span><input aria-label="Stable installation identity" readonly x-model="$store.chat.wappInstallDraft.wapp_installation_id" /></label><label><span>Launch URL</span><input aria-label="Approved launch URL" readonly x-model="$store.chat.wappInstallDraft.launch_url" /></label><label><span>Approved View origin</span><input aria-label="Approved View origin" readonly x-model="$store.chat.wappInstallDraft.open_origins" /></label><label><span>Feed destination</span><select aria-label="Workspace Feed destination" data-testid="wapp-feed-destination" :value="$store.chat.wappInstallDraft?.destination_channel_id" @change="$store.chat.selectWappActivationDestination($event.target.value)"><option value="">Choose a destination</option><template x-for="group in $store.chat.wappPublishingDestinationGroups" :key="group.scope_id"><optgroup :label="group.label"><template x-for="channel in group.channels" :key="channel.channel_id"><option :value="channel.channel_id" x-text="channel.label"></option></template></optgroup></template></select></label></div><label class="settings-checkbox"><input type="checkbox" aria-label="Allow Feed-only activity publishing" x-model="$store.chat.wappInstallDraft.activity_publish" disabled /><span>Feed-only publishing (<code>activity.publish</code>); no channel or message write</span></label><p class="settings-field-help">Book of Sand View links are limited to its approved origin. No private key is requested or stored.</p><p class="error-text" role="alert" aria-live="assertive" x-show="$store.chat.wappManagementError" x-text="$store.chat.wappManagementError"></p></div><footer><button type="button" class="btn-secondary" aria-label="Cancel WApp activation" @click="$store.chat.wappInstallEditorOpen = false">Cancel</button><button type="button" class="btn-primary" aria-label="Sign and activate WApp" data-testid="confirm-wapp-activation" @click="$store.chat.createWappInstallIntent()" :disabled="$store.chat.wappInstallSaving || $store.chat.wappActivationLoading" x-text="$store.chat.wappInstallSaving ? 'Signing and activating…' : 'Approve and activate'"></button></footer></div></div>
 
@@ -11501,8 +11384,31 @@
     <div class="tower-usage-content">
       <p x-text="$store.chat.currentWorkspace?.label || $store.chat.currentWorkspace?.name || 'Selected workspace'"></p>
       <p class="tower-usage-help">Stored data bytes. Database values are logical estimates. Unavailable measurements are excluded from the subtotal.</p>
+      <section aria-label="USD hosting billing" data-testid="hosting-billing">
+        <h3>Hosting balance</h3>
+        <p role="alert" x-show="$store.chat.hostingBillingError" x-text="$store.chat.hostingBillingError"></p>
+        <p x-show="$store.chat.hostingBillingBusy">Loading billing…</p>
+        <template x-if="$store.chat.hostingBillingCurrentSnapshot?.status.billing_mode === 'usd_prepaid'">
+          <div>
+            <p>Shared customer balance: <strong x-text="$store.chat.hostingFormatUsd($store.chat.hostingBillingCurrentSnapshot.status.balance_usd)"></strong></p>
+            <p>Welcome credit: <span x-text="$store.chat.hostingFormatUsd($store.chat.hostingBillingCurrentSnapshot.status.promo_usd)"></span> · expires <time x-text="new Date($store.chat.hostingBillingCurrentSnapshot.status.promo_expires_at).toLocaleString()"></time></p>
+            <p>Hourly burn: <span x-text="$store.chat.hostingFormatUsd($store.chat.hostingBillingCurrentSnapshot.status.hourly_burn_usd)"></span> · estimated runout: <span x-text="$store.chat.hostingBillingCurrentSnapshot.status.estimated_runout_at ? new Date($store.chat.hostingBillingCurrentSnapshot.status.estimated_runout_at).toLocaleString() : 'Unavailable until complete current measurements'"></span></p>
+            <p x-text="'Status: ' + $store.chat.hostingBillingCurrentSnapshot.status.billing_state"></p>
+            <p>USD $5 per decimal GB per 720 hours. Charges cover completed linked objects and logical database rows. Unavailable graph, Git and GRASP stores are excluded. Promotional expiry may bring runout forward.</p>
+            <label>Top up <select x-model="$store.chat.hostingTopupCents"><option value="500">$5 USD</option><option value="1000">$10 USD</option><option value="2500">$25 USD</option><option value="5000">$50 USD</option><option value="10000">$100 USD</option></select></label>
+            <button type="button" :disabled="$store.chat.hostingCheckoutBusy || !$store.chat.hostingBillingCurrentSnapshot.status.stripe.configured || !$store.chat.hostingBillingCurrentSnapshot.status.can_top_up" @click="$store.chat.topUpHostingBilling()">Stripe top-up (test mode)</button>
+            <p x-show="!$store.chat.hostingBillingCurrentSnapshot.status.stripe.configured">Stripe is not configured on this Tower. No payment has been taken.</p>
+            <p x-show="!$store.chat.hostingBillingCurrentSnapshot.status.can_top_up">Only the customer account owner can start a top-up.</p>
+            <p>Live payments await refund/dispute support and payment validation.</p>
+            <details><summary>Hourly usage</summary><template x-for="row in $store.chat.hostingBillingCurrentSnapshot.usage" :key="row.hour"><p><span x-text="new Date(row.hour).toLocaleString()"></span> · <span x-text="row.status"></span> · <span x-text="row.bytes === null ? 'Unavailable' : row.bytes + ' covered bytes'"></span> · <span x-text="$store.chat.hostingLedgerUsd(row.debit_units)"></span></p></template></details>
+            <details><summary>Transactions</summary><template x-for="row in $store.chat.hostingBillingCurrentSnapshot.ledger" :key="row.id"><p><span x-text="new Date(row.created_at).toLocaleString()"></span> · <span x-text="row.kind"></span> · <span x-text="$store.chat.hostingLedgerUsd(row.amount_units)"></span> · <span x-text="row.reason"></span></p></template></details>
+          </div>
+        </template>
+        <p x-show="$store.chat.hostingBillingCurrentSnapshot?.status.billing_mode === 'legacy_unlinked'">This existing workspace has not been enrolled in USD hosting billing.</p>
+        <button type="button" :disabled="$store.chat.hostingBillingBusy" @click="$store.chat.refreshHostingBilling()">Refresh billing</button>
+      </section>
       <p role="status" x-show="$store.chat.towerUsageStatus === 'loading'">Collecting workspace usage…</p>
-      <p role="alert" x-show="$store.chat.towerUsageError" x-text="$store.chat.towerUsageError"></p>
+      <p role="alert" data-testid="tower-usage-error" x-show="$store.chat.towerUsageError" x-text="$store.chat.towerUsageError"></p>
       <template x-if="$store.chat.towerUsageCurrentSnapshot">
         <div>
           <p class="tower-usage-total">Covered subtotal: <strong x-text="$store.chat.formatStorageBytes($store.chat.towerUsageCurrentSnapshot.total_bytes)"></strong></p>
@@ -11615,6 +11521,7 @@
     </div>
     <iframe :title="$store.chat.messageActivityDisplayTitle + ' dashboard'" sandbox="allow-scripts" referrerpolicy="no-referrer" :src="$store.chat.messageActivitySrc || 'about:blank'"></iframe>
   </dialog>
+  <div hidden x-effect="const context = $store.chat.orgDataInstallationsContextKey; const section = $store.chat.navSection; queueMicrotask(() => { if (context === $store.chat.orgDataInstallationsContextKey) $store.chat.loadOrgDataInstallations(); })"></div>
   <dialog id="org-data-modal" class="message-activity-modal" :class="{ 'thread-full': $store.chat.orgDataFull }" aria-labelledby="org-data-title" data-testid="org-data-modal"
     x-effect="if ($store.chat.orgDataOpen && $store.chat.orgDataOpenedContext !== $store.chat.orgDataContextKey) $store.chat.closeOrgData(true)"
     @keydown.escape="$store.chat.handleOrgDataEscape($event)" @cancel.prevent="$store.chat.handleOrgDataEscape($event)" @close="!$el.open && $store.chat.orgDataOpen && $store.chat.closeOrgData()"

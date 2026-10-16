@@ -263,13 +263,18 @@ function hasProseMirrorContentModel(contentModel = {}) {
 }
 
 function normalizedDocumentPlainText(value) {
-  return String(value || '').replace(/\s+/g, ' ').trim();
+  // innerText inserts layout-dependent separators (notably around pre/table).
+  // This guard checks text presence; exact whitespace/marks remain protected
+  // by the independent content-model round-trip validation.
+  return String(value || '').replace(/\s+/g, '');
 }
 
 function proseMirrorPlainText(node = null) {
   if (!node || typeof node !== 'object') return '';
   if (node.type === 'text') return String(node.text || '');
   if (node.type === 'fdWikiLink') return String(node.attrs?.title || '');
+  if (node.type === 'fdStorageFile') return String(node.attrs?.label || node.attrs?.title || node.attrs?.src || 'File');
+  if (node.type === 'fdUploadPlaceholder') return String(node.attrs?.label || 'Uploading image...');
   if (node.type === 'hardBreak') return '\n';
   const children = Array.isArray(node.content) ? node.content : [];
   const content = children.map(proseMirrorPlainText).join('');
@@ -1346,7 +1351,7 @@ export const docsManagerMixin = {
     if (!this.selectedDocId) return false;
     const recordId = this.selectedDocId;
     if (this.docRichEditorLoadState === 'error' && this.docRichEditorMountEl) {
-      void this.mountDocRichEditor(this.docRichEditorMountEl);
+      void this.mountDocRichEditor(this.docRichEditorMountEl, { retry: true });
     } else {
       if (this.docEditDraftDirty || this.docLocalDraft) return false;
       this.openDoc(recordId, { syncRoute: false, ensureSync: false });
@@ -1703,7 +1708,9 @@ export const docsManagerMixin = {
 
   buildSelectedDocContentModel() {
     if (this.docEditorMode === 'rich') {
-      const synced = this.syncDocRichEditorContentModel();
+      const synced = this.docRichEditorAdapter
+        ? this.syncDocRichEditorContentModel()
+        : (hasProseMirrorContentModel(this.docEditorContentModel) ? this.docEditorContentModel : null);
       if (synced) {
         const bound = bindWikiState(synced.editor_state, this.documents, this.selectedDocument?.pg_channel_id);
         return bound === synced.editor_state ? synced : prosemirrorToFlightDeckContentModel(bound);
@@ -1744,32 +1751,57 @@ export const docsManagerMixin = {
     return boundModel;
   },
 
-  async mountDocRichEditor(element = null) {
+  getDocEditorFallbackContent() {
+    // Reading must never rebuild/serialize the editor or mutate its draft.
+    return this.docDraftReadSaved
+      ? (this.docSavedSnapshot?.content ?? this.selectedDocument?.content ?? '')
+      : (this.docEditorContentModel?.content ?? this.docEditorContent ?? this.selectedDocument?.content ?? '');
+  },
+
+  async mountDocRichEditor(element = null, options = {}) {
     if (!element || this.docEditorMode !== 'rich') return;
     if (this.docRichEditorAdapter && this.docRichEditorMountEl === element) return;
     if (this.docRichEditorMountPromise && this.docRichEditorMountEl === element) {
       return this.docRichEditorMountPromise;
     }
+    // Alpine effects may run again after failure. Only an explicit action can
+    // start another bounded attempt; never turn reactive updates into a loop.
+    if (this.docRichEditorLoadState === 'error' && this.docRichEditorMountEl === element && !options.retry) return false;
     this.destroyDocRichEditor();
     this.docRichEditorMountEl = element;
     const mountGeneration = this.docRichEditorMountGeneration;
     const recordId = this.selectedDocId;
     const editorGeneration = this.docEditAccessGeneration;
     const workspaceId = this.getSelectedDocWorkspaceId();
+    const isCurrent = () => this.docRichEditorMountGeneration === mountGeneration
+      && this.selectedDocId === recordId && this.docEditAccessGeneration === editorGeneration
+      && this.getSelectedDocWorkspaceId() === workspaceId
+      && this.docRichEditorMountEl === element && this.docEditorMode === 'rich';
     this.docRichEditorLoadState = 'loading';
     this.docRichEditorLoadError = '';
+    this.cancelDocAutosave();
     const diagnosticOperation = createDiagnosticOperation('document-editor');
     let stage = 'import';
+    let recovered = false;
     const mountPromise = (async () => {
-      const { createTiptapEditorAdapter } = await loadTiptapEditorAdapter();
-      if (this.docRichEditorMountGeneration !== mountGeneration
-        || this.selectedDocId !== recordId || this.docEditAccessGeneration !== editorGeneration
-        || this.getSelectedDocWorkspaceId() !== workspaceId
-        || this.docRichEditorMountEl !== element
-        || this.docEditorMode !== 'rich') {
+      let module;
+      try {
+        module = await loadTiptapEditorAdapter({ retry: options.retry === true });
+      } catch (error) {
+        console.warn('[flightdeck] document editor import failed; attempting recovery', error);
+        await waitForDocumentRetry(300);
+        if (isCurrent()) {
+          stage = 'recovery-import';
+          this.docRichEditorLoadError = 'Preparing editing — trying again…';
+          module = await loadTiptapEditorAdapter({ retry: true });
+          recovered = true;
+        }
+      }
+      if (!isCurrent()) {
         finishDiagnosticOperation(diagnosticOperation, 'cancelled', null, { stage });
         return false;
       }
+      const { createTiptapEditorAdapter } = module;
       const sourceDoc = {
         ...(this.selectedDocument || {}), content: this.docEditorContent,
         content_blocks: this.docEditorBlocks, editor_state: this.docEditorProseMirrorState,
@@ -1801,16 +1833,20 @@ export const docsManagerMixin = {
       });
       this.syncDocRichEditorContentModel();
       this.docRichEditorLoadState = 'ready';
+      this.docRichEditorLoadError = '';
+      if (this.docEditDraftDirty) this.scheduleDocAutosave();
       this.scheduleStorageImageHydration?.();
-      finishDiagnosticOperation(diagnosticOperation, 'succeeded', null, { stage });
+      finishDiagnosticOperation(diagnosticOperation, 'succeeded', null, { stage, recovered });
     })().catch(error => {
-      if (this.docRichEditorMountGeneration === mountGeneration && this.docRichEditorMountEl === element) {
+      if (isCurrent()) {
         // A factory may return before later mount setup fails. Drop that partial
         // adapter so explicit retry does not mistake it for a ready editor.
         this.docRichEditorAdapter?.destroy?.();
         this.docRichEditorAdapter = null;
+        element.replaceChildren?.();
         this.docRichEditorLoadState = 'error';
-        this.docRichEditorLoadError = `Document editor could not load: ${error?.message || error}`;
+        this.docRichEditorLoadError = 'Editing is unavailable. Check your connection and try again. If it still fails, refresh the app. Your content is unchanged.';
+        console.warn('[flightdeck] document editor unavailable', { stage, error });
         finishDiagnosticOperation(diagnosticOperation, 'failed', error, { stage, category: stage });
       } else {
         finishDiagnosticOperation(diagnosticOperation, 'cancelled', null, { stage });
@@ -3367,6 +3403,7 @@ export const docsManagerMixin = {
   scheduleDocAutosave() {
     this.scheduleDocLocalDraftPersistence();
     if (!this.docsEditorOpen) return;
+    if (this.docEditorMode === 'rich' && ['loading', 'error'].includes(this.docRichEditorLoadState)) return;
     if (this.docEditorMode === 'preview') return;
     if (!isOnlineForPgEdit() || this.docNeedsHeadCheck || this.docReconnectCheck || this.docDraftChoice || this.docDraftReadSaved) return;
     if (isTowerPgBackendMode() && isSyncedPgRecord(this.selectedDocument)
@@ -4320,6 +4357,10 @@ export const docsManagerMixin = {
   async saveSelectedDocItem(options = {}) {
     const autosave = options.autosave === true;
     this.error = null;
+    if (this.docEditorMode === 'rich' && ['loading', 'error'].includes(this.docRichEditorLoadState)) {
+      if (this.docEditDraftDirty) await this.persistSelectedDocDraft();
+      return null;
+    }
     if (Number(this.docRichImageUploadCount || 0) > 0) {
       this.docAutosaveState = 'pending';
       if (!autosave) this.error = 'Wait for pasted images to finish uploading before saving this document.';
@@ -4465,6 +4506,10 @@ export const docsManagerMixin = {
 
   async saveSelectedPgDocItem(item, ownerNpub, options = {}) {
     const autosave = options.autosave === true;
+    if (this.docEditorMode === 'rich' && ['loading', 'error'].includes(this.docRichEditorLoadState)) {
+      if (this.docEditDraftDirty) await this.persistSelectedDocDraft();
+      return null;
+    }
     if ((this.docReconnectCheck && !options.checkedReconnect) || this.docDraftChoice || this.docDraftReadSaved || !this.isSelectedDocDraftReadyForPersistence()) return null;
     const generation = this.docEditAccessGeneration;
     const workspaceId = this.getSelectedDocWorkspaceId(item);
@@ -4506,12 +4551,20 @@ export const docsManagerMixin = {
     const normalizedVisibleText = normalizedDocumentPlainText(visibleEditorText);
     const normalizedSerializedText = normalizedDocumentPlainText(proseMirrorPlainText(contentModel.editor_state));
     if (normalizedVisibleText
-      && (!normalizedSerializedText || normalizedVisibleText.length > normalizedSerializedText.length)) {
+      && normalizedVisibleText !== normalizedSerializedText) {
       // A stale adapter can still serialize the last accepted body while a
-      // duplicate visible editor contains a much longer draft. Preserve the
-      // complete visible text as a plain recovery model before refusing Save;
-      // keeping edit mode open also retains the original rich DOM in memory.
-      const recoveryModel = createDocumentEditorState({
+      // duplicate visible editor contains a different draft. Preserve a rich
+      // recovery when verifiable, otherwise keep visible text and the rich DOM.
+      const nativeState = this.docRichEditorAdapter?.getJSON?.();
+      const nativeModel = nativeState?.type === 'doc' ? prosemirrorToFlightDeckContentModel(nativeState) : null;
+      // Prefer the native rich tree, including comment-anchor identities, if
+      // only the adapter snapshot was stale. Parse DOM only for actual gaps.
+      const visibleModel = nativeModel
+        && normalizedDocumentPlainText(proseMirrorPlainText(nativeModel.editor_state)) === normalizedVisibleText
+        ? nativeModel : this.docRichEditorAdapter?.getVisibleContentModel?.();
+      const recoveryModel = visibleModel
+        && normalizedDocumentPlainText(proseMirrorPlainText(visibleModel.editor_state)) === normalizedVisibleText
+        ? visibleModel : createDocumentEditorState({
         content: visibleEditorText,
         content_blocks: [],
       }).contentModel;
@@ -4519,13 +4572,19 @@ export const docsManagerMixin = {
       this.docEditorBlocks = normalizeDocumentBlocks(recoveryModel.content_blocks, recoveryModel.content);
       this.docEditorProseMirrorState = recoveryModel.editor_state;
       this.docEditorContentModel = recoveryModel;
+      // Repair the adapter only when its schema can recover the complete rich
+      // surface. Otherwise keep the original DOM available for recovery.
+      if (recoveryModel === visibleModel) this.docRichEditorAdapter.setContent(recoveryModel.editor_state, { preserveSelection: true });
       this.docAutosaveState = 'error';
-      await this.persistSelectedDocDraft({ integrityError: 'visible_editor_content_exceeds_serialized_model' });
+      const recoveryRow = { ...this.buildSelectedDocDraftRow(), ...recoveryModel,
+        integrity_error: 'visible_editor_content_exceeds_serialized_model' };
+      await this.persistSelectedDocDraft({ row: recoveryRow, integrityError: recoveryRow.integrity_error });
       if (!autosave) {
         this.error = 'The visible document did not match the save model. Your complete text is still open and stored as a recovery draft; please retry Save.';
       }
       return null;
     }
+    if (String(this.error || '').startsWith('The visible document did not match the save model.')) this.error = null;
     if (isDocumentContentReadyForEditor(item)
       && contentModel.content === createDocumentEditorState(item).contentModel.content
       && documentContentSignature(contentModel) === documentContentSignature(item)
@@ -4785,6 +4844,12 @@ export const docsManagerMixin = {
         });
         void releasePgEditLeaseForRecord(this, item, 'document', { reportError: false });
         if (!autosave) this.error = this.docEditAccessMessage;
+      } else if (error?.status === 403) {
+        this.cancelDocAutosave();
+        this.docEditAccessState = 'blocked';
+        this.docEditAccessMessage = 'Tower denied this save. Your local draft is retained. Get edit access or explicitly retry after access changes.';
+        this.docRichEditorAdapter?.setEditable?.(true);
+        this.error = this.docEditAccessMessage;
       } else if (!autosave) {
         this.error = error?.message || 'Failed to save PG document.';
       }

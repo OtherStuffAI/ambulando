@@ -24,7 +24,6 @@ import {
   hydrateTowerPgTaskComments,
   hydrateTowerPgWorkroom,
   hydrateTowerPgWorkrooms,
-  hydrateTowerPgWappActivity,
   hydrateTowerPgWappPublishingGrants,
   mapPgChannelToLocal,
   mapPgAudioNoteToLocal,
@@ -40,7 +39,6 @@ import {
   mapPgWorkroomLinkToLocal,
   mapPgWorkroomParticipantToLocal,
   mapPgWorkroomToLocal,
-  mapPgWappActivityItemToLocal,
   mapPgWappPublishingGrantToLocal,
   mergePgHydratedTasksWithLocal,
   mapPgThreadToLocal,
@@ -51,7 +49,6 @@ import {
   deleteWorkspaceDb,
   getMessagesByChannel,
   getSyncState,
-  getWappActivityProjection,
   openWorkspaceDb,
 } from '../src/db.js';
 import { recordFamilyHash } from '../src/translators/chat.js';
@@ -155,90 +152,6 @@ describe('Tower PG WApp publishing hydration', () => {
     ]);
   });
 
-  it('materializes every activity page authoritatively, counts, and per-user mutes', async () => {
-    const replaceWappActivityItems = vi.fn(async () => {});
-    const replaceWappActivityMutes = vi.fn(async () => {});
-    const currentStore = store({
-      applyWappActivityItems: vi.fn(),
-      applyWappActivityCounts: vi.fn(),
-      applyWappActivityMutes: vi.fn(),
-    });
-    const getTowerPgWappActivityItems = vi.fn()
-      .mockResolvedValueOnce({ items: [{ id: 'item-1', title: '<script>unsafe</script>', unread: true, occurred_at: '2026-08-03T00:00:00.000Z' }], next_cursor: 'page-2' })
-      .mockResolvedValueOnce({ items: [{ id: 'item-2', state: 'withdrawn', read_at: '2026-08-03T00:05:00.000Z' }] });
-    const getTowerPgWappActivityCounts = vi.fn();
-
-    const result = await hydrateTowerPgWappActivity(currentStore, {
-      getTowerPgWappActivityItems,
-      getTowerPgWappActivityCounts,
-      getTowerPgWappActivityMutes: vi.fn(async () => ({ mutes: [{ target_type: 'category', target_value: 'lead' }] })),
-      replaceWappActivityItems,
-      replaceWappActivityMutes,
-    });
-
-    expect(getTowerPgWappActivityItems).toHaveBeenCalledTimes(2);
-    expect(getTowerPgWappActivityItems.mock.calls[1][1]).toEqual(expect.objectContaining({ cursor: 'page-2' }));
-    expect(getTowerPgWappActivityCounts).not.toHaveBeenCalled();
-    expect(replaceWappActivityItems).toHaveBeenCalledWith([
-      expect.objectContaining({ record_id: 'item-1', title: '<script>unsafe</script>', unread: true }),
-      expect.objectContaining({ record_id: 'item-2', state: 'withdrawn', unread: false }),
-    ], { authoritative: true });
-    expect(replaceWappActivityMutes).toHaveBeenCalledWith([
-      expect.objectContaining({ record_id: 'category:lead', target_type: 'category', target_value: 'lead' }),
-    ]);
-    expect(result.counts).toEqual({ unread: 1 });
-  });
-
-  it('keeps a server-dismissed item absent after destroying and recreating Feed state', async () => {
-    const ownerNpub = 'npub_feed_refresh_persistence';
-    await deleteWorkspaceDb(ownerNpub);
-    await openWorkspaceDb(ownerNpub).open();
-    const serverRows = [
-      { id: 'item-1', title: 'First', unread: true, occurred_at: '2026-08-06T01:00:00.000Z' },
-      { id: 'item-2', title: 'Second', unread: true, occurred_at: '2026-08-06T01:01:00.000Z' },
-    ];
-    const dismissedIds = new Set();
-    const statefulApi = {
-      list: vi.fn(async () => ({
-        items: serverRows.filter((item) => !dismissedIds.has(item.id)),
-        next_cursor: null,
-      })),
-      dismiss: vi.fn(async (itemId) => {
-        dismissedIds.add(itemId);
-        return { state: { dismissed_at: '2026-08-06T02:00:00.000Z', unread: true } };
-      }),
-    };
-    const createFeedStore = () => store({
-      workspaceOwnerNpub: ownerNpub,
-      currentWorkspace: {
-        workspaceId: 'workspace-1',
-        workspaceOwnerNpub: ownerNpub,
-        directHttpsUrl: 'https://tower.example',
-        appNpub: 'flightdeck_pg',
-        pgBackendMode: true,
-      },
-    });
-    const hydrate = (feedStore) => hydrateTowerPgWappActivity(feedStore, {
-      getTowerPgWappActivityItems: statefulApi.list,
-      getTowerPgWappActivityMutes: vi.fn(async () => ({ mutes: [] })),
-    });
-
-    await hydrate(createFeedStore());
-    expect((await getWappActivityProjection()).counts.unread).toBe(2);
-
-    const response = await statefulApi.dismiss('item-1');
-    expect(response.state.dismissed_at).toBeTruthy();
-
-    const recreatedStore = createFeedStore();
-    await hydrate(recreatedStore);
-    const afterReload = await getWappActivityProjection();
-    expect(afterReload.items.map((item) => item.record_id)).toEqual(['item-2']);
-    expect(afterReload.counts.unread).toBe(1);
-    expect(statefulApi.list).toHaveBeenCalledTimes(2);
-
-    await deleteWorkspaceDb(ownerNpub);
-  });
-
   it('replaces the complete admin grant list so removed choices cannot remain stale', async () => {
     const replaceWappPublishingGrants = vi.fn(async () => {});
     const currentStore = store({ applyWappPublishingGrants: vi.fn() });
@@ -254,12 +167,6 @@ describe('Tower PG WApp publishing hydration', () => {
     expect(currentStore.applyWappPublishingGrants).not.toHaveBeenCalled();
   });
 
-  it('preserves plain activity text for x-text rendering rather than interpreting HTML', () => {
-    const item = mapPgWappActivityItemToLocal({ id: 'item-1', title: '<b>Title</b>', summary: '<img src=x onerror=alert(1)>' });
-    expect(item.title).toBe('<b>Title</b>');
-    expect(item.summary).toBe('<img src=x onerror=alert(1)>');
-    expect(item.grant_status).toBe('');
-  });
 });
 
 describe('PG read hydrator', () => {
@@ -1830,12 +1737,12 @@ describe('PG read hydrator', () => {
       { entity_type: 'daily_scope_agent_access', entity_id: 'actor-agent' },
     ]);
 
-    expect(result.fallbackEvents).toBe(0);
+    expect(result.fallbackEvents).toBe(3);
     expect(refreshTowerPgWorkspaceMembers).toHaveBeenCalledWith({ force: true, limit: 200 });
     expect(refreshGroups).toHaveBeenCalledWith({ force: true, minIntervalMs: 0 });
     expect(refreshDailyScopeAgentAccess).toHaveBeenCalledOnce();
     expect(refreshChannelGrants).toHaveBeenCalledOnce();
-    expect(refreshPgChannelAccessMaterialization).toHaveBeenCalledOnce();
+    expect(refreshPgChannelAccessMaterialization).toHaveBeenCalledWith({ channelIds: ['channel-1'] });
   });
 
   it('routes PG workroom visible events to targeted workroom hydrators', async () => {

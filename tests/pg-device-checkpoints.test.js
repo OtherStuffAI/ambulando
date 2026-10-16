@@ -107,12 +107,15 @@ it('counts a manifest once in the wire budget even when decoded actors accompany
   const h = await largeHarness({ actorLabel: true }), read = h.ports.readPage;
   h.ports.readPage = async (...args) => {
     const page = await read(...args);
-    return { ...page, access_changes: page.large_records.length ? Array.from({ length: 199 }, () => ({ revision: '1' })) : [] };
+    return { ...page, access_revision: '1', retention_policy: 'retain_downloaded',
+      access_changes: page.large_records.length ? Array.from({ length: 199 }, (_, i) => ({
+        family: 'message', resource_type: 'channel', resource_id: `channel-${i}`, status: 'granted',
+      })) : [] };
   };
   await h.run(h.options); expect((await state()).converged).toBe(true);
 });
 
-it.each(['interrupt', 'digest', 'quota', 'generation', 'expiry', 'cache loss', 'reordered'])('leaves the durable cursor unadvanced after large assembly %s and discards chunks', async scenario => {
+it.each(['interrupt', 'digest', 'quota', 'generation', 'access loss', 'expiry', 'cache loss', 'reordered'])('leaves the durable cursor unadvanced after large assembly %s and discards chunks', async scenario => {
   const h = await largeHarness(), read = h.ports.readChunk, materialize = h.ports.materialize;
   if (scenario === 'quota') h.manifest.total_bytes = 64 * 1024 * 1024 + 1;
   if (scenario === 'quota') h.manifest.chunk_count = Math.ceil(h.manifest.total_bytes / 262144);
@@ -122,6 +125,9 @@ it.each(['interrupt', 'digest', 'quota', 'generation', 'expiry', 'cache loss', '
     if (scenario === 'digest' && args[4] === 0) bytes[bytes.length - 1] ^= 1;
     if (scenario === 'generation' && args[4] === 0) {
       const prior = await state(); await db.sync_state.put({ key, value: { ...prior, localGeneration: prior.localGeneration + 1 } });
+    }
+    if (scenario === 'access loss' && args[4] === 0) {
+      const prior = await state(); await db.sync_state.put({ key, value: { ...prior, accessLost: true } });
     }
     return bytes;
   };
@@ -250,7 +256,9 @@ it('traverses empty pages and grant catchup, repairing a concurrent delete witho
     const page = await read(...args); index++;
     return { ...page, changes: index === 1 ? [] : index === 2 ? fixture.one_message_delta.changes
       : [...fixture.explicit_delete.changes, ...fixture.one_message_delta.changes],
-      has_more: index < 3, access_changes: index === 2 ? [{ revision: '3', change: 'grant' }] : [],
+      has_more: index < 3, access_revision: '3', retention_policy: 'retain_downloaded',
+      access_changes: index === 2 ? [{ family: 'message', resource_type: 'channel',
+        resource_id: fixture.one_message_delta.changes[0].row.channel_id, status: 'granted' }] : [],
       handover: index < 3 ? boundedFixture.pending : boundedFixture.complete };
   };
   const progress = vi.fn();
@@ -356,27 +364,27 @@ it.each(['reset_required', 'history_pruned', 'client_expired', 'client_not_regis
   expect(h.remote.client.mock.calls.filter(c => c[2].operation === 'retire').map(c => c[1])).toEqual([old]);
 });
 
-it('invalidates revoked authority while retaining downloads and drafts for recovery', async () => {
+it('retains revoked downloads and keeps pending commands for recovery', async () => {
   const h = harness(); await h.run(); await db.pending_writes.add({ record_id: 'pending' });
   await db.chat_messages.put({ record_id: 'pending', body: 'draft', sync_status: 'pending' });
   const downloads = await db.chat_messages.toArray();
   const old = await state();
   h.remote.page.mockRejectedValueOnce(failure('workspace_membership_required', 403));
   await expect(h.run()).rejects.toThrow('workspace_membership_required');
-  expect(await db.chat_messages.toArray()).toEqual(downloads); expect(await db.pending_writes.count()).toBe(1);
-  expect((await state()).cursor).toBeNull(); expect((await state()).resetting).toBe(true);
-  expect((await state()).converged).not.toBe(true);
-  expect((await state()).device.clientId).not.toBe(old.device.clientId);
-  expect((await state()).device.pendingAck).toBeNull();
-  // Re-grant with an empty authorised replacement snapshot: omission is not
-  // a tombstone. Retained content remains, but canonical authority is retired.
-  const read = h.ports.readPage;
-  h.ports.readPage = async (...args) => ({ ...await read(...args), changes: [] });
-  await h.run();
+  expect(await db.pg_record_rows.count()).toBe(17); expect(await db.chat_messages.count()).toBeGreaterThan(0); expect(await db.pending_writes.count()).toBe(1); expect((await state()).accessLost).toBe(true);
   expect(await db.chat_messages.toArray()).toEqual(downloads);
-  expect(await db.pg_record_rows.count()).toBe(0);
+  expect((await state()).cursor).toBe(old.cursor);
+  expect((await state()).device.clientId).toBe(old.device.clientId);
+  // Repeated denial preserves cache identity and canonical downloads, but marks
+  // future network authority lost. A new authorised page clears that status.
+  h.remote.page.mockRejectedValueOnce(failure('record_access_required', 403));
+  await expect(h.run()).rejects.toThrow('record_access_required');
+  expect(await db.pg_record_rows.count()).toBe(17);
+  expect((await state()).device.clientId).toBe(old.device.clientId);
+  await h.run();
+  expect((await state()).accessLost).toBe(false);
+  expect(await db.pg_record_rows.count()).toBe(17);
   expect(await db.pending_writes.count()).toBe(1);
-  expect((await state()).converged).toBe(true);
 });
 
 it.each(['actors', 'access'])('rejects byte overflow from %s sidecars before any local commit or ack', async sidecar => {
@@ -499,7 +507,7 @@ it('resumes snapshot retirement after interruption and acknowledges only its fin
   const interruptedState = await state();
   expect(interruptedState.snapshotRetirement.pendingAck).toBeTruthy(); expect(interruptedState.device.pendingAck).toBeNull();
   expect(h.remote.client.mock.calls.filter(c => c[2].operation === 'ack')).toHaveLength(1);
-  await h.run(); expect(await db.chat_messages.get('obsolete')).toBeTruthy();
+  await h.run(); expect(await db.chat_messages.get('obsolete')).toMatchObject({ pg_access_status: 'stale' });
   expect((await state()).snapshotRetirement).toBeNull(); expect((await state()).device.pendingAck).toBeNull();
   expect(h.remote.client.mock.calls.filter(c => c[2].operation === 'ack')[1][2].cursor).toBe(interruptedState.snapshotRetirement.nextCursor);
 });

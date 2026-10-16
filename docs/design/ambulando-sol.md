@@ -58,9 +58,22 @@ and enabling the preference restores access.
 The product is denser than the reference gallery: existing independent scroll
 panes, full-width boards, rich editor toolbars, sync/authority details and view
 locks remain because they serve working workflows. Expanded desktop product navigation
-uses the horizontal bar; the phone drawer retains view, scope/channel and workspace controls.
+uses the horizontal bar; phones use the fixed bottom view switcher, with
+scope/channel and workspace controls in the drawer.
 Navigation keeps the original collapsed default; its toggle reveals the expanded
 scope/channel sidebar and horizontal desktop product navigation.
+On mobile, the branding row retains the logo, hamburger, theme and profile menu.
+The compact context row contains workspace home (show all in the workspace),
+current scope/channel and Full screen. Focus hides only the branding row and
+places a hamburger before workspace home; the context and Show header toggle
+remain visible. There is one visible hamburger in either mode. Scope/channel
+switching stays in the sidebar. Names truncate with full accessible labels.
+The mobile drawer starts with Home, followed by scopes/channels and the workspace
+switcher; it has no utility text block. Backdrop and Escape close it in normal
+and focused modes, restoring focus to the existing hamburger after dialog cleanup.
+The fullscreen control retains focus through both directions. Desktop placement is unchanged.
+Both rows and the drawer respect safe-area and visual viewport insets.
+Browser fullscreen and external browser chrome remain browser-owned.
 Baseline-disabled approvals, flows, schedules, people, opportunities and reports
 retain their existing feature guards. Their shared presentation is themed; the
 redesign does not enable those products or claim browser coverage of gated flows.
@@ -129,7 +142,9 @@ The A4 cases in `tests/e2e/ambulando-sol.spec.cjs` check both themes at
 comment isolation and editor retention while switching phone panes.
 
 Expanded desktop sidebars place product view buttons in the horizontal context
-bar. The collapsed icon rail and phone drawer retain their navigation; mutually
+bar. The collapsed desktop icon rail retains its navigation. Phones use the
+bottom view switcher and reserve its height plus the safe-area inset; the drawer
+contains scopes, channels and workspaces without duplicate product views. Mutually
 exclusive visibility keeps one reachable product section set. The horizontal
 bar scrolls locally when necessary and retains view locks and fullscreen actions.
 Visible product copy and installed-app titles use Ambulando. Sol remains the
@@ -170,7 +185,49 @@ verify the Chromium clipboard with explicitly granted permissions and preserve
 the white paper code colors in both themes. Set `SOL_EVIDENCE_DIR` to a verified ignored handoff directory to
 capture screenshots.
 
+## Notification and shared-surface contrast
+
+The update header retains navy in light mode and the blue information surface
+in dark mode. Its local `--update-header-*` tokens pair title, disclosure,
+actions, border, hover and keyboard outline with that surface. Updating feedback
+keeps full ink opacity. Success Copy feedback uses the existing success pair.
+Image-preview captions and close controls use opaque card backing and foreground
+ink so the underlying content cannot erase them; the close focus ring is inset.
+
+`tests/e2e/theme-contrast.spec.cjs` renders production notification and image
+preview constructors with synthetic content and production styles. It measures
+composited CSS colours (including colour mixes and opacity) in light/dark themes
+at desktop/phone widths, with keyboard, hover, updating, retry and dismissal
+checks. It also samples headers, secondary text, input placeholders, buttons,
+notifications, tabs, badges, activity text, document metadata and white paper.
+Set `SOL_CONTRAST_DIST=1` to test the built CSS and `SOL_EVIDENCE_DIR` to a verified
+ignored handoff directory for measurements and screenshots. The sampled cases
+target 4.5:1 text and 3:1 meaningful controls/focus indicators; they do not establish
+whole-product compliance, arbitrary user-defined status colours or authenticated
+backend coverage.
+
 Phone conversation spacing, bounded long-draft/edit/attachment state and
 keyboard-visible reading-area checks are specified in
 [Phone conversation space](mobile-chat-density.md). Chat inputs stay 16px,
 while phone message text uses the classic compact 14px proportion.
+
+## Message action placement
+
+Thread message actions occupy a 44px column beside wrapping sender metadata.
+Messages keep their natural height in the scrolling history at every width.
+The prose begins below that row and keeps the full body width; neither the
+button background nor its hit area covers text. Channel cards reserve heading
+space beside their action button. The closed control is transparent, with a
+semantic hover surface and the shared keyboard focus ring. Expanded state is
+announced; Escape closes the list and restores focus. Native buttons retain
+Tab navigation, outside-click dismissal and the existing permission guards.
+Action lists scroll within half the viewport height.
+
+`tests/e2e/chat-message-actions.spec.cjs` checks both themes at
+320/390/430/768/1440px, long sender names and multiline prose, 150%/200% text
+sizes, CDP pinch-scale simulation, geometric separation, selection, scrolling, keyboard and pointer
+dismissal, action callbacks, read-only visibility and the compact thread header.
+It uses the production store/template with synthetic records and blocked backend
+requests; it does not establish authenticated permissions or physical-device
+zoom behavior. Optional `SOL_EVIDENCE_DIR` writes screenshots only to ignored,
+untracked evidence storage.

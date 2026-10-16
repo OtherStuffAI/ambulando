@@ -24,13 +24,9 @@ Switching scope replaces ownership and hides unrelated authority. Whole-cache
 cloning is not a supported backup/import operation: a clone must omit checkpoint
 identity/owner metadata so its next pull creates an independent registration.
 
-First v2 adoption retains v1 downloads and local writes while the replacement
-snapshot and delta handover retire old canonical authority. Same-cache reset/history loss/client expiry
-and membership revocation invalidate authority and checkpoint identity while
-retaining downloaded rows and drafts. Recovery snapshot omissions retire old
-canonical authority, not those downloaded projections or pending commands.
-Explicit newer tombstones still delete records. Switching viewer/backend remains
-a separate cache-isolation boundary; it is not a permission-repair operation.
+First v2 adoption preserves v1 views and local writes until the replacement
+snapshot and delta handover finish. Reset/history loss/client expiry preserves same-reader downloaded content,
+pending commands and recoverable local edits.
 Registrations marked obsolete by this cache are retired only under their matching
 signer/backend/workspace scope. Capacity errors retain the new ID and report the
 failure; active devices are never enumerated or evicted.
@@ -76,6 +72,43 @@ Automated coverage lives in `tests/pg-device-checkpoints.test.js` and the exact
 transport cases in `tests/api-sync-auth.test.js`, alongside the existing bounded
 record-delta, hydrator and materialisation-worker suites.
 
+## Retained downloads and additive access
+
+Tower's additive access extension keeps channel birth and permission changes on
+existing v1/v2 cursors and v2 device identities. Its opaque cursor independently
+pages newly authorized historic partitions; catchup uses canonical delta changes,
+not a workspace snapshot. `access_revision` is distinct from checkpoint CAS
+revision. `access_changes` is reader-specific and includes family, resource type,
+resource ID, granted/lost status, and optional resource kind for view states.
+
+The materialization worker commits the partition ledger with each page cursor.
+Dexie liveQuery projects access status into cached rows without scanning and
+rewriting an entire channel on each permission event. Loss in one family does
+not mark another family in that channel lost. Tower continues to authorize every
+future read/write. Previously downloaded bytes remain in the original reader's
+workspace partition and are shown as retained, stale or access-lost. A membership
+denial preserves cursor/client/ack intent and marks local access lost; a subsequent
+authorized page clears that workspace status. Typed reads compare access revision
+and loss status as well as cursor/generation to reject stale responses.
+
+Exceptional checkpoint repair preserves canonical and presentation rows. Snapshot
+omission marks retained content stale; only explicit content tombstones delete
+records. Same-workspace recovery leaves selected channels, scroll, editor buffers,
+drafts and outbox intact. Explicit identity replacement remains a separate cache
+isolation boundary. Browser activation and worker disposal guards still apply.
+
+Grant hints refresh only affected channel descriptors and selected grant controls;
+the existing service cursor loop delivers access notifications and historic rows.
+Forbidden queued writes retain their envelopes and stop automatic submission.
+Explicit retry is allowed after access changes. A forbidden document save retains
+its draft and blocks remote autosave while local draft persistence continues.
+
+Synthetic network/browser coverage is in `additive-workspace-sync.spec.cjs`;
+`pg-additive-access.test.js` covers partition status, atomic commit, older history,
+forbidden intent and identity replacement. Isolated fixtures do not establish
+that a deployed Tower migration has run; coordinated Tower-first activation and
+real signed two-reader acceptance remain part of the manager's release smoke.
+
 ## Negotiated finite snapshot handover
 
 When authenticated discovery advertises `record_sync.extensions` containing
@@ -92,7 +125,8 @@ strings compared with BigInt; cursors remain opaque. A saved negotiated extensio
 cannot silently downgrade when later discovery stops advertising it.
 
 This certifies a convergent committed prefix with drained authority catchups,
-not a frozen historical export or permission to read retained downloads. Newer
+not a frozen historical export or authorization for future network reads or writes.
+Previously authorized downloads remain locally readable under the retained-download policy. Newer
 writes can be collected in the next finite round without prolonging this one.
 Authority churn may require additional repair catchups before certification.
 Unextended v2 retains its existing terminal-delta semantics.
@@ -137,3 +171,9 @@ recipe to avoid committing a duplicate 1.2 MB payload. The materialisation test
 recreates the exact bytes and consumes Tower's pinned digest/manifest and exact
 expected acknowledgement. Full-scale database fixtures and live slow-link
 acceptance remain Tower and cross-component validation responsibilities.
+
+Bounded handover and chunk negotiation preserve the additive access contract above.
+Membership denial marks access lost without discarding canonical rows, cursor or
+device identity; it does not authorize future reads or writes. Assembly commits
+reject an access-loss change during download. Explicit content tombstones still
+delete records, and viewer/backend replacement remains a cache-isolation boundary.

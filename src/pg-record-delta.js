@@ -1,3 +1,4 @@
+import { mergePgAccessState } from './pg-access-state.js';
 import { markPgTargetArchived } from './pg-archive-state.js';
 import { mapScopeOrder } from './scope-order.js';
 import { personalAttentionVersion } from './personal-attention.js';
@@ -42,6 +43,11 @@ const TOWER_WINS_LOCAL_ASSET_CONFLICT_FAMILIES = new Set(['file', 'file_folder']
 export function recordDeltaCursorKey(store) { return `${towerPgSyncCursorKey(store)}:record-delta-v1`; }
 const pending = (row) => ['pending', 'failed'].includes(row?.sync_status) || row?.pg_reconciliation_pending === true;
 const rawKey = (family, id) => `${family}:${id}`;
+async function publishAccessProjection(db, cursorKey, state) {
+  const key = `${cursorKey}:record-access`;
+  const value = { accessRevision: state.accessRevision || null, accessPartitions: state.accessPartitions || {}, accessLost: Boolean(state.accessLost) };
+  if (!sameLogicalValue((await db.sync_state.get(key))?.value, value)) await db.sync_state.put({ key, value });
+}
 export function isTowerWinsLocalAssetConflict(conflict = {}) {
   return TOWER_WINS_LOCAL_ASSET_CONFLICT_FAMILIES.has(String(conflict.family || ''));
 }
@@ -159,7 +165,8 @@ export async function getPgAttentionProjection(store) {
   if (!authority || authority.legacyFallbackActive === true) return null;
   const ids = [...new Set([
     ...(store.tasks || []).map(r => `task:${r.record_id}`),
-    ...(store.messages || []).map(r => `thread:${r.pg_thread_id || r.record_id}`),
+    ...[...(store.messages || []), ...(store.fileMessages || []), ...(store.recentChannelMessages || [])]
+      .map(r => `thread:${r.pg_thread_id || r.parent_message_id || r.record_id}`),
     ...(store.documents || []).map(r => `document:${r.record_id}`),
   ])];
   const [counts, visible, conflicts] = await Promise.all([db.pg_attention_counts.toArray(), db.pg_resource_attention.bulkGet(ids), db.pg_record_conflicts.toArray()]);
@@ -230,6 +237,7 @@ async function applyRecordPage(store, page, options = {}) {
       const owner = (await db.sync_state.get(DEVICE_CACHE_OWNER_KEY))?.value;
       if (owner?.clientId !== state.device.clientId || owner.scope !== state.device.scope) throw new Error('Device authoritative owner changed');
     }
+    if (Object.hasOwn(options, 'expectedAccessLost') && Boolean(state.accessLost) !== options.expectedAccessLost) throw new Error('Record-delta access changed before page commit');
     if (Object.hasOwn(options, 'expectedGeneration') && Number(state.localGeneration || 0) !== options.expectedGeneration) throw new Error('Record-delta authority generation changed before page commit');
     if (Object.hasOwn(options, 'expectedCursor') && state.cursor !== options.expectedCursor) {
       if (state.cursor === page.next_cursor) return { applied: 0, cursor: state.cursor, hasMore: page.has_more, replay: true };
@@ -266,6 +274,7 @@ async function applyRecordPage(store, page, options = {}) {
       }
       return commandIds.has(id);
     };
+    const accessPartitions = mergePgAccessState(state, page, PG_RECORD_DELTA_FAMILIES, context.workspaceId);
     const changedKeys = new Set();
     const affectedTasks = new Set();
     const affectedChannels = new Set();
@@ -279,7 +288,7 @@ async function applyRecordPage(store, page, options = {}) {
       const key = rawKey(c.family, c.id);
       const prior = versions.get(key);
       if (prior && prior.generation === generation && BigInt(prior.version) >= BigInt(c.version) && !(options.reconcileKeys || []).includes(key)) continue;
-      if (page.mode !== 'snapshot' && prior && BigInt(prior.version) > BigInt(c.version)) continue;
+      if (prior && BigInt(prior.version) > BigInt(c.version)) continue;
       if (c.operation === 'delete' && ['scope', 'channel'].includes(c.family)) await markPgTargetArchived(c.family, c.id, db);
       if (c.operation === 'upsert' && ['scope', 'channel'].includes(c.family)) await db.pg_archived_targets.delete(`${c.family}:${c.id}`);
       const raw = { ...c, key, generation, parent_id: c.row?.task_id || c.row?.thread_id || prior?.parent_id || null, source_message_id: c.row?.source_message_id || prior?.source_message_id || prior?.row?.source_message_id || null };
@@ -373,7 +382,13 @@ async function applyRecordPage(store, page, options = {}) {
         if (prior) { await table.delete(localId); applied++; }
         return;
       }
-      if (Number(prior?.version || 0) > Number(raw.row?.row_version || raw.row?.version || 0)) {
+      // Scope/channel canonical rows may have no content version. Their
+      // freshness is the exact journal version checked before materialization;
+      // pending edits and commands are protected above.
+      const journalVersionedNavigation = ['scope', 'channel'].includes(raw.family)
+        && raw.row?.row_version == null && raw.row?.version == null;
+      if (!journalVersionedNavigation
+        && Number(prior?.version || 0) > Number(raw.row?.row_version || raw.row?.version || 0)) {
         // A newer local version is still present in the authorized snapshot.
         await table.update(localId, { pg_delta_generation: generation, pg_delta_family: raw.family });
         return;
@@ -407,7 +422,7 @@ async function applyRecordPage(store, page, options = {}) {
         mapped.pg_effective_message_ids = prior.pg_effective_message_ids;
       }
       if (raw.family === 'resource_view_state' && prior) mapped.viewed_activity_version = Math.max(Number(prior.viewed_activity_version || 0), Number(mapped.viewed_activity_version || 0));
-      mapped = { ...mapped, pg_delta_generation: generation, pg_delta_family: raw.family };
+      mapped = { ...mapped, pg_access_status: 'current', pg_delta_generation: generation, pg_delta_family: raw.family };
       // Preserve separately hydrated document bytes, absent from canonical PG rows.
       if (raw.family === 'doc' && prior && mapped.content_storage_object_id
         && mapped.content_storage_object_id === prior.content_storage_object_id
@@ -471,7 +486,7 @@ async function applyRecordPage(store, page, options = {}) {
       await publishContextAuthority(db, context.workspaceId, state);
     }
     if (options.beforeCommit) await options.beforeCommit();
-    const nextState = { ...state, contextDirty: page.has_more || options.partialPage ? contextDirty : false, viewBaselineInitialized: options.viewBaselineInitialized || state.viewBaselineInitialized || false, legacyFallbackActive: false, resetting: false, cursor: retirementPending || options.partialPage ? state.cursor : page.next_cursor, applyingPage: options.partialPage ? { nextCursor: page.next_cursor, through: options.pageOffset } : null, generation, incrementalSnapshot: true, snapshotRetirement: retirementPending ? state.snapshotRetirement || { tableIndex: 0, after: null, nextCursor: page.next_cursor } : null, snapshotId: page.mode === 'snapshot' ? page.snapshot_id : state.snapshotId,
+    const nextState = { ...state, accessPartitions, accessRevision: page.access_revision || state.accessRevision, contextDirty: page.has_more || options.partialPage ? contextDirty : false, viewBaselineInitialized: options.viewBaselineInitialized || state.viewBaselineInitialized || false, legacyFallbackActive: false, resetting: false, accessLost: options.partialPage ? Boolean(state.accessLost) : false, cursor: retirementPending || options.partialPage ? state.cursor : page.next_cursor, applyingPage: options.partialPage ? { nextCursor: page.next_cursor, through: options.pageOffset } : null, generation, incrementalSnapshot: true, snapshotRetirement: retirementPending ? state.snapshotRetirement || { tableIndex: 0, after: null, nextCursor: page.next_cursor } : null, snapshotId: page.mode === 'snapshot' ? page.snapshot_id : state.snapshotId,
       snapshotFamilies: page.mode === 'snapshot' ? page.families.filter(f => PG_RECORD_DELTA_FAMILIES.includes(f)) : state.snapshotFamilies,
       handover: options.boundedExtension === 'bounded_snapshot_v1' ? page.handover : null,
       snapshotComplete: page.snapshot_complete || state.snapshotComplete || false,
@@ -487,7 +502,10 @@ async function applyRecordPage(store, page, options = {}) {
         pendingAck: retirementPending ? null : intent };
       if (retirementPending) nextState.snapshotRetirement.pendingAck = intent;
     }
-    if (!options.reconcileOnly) await db.sync_state.put({ key: cursorKey, value: nextState });
+    if (!options.reconcileOnly) {
+      await db.sync_state.put({ key: cursorKey, value: nextState });
+      await publishAccessProjection(db, cursorKey, nextState);
+    }
     if (!options.reconcileOnly && page.protocol_version === 2) await db.sync_state.put({ key: DEVICE_CACHE_OWNER_KEY,
       value: { cursorKey, scope: state.device.scope, clientId: state.device.clientId, canonicalCount: await db.pg_record_rows.count() } });
     return { applied, localGeneration: Number(state.localGeneration || 0), cursor: page.next_cursor, retirementPending, hasMore: page.has_more, fullSnapshot: page.mode === 'snapshot', protocolVersion: 1, needsSummaryBackfill: Boolean(state.snapshotComplete && state.assignmentPolicyVersion !== 1 && page.mode === 'delta' && !page.has_more) };
@@ -544,7 +562,9 @@ export async function retireSnapshotOmissions(store, options) {
         const canonicalTable = ['pg_record_rows', 'pg_actors'].includes(tableName);
         if (canonicalTable) {
           if (row.family?.startsWith('feed_') && !state.snapshotFamilies?.includes(row.family)) continue;
-          if (row.generation !== state.generation) obsolete.push(row.key || row.actor_id);
+          if (row.generation !== state.generation && row.operation !== 'delete') {
+            await table.update(row.key || row.actor_id, { pg_access_status: 'stale' });
+          }
           continue;
         }
         if (!(row.pg_backend || row.pg_delta_family || tableName === 'resource_view_states')
@@ -561,11 +581,9 @@ export async function retireSnapshotOmissions(store, options) {
           await db.pg_record_conflicts.put({ key: `reset:${tableName}:${row.record_id}`, family: tableName,
             record_id: row.record_id, local: row, reason: 'authority_reset' });
         }
-        // An omission during scoped recovery is loss of current authority,
-        // not an explicit record deletion. Keep downloads and drafts; their
-        // old generation does not certify membership in the repaired snapshot.
-        if (state.retainDownloads) continue;
-        obsolete.push(tableName.startsWith('feed_') ? row.key : row.record_id);
+        // Omission is permission filtering or incomplete historical coverage,
+        // never evidence that the user deleted content. Retain its bytes and intent.
+        await table.update(tableName.startsWith('feed_') ? row.key : row.record_id, { pg_access_status: 'stale' });
         if (tableName === 'chat_messages') channels.add(row.channel_id);
       }
       if (obsolete.length) await table.bulkDelete(obsolete);
@@ -593,11 +611,25 @@ export async function retireSnapshotOmissions(store, options) {
   }
 }
 
-export async function resetPgRecordAuthority(store, { preserveViews = false, retainDownloads = false, expectedCursor, expectedGeneration, deviceScope = null, deviceLease } = {}) {
+export async function markPgRecordAccessLost(store, options = {}) {
+  const db = getWorkspaceDb(), key = recordDeltaCursorKey(store);
+  return db.transaction('rw', db.sync_state, async () => {
+    await assertDeviceLease(db, options.deviceLease);
+    const state = (await db.sync_state.get(key))?.value || { cursor: null };
+    if (options.expectedCursor !== undefined && state.cursor !== options.expectedCursor
+      || options.expectedGeneration !== undefined && Number(state.localGeneration || 0) !== options.expectedGeneration) throw new Error('Stale access loss response');
+    await db.sync_state.put({ key, value: { ...state, accessLost: true } });
+    await publishAccessProjection(db, key, { ...state, accessLost: true });
+    return { applied: 0, cursor: state.cursor, hasMore: false };
+  });
+}
+
+export async function resetPgRecordAuthority(store, { preserveViews = false, accessLost = false, expectedCursor, expectedGeneration, deviceScope = null, deviceLease } = {}) {
   const db = getWorkspaceDb();
   const cursorKey = recordDeltaCursorKey(store);
   // Cursor expiry/epoch changes invalidate the download, not cached visibility.
-  // Definitive revocation hides authority and retains recoverable local intent.
+  // Explicit identity replacement hides unrelated authority; same-reader repair
+  // retains downloaded content and recoverable local intent.
   return db.transaction('rw', db.tables, async () => {
     const priorState = (await db.sync_state.get(cursorKey))?.value;
     await assertDeviceLease(db, deviceLease);
@@ -608,15 +640,16 @@ export async function resetPgRecordAuthority(store, { preserveViews = false, ret
     const localGeneration = Number(priorState?.localGeneration || 0) + 1;
     const obsoleteDevices = [...(priorState?.obsoleteDevices || []), ...(priorState?.device ? [priorState.device] : []),
       ...(ownerState?.device ? [ownerState.device] : [])];
-    const replacement = { cursor: null, resetting: true, localGeneration, obsoleteDevices, retainDownloads,
+    const replacement = { cursor: null, resetting: true, accessLost, accessPartitions: preserveViews ? priorState?.accessPartitions : {}, accessRevision: preserveViews ? priorState?.accessRevision : undefined, localGeneration, obsoleteDevices,
       ...(deviceScope ? { device: { scope: deviceScope, clientId: createDeviceCacheId(), registered: false, revision: '0', pendingAck: null,
         extension: priorState?.device?.scope === deviceScope ? priorState.device.extension || null : null,
         largeRecords: priorState?.device?.scope === deviceScope ? priorState.device.largeRecords || null : null } } : {}) };
+    await publishAccessProjection(db, cursorKey, replacement);
     await db.sync_state.put({ key: DEVICE_CACHE_OWNER_KEY, value: { cursorKey, scope: deviceScope,
       clientId: replacement.device?.clientId || null, canonicalCount: preserveViews ? await db.pg_record_rows.count() : 0 } });
     const prefix = `${cursorKey}:staged:`;
     await db.sync_state.where('key').between(prefix, `${prefix}\uffff`, true, true).delete();
-    await clearContextAuthority(db);
+    if (!preserveViews) await clearContextAuthority(db);
     if (preserveViews) {
       await db.sync_state.delete(`${cursorKey}:summary-backfill-assignment-v2`);
       await db.sync_state.put({ key: cursorKey, value: replacement });

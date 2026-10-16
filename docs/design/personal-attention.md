@@ -43,6 +43,29 @@ Standalone files remain neutral Deck entries. Thread/task attachments are exclud
 from separate Deck entries at both source recovery and final feed assembly. Their
 source records and parent attachment access remain intact.
 
+## Deck selection and read positions
+
+Completed tasks (`done`, `complete`, `completed`) remain Inbox candidates while
+their persisted personal attention is unread. Both bounded source selection and
+final card assembly apply this exception. An explicit item read receipt clears
+that attention and removes the completed card; the downloaded task remains in
+Dexie and its board. Merely selecting a channel or opening Deck never writes a
+resource receipt. Recent neutral activity does not make an unrelated card unread.
+
+The bounded item attention projection includes the selected chat window, Deck's
+`fileMessages` collection and `recentChannelMessages`, resolving reply parents
+when a canonical thread ID is absent. Document collection changes request an
+attention refresh, as task and message collection changes already do. This fixes
+presentation of existing downloaded rows without resetting read watermarks,
+sync cursors, pending writes or permission state. Family filters and search still
+apply; unread records outside the displayed page remain available through paging.
+
+Regression coverage lives in `tests/inbox-activity-recovery.test.js` and the
+real-IndexedDB `tests/e2e/deck-unread-lifecycle.spec.cjs` probe. The browser probe
+uses synthetic records and covers repeated visits, switching to an unaffected
+channel, reload and explicit read dismissal; it is not proof of an individual
+device's historical cache or authenticated backend delivery.
+
 ## Existing caches and rollout
 
 The existing bounded summary rebuild uses a new `summary-backfill-attention-v1`

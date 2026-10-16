@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { publishStagedDist } from '../scripts/dist-release.mjs';
+import { collectCurrentAssetClosure, publishStagedDist } from '../scripts/dist-release.mjs';
 import { verifyDistAssets } from '../scripts/verify-dist-assets.mjs';
 import { missingDistAssetGuardPlugin } from '../vite.config.js';
 
@@ -28,6 +28,41 @@ afterEach(() => {
 });
 
 describe('Flight Deck dist release publication', () => {
+  it('retains relative lazy editor imports and their dependencies across a release', () => {
+    const root = makeDirectory();
+    const dist = path.join(root, 'dist');
+    const staged = path.join(root, 'staged');
+    write(dist, 'index.html', '<script src="/assets/app-old.js"></script>');
+    write(dist, 'assets/app-old.js', 'import("./editor-old.js"); const preloads = ["assets/editor-old.css"];');
+    write(dist, 'assets/editor-old.js', 'import "./nested/dependency-old.js";');
+    write(dist, 'assets/nested/dependency-old.js', 'import "../app-old.js";');
+    write(dist, 'assets/editor-old.css', 'old editor styles');
+    write(staged, 'index.html', '<script src="/assets/app-new.js"></script>');
+    write(staged, 'assets/app-new.js', 'new app');
+    expect([...collectCurrentAssetClosure(dist)].sort()).toEqual([
+      'app-old.js', 'editor-old.css', 'editor-old.js', 'nested/dependency-old.js',
+    ]);
+    const result = publishStagedDist(staged, dist);
+    expect(result.retainedPreviousAssets).toHaveLength(4);
+    for (const asset of result.retainedPreviousAssets) expect(existsSync(path.join(dist, 'assets', asset))).toBe(true);
+  });
+
+  it('ignores route patterns and diagnostic regexes when collecting assets', () => {
+    const dist = makeDirectory();
+    write(dist, 'index.html', '<script src="/assets/app.js"></script>');
+    write(dist, 'assets/app.js', 'const route = "/assets/:id"; const pattern = "/assets/(${chunks})";');
+    expect([...collectCurrentAssetClosure(dist)]).toEqual(['app.js']);
+  });
+
+  it('rejects a build with a missing lazy editor dependency before publication', () => {
+    const dist = makeDirectory();
+    write(dist, 'index.html', '<script src="/assets/app.js"></script><button data-chat-get-it-done="true"></button><div data-testid="chat-get-it-done-modal"></div>');
+    write(dist, 'assets/app.js', 'import("./missing-editor.js")');
+    write(dist, 'version.json', '{}');
+    write(dist, 'service-worker.js', '');
+    expect(() => verifyDistAssets(dist)).toThrow('missing asset /assets/missing-editor.js');
+  });
+
   it('publishes complete new assets before atomically replacing HTML and retains the previous asset closure', () => {
     const root = makeDirectory();
     const dist = path.join(root, 'dist');

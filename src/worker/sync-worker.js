@@ -13,6 +13,7 @@ import {
   getWorkspaceDb,
   getAllGroups,
   getPendingWrites,
+  updatePendingWrite,
   removePendingWrite,
   upsertWorkspaceSettings,
   upsertChannel,
@@ -446,7 +447,7 @@ async function markLockManagedWriteState(recordId, familyHash, patch = {}, optio
  */
 export async function flushPendingWrites(ownerNpub, onProgress, options = {}) {
   openWorkspaceDb(resolveWorkspaceDbKey(ownerNpub, options));
-  const pending = await normalizePendingWritesForFlush(await getPendingWrites(), options);
+  const pending = await normalizePendingWritesForFlush((await getPendingWrites()).filter(row => !row.authorization_blocked || options.retryForbiddenWrites === true), options);
   if (pending.length === 0) return { pushed: 0 };
   let pushed = 0;
 
@@ -492,6 +493,7 @@ export async function flushPendingWrites(ownerNpub, onProgress, options = {}) {
         checkoutPolicyConfig,
       });
     } catch (error) {
+      if (error?.status === 403) for (const row of batch) await updatePendingWrite(row.row_id, { authorization_blocked: true, sync_error: error.message || 'Tower denied this write' });
       const reason = error instanceof Error ? error.message : String(error);
       const punctuatedReason = /[.!?]$/.test(reason) ? reason : `${reason}.`;
       flightDeckLog('error', 'sync', 'pending write batch failed', {
@@ -519,6 +521,9 @@ export async function flushPendingWrites(ownerNpub, onProgress, options = {}) {
       for (const rej of result.rejected) {
         if (rej.record_id) {
           rejectedIds.add(rej.record_id);
+          if (['write_forbidden', 'forbidden', 'workspace_membership_required', 'permission_denied'].includes(rej.code)) {
+            for (const row of batch.filter(row => row.record_id === rej.record_id)) await updatePendingWrite(row.row_id, { authorization_blocked: true, sync_error: rej.reason || rej.code });
+          }
           await markLockManagedWriteState(
             rej.record_id,
             rej.record_family_hash || batch.find((entry) => entry.record_id === rej.record_id)?.record_family_hash,

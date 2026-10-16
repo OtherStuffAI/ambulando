@@ -17,8 +17,6 @@ import {
   getTowerPgDailyNotes,
   getTowerPgPersonalWapps,
   getTowerPgWappPublishingGrants,
-  getTowerPgWappActivityItems,
-  getTowerPgWappActivityMutes,
   getTowerPgApprovals,
   getTowerPgDoc,
   getTowerPgDocBody,
@@ -64,8 +62,6 @@ import {
   replaceFileFoldersForWorkspace,
   replacePgPersonalWappsForOwner,
   replaceWappPublishingGrants,
-  replaceWappActivityItems,
-  replaceWappActivityMutes,
   replaceWorkspaceMembers,
   replacePgDocumentsForChannel,
   replacePgFileFoldersForChannel,
@@ -153,24 +149,6 @@ async function readAllTowerPgChannelMessages(readMessages, workspaceId, channelI
   } while (cursor);
 
   return messages;
-}
-
-async function readAllTowerPgWappActivityItems(readItems, workspaceId, options = {}) {
-  const items = [];
-  const seenCursors = new Set();
-  let cursor = null;
-
-  do {
-    const page = await readItems(workspaceId, { ...options, cursor });
-    items.push(...(Array.isArray(page?.items) ? page.items : []));
-    const nextCursor = trimText(page?.next_cursor);
-    if (!nextCursor) break;
-    if (seenCursors.has(nextCursor)) throw new Error('Tower PG WApp activity pagination returned a repeated cursor');
-    seenCursors.add(nextCursor);
-    cursor = nextCursor;
-  } while (cursor);
-
-  return items;
 }
 
 function isMissingPgReactionTargetError(error) {
@@ -1268,62 +1246,6 @@ export function mapPgWappPublishingGrantToLocal(input) {
   };
 }
 
-export function mapPgWappActivityItemToLocal(input) {
-  const item = input?.item && typeof input.item === 'object' ? input.item : input || {};
-  const readAt = item.read_at || item.user_state?.read_at || null;
-  const dismissedAt = item.dismissed_at || item.user_state?.dismissed_at || null;
-  const state = trimText(item.state) || 'active';
-  return {
-    ...item,
-    record_id: trimText(item.id || item.record_id),
-    workspace_id: trimText(item.workspace_id),
-    wapp_installation_id: trimText(item.wapp_installation_id || item.installation_id),
-    publisher_npub: trimText(item.publisher_npub),
-    source_name: trimText(item.display_name || item.source_name || item.wapp_name || item.app_id) || 'WApp',
-    category: trimText(item.category) || 'update',
-    title: trimText(item.title) || 'WApp update',
-    summary: trimText(item.summary),
-    scope_id: trimText(item.scope_id),
-    channel_id: trimText(item.channel_id),
-    scope_title: trimText(item.scope_title || item.scope_name),
-    channel_title: trimText(item.channel_title || item.channel_name),
-    priority: trimText(item.priority) || 'normal',
-    state,
-    version: Number(item.version || 1),
-    open_url: trimText(item.open_url),
-    registered_open_origins: normalizeStringList(item.registered_open_origins || item.approved_open_origins),
-    grant_status: trimText(item.grant_status || item.source_status),
-    open_url_allowed: item.open_url_allowed === true,
-    open_links_disabled: item.open_links_disabled === true,
-    read_at: readAt,
-    dismissed_at: dismissedAt,
-    unread: typeof item.unread === 'boolean' ? item.unread : !readAt,
-    muted: item.muted === true,
-    occurred_at: item.occurred_at || item.created_at || null,
-    updated_at: item.updated_at || item.occurred_at || item.created_at || null,
-    withdrawn_at: item.withdrawn_at || (state === 'withdrawn' ? item.updated_at || null : null),
-    resolved_at: item.resolved_at || (state === 'resolved' ? item.updated_at || null : null),
-    pg_backend: true,
-    pg_record_type: 'wapp_activity_item',
-  };
-}
-
-export function mapPgWappActivityMuteToLocal(input) {
-  const mute = input?.mute && typeof input.mute === 'object' ? input.mute : input || {};
-  const targetType = trimText(mute.target_type || mute.targetType);
-  const targetValue = trimText(mute.target_value || mute.targetValue);
-  return {
-    ...mute,
-    record_id: trimText(mute.id || mute.record_id) || `${targetType}:${targetValue}`,
-    target_type: targetType,
-    target_value: targetValue,
-    created_at: mute.created_at || null,
-    updated_at: mute.updated_at || mute.created_at || null,
-    pg_backend: true,
-    pg_record_type: 'wapp_activity_mute',
-  };
-}
-
 export function mapPgReactionToLocal(reaction, {
   workspaceOwnerNpub,
   targetType,
@@ -1545,7 +1467,7 @@ export async function hydrateTowerPgSyncBundle(store, bundle = {}, deps = {}) {
     return commitDeviceMetadata(recordDeltaCursorKey(store), { ...bundle.device_action, deviceLease: bundle.local_apply_options?.deviceLease });
   }
   if ([1, 2].includes(bundle.protocol_version)) {
-    const { applyPgRecordChanges, resetPgRecordAuthority, reconcilePgRecordConflicts, rebuildPgRecordSummaries, retireSnapshotOmissions } = await import('./pg-record-delta.js');
+    const { applyPgRecordChanges, resetPgRecordAuthority, markPgRecordAccessLost, reconcilePgRecordConflicts, rebuildPgRecordSummaries, retireSnapshotOmissions } = await import('./pg-record-delta.js');
     if (bundle.resume_snapshot_retirement) return retireSnapshotOmissions(store, bundle.local_apply_options);
     if (bundle.rebuild_summaries) return rebuildPgRecordSummaries(store);
     if (bundle.reconcile_commands) return reconcilePgRecordConflicts(store, { acceptRemoteKey: bundle.accept_remote_key || null });
@@ -1562,6 +1484,7 @@ export async function hydrateTowerPgSyncBundle(store, bundle = {}, deps = {}) {
       });
       return { applied: (bundle.members?.length || 0) + (bundle.groups?.length || 0), cursor: null, hasMore: false };
     }
+    if (bundle.access_lost === true) return markPgRecordAccessLost(store, bundle.local_apply_options);
     if (bundle.reset_authority === true) { const reset = await resetPgRecordAuthority(store, bundle.local_apply_options); return { applied: 0, cursor: null, hasMore: false, ...reset }; }
     const context = resolveTowerPgWorkspaceContext(store);
     await (deps.migrateLegacyAutopilotLaunchers || migrateLegacyAutopilotLaunchers)(
@@ -1904,11 +1827,12 @@ async function syncTowerPgRecordWorkspace(store, options, deps) {
   // In particular, probing a rolled-back server must never purge the cache.
   for (let pages = 1; pages <= (options.maxPages || 1000); pages++) {
     options.onProgress?.({ stage: 'receiving', page: pages, applied, cursorPresent: Boolean(cursor), mode: 'unavailable', protocolVersion: 1 });
+    const requestAccessLost = Boolean((await (deps.getSyncState || getSyncState)(recordDeltaCursorKey(store)))?.accessLost);
     let page;
     try {
       page = await read(context.workspaceId, { baseUrl: context.baseUrl, appNpub: context.appNpub, diagnosticOperation: options.diagnosticOperation, cursor, limit: options.limit || 200, timeoutMs: options.timeoutMs || 30000 });
     } catch (error) {
-      if (!authorityResetting && resets === 0 && [404, 406, 501].includes(error.status)) {
+      if (!authorityResetting && !requestAccessLost && resets === 0 && [404, 406, 501].includes(error.status)) {
         options.onProgress?.({ stage: 'recovery', recoveryReason: 'unsupported', page: pages, applied, cursorPresent: Boolean(cursor), mode: 'unavailable', protocolVersion: 1 });
         return { unsupported: true, fallbackAuthority: { expectedCursor: cursor, expectedGeneration: localGeneration } };
       }
@@ -1917,9 +1841,15 @@ async function syncTowerPgRecordWorkspace(store, options, deps) {
       const code = error.code || payload.code || payload.error;
       const matchingWorkspace = !payload.identity?.workspace_id || payload.identity.workspace_id === context.workspaceId;
       const revoked = matchingWorkspace && error.status === 403 && code === 'workspace_membership_required';
-      if (revoked || (error.status === 409 && String(error.responseText || error.message).includes('reset_required'))) {
+      if (revoked) {
         assertTowerPgWorkspaceCurrent(store, context);
-        const reset = await materialize(store, { protocol_version: 1, reset_authority: true, local_apply_options: { preserveViews: !revoked, expectedCursor: cursor, expectedGeneration: localGeneration } }, deps);
+        await materialize(store, { protocol_version: 1, access_lost: true,
+          local_apply_options: { expectedCursor: cursor, expectedGeneration: localGeneration } }, deps);
+        throw error;
+      }
+      if (error.status === 409 && ['reset_required', 'history_pruned', 'client_expired', 'client_not_registered', 'page_token_invalid'].includes(code || String(error.message))) {
+        assertTowerPgWorkspaceCurrent(store, context);
+        const reset = await materialize(store, { protocol_version: 1, reset_authority: true, local_apply_options: { preserveViews: true, accessLost: revoked, expectedCursor: cursor, expectedGeneration: localGeneration } }, deps);
         localGeneration = reset.localGeneration;
         if (revoked || ++resets > 2) throw error;
         options.onProgress?.({ stage: 'recovery', recoveryReason: 'reset_required', page: pages, applied, cursorPresent: Boolean(cursor), mode: 'unavailable', protocolVersion: 1 });
@@ -1962,7 +1892,7 @@ async function syncTowerPgRecordWorkspace(store, options, deps) {
     options.onProgress?.({ stage: 'applying', page: pages, applied, cursorPresent: Boolean(cursor), mode: page.mode, fullSnapshot: page.mode === 'snapshot', hasMore: page.has_more === true, protocolVersion: 1 });
     assertTowerPgWorkspaceCurrent(store, context);
     if (page.has_more && page.next_cursor === cursor) throw new Error('Tower record sync repeated its cursor');
-    const result = await materialize(store, { ...page, local_apply_options: { expectedCursor: cursor, expectedGeneration: localGeneration, viewBaselineInitialized, incrementalSnapshot: true } }, deps);
+    const result = await materialize(store, { ...page, local_apply_options: { expectedCursor: cursor, expectedGeneration: localGeneration, expectedAccessLost: requestAccessLost, viewBaselineInitialized, incrementalSnapshot: true } }, deps);
     applied += result.applied;
     cursor = result.cursor;
     if (!result.hasMore) {
@@ -3136,10 +3066,12 @@ export async function hydrateTowerPgEventUpdates(store, events = [], deps = {}) 
       workspaceMembersChanged = true;
     } else if (['group', 'group_member', 'workspace_group_member'].includes(entityType)) {
       groupsChanged = true;
+      fallbackEvents += 1;
     } else if (['daily_scope_agent_access', 'daily_scope_access'].includes(entityType)) {
       dailyScopeAccessChanged = true;
     } else if (entityType === 'channel_grant' && channelId) {
       channelGrantChannels.add(channelId);
+      fallbackEvents += 1;
     } else if (entityType === 'channel') {
       channelsChanged = true;
     } else if (['message', 'thread'].includes(entityType) && channelId) {
@@ -3173,8 +3105,7 @@ export async function hydrateTowerPgEventUpdates(store, events = [], deps = {}) 
       if (ownerActorId) personalWappOwnerIds.add(ownerActorId);
       else fallbackEvents += 1;
     } else if (['wapp_activity_item', 'wapp_activity_mute'].includes(entityType)) {
-      // The WApp projection has its own bounded reconciliation path. Treat its
-      // SSE events as recognized so they do not also trigger a workspace delta.
+      // Retired publisher records are ignored without fetching or deleting history.
     } else if (entityType === 'reaction' && trimText(payload.target_type) && trimText(payload.target_id)) {
       const targetType = trimText(payload.target_type);
       const targetId = trimText(payload.target_id);
@@ -3270,7 +3201,7 @@ export async function hydrateTowerPgEventUpdates(store, events = [], deps = {}) 
       ? [store.refreshGroups({ force: true, minIntervalMs: 0 })]
       : []),
     ...(accessMaterializationChanged && typeof store?.refreshPgChannelAccessMaterialization === 'function'
-      ? [store.refreshPgChannelAccessMaterialization()]
+      ? [store.refreshPgChannelAccessMaterialization({ channelIds: [...channelGrantChannels] })]
       : []),
     ...(dailyScopeAccessChanged && typeof store?.refreshDailyScopeAgentAccess === 'function'
       ? [store.refreshDailyScopeAgentAccess()]
@@ -3499,36 +3430,6 @@ export async function hydrateTowerPgWappPublishingGrants(store, deps = {}) {
   assertTowerPgWorkspaceCurrent(store, context);
   await replaceGrants(grants);
   return grants;
-}
-
-export async function hydrateTowerPgWappActivity(store, deps = {}) {
-  const context = resolveTowerPgWorkspaceContext(store);
-  if (!context.workspaceId || !context.baseUrl) return { items: [], counts: {}, mutes: [] };
-  const readItems = deps.getTowerPgWappActivityItems || getTowerPgWappActivityItems;
-  const readMutes = deps.getTowerPgWappActivityMutes || getTowerPgWappActivityMutes;
-  const replaceItems = deps.replaceWappActivityItems || replaceWappActivityItems;
-  const replaceMutes = deps.replaceWappActivityMutes || replaceWappActivityMutes;
-  const sourceRows = await readAllTowerPgWappActivityItems(readItems, context.workspaceId, {
-    baseUrl: context.baseUrl,
-    appNpub: context.appNpub,
-    limit: deps.limit || 100,
-    includeResolved: true,
-  });
-  const items = sourceRows.map(mapPgWappActivityItemToLocal);
-  const muteResult = await readMutes(context.workspaceId, { baseUrl: context.baseUrl, appNpub: context.appNpub });
-  const mutes = (Array.isArray(muteResult?.mutes) ? muteResult.mutes : [])
-    .map(mapPgWappActivityMuteToLocal)
-    .filter((mute) => mute.target_type && mute.target_value);
-  const currentContext = resolveTowerPgWorkspaceContext(store);
-  const counts = {
-    unread: items.filter((item) => item?.unread === true && !item?.dismissed_at && item?.muted !== true).length,
-  };
-  if (currentContext.workspaceId !== context.workspaceId || currentContext.baseUrl !== context.baseUrl) {
-    return { items, counts, mutes };
-  }
-  assertTowerPgWorkspaceCurrent(store, context);
-  await Promise.all([replaceItems(items, { authoritative: true }), replaceMutes(mutes)]);
-  return { items, counts, mutes };
 }
 
 export async function hydrateTowerPgDocumentsAndFiles(store, deps = {}) {

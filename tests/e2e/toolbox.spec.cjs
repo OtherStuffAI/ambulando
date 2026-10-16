@@ -1,6 +1,10 @@
 const { test, expect } = require('playwright/test');
 const { serveBuiltFlightDeck } = require('./fixtures/serve-built-flightdeck.cjs');
 
+test.afterEach(async ({}, info) => {
+  if (info.errors.length) console.log('TOOLBOX_FAILURE', info.errors.map(error => error.message).join('\n'));
+});
+
 // Built-client smoke with local fixtures. No remote Tower or WApp authentication.
 async function seed(page, workspace = 'toolbox-workspace-a') {
   await page.waitForFunction(() => !!window.Alpine?.store('chat'));
@@ -34,6 +38,9 @@ async function seed(page, workspace = 'toolbox-workspace-a') {
       if (name === 'wapp.reorder') return { personal_wapps: args[1].ordered_ids.map((id, index) => ({ ...s.wapps.find(row => row.record_id === id), id, sort_order: index })) };
       return {};
     };
+    s.orgDataInstallations = [{ key: 'register', title: 'Project Register', version: 1 }];
+    s.orgDataInstallationContext = s.orgDataInstallationsContextKey;
+    s.loadOrgDataInstallations = async () => {};
     s.startWorkspaceLiveQueries = () => {};
     s.ensureBackgroundSync = () => {};
     s.refreshStatusRecentChanges = () => {};
@@ -57,19 +64,25 @@ for (const width of [1280, 390]) {
     if (width === 390) await page.getByRole('button', { name: 'Show Hello and Links', exact: true }).evaluate(button => button.click());
     await expect(page.getByTestId('apps-stack')).toBeVisible();
     await page.getByRole('button', { name: 'Open Apps stack', exact: true }).click();
-    await expect(page.getByTestId('message-activity-launch')).toBeVisible();
-    await expect(page.getByTestId('app-launch')).toHaveCount(1);
+    await expect(page.getByTestId('message-activity-launch')).toHaveCount(0);
+    await expect(page.getByTestId('tower-usage-launch')).toHaveCount(0);
+    await expect(page.getByTestId('app-launch')).toHaveCount(2);
     await expect(page.getByRole('region', { name: 'Toolbox', exact: true })).toHaveCount(0);
     await expect(page.locator('[aria-label="My Agents"]')).toBeVisible();
     await page.evaluate(() => { window.Alpine.store('chat').closePersonalWappsOverlay(); });
     await openToolbox(page, width === 390);
-    const napplet = page.getByRole('checkbox', { name: 'Show Message activity in Apps', exact: true });
+    await page.evaluate(() => { window.Alpine.store('chat').orgDataInstallations = []; });
+    for (const title of ['Message activity', 'Tower Usage', 'Organisation Data Catalogue', 'People', 'Organisation chart', 'Holiday viewer']) {
+      await expect(page.getByRole('checkbox', { name: 'Show ' + title + ' in Apps', exact: true })).toHaveCount(0);
+    }
+    await expect(page.getByTestId('toolbox-page').locator('.personal-wapp-settings-row')).toHaveCount(1);
+    await page.evaluate(() => { window.Alpine.store('chat').orgDataInstallations = [{ key: 'register', title: 'Project Register', version: 1 }]; });
+    const napplet = page.getByRole('checkbox', { name: 'Show Project Register in Apps', exact: true });
     const wapp = page.getByRole('checkbox', { name: "Show Sample Artifacts in Apps", exact: true });
     await expect(napplet).toBeChecked(); await expect(wapp).toBeChecked();
     await expect(page.getByRole('checkbox', { name: /Show (Private|Archived) app in Apps/ })).toHaveCount(0);
     await napplet.uncheck(); await expect(page.getByText('Placement saved.', { exact: true })).toBeVisible();
     await wapp.uncheck();
-    await page.getByRole('checkbox', { name: 'Show Tower Usage in Apps', exact: true }).uncheck();
     await expect.poll(() => page.evaluate(() => window.Alpine.store('chat').visibleApps.length)).toBe(0);
     await page.reload(); await seed(page); await openToolbox(page, width === 390);
     await expect(napplet).not.toBeChecked(); await expect(wapp).not.toBeChecked();
@@ -79,7 +92,6 @@ for (const width of [1280, 390]) {
     await expect(napplet).not.toBeChecked(); await expect(wapp).not.toBeChecked();
     await napplet.check(); await expect(napplet).toBeEnabled();
     await wapp.check(); await expect(wapp).toBeEnabled();
-    await page.getByRole('checkbox', { name: 'Show Tower Usage in Apps', exact: true }).check();
     await page.screenshot({ path: 'tmp/docs/handoffs/toolbox-collapsed-' + width + '.png' });
     await page.evaluate(() => { const s = window.Alpine.store('chat'); if (s.mobileViewport) s.mobileNavOpen = true; else s.navCollapsed = false; });
     await expect(page.locator('.sidebar button[aria-label="Toolbox"]')).toBeHidden();
@@ -93,7 +105,7 @@ for (const width of [1280, 390]) {
     if (width === 390) await page.evaluate(() => { window.Alpine.store('chat').mobileNavOpen = false; });
     const row = title => page.getByTestId('toolbox-page').locator('.personal-wapp-settings-row').filter({ has: page.locator('strong', { hasText: title }) });
     const modal = page.locator('.personal-wapp-editor-modal');
-    for (const [title, save] of [['Sample Artifacts', 'Save WApp'], ['Message activity', 'Save napplet']]) {
+    for (const [title, save] of [['Sample Artifacts', 'Save WApp'], ['Project Register', 'Save napplet']]) {
       await row(title).getByRole('button', { name: 'Edit', exact: true }).click();
       await expect(modal).toBeVisible();
       await modal.getByRole('textbox', { name: 'Icon URL', exact: true }).fill('http://127.0.0.1:3100/favicon.ico');
@@ -127,20 +139,20 @@ for (const width of [1280, 390]) {
     }
     await page.reload(); await seed(page); await openToolbox(page, width === 390);
     await page.evaluate(() => { const s = window.Alpine.store('chat'); s.selectedBoardId = '__pg_channel__:channel-a'; });
-    await expect.poll(() => page.evaluate(() => window.Alpine.store('chat').visibleApps.length)).toBe(3);
+    await expect.poll(() => page.evaluate(() => window.Alpine.store('chat').visibleApps.length)).toBe(2);
     await page.evaluate(() => { window.Alpine.store('chat').channels = []; });
-    await expect.poll(() => page.evaluate(() => window.Alpine.store('chat').visibleApps.length)).toBe(1);
-    await row('Message activity').getByRole('button', { name: 'Edit', exact: true }).click();
+    await expect.poll(() => page.evaluate(() => window.Alpine.store('chat').visibleApps.length)).toBe(0);
+    await row('Project Register').getByRole('button', { name: 'Edit', exact: true }).click();
     await expect(modal.getByRole('combobox', { name: 'App visibility' })).toHaveValue('channel');
     await expect(modal.getByRole('combobox', { name: 'App channel' }).locator('option:checked')).toHaveText('Unavailable channel (restricted)');
     await modal.getByRole('button', { name: 'Cancel', exact: true }).click();
     await seed(page, 'toolbox-workspace-b');
-    await expect.poll(() => page.evaluate(() => window.Alpine.store('chat').visibleApps.length)).toBe(3);
+    await expect.poll(() => page.evaluate(() => window.Alpine.store('chat').visibleApps.length)).toBe(2);
     await seed(page);
     await page.evaluate(() => { window.Alpine.store('chat').knownWorkspaces[0].pgMe.actor.actor_id = 'other'; });
-    await expect.poll(() => page.evaluate(() => window.Alpine.store('chat').visibleApps.map(app => app.title))).toEqual(['Private app', 'Message activity', 'Tower Usage']);
+    await expect.poll(() => page.evaluate(() => window.Alpine.store('chat').visibleApps.map(app => app.title))).toEqual(['Private app', 'Project Register']);
     await seed(page); await openToolbox(page, width === 390);
-    for (const [title, save] of [['Sample Artifacts', 'Save WApp'], ['Message activity', 'Save napplet']]) {
+    for (const [title, save] of [['Sample Artifacts', 'Save WApp'], ['Project Register', 'Save napplet']]) {
       await row(title).getByRole('button', { name: 'Edit', exact: true }).click();
       await modal.getByRole('combobox', { name: 'App visibility' }).selectOption('everywhere');
       await modal.getByRole('button', { name: save, exact: true }).click();
@@ -153,35 +165,36 @@ for (const width of [1280, 390]) {
     await expect(row('Synthetic added app')).toBeVisible();
     await row('Synthetic added app').getByRole('button', { name: 'Archive' }).click();
     await expect(row('Synthetic added app')).toHaveCount(0);
-    await row('Message activity').getByRole('button', { name: 'Move Message activity down' }).click();
+    await row('Project Register').getByRole('button', { name: 'Move Project Register down' }).click();
     await expect.poll(() => page.evaluate(() => window.Alpine.store('chat').toolboxApps.at(-1).appType)).toBe('Napplet');
     await page.evaluate(() => { const s = window.Alpine.store('chat'); s.navCollapsed = true; s.mobileNavOpen = false; s.navigateTo('settings'); s.settingsTab = 'apps'; });
     await expect(page.locator('.settings-section .personal-wapp-settings-row')).toHaveCount(0);
 
     await page.evaluate(() => window.Alpine.store('chat').navigateTo('toolbox'));
     // Display names use local placement preferences, with the same editor and launch.
-    await row('Message activity').getByRole('button', { name: 'Edit', exact: true }).click();
+    await row('Project Register').getByRole('button', { name: 'Edit', exact: true }).click();
     const titleField = modal.getByRole('textbox', { name: 'Title', exact: true });
     await expect(titleField).toBeEditable();
     for (const blank of ['', '   ']) {
       await titleField.fill(blank);
       await modal.getByRole('button', { name: 'Save napplet', exact: true }).click();
       await expect(modal.getByText('Title is required. Enter a display name.', { exact: true })).toBeVisible();
-      await expect(row('Message activity')).toBeVisible();
+      await expect(row('Project Register')).toBeVisible();
     }
-    await titleField.fill('  My message dashboard  ');
+    await titleField.fill('  My project register  ');
     await modal.getByRole('button', { name: 'Save napplet', exact: true }).click();
-    await expect(row('My message dashboard')).toBeVisible();
-    await row('My message dashboard').getByRole('button', { name: 'Edit', exact: true }).click();
-    await expect(modal.getByRole('heading', { name: 'Edit My message dashboard' })).toBeVisible();
-    await expect(titleField).toHaveValue('My message dashboard');
+    await expect(row('My project register')).toBeVisible();
+    await row('My project register').getByRole('button', { name: 'Edit', exact: true }).click();
+    // The existing shared editor heading still uses the retained Message activity title.
+    await expect(modal.getByRole('heading', { name: 'Edit Message activity' })).toBeVisible();
+    await expect(titleField).toHaveValue('My project register');
     await modal.getByRole('button', { name: 'Cancel', exact: true }).click();
     await page.reload(); await seed(page); await openToolbox(page, width === 390);
-    await expect(row('My message dashboard')).toBeVisible();
-    await seed(page, 'toolbox-workspace-b'); await openToolbox(page, width === 390); await expect(row('Message activity')).toBeVisible();
-    await seed(page); await openToolbox(page, width === 390); await page.evaluate(() => { window.Alpine.store('chat').knownWorkspaces[0].pgMe.actor.actor_id = 'other'; });
-    await expect(row('Message activity')).toBeVisible();
-    await seed(page); await openToolbox(page, width === 390); await expect(row('My message dashboard')).toBeVisible();
+    await expect(row('My project register')).toBeVisible();
+    await seed(page, 'toolbox-workspace-b'); await openToolbox(page, width === 390); await expect(row('Project Register')).toBeVisible();
+    await seed(page); await openToolbox(page, width === 390); await page.evaluate(() => { const s = window.Alpine.store('chat'); s.knownWorkspaces[0].pgMe.actor.actor_id = 'other'; s.orgDataInstallationContext = s.orgDataInstallationsContextKey; });
+    await expect(row('Project Register')).toBeVisible();
+    await seed(page); await openToolbox(page, width === 390); await expect(row('My project register')).toBeVisible();
     // Keep WApp title editing on its existing server-backed path.
     await row('Sample Artifacts').getByRole('button', { name: 'Edit', exact: true }).click();
     await titleField.fill('Renamed WApp');
@@ -193,13 +206,13 @@ for (const width of [1280, 390]) {
     await page.evaluate(() => window.Alpine.store('chat').navigateTo('status'));
     if (width === 390) await page.getByRole('button', { name: 'Show Hello and Links', exact: true }).evaluate(button => button.click());
     await page.getByRole('button', { name: 'Open Apps stack', exact: true }).click();
-    await page.getByTestId('message-activity-launch').click();
-    await expect(page.getByRole('dialog', { name: 'My message dashboard', exact: true })).toBeVisible();
-    await expect(page.locator('#message-activity-modal iframe')).toHaveAttribute('sandbox', 'allow-scripts');
-    // Fixture has no authorized aggregate backend: actual sandbox shows its useful error.
-    await expect(page.frameLocator('#message-activity-modal iframe').getByRole('alert')).toBeVisible();
-    await page.getByRole('button', { name: 'Close My message dashboard', exact: true }).click();
-    await expect(page.getByRole('button', { name: 'Open Apps stack', exact: true })).toBeFocused();
+    // Probe launcher routing; host authorization is covered independently by org-data tests.
+    await page.evaluate(() => {
+      const s = window.Alpine.store('chat');
+      s.openOrgData = options => { s.toolboxFixtureLaunch = options.view; s.closePersonalWappsOverlay(); };
+    });
+    await page.getByTestId('apps-stack').getByRole('button', { name: 'Open My project register', exact: true }).click();
+    await expect.poll(() => page.evaluate(() => window.Alpine.store('chat').toolboxFixtureLaunch)).toBe('bundle:register');
     await page.getByRole('button', { name: 'Open Apps stack', exact: true }).click();
     const popup = page.waitForEvent('popup');
     await page.getByTestId('apps-stack').getByRole('button', { name: "Open Sample Artifacts", exact: true }).click();

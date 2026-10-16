@@ -11,6 +11,7 @@ import {
 import path from 'node:path';
 
 const ASSET_REFERENCE_PATTERN = /\/assets\/([^"'`\s?#)]+)/g;
+const RELATIVE_ASSET_REFERENCE_PATTERN = /["'`]((?:\.\.?\/|assets\/)[^"'`\s?#)]+)(?:[?#][^"'`]*)?["'`]/g;
 
 function listFiles(rootDir, relativeDir = '') {
   const currentDir = path.join(rootDir, relativeDir);
@@ -25,8 +26,21 @@ function listFiles(rootDir, relativeDir = '') {
   });
 }
 
-function referencedAssets(source) {
-  return [...source.matchAll(ASSET_REFERENCE_PATTERN)].map((match) => match[1]);
+function referencedAssets(source, fromAsset = null) {
+  const assets = [...source.matchAll(ASSET_REFERENCE_PATTERN)].map((match) => match[1]);
+  if (fromAsset !== null) {
+    for (const [, reference] of source.matchAll(RELATIVE_ASSET_REFERENCE_PATTERN)) {
+      // Vite emits both relative imports and root-relative preload maps. Follow
+      // their complete closure so a warm tab can still lazily open an editor.
+      const asset = reference.startsWith('assets/') ? reference.slice(7)
+        : path.posix.normalize(path.posix.join(path.posix.dirname(fromAsset), reference));
+      if (!asset.startsWith('../') && !path.posix.isAbsolute(asset)) assets.push(asset);
+    }
+  }
+  // Ignore route patterns and diagnostic regexes which mention /assets/ but
+  // are not file references. Only literal filenames belong to the graph.
+  return assets.filter((asset) => /^[A-Za-z0-9_./-]+\.[A-Za-z0-9]+$/.test(asset)
+    && !asset.startsWith('../') && !path.posix.isAbsolute(asset));
 }
 
 export function collectCurrentAssetClosure(distDir) {
@@ -42,7 +56,7 @@ export function collectCurrentAssetClosure(distDir) {
 
     const assetPath = path.join(distDir, 'assets', asset);
     if (!existsSync(assetPath)) continue;
-    for (const nestedAsset of referencedAssets(readFileSync(assetPath, 'utf8'))) {
+    for (const nestedAsset of referencedAssets(readFileSync(assetPath, 'utf8'), asset)) {
       if (!closure.has(nestedAsset)) pending.push(nestedAsset);
     }
   }
