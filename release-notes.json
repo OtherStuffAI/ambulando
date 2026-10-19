@@ -4247,6 +4247,12 @@
       "label": "Native Note to self deleted-thread retry recovery",
       "notes": [],
       "noUserVisibleChanges": true
+    },
+    {
+      "buildNumber": 2443,
+      "label": "Native Note to self root retry and error diagnostics",
+      "notes": [],
+      "noUserVisibleChanges": true
     }
   ]
 }

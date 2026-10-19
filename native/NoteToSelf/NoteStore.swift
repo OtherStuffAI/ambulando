@@ -102,7 +102,7 @@ final class NoteStore: ObservableObject {
                     let image = local.draft.images[i]; let object = image.object!
                     let metadata: [String:Any]
                     do { metadata = try await api.request(origin:destination.origin,path:"/api/v4/storage/" + object) }
-                    catch NStackError.response(404, _) where !replaced {
+                    catch NStackError.response(404, _, _) where !replaced {
                         // This exact authenticated metadata read is built here, so any 404 means the object is gone or
                         // no longer readable, whatever the body shape, and it can never be attached. Keep the sanitized
                         // bytes and message ID and prepare one fresh object. Tower's message idempotency hash covers
@@ -130,42 +130,55 @@ final class NoteStore: ObservableObject {
             }
             try assertIdentity(destination)
             let text = draft.text; let hash = NostrCodec.hash(Data(text.utf8))
-            var tags = [["protocol","flightdeck_pg_message_instruction"],["body_sha256",hash],["workspace_id",destination.workspace],["channel_id",destination.channel]]
-            if let thread = draft.thread { tags.append(["thread_id",thread]) }
-            let signature = try identity.sign(kind:33358,tags:tags,content:text)
-            let encoded = try JSONSerialization.jsonObject(with:JSONEncoder().encode(signature))
-            var body: [String:Any] = ["body":text,"client_request_id":draft.id.uuidString,"create_thread":draft.thread == nil,
-                "message_signature":["version":1,"signer_npub":destination.signer,"body_sha256":hash,"nostr_event":encoded],
-                "metadata":["attachments":draft.images.map { ["kind":"image","storage_object_id":$0.object!,"filename":$0.filename,"mime_type":"image/png","size_bytes":$0.bytes.count] as [String:Any] }]]
-            if let thread = draft.thread { body["thread_id"] = thread }
-            let response: [String:Any]
-            do { response = try await api.request(origin:destination.origin,path:destination.base + "/channels/" + destination.channel + "/messages",app:destination.app,method:"POST",body:body) }
-            catch NStackError.response(409, let code?) where code == "idempotency_conflict" {
-                // Tower already accepted a different message under this request ID, such as an earlier delivery
-                // whose image was later removed. Never resend under this ID; keep the content as a new draft.
-                let previous = local.draft
-                local.draft.id = UUID(); local.draft.frozen = false; local.draft.destination = nil
-                do { try persist() } catch { local.draft = previous; throw error }
-                notice = "Tower already has a note sent with this draft’s ID, so it was not sent again. Your text and images are kept as an editable draft; send only if you want another copy."
+            var rerooted = false
+            while true {
+                let thread = draft.thread
+                var tags = [["protocol","flightdeck_pg_message_instruction"],["body_sha256",hash],["workspace_id",destination.workspace],["channel_id",destination.channel]]
+                if let thread { tags.append(["thread_id",thread]) }
+                let signature = try identity.sign(kind:33358,tags:tags,content:text)
+                let encoded = try JSONSerialization.jsonObject(with:JSONEncoder().encode(signature))
+                var body: [String:Any] = ["body":text,"client_request_id":draft.id.uuidString,"create_thread":thread == nil,
+                    "message_signature":["version":1,"signer_npub":destination.signer,"body_sha256":hash,"nostr_event":encoded],
+                    "metadata":["attachments":draft.images.map { ["kind":"image","storage_object_id":$0.object!,"filename":$0.filename,"mime_type":"image/png","size_bytes":$0.bytes.count] as [String:Any] }]]
+                if let thread { body["thread_id"] = thread }
+                let response: [String:Any]
+                do { response = try await api.request(origin:destination.origin,path:destination.base + "/channels/" + destination.channel + "/messages",app:destination.app,method:"POST",body:body) }
+                catch NStackError.response(409, let code?, _) where code == "idempotency_conflict" {
+                    // Tower already accepted a different message under this request ID, such as an earlier delivery
+                    // whose image or thread was later removed. Never resend under this ID; keep the content as a new draft.
+                    let previous = local.draft
+                    local.draft.id = UUID(); local.draft.frozen = false; local.draft.destination = nil
+                    do { try persist() } catch { local.draft = previous; throw error }
+                    notice = "Tower already has a note sent with this draft’s ID (idempotency_conflict), so it was not sent again. Your text and images are kept as an editable draft; send only if you want another copy."
+                    return
+                }
+                catch NStackError.response(404, let code?, _) where code == "thread_not_found" && thread != nil && !rerooted {
+                    // Tower checks the reply thread before recording a message or its idempotency key, so this request was
+                    // not accepted, and a deleted thread can never accept it. Persist dropping only the stale reply target,
+                    // then retry once as a new root under the same request ID: an earlier acceptance answers
+                    // idempotency_conflict instead of creating a duplicate.
+                    try assertIdentity(destination)
+                    let previous = local.draft
+                    local.draft.thread = nil; local.draft.parent = nil
+                    do { try persist() } catch { local.draft = previous; throw error }
+                    rerooted = true; continue
+                }
+                catch NStackError.response(404, let code?, _) where code == "channel_not_found" {
+                    // A missing channel cannot accept this note either. Unfreeze it, keeping content and request ID,
+                    // so Settings can reconnect the workspace; the next explicit send stays idempotency-checked.
+                    let previous = local.draft
+                    local.draft.frozen = false; local.draft.destination = nil; local.draft.thread = nil; local.draft.parent = nil
+                    do { try persist() } catch { local.draft = previous; throw error }
+                    notice = "Your Note to self conversation was not found (channel_not_found), so nothing was sent. Your text and images are kept; reconnect your workspace in Settings, then tap Send."
+                    return
+                }
+                guard let message = response["message"] as? [String:Any], message["client_request_id"] as? String == draft.id.uuidString, message["channel_id"] as? String == destination.channel, message["body"] as? String == text else { throw NoteError.malformed }
+                let acceptedDraft = local.draft
+                local.draft = NoteDraft()
+                do { try persist() } catch { local.draft = acceptedDraft; throw error }
+                notice = rerooted ? "Sent to your Flight Deck Note to self as a new note, because the thread it replied to no longer exists (thread_not_found)." : "Sent to your Flight Deck Note to self."
                 return
             }
-            catch NStackError.response(404, let code?) where code == "thread_not_found" || code == "channel_not_found" {
-                // Tower checks the channel and reply thread before recording a message, so this request was not accepted,
-                // and a deleted target can never accept it. Release the content without its target and keep the request
-                // ID: the next explicit send is still idempotency-checked against any earlier acceptance.
-                let previous = local.draft
-                local.draft.frozen = false; local.draft.destination = nil; local.draft.thread = nil; local.draft.parent = nil
-                do { try persist() } catch { local.draft = previous; throw error }
-                notice = code == "thread_not_found"
-                    ? "The thread this reply belonged to no longer exists, so nothing was sent. Your text and images are kept as a new note; tap Send to post it."
-                    : "Your Note to self conversation was not found, so nothing was sent. Your text and images are kept; reconnect your workspace in Settings, then tap Send."
-                return
-            }
-            guard let message = response["message"] as? [String:Any], message["client_request_id"] as? String == draft.id.uuidString, message["channel_id"] as? String == destination.channel, message["body"] as? String == text else { throw NoteError.malformed }
-            let acceptedDraft = local.draft
-            local.draft = NoteDraft()
-            do { try persist() } catch { local.draft = acceptedDraft; throw error }
-            notice = "Sent to your Flight Deck Note to self."
         } catch { notice = error.localizedDescription }
     }
 }

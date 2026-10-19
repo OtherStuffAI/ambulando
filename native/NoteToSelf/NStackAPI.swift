@@ -2,15 +2,15 @@
 import Foundation
 
 enum NStackError: LocalizedError {
-    case discoveryLimit, invalidSetup, unsafeURL, response(Int, String? = nil), malformed, fallbackLimit
+    case discoveryLimit, invalidSetup, unsafeURL, response(Int, String? = nil, String? = nil), malformed, fallbackLimit
     var errorDescription: String? {
         switch self {
         case .discoveryLimit: "nStack discovery reached a server list limit without a continuation cursor. Ask the administrator to enable complete discovery."
         case .invalidSetup: "Choose an HTTPS nStack and unlock your identity."
         case .unsafeURL: "nStack refused an unsafe URL or redirect. Use your selected HTTPS origin."
-        // Show only Tower's typed snake_case code so a screenshot identifies the failing rule without echoing free text.
-        case .response(let code, let detail):
-            "nStack returned HTTP \(code)" + (detail.flatMap { $0.range(of:"^[a-z][a-z0-9_]{0,63}$",options:.regularExpression) == nil ? nil : " (\($0))" } ?? "") + ". Check access and connection; your draft is retained."
+        // Name the request stage and Tower's code or error text, so a screenshot identifies which rule failed.
+        case .response(let code, let detail, let stage):
+            "nStack returned HTTP \(code)" + (stage.map { " during " + $0 } ?? "") + " (" + (detail.map(NStackAPI.summary) ?? "no Tower error body") + "). Check access and connection; your draft is retained."
         case .malformed: "nStack returned an unexpected response. Your draft is retained."
         case .fallbackLimit: "This backend uses JSON file upload, limited to 8 MiB. Your draft is retained."
         }
@@ -28,6 +28,21 @@ final class NStackAPI {
         self.sign = sign
         let config = URLSessionConfiguration.ephemeral; config.timeoutIntervalForRequest = 45
         self.session = session ?? URLSession(configuration: config, delegate: RefuseRedirects(), delegateQueue: nil)
+    }
+    /// One display line of server error text: control characters removed, at most 80 characters.
+    nonisolated static func summary(_ detail: String) -> String {
+        let line = detail.components(separatedBy:.controlCharacters).joined(separator:" ").split(separator:" ").joined(separator:" ")
+        return line.count > 80 ? String(line.prefix(80)) + "…" : line
+    }
+    /// Coarse request stage for error notices; identifiers are omitted.
+    nonisolated static func stage(method: String, path: String) -> String? {
+        let path = path.split(separator:"?",maxSplits:1).first.map(String.init) ?? path
+        if path.hasSuffix("/messages") { return method == "POST" ? "message send" : "history" }
+        if path.hasSuffix("/storage/prepare") { return "image prepare" }
+        if path.hasPrefix("/api/v4/storage/") { return path.hasSuffix("/complete") ? "image complete" : method == "PUT" ? "image upload" : "image check" }
+        if path.hasSuffix("/workspaces") { return "workspace discovery" }
+        if path.hasSuffix("/scopes") || path.hasSuffix("/channels") { return "workspace connect" }
+        return nil
     }
     nonisolated static func origin(_ value: String) throws -> URL {
         guard let u = URL(string: value.trimmingCharacters(in: .whitespacesAndNewlines)), u.scheme == "https", u.host != nil,
@@ -56,7 +71,7 @@ final class NStackAPI {
         guard (200..<300).contains(http.statusCode) else {
             // Typed PG errors carry a stable `code`; generic storage errors carry only `error` text.
             let failure = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
-            throw NStackError.response(http.statusCode, failure?["code"] as? String ?? failure?["error"] as? String)
+            throw NStackError.response(http.statusCode, failure?["code"] as? String ?? failure?["error"] as? String, Self.stage(method: method, path: path))
         }
         guard let result = try JSONSerialization.jsonObject(with: data) as? [String: Any] else { throw NStackError.malformed }
         return result
@@ -73,6 +88,6 @@ final class NStackAPI {
         var request = URLRequest(url: url); request.httpMethod = "PUT"; request.setValue(mime, forHTTPHeaderField: "Content-Type")
         let (_, response) = try await session.upload(for: request, fromFile: file)
         try Task.checkCancellation()
-        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else { throw NStackError.response((response as? HTTPURLResponse)?.statusCode ?? 0) }
+        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else { throw NStackError.response((response as? HTTPURLResponse)?.statusCode ?? 0, nil, "image upload") }
     }
 }

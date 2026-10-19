@@ -302,7 +302,7 @@ extension NoteTests {
         var notes = NoteStore(identity:identity,stateFile:state,session:session)
         await notes.send()
         XCTAssertEqual(tower.prepares,1); XCTAssertEqual(tower.messagePosts,0)
-        XCTAssertEqual(notes.notice,NStackError.response(404).localizedDescription)
+        XCTAssertEqual(notes.notice,NStackError.response(404,nil,"image check").localizedDescription)
         XCTAssertTrue(notes.draft.frozen); XCTAssertEqual(notes.draft.id,original.id); XCTAssertEqual(notes.draft.images[0].bytes,original.images[0].bytes)
         XCTAssertNotEqual(notes.draft.images[0].object,original.images[0].object)
         // An uncertain prepare during recovery still fails closed instead of allocating another object.
@@ -319,10 +319,13 @@ extension NoteTests {
 }
 
 extension NoteTests {
-    func testHTTPErrorShowsOnlyTypedTowerCode() {
-        XCTAssertTrue(NStackError.response(404,"thread_not_found").localizedDescription.hasPrefix("nStack returned HTTP 404 (thread_not_found)."))
-        XCTAssertTrue(NStackError.response(404,"storage object not found or not readable by this npub").localizedDescription.hasPrefix("nStack returned HTTP 404."))
-        XCTAssertTrue(NStackError.response(404).localizedDescription.hasPrefix("nStack returned HTTP 404."))
+    func testHTTPErrorNamesStageAndTowerCodeOrDetail() {
+        XCTAssertTrue(NStackError.response(404,"thread_not_found","message send").localizedDescription.hasPrefix("nStack returned HTTP 404 during message send (thread_not_found)."))
+        XCTAssertTrue(NStackError.response(404,"storage object not found\nor not readable",NStackAPI.stage(method:"GET",path:"/api/v4/storage/x")).localizedDescription.hasPrefix("nStack returned HTTP 404 during image check (storage object not found or not readable)."))
+        XCTAssertTrue(NStackError.response(404).localizedDescription.hasPrefix("nStack returned HTTP 404 (no Tower error body)."))
+        XCTAssertEqual(NStackAPI.summary(String(repeating:"x",count:100)).count,81)
+        XCTAssertEqual(NStackAPI.stage(method:"GET",path:"/api/v4/flightdeck-pg/workspaces/w/channels/c/messages?limit=200"),"history")
+        XCTAssertEqual(NStackAPI.stage(method:"POST",path:"/api/v4/storage/x/complete"),"image complete")
     }
 
     @MainActor
@@ -348,7 +351,7 @@ extension NoteTests {
     /// The observed live failure: the saved image still reads and reconciles, but the reply's thread is gone,
     /// so Tower answers the message POST with 404 thread_not_found on every retry.
     @MainActor
-    func testFrozenReplyToDeletedThreadIsReleasedAsNewNoteAndSentOnce() async throws {
+    func testFrozenReplyToDeletedThreadRetriesOnceAsRootUnderSameRequestID() async throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at:root) }
         let (identity,destination,state,original,session) = try frozenImageDraft(root)
@@ -356,28 +359,56 @@ extension NoteTests {
         let saved = original.images[0].object!
         tower.objects[saved] = (original.images[0].bytes,true)
         tower.missingThreads = [original.thread!]
-        MockProtocol.handler = { request in try tower.handle(request) }
-        var notes = NoteStore(identity:identity,stateFile:state,session:session)
+        var posted: [[String:Any]] = []
+        MockProtocol.handler = { request in
+            if request.httpMethod == "POST", request.url!.path.hasSuffix("/messages") { posted.append(try JSONSerialization.jsonObject(with:requestBody(request)) as! [String:Any]) }
+            return try tower.handle(request)
+        }
+        let notes = NoteStore(identity:identity,stateFile:state,session:session)
         await notes.send()
-        XCTAssertEqual(tower.messagePosts,1); XCTAssertTrue(tower.messages.isEmpty); XCTAssertEqual(tower.prepares,0)
-        XCTAssertTrue(notes.notice?.contains("no longer exists") == true)
-        // Only the dead reply target is dropped; text, image, verified object and request ID are kept, and nothing is auto-sent.
-        notes = NoteStore(identity:identity,stateFile:state,session:session)
-        XCTAssertFalse(notes.draft.frozen); XCTAssertNil(notes.draft.destination); XCTAssertNil(notes.draft.thread); XCTAssertNil(notes.draft.parent)
-        XCTAssertEqual(notes.draft.id,original.id); XCTAssertEqual(notes.draft.text,original.text)
-        XCTAssertEqual(notes.draft.images.map(\.bytes),original.images.map(\.bytes)); XCTAssertEqual(notes.draft.images.first?.object,saved)
-        // An explicit send posts it as a new note under the same request ID, reusing the verified object.
-        await notes.send()
-        XCTAssertEqual(notes.notice,"Sent to your Flight Deck Note to self.")
-        XCTAssertEqual(tower.messagePosts,2); XCTAssertEqual(tower.messages.count,1); XCTAssertEqual(tower.prepares,0); XCTAssertTrue(tower.storageWrites.isEmpty)
+        XCTAssertEqual(notes.notice,"Sent to your Flight Deck Note to self as a new note, because the thread it replied to no longer exists (thread_not_found).")
+        // Exactly one reply attempt and one root retry, both under the original request ID, reusing the verified object.
+        XCTAssertEqual(tower.messages.count,1); XCTAssertEqual(tower.prepares,0); XCTAssertTrue(tower.storageWrites.isEmpty)
+        guard posted.count == 2 else { XCTFail("Expected one reply attempt and one root retry, got \(posted.count) posts"); return }
+        XCTAssertEqual(posted[0]["thread_id"] as? String,original.thread); XCTAssertEqual(posted[0]["create_thread"] as? Bool,false)
+        XCTAssertNil(posted[1]["thread_id"]); XCTAssertEqual(posted[1]["create_thread"] as? Bool,true)
+        XCTAssertEqual(posted.map { $0["client_request_id"] as? String },[original.id.uuidString,original.id.uuidString])
+        // The root retry is re-signed without the stale thread tag.
+        let event = ((posted[1]["message_signature"] as? [String:Any])?["nostr_event"] as? [String:Any])?["tags"] as? [[String]]
+        XCTAssertFalse(event?.contains { $0.first == "thread_id" } ?? true)
         let accepted = try XCTUnwrap(tower.messages[original.id.uuidString]?.body)
-        XCTAssertNil(accepted["thread_id"]); XCTAssertEqual(accepted["create_thread"] as? Bool,true); XCTAssertEqual(accepted["body"] as? String,original.text)
+        XCTAssertEqual(accepted["body"] as? String,original.text)
         XCTAssertEqual(((accepted["metadata"] as? [String:Any])?["attachments"] as? [[String:Any]])?.first?["storage_object_id"] as? String,saved)
-        XCTAssertFalse(notes.draft.frozen); XCTAssertTrue(notes.draft.images.isEmpty); XCTAssertNotEqual(notes.draft.id,original.id)
+        let reloaded = NoteStore(identity:identity,stateFile:state,session:session)
+        XCTAssertFalse(reloaded.draft.frozen); XCTAssertTrue(reloaded.draft.images.isEmpty); XCTAssertNotEqual(reloaded.draft.id,original.id)
     }
 
     @MainActor
-    func testReleasedReplyAlreadyAcceptedInDeletedThreadIsNeverResent() async throws {
+    func testRootRetryWithLostResponsePersistsClearedThreadAndReplaysWithoutDuplicate() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at:root) }
+        let (identity,destination,state,original,session) = try frozenImageDraft(root)
+        let tower = MockTower(destination:destination)
+        let saved = original.images[0].object!
+        tower.objects[saved] = (original.images[0].bytes,true)
+        tower.missingThreads = [original.thread!]
+        tower.loseNextMessageResponse = true
+        MockProtocol.handler = { request in try tower.handle(request) }
+        var notes = NoteStore(identity:identity,stateFile:state,session:session)
+        await notes.send()
+        // Tower accepted the root retry but the response was lost: the persisted draft is still frozen, now as a root.
+        XCTAssertEqual(tower.messages.count,1); XCTAssertEqual(tower.messagePosts,2)
+        notes = NoteStore(identity:identity,stateFile:state,session:session)
+        XCTAssertTrue(notes.draft.frozen); XCTAssertNil(notes.draft.thread); XCTAssertNil(notes.draft.parent)
+        XCTAssertEqual(notes.draft.id,original.id); XCTAssertEqual(notes.draft.text,original.text); XCTAssertEqual(notes.draft.destination,destination)
+        XCTAssertEqual(notes.draft.images.first?.object,saved); XCTAssertEqual(notes.draft.images.map(\.bytes),original.images.map(\.bytes))
+        await notes.send()
+        XCTAssertEqual(notes.notice,"Sent to your Flight Deck Note to self."); XCTAssertEqual(tower.messages.count,1); XCTAssertEqual(tower.messagePosts,3)
+        XCTAssertFalse(notes.draft.frozen); XCTAssertNotEqual(notes.draft.id,original.id)
+    }
+
+    @MainActor
+    func testReplyAlreadyAcceptedBeforeThreadDeletionIsNeverResentAsRoot() async throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at:root) }
         let (identity,destination,state,original,session) = try frozenImageDraft(root)
@@ -390,11 +421,12 @@ extension NoteTests {
         tower.missingThreads = [original.thread!]
         MockProtocol.handler = { request in try tower.handle(request) }
         let notes = NoteStore(identity:identity,stateFile:state,session:session)
-        await notes.send(); await notes.send()
-        XCTAssertEqual(tower.messages.count,1); XCTAssertEqual(tower.messages[original.id.uuidString]?.hash,earlier)
-        XCTAssertTrue(notes.notice?.contains("not sent again") == true)
-        XCTAssertFalse(notes.draft.frozen); XCTAssertNotEqual(notes.draft.id,original.id); XCTAssertEqual(notes.draft.text,original.text)
-        XCTAssertEqual(notes.draft.images.map(\.bytes),original.images.map(\.bytes))
+        await notes.send()
+        XCTAssertEqual(tower.messagePosts,2); XCTAssertEqual(tower.messages.count,1); XCTAssertEqual(tower.messages[original.id.uuidString]?.hash,earlier)
+        XCTAssertTrue(notes.notice?.contains("idempotency_conflict") == true)
+        let reloaded = NoteStore(identity:identity,stateFile:state,session:session)
+        XCTAssertFalse(reloaded.draft.frozen); XCTAssertNotEqual(reloaded.draft.id,original.id); XCTAssertEqual(reloaded.draft.text,original.text)
+        XCTAssertNil(reloaded.draft.thread); XCTAssertEqual(reloaded.draft.images.map(\.bytes),original.images.map(\.bytes))
     }
 
     @MainActor
@@ -412,11 +444,12 @@ extension NoteTests {
         var notes = NoteStore(identity:identity,stateFile:state,session:session)
         await notes.send()
         XCTAssertTrue(notes.draft.frozen); XCTAssertEqual(notes.draft.thread,original.thread); XCTAssertEqual(notes.draft.destination,destination)
+        XCTAssertEqual(notes.notice,"nStack returned HTTP 404 during message send (no Tower error body). Check access and connection; your draft is retained.")
         tower.channelMissing = true
         MockProtocol.handler = { request in try tower.handle(request) }
         notes = NoteStore(identity:identity,stateFile:state,session:session)
         await notes.send()
-        XCTAssertTrue(notes.notice?.contains("reconnect") == true); XCTAssertTrue(tower.messages.isEmpty)
+        XCTAssertTrue(notes.notice?.contains("channel_not_found") == true); XCTAssertTrue(tower.messages.isEmpty)
         XCTAssertFalse(notes.draft.frozen); XCTAssertNil(notes.draft.destination); XCTAssertNil(notes.draft.thread)
         XCTAssertEqual(notes.draft.id,original.id); XCTAssertEqual(notes.draft.text,original.text); XCTAssertEqual(notes.draft.images.map(\.bytes),original.images.map(\.bytes))
     }
