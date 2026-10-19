@@ -40,6 +40,22 @@ choice does not become active authority: the user must review the destination
 and request a fresh handle. It is never copied into Tower workspace records or
 hydrated through `TowerSyncService`.
 
+## Unified setup projection
+
+Settings presents one NStack collection. Every saved/manual Tower or Supabase
+server is projected as an NStack immediately, with its saved workspaces nested
+beneath it and the active route shown as `NStack → workspace`. The projection
+does not rewrite legacy settings or create another transport path.
+
+Consented `window.NStack` results enter that same collection. Pre-approval
+browser summaries remain provisional and are never merged by label or opaque
+origin-scoped ID. After capability approval, Ambulando may merge the browser
+entry with a configured NStack only when normalized connection metadata matches
+the endpoint or verified server npub. Provider change/revocation removes that
+in-memory approval evidence and capability handle without deleting an
+independently configured NStack. Browser workspace IDs are not merged with
+saved workspace identities by name.
+
 ## NIP-78 records
 
 All current-state recovery records are NIP-78 addressable events (`kind:30078`).

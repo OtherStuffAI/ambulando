@@ -11,9 +11,9 @@ describe('Nstack onboarding and draft policies', () => {
     expect(store.connectStep).toBe(1);
     expect(store.connectHostedNotice).toMatch(/Sign in with your Nostr identity/);
   });
-  it('offers public base-aware legal links in separate tabs and keeps BYO submit', () => {
+  it('offers public base-aware legal links in separate tabs and keeps manual NStack submit', () => {
     const html = readFileSync('index.html', 'utf8');
-    expect(html.indexOf('<h3>Host My Tower</h3>')).toBeLessThan(html.indexOf('>BYO Tower</summary>'));
+    expect(html.indexOf('<h3>Host my NStack</h3>')).toBeLessThan(html.indexOf('>Add an existing NStack</summary>'));
     for (const page of ['privacy', 'terms']) {
       expect(html).toContain(`href="%BASE_URL%legal/${page}.html" target="_blank" rel="noopener"`);
       expect(readFileSync(`legal/${page}.html`, 'utf8')).toContain(`data-legal-page="${page}"`);

@@ -691,8 +691,8 @@
         <template x-if="$store.chat.connectStep === 1">
           <div class="connect-onboarding-screen">
             <div class="connect-wizard-top">
-              <p class="connect-modal-eyebrow" x-text="$store.chat.isTowerPgMode ? 'New workspace' : 'Workspace connection'"></p>
-              <h2 x-text="$store.chat.isTowerPgMode ? 'Connect to a Tower' : 'Connect to SuperBased'"></h2>
+              <p class="connect-modal-eyebrow" x-text="$store.chat.isTowerPgMode ? 'Add an NStack' : 'NStack connection'"></p>
+              <h2>Add an NStack manually</h2>
               <div class="connect-wizard-steps" x-show="$store.chat.isTowerPgMode && !$store.chat.connectHostedConfig" aria-label="Onboarding progress">
                 <span class="active">1</span>
                 <span>2</span>
@@ -700,23 +700,23 @@
                 <span>4</span>
                 <span>5</span>
               </div>
-              <p x-text="$store.chat.isTowerPgMode ? 'Choose a Tower host or paste a workspace descriptor. Ambulando opens into an empty workspace shell, then builds the selected spaces through Tower.' : 'Choose a host or enter a custom URL.'"></p>
+              <p x-text="$store.chat.isTowerPgMode ? 'Use Tower/Supabase connection details to add an NStack, then choose or create one of its workspaces.' : 'Use the server URL or existing connection key for this NStack.'"></p>
             </div>
             <div class="connect-host-options" :class="{ 'connect-host-options-pg': $store.chat.isTowerPgMode }">
               <section class="connect-onboarding-card connect-hosted-card" x-show="$store.chat.isTowerPgMode">
-                <h3>Host My Tower</h3>
+                <h3>Host my NStack</h3>
                 <p>Hosting provided by Other Stuff on <strong>nstack.otherstuff.ai</strong>.</p>
                 <p class="connect-hosted-price">USD $5 <span>per GB per month</span></p>
                 <p>First 1 GB free for one month: a <strong>USD $5 credit</strong> against your first month’s 1 GB. Additional usage is payable; the credit does not renew.</p>
                 <p>After the credit, 1 GB costs USD $5 per month. Your account is paused if the amount due is unpaid. No automatic charge is assumed.</p>
                 <p class="connect-legal-links"><a href="%BASE_URL%legal/privacy.html" target="_blank" rel="noopener">Privacy Policy (draft)</a> · <a href="%BASE_URL%legal/terms.html" target="_blank" rel="noopener">Terms (draft)</a><br><small>Opens in a new tab; your workspace setup stays here.</small></p>
-                <button class="auth-option" type="button" @click="$store.chat.connectRequestHostedTower()" :disabled="$store.chat.connectHostBusy"><span x-text="$store.chat.connectHostBusy ? 'Checking hosting…' : 'Host My Tower'"></span></button>
+                <button class="auth-option" type="button" @click="$store.chat.connectRequestHostedTower()" :disabled="$store.chat.connectHostBusy"><span x-text="$store.chat.connectHostBusy ? 'Checking hosting…' : 'Host my NStack'"></span></button>
                 <p class="connect-hosted-availability">Continue to check availability and create your hosted workspace. Payments use Stripe test mode.</p>
                 <p class="auth-error" role="status" aria-live="polite" x-show="$store.chat.connectHostedNotice" x-text="$store.chat.connectHostedNotice"></p>
               </section>
             <details class="connect-onboarding-card connect-byo-card" :open="!$store.chat.isTowerPgMode">
-              <summary class="connect-byo-summary" x-show="$store.chat.isTowerPgMode">BYO Tower</summary>
-              <p x-show="$store.chat.isTowerPgMode">Connect your existing Tower using its URL or workspace descriptor.</p>
+              <summary class="connect-byo-summary" x-show="$store.chat.isTowerPgMode">Add an existing NStack</summary>
+              <p x-show="$store.chat.isTowerPgMode">Add an NStack using its Tower/Supabase URL or workspace descriptor.</p>
               <div class="connect-hosts-list">
                 <template x-for="host in $store.chat.mergedHostsList" :key="host.url">
                   <button type="button" class="connect-host-row" @click="$store.chat.connectToHost(host.url, host.towerName || host.label || host.url)" :disabled="$store.chat.connectHostBusy">
@@ -728,7 +728,7 @@
               </div>
               <form class="connect-manual-form" @submit.prevent="$store.chat.connectByo()">
                 <label>
-                  <span x-text="$store.chat.isTowerPgMode ? 'Tower URL or workspace descriptor' : 'BYO SuperBased'"></span>
+                  <span x-text="$store.chat.isTowerPgMode ? 'NStack server URL or workspace descriptor' : 'NStack server URL or connection key'"></span>
                   <input type="text" x-model="$store.chat.connectManualUrl" :placeholder="$store.chat.isTowerPgMode ? 'URL or workspace descriptor JSON' : 'URL or connection token'" :disabled="$store.chat.connectHostBusy" />
                 </label>
                 <button class="auth-option" type="submit" :disabled="$store.chat.connectHostBusy || !$store.chat.connectManualUrl.trim()">
@@ -7783,43 +7783,46 @@
           <section class="settings-panel nstack-settings-panel" x-init="$store.chat.initializeNStackDiscovery()">
             <div class="settings-panel-header">
               <div>
-                <h2>NStack discovery</h2>
-                <p>Choose which browser-approved NStack and workspace Ambulando may ask to use. Discovery does not grant service authority.</p>
+                <h2>Your NStacks</h2>
+                <p>Each NStack is a Tower/Supabase server. Its workspaces appear underneath, whether it was already configured, added manually, or found through Nostr Browser.</p>
               </div>
               <span class="nstack-availability" :class="`nstack-availability-${$store.chat.nstackAvailability}`" x-text="$store.chat.nstackAvailability === 'available' ? `Available · v${$store.chat.nstackProtocolVersion}` : ($store.chat.nstackAvailability === 'checking' ? 'Checking…' : 'Unavailable')"></span>
             </div>
 
-            <div class="nstack-active-selection" x-show="$store.chat.nstackActiveSelection">
-              <strong>Saved destination</strong>
-              <span x-text="`${$store.chat.nstackActiveSelection?.stackLabel || 'NStack'} → ${$store.chat.nstackActiveSelection?.workspaceLabel || 'Workspace'}`"></span>
+            <div class="nstack-active-selection" x-show="$store.chat.activeNStackRoute" role="status" aria-live="polite">
+              <strong>Active route</strong>
+              <span x-text="`${$store.chat.activeNStackRoute?.stackLabel || 'Current NStack'} → ${$store.chat.activeNStackRoute?.workspaceLabel || 'Workspace'}`"></span>
               <small x-show="$store.chat.nstackCapabilityHandleId">Capability active for this page. The opaque handle is not saved.</small>
-              <small x-show="!$store.chat.nstackCapabilityHandleId">Review and request access again before using this destination.</small>
+              <small x-show="!$store.chat.nstackCapabilityHandleId">This is the configured Tower route. Browser authorization is separate and never switches it silently.</small>
+            </div>
+
+            <div class="nstack-known-list" aria-label="Known NStacks">
+              <p class="settings-empty-note" x-show="$store.chat.knownNStacks.length === 0">No NStacks are configured yet.</p>
+              <template x-for="nstack in $store.chat.knownNStacks" :key="nstack.key">
+                <article class="nstack-known-card" :class="{ active: nstack.active, provisional: nstack.provisional }">
+                  <div class="nstack-known-header">
+                    <span><b x-text="nstack.label"></b><small x-text="nstack.sourceLabel"></small></span>
+                    <span class="nstack-known-status" x-text="nstack.active ? 'Active' : (nstack.provisional ? 'Needs approval' : 'Known')"></span>
+                  </div>
+                  <small class="nstack-known-endpoint" x-show="nstack.endpoint" x-text="nstack.endpoint"></small>
+                  <div class="nstack-known-workspaces" x-show="nstack.workspaces.length > 0">
+                    <template x-for="workspace in nstack.workspaces" :key="workspace.key">
+                      <button type="button" class="nstack-workspace-row" :class="{ active: workspace.active }" :aria-current="workspace.active ? 'true' : null" @click="$store.chat.selectKnownNStackWorkspace(nstack, workspace)" :disabled="$store.chat.nstackBusy">
+                        <span><b x-text="workspace.label"></b><small x-text="workspace.source === 'browser' ? (workspace.authorized ? 'Browser authorized' : 'Found through Nostr Browser') : 'Configured workspace'"></small></span>
+                        <span aria-hidden="true" x-text="workspace.active ? '✓' : '›'"></span>
+                      </button>
+                    </template>
+                  </div>
+                  <button x-show="nstack.browserStackId && nstack.workspaces.every(workspace => workspace.source !== 'browser')" class="auth-option secondary" type="button" @click="$store.chat.selectNStack(nstack.browserStackId)" :disabled="$store.chat.nstackBusy">Show browser-approved workspaces</button>
+                  <p class="settings-empty-note" x-show="!nstack.browserStackId && nstack.workspaces.length === 0">No workspaces are known for this NStack yet.</p>
+                </article>
+              </template>
             </div>
 
             <div class="nstack-discovery-actions">
-              <button class="auth-option secondary" type="button" @click="$store.chat.requestNStackDiscovery()" :disabled="$store.chat.nstackBusy || $store.chat.nstackAvailability !== 'available'" x-text="$store.chat.nstackBusy && $store.chat.nstackStatus === 'requesting' ? 'Waiting for browser…' : 'Discover NStacks'"></button>
-              <span class="settings-field-help" x-show="$store.chat.nstackAvailability === 'unavailable'">No provider is installed. Manual/direct Tower connection remains available below.</span>
-            </div>
-
-            <div class="nstack-picker-grid" x-show="$store.chat.nstackDiscoveryApproved">
-              <div>
-                <strong>Approved NStacks</strong>
-                <p class="settings-empty-note" x-show="$store.chat.nstackStacks.length === 0">No NStacks were shared with this origin.</p>
-                <template x-for="stack in $store.chat.nstackStacks" :key="stack.id">
-                  <button type="button" class="nstack-picker-row" :class="{ active: stack.id === $store.chat.nstackSelectedStackId }" @click="$store.chat.selectNStack(stack.id)" :disabled="$store.chat.nstackBusy">
-                    <span><b x-text="stack.name"></b><small x-text="stack.host ? 'Approved host' : 'Approved'"></small></span><span aria-hidden="true">›</span>
-                  </button>
-                </template>
-              </div>
-              <div>
-                <strong>Approved workspaces</strong>
-                <p class="settings-empty-note" x-show="$store.chat.nstackSelectedStackId && $store.chat.nstackWorkspaces.length === 0 && !$store.chat.nstackBusy">No workspaces were shared for this NStack.</p>
-                <template x-for="workspace in $store.chat.nstackWorkspaces" :key="workspace.id">
-                  <button type="button" class="nstack-picker-row" :class="{ active: workspace.id === $store.chat.nstackSelectedWorkspaceId }" @click="$store.chat.chooseNStackWorkspace(workspace.id)" :disabled="$store.chat.nstackBusy">
-                    <span><b x-text="workspace.name"></b><small>Approved</small></span><span aria-hidden="true" x-text="workspace.id === $store.chat.nstackSelectedWorkspaceId ? '✓' : '○'"></span>
-                  </button>
-                </template>
-              </div>
+              <button class="auth-option secondary" type="button" @click="$store.chat.requestNStackDiscovery()" :disabled="$store.chat.nstackBusy || $store.chat.nstackAvailability !== 'available'" x-text="$store.chat.nstackBusy && $store.chat.nstackStatus === 'requesting' ? 'Waiting for browser…' : 'Find NStacks through Nostr Browser'"></button>
+              <button class="auth-option secondary" type="button" @click="$store.chat.openConnectModal()">Add an NStack manually</button>
+              <span class="settings-field-help" x-show="$store.chat.nstackAvailability === 'unavailable'">Nostr Browser discovery is unavailable. Existing and manually added NStacks remain usable.</span>
             </div>
 
             <div class="nstack-capability-request" x-show="$store.chat.nstackSelectedWorkspace">
@@ -7852,13 +7855,11 @@
               <p class="auth-error" role="alert" x-show="$store.chat.nstackRecoveryError" x-text="$store.chat.nstackRecoveryError"></p>
               <p class="settings-field-help">Large snapshots require an authenticated blob adapter. None is configured, so Ambulando supports and validates manifest/key envelopes without inventing an upload service.</p>
             </div>
-          </section>
 
-          <section class="settings-panel">
             <div class="settings-panel-header">
               <div>
-                <h2>SuperBased</h2>
-                <p>Configure the current workspace backend and transport without leaving Setup.</p>
+                <h3>Current NStack connection</h3>
+                <p>These are the Tower/Supabase connection and transport details for the active NStack.</p>
               </div>
             </div>
 
@@ -7936,27 +7937,6 @@
               </div>
             </div>
 
-            <div class="workspace-selector-panel" x-show="$store.chat.isLoggedIn">
-              <div class="workspace-selector-header">
-                <strong>Workspaces</strong>
-                <button class="auth-option secondary" type="button" @click="$store.chat.openWorkspaceBootstrapModal()">New workspace</button>
-              </div>
-              <div class="workspace-selector-list" x-show="$store.chat.knownWorkspaces.length > 0">
-                <template x-for="workspace in $store.chat.knownWorkspaces" :key="workspace.workspaceKey || workspace.workspaceOwnerNpub">
-                  <button
-                    type="button"
-                    class="workspace-selector-row"
-                    :class="{ 'workspace-selector-row-active': $store.chat.currentWorkspaceKey === (workspace.workspaceKey || workspace.workspaceOwnerNpub) }"
-                    @click="$store.chat.selectWorkspace(workspace.workspaceKey || workspace.workspaceOwnerNpub)"
-                  >
-                    <span class="workspace-selector-name" x-text="workspace.name"></span>
-                    <span class="workspace-selector-meta" x-text="$store.chat.getWorkspaceMeta(workspace)"></span>
-                  </button>
-                </template>
-              </div>
-              <p class="auth-extension-hint" x-show="$store.chat.knownWorkspaces.length === 0">No workspaces yet. Create one to start using group-based records.</p>
-            </div>
-
             <div class="preset-connect-panel" x-show="!$store.chat.backendUrl && $store.chat.presetConnectHost">
               <button
                 type="button"
@@ -7979,16 +7959,16 @@
 
             <form class="auth-form" @submit.prevent="$store.chat.saveConnectionSettings()">
               <label>
-                <span>Connection key</span>
+                <span>Existing Tower/Supabase connection key</span>
                 <textarea
                   x-model="$store.chat.superbasedTokenInput"
                   rows="3"
-                  placeholder="Paste SuperBased connection key"
+                  placeholder="Paste an existing NStack connection key"
                   class="token-input"
                 ></textarea>
               </label>
               <label>
-                <span>HTTP backend override</span>
+                <span>NStack server URL</span>
                 <input type="text" x-model="$store.chat.backendOverrideDraft" :readonly="$store.chat.isTowerPgMode" placeholder="https://sb.example.com" />
               </label>
               <p class="settings-field-help" x-show="$store.chat.isTowerPgMode">Tower PG uses the verified workspace descriptor; the HTTP override is read-only. Use the switch above to change transport.</p>
@@ -7998,7 +7978,7 @@
               </label>
               <p class="auth-error" x-show="$store.chat.superbasedError" x-text="$store.chat.superbasedError"></p>
               <div class="superbased-actions">
-                <button class="auth-option" type="submit">Save connection</button>
+                <button class="auth-option" type="submit">Save NStack connection</button>
               </div>
             </form>
           </section>

@@ -4266,6 +4266,13 @@
       "label": "Native Note to self discard race guard",
       "notes": [],
       "noUserVisibleChanges": true
+    },
+    {
+      "buildNumber": 2448,
+      "label": "Unified NStack setup",
+      "notes": [
+        "Setup now shows every configured Tower/Supabase server as an NStack with its workspaces, while Nostr Browser discovery adds and authorizes destinations in the same list."
+      ]
     }
   ]
 }

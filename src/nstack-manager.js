@@ -1,5 +1,6 @@
 import { nip19 } from 'nostr-tools';
 import { createNStackProviderAdapter, nstackErrorMessage } from './nstack-provider.js';
+import { activeNStackRoute, projectNStackDestinations } from './nstack-destinations.js';
 import { loadNStackSelection, saveNStackSelection } from './nstack-selection-store.js';
 import {
   buildNStackRecoveryEvent,
@@ -54,6 +55,8 @@ export const nstackManagerMixin = {
   nstackDiscoveryApproved: false,
   nstackStacks: [],
   nstackWorkspaces: [],
+  nstackWorkspaceCatalogues: {},
+  nstackBrowserApprovedConnections: {},
   nstackSelectedStackId: '',
   nstackSelectedWorkspaceId: '',
   nstackActiveSelection: null,
@@ -75,6 +78,23 @@ export const nstackManagerMixin = {
     return this.nstackWorkspaces.find(workspace => workspace.id === this.nstackSelectedWorkspaceId) || null;
   },
 
+  get knownNStacks() {
+    return projectNStackDestinations({
+      knownHosts: this.mergedHostsList || this.knownHosts || [],
+      knownWorkspaces: this.knownWorkspaces || [],
+      currentWorkspace: this.currentWorkspace,
+      currentBackendUrl: this.currentWorkspaceBackendUrl || this.backendUrl,
+      browserStacks: this.nstackStacks,
+      browserWorkspaceCatalogues: this.nstackWorkspaceCatalogues,
+      browserApprovedConnections: this.nstackBrowserApprovedConnections,
+      browserOrigin: currentOrigin(),
+    });
+  },
+
+  get activeNStackRoute() {
+    return activeNStackRoute(this.knownNStacks);
+  },
+
   nstackRelays() {
     return nstackRecoveryRelayUrls(text(this.nstackRecoveryRelaysInput).split(/[\s,]+/).filter(Boolean));
   },
@@ -93,6 +113,8 @@ export const nstackManagerMixin = {
     this.nstackDiscoveryApproved = false;
     this.nstackStacks = [];
     this.nstackWorkspaces = [];
+    this.nstackWorkspaceCatalogues = {};
+    this.nstackBrowserApprovedConnections = {};
     this.nstackCapabilityHandleId = '';
     this._nstackCapability = null;
     try {
@@ -128,6 +150,8 @@ export const nstackManagerMixin = {
       await this._nstackAdapter.requestDiscovery({ workspaces: true });
       this.nstackDiscoveryApproved = true;
       this.nstackStacks = await this._nstackAdapter.listNStacks();
+      this.nstackWorkspaceCatalogues = {};
+      this.nstackBrowserApprovedConnections = {};
       this.nstackStatus = this.nstackStacks.length ? 'discovered' : 'empty';
       if (this.nstackStacks.length === 1) await this.selectNStack(this.nstackStacks[0].id);
     } catch (error) {
@@ -148,6 +172,10 @@ export const nstackManagerMixin = {
     this.nstackError = '';
     try {
       this.nstackWorkspaces = await this._nstackAdapter.listWorkspaces({ stackId: this.nstackSelectedStackId });
+      this.nstackWorkspaceCatalogues = {
+        ...this.nstackWorkspaceCatalogues,
+        [this.nstackSelectedStackId]: this.nstackWorkspaces,
+      };
       this.nstackStatus = this.nstackWorkspaces.length ? 'workspaces' : 'no_workspaces';
     } catch (error) {
       this.nstackStatus = statusForError(error);
@@ -180,6 +208,14 @@ export const nstackManagerMixin = {
       });
       this._nstackCapability = handle;
       this.nstackCapabilityHandleId = handle.handle;
+      this.nstackBrowserApprovedConnections = {
+        ...this.nstackBrowserApprovedConnections,
+        [stack.id]: {
+          url: handle.connection.url,
+          peerNpub: handle.connection.peerNpub || '',
+          workspaceId: workspace.id,
+        },
+      };
       this.nstackActiveSelection = await saveNStackSelection({
         origin: currentOrigin(),
         identity: this.session?.npub,
@@ -201,6 +237,7 @@ export const nstackManagerMixin = {
   },
 
   handleNStackChange(change = {}) {
+    this.nstackBrowserApprovedConnections = {};
     if (this.nstackCapabilityHandleId) {
       this.nstackCapabilityHandleId = '';
       this._nstackCapability = null;
@@ -209,6 +246,18 @@ export const nstackManagerMixin = {
     } else {
       this.nstackStatus = 'changed';
     }
+  },
+
+  async selectKnownNStackWorkspace(nstack, workspace) {
+    if (workspace?.workspaceKey) {
+      await this.selectWorkspace(workspace.workspaceKey);
+      return;
+    }
+    if (!nstack?.browserStackId || !workspace?.browserWorkspaceId) return;
+    if (this.nstackSelectedStackId !== nstack.browserStackId) {
+      await this.selectNStack(nstack.browserStackId);
+    }
+    this.chooseNStackWorkspace(workspace.browserWorkspaceId);
   },
 
   async createNStackRecoveryBackup() {

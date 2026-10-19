@@ -587,6 +587,16 @@ code, pre { font-family:var(--font-code); }
 .nstack-availability-available { color:var(--success); border-color:color-mix(in srgb, var(--success) 45%, var(--border)); }
 .nstack-active-selection, .nstack-capability-request, .nstack-recovery-panel { display:grid; gap:6px; padding:12px; border:1px solid var(--border); border-radius:10px; background:var(--surface-muted); }
 .nstack-active-selection small, .nstack-picker-row small, .nstack-recovered-list small { display:block; color:var(--text-muted); }
+.nstack-known-list { display:grid; gap:10px; }
+.nstack-known-card { display:grid; gap:8px; padding:12px; border:1px solid var(--border); border-radius:10px; background:var(--background); }
+.nstack-known-card.active { border-color:var(--primary); box-shadow:0 0 0 1px var(--primary); }
+.nstack-known-card.provisional { border-style:dashed; }
+.nstack-known-header { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
+.nstack-known-header small, .nstack-known-endpoint, .nstack-workspace-row small { display:block; color:var(--text-muted); overflow-wrap:anywhere; }
+.nstack-known-status { flex:none; color:var(--text-muted); font-size:12px; }
+.nstack-known-workspaces { display:grid; gap:6px; padding-left:12px; border-left:2px solid var(--border); }
+.nstack-workspace-row { display:flex; align-items:center; justify-content:space-between; gap:8px; width:100%; min-height:44px; padding:8px 10px; text-align:left; color:var(--foreground); background:var(--surface-muted); border:1px solid var(--border); border-radius:8px; }
+.nstack-workspace-row.active { border-color:var(--primary); }
 .nstack-discovery-actions, .nstack-recovery-actions { display:flex; align-items:center; flex-wrap:wrap; gap:8px; }
 .nstack-picker-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
 .nstack-picker-grid > div { display:grid; align-content:start; gap:6px; min-width:0; }
@@ -598,4 +608,6 @@ code, pre { font-family:var(--font-code); }
 @media (max-width: 768px) {
   .nstack-picker-grid { grid-template-columns:1fr; }
   .nstack-recovery-actions > button, .nstack-discovery-actions > button { width:100%; min-height:44px; }
+  .nstack-known-header { align-items:flex-start; flex-direction:column; gap:4px; }
+  .nstack-known-workspaces { padding-left:8px; }
 }

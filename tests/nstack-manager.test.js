@@ -24,6 +24,11 @@ function store(overrides = {}) {
     session: { npub: 'npub1alice' },
     currentWorkspaceKey: 'workspace-local-a',
     selectedWorkspaceKey: '',
+    knownHosts: [],
+    knownWorkspaces: [],
+    mergedHostsList: [],
+    currentWorkspace: null,
+    currentWorkspaceBackendUrl: '',
     ...overrides,
   };
 }
@@ -68,9 +73,16 @@ describe('NStack settings manager', () => {
     expect(selection.save).toHaveBeenCalledWith(expect.objectContaining({ workspacePartition: 'workspace-local-a' }));
     expect(selection.save.mock.calls[0][0].selection).not.toHaveProperty('handleId');
 
+    value.knownHosts = [{ url: 'https://stack.example', label: 'Manual stack' }];
+    value.mergedHostsList = value.knownHosts;
+    expect(value.knownNStacks).toHaveLength(1);
+    expect(value.knownNStacks[0].sources).toEqual(['configured', 'browser']);
+
     provider.emit('changed');
     expect(value.nstackStatus).toBe('changed');
     expect(value.nstackCapabilityHandleId).toBe('');
     expect(value.nstackError).toMatch(/did not switch/);
+    expect(value.knownNStacks.some(entry => entry.sources.includes('configured'))).toBe(true);
+    expect(value.knownHosts).toEqual([{ url: 'https://stack.example', label: 'Manual stack' }]);
   });
 });
