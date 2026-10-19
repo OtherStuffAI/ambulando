@@ -4260,6 +4260,12 @@
       "notes": [
         "Settings can discover browser-approved NStacks and workspaces, request scoped access, and create or restore encrypted Nostr recovery records while keeping manual Tower connection available."
       ]
+    },
+    {
+      "buildNumber": 2447,
+      "label": "Native Note to self discard race guard",
+      "notes": [],
+      "noUserVisibleChanges": true
     }
   ]
 }

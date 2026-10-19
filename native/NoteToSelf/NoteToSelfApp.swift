@@ -86,10 +86,12 @@ struct NotesHome: View {
             Text("The unsent text and any attached images will be removed from this device and cannot be recovered.")
         }
         .onChange(of:picker) { _,value in
-            Task { do { if let data = try await value?.loadTransferable(type:Data.self) { await notes.addImage(data) } } catch { notes.notice = error.localizedDescription }; picker = nil }
+            let draftID = notes.draft.id
+            Task { do { if let data = try await value?.loadTransferable(type:Data.self) { await notes.addImage(data,to:draftID) } } catch { notes.notice = error.localizedDescription }; picker = nil }
         }
         .fileImporter(isPresented:$importer,allowedContentTypes:[.image]) { result in
-            Task { do { let url = try result.get(); let access = url.startAccessingSecurityScopedResource(); defer { if access { url.stopAccessingSecurityScopedResource() } }; await notes.addImage(try Data(contentsOf:url)) } catch { notes.notice = error.localizedDescription } }
+            let draftID = notes.draft.id
+            Task { do { let url = try result.get(); let access = url.startAccessingSecurityScopedResource(); defer { if access { url.stopAccessingSecurityScopedResource() } }; await notes.addImage(try Data(contentsOf:url),to:draftID) } catch { notes.notice = error.localizedDescription } }
         }
         .task(id:identity.npub) {
             guard identity.unlocked else { notes.messages = []; if identity.exists { unlock = true }; return }
@@ -101,7 +103,9 @@ struct NotesHome: View {
     }
     func pasteImage() {
         let board = UIPasteboard.general
-        if let bytes = board.data(forPasteboardType:UTType.png.identifier) ?? board.data(forPasteboardType:UTType.jpeg.identifier) ?? board.image?.pngData() { Task { await notes.addImage(bytes) } }
+        if let bytes = board.data(forPasteboardType:UTType.png.identifier) ?? board.data(forPasteboardType:UTType.jpeg.identifier) ?? board.image?.pngData() {
+            let draftID = notes.draft.id; Task { await notes.addImage(bytes,to:draftID) }
+        }
         else { notes.notice = "Copy an image first, then tap Paste image." }
     }
 }

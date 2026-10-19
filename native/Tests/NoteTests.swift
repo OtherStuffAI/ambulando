@@ -75,6 +75,27 @@ final class MockProtocol: URLProtocol {
     }
     override func stopLoading() {}
 }
+/// Keeps selected requests in flight until a test releases their exact response.
+final class DeferredMockProtocol: URLProtocol {
+    static var handler: ((URLRequest,DeferredMockProtocol) -> Void)!
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    override func startLoading() { Self.handler(request,self) }
+    override func stopLoading() {}
+    func succeed(_ result: [String:Any]) {
+        do {
+            let data = try JSONSerialization.data(withJSONObject:result)
+            client?.urlProtocol(self,didReceive:HTTPURLResponse(url:request.url!,statusCode:200,httpVersion:nil,headerFields:["Content-Type":"application/json"])!,cacheStoragePolicy:.notAllowed)
+            client?.urlProtocol(self,didLoad:data); client?.urlProtocolDidFinishLoading(self)
+        } catch { client?.urlProtocol(self,didFailWithError:error) }
+    }
+}
+final class DeferredRequests: @unchecked Sendable {
+    private let lock = NSLock()
+    private var requests: [String:DeferredMockProtocol] = [:]
+    func store(_ request: DeferredMockProtocol,for body: String) { lock.lock(); defer { lock.unlock() }; requests[body] = request }
+    func take(_ body: String) -> DeferredMockProtocol? { lock.lock(); defer { lock.unlock() }; return requests.removeValue(forKey:body) }
+}
 private func syntheticNsec() -> String {
     let alphabet = Array("qpzry9x8gf2tvdw0s3jn54khce6mua7l")
     var accumulator: UInt32 = 0, bits: UInt32 = 0; var words: [UInt32] = []
@@ -509,5 +530,61 @@ extension NoteTests {
         notes.edit("Fresh note")
         XCTAssertEqual(notes.draft.text,"Fresh note"); XCTAssertTrue(notes.canDiscardNote)
         XCTAssertEqual(notes.connection,destination); XCTAssertEqual(networkRequests,0)
+    }
+
+    @MainActor
+    func testDiscardedInFlightSendCannotUnlockOrMutateFreshSend() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at:root) }
+        let vault = IdentityVault(url:root.appendingPathComponent("vault.json"),secrets:MemorySecret())
+        try vault.create(nsec:syntheticNsec(),pin:"1234")
+        let identity = IdentityModel(vault:vault); identity.perform { try $0.unlock(pin:"1234") }
+        let destination = Connection(origin:"https://notes.example",workspace:UUID().uuidString,app:NostrCodec.npub(Data(repeating:11,count:32)),signer:identity.npub!,channel:UUID().uuidString,label:"Synthetic workspace")
+        var local = LocalNotes(); local.connection = destination; local.draft.text = "Old draft"
+        let oldID = local.draft.id
+        let state = root.appendingPathComponent("state.json")
+        try FileManager.default.createDirectory(at:root,withIntermediateDirectories:true)
+        try JSONEncoder().encode(local).write(to:state)
+
+        let pending = DeferredRequests()
+        let oldStarted = expectation(description:"old send suspended")
+        let freshStarted = expectation(description:"fresh send suspended")
+        DeferredMockProtocol.handler = { request,loader in
+            let body = try! JSONSerialization.jsonObject(with:requestBody(request)) as! [String:Any]
+            let text = body["body"] as! String
+            pending.store(loader,for:text)
+            if text == "Old draft" { oldStarted.fulfill() } else if text == "Fresh draft" { freshStarted.fulfill() }
+        }
+        let config = URLSessionConfiguration.ephemeral; config.protocolClasses = [DeferredMockProtocol.self]
+        let notes = NoteStore(identity:identity,stateFile:state,session:URLSession(configuration:config))
+
+        let oldSend = Task { await notes.send() }
+        await fulfillment(of:[oldStarted],timeout:2)
+        XCTAssertTrue(notes.busy); XCTAssertEqual(notes.draft.id,oldID); XCTAssertTrue(notes.draft.frozen)
+
+        notes.requestDiscard(); notes.confirmDiscard()
+        let discardedNotice = notes.notice
+        XCTAssertFalse(notes.busy); XCTAssertFalse(notes.discardConfirmationPresented); XCTAssertNotEqual(notes.draft.id,oldID)
+        notes.edit("Fresh draft")
+        let freshID = notes.draft.id
+        let freshSend = Task { await notes.send() }
+        await fulfillment(of:[freshStarted],timeout:2)
+        XCTAssertTrue(notes.busy); XCTAssertEqual(notes.draft.id,freshID); XCTAssertTrue(notes.draft.frozen)
+        let freshState = try Data(contentsOf:state)
+
+        let oldRequest = try XCTUnwrap(pending.take("Old draft"))
+        oldRequest.succeed(["message":["client_request_id":oldID.uuidString,"channel_id":destination.channel,"body":"Old draft"]])
+        await oldSend.value
+
+        XCTAssertTrue(notes.busy,"The stale send must not release the fresh send's busy owner")
+        XCTAssertEqual(notes.draft.id,freshID); XCTAssertEqual(notes.draft.text,"Fresh draft"); XCTAssertTrue(notes.draft.frozen)
+        XCTAssertEqual(notes.notice,discardedNotice); XCTAssertFalse(notes.discardConfirmationPresented)
+        XCTAssertEqual(try Data(contentsOf:state),freshState,"The stale send must not rewrite the persisted fresh draft")
+
+        let freshRequest = try XCTUnwrap(pending.take("Fresh draft"))
+        freshRequest.succeed(["message":["client_request_id":freshID.uuidString,"channel_id":destination.channel,"body":"Fresh draft"]])
+        await freshSend.value
+        XCTAssertFalse(notes.busy); XCTAssertFalse(notes.draft.frozen); XCTAssertTrue(notes.draft.text.isEmpty)
+        XCTAssertEqual(notes.notice,"Sent to your Flight Deck Note to self.")
     }
 }
