@@ -8,6 +8,7 @@ const REQUIRED_PROVIDER_METHODS = [
   'requestDiscovery',
   'listNStacks',
   'listWorkspaces',
+  'getConnection',
   'revoke',
   'on',
 ];
@@ -110,7 +111,6 @@ function findForbiddenField(value, path = []) {
 function isNStackProvider(value) {
   return Boolean(
     value
-    && value.version === 1
     && REQUIRED_PROVIDER_METHODS.every((method) => typeof value[method] === 'function')
   );
 }
@@ -142,7 +142,7 @@ export async function waitForNStackProvider({
             provider.isAvailable(),
             new Promise((resolve) => setTimeout(() => resolve(null), remaining)),
           ]);
-          if (availability?.available === true && availability?.version === 1) return provider;
+          if (availability?.available === true) return provider;
         } catch {
           // An injected but not-yet-ready bridge can become usable within the
           // same bounded startup window.
@@ -243,6 +243,31 @@ export async function discoverNStackWorkspaces(provider) {
     throw new NStackConnectionError('no_accessible_workspaces', 'No accessible NStack workspaces were disclosed.');
   }
   return results;
+}
+
+export async function resolveNStackWorkspace(provider, connection) {
+  if (!isNStackProvider(provider)) {
+    throw new NStackConnectionError('bridge_unavailable', 'The NBrowser NStack bridge is unavailable.');
+  }
+  const stackId = text(connection?.stackId, 'NStack opaque ID');
+  const workspaceOpaqueId = text(connection?.workspaceOpaqueId, 'Workspace opaque ID');
+  let workspace;
+  try {
+    workspace = await provider.getConnection({ stackId, workspaceId: workspaceOpaqueId });
+  } catch (error) {
+    throw new NStackConnectionError('bridge_unavailable', error?.message || 'NBrowser could not resolve the selected workspace.', { cause: error });
+  }
+  const resolved = nstackWorkspaceDescriptor({
+    ...(workspace?.nstack || {}),
+    id: workspace?.nstack?.id || stackId,
+    name: workspace?.nstack?.name || connection?.stackName,
+    url: workspace?.nstack?.url,
+    serviceNpub: workspace?.serviceNpub,
+  }, workspace);
+  if (resolved.stackId !== stackId || resolved.workspaceOpaqueId !== workspaceOpaqueId) {
+    throw new NStackConnectionError('malformed_descriptor', 'NBrowser returned mismatched opaque workspace aliases.');
+  }
+  return resolved;
 }
 
 export function nstackUserMessage(error, phase = 'discovery') {

@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { nip19 } from 'nostr-tools';
 
+import { FLIGHT_DECK_PG_APP_NPUB } from '../src/app-identity.js';
+
 vi.mock('../src/backend-mode.js', () => ({ isTowerPgBackendMode: vi.fn(() => true) }));
 vi.mock('../src/hosted-workspace-signup.js', () => ({
   hostedSignupConfig: vi.fn(),
@@ -32,7 +34,7 @@ const descriptor = {
     workspace_service_npub: workspaceServiceNpub,
     workspace_owner_npub: ownerNpub,
     workspace_id: 'workspace-real',
-    app_npub: 'flightdeck_pg',
+    app_npub: FLIGHT_DECK_PG_APP_NPUB,
   },
   label: 'Wingmen',
   links: {},
@@ -50,6 +52,12 @@ function provider() {
       workspaceOwnerNpub: ownerNpub, workspaceServiceNpub,
       directHttpsUrl: 'https://tower.example', serviceNpub: towerNpub,
     }]),
+    getConnection: vi.fn(async () => ({
+      id: 'opaque-workspace', name: 'Wingmen', workspaceId: 'workspace-real',
+      workspaceOwnerNpub: ownerNpub, workspaceServiceNpub,
+      directHttpsUrl: 'https://tower.example', serviceNpub: towerNpub,
+      nstack: { id: 'opaque-stack', name: 'Home', url: 'https://tower.example' },
+    })),
     revoke: vi.fn(async () => true),
     on: vi.fn((_name, handler) => { change = handler; return () => {}; }),
     emitChange(reason = 'revoked') { change?.({ reason }); },
@@ -106,8 +114,12 @@ describe('NStack connect settings integration', () => {
     const { connectSettingsManagerMixin } = await import('../src/connect-settings-manager.js');
     const value = store();
     Object.defineProperties(value, Object.getOwnPropertyDescriptors(connectSettingsManagerMixin));
+    globalThis.window.NStack = provider();
+    await value.initializeNStackConnection({ timeoutMs: 20, pollIntervalMs: 1 });
 
-    await value.connectFromNStack({ descriptor });
+    await value.connectFromNStack({
+      descriptor, stackId: 'opaque-stack', workspaceOpaqueId: 'opaque-workspace', stackName: 'Home',
+    });
 
     expect(value.nstackError).toBe('');
     expect(api.getTowerPgWorkspaceDescriptor).toHaveBeenCalledTimes(1);
@@ -129,8 +141,12 @@ describe('NStack connect settings integration', () => {
     const { connectSettingsManagerMixin } = await import('../src/connect-settings-manager.js');
     const value = store();
     Object.defineProperties(value, Object.getOwnPropertyDescriptors(connectSettingsManagerMixin));
+    globalThis.window.NStack = provider();
+    await value.initializeNStackConnection({ timeoutMs: 20, pollIntervalMs: 1 });
 
-    await value.connectFromNStack({ descriptor });
+    await value.connectFromNStack({
+      descriptor, stackId: 'opaque-stack', workspaceOpaqueId: 'opaque-workspace', stackName: 'Home',
+    });
 
     expect(value.nstackError).toBe('Tower access failed: membership denied');
     expect(value.knownWorkspaces).toEqual([]);

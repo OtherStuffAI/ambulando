@@ -47,6 +47,7 @@ import { hostedSignupConfig, hostedSignupIntent, submitHostedSignup } from './ho
 import {
   discoverNStackWorkspaces,
   nstackUserMessage,
+  resolveNStackWorkspace,
   waitForNStackProvider,
 } from './nstack-connection.js';
 
@@ -481,9 +482,12 @@ export const connectSettingsManagerMixin = {
     this.nstackError = '';
     this.nstackNotice = 'Approve fresh Tower access with your Nostr signer…';
     try {
+      const provider = nstackRuntime(this).provider
+        || await this.initializeNStackConnection({ timeoutMs: 2500, pollIntervalMs: 50 });
+      const resolved = await resolveNStackWorkspace(provider, connection);
       // connectWithPgDescriptor performs fresh signed descriptor and /me
       // requests, then imports only the verified real descriptor shape.
-      await this.connectWithPgDescriptor(connection.descriptor);
+      await this.connectWithPgDescriptor(resolved.descriptor);
       this.nstackConnections = [];
       this.nstackNotice = '';
     } catch (error) {

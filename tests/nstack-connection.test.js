@@ -5,6 +5,7 @@ import {
   discoverNStackWorkspaces,
   nstackUserMessage,
   nstackWorkspaceDescriptor,
+  resolveNStackWorkspace,
   waitForNStackProvider,
 } from '../src/nstack-connection.js';
 
@@ -43,6 +44,7 @@ function provider(overrides = {}) {
     requestDiscovery: vi.fn(async () => ({ disclosed: 1, workspaces: true })),
     listNStacks: vi.fn(async () => [stack()]),
     listWorkspaces: vi.fn(async () => [workspace()]),
+    getConnection: vi.fn(async () => ({ ...workspace(), nstack: stack() })),
     requestCapabilities: vi.fn(async () => { throw new Error('must not be called'); }),
     revoke: vi.fn(async () => true),
     on: vi.fn(() => () => {}),
@@ -61,10 +63,16 @@ describe('NStack connection discovery', () => {
   });
 
   it('accepts the ready promise provider before the window property is assigned', async () => {
-    const expected = provider();
+    const expected = provider({ version: undefined });
     const windowObject = { NStackReady: Promise.resolve(expected) };
 
     await expect(waitForNStackProvider({ windowObject, timeoutMs: 100, pollIntervalMs: 2 })).resolves.toBe(expected);
+  });
+
+  it('feature-detects compatible providers without pinning their numeric version', async () => {
+    const expected = provider({ version: 2, isAvailable: vi.fn(async () => ({ available: true, version: 2 })) });
+    await expect(waitForNStackProvider({ windowObject: { NStack: expected }, timeoutMs: 20 }))
+      .resolves.toBe(expected);
   });
 
   it('requests workspace disclosure and returns multiple validated real descriptors', async () => {
@@ -115,5 +123,17 @@ describe('NStack connection discovery', () => {
       peerNpub,
     });
     expect(result.descriptor.tower_base_url).toBe('https://tower.example');
+  });
+
+  it('revalidates the selected opaque aliases before returning a real descriptor', async () => {
+    const bridge = provider();
+    const result = await resolveNStackWorkspace(bridge, {
+      stackId: 'opaque-stack', workspaceOpaqueId: 'opaque-workspace', stackName: 'Home NStack',
+    });
+    expect(bridge.getConnection).toHaveBeenCalledWith({
+      stackId: 'opaque-stack', workspaceId: 'opaque-workspace',
+    });
+    expect(result.descriptor.identity.workspace_id).toBe('real-workspace-id');
+    expect(JSON.stringify(result.descriptor)).not.toContain('opaque-workspace');
   });
 });

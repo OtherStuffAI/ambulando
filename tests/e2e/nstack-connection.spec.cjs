@@ -41,6 +41,20 @@ test('late NBrowser discovery imports a selected real descriptor and revocation 
         directHttpsUrl: 'https://tower.example',
         serviceNpub: towerNpub,
       })),
+      getConnection: async ({ stackId, workspaceId }) => {
+        window.__nstackConnectionRequest = { stackId, workspaceId };
+        const number = Number(workspaceId.split('-').at(-1));
+        return {
+          id: workspaceId,
+          name: `Workspace ${number}`,
+          workspaceId: `real-workspace-${number}`,
+          workspaceOwnerNpub: ownerNpub,
+          workspaceServiceNpub,
+          directHttpsUrl: 'https://tower.example',
+          serviceNpub: towerNpub,
+          nstack: { id: stackId, name: 'Home NStack', url: 'https://tower.example' },
+        };
+      },
       revoke: async () => true,
       on: (_name, handler) => { window.__nstackChange = handler; return () => {}; },
     });
@@ -69,9 +83,11 @@ test('late NBrowser discovery imports a selected real descriptor and revocation 
   const result = await page.evaluate(() => ({
     descriptor: window.__importedNStackDescriptor,
     consent: window.__nstackConsentRequests,
+    resolved: window.__nstackConnectionRequest,
     saved: window.Alpine.store('chat').knownWorkspaces,
   }));
   expect(result.consent).toEqual([{ workspaces: true }]);
+  expect(result.resolved).toEqual({ stackId: 'opaque-stack', workspaceId: 'opaque-workspace-2' });
   expect(result.descriptor.identity.workspace_id).toBe('real-workspace-2');
   expect(JSON.stringify(result.descriptor)).not.toContain('opaque-workspace-2');
   expect(result.saved[0].workspaceId).toBe('real-workspace-2');
