@@ -704,6 +704,42 @@
               <p x-text="$store.chat.isTowerPgMode ? 'Choose a Tower host or paste a workspace descriptor. Ambulando opens into an empty workspace shell, then builds the selected spaces through Tower.' : 'Choose a host or enter a custom URL.'"></p>
             </div>
             <div class="connect-host-options" :class="{ 'connect-host-options-pg': $store.chat.isTowerPgMode }">
+              <section
+                class="connect-onboarding-card connect-nstack-card"
+                data-testid="connect-nstack-card"
+                x-show="$store.chat.isTowerPgMode && $store.chat.nstackProviderState === 'available'"
+                x-cloak
+              >
+                <h3>Connect from NBrowser</h3>
+                <p>Choose a saved NStack workspace. Ambulando will then verify it directly with Tower using your Nostr signer.</p>
+                <button
+                  class="auth-option"
+                  data-testid="connect-nstack-discover"
+                  type="button"
+                  @click="$store.chat.discoverFromNStack()"
+                  :disabled="$store.chat.nstackDiscoveryBusy"
+                >
+                  <span x-show="!$store.chat.nstackDiscoveryBusy">Connect from NBrowser</span>
+                  <span x-show="$store.chat.nstackDiscoveryBusy">Waiting for NBrowser…</span>
+                </button>
+                <div class="connect-workspace-list connect-nstack-list" data-testid="connect-nstack-list" x-show="$store.chat.nstackConnections.length > 0">
+                  <template x-for="connection in $store.chat.nstackConnections" :key="`${connection.stackId}:${connection.workspaceOpaqueId}`">
+                    <button
+                      type="button"
+                      class="connect-workspace-row"
+                      data-testid="connect-nstack-workspace"
+                      @click="$store.chat.connectFromNStack(connection)"
+                      :disabled="$store.chat.nstackDiscoveryBusy"
+                      :aria-label="`Connect ${connection.workspaceName} from ${connection.stackName}`"
+                    >
+                      <span class="connect-workspace-name" x-text="connection.workspaceName"></span>
+                      <span class="connect-workspace-meta" x-text="connection.stackName"></span>
+                    </button>
+                  </template>
+                </div>
+                <p class="connect-hosted-availability" role="status" aria-live="polite" x-show="$store.chat.nstackNotice" x-text="$store.chat.nstackNotice"></p>
+                <p class="auth-error" role="alert" x-show="$store.chat.nstackError" x-text="$store.chat.nstackError"></p>
+              </section>
               <section class="connect-onboarding-card connect-hosted-card" x-show="$store.chat.isTowerPgMode">
                 <h3>Host My Tower</h3>
                 <p>Hosting provided by Other Stuff on <strong>nstack.otherstuff.ai</strong>.</p>

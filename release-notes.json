@@ -4012,6 +4012,14 @@
       "notes": [
         "Keep feed content in focus, with refresh, dismissed items and source management in the Feed options menu. Use each item’s menu to mark read, save or dismiss."
       ]
+    },
+    {
+      "buildNumber": 2409,
+      "label": "Connect workspaces from NBrowser",
+      "notes": [
+        "Choose a disclosed NStack workspace in NBrowser and import it into the normal Tower connection flow without retyping server or workspace details.",
+        "Ambulando validates the descriptor and verifies Tower access with fresh Nostr authentication before saving the workspace; manual Tower setup remains available."
+      ]
     }
   ]
 }
