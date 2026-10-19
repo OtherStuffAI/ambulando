@@ -4280,6 +4280,13 @@
       "notes": [
         "Appearance now uses a compact, bounded theme selector on desktop and a tidy touch-friendly stack on phones, while preserving device-local theme choices."
       ]
+    },
+    {
+      "buildNumber": 2451,
+      "label": "Nostr Browser connection autofill",
+      "notes": [
+        "A saved NStack workspace shared by Nostr Browser can now be imported and made active after fresh signed Tower verification, without retyping its server or workspace details."
+      ]
     }
   ]
 }
