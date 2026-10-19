@@ -63,6 +63,7 @@ import { reactionsManagerMixin } from './reactions-manager.js';
 import { syncManagerMixin } from './sync-manager.js';
 import { peopleProfilesManagerMixin } from './people-profiles-manager.js';
 import { connectSettingsManagerMixin } from './connect-settings-manager.js';
+import { nstackManagerMixin } from './nstack-manager.js';
 import { normalizedAutopilotLaunchUrl } from './autopilot-agents.js';
 import { fetchDocumentAgentSessions } from './document-agent-sessions.js';
 import { workspaceSelfIndexManagerMixin } from './workspace-self-index-manager.js';
@@ -10431,6 +10432,7 @@ export function initApp() {
     driveManagerMixin,
     peopleProfilesManagerMixin,
     connectSettingsManagerMixin,
+    nstackManagerMixin,
     workspaceSelfIndexManagerMixin,
     onboardingAnnouncementsManagerMixin,
     channelsManagerMixin,

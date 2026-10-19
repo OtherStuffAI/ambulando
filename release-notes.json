@@ -4253,6 +4253,13 @@
       "label": "Native Note to self root retry and error diagnostics",
       "notes": [],
       "noUserVisibleChanges": true
+    },
+    {
+      "buildNumber": 2444,
+      "label": "NStack discovery and encrypted recovery",
+      "notes": [
+        "Settings can discover browser-approved NStacks and workspaces, request scoped access, and create or restore encrypted Nostr recovery records while keeping manual Tower connection available."
+      ]
     }
   ]
 }

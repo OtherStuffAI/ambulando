@@ -580,3 +580,22 @@ code, pre { font-family:var(--font-code); }
 .pinned-item-type { display: inline-flex; align-items: center; flex: 0 0 16px; width: 16px; color: var(--text-muted); }
 .pinned-item-type svg { width: 16px; height: 16px; }
 .pinned-thread-open .attention-card-title { flex: 1; }
+
+/* Origin-mediated NStack connection and recovery settings. */
+.nstack-settings-panel { gap: 16px; }
+.nstack-availability { display:inline-flex; align-items:center; min-height:28px; padding:4px 9px; border:1px solid var(--border); border-radius:999px; color:var(--text-muted); font-size:12px; white-space:nowrap; }
+.nstack-availability-available { color:var(--success); border-color:color-mix(in srgb, var(--success) 45%, var(--border)); }
+.nstack-active-selection, .nstack-capability-request, .nstack-recovery-panel { display:grid; gap:6px; padding:12px; border:1px solid var(--border); border-radius:10px; background:var(--surface-muted); }
+.nstack-active-selection small, .nstack-picker-row small, .nstack-recovered-list small { display:block; color:var(--text-muted); }
+.nstack-discovery-actions, .nstack-recovery-actions { display:flex; align-items:center; flex-wrap:wrap; gap:8px; }
+.nstack-picker-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+.nstack-picker-grid > div { display:grid; align-content:start; gap:6px; min-width:0; }
+.nstack-picker-row { display:flex; align-items:center; justify-content:space-between; gap:8px; width:100%; min-height:48px; padding:8px 10px; text-align:left; color:var(--foreground); background:var(--background); border:1px solid var(--border); border-radius:8px; }
+.nstack-picker-row.active { border-color:var(--primary); box-shadow:0 0 0 1px var(--primary); }
+.nstack-recovery-panel label { display:grid; gap:5px; }
+.nstack-recovered-list { display:grid; gap:6px; }
+.nstack-recovered-list > div { padding:8px; border:1px solid var(--border); border-radius:8px; background:var(--background); }
+@media (max-width: 768px) {
+  .nstack-picker-grid { grid-template-columns:1fr; }
+  .nstack-recovery-actions > button, .nstack-discovery-actions > button { width:100%; min-height:44px; }
+}

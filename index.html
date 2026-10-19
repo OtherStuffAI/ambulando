@@ -7780,6 +7780,80 @@
           </div>
 
           <div class="settings-tab-content" x-show="$store.chat.settingsTab === 'connection'">
+          <section class="settings-panel nstack-settings-panel" x-init="$store.chat.initializeNStackDiscovery()">
+            <div class="settings-panel-header">
+              <div>
+                <h2>NStack discovery</h2>
+                <p>Choose which browser-approved NStack and workspace Ambulando may ask to use. Discovery does not grant service authority.</p>
+              </div>
+              <span class="nstack-availability" :class="`nstack-availability-${$store.chat.nstackAvailability}`" x-text="$store.chat.nstackAvailability === 'available' ? `Available · v${$store.chat.nstackProtocolVersion}` : ($store.chat.nstackAvailability === 'checking' ? 'Checking…' : 'Unavailable')"></span>
+            </div>
+
+            <div class="nstack-active-selection" x-show="$store.chat.nstackActiveSelection">
+              <strong>Saved destination</strong>
+              <span x-text="`${$store.chat.nstackActiveSelection?.stackLabel || 'NStack'} → ${$store.chat.nstackActiveSelection?.workspaceLabel || 'Workspace'}`"></span>
+              <small x-show="$store.chat.nstackCapabilityHandleId">Capability active for this page. The opaque handle is not saved.</small>
+              <small x-show="!$store.chat.nstackCapabilityHandleId">Review and request access again before using this destination.</small>
+            </div>
+
+            <div class="nstack-discovery-actions">
+              <button class="auth-option secondary" type="button" @click="$store.chat.requestNStackDiscovery()" :disabled="$store.chat.nstackBusy || $store.chat.nstackAvailability !== 'available'" x-text="$store.chat.nstackBusy && $store.chat.nstackStatus === 'requesting' ? 'Waiting for browser…' : 'Discover NStacks'"></button>
+              <span class="settings-field-help" x-show="$store.chat.nstackAvailability === 'unavailable'">No provider is installed. Manual/direct Tower connection remains available below.</span>
+            </div>
+
+            <div class="nstack-picker-grid" x-show="$store.chat.nstackDiscoveryApproved">
+              <div>
+                <strong>Approved NStacks</strong>
+                <p class="settings-empty-note" x-show="$store.chat.nstackStacks.length === 0">No NStacks were shared with this origin.</p>
+                <template x-for="stack in $store.chat.nstackStacks" :key="stack.id">
+                  <button type="button" class="nstack-picker-row" :class="{ active: stack.id === $store.chat.nstackSelectedStackId }" @click="$store.chat.selectNStack(stack.id)" :disabled="$store.chat.nstackBusy">
+                    <span><b x-text="stack.name"></b><small x-text="stack.host ? 'Approved host' : 'Approved'"></small></span><span aria-hidden="true">›</span>
+                  </button>
+                </template>
+              </div>
+              <div>
+                <strong>Approved workspaces</strong>
+                <p class="settings-empty-note" x-show="$store.chat.nstackSelectedStackId && $store.chat.nstackWorkspaces.length === 0 && !$store.chat.nstackBusy">No workspaces were shared for this NStack.</p>
+                <template x-for="workspace in $store.chat.nstackWorkspaces" :key="workspace.id">
+                  <button type="button" class="nstack-picker-row" :class="{ active: workspace.id === $store.chat.nstackSelectedWorkspaceId }" @click="$store.chat.chooseNStackWorkspace(workspace.id)" :disabled="$store.chat.nstackBusy">
+                    <span><b x-text="workspace.name"></b><small>Approved</small></span><span aria-hidden="true" x-text="workspace.id === $store.chat.nstackSelectedWorkspaceId ? '✓' : '○'"></span>
+                  </button>
+                </template>
+              </div>
+            </div>
+
+            <div class="nstack-capability-request" x-show="$store.chat.nstackSelectedWorkspace">
+              <p>Ambulando will request only <code>workspace.read</code> for this exact NStack/workspace for 15 minutes. Nostr Browser returns a document-scoped, revocable opaque handle and approved connection metadata, never credentials.</p>
+              <button class="auth-option" type="button" @click="$store.chat.activateNStackSelection()" :disabled="$store.chat.nstackBusy">Request workspace access</button>
+            </div>
+            <p class="auth-error" role="alert" x-show="$store.chat.nstackError" x-text="$store.chat.nstackError"></p>
+            <p class="settings-field-help" role="status" x-show="$store.chat.nstackStatus === 'empty'">Discovery succeeded, but no NStacks were approved.</p>
+
+            <div class="nstack-recovery-panel">
+              <div>
+                <h3>Encrypted configuration recovery</h3>
+                <p>Publish the selected, approved host configuration or restore NIP-78 records encrypted to your own Nostr identity. This restores NStack configuration, not a lost private key. No private key or live capability is backed up.</p>
+              </div>
+              <label>
+                <span>Recovery relays</span>
+                <input type="text" x-model="$store.chat.nstackRecoveryRelaysInput" placeholder="Optional wss:// relay list" />
+              </label>
+              <div class="nstack-recovery-actions">
+                <button class="btn-secondary" type="button" @click="$store.chat.createNStackRecoveryBackup()" :disabled="$store.chat.nstackBusy || !$store.chat.nstackCapabilityHandleId || !$store.chat.nstackSelectedStack?.host">Create/update recovery records</button>
+                <button class="btn-secondary" type="button" @click="$store.chat.restoreNStackRecoveryBackup()" :disabled="$store.chat.nstackBusy || !$store.chat.session?.npub">Restore configuration</button>
+              </div>
+              <p class="settings-field-help" x-show="$store.chat.nstackRecoveryStatus === 'restored'">Recovery records validated and restored for review. Ambulando did not switch destinations or treat restored policy as current authority.</p>
+              <p class="settings-field-help" x-show="$store.chat.nstackRecoveryStatus === 'partial'">Recovery completed partially. Valid stacks are shown below; failed records were not applied.</p>
+              <div class="nstack-recovered-list" x-show="$store.chat.nstackRecoveredRegistry?.stacks?.length">
+                <template x-for="entry in ($store.chat.nstackRecoveredRegistry?.stacks || [])" :key="entry.descriptor.stackId">
+                  <div><b x-text="entry.descriptor.label"></b><small x-text="`${entry.workspaceCatalogue.workspaces.length} workspace(s) · configuration only`"></small></div>
+                </template>
+              </div>
+              <p class="auth-error" role="alert" x-show="$store.chat.nstackRecoveryError" x-text="$store.chat.nstackRecoveryError"></p>
+              <p class="settings-field-help">Large snapshots require an authenticated blob adapter. None is configured, so Ambulando supports and validates manifest/key envelopes without inventing an upload service.</p>
+            </div>
+          </section>
+
           <section class="settings-panel">
             <div class="settings-panel-header">
               <div>

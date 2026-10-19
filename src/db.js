@@ -39,6 +39,13 @@ sharedDb.version(2).stores({
 // Local connection choices are shared across workspaces, never synced to Tower.
 sharedDb.version(3).stores({ tower_transport_preferences: '&logicalTower' });
 
+// NStack choices are browser-local and partitioned by origin plus signed-in
+// Nostr identity. Capability handles are deliberately never stored here.
+sharedDb.version(4).stores({
+  tower_transport_preferences: '&logicalTower',
+  nstack_selections: '&partition, origin, identity, updated_at',
+});
+
 // ---------------------------------------------------------------------------
 // Workspace DB — one per workspace identity key.
 // Contains ALL record / sync tables.
