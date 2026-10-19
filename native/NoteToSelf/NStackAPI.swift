@@ -8,7 +8,9 @@ enum NStackError: LocalizedError {
         case .discoveryLimit: "nStack discovery reached a server list limit without a continuation cursor. Ask the administrator to enable complete discovery."
         case .invalidSetup: "Choose an HTTPS nStack and unlock your identity."
         case .unsafeURL: "nStack refused an unsafe URL or redirect. Use your selected HTTPS origin."
-        case .response(let code, _): "nStack returned HTTP \(code). Check access and connection; your draft is retained."
+        // Show only Tower's typed snake_case code so a screenshot identifies the failing rule without echoing free text.
+        case .response(let code, let detail):
+            "nStack returned HTTP \(code)" + (detail.flatMap { $0.range(of:"^[a-z][a-z0-9_]{0,63}$",options:.regularExpression) == nil ? nil : " (\($0))" } ?? "") + ". Check access and connection; your draft is retained."
         case .malformed: "nStack returned an unexpected response. Your draft is retained."
         case .fallbackLimit: "This backend uses JSON file upload, limited to 8 MiB. Your draft is retained."
         }

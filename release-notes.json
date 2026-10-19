@@ -4241,6 +4241,12 @@
       "label": "Native Note to self image retry recovery",
       "notes": [],
       "noUserVisibleChanges": true
+    },
+    {
+      "buildNumber": 2442,
+      "label": "Native Note to self deleted-thread retry recovery",
+      "notes": [],
+      "noUserVisibleChanges": true
     }
   ]
 }

@@ -102,10 +102,11 @@ final class NoteStore: ObservableObject {
                     let image = local.draft.images[i]; let object = image.object!
                     let metadata: [String:Any]
                     do { metadata = try await api.request(origin:destination.origin,path:"/api/v4/storage/" + object) }
-                    catch NStackError.response(404, let detail?) where !replaced && detail.hasPrefix("storage object not found") {
-                        // Tower confirms this object is gone or no longer readable, so it can never be attached.
-                        // Keep the sanitized bytes and message ID and prepare one fresh object. Tower's message
-                        // idempotency hash covers attachment IDs, so a fresh object cannot duplicate an accepted message.
+                    catch NStackError.response(404, _) where !replaced {
+                        // This exact authenticated metadata read is built here, so any 404 means the object is gone or
+                        // no longer readable, whatever the body shape, and it can never be attached. Keep the sanitized
+                        // bytes and message ID and prepare one fresh object. Tower's message idempotency hash covers
+                        // attachment IDs, so a fresh object cannot duplicate an accepted message.
                         try assertIdentity(destination)
                         local.draft.images[i].object = nil; local.draft.images[i].upload = nil; local.draft.images[i].complete = false; try persist()
                         replaced = true; continue
@@ -146,6 +147,18 @@ final class NoteStore: ObservableObject {
                 local.draft.id = UUID(); local.draft.frozen = false; local.draft.destination = nil
                 do { try persist() } catch { local.draft = previous; throw error }
                 notice = "Tower already has a note sent with this draft’s ID, so it was not sent again. Your text and images are kept as an editable draft; send only if you want another copy."
+                return
+            }
+            catch NStackError.response(404, let code?) where code == "thread_not_found" || code == "channel_not_found" {
+                // Tower checks the channel and reply thread before recording a message, so this request was not accepted,
+                // and a deleted target can never accept it. Release the content without its target and keep the request
+                // ID: the next explicit send is still idempotency-checked against any earlier acceptance.
+                let previous = local.draft
+                local.draft.frozen = false; local.draft.destination = nil; local.draft.thread = nil; local.draft.parent = nil
+                do { try persist() } catch { local.draft = previous; throw error }
+                notice = code == "thread_not_found"
+                    ? "The thread this reply belonged to no longer exists, so nothing was sent. Your text and images are kept as a new note; tap Send to post it."
+                    : "Your Note to self conversation was not found, so nothing was sent. Your text and images are kept; reconnect your workspace in Settings, then tap Send."
                 return
             }
             guard let message = response["message"] as? [String:Any], message["client_request_id"] as? String == draft.id.uuidString, message["channel_id"] as? String == destination.channel, message["body"] as? String == text else { throw NoteError.malformed }
