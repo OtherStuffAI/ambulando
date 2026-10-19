@@ -8,11 +8,13 @@ final class NoteStore: ObservableObject {
     @Published var notice: String?
     @Published var busy = false
     @Published var storageReady = false
+    @Published private(set) var discardConfirmationPresented = false
     let identity: IdentityModel
     let networkSession: URLSession?
     let file: URL?
     var draft: NoteDraft { local.draft }
     var connection: Connection? { local.connection }
+    var canDiscardNote: Bool { draft.frozen || !draft.text.isEmpty || !draft.images.isEmpty || draft.thread != nil }
     var api: NStackAPI { NStackAPI(session:networkSession) { [identity] in try identity.sign(kind:$0,tags:$1,content:$2) } }
     init(identity: IdentityModel, stateFile: URL? = nil, session: URLSession? = nil) {
         self.identity = identity; networkSession = session
@@ -47,6 +49,15 @@ final class NoteStore: ObservableObject {
         do { try persist() } catch { notice = error.localizedDescription }
     }
     func cancelReply() { guard !busy, !draft.frozen else { return }; local.draft.thread = nil; local.draft.parent = nil; do { try persist() } catch { notice = error.localizedDescription } }
+    func requestDiscard() { if canDiscardNote { discardConfirmationPresented = true } }
+    func cancelDiscard() { discardConfirmationPresented = false }
+    func confirmDiscard() {
+        guard discardConfirmationPresented, canDiscardNote else { discardConfirmationPresented = false; return }
+        let previous = local.draft; let wasBusy = busy
+        local.draft = NoteDraft(); busy = false; discardConfirmationPresented = false
+        do { try persist(); notice = "Draft discarded from this iPhone." }
+        catch { local.draft = previous; busy = wasBusy; notice = error.localizedDescription }
+    }
     func assertIdentity(_ destination: Connection) throws {
         guard identity.unlocked, identity.npub == destination.signer else { throw NoteError.identity }
     }
@@ -82,6 +93,7 @@ final class NoteStore: ObservableObject {
     }
     func send() async {
         guard !busy, storageReady, !draft.text.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty || !draft.images.isEmpty else { return }
+        let sendingID = draft.id
         busy = true; defer { busy = false }
         do {
             guard let destination = draft.destination ?? connection else { throw NoteError.setup }
@@ -96,13 +108,18 @@ final class NoteStore: ObservableObject {
                         local.draft.images[i].preparing = true; try persist()
                         let image = local.draft.images[i]
                         let response = try await api.request(origin:destination.origin,path:destination.base + "/storage/prepare",app:destination.app,method:"POST",body:["file_name":image.filename,"content_type":"image/png","size_bytes":image.bytes.count,"sha256_hex":NostrCodec.hash(image.bytes),"is_public":false])
+                        guard local.draft.id == sendingID else { return }
                         guard let object = response["object_id"] as? String, UUID(uuidString:object) != nil, response["is_public"] as? Bool == false, let upload = response["upload_url"] as? String else { throw NoteError.malformed }
                         local.draft.images[i].object = object; local.draft.images[i].upload = upload; local.draft.images[i].preparing = false; try persist()
                     }
                     let image = local.draft.images[i]; let object = image.object!
                     let metadata: [String:Any]
-                    do { metadata = try await api.request(origin:destination.origin,path:"/api/v4/storage/" + object) }
+                    do {
+                        metadata = try await api.request(origin:destination.origin,path:"/api/v4/storage/" + object)
+                        guard local.draft.id == sendingID else { return }
+                    }
                     catch NStackError.response(404, _, _) where !replaced {
+                        guard local.draft.id == sendingID else { return }
                         // This exact authenticated metadata read is built here, so any 404 means the object is gone or
                         // no longer readable, whatever the body shape, and it can never be attached. Keep the sanitized
                         // bytes and message ID and prepare one fresh object. Tower's message idempotency hash covers
@@ -116,9 +133,12 @@ final class NoteStore: ObservableObject {
                         try image.bytes.write(to:temp,options:[.atomic,.completeFileProtectionUntilFirstUserAuthentication]); defer { try? FileManager.default.removeItem(at:temp) }
                         try assertIdentity(destination)
                         try await api.putFile(temp,upload:image.upload!,origin:destination.origin,object:object,mime:"image/png",size:image.bytes.count)
+                        guard local.draft.id == sendingID else { return }
                         _ = try await api.request(origin:destination.origin,path:"/api/v4/storage/" + object + "/complete",method:"POST",body:["sha256_hex":NostrCodec.hash(image.bytes),"size_bytes":image.bytes.count])
+                        guard local.draft.id == sendingID else { return }
                     }
                     let completed = try await api.request(origin:destination.origin,path:"/api/v4/storage/" + object)
+                    guard local.draft.id == sendingID else { return }
                     // Tower's PostgreSQL BIGINT metadata is a decimal JSON string;
                     // retain compatibility with backends that emit a JSON number.
                     let sizeMatches = (completed["size_bytes"] as? String) == String(image.bytes.count)
@@ -142,8 +162,12 @@ final class NoteStore: ObservableObject {
                     "metadata":["attachments":draft.images.map { ["kind":"image","storage_object_id":$0.object!,"filename":$0.filename,"mime_type":"image/png","size_bytes":$0.bytes.count] as [String:Any] }]]
                 if let thread { body["thread_id"] = thread }
                 let response: [String:Any]
-                do { response = try await api.request(origin:destination.origin,path:destination.base + "/channels/" + destination.channel + "/messages",app:destination.app,method:"POST",body:body) }
+                do {
+                    response = try await api.request(origin:destination.origin,path:destination.base + "/channels/" + destination.channel + "/messages",app:destination.app,method:"POST",body:body)
+                    guard local.draft.id == sendingID else { return }
+                }
                 catch NStackError.response(409, let code?, _) where code == "idempotency_conflict" {
+                    guard local.draft.id == sendingID else { return }
                     // Tower already accepted a different message under this request ID, such as an earlier delivery
                     // whose image or thread was later removed. Never resend under this ID; keep the content as a new draft.
                     let previous = local.draft
@@ -153,6 +177,7 @@ final class NoteStore: ObservableObject {
                     return
                 }
                 catch NStackError.response(404, let code?, _) where code == "thread_not_found" && thread != nil && !rerooted {
+                    guard local.draft.id == sendingID else { return }
                     // Tower checks the reply thread before recording a message or its idempotency key, so this request was
                     // not accepted, and a deleted thread can never accept it. Persist dropping only the stale reply target,
                     // then retry once as a new root under the same request ID: an earlier acceptance answers
@@ -164,6 +189,7 @@ final class NoteStore: ObservableObject {
                     rerooted = true; continue
                 }
                 catch NStackError.response(404, let code?, _) where code == "channel_not_found" {
+                    guard local.draft.id == sendingID else { return }
                     // A missing channel cannot accept this note either. Unfreeze it, keeping content and request ID,
                     // so Settings can reconnect the workspace; the next explicit send stays idempotency-checked.
                     let previous = local.draft
@@ -179,7 +205,7 @@ final class NoteStore: ObservableObject {
                 notice = rerooted ? "Sent to your Flight Deck Note to self as a new note, because the thread it replied to no longer exists (thread_not_found)." : "Sent to your Flight Deck Note to self."
                 return
             }
-        } catch { notice = error.localizedDescription }
+        } catch { if local.draft.id == sendingID { notice = error.localizedDescription } }
     }
 }
 extension NStackAPI {

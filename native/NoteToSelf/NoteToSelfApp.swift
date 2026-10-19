@@ -46,6 +46,10 @@ struct NotesHome: View {
                         if notes.draft.frozen { Text("This submission is saved for retry with the same message ID. Its text and images stay fixed until delivery is confirmed.").font(.footnote).foregroundStyle(.secondary) }
                         Button { Task { await notes.send(); await notes.history() } } label: { Label(notes.draft.frozen ? "Retry send" : "Send to myself",systemImage:"paperplane.fill").frame(maxWidth:.infinity) }
                             .buttonStyle(.borderedProminent).disabled(notes.busy || !notes.storageReady || !identity.unlocked || notes.connection == nil || (notes.draft.text.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty && notes.draft.images.isEmpty))
+                        if notes.canDiscardNote {
+                            Button("Discard note",role:.destructive) { notes.requestDiscard() }
+                                .frame(maxWidth:.infinity)
+                        }
                         if !identity.unlocked { Button("Set up or unlock identity") { if identity.exists { unlock = true } else { settings = true } } }
                         if notes.busy { ProgressView("Saving your note…") }
                         if let notice = notes.notice { Text(notice).font(.footnote).textSelection(.enabled) }
@@ -75,6 +79,12 @@ struct NotesHome: View {
         }
         .sheet(isPresented:$settings) { NavigationStack { ConnectionSettings(notes:notes,identity:identity).toolbar { Button("Done") { settings = false } } } }
         .sheet(isPresented:$unlock) { IdentityUnlock(model:identity) { unlock = false } }
+        .alert("Discard note?",isPresented:Binding(get:{ notes.discardConfirmationPresented },set:{ if !$0 { notes.cancelDiscard() } })) {
+            Button("Cancel",role:.cancel) { notes.cancelDiscard() }
+            Button("Discard note",role:.destructive) { notes.confirmDiscard() }
+        } message: {
+            Text("The unsent text and any attached images will be removed from this device and cannot be recovered.")
+        }
         .onChange(of:picker) { _,value in
             Task { do { if let data = try await value?.loadTransferable(type:Data.self) { await notes.addImage(data) } } catch { notes.notice = error.localizedDescription }; picker = nil }
         }

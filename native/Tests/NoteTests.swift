@@ -454,3 +454,60 @@ extension NoteTests {
         XCTAssertEqual(notes.draft.id,original.id); XCTAssertEqual(notes.draft.text,original.text); XCTAssertEqual(notes.draft.images.map(\.bytes),original.images.map(\.bytes))
     }
 }
+
+extension NoteTests {
+    @MainActor
+    func testDiscardIsAvailableForPendingOrFrozenDraftAndCancelPreservesEverything() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at:root) }
+        let (identity,destination,state,original,session) = try frozenImageDraft(root)
+        let before = try Data(contentsOf:state)
+        let notes = NoteStore(identity:identity,stateFile:state,session:session)
+
+        notes.busy = true
+        XCTAssertTrue(notes.canDiscardNote, "A frozen draft must stay discardable while normal controls are disabled")
+        notes.requestDiscard()
+        XCTAssertTrue(notes.discardConfirmationPresented)
+        notes.cancelDiscard()
+
+        XCTAssertFalse(notes.discardConfirmationPresented)
+        XCTAssertEqual(notes.draft.id,original.id); XCTAssertEqual(notes.draft.text,original.text)
+        XCTAssertEqual(notes.draft.images.first?.bytes,original.images.first?.bytes)
+        XCTAssertEqual(notes.draft.images.first?.object,original.images.first?.object)
+        XCTAssertEqual(notes.connection,destination); XCTAssertTrue(identity.unlocked)
+        XCTAssertEqual(try Data(contentsOf:state),before)
+    }
+
+    @MainActor
+    func testConfirmedDiscardClearsOnlyLocalDraftWithoutNetworkAndAllowsFreshCompose() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at:root) }
+        let (identity,destination,state,original,session) = try frozenImageDraft(root)
+        let signer = identity.npub
+        let savedObject = try XCTUnwrap(original.images.first?.object)
+        let savedUpload = try XCTUnwrap(original.images.first?.upload)
+        var networkRequests = 0
+        MockProtocol.handler = { _ in networkRequests += 1; return [:] }
+        let notes = NoteStore(identity:identity,stateFile:state,session:session)
+        notes.busy = true
+
+        notes.requestDiscard()
+        notes.confirmDiscard()
+
+        XCTAssertEqual(networkRequests,0)
+        XCTAssertFalse(notes.busy); XCTAssertFalse(notes.canDiscardNote); XCTAssertFalse(notes.discardConfirmationPresented)
+        XCTAssertNotEqual(notes.draft.id,original.id); XCTAssertEqual(notes.draft.text,""); XCTAssertTrue(notes.draft.images.isEmpty)
+        XCTAssertNil(notes.draft.thread); XCTAssertNil(notes.draft.parent); XCTAssertNil(notes.draft.destination); XCTAssertFalse(notes.draft.frozen)
+        XCTAssertEqual(notes.connection,destination, "Workspace settings are not part of the discarded draft")
+        XCTAssertTrue(identity.unlocked); XCTAssertEqual(identity.npub,signer)
+        XCTAssertTrue(FileManager.default.fileExists(atPath:root.appendingPathComponent("vault.json").path))
+        let saved = try Data(contentsOf:state)
+        XCTAssertFalse(saved.range(of:Data(savedObject.utf8)) != nil)
+        XCTAssertFalse(saved.range(of:Data(savedUpload.utf8)) != nil)
+        XCTAssertFalse(saved.range(of:original.images[0].bytes.base64EncodedData()) != nil)
+
+        notes.edit("Fresh note")
+        XCTAssertEqual(notes.draft.text,"Fresh note"); XCTAssertTrue(notes.canDiscardNote)
+        XCTAssertEqual(notes.connection,destination); XCTAssertEqual(networkRequests,0)
+    }
+}
