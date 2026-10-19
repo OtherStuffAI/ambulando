@@ -4235,6 +4235,12 @@
       "label": "Managed runtime verification",
       "notes": [],
       "noUserVisibleChanges": true
+    },
+    {
+      "buildNumber": 2441,
+      "label": "Native Note to self image retry recovery",
+      "notes": [],
+      "noUserVisibleChanges": true
     }
   ]
 }

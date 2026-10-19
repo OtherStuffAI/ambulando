@@ -2,13 +2,13 @@
 import Foundation
 
 enum NStackError: LocalizedError {
-    case discoveryLimit, invalidSetup, unsafeURL, response(Int), malformed, fallbackLimit
+    case discoveryLimit, invalidSetup, unsafeURL, response(Int, String? = nil), malformed, fallbackLimit
     var errorDescription: String? {
         switch self {
         case .discoveryLimit: "nStack discovery reached a server list limit without a continuation cursor. Ask the administrator to enable complete discovery."
         case .invalidSetup: "Choose an HTTPS nStack and unlock your identity."
         case .unsafeURL: "nStack refused an unsafe URL or redirect. Use your selected HTTPS origin."
-        case .response(let code): "nStack returned HTTP \(code). Check access and connection; your draft is retained."
+        case .response(let code, _): "nStack returned HTTP \(code). Check access and connection; your draft is retained."
         case .malformed: "nStack returned an unexpected response. Your draft is retained."
         case .fallbackLimit: "This backend uses JSON file upload, limited to 8 MiB. Your draft is retained."
         }
@@ -51,7 +51,11 @@ final class NStackAPI {
         let (data, response) = try await session.data(for: request)
         try Task.checkCancellation()
         guard let http = response as? HTTPURLResponse else { throw NStackError.malformed }
-        guard (200..<300).contains(http.statusCode) else { throw NStackError.response(http.statusCode) }
+        guard (200..<300).contains(http.statusCode) else {
+            // Typed PG errors carry a stable `code`; generic storage errors carry only `error` text.
+            let failure = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+            throw NStackError.response(http.statusCode, failure?["code"] as? String ?? failure?["error"] as? String)
+        }
         guard let result = try JSONSerialization.jsonObject(with: data) as? [String: Any] else { throw NStackError.malformed }
         return result
     }

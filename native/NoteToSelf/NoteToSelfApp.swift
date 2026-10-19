@@ -128,6 +128,7 @@ struct ConnectionSettings: View {
             Section("nStack") {
                 TextField("https://your-nstack.example",text:$origin).keyboardType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled()
                 Button("Discover my workspaces") { discover() }.disabled(!identity.unlocked || loading || notes.busy || notes.draft.frozen)
+                if notes.draft.frozen { Text("Workspace changes are paused while a note waits to send. Retry it from Compose; any notice below may come from that send.").font(.footnote).foregroundStyle(.secondary) }
                 ForEach(Array(choices.enumerated()),id:\.offset) { _,workspace in
                     Button(workspace["label"] as? String ?? "Workspace") { Task { await notes.connect(origin:origin,workspace:workspace); await notes.history() } }.disabled(notes.busy)
                 }

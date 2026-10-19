@@ -88,31 +88,44 @@ final class NoteStore: ObservableObject {
             try assertIdentity(destination)
             if !draft.frozen { local.draft.text = NotePrivacy.clean(draft.text).trimmingCharacters(in:.whitespacesAndNewlines); local.draft.destination = destination; local.draft.frozen = true; try persist() }
             for i in local.draft.images.indices {
-                try assertIdentity(destination)
-                if local.draft.images[i].object == nil {
-                    guard !local.draft.images[i].preparing else { throw NoteError.uncertainPrepare }
-                    local.draft.images[i].preparing = true; try persist()
-                    let image = local.draft.images[i]
-                    let response = try await api.request(origin:destination.origin,path:destination.base + "/storage/prepare",app:destination.app,method:"POST",body:["file_name":image.filename,"content_type":"image/png","size_bytes":image.bytes.count,"sha256_hex":NostrCodec.hash(image.bytes),"is_public":false])
-                    guard let object = response["object_id"] as? String, UUID(uuidString:object) != nil, response["is_public"] as? Bool == false, let upload = response["upload_url"] as? String else { throw NoteError.malformed }
-                    local.draft.images[i].object = object; local.draft.images[i].upload = upload; local.draft.images[i].preparing = false; try persist()
-                }
-                let image = local.draft.images[i]; let object = image.object!
-                let metadata = try await api.request(origin:destination.origin,path:"/api/v4/storage/" + object)
-                if !(metadata["completed_at"] is String) {
-                    let temp = FileManager.default.temporaryDirectory.appendingPathComponent(image.filename)
-                    try image.bytes.write(to:temp,options:[.atomic,.completeFileProtectionUntilFirstUserAuthentication]); defer { try? FileManager.default.removeItem(at:temp) }
+                var replaced = false
+                while true {
                     try assertIdentity(destination)
-                    try await api.putFile(temp,upload:image.upload!,origin:destination.origin,object:object,mime:"image/png",size:image.bytes.count)
-                    _ = try await api.request(origin:destination.origin,path:"/api/v4/storage/" + object + "/complete",method:"POST",body:["sha256_hex":NostrCodec.hash(image.bytes),"size_bytes":image.bytes.count])
+                    if local.draft.images[i].object == nil {
+                        guard !local.draft.images[i].preparing else { throw NoteError.uncertainPrepare }
+                        local.draft.images[i].preparing = true; try persist()
+                        let image = local.draft.images[i]
+                        let response = try await api.request(origin:destination.origin,path:destination.base + "/storage/prepare",app:destination.app,method:"POST",body:["file_name":image.filename,"content_type":"image/png","size_bytes":image.bytes.count,"sha256_hex":NostrCodec.hash(image.bytes),"is_public":false])
+                        guard let object = response["object_id"] as? String, UUID(uuidString:object) != nil, response["is_public"] as? Bool == false, let upload = response["upload_url"] as? String else { throw NoteError.malformed }
+                        local.draft.images[i].object = object; local.draft.images[i].upload = upload; local.draft.images[i].preparing = false; try persist()
+                    }
+                    let image = local.draft.images[i]; let object = image.object!
+                    let metadata: [String:Any]
+                    do { metadata = try await api.request(origin:destination.origin,path:"/api/v4/storage/" + object) }
+                    catch NStackError.response(404, let detail?) where !replaced && detail.hasPrefix("storage object not found") {
+                        // Tower confirms this object is gone or no longer readable, so it can never be attached.
+                        // Keep the sanitized bytes and message ID and prepare one fresh object. Tower's message
+                        // idempotency hash covers attachment IDs, so a fresh object cannot duplicate an accepted message.
+                        try assertIdentity(destination)
+                        local.draft.images[i].object = nil; local.draft.images[i].upload = nil; local.draft.images[i].complete = false; try persist()
+                        replaced = true; continue
+                    }
+                    if !(metadata["completed_at"] is String) {
+                        let temp = FileManager.default.temporaryDirectory.appendingPathComponent(image.filename)
+                        try image.bytes.write(to:temp,options:[.atomic,.completeFileProtectionUntilFirstUserAuthentication]); defer { try? FileManager.default.removeItem(at:temp) }
+                        try assertIdentity(destination)
+                        try await api.putFile(temp,upload:image.upload!,origin:destination.origin,object:object,mime:"image/png",size:image.bytes.count)
+                        _ = try await api.request(origin:destination.origin,path:"/api/v4/storage/" + object + "/complete",method:"POST",body:["sha256_hex":NostrCodec.hash(image.bytes),"size_bytes":image.bytes.count])
+                    }
+                    let completed = try await api.request(origin:destination.origin,path:"/api/v4/storage/" + object)
+                    // Tower's PostgreSQL BIGINT metadata is a decimal JSON string;
+                    // retain compatibility with backends that emit a JSON number.
+                    let sizeMatches = (completed["size_bytes"] as? String) == String(image.bytes.count)
+                        || (completed["size_bytes"] as? NSNumber) == NSNumber(value: image.bytes.count)
+                    guard completed["sha256_hex"] as? String == NostrCodec.hash(image.bytes), sizeMatches, completed["is_public"] as? Bool == false, completed["completed_at"] is String else { throw NoteError.malformed }
+                    local.draft.images[i].complete = true; try persist()
+                    break
                 }
-                let completed = try await api.request(origin:destination.origin,path:"/api/v4/storage/" + object)
-                // Tower's PostgreSQL BIGINT metadata is a decimal JSON string;
-                // retain compatibility with backends that emit a JSON number.
-                let sizeMatches = (completed["size_bytes"] as? String) == String(image.bytes.count)
-                    || (completed["size_bytes"] as? NSNumber) == NSNumber(value: image.bytes.count)
-                guard completed["sha256_hex"] as? String == NostrCodec.hash(image.bytes), sizeMatches, completed["is_public"] as? Bool == false, completed["completed_at"] is String else { throw NoteError.malformed }
-                local.draft.images[i].complete = true; try persist()
             }
             try assertIdentity(destination)
             let text = draft.text; let hash = NostrCodec.hash(Data(text.utf8))
@@ -124,7 +137,17 @@ final class NoteStore: ObservableObject {
                 "message_signature":["version":1,"signer_npub":destination.signer,"body_sha256":hash,"nostr_event":encoded],
                 "metadata":["attachments":draft.images.map { ["kind":"image","storage_object_id":$0.object!,"filename":$0.filename,"mime_type":"image/png","size_bytes":$0.bytes.count] as [String:Any] }]]
             if let thread = draft.thread { body["thread_id"] = thread }
-            let response = try await api.request(origin:destination.origin,path:destination.base + "/channels/" + destination.channel + "/messages",app:destination.app,method:"POST",body:body)
+            let response: [String:Any]
+            do { response = try await api.request(origin:destination.origin,path:destination.base + "/channels/" + destination.channel + "/messages",app:destination.app,method:"POST",body:body) }
+            catch NStackError.response(409, let code?) where code == "idempotency_conflict" {
+                // Tower already accepted a different message under this request ID, such as an earlier delivery
+                // whose image was later removed. Never resend under this ID; keep the content as a new draft.
+                let previous = local.draft
+                local.draft.id = UUID(); local.draft.frozen = false; local.draft.destination = nil
+                do { try persist() } catch { local.draft = previous; throw error }
+                notice = "Tower already has a note sent with this draft’s ID, so it was not sent again. Your text and images are kept as an editable draft; send only if you want another copy."
+                return
+            }
             guard let message = response["message"] as? [String:Any], message["client_request_id"] as? String == draft.id.uuidString, message["channel_id"] as? String == destination.channel, message["body"] as? String == text else { throw NoteError.malformed }
             let acceptedDraft = local.draft
             local.draft = NoteDraft()

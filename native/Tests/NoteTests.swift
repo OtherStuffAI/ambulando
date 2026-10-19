@@ -58,15 +58,18 @@ final class MemorySecret: VaultSecretStore {
     func read() throws -> Data? { value }
     func write(_ data: Data) throws { value = data }
 }
+/// Thrown by a mock handler to answer with a non-2xx HTTP status and JSON body.
+struct MockHTTPStatus: Error { let code: Int; let body: [String:Any] }
 final class MockProtocol: URLProtocol {
     static var handler: ((URLRequest) throws -> [String:Any])!
     override class func canInit(with request: URLRequest) -> Bool { true }
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
     override func startLoading() {
         do {
-            let result = try Self.handler(request)
+            var status = 200; var result: [String:Any]
+            do { result = try Self.handler(request) } catch let failure as MockHTTPStatus { status = failure.code; result = failure.body }
             let data = try JSONSerialization.data(withJSONObject:result)
-            client?.urlProtocol(self,didReceive:HTTPURLResponse(url:request.url!,statusCode:200,httpVersion:nil,headerFields:["Content-Type":"application/json"])!,cacheStoragePolicy:.notAllowed)
+            client?.urlProtocol(self,didReceive:HTTPURLResponse(url:request.url!,statusCode:status,httpVersion:nil,headerFields:["Content-Type":"application/json"])!,cacheStoragePolicy:.notAllowed)
             client?.urlProtocol(self,didLoad:data); client?.urlProtocolDidFinishLoading(self)
         } catch { client?.urlProtocol(self,didFailWithError:error) }
     }
@@ -144,5 +147,175 @@ extension NoteTests {
         XCTAssertTrue(notes.draft.text.isEmpty); XCTAssertNotEqual(notes.draft.id,local.draft.id)
         await notes.history(); XCTAssertEqual(notes.messages.map(\.id),["browser-message","phone-message"])
         identity.lock(); await notes.history(); XCTAssertNotNil(notes.notice)
+    }
+}
+
+private func requestBody(_ request: URLRequest) -> Data {
+    var bytes = request.httpBody ?? Data()
+    if let stream = request.httpBodyStream {
+        stream.open(); defer { stream.close() }; var buffer = [UInt8](repeating:0,count:4096)
+        while stream.hasBytesAvailable { let count = stream.read(&buffer,maxLength:buffer.count); if count > 0 { bytes.append(contentsOf:buffer.prefix(count)) } else { break } }
+    }
+    return bytes
+}
+
+/// Minimal Tower model: generic storage metadata/upload/complete plus PG message
+/// idempotency keyed by client_request_id with a hash that covers attachment IDs.
+/// Requests arrive on URLProtocol's loading thread while the test awaits; access is sequential.
+final class MockTower: @unchecked Sendable {
+    let destination: Connection
+    var objects: [String:(bytes: Data?, completed: Bool)] = [:]
+    var messages: [String:(hash: String, body: [String:Any])] = [:]
+    var prepares = 0, messagePosts = 0, storageWrites: [String] = []
+    var loseNextMessageResponse = false
+    init(destination: Connection) { self.destination = destination }
+    static let missing = MockHTTPStatus(code:404,body:["error":"storage object not found or not readable by this npub"])
+    func handle(_ request: URLRequest) throws -> [String:Any] {
+        let url = request.url!; let method = request.httpMethod ?? "GET"; let bytes = requestBody(request)
+        // NIP-98 must bind the exact URL, method and body of every request.
+        let header = request.value(forHTTPHeaderField:"Authorization") ?? ""
+        let event = try JSONSerialization.jsonObject(with:Data(base64Encoded:String(header.dropFirst("Nostr ".count)))!) as! [String:Any]
+        let tags = event["tags"] as! [[String]]
+        XCTAssertEqual(event["kind"] as? Int,27235)
+        XCTAssertTrue(tags.contains(["u",url.absoluteString])); XCTAssertTrue(tags.contains(["method",method]))
+        if !bytes.isEmpty { XCTAssertTrue(tags.contains(["payload",NostrCodec.hash(bytes)])) }
+        let body = bytes.isEmpty ? [:] : try JSONSerialization.jsonObject(with:bytes) as! [String:Any]
+        let path = url.path
+        if path == destination.base + "/storage/prepare" {
+            prepares += 1; let id = UUID().uuidString.lowercased(); objects[id] = (nil,false)
+            return ["object_id":id,"is_public":false,"upload_url":"https://notes.example/api/v4/storage/" + id]
+        }
+        if path.hasPrefix("/api/v4/storage/") {
+            let parts = path.dropFirst("/api/v4/storage/".count).split(separator:"/").map(String.init)
+            guard let object = objects[parts[0]] else { throw Self.missing }
+            if parts.count == 2 && parts[1] == "complete" { objects[parts[0]]!.completed = object.bytes != nil; return [:] }
+            if method == "PUT" { storageWrites.append(parts[0]); objects[parts[0]]!.bytes = Data(base64Encoded:body["base64_data"] as! String); return [:] }
+            guard object.completed, let stored = object.bytes else { return ["completed_at":NSNull()] }
+            return ["completed_at":"2026-10-19T09:00:00Z","sha256_hex":NostrCodec.hash(stored),"size_bytes":String(stored.count),"is_public":false]
+        }
+        if path == destination.base + "/channels/" + destination.channel + "/messages" && method == "POST" {
+            messagePosts += 1
+            let ids = ((body["metadata"] as? [String:Any])?["attachments"] as? [[String:Any]] ?? []).compactMap { $0["storage_object_id"] as? String }
+            let key = body["client_request_id"] as! String
+            let hash = NostrCodec.hash(try NostrCodec.json(["thread":body["thread_id"] ?? NSNull(),"body":body["body"]!,"attachments":ids]))
+            if let existing = messages[key], existing.hash != hash { throw MockHTTPStatus(code:409,body:["error":"client_request_id was already used for a materially different message","code":"idempotency_conflict"]) }
+            if messages[key] == nil {
+                for id in ids { guard objects[id]?.completed == true else { throw MockHTTPStatus(code:400,body:["code":"not_attachable"]) } }
+                messages[key] = (hash,body)
+            }
+            if loseNextMessageResponse { loseNextMessageResponse = false; throw URLError(.timedOut) }
+            return ["message":["client_request_id":key,"channel_id":destination.channel,"body":body["body"]!]]
+        }
+        return ["messages":[],"next_cursor":NSNull()]
+    }
+}
+
+extension NoteTests {
+    @MainActor
+    private func frozenImageDraft(_ root: URL) throws -> (IdentityModel, Connection, URL, NoteDraft, URLSession) {
+        let vault = IdentityVault(url:root.appendingPathComponent("vault.json"),secrets:MemorySecret())
+        try vault.create(nsec:syntheticNsec(),pin:"1234")
+        let identity = IdentityModel(vault:vault); identity.perform { try $0.unlock(pin:"1234") }
+        let destination = Connection(origin:"https://notes.example",workspace:UUID().uuidString,app:NostrCodec.npub(Data(repeating:11,count:32)),signer:identity.npub!,channel:UUID().uuidString,label:"Synthetic workspace")
+        // Mirrors a retained device draft: frozen reply whose saved object had completed before Tower lost it.
+        var local = LocalNotes(); local.connection = destination
+        local.draft.text = "Frozen note"; local.draft.thread = UUID().uuidString; local.draft.parent = UUID().uuidString
+        local.draft.destination = destination; local.draft.frozen = true
+        var image = NoteImage(bytes:Data(repeating:7,count:431))
+        image.object = UUID().uuidString.lowercased()
+        image.upload = "https://storage.example/v4/" + image.object! + ".png?X-Amz-Signature=expired"
+        image.complete = true
+        local.draft.images = [image]
+        let state = root.appendingPathComponent("state.json")
+        try FileManager.default.createDirectory(at:root,withIntermediateDirectories:true)
+        try JSONEncoder().encode(local).write(to:state)
+        let config = URLSessionConfiguration.ephemeral; config.protocolClasses = [MockProtocol.self]
+        return (identity,destination,state,local.draft,URLSession(configuration:config))
+    }
+
+    @MainActor
+    func testFrozenDraftRecoversConfirmedMissingObjectAcrossProcessRecoveryWithoutDuplicate() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at:root) }
+        let (identity,destination,state,original,session) = try frozenImageDraft(root)
+        let tower = MockTower(destination:destination)
+        MockProtocol.handler = { request in try tower.handle(request) }
+        // Tower accepts the message but the response is lost: delivery is uncertain.
+        tower.loseNextMessageResponse = true
+        var notes = NoteStore(identity:identity,stateFile:state,session:session)
+        await notes.send()
+        XCTAssertEqual(tower.prepares,1); XCTAssertEqual(tower.messages.count,1)
+        XCTAssertTrue(notes.draft.frozen); XCTAssertEqual(notes.draft.id,original.id); XCTAssertEqual(notes.draft.text,original.text)
+        let fresh = try XCTUnwrap(notes.draft.images.first?.object)
+        XCTAssertNotEqual(fresh,original.images[0].object); XCTAssertEqual(notes.draft.images[0].bytes,original.images[0].bytes)
+        XCTAssertEqual(tower.storageWrites,[fresh])
+        // Process recovery reloads the persisted fresh object and replays the same request ID.
+        notes = NoteStore(identity:identity,stateFile:state,session:session)
+        XCTAssertEqual(notes.draft.images.first?.object,fresh); XCTAssertTrue(notes.draft.images[0].complete)
+        await notes.send()
+        XCTAssertEqual(notes.notice,"Sent to your Flight Deck Note to self.")
+        XCTAssertEqual(tower.prepares,1); XCTAssertEqual(tower.messagePosts,2); XCTAssertEqual(tower.messages.count,1)
+        let accepted = try XCTUnwrap(tower.messages[original.id.uuidString]?.body)
+        XCTAssertEqual(accepted["body"] as? String,"Frozen note"); XCTAssertEqual(accepted["thread_id"] as? String,original.thread)
+        XCTAssertEqual(((accepted["metadata"] as? [String:Any])?["attachments"] as? [[String:Any]])?.first?["storage_object_id"] as? String,fresh)
+        XCTAssertFalse(notes.draft.frozen); XCTAssertTrue(notes.draft.images.isEmpty); XCTAssertNotEqual(notes.draft.id,original.id)
+    }
+
+    @MainActor
+    func testRecoveredDraftAlreadyAcceptedUnderItsIDIsNeverResent() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at:root) }
+        let (identity,destination,state,original,session) = try frozenImageDraft(root)
+        let tower = MockTower(destination:destination)
+        // An earlier delivery used the old object, which Tower no longer exposes (e.g. the message was deleted).
+        let earlier = NostrCodec.hash(try NostrCodec.json(["thread":original.thread!,"body":original.text,"attachments":[original.images[0].object!]]))
+        tower.messages[original.id.uuidString] = (earlier,["body":original.text])
+        MockProtocol.handler = { request in try tower.handle(request) }
+        let notes = NoteStore(identity:identity,stateFile:state,session:session)
+        await notes.send()
+        XCTAssertEqual(tower.messages.count,1); XCTAssertEqual(tower.messages[original.id.uuidString]?.hash,earlier)
+        XCTAssertTrue(notes.notice?.contains("not sent again") == true)
+        // Content is preserved as an editable draft that will only send under a new ID by explicit user action.
+        XCTAssertFalse(notes.draft.frozen); XCTAssertNil(notes.draft.destination); XCTAssertNotEqual(notes.draft.id,original.id)
+        XCTAssertEqual(notes.draft.text,original.text); XCTAssertEqual(notes.draft.thread,original.thread)
+        XCTAssertEqual(notes.draft.images.map(\.bytes),original.images.map(\.bytes))
+        let reloaded = NoteStore(identity:identity,stateFile:state,session:session)
+        XCTAssertEqual(reloaded.draft.id,notes.draft.id); XCTAssertFalse(reloaded.draft.frozen)
+    }
+
+    @MainActor
+    func testUnconfirmedOrRepeatedStorage404KeepsDraftFrozenWithoutAllocatingObjects() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at:root) }
+        let (identity,destination,state,original,session) = try frozenImageDraft(root)
+        let tower = MockTower(destination:destination)
+        // A 404 without Tower's storage error (e.g. a proxy page) is not a confirmed missing object.
+        MockProtocol.handler = { request in
+            if request.url!.path.hasPrefix("/api/v4/storage/") { throw MockHTTPStatus(code:404,body:["error":"Not Found"]) }
+            return try tower.handle(request)
+        }
+        var notes = NoteStore(identity:identity,stateFile:state,session:session)
+        await notes.send()
+        XCTAssertEqual(tower.prepares,0); XCTAssertEqual(tower.messagePosts,0)
+        XCTAssertTrue(notes.draft.frozen); XCTAssertEqual(notes.draft.images.first?.object,original.images[0].object)
+        // A fresh object that is also missing is not replaced again in the same attempt.
+        MockProtocol.handler = { request in
+            if request.url!.path.hasPrefix("/api/v4/storage/") { throw MockTower.missing }
+            return try tower.handle(request)
+        }
+        notes = NoteStore(identity:identity,stateFile:state,session:session)
+        await notes.send()
+        XCTAssertEqual(tower.prepares,1); XCTAssertEqual(tower.messagePosts,0)
+        XCTAssertTrue(notes.draft.frozen); XCTAssertEqual(notes.draft.id,original.id); XCTAssertEqual(notes.draft.images[0].bytes,original.images[0].bytes)
+        // An uncertain prepare during recovery still fails closed instead of allocating another object.
+        MockProtocol.handler = { request in
+            if request.url!.path.hasPrefix("/api/v4/storage/") { throw MockTower.missing }
+            if request.url!.path.hasSuffix("/storage/prepare") { throw URLError(.timedOut) }
+            return try tower.handle(request)
+        }
+        notes = NoteStore(identity:identity,stateFile:state,session:session)
+        await notes.send(); await notes.send()
+        XCTAssertEqual(notes.notice,NoteError.uncertainPrepare.localizedDescription)
+        XCTAssertTrue(notes.draft.frozen); XCTAssertTrue(notes.draft.images[0].preparing); XCTAssertEqual(tower.messagePosts,0)
     }
 }
