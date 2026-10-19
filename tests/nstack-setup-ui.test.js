@@ -21,4 +21,12 @@ describe('unified NStack setup UI', () => {
     expect(html).toContain('Tower/Supabase connection details to add an NStack');
     expect(html).toContain('Existing Tower/Supabase connection key');
   });
+
+  it('promises a real verified Tower connection rather than a capability badge', () => {
+    expect(html).toContain('Connect to this workspace');
+    expect(html).toContain('fresh <code>window.nostr</code>/NIP-98 requests to Tower');
+    expect(html).toContain('nstackConnectionVerified');
+    expect(html).not.toContain('Request workspace access');
+    expect(html).not.toContain('Capability active for this page');
+  });
 });

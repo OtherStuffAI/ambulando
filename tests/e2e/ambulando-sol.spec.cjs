@@ -259,6 +259,63 @@ test('visible theme control changes and persists the user preference', async ({ 
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
 });
 
+test('settings theme selector stays compact, responsive and device-local', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.addInitScript(() => localStorage.setItem('ambulando:theme', 'dark'));
+  await openFixture(page);
+  await page.evaluate(() => {
+    const s = window.Alpine.store('chat');
+    s.closeThread({ syncRoute: false });
+    s.navigateTo('settings', { syncRoute: false });
+    s.settingsTab = 'connection';
+  });
+
+  const panel = page.getByTestId('appearance-panel');
+  const select = panel.locator('#sol-theme-select');
+  await expect(panel).toBeVisible();
+  expect(await select.evaluate(node => node.labels?.[0]?.classList.contains('sol-appearance-control'))).toBe(true);
+  await expect(select).toHaveValue('dark');
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  await expect(select.locator('option')).toHaveText(['Use device setting', 'Light', 'Dark']);
+  const desktop = await panel.evaluate(node => {
+    const panelBox = node.getBoundingClientRect();
+    const copyBox = node.querySelector('.sol-appearance-copy').getBoundingClientRect();
+    const controlBox = node.querySelector('.sol-appearance-control').getBoundingClientRect();
+    return { panel: { width: panelBox.width, height: panelBox.height }, copy: { top: copyBox.top, bottom: copyBox.bottom }, control: { top: controlBox.top, bottom: controlBox.bottom } };
+  });
+  expect(desktop.panel.width).toBeLessThanOrEqual(720);
+  expect(desktop.panel.height).toBeLessThanOrEqual(120);
+  expect(Math.min(desktop.copy.bottom, desktop.control.bottom)).toBeGreaterThan(Math.max(desktop.copy.top, desktop.control.top));
+  await capture(page, 'settings-theme-selector-desktop');
+
+  await select.focus();
+  expect(await select.evaluate(node => document.activeElement === node)).toBe(true);
+  await select.selectOption('light');
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+  await select.selectOption('dark');
+  await expect(select).toHaveValue('dark');
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  expect(await page.evaluate(() => localStorage.getItem('ambulando:theme'))).toBe('dark');
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  const mobile = await panel.evaluate(node => {
+    const panelBox = node.getBoundingClientRect();
+    const copyBox = node.querySelector('.sol-appearance-copy').getBoundingClientRect();
+    const controlBox = node.querySelector('.sol-appearance-control').getBoundingClientRect();
+    const selectBox = node.querySelector('select').getBoundingClientRect();
+    return { panel: { left: panelBox.left, right: panelBox.right, width: panelBox.width, height: panelBox.height }, copyBottom: copyBox.bottom, controlTop: controlBox.top, select: { left: selectBox.left, right: selectBox.right, width: selectBox.width, height: selectBox.height } };
+  });
+  console.log('SOL_APPEARANCE_GEOMETRY', JSON.stringify({ desktop, mobile }));
+  expect(mobile.panel.width).toBeLessThanOrEqual(374);
+  expect(mobile.panel.height).toBeLessThanOrEqual(180);
+  expect(mobile.controlTop).toBeGreaterThanOrEqual(mobile.copyBottom);
+  expect(mobile.select.height).toBeGreaterThanOrEqual(44);
+  expect(mobile.select.left).toBeGreaterThanOrEqual(mobile.panel.left);
+  expect(mobile.select.right).toBeLessThanOrEqual(mobile.panel.right);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await capture(page, 'settings-theme-selector-mobile');
+});
+
 test('profile actions support menu keyboard navigation and restore the avatar trigger', async ({ page }) => {
   await openFixture(page);
   await page.evaluate(() => { window.Alpine.store('chat').closeThread({ syncRoute: false }); });

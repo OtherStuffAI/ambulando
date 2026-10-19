@@ -7626,9 +7626,9 @@
 
         <template x-if="$store.chat.navSection === 'settings'">
           <div class="settings-section">
-          <section class="settings-panel sol-appearance-panel" aria-labelledby="sol-appearance-title">
-            <div><h2 id="sol-appearance-title">Appearance</h2><p>Color theme is saved on this device and applies to every workspace.</p></div>
-            <label><span>Color theme</span><select aria-label="Color theme" :value="$store.appearance.preference" @change="$store.appearance.setTheme($event.target.value)"><option value="system">Use device setting</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+          <section class="settings-panel sol-appearance-panel" aria-labelledby="sol-appearance-title" data-testid="appearance-panel">
+            <div class="sol-appearance-copy"><h2 id="sol-appearance-title">Appearance</h2><p>Color theme is saved on this device and applies to every workspace.</p></div>
+            <label class="sol-appearance-control" for="sol-theme-select"><span>Color theme</span><select id="sol-theme-select" :value="$store.appearance.preference" @change="$store.appearance.setTheme($event.target.value)"><option value="system">Use device setting</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
           </section>
           <div class="settings-tabs">
             <button x-show="$store.chat.canAdminWorkspace" class="settings-tab" :class="{ active: $store.chat.settingsTab === 'workspace' }" @click="$store.chat.settingsTab = 'workspace'">Workspace</button>
@@ -7792,8 +7792,8 @@
             <div class="nstack-active-selection" x-show="$store.chat.activeNStackRoute" role="status" aria-live="polite">
               <strong>Active route</strong>
               <span x-text="`${$store.chat.activeNStackRoute?.stackLabel || 'Current NStack'} → ${$store.chat.activeNStackRoute?.workspaceLabel || 'Workspace'}`"></span>
-              <small x-show="$store.chat.nstackCapabilityHandleId">Capability active for this page. The opaque handle is not saved.</small>
-              <small x-show="!$store.chat.nstackCapabilityHandleId">This is the configured Tower route. Browser authorization is separate and never switches it silently.</small>
+              <small x-show="$store.chat.nstackConnectionVerified">Imported from Nostr Browser and verified with a fresh signed Tower request.</small>
+              <small x-show="!$store.chat.nstackConnectionVerified">This is the configured Tower route. Browser discovery never switches it silently.</small>
             </div>
 
             <div class="nstack-known-list" aria-label="Known NStacks">
@@ -7802,13 +7802,13 @@
                 <article class="nstack-known-card" :class="{ active: nstack.active, provisional: nstack.provisional }">
                   <div class="nstack-known-header">
                     <span><b x-text="nstack.label"></b><small x-text="nstack.sourceLabel"></small></span>
-                    <span class="nstack-known-status" x-text="nstack.active ? 'Active' : (nstack.provisional ? 'Needs approval' : 'Known')"></span>
+                    <span class="nstack-known-status" x-text="nstack.active ? 'Active' : (nstack.provisional ? 'Discovered' : 'Known')"></span>
                   </div>
                   <small class="nstack-known-endpoint" x-show="nstack.endpoint" x-text="nstack.endpoint"></small>
                   <div class="nstack-known-workspaces" x-show="nstack.workspaces.length > 0">
                     <template x-for="workspace in nstack.workspaces" :key="workspace.key">
                       <button type="button" class="nstack-workspace-row" :class="{ active: workspace.active }" :aria-current="workspace.active ? 'true' : null" @click="$store.chat.selectKnownNStackWorkspace(nstack, workspace)" :disabled="$store.chat.nstackBusy">
-                        <span><b x-text="workspace.label"></b><small x-text="workspace.source === 'browser' ? (workspace.authorized ? 'Browser authorized' : 'Found through Nostr Browser') : 'Configured workspace'"></small></span>
+                        <span><b x-text="workspace.label"></b><small x-text="workspace.source === 'browser' ? 'Shared by Nostr Browser' : (workspace.source === 'configured_browser' ? 'Configured · shared by Nostr Browser' : 'Configured workspace')"></small></span>
                         <span aria-hidden="true" x-text="workspace.active ? '✓' : '›'"></span>
                       </button>
                     </template>
@@ -7826,8 +7826,8 @@
             </div>
 
             <div class="nstack-capability-request" x-show="$store.chat.nstackSelectedWorkspace">
-              <p>Ambulando will request only <code>workspace.read</code> for this exact NStack/workspace for 15 minutes. Nostr Browser returns a document-scoped, revocable opaque handle and approved connection metadata, never credentials.</p>
-              <button class="auth-option" type="button" @click="$store.chat.activateNStackSelection()" :disabled="$store.chat.nstackBusy">Request workspace access</button>
+              <p>Ambulando will import this saved server and workspace, then make fresh <code>window.nostr</code>/NIP-98 requests to Tower. It switches only after Tower verifies the descriptor and your access.</p>
+              <button class="auth-option" type="button" @click="$store.chat.activateNStackSelection()" :disabled="$store.chat.nstackBusy" x-text="$store.chat.nstackBusy ? 'Verifying with Tower…' : 'Connect to this workspace'"></button>
             </div>
             <p class="auth-error" role="alert" x-show="$store.chat.nstackError" x-text="$store.chat.nstackError"></p>
             <p class="settings-field-help" role="status" x-show="$store.chat.nstackStatus === 'empty'">Discovery succeeded, but no NStacks were approved.</p>
@@ -7842,7 +7842,7 @@
                 <input type="text" x-model="$store.chat.nstackRecoveryRelaysInput" placeholder="Optional wss:// relay list" />
               </label>
               <div class="nstack-recovery-actions">
-                <button class="btn-secondary" type="button" @click="$store.chat.createNStackRecoveryBackup()" :disabled="$store.chat.nstackBusy || !$store.chat.nstackCapabilityHandleId || !$store.chat.nstackSelectedStack?.host">Create/update recovery records</button>
+                <button class="btn-secondary" type="button" @click="$store.chat.createNStackRecoveryBackup()" :disabled="$store.chat.nstackBusy || !$store.chat.nstackConnectionVerified || !$store.chat.nstackSelectedStack?.host">Create/update recovery records</button>
                 <button class="btn-secondary" type="button" @click="$store.chat.restoreNStackRecoveryBackup()" :disabled="$store.chat.nstackBusy || !$store.chat.session?.npub">Restore configuration</button>
               </div>
               <p class="settings-field-help" x-show="$store.chat.nstackRecoveryStatus === 'restored'">Recovery records validated and restored for review. Ambulando did not switch destinations or treat restored policy as current authority.</p>

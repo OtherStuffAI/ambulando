@@ -204,6 +204,8 @@ export function normalizeWorkspaceEntry(raw = {}) {
 
   const slug = String(raw.slug || '').trim() || slugify(name);
   const workspaceId = String(raw.workspaceId || raw.workspace_id || '').trim() || null;
+  const fipsEndpoint = String(raw.fipsEndpoint || raw.fips_endpoint || '').trim() || null;
+  const peerNpub = String(raw.peerNpub || raw.peer_npub || '').trim() || null;
   const savedKey = String(raw.workspaceKey || raw.workspace_key || '').trim();
   const workspaceKey = pgBackendMode && workspaceId
     ? pgWorkspaceIdentityKey({ pgSessionNpub, towerServiceNpub, workspaceServiceNpub, appNpub, workspaceId })
@@ -225,6 +227,8 @@ export function normalizeWorkspaceEntry(raw = {}) {
     towerServiceNpub,
     workspaceServiceNpub,
     workspaceId,
+    fipsEndpoint,
+    peerNpub,
     pgSessionNpub,
     pgBackendMode,
     pgDescriptor: raw.pgDescriptor || raw.pg_descriptor || null,
@@ -279,6 +283,8 @@ function normalizeWorkspacePatch(raw = {}) {
     [['towerServiceNpub', 'tower_service_npub'], 'towerServiceNpub'],
     [['workspaceServiceNpub', 'workspace_service_npub'], 'workspaceServiceNpub'],
     [['workspaceId', 'workspace_id'], 'workspaceId'],
+    [['fipsEndpoint', 'fips_endpoint'], 'fipsEndpoint'],
+    [['peerNpub', 'peer_npub'], 'peerNpub'],
     [['pgSessionNpub', 'pg_session_npub', 'sessionNpub', 'session_npub'], 'pgSessionNpub'],
     [['pgBackendMode', 'pg_backend_mode'], 'pgBackendMode'],
     [['pgDescriptor', 'pg_descriptor'], 'pgDescriptor'],

@@ -7,7 +7,7 @@ import { nstackRecoveryD, NSTACK_RECOVERY_TYPES } from '../src/nstack-recovery.j
 import { DeterministicNStackProviderFixture } from '../tests/fixtures/nstack-provider-fixture.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const repository = path.resolve(process.env.NBROWSER_REPO || path.join(here, '../../../nbrowser'));
+const repository = path.resolve(process.env.NBROWSER_REPO || path.join(here, '../../../wm/wmapp'));
 const [contract, bridge, access, models, fixturePage] = await Promise.all([
   readFile(path.join(repository, 'docs/nstack-browser-contract.md'), 'utf8'),
   readFile(path.join(repository, 'app/lib/src/features/nstack/nstack_bridge_script.dart'), 'utf8'),
@@ -16,18 +16,21 @@ const [contract, bridge, access, models, fixturePage] = await Promise.all([
   readFile(path.join(repository, 'app/web/nstack-test.html'), 'utf8'),
 ]);
 
-for (const method of ['isAvailable', 'requestDiscovery', 'listNStacks', 'listWorkspaces', 'requestCapabilities', 'revoke']) {
+for (const method of ['isAvailable', 'requestDiscovery', 'listNStacks', 'listWorkspaces', 'getConnection']) {
   assert.match(contract, new RegExp(`\\b${method}\\b`));
   assert.match(bridge, new RegExp(`\\b${method}\\b`));
   assert.match(fixturePage, new RegExp(`\\b${method}\\b`));
 }
-for (const code of ['unavailable', 'locked', 'consent_denied', 'not_disclosed', 'invalid_request', 'stale_handle', 'stack_unavailable', 'unsupported_capability']) {
+for (const code of ['unavailable', 'locked', 'consent_denied', 'not_disclosed', 'invalid_request', 'stale_handle', 'stack_unavailable']) {
   assert.match(contract, new RegExp(`\\b${code}\\b`));
 }
-for (const capability of ['workspace.read', 'storage.read', 'storage.write', 'events.read', 'events.write']) {
-  assert.match(access, new RegExp(capability.replace('.', '\\.')));
+for (const field of ['workspaceId', 'workspaceOwnerNpub', 'workspaceServiceNpub', 'directHttpsUrl', 'serviceNpub']) {
+  assert.match(contract, new RegExp(`\\b${field}\\b`));
+  assert.match(access, new RegExp(`\\b${field}\\b`));
 }
 assert.match(bridge, /version: 1/);
+assert.match(bridge, /NStackReady/);
+assert.match(bridge, /nstackready/);
 assert.match(bridge, /detail \|\| \{ reason: 'changed' \}/);
 assert.match(models, /org\.wingman\.nbrowser\.settings\.v1/);
 
@@ -41,19 +44,15 @@ const unsubscribe = adapter.on('change', () => {});
 assert.deepEqual(await adapter.isAvailable(), { available: true, version: '1' });
 assert.deepEqual(await adapter.requestDiscovery({ workspaces: true }), { disclosed: 1, workspaces: true });
 const [stack] = await adapter.listNStacks();
-assert.deepEqual(Object.keys(stack).sort(), ['available', 'host', 'id', 'name']);
+assert.deepEqual(Object.keys(stack).sort(), ['available', 'host', 'id', 'lastRefreshedAt', 'name', 'stale', 'url']);
 const [workspace] = await adapter.listWorkspaces({ stackId: stack.id });
-assert.deepEqual(Object.keys(workspace).sort(), ['id', 'name']);
-const capability = await adapter.requestCapabilities({
-  stackId: stack.id,
-  workspaceId: workspace.id,
-  capabilities: ['workspace.read'],
-  duration: 900,
-});
-assert.equal(capability.connection.url, 'https://host.example');
-assert.equal(typeof capability.handle, 'string');
+const connection = await adapter.getConnection({ stackId: stack.id, workspaceId: workspace.id });
+assert.equal(connection.workspaceId, 'main');
+assert.equal(connection.directHttpsUrl, 'https://host.example');
+assert.equal(typeof connection.serviceNpub, 'string');
+assert.equal(provider.calls.some(call => call[0] === 'requestCapabilities'), false);
 provider.emit('changed');
-assert.throws(() => adapter.assertHandleActive(capability.handle), error => error?.code === 'stale_handle');
+assert.throws(() => adapter.getWorkspaceDescriptor({ stackId: stack.id, workspaceId: workspace.id }), error => error?.code === 'not_disclosed');
 unsubscribe();
 
 const ambulandoD = await nstackRecoveryD(NSTACK_RECOVERY_TYPES.HOST_HINT);

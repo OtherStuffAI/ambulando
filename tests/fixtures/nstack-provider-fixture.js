@@ -36,8 +36,11 @@ export class DeterministicNStackProviderFixture {
     return this.stacks.map(stack => ({
       id: `${this.origin}:stack:${stack.id}`,
       name: stack.name,
+      url: stack.url,
       host: stack.host === true,
       available: true,
+      stale: false,
+      lastRefreshedAt: '2026-10-19T00:00:00.000Z',
       ...(stack.extra || {}),
     }));
   }
@@ -47,35 +50,30 @@ export class DeterministicNStackProviderFixture {
     this.requireDisclosure();
     const rawId = stackId.split(':stack:')[1];
     if (!rawId) throw providerError('not_disclosed', 'The NStack was not disclosed.');
-    return (this.workspaces[rawId] || []).map(workspace => ({ id: `${this.origin}:workspace:${workspace.id}`, name: workspace.name }));
-  }
-
-  async requestCapabilities(request) {
-    this.calls.push(['requestCapabilities', request]);
-    this.requireDisclosure();
-    this.sequence += 1;
-    const handle = `opaque-handle-${this.sequence}`;
-    this.handles.add(handle);
-    const rawStackId = request.stackId.split(':stack:')[1];
-    const stack = this.stacks.find(candidate => candidate.id === rawStackId);
-    return {
-      handle,
-      stackId: request.stackId,
-      ...(request.workspaceId ? { workspaceId: request.workspaceId } : {}),
-      capabilities: [...request.capabilities].sort(),
-      expiresAt: '2099-01-01T00:00:00.000Z',
-      connection: {
-        transport: 'https',
+    const stack = this.stacks.find(candidate => candidate.id === rawId);
+    return (this.workspaces[rawId] || []).map(workspace => ({
+      id: `${this.origin}:workspace:${workspace.id}`,
+      name: workspace.name,
+      workspaceId: workspace.workspaceId || workspace.id,
+      workspaceOwnerNpub: workspace.workspaceOwnerNpub || `npub1${'q'.repeat(58)}`,
+      workspaceServiceNpub: workspace.workspaceServiceNpub || `npub1${'p'.repeat(58)}`,
+      directHttpsUrl: workspace.directHttpsUrl || stack?.url || 'https://stack.example',
+      serviceNpub: workspace.serviceNpub || stack?.serviceNpub || `npub1${'z'.repeat(58)}`,
+      ...(workspace.fipsEndpoint ? { fipsEndpoint: workspace.fipsEndpoint, peerNpub: workspace.peerNpub } : {}),
+      nstack: {
+        id: stackId,
+        name: stack?.name || 'NStack',
         url: stack?.url || 'https://stack.example',
-        ...(stack?.fipsEndpoint ? { fipsEndpoint: stack.fipsEndpoint, peerNpub: stack.peerNpub } : {}),
       },
-    };
+    }));
   }
 
-  async revoke({ handle }) {
-    this.calls.push(['revoke', { handle }]);
-    if (!this.handles.delete(handle)) throw providerError('stale_handle', 'Capability handle is stale or revoked.');
-    return true;
+  async getConnection({ stackId, workspaceId }) {
+    this.calls.push(['getConnection', { stackId, workspaceId }]);
+    const workspaces = await this.listWorkspaces({ stackId });
+    const selected = workspaces.find(workspace => workspace.id === workspaceId);
+    if (!selected) throw providerError('not_disclosed', 'The workspace was not disclosed.');
+    return selected;
   }
 
   on(event, handler) {

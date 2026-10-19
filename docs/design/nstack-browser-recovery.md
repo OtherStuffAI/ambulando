@@ -4,9 +4,9 @@ Ambulando consumes an injected `window.NStack`; it does not install or emulate a
 production provider. `src/nstack-provider.js` is the stable boundary around the
 approved v1 methods. Availability reveals only the protocol version. Stack and
 workspace lists stay inaccessible until `requestDiscovery()` succeeds. The
-adapter accepts only origin-disclosed opaque IDs, requests named capabilities for
-one selected destination, keeps capability handles and connection metadata in
-memory, and invalidates every handle on the provider's reason-only change event.
+adapter accepts opaque bridge IDs only for calls back to that document and
+strictly validates the safe real connection metadata disclosed for each selected
+workspace. It never asks for signer, Nostr, Blossom or service capability handles.
 
 The deterministic provider in `tests/fixtures/` is contract evidence, not a
 browser global. Nostr Browser can replace that fixture without changing the
@@ -15,12 +15,22 @@ origin-specific IDs. It must never return administrator credentials, private
 keys, signer/bunker/NWC secrets, cookies, database credentials, bearer tokens or
 another reusable raw capability token.
 
-The provider surface follows NBrowser v1 exactly: stack summaries are
-`{id,name,host,available}`, workspace summaries are `{id,name}`, capability
-requests use `capabilities` plus optional `duration`, and approved results contain
-`handle`, `expiresAt`, and `connection`. Ambulando asks for `workspace.read` for
-15 minutes. `change` carries only `{reason}` and is a prompt to discard handles
-and explicitly review/re-list; the event is not authority.
+The provider surface follows NBrowser v1 exactly. Stack summaries retain their
+opaque `id`, label and availability and may include safe refresh metadata.
+Workspace summaries add the real Tower workspace id, owner and workspace-service
+npubs, canonical HTTPS Tower URL, Tower service npub and optional paired FIPS
+metadata. `change` carries only `{reason}` and is a prompt to discard all disclosed
+summaries and explicitly discover again; the event is not authority. Early
+document injection is handled through the provider ready promise/event with a
+bounded fallback.
+
+Choosing a disclosed workspace builds the same `wingman_workspace_locator` used
+by manual Tower PG setup. Ambulando fetches Tower's descriptor and `/me` with
+fresh exact `window.nostr` NIP-98 signatures, compares every disclosed stable
+identity with Tower's response, then—and only then—persists and selects the
+verified workspace. A declined prompt, malformed/mismatched descriptor, failed
+Tower verification, empty list, or provider change preserves the active
+destination and the manual-add path.
 
 ### Separate NBrowser recovery record
 
@@ -34,11 +44,10 @@ application-owned configuration recovery records.
 ## Local selection boundary
 
 The selected stack/workspace summary is stored in shared Dexie under an exact
-`origin + Nostr identity + local Ambulando workspace` partition. IDs and labels are the only persisted
-provider fields. Capability handles are deliberately not persisted. A restored
-choice does not become active authority: the user must review the destination
-and request a fresh handle. It is never copied into Tower workspace records or
-hydrated through `TowerSyncService`.
+`origin + Nostr identity + local Ambulando workspace` partition. Opaque IDs and
+labels are persisted only to restore UI choice. They are never treated as real
+workspace identity or service authority. A restored choice does not switch the
+active destination: the user must review it and complete fresh Tower verification.
 
 ## Unified setup projection
 
@@ -47,14 +56,13 @@ server is projected as an NStack immediately, with its saved workspaces nested
 beneath it and the active route shown as `NStack → workspace`. The projection
 does not rewrite legacy settings or create another transport path.
 
-Consented `window.NStack` results enter that same collection. Pre-approval
-browser summaries remain provisional and are never merged by label or opaque
-origin-scoped ID. After capability approval, Ambulando may merge the browser
-entry with a configured NStack only when normalized connection metadata matches
-the endpoint or verified server npub. Provider change/revocation removes that
-in-memory approval evidence and capability handle without deleting an
-independently configured NStack. Browser workspace IDs are not merged with
-saved workspace identities by name.
+Consented `window.NStack` results enter that same collection and are never merged
+by label or opaque origin-scoped ID. Ambulando may merge the browser entry with a
+configured NStack only when normalized connection metadata matches the endpoint
+or verified server npub. Workspaces merge only by their real workspace id plus
+owner and service identities. Provider change/revocation removes the disclosed
+browser projection without deleting or disconnecting an independently verified
+configured NStack.
 
 ## NIP-78 records
 
@@ -88,7 +96,7 @@ but is not the source of deletion truth. Callers must publish the signed
 encrypted tombstone successfully before constructing that cleanup request.
 
 The current Settings action publishes the selected host NStack after its
-workspace capability has been approved. It does not invent endpoints for other
+workspace has been freshly verified by Tower. It does not invent endpoints for other
 discovered stacks: their descriptors can be added only after a future explicit
 per-stack approval workflow supplies connection metadata.
 

@@ -1268,11 +1268,15 @@ export const connectSettingsManagerMixin = {
     if (this.session?.npub && sessionNpub !== this.session.npub) {
       throw new Error('Workspace descriptor was verified by a different signer');
     }
-    let workspace = normalizeWorkspaceEntry(pgWorkspaceEntryFromDescriptor(descriptor, {
-      me,
-      sessionNpub,
-      verifiedAt: new Date().toISOString(),
-    }));
+    let workspace = normalizeWorkspaceEntry({
+      ...pgWorkspaceEntryFromDescriptor(descriptor, {
+        me,
+        sessionNpub,
+        verifiedAt: new Date().toISOString(),
+      }),
+      fipsEndpoint: options.connectionMetadata?.fipsEndpoint || '',
+      peerNpub: options.connectionMetadata?.peerNpub || '',
+    });
     if (!workspace) throw new Error('Verified workspace descriptor could not be stored');
     const existingWorkspace = findExistingPgWorkspace(this.knownWorkspaces, workspace);
     workspace = preservePgSelfIndexState(workspace, existingWorkspace);

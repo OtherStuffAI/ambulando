@@ -1,11 +1,8 @@
 const SECRET_KEYS = new Set([
   'adminCredential', 'bearerToken', 'cookie', 'databaseCredential', 'nsec',
-  'nwc', 'privateKey', 'rawToken', 'secret', 'signerSecret', 'token',
+  'nwc', 'privateKey', 'rawToken', 'secret', 'signature', 'signerSecret', 'token',
+  'wrappedSecret', 'wrappedWorkspaceNsec',
 ]);
-
-export const NSTACK_V1_CAPABILITIES = Object.freeze(new Set([
-  'workspace.read', 'storage.read', 'storage.write', 'events.read', 'events.write',
-]));
 
 function text(value) { return String(value ?? '').trim(); }
 
@@ -24,9 +21,46 @@ function normalizeProviderError(error, fallback = 'unavailable') {
 function assertNoSecrets(value, path = 'response') {
   if (!value || typeof value !== 'object') return;
   for (const [key, child] of Object.entries(value)) {
-    if (SECRET_KEYS.has(key)) throw fail('malformed', `${path} exposed forbidden credential material.`);
+    if (SECRET_KEYS.has(key) || /(?:^|_)(?:credential|password|secret|signature|token)(?:$|_)/i.test(key)) {
+      throw fail('malformed', `${path} exposed forbidden credential material.`);
+    }
     if (child && typeof child === 'object') assertNoSecrets(child, `${path}.${key}`);
   }
+}
+
+function validateNpub(value, label) {
+  const npub = text(value);
+  if (!/^npub1[023456789acdefghjklmnpqrstuvwxyz]{58}$/.test(npub)) {
+    throw fail('malformed', `${label} is not a valid npub.`);
+  }
+  return npub;
+}
+
+function canonicalHttpsUrl(value, label) {
+  let url;
+  try { url = new URL(text(value)); } catch { /* handled below */ }
+  if (!url || url.protocol !== 'https:' || url.username || url.password || url.search || url.hash) {
+    throw fail('malformed', `${label} is not a safe canonical HTTPS URL.`);
+  }
+  return url.toString().replace(/\/$/, '');
+}
+
+function safeFipsMetadata(value = {}) {
+  const rawEndpoint = text(value.fipsEndpoint);
+  const rawPeer = text(value.peerNpub);
+  if (!rawEndpoint && !rawPeer) return {};
+  if (!rawEndpoint || !rawPeer) throw fail('malformed', 'FIPS endpoint and peer npub must be disclosed together.');
+  let endpoint;
+  try { endpoint = new URL(rawEndpoint); } catch { /* handled below */ }
+  if (!endpoint || endpoint.protocol !== 'http:' || !endpoint.hostname.endsWith('.fips')
+    || endpoint.hostname.length <= 5 || !endpoint.port || endpoint.username || endpoint.password
+    || endpoint.search || endpoint.hash || !['', '/'].includes(endpoint.pathname)) {
+    throw fail('malformed', 'The NStack provider returned unsafe FIPS metadata.');
+  }
+  return {
+    fipsEndpoint: endpoint.toString(),
+    peerNpub: validateNpub(rawPeer, 'FIPS peer npub'),
+  };
 }
 
 function validateStack(value, index) {
@@ -37,51 +71,72 @@ function validateStack(value, index) {
   if (!id || !name || typeof value.host !== 'boolean' || value.available !== true) {
     throw fail('malformed', `NStack ${index + 1} does not match the window.NStack v1 summary.`);
   }
-  return { id, name, host: value.host, available: true };
+  const result = { id, name, host: value.host, available: true };
+  if (value.url !== undefined) result.url = canonicalHttpsUrl(value.url, `NStack ${index + 1} URL`);
+  if (value.stale !== undefined) {
+    if (typeof value.stale !== 'boolean') throw fail('malformed', `NStack ${index + 1} stale state is malformed.`);
+    result.stale = value.stale;
+  }
+  if (value.lastRefreshedAt !== undefined && value.lastRefreshedAt !== null) {
+    const lastRefreshedAt = text(value.lastRefreshedAt);
+    if (!lastRefreshedAt || Number.isNaN(Date.parse(lastRefreshedAt))) throw fail('malformed', `NStack ${index + 1} refresh time is malformed.`);
+    result.lastRefreshedAt = lastRefreshedAt;
+  }
+  return result;
 }
 
-function validateWorkspace(value, index) {
+function validateWorkspace(value, index, stack) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw fail('malformed', `Workspace ${index + 1} is malformed.`);
   assertNoSecrets(value, `Workspace ${index + 1}`);
   const id = text(value.id);
   const name = text(value.name);
-  if (!id || !name) throw fail('malformed', `Workspace ${index + 1} does not match the window.NStack v1 summary.`);
-  return { id, name };
-}
-
-function validateCapabilityResult(value, request) {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) throw fail('malformed', 'The NStack capability result is malformed.');
-  assertNoSecrets(value, 'capability response');
-  const handle = text(value.handle);
-  const stackId = text(value.stackId);
   const workspaceId = text(value.workspaceId);
-  const expiresAt = text(value.expiresAt);
-  const capabilities = Array.isArray(value.capabilities) ? value.capabilities.map(text) : [];
-  const connection = value.connection;
-  if (!handle || stackId !== request.stackId || workspaceId !== (request.workspaceId || '') || !expiresAt || Number.isNaN(Date.parse(expiresAt))) {
-    throw fail('malformed', 'The NStack provider returned an invalid capability handle.');
-  }
-  if (capabilities.length !== request.capabilities.length || request.capabilities.some(capability => !capabilities.includes(capability))) {
-    throw fail('malformed', 'The NStack provider returned different capabilities than Ambulando requested.');
-  }
-  let connectionUrl;
-  try { connectionUrl = new URL(text(connection?.url)); } catch { /* handled below */ }
-  if (!connection || connection.transport !== 'https' || connectionUrl?.protocol !== 'https:' || connectionUrl.username || connectionUrl.password) {
-    throw fail('malformed', 'The NStack provider returned invalid connection metadata.');
+  if (!id || !name || !workspaceId) throw fail('malformed', `Workspace ${index + 1} does not match the window.NStack v1 summary.`);
+  const directHttpsUrl = canonicalHttpsUrl(value.directHttpsUrl, `Workspace ${index + 1} Tower URL`);
+  const nstack = value.nstack;
+  if (!nstack || typeof nstack !== 'object' || Array.isArray(nstack)
+    || text(nstack.id) !== stack.id || text(nstack.name) !== stack.name
+    || (stack.url && canonicalHttpsUrl(nstack.url, `Workspace ${index + 1} NStack URL`) !== stack.url)) {
+    throw fail('malformed', `Workspace ${index + 1} does not match its disclosed NStack.`);
   }
   return {
-    handle,
-    stackId,
-    ...(workspaceId ? { workspaceId } : {}),
-    capabilities: [...capabilities],
-    expiresAt,
-    connection: {
-      transport: 'https',
-      url: connectionUrl.toString().replace(/\/$/, ''),
-      ...(text(connection.fipsEndpoint) ? { fipsEndpoint: text(connection.fipsEndpoint) } : {}),
-      ...(text(connection.peerNpub) ? { peerNpub: text(connection.peerNpub) } : {}),
-    },
+    id,
+    name,
+    workspaceId,
+    workspaceOwnerNpub: validateNpub(value.workspaceOwnerNpub, `Workspace ${index + 1} owner npub`),
+    workspaceServiceNpub: validateNpub(value.workspaceServiceNpub, `Workspace ${index + 1} service npub`),
+    directHttpsUrl,
+    serviceNpub: validateNpub(value.serviceNpub, `Workspace ${index + 1} Tower service npub`),
+    ...safeFipsMetadata(value),
+    nstack: { id: stack.id, name: stack.name, url: canonicalHttpsUrl(nstack.url, `Workspace ${index + 1} NStack URL`) },
   };
+}
+
+export async function waitForNStackProvider({ windowObject = globalThis.window, provider, timeoutMs = 1_500 } = {}) {
+  if (provider) return provider;
+  if (!windowObject) return null;
+  const immediate = windowObject.NStack;
+  const ready = immediate?.ready || windowObject.NStackReady;
+  if (ready && typeof ready.then === 'function') {
+    return Promise.race([
+      ready.then(value => value || windowObject.NStack),
+      new Promise(resolve => setTimeout(() => resolve(windowObject.NStack || null), timeoutMs)),
+    ]);
+  }
+  if (immediate) return immediate;
+  return new Promise(resolve => {
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      windowObject.removeEventListener?.('nstackready', onReady);
+      resolve(windowObject.NStack || null);
+    };
+    const onReady = () => finish();
+    const timer = setTimeout(finish, timeoutMs);
+    windowObject.addEventListener?.('nstackready', onReady, { once: true });
+  });
 }
 
 export function createNStackProviderAdapter({ provider, origin } = {}) {
@@ -89,7 +144,6 @@ export function createNStackProviderAdapter({ provider, origin } = {}) {
   let discoveryApproved = false;
   let stacks = new Map();
   let workspaces = new Map();
-  const handles = new Map();
   const listeners = new Set();
   let providerUnsubscribe = null;
 
@@ -100,10 +154,9 @@ export function createNStackProviderAdapter({ provider, origin } = {}) {
 
   function invalidate(change = {}) {
     const reason = text(change?.reason) || 'changed';
-    for (const handle of handles.values()) {
-      handle.active = false;
-      handle.reason = reason;
-    }
+    discoveryApproved = false;
+    stacks = new Map();
+    workspaces = new Map();
     for (const listener of listeners) listener({ reason });
   }
 
@@ -147,6 +200,7 @@ export function createNStackProviderAdapter({ provider, origin } = {}) {
         const result = await requireMethod('listNStacks')();
         if (!Array.isArray(result)) throw fail('malformed', 'The NStack list is malformed.');
         const rows = result.map(validateStack);
+        if (new Set(rows.map(row => row.id)).size !== rows.length) throw fail('malformed', 'The NStack list contains duplicate opaque ids.');
         stacks = new Map(rows.map(row => [row.id, row]));
         return rows;
       } catch (error) {
@@ -157,11 +211,16 @@ export function createNStackProviderAdapter({ provider, origin } = {}) {
     async listWorkspaces({ stackId } = {}) {
       const selectedStackId = text(stackId);
       if (!discoveryApproved) throw fail('not_disclosed', 'Request NStack discovery first.');
-      if (!stacks.has(selectedStackId)) throw fail('not_disclosed', 'Choose an NStack disclosed to this origin.');
+      const stack = stacks.get(selectedStackId);
+      if (!stack) throw fail('not_disclosed', 'Choose an NStack disclosed to this origin.');
       try {
         const result = await requireMethod('listWorkspaces')({ stackId: selectedStackId });
         if (!Array.isArray(result)) throw fail('malformed', 'The NStack workspace list is malformed.');
-        const rows = result.map(validateWorkspace);
+        const rows = result.map((row, index) => validateWorkspace(row, index, stack));
+        if (new Set(rows.map(row => row.id)).size !== rows.length
+          || new Set(rows.map(row => `${row.workspaceId}\n${row.workspaceOwnerNpub}\n${row.workspaceServiceNpub}`)).size !== rows.length) {
+          throw fail('malformed', 'The NStack workspace list contains duplicate identities.');
+        }
         workspaces.set(selectedStackId, new Map(rows.map(row => [row.id, row])));
         return rows;
       } catch (error) {
@@ -169,53 +228,32 @@ export function createNStackProviderAdapter({ provider, origin } = {}) {
       }
     },
 
-    async requestCapabilities(request = {}) {
-      const stackId = text(request.stackId);
-      const workspaceId = text(request.workspaceId);
-      const capabilities = [...new Set((request.capabilities || []).map(text).filter(Boolean))];
-      if (!stacks.has(stackId)) throw fail('not_disclosed', 'Choose an NStack disclosed to this origin.');
-      if (workspaceId && !workspaces.get(stackId)?.has(workspaceId)) throw fail('not_disclosed', 'Choose a workspace disclosed to this origin.');
-      if (capabilities.length === 0) throw fail('invalid_request', 'Request at least one NStack capability.');
-      if (capabilities.some(capability => !NSTACK_V1_CAPABILITIES.has(capability))) {
-        throw fail('unsupported_capability', 'Ambulando requested an unsupported NStack capability.');
-      }
-      const outbound = { stackId, ...(workspaceId ? { workspaceId } : {}), capabilities };
-      if (request.duration !== undefined) outbound.duration = request.duration;
-      try {
-        const handle = { ...validateCapabilityResult(await requireMethod('requestCapabilities')(outbound), outbound), active: true, reason: '' };
-        handles.set(handle.handle, handle);
-        return { ...handle, connection: { ...handle.connection } };
-      } catch (error) {
-        throw error?.name === 'NStackError' ? error : normalizeProviderError(error);
-      }
+    getWorkspaceDescriptor({ stackId, workspaceId } = {}) {
+      const descriptor = workspaces.get(text(stackId))?.get(text(workspaceId));
+      if (!descriptor) throw fail('not_disclosed', 'Choose a workspace disclosed to this origin.');
+      return structuredClone(descriptor);
     },
 
-    async revoke({ handle } = {}) {
-      const id = text(handle);
-      if (!id) throw fail('invalid_request', 'handle is required.');
+    async getConnection({ stackId, workspaceId } = {}) {
+      const selectedStackId = text(stackId);
+      const selectedWorkspaceId = text(workspaceId);
+      const stack = stacks.get(selectedStackId);
+      const listed = workspaces.get(selectedStackId)?.get(selectedWorkspaceId);
+      if (!stack || !listed) throw fail('not_disclosed', 'Choose a workspace disclosed to this origin.');
       try {
-        const result = await requireMethod('revoke')({ handle: id });
-        if (result !== true) throw fail('malformed', 'The NStack provider returned an invalid revoke result.');
-        const active = handles.get(id);
-        if (active) {
-          active.active = false;
-          active.reason = 'revoked';
+        const current = validateWorkspace(
+          await requireMethod('getConnection')({ stackId: selectedStackId, workspaceId: selectedWorkspaceId }),
+          0,
+          stack,
+        );
+        const stableFields = ['id', 'workspaceId', 'workspaceOwnerNpub', 'workspaceServiceNpub', 'directHttpsUrl', 'serviceNpub', 'fipsEndpoint', 'peerNpub'];
+        if (stableFields.some(field => text(current[field]) !== text(listed[field]))) {
+          throw fail('malformed', 'The NStack connection changed after it was listed. Discover it again.');
         }
-        return true;
+        return structuredClone(current);
       } catch (error) {
         throw error?.name === 'NStackError' ? error : normalizeProviderError(error);
       }
-    },
-
-    assertHandleActive(handleId) {
-      const handle = handles.get(text(handleId));
-      if (!handle?.active) throw fail('stale_handle', 'The NStack capability is no longer active. Request access again.');
-      if (Date.parse(handle.expiresAt) <= Date.now()) {
-        handle.active = false;
-        handle.reason = 'expired';
-        throw fail('stale_handle', 'The NStack capability expired. Request access again.');
-      }
-      return { ...handle, connection: { ...handle.connection } };
     },
 
     on(event, handler) {
@@ -235,7 +273,6 @@ export function createNStackProviderAdapter({ provider, origin } = {}) {
       if (typeof providerUnsubscribe === 'function') providerUnsubscribe();
       providerUnsubscribe = null;
       listeners.clear();
-      handles.clear();
       stacks.clear();
       workspaces.clear();
     },

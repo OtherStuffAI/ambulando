@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createNStackProviderAdapter } from '../src/nstack-provider.js';
+import { createNStackProviderAdapter, waitForNStackProvider } from '../src/nstack-provider.js';
 import { DeterministicNStackProviderFixture } from './fixtures/nstack-provider-fixture.js';
 
 function fixture(origin = 'https://ambulando.example') {
@@ -45,43 +45,34 @@ describe('window.NStack adapter', () => {
     await expect(adapter.listNStacks()).rejects.toMatchObject({ code: 'not_disclosed' });
   });
 
-  it('lists multiple stacks/workspaces, requests the exact capabilities and rejects stale handles', async () => {
+  it('lists multiple stacks and validates real workspace connection descriptors', async () => {
     const provider = fixture();
     const adapter = createNStackProviderAdapter({ provider, origin: provider.origin });
     await adapter.requestDiscovery();
     const stacks = await adapter.listNStacks();
     const workspaces = await adapter.listWorkspaces({ stackId: stacks[1].id });
-    const handle = await adapter.requestCapabilities({
-      stackId: stacks[1].id,
-      workspaceId: workspaces[0].id,
-      capabilities: ['workspace.read', 'workspace.read'],
-      duration: 900,
+    expect(workspaces).toHaveLength(2);
+    expect(adapter.getWorkspaceDescriptor({ stackId: stacks[1].id, workspaceId: workspaces[0].id })).toMatchObject({
+      workspaceId: 'suite',
+      directHttpsUrl: 'https://work.example',
+      serviceNpub: expect.stringMatching(/^npub1/),
     });
-    expect(provider.calls.find(call => call[0] === 'requestCapabilities')[1]).toEqual({
-      stackId: stacks[1].id,
-      workspaceId: workspaces[0].id,
-      capabilities: ['workspace.read'],
-      duration: 900,
-    });
-    expect(handle.connection.url).toBe('https://work.example');
-    expect(adapter.assertHandleActive(handle.handle).active).toBe(true);
+    expect(provider.calls.some(call => call[0] === 'requestCapabilities')).toBe(false);
     const changed = vi.fn();
     const unsubscribe = adapter.on('change', changed);
     provider.emit('changed');
     expect(changed).toHaveBeenCalledWith({ reason: 'changed' });
-    expect(() => adapter.assertHandleActive(handle.handle)).toThrow(/no longer active/);
+    expect(() => adapter.getWorkspaceDescriptor({ stackId: stacks[1].id, workspaceId: workspaces[0].id })).toThrow(/disclosed/);
     unsubscribe();
   });
 
-  it('revokes a document handle through the v1 provider method', async () => {
-    const provider = fixture();
-    const adapter = createNStackProviderAdapter({ provider, origin: provider.origin });
-    await adapter.requestDiscovery();
-    const [stack] = await adapter.listNStacks();
-    const [workspace] = await adapter.listWorkspaces({ stackId: stack.id });
-    const result = await adapter.requestCapabilities({ stackId: stack.id, workspaceId: workspace.id, capabilities: ['workspace.read'] });
-    await expect(adapter.revoke({ handle: result.handle })).resolves.toBe(true);
-    expect(() => adapter.assertHandleActive(result.handle)).toThrow(/no longer active/);
+  it('waits for bounded late provider injection and supports the ready event', async () => {
+    const host = new EventTarget();
+    host.NStack = undefined;
+    const pending = waitForNStackProvider({ windowObject: host, timeoutMs: 100 });
+    host.NStack = fixture();
+    host.dispatchEvent(new Event('nstackready'));
+    await expect(pending).resolves.toBe(host.NStack);
   });
 
   it('keeps opaque ids origin-scoped in deterministic fixtures', async () => {
@@ -105,16 +96,20 @@ describe('window.NStack adapter', () => {
 
   it('rejects malformed connection metadata returned after approval', async () => {
     const provider = fixture();
-    provider.stacks[0].url = 'https://user:password@personal.example';
+    provider.workspaces.personal[0].directHttpsUrl = 'https://user:password@personal.example';
     const adapter = createNStackProviderAdapter({ provider, origin: provider.origin });
     await adapter.requestDiscovery();
     const [stack] = await adapter.listNStacks();
-    const [workspace] = await adapter.listWorkspaces({ stackId: stack.id });
-    await expect(adapter.requestCapabilities({
-      stackId: stack.id,
-      workspaceId: workspace.id,
-      capabilities: ['workspace.read'],
-    })).rejects.toMatchObject({ code: 'malformed' });
+    await expect(adapter.listWorkspaces({ stackId: stack.id })).rejects.toMatchObject({ code: 'malformed' });
+  });
+
+  it('rejects duplicate real workspace identities behind different opaque ids', async () => {
+    const provider = fixture();
+    provider.workspaces.personal.push({ id: 'duplicate-alias', workspaceId: 'private', name: 'Duplicate' });
+    const adapter = createNStackProviderAdapter({ provider, origin: provider.origin });
+    await adapter.requestDiscovery();
+    const [stack] = await adapter.listNStacks();
+    await expect(adapter.listWorkspaces({ stackId: stack.id })).rejects.toMatchObject({ code: 'malformed' });
   });
 
   it('reports an unreachable provider without disclosing cached inventory', async () => {

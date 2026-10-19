@@ -54,9 +54,9 @@ function workspaceLabel(entry = {}) {
 }
 
 function sourceLabel(sources, provisional) {
-  if (provisional) return 'Found through Nostr Browser · approval required';
-  if (sources.includes('browser') && sources.includes('configured')) return 'Configured · authorized through Nostr Browser';
-  if (sources.includes('browser')) return 'Authorized through Nostr Browser';
+  if (provisional) return 'Found through Nostr Browser';
+  if (sources.includes('browser') && sources.includes('configured')) return 'Configured · shared by Nostr Browser';
+  if (sources.includes('browser')) return 'Shared by Nostr Browser';
   return 'Configured on this device';
 }
 
@@ -138,6 +138,9 @@ export function projectNStackDestinations({
         key: `configured:${key || `${stack.key}:${stack.workspaces.length}`}`,
         workspaceKey: key,
         browserWorkspaceId: '',
+        remoteWorkspaceId: text(workspace?.workspaceId || workspace?.workspace_id),
+        workspaceOwnerNpub: text(workspace?.workspaceOwnerNpub || workspace?.workspace_owner_npub),
+        workspaceServiceNpub: text(workspace?.workspaceServiceNpub || workspace?.workspace_service_npub),
         label: workspaceLabel(workspace),
         source: 'configured',
         active,
@@ -161,6 +164,9 @@ export function projectNStackDestinations({
         key: `configured:${activeWorkspaceKey}`,
         workspaceKey: activeWorkspaceKey,
         browserWorkspaceId: '',
+        remoteWorkspaceId: text(currentWorkspace?.workspaceId || currentWorkspace?.workspace_id),
+        workspaceOwnerNpub: text(currentWorkspace?.workspaceOwnerNpub || currentWorkspace?.workspace_owner_npub),
+        workspaceServiceNpub: text(currentWorkspace?.workspaceServiceNpub || currentWorkspace?.workspace_service_npub),
         label: workspaceLabel(currentWorkspace),
         source: 'configured',
         active: true,
@@ -200,14 +206,30 @@ export function projectNStackDestinations({
     for (const workspace of catalogue) {
       const id = text(workspace?.id);
       if (!id || stack.workspaces.some(entry => entry.browserWorkspaceId === id)) continue;
+      const remoteWorkspaceId = text(workspace?.workspaceId);
+      const workspaceOwnerNpub = text(workspace?.workspaceOwnerNpub);
+      const workspaceServiceNpub = text(workspace?.workspaceServiceNpub);
+      const configuredWorkspace = stack.workspaces.find(entry => (
+        remoteWorkspaceId && entry.remoteWorkspaceId === remoteWorkspaceId
+        && workspaceOwnerNpub && entry.workspaceOwnerNpub === workspaceOwnerNpub
+        && workspaceServiceNpub && entry.workspaceServiceNpub === workspaceServiceNpub
+      ));
+      if (configuredWorkspace) {
+        configuredWorkspace.browserWorkspaceId = id;
+        configuredWorkspace.source = 'configured_browser';
+        continue;
+      }
       stack.workspaces.push({
         key: `browser:${browserStackId}:${id}`,
         workspaceKey: '',
         browserWorkspaceId: id,
+        remoteWorkspaceId,
+        workspaceOwnerNpub,
+        workspaceServiceNpub,
         label: text(workspace.name) || 'Workspace',
         source: 'browser',
         active: false,
-        authorized: Boolean(connection?.workspaceId === id),
+        authorized: false,
       });
     }
   }

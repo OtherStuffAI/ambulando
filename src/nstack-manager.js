@@ -1,5 +1,5 @@
 import { nip19 } from 'nostr-tools';
-import { createNStackProviderAdapter, nstackErrorMessage } from './nstack-provider.js';
+import { createNStackProviderAdapter, nstackErrorMessage, waitForNStackProvider } from './nstack-provider.js';
 import { activeNStackRoute, projectNStackDestinations } from './nstack-destinations.js';
 import { loadNStackSelection, saveNStackSelection } from './nstack-selection-store.js';
 import {
@@ -15,8 +15,6 @@ import {
   personalEncryptForNpub,
   signNostrEvent,
 } from './auth/nostr.js';
-
-export const AMBULANDO_NSTACK_CAPABILITIES = Object.freeze(['workspace.read']);
 
 function text(value) {
   return String(value ?? '').trim();
@@ -60,7 +58,7 @@ export const nstackManagerMixin = {
   nstackSelectedStackId: '',
   nstackSelectedWorkspaceId: '',
   nstackActiveSelection: null,
-  nstackCapabilityHandleId: '',
+  nstackConnectionVerified: false,
   nstackRecoveryRelaysInput: '',
   nstackRecoveryStatus: '',
   nstackRecoveryError: '',
@@ -68,7 +66,7 @@ export const nstackManagerMixin = {
   _nstackAdapter: null,
   _nstackUnsubscribe: null,
   _nstackInitializedPartition: '',
-  _nstackCapability: null,
+  _nstackReadyListener: null,
 
   get nstackSelectedStack() {
     return this.nstackStacks.find(stack => stack.id === this.nstackSelectedStackId) || null;
@@ -99,14 +97,15 @@ export const nstackManagerMixin = {
     return nstackRecoveryRelayUrls(text(this.nstackRecoveryRelaysInput).split(/[\s,]+/).filter(Boolean));
   },
 
-  async initializeNStackDiscovery({ provider = globalThis.window?.NStack } = {}) {
+  async initializeNStackDiscovery({ provider, timeoutMs = 1_500, force = false } = {}) {
     const identity = text(this.session?.npub);
     const workspacePartition = text(this.currentWorkspaceKey || this.selectedWorkspaceKey) || 'unbound';
     const partition = `${currentOrigin()}\n${identity}\n${workspacePartition}`;
-    if (this._nstackInitializedPartition === partition && this._nstackAdapter) return;
+    if (!force && this._nstackInitializedPartition === partition && this._nstackAdapter) return;
     this._nstackUnsubscribe?.();
     this._nstackAdapter?.dispose?.();
-    this._nstackAdapter = createNStackProviderAdapter({ provider, origin: currentOrigin() });
+    const resolvedProvider = await waitForNStackProvider({ provider, timeoutMs });
+    this._nstackAdapter = createNStackProviderAdapter({ provider: resolvedProvider, origin: currentOrigin() });
     this._nstackInitializedPartition = partition;
     this.nstackAvailability = 'checking';
     this.nstackError = '';
@@ -115,8 +114,7 @@ export const nstackManagerMixin = {
     this.nstackWorkspaces = [];
     this.nstackWorkspaceCatalogues = {};
     this.nstackBrowserApprovedConnections = {};
-    this.nstackCapabilityHandleId = '';
-    this._nstackCapability = null;
+    this.nstackConnectionVerified = false;
     try {
       const availability = await this._nstackAdapter.isAvailable();
       this.nstackAvailability = availability.available ? 'available' : 'unavailable';
@@ -126,6 +124,13 @@ export const nstackManagerMixin = {
       this.nstackError = nstackErrorMessage(error);
     }
     this._nstackUnsubscribe = this._nstackAdapter.on('change', change => this.handleNStackChange(change));
+    if (!resolvedProvider && !this._nstackReadyListener && globalThis.window?.addEventListener) {
+      this._nstackReadyListener = () => {
+        this._nstackReadyListener = null;
+        void this.initializeNStackDiscovery({ provider: globalThis.window?.NStack, timeoutMs: 0, force: true });
+      };
+      globalThis.window.addEventListener('nstackready', this._nstackReadyListener, { once: true });
+    }
     if (identity) {
       this.nstackActiveSelection = await loadNStackSelection({ origin: currentOrigin(), identity, workspacePartition }).catch(() => null);
       if (this.nstackActiveSelection) {
@@ -166,8 +171,7 @@ export const nstackManagerMixin = {
     this.nstackSelectedStackId = text(stackId);
     this.nstackSelectedWorkspaceId = '';
     this.nstackWorkspaces = [];
-    this.nstackCapabilityHandleId = '';
-    this._nstackCapability = null;
+    this.nstackConnectionVerified = false;
     this.nstackBusy = true;
     this.nstackError = '';
     try {
@@ -176,6 +180,16 @@ export const nstackManagerMixin = {
         ...this.nstackWorkspaceCatalogues,
         [this.nstackSelectedStackId]: this.nstackWorkspaces,
       };
+      const first = this.nstackWorkspaces[0];
+      if (first) {
+        this.nstackBrowserApprovedConnections = {
+          ...this.nstackBrowserApprovedConnections,
+          [this.nstackSelectedStackId]: {
+            url: first.directHttpsUrl,
+            peerNpub: first.serviceNpub,
+          },
+        };
+      }
       this.nstackStatus = this.nstackWorkspaces.length ? 'workspaces' : 'no_workspaces';
     } catch (error) {
       this.nstackStatus = statusForError(error);
@@ -187,8 +201,7 @@ export const nstackManagerMixin = {
 
   chooseNStackWorkspace(workspaceId) {
     this.nstackSelectedWorkspaceId = text(workspaceId);
-    this.nstackCapabilityHandleId = '';
-    this._nstackCapability = null;
+    this.nstackConnectionVerified = false;
     this.nstackStatus = 'workspace_selected';
     this.nstackError = '';
   },
@@ -199,21 +212,45 @@ export const nstackManagerMixin = {
     if (!stack || !workspace || this.nstackBusy) return;
     this.nstackBusy = true;
     this.nstackError = '';
+    const previousSelection = this.nstackActiveSelection;
     try {
-      const handle = await this._nstackAdapter.requestCapabilities({
+      const disclosed = await this._nstackAdapter.getConnection({
         stackId: stack.id,
         workspaceId: workspace.id,
-        capabilities: AMBULANDO_NSTACK_CAPABILITIES,
-        duration: 900,
       });
-      this._nstackCapability = handle;
-      this.nstackCapabilityHandleId = handle.handle;
+      const candidate = {
+        type: 'wingman_workspace_locator',
+        tower_base_url: disclosed.directHttpsUrl,
+        identity: {
+          tower_service_npub: disclosed.serviceNpub,
+          workspace_service_npub: disclosed.workspaceServiceNpub,
+          workspace_owner_npub: disclosed.workspaceOwnerNpub,
+          workspace_id: disclosed.workspaceId,
+        },
+        label: disclosed.name,
+      };
+      const { descriptor, me } = await this.verifyPgDescriptor(candidate, { baseUrl: disclosed.directHttpsUrl });
+      if (descriptor.workspaceId !== disclosed.workspaceId
+        || descriptor.workspaceOwnerNpub !== disclosed.workspaceOwnerNpub
+        || descriptor.workspaceServiceNpub !== disclosed.workspaceServiceNpub
+        || descriptor.towerServiceNpub !== disclosed.serviceNpub
+        || descriptor.towerBaseUrl !== disclosed.directHttpsUrl) {
+        throw Object.assign(new Error('NBrowser workspace details do not match Tower verification.'), { code: 'malformed' });
+      }
+      const imported = await this.rememberVerifiedPgWorkspace(descriptor, me, {
+        clearLocalForget: true,
+        connectionMetadata: {
+          fipsEndpoint: disclosed.fipsEndpoint || '',
+          peerNpub: disclosed.peerNpub || '',
+        },
+      });
+      await this.selectWorkspace(imported.workspaceKey || imported.workspaceOwnerNpub, { pgVerified: true });
       this.nstackBrowserApprovedConnections = {
         ...this.nstackBrowserApprovedConnections,
         [stack.id]: {
-          url: handle.connection.url,
-          peerNpub: handle.connection.peerNpub || '',
-          workspaceId: workspace.id,
+          url: disclosed.directHttpsUrl,
+          peerNpub: disclosed.serviceNpub,
+          workspaceId: disclosed.workspaceId,
         },
       };
       this.nstackActiveSelection = await saveNStackSelection({
@@ -225,10 +262,14 @@ export const nstackManagerMixin = {
           stackLabel: stack.name,
           workspaceId: workspace.id,
           workspaceLabel: workspace.name,
+          remoteWorkspaceId: disclosed.workspaceId,
         },
       });
+      this.nstackConnectionVerified = true;
       this.nstackStatus = 'active';
     } catch (error) {
+      this.nstackActiveSelection = previousSelection;
+      this.nstackConnectionVerified = false;
       this.nstackStatus = statusForError(error);
       this.nstackError = nstackErrorMessage(error);
     } finally {
@@ -237,15 +278,16 @@ export const nstackManagerMixin = {
   },
 
   handleNStackChange(change = {}) {
+    this.nstackDiscoveryApproved = false;
+    this.nstackStacks = [];
+    this.nstackWorkspaces = [];
+    this.nstackWorkspaceCatalogues = {};
     this.nstackBrowserApprovedConnections = {};
-    if (this.nstackCapabilityHandleId) {
-      this.nstackCapabilityHandleId = '';
-      this._nstackCapability = null;
-      this.nstackStatus = 'changed';
-      this.nstackError = `NStack access changed (${text(change.reason) || 'changed'}). Review the same destination and request access again; Ambulando did not switch destinations.`;
-    } else {
-      this.nstackStatus = 'changed';
-    }
+    this.nstackSelectedStackId = '';
+    this.nstackSelectedWorkspaceId = '';
+    this.nstackConnectionVerified = false;
+    this.nstackStatus = 'changed';
+    this.nstackError = `NStack access changed (${text(change.reason) || 'changed'}). Discover again to review browser-saved destinations. The active Tower connection was preserved.`;
   },
 
   async selectKnownNStackWorkspace(nstack, workspace) {
@@ -263,9 +305,8 @@ export const nstackManagerMixin = {
   async createNStackRecoveryBackup() {
     const stack = this.nstackSelectedStack;
     const workspace = this.nstackSelectedWorkspace;
-    const capability = this._nstackCapability;
-    if (!stack || !workspace || !capability || this.nstackBusy) {
-      this.nstackRecoveryError = 'Choose a host workspace and approve access before creating its recovery records.';
+    if (!stack || !workspace || !this.nstackConnectionVerified || this.nstackBusy) {
+      this.nstackRecoveryError = 'Import and verify a host workspace before creating its recovery records.';
       return;
     }
     if (!stack.host) {
@@ -280,15 +321,15 @@ export const nstackManagerMixin = {
     try {
       const signer = signerForSession(this.session);
       const author = await signer.getPublicKey();
-      this._nstackAdapter.assertHandleActive(capability.handle);
+      const disclosed = this._nstackAdapter.getWorkspaceDescriptor({ stackId: stack.id, workspaceId: workspace.id });
       const descriptor = await buildNStackRecoveryEvent({
         type: NSTACK_RECOVERY_TYPES.DESCRIPTOR,
         logicalKey: stack.id,
         data: {
           stackId: stack.id,
           label: stack.name,
-          endpoint: capability.connection.url,
-          servicePubkeys: capability.connection.peerNpub ? { tower: capability.connection.peerNpub } : {},
+          endpoint: disclosed.directHttpsUrl,
+          servicePubkeys: { tower: disclosed.serviceNpub },
           protocolVersions: { nstack: this.nstackProtocolVersion },
         },
         signer,
@@ -302,7 +343,7 @@ export const nstackManagerMixin = {
       const policy = await buildNStackRecoveryEvent({
         type: NSTACK_RECOVERY_TYPES.POLICY,
         logicalKey: stack.id,
-        data: { stackId: stack.id, workspaceId: workspace.id, capabilities: AMBULANDO_NSTACK_CAPABILITIES },
+        data: { stackId: stack.id, workspaceId: workspace.id, capabilities: ['connection.autofill'] },
         signer,
       });
       for (const event of [descriptor, catalogue, policy]) await repository.publish({ relays, event });
@@ -318,7 +359,7 @@ export const nstackManagerMixin = {
       });
       const hostHint = await buildNStackRecoveryEvent({
         type: NSTACK_RECOVERY_TYPES.HOST_HINT,
-        data: { host: { stackId: stack.id, endpoint: capability.connection.url }, recoveryRelays: relays },
+        data: { host: { stackId: stack.id, endpoint: disclosed.directHttpsUrl }, recoveryRelays: relays },
         signer,
       });
       await repository.publish({ relays, event: index });

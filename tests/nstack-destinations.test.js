@@ -4,6 +4,8 @@ import { activeNStackRoute, projectNStackDestinations } from '../src/nstack-dest
 const manualWorkspace = {
   workspaceKey: 'saved-workspace',
   workspaceOwnerNpub: 'npub1owner',
+  workspaceServiceNpub: 'npub1workspace',
+  workspaceId: 'real-workspace',
   name: 'Operations',
   directHttpsUrl: 'https://tower.example/',
   towerServiceNpub: 'npub1tower',
@@ -40,17 +42,22 @@ describe('unified NStack destinations', () => {
       knownHosts: [{ url: 'https://tower.example/', label: 'Manual NStack' }],
       knownWorkspaces: [manualWorkspace],
       browserStacks: [{ id: 'opaque-stack', name: 'Browser label', available: true }],
-      browserWorkspaceCatalogues: { 'opaque-stack': [{ id: 'opaque-workspace', name: 'Browser workspace' }] },
+      browserWorkspaceCatalogues: { 'opaque-stack': [{
+        id: 'opaque-workspace',
+        name: 'Browser workspace',
+        workspaceId: 'real-workspace',
+        workspaceOwnerNpub: 'npub1owner',
+        workspaceServiceNpub: 'npub1workspace',
+      }] },
       browserApprovedConnections: {
         'opaque-stack': { url: 'https://tower.example', peerNpub: 'npub1tower', workspaceId: 'opaque-workspace' },
       },
     });
     expect(result).toHaveLength(1);
     expect(result[0]).toMatchObject({ sources: ['configured', 'browser'], provisional: false, browserStackId: 'opaque-stack' });
-    expect(result[0].workspaces).toEqual(expect.arrayContaining([
-      expect.objectContaining({ workspaceKey: 'saved-workspace', source: 'configured' }),
-      expect.objectContaining({ browserWorkspaceId: 'opaque-workspace', source: 'browser', authorized: true }),
-    ]));
+    expect(result[0].workspaces).toEqual([
+      expect.objectContaining({ workspaceKey: 'saved-workspace', browserWorkspaceId: 'opaque-workspace', source: 'configured_browser' }),
+    ]);
   });
 
   it('uses endpoint metadata and a safe generic fallback for the current NStack label', () => {

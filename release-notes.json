@@ -4273,6 +4273,13 @@
       "notes": [
         "Setup now shows every configured Tower/Supabase server as an NStack with its workspaces, while Nostr Browser discovery adds and authorizes destinations in the same list."
       ]
+    },
+    {
+      "buildNumber": 2449,
+      "label": "Compact theme selector",
+      "notes": [
+        "Appearance now uses a compact, bounded theme selector on desktop and a tidy touch-friendly stack on phones, while preserving device-local theme choices."
+      ]
     }
   ]
 }
