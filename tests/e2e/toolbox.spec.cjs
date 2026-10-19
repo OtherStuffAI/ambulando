@@ -1,7 +1,7 @@
 const { test, expect } = require('playwright/test');
 const { serveBuiltFlightDeck } = require('./fixtures/serve-built-flightdeck.cjs');
 
-test.afterEach(async ({}, info) => {
+test.afterEach(async (_fixtures, info) => {
   if (info.errors.length) console.log('TOOLBOX_FAILURE', info.errors.map(error => error.message).join('\n'));
 });
 
