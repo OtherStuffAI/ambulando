@@ -1111,6 +1111,27 @@ describe('normalizeSettingsTab', () => {
 
     expect(store.settingsTab).toBe('data');
   });
+  it('keeps the NStack connection tab selectable for admins and non-admins', () => {
+    for (const canAdminWorkspace of [true, false]) {
+      const { fn, store } = bindMethod('normalizeSettingsTab', {
+        settingsTab: 'connection',
+        canAdminWorkspace,
+        workspaceAdvancedOptionsEnabled: false,
+      });
+      fn();
+      expect(store.settingsTab).toBe('connection');
+    }
+  });
+
+  it('falls back to the NStack connection tab when a non-admin requests Workspace', () => {
+    const { fn, store } = bindMethod('normalizeSettingsTab', {
+      settingsTab: 'workspace',
+      canAdminWorkspace: false,
+      workspaceAdvancedOptionsEnabled: false,
+    });
+    fn();
+    expect(store.settingsTab).toBe('connection');
+  });
 });
 
 describe('openSettingsTab', () => {

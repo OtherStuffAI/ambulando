@@ -7627,8 +7627,8 @@
         <template x-if="$store.chat.navSection === 'settings'">
           <div class="settings-section">
           <div class="settings-tabs">
+            <button class="settings-tab" :class="{ active: $store.chat.settingsTab === 'connection' }" @click="$store.chat.settingsTab = 'connection'">NStack</button>
             <button x-show="$store.chat.canAdminWorkspace" class="settings-tab" :class="{ active: $store.chat.settingsTab === 'workspace' }" @click="$store.chat.settingsTab = 'workspace'">Workspace</button>
-            <button class="settings-tab" :class="{ active: $store.chat.settingsTab === 'connection' }" @click="$store.chat.settingsTab = 'connection'">Connection</button>
             <button class="settings-tab" :class="{ active: $store.chat.settingsTab === 'deck' }" @click="$store.chat.openSettingsTab('deck')">Deck</button>
             <button class="settings-tab" :class="{ active: $store.chat.settingsTab === 'notifications' }" @click="$store.chat.openSettingsTab('notifications')">Notifications</button>
             <button class="settings-tab" :class="{ active: $store.chat.settingsTab === 'apps' }" @click="$store.chat.openSettingsTab('apps')">App Management</button>

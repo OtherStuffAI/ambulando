@@ -236,7 +236,7 @@ test.describe('workspace admin gating', () => {
       await expect(memberPage.getByRole('heading', { name: 'SuperBased' })).toBeVisible();
 
       const visibleTabs = await memberPage.locator('.settings-tabs .settings-tab:visible').allTextContents();
-      expect(visibleTabs).toEqual(['Connection']);
+      expect(visibleTabs).toEqual(['NStack']);
 
       await expect(memberPage.getByRole('button', { name: 'Workspace', exact: true })).toHaveCount(0);
       await expect(memberPage.getByRole('button', { name: 'Automation', exact: true })).toHaveCount(0);

@@ -304,8 +304,73 @@ test('theme is a single Deck setting and remains responsive and device-local', a
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await capture(page, 'deck-theme-selector-mobile');
 
-  await page.locator('.settings-tabs').getByRole('button', { name: 'Connection', exact: true }).click();
+  await page.locator('.settings-tabs').getByRole('button', { name: 'NStack', exact: true }).click();
   await expect(select).toBeHidden();
+});
+
+test('settings lists NStack first, then Workspace for admins, on desktop and phone', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await openFixture(page);
+  const tabs = page.locator('.settings-tabs');
+  const visibleLabels = () => tabs.locator('.settings-tab:visible').allTextContents().then(labels => labels.map(label => label.trim()));
+  const setAdmin = admin => page.evaluate(isAdmin => {
+    const s = window.Alpine.store('chat');
+    s.knownWorkspaces = [{ workspaceKey: 'sol-workspace', workspaceOwnerNpub: 'npub1solowner', creatorNpub: isAdmin ? 'npub1solfixture' : 'npub1solother', name: 'Sol workspace' }];
+    s.selectedWorkspaceKey = 'sol-workspace';
+  }, admin);
+  await setAdmin(true);
+  await page.evaluate(() => {
+    const s = window.Alpine.store('chat');
+    s.closeThread({ syncRoute: false });
+    s.navigateTo('settings', { syncRoute: false });
+    s.settingsTab = 'connection';
+  });
+
+  await expect(tabs).toBeVisible();
+  const desktopLabels = await visibleLabels();
+  expect(desktopLabels.slice(0, 2)).toEqual(['NStack', 'Workspace']);
+  expect(desktopLabels).not.toContain('Connection');
+  const nstack = tabs.getByRole('button', { name: 'NStack', exact: true });
+  const workspace = tabs.getByRole('button', { name: 'Workspace', exact: true });
+  await expect(nstack).toHaveClass(/\bactive\b/);
+  await expect(page.getByRole('heading', { name: 'Your NStacks', exact: true })).toBeVisible();
+  await capture(page, 'settings-nstack-first-desktop');
+
+  await workspace.click();
+  await expect(workspace).toHaveClass(/\bactive\b/);
+  await expect(nstack).not.toHaveClass(/\bactive\b/);
+  await expect(page.getByRole('heading', { name: 'Your NStacks', exact: true })).toBeHidden();
+  await nstack.click();
+  expect(await page.evaluate(() => window.Alpine.store('chat').settingsTab)).toBe('connection');
+  await expect(page.getByRole('heading', { name: 'Your NStacks', exact: true })).toBeVisible();
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  const phone = await tabs.locator('.settings-tab:visible').evaluateAll(nodes => nodes.map(node => {
+    const box = node.getBoundingClientRect();
+    return { label: node.textContent.trim(), left: box.left, top: box.top, right: box.right, height: box.height, width: box.width };
+  }));
+  expect(phone.slice(0, 2).map(tab => tab.label)).toEqual(['NStack', 'Workspace']);
+  expect(phone[0].left).toBeLessThanOrEqual(phone[1].left);
+  expect(phone[0].top).toBeLessThanOrEqual(phone[1].top);
+  expect(phone[0].left).toBeGreaterThanOrEqual(0);
+  expect(phone[0].height).toBeGreaterThanOrEqual(32);
+  expect(phone[0].width).toBeGreaterThan(0);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await nstack.focus();
+  await expect(nstack).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(workspace).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(workspace).toHaveClass(/\bactive\b/);
+  await nstack.click();
+  await capture(page, 'settings-nstack-first-phone');
+
+  await setAdmin(false);
+  await page.evaluate(() => window.Alpine.store('chat').normalizeSettingsTab());
+  const memberLabels = await visibleLabels();
+  expect(memberLabels[0]).toBe('NStack');
+  expect(memberLabels).not.toContain('Workspace');
+  await expect(nstack).toHaveClass(/\bactive\b/);
 });
 
 test('profile actions support menu keyboard navigation and restore the avatar trigger', async ({ page }) => {

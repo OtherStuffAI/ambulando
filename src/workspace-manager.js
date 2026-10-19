@@ -458,7 +458,7 @@ export const workspaceManagerMixin = {
     const adminAdvancedTabs = this.workspaceAdvancedOptionsEnabled && !isFlightDeckSurfaceDisabled('schedules') ? ['schedules'] : [];
     const personalTabs = ['deck', 'notifications', 'apps'];
     const visibleTabs = this.canAdminWorkspace
-      ? ['workspace', 'connection', ...personalTabs, 'permissions', 'scopes', 'sharing', ...advancedTabs, ...adminAdvancedTabs]
+      ? ['connection', 'workspace', ...personalTabs, 'permissions', 'scopes', 'sharing', ...advancedTabs, ...adminAdvancedTabs]
       : ['connection', ...personalTabs, 'permissions', ...(this.canAccessScopeSettings ? ['scopes'] : []), ...advancedTabs];
     if (!visibleTabs.includes(this.settingsTab)) {
       this.settingsTab = 'connection';

@@ -4294,6 +4294,13 @@
       "notes": [
         "Theme is now a normal dropdown in Deck settings, with no separate Appearance panel above the settings tabs."
       ]
+    },
+    {
+      "buildNumber": 2453,
+      "label": "NStack first in settings",
+      "notes": [
+        "The Connection settings tab is now called NStack and appears first, before Workspace, because a server must be set up before a workspace."
+      ]
     }
   ]
 }
