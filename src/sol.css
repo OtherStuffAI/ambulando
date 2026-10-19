@@ -95,12 +95,6 @@ code, pre { font-family:var(--font-code); }
 .hero-hint { text-align:center; }
 .settings-panel, .flightdeck-panel, .flightdeck-scope-card, .task-card, .doc-card, .files-card, .agent-status-card { border-radius:var(--radius-panel); box-shadow:none; }
 .settings-panel { background:var(--card); color:var(--card-foreground); }
-.sol-appearance-panel { display:flex; flex-direction:row; align-items:center; align-self:flex-start; justify-content:space-between; gap:24px; width:min(100%,720px); max-width:720px; box-sizing:border-box; margin:16px 0; padding:14px 16px; border:1px solid var(--border); }
-.sol-appearance-copy { min-width:0; }
-.sol-appearance-panel h2 { margin-bottom:4px; font-size:18px; }
-.sol-appearance-panel p { margin:0; color:var(--muted-foreground); }
-.sol-appearance-control { display:flex; flex:0 0 200px; flex-direction:column; gap:4px; min-width:0; }
-.sol-appearance-control select { width:100%; }
 .settings-tabs { gap:4px; flex-wrap:wrap; }
 .settings-tab { border-radius:var(--radius-control); min-height:36px; color:var(--muted-foreground); }
 .settings-tab.active { background:var(--accent); color:var(--accent-foreground); }
@@ -141,8 +135,6 @@ code, pre { font-family:var(--font-code); }
   .mobile-sidebar-backdrop { top:60px; background:color-mix(in srgb, var(--foreground) 25%, transparent); }
   .sidebar .view-lock-button { margin-top:-48px; min-height:44px; }
   .mobile-section-switcher-btn-active { background:var(--accent); color:var(--accent-foreground); }
-  .sol-appearance-panel { align-items:stretch; flex-direction:column; gap:10px; margin:12px 0; padding:12px; }
-  .sol-appearance-control { flex-basis:auto; width:100%; }
   .auth-panel { margin-top:24px; padding:24px; }
   .auth-brand { align-items:flex-start; }
   .auth-panel h2 { font-size:20px; }

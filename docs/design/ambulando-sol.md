@@ -25,7 +25,7 @@ conventions in `src/sol.css`. Avoid new fixed light colors in any product surfac
 | Documents/editor/wiki | Local draft recovery, checkout, Tiptap, notebook links, backlinks, body hydration and independent scrolling | Theme-aware editor/toolbars, reading text, restrained document panels |
 | Files | Workspace-aware signed storage, previews/downloads, upload/publish states | Themed file cards, previews, dialogs and failure feedback |
 | Agents/context/toolbox | Presence vs execution state, Autopilot connections, context tree, WApp delegation | Semantic surfaces and controls; mapped Bot icon, original authority boundaries |
-| Settings | Workspace/admin gates, connection/FIPS, notifications, apps, members/groups, scopes and repair | Device-local appearance selector, wrapping tabs, paired form/panel tokens |
+| Settings | Workspace/admin gates, connection/FIPS, notifications, apps, members/groups, scopes and repair | Device-local Theme dropdown in Deck settings, wrapping tabs, paired form/panel tokens |
 | Menus/dialogs/approvals | Existing handlers, approval authority, busy exit restrictions and result evidence | Shared focus containment/restoration for modal dialogs, semantic layers, explicit focus and disabled/error states |
 
 ## Themes and interaction
@@ -34,6 +34,8 @@ The `appearance` Alpine store is presentation-only. `ambulando:theme` stores
 `light`, `dark` or `system` on the device. The inline head bootstrap applies the
 resolved theme before stylesheet loading; system changes and storage events keep
 tabs aligned. This preference never writes to Tower or changes a workspace key.
+Settings exposes this preference as one ordinary labelled Theme dropdown in the
+Deck layout panel; it does not have a separate Appearance panel.
 Dark mode uses explicit token pairs, including native control color schemes.
 
 Desktop controls use 36px minimum height; touch/phone controls use 44px. Product

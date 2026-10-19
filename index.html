@@ -7626,10 +7626,6 @@
 
         <template x-if="$store.chat.navSection === 'settings'">
           <div class="settings-section">
-          <section class="settings-panel sol-appearance-panel" aria-labelledby="sol-appearance-title" data-testid="appearance-panel">
-            <div class="sol-appearance-copy"><h2 id="sol-appearance-title">Appearance</h2><p>Color theme is saved on this device and applies to every workspace.</p></div>
-            <label class="sol-appearance-control" for="sol-theme-select"><span>Color theme</span><select id="sol-theme-select" :value="$store.appearance.preference" @change="$store.appearance.setTheme($event.target.value)"><option value="system">Use device setting</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
-          </section>
           <div class="settings-tabs">
             <button x-show="$store.chat.canAdminWorkspace" class="settings-tab" :class="{ active: $store.chat.settingsTab === 'workspace' }" @click="$store.chat.settingsTab = 'workspace'">Workspace</button>
             <button class="settings-tab" :class="{ active: $store.chat.settingsTab === 'connection' }" @click="$store.chat.settingsTab = 'connection'">Connection</button>
@@ -8194,6 +8190,12 @@
                   <p>Choose how recent workspace activity appears on the Deck.</p>
                 </div>
               </div>
+              <label class="settings-field-label" for="deck-theme-select">Theme</label>
+              <select id="deck-theme-select" data-testid="deck-theme-select" :value="$store.appearance.preference" @change="$store.appearance.setTheme($event.target.value)">
+                <option value="system">Use device setting</option>
+                <option value="light">Light</option>
+                <option value="dark">Dark</option>
+              </select>
               <label class="settings-field-label settings-checkbox-row" for="deck-inbox-enabled-input">
                 <input
                   id="deck-inbox-enabled-input"

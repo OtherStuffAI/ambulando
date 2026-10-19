@@ -259,7 +259,7 @@ test('visible theme control changes and persists the user preference', async ({ 
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
 });
 
-test('settings theme selector stays compact, responsive and device-local', async ({ page }) => {
+test('theme is a single Deck setting and remains responsive and device-local', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.addInitScript(() => localStorage.setItem('ambulando:theme', 'dark'));
   await openFixture(page);
@@ -270,23 +270,18 @@ test('settings theme selector stays compact, responsive and device-local', async
     s.settingsTab = 'connection';
   });
 
-  const panel = page.getByTestId('appearance-panel');
-  const select = panel.locator('#sol-theme-select');
-  await expect(panel).toBeVisible();
-  expect(await select.evaluate(node => node.labels?.[0]?.classList.contains('sol-appearance-control'))).toBe(true);
+  const select = page.getByTestId('deck-theme-select');
+  await expect(page.getByTestId('appearance-panel')).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Appearance', exact: true })).toHaveCount(0);
+  await expect(select).toHaveCount(1);
+  await expect(select).toBeHidden();
+  await page.locator('.settings-tabs').getByRole('button', { name: 'Deck', exact: true }).click();
+  await expect(select).toBeVisible();
+  expect(await select.evaluate(node => node.labels?.[0]?.textContent.trim())).toBe('Theme');
   await expect(select).toHaveValue('dark');
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
   await expect(select.locator('option')).toHaveText(['Use device setting', 'Light', 'Dark']);
-  const desktop = await panel.evaluate(node => {
-    const panelBox = node.getBoundingClientRect();
-    const copyBox = node.querySelector('.sol-appearance-copy').getBoundingClientRect();
-    const controlBox = node.querySelector('.sol-appearance-control').getBoundingClientRect();
-    return { panel: { width: panelBox.width, height: panelBox.height }, copy: { top: copyBox.top, bottom: copyBox.bottom }, control: { top: controlBox.top, bottom: controlBox.bottom } };
-  });
-  expect(desktop.panel.width).toBeLessThanOrEqual(720);
-  expect(desktop.panel.height).toBeLessThanOrEqual(120);
-  expect(Math.min(desktop.copy.bottom, desktop.control.bottom)).toBeGreaterThan(Math.max(desktop.copy.top, desktop.control.top));
-  await capture(page, 'settings-theme-selector-desktop');
+  await capture(page, 'deck-theme-selector-desktop');
 
   await select.focus();
   expect(await select.evaluate(node => document.activeElement === node)).toBe(true);
@@ -298,22 +293,19 @@ test('settings theme selector stays compact, responsive and device-local', async
   expect(await page.evaluate(() => localStorage.getItem('ambulando:theme'))).toBe('dark');
 
   await page.setViewportSize({ width: 390, height: 844 });
-  const mobile = await panel.evaluate(node => {
-    const panelBox = node.getBoundingClientRect();
-    const copyBox = node.querySelector('.sol-appearance-copy').getBoundingClientRect();
-    const controlBox = node.querySelector('.sol-appearance-control').getBoundingClientRect();
-    const selectBox = node.querySelector('select').getBoundingClientRect();
-    return { panel: { left: panelBox.left, right: panelBox.right, width: panelBox.width, height: panelBox.height }, copyBottom: copyBox.bottom, controlTop: controlBox.top, select: { left: selectBox.left, right: selectBox.right, width: selectBox.width, height: selectBox.height } };
+  const mobile = await select.evaluate(node => {
+    const selectBox = node.getBoundingClientRect();
+    const contentBox = node.closest('.settings-tab-content').getBoundingClientRect();
+    return { content: { left: contentBox.left, right: contentBox.right }, select: { left: selectBox.left, right: selectBox.right, height: selectBox.height } };
   });
-  console.log('SOL_APPEARANCE_GEOMETRY', JSON.stringify({ desktop, mobile }));
-  expect(mobile.panel.width).toBeLessThanOrEqual(374);
-  expect(mobile.panel.height).toBeLessThanOrEqual(180);
-  expect(mobile.controlTop).toBeGreaterThanOrEqual(mobile.copyBottom);
   expect(mobile.select.height).toBeGreaterThanOrEqual(44);
-  expect(mobile.select.left).toBeGreaterThanOrEqual(mobile.panel.left);
-  expect(mobile.select.right).toBeLessThanOrEqual(mobile.panel.right);
+  expect(mobile.select.left).toBeGreaterThanOrEqual(mobile.content.left);
+  expect(mobile.select.right).toBeLessThanOrEqual(mobile.content.right);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  await capture(page, 'settings-theme-selector-mobile');
+  await capture(page, 'deck-theme-selector-mobile');
+
+  await page.locator('.settings-tabs').getByRole('button', { name: 'Connection', exact: true }).click();
+  await expect(select).toBeHidden();
 });
 
 test('profile actions support menu keyboard navigation and restore the avatar trigger', async ({ page }) => {
