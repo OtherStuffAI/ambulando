@@ -4387,6 +4387,13 @@
         "Keep cached conversations responsive while priority and repair updates extend a large local workspace, without repeatedly recounting the full downloaded cache.",
         "Drag naplets and duplicate or edit Canvas items reliably without reactive browser state interrupting the action."
       ]
+    },
+    {
+      "buildNumber": 2472,
+      "label": "Working Canvas controls",
+      "notes": [
+        "Create a canvas from Deck and open canvas settings reliably, including when those actions run from the shared Alpine store."
+      ]
     }
   ]
 }

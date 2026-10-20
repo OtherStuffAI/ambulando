@@ -6,6 +6,15 @@ import { createCanvasRecord, hydrateCanvasList, reorderCanvasRecords, updateCanv
 const runtimes = new WeakMap();
 const text = value => String(value ?? '').trim();
 
+function scheduleUiNextTick(callback) {
+  const nextTick = globalThis.Alpine?.nextTick;
+  if (typeof nextTick === 'function') {
+    nextTick(callback);
+    return;
+  }
+  queueMicrotask(callback);
+}
+
 export const canvasManagerMixin = {
   canvasRows: [],
   canvasContextKey: '',
@@ -72,7 +81,7 @@ export const canvasManagerMixin = {
   },
   openCanvasCreateDialog() {
     this.canvasDialog = { open: true, mode: 'create', id: '', rowVersion: null, title: '', visibilityMode: 'workspace', actorIds: [], groupIds: [] };
-    this.$nextTick?.(() => document.getElementById('canvas-settings-dialog')?.showModal());
+    scheduleUiNextTick(() => document.getElementById('canvas-settings-dialog')?.showModal());
   },
   openCanvasSettingsDialog(canvas) {
     if (!canvas?.can_manage) return;
@@ -86,7 +95,7 @@ export const canvasManagerMixin = {
       actorIds: [...(canvas.visibility?.actor_ids || [])],
       groupIds: [...(canvas.visibility?.group_ids || [])],
     };
-    this.$nextTick?.(() => document.getElementById('canvas-settings-dialog')?.showModal());
+    scheduleUiNextTick(() => document.getElementById('canvas-settings-dialog')?.showModal());
   },
   closeCanvasSettingsDialog() {
     document.getElementById('canvas-settings-dialog')?.close();

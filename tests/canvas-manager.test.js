@@ -16,6 +16,27 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+it('opens Canvas create and settings dialogs through Alpine nextTick from the store', () => {
+  const showModal = vi.fn();
+  const nextTick = vi.fn(callback => callback());
+  vi.stubGlobal('Alpine', { nextTick });
+  vi.stubGlobal('document', { getElementById: vi.fn(() => ({ showModal })) });
+  const store = Object.assign(Object.create(canvasManagerMixin), {});
+
+  store.openCanvasCreateDialog();
+  expect(store.canvasDialog.mode).toBe('create');
+  expect(nextTick).toHaveBeenCalledOnce();
+  expect(showModal).toHaveBeenCalledOnce();
+
+  store.openCanvasSettingsDialog({
+    canvas_id: 'canvas', row_version: 3, title: 'Planning', can_manage: true,
+    visibility: { mode: 'workspace', actor_ids: [], group_ids: [] },
+  });
+  expect(store.canvasDialog).toMatchObject({ mode: 'edit', id: 'canvas', rowVersion: 3, title: 'Planning' });
+  expect(nextTick).toHaveBeenCalledTimes(2);
+  expect(showModal).toHaveBeenCalledTimes(2);
+});
+
 it('sends the selected list row version when renaming or changing Canvas visibility', async () => {
   const close = vi.fn();
   vi.stubGlobal('document', { getElementById: vi.fn(() => ({ close })) });
