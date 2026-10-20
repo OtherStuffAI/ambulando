@@ -4446,6 +4446,13 @@
         "Verify an existing downloaded workspace against Tower and fetch only changed or deleted records before continuing with small delta updates.",
         "Keep a genuinely new workspace on the paced complete-download path while cached work, drafts and pending changes remain available during recovery."
       ]
+    },
+    {
+      "buildNumber": 2484,
+      "label": "Complete existing-cache repair",
+      "notes": [
+        "Finish verifying an existing workspace cache when Tower challenges a mix of changed records and deletions, without clearing downloads, drafts or pending changes."
+      ]
     }
   ]
 }
