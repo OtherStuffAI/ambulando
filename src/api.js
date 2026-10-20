@@ -934,6 +934,66 @@ export async function getTowerPgRecordSync(workspaceId, { baseUrl = _baseUrl, ap
   return json(resp, { requestUrl, method: 'GET', prefix: 'Tower PG record sync' });
 }
 
+function appendRecordSyncFilters(params, filters = {}) {
+  for (const family of [...new Set(filters.families || [])]) {
+    if (family) params.append('family', String(family));
+  }
+  for (const [option, parameter] of [
+    ['scopeId', 'scope_id'], ['channelId', 'channel_id'], ['threadId', 'thread_id'],
+    ['taskId', 'task_id'], ['documentId', 'document_id'],
+  ]) {
+    const value = String(filters[option] || '').trim();
+    if (value) params.set(parameter, value);
+  }
+  return params;
+}
+
+async function getTowerPgAuxiliaryRecordPage(workspaceId, lane, { baseUrl = _baseUrl, appNpub = FLIGHT_DECK_PG_APP_NPUB, cursor = null, limit = 200, filters = {}, timeoutMs = 30_000, diagnosticOperation } = {}) {
+  if (!['priority', 'repair-manifest'].includes(lane)) throw new Error('Invalid auxiliary record-sync lane');
+  const params = appendRecordSyncFilters(new URLSearchParams({
+    limit: String(Math.min(200, Math.max(1, Number(limit) || 200))),
+  }), filters);
+  if (cursor) params.set('cursor', String(cursor));
+  const path = `/api/v4/flightdeck-pg/workspaces/${encodeURIComponent(workspaceId)}/record-sync/${lane}?${params}`;
+  const requestUrl = resolveTowerPgUrl(path, baseUrl);
+  const response = await signedTowerPgFetch(path, {
+    baseUrl, appNpub, timeoutMs, diagnosticOperation, useWorkspaceKey: false,
+  });
+  return json(response, { requestUrl, method: 'GET', prefix: `Tower PG record ${lane}` });
+}
+
+export function getTowerPgRecordPriority(workspaceId, options = {}) {
+  return getTowerPgAuxiliaryRecordPage(workspaceId, 'priority', options);
+}
+
+export function getTowerPgRecordRepairManifest(workspaceId, options = {}) {
+  return getTowerPgAuxiliaryRecordPage(workspaceId, 'repair-manifest', options);
+}
+
+export async function getTowerPgRecordContext(workspaceId, resourceType, resourceId, { baseUrl = _baseUrl, appNpub = FLIGHT_DECK_PG_APP_NPUB, timeoutMs = 30_000, diagnosticOperation } = {}) {
+  if (!['channel', 'thread', 'task', 'document'].includes(resourceType) || !String(resourceId || '').trim()) {
+    throw new Error('Invalid record context target');
+  }
+  const params = new URLSearchParams({ resource_type: resourceType, resource_id: String(resourceId) });
+  const path = `/api/v4/flightdeck-pg/workspaces/${encodeURIComponent(workspaceId)}/record-sync/context?${params}`;
+  const requestUrl = resolveTowerPgUrl(path, baseUrl);
+  const response = await signedTowerPgFetch(path, {
+    baseUrl, appNpub, timeoutMs, diagnosticOperation, useWorkspaceKey: false,
+  });
+  return json(response, { requestUrl, method: 'GET', prefix: 'Tower PG record context' });
+}
+
+export async function postTowerPgRecordRepair(workspaceId, records, { baseUrl = _baseUrl, appNpub = FLIGHT_DECK_PG_APP_NPUB, timeoutMs = 30_000, diagnosticOperation } = {}) {
+  if (!Array.isArray(records) || records.length < 1 || records.length > 200) throw new Error('Invalid selective repair request');
+  const path = `/api/v4/flightdeck-pg/workspaces/${encodeURIComponent(workspaceId)}/record-sync/repair`;
+  const requestUrl = resolveTowerPgUrl(path, baseUrl);
+  const response = await signedTowerPgFetch(path, {
+    method: 'POST', body: { records }, baseUrl, appNpub, timeoutMs,
+    diagnosticOperation, useWorkspaceKey: false,
+  });
+  return json(response, { requestUrl, method: 'POST', prefix: 'Tower PG selective record repair' });
+}
+
 export async function towerPgRecordClient(workspaceId, clientId, { operation = 'read', cursor, expectedRevision, largeRecordReceipts, baseUrl = _baseUrl, appNpub = FLIGHT_DECK_PG_APP_NPUB, timeoutMs = 30_000, diagnosticOperation } = {}) {
   if (!['read', 'register', 'ack', 'retire'].includes(operation)) throw new Error('Invalid checkpoint operation');
   const method = { read: 'GET', register: 'POST', ack: 'POST', retire: 'DELETE' }[operation];

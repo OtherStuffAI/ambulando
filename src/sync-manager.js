@@ -127,6 +127,7 @@ import { isFlightDeckSurfaceDisabled } from './disabled-surfaces.js';
 import { replaceTowerSyncService } from './tower-sync-service.js';
 import { TowerPgMaterializationWorkerClient } from './tower-pg-materialization-worker-client.js';
 import { prepareTowerWorkspaceCommand } from './tower-command-port.js';
+import { hydratePriorityContext } from './pg-priority-sync.js';
 
 const PG_RECORD_SYNC_DISABLED_MESSAGE = 'Tower PG mode active; encrypted record sync is disabled.';
 const PG_RECORD_REPAIR_DISABLED_MESSAGE = 'Tower PG mode active; encrypted record repair is not available because encrypted record sync is disabled.';
@@ -672,6 +673,10 @@ export const syncManagerMixin = {
       const service = this._towerSyncService || null;
       for (let attempt = 0; ; attempt++) {
         try {
+          // Start the dependency closure first, but do not serialize the
+          // established visible read behind its network/signer lifecycle.
+          // Both lanes materialise through TowerSyncService and Dexie.
+          void this.refreshTowerPgPriorityContext?.(family, id, options);
           return await (service?.ensureLoaded(family, id, options)
             ?? this.loadTowerSyncTarget(family === 'workspace-bootstrap' ? 'workspace' : family, id, options));
         } catch (error) {
@@ -689,6 +694,41 @@ export const syncManagerMixin = {
         }
       }
     });
+  },
+
+  async refreshTowerPgPriorityContext(family, id, options = {}) {
+    if (!isTowerPgBackendMode()) return null;
+    const target = (() => {
+      if (['channel', 'channel-messages'].includes(family)) return { type: 'channel', id };
+      if (['task', 'task-comments'].includes(family)) return { type: 'task', id };
+      if (['document', 'document-comments'].includes(family)) return { type: 'document', id };
+      if (['thread-history', 'thread-history-page'].includes(family)) return { type: 'thread', id: options.threadId || id };
+      return null;
+    })();
+    if (!target?.id) return null;
+    const context = resolveTowerPgWorkspaceContext(this);
+    const service = this._towerSyncService || this.getTowerSyncService();
+    if (!service || service.disposed) return null;
+    try {
+      return await service.coalesce(`priority-context:${target.type}:${target.id}`, () => hydratePriorityContext(
+        this, target.type, target.id, options, {
+          context,
+          readState: getSyncState,
+          materialize: bundle => service.materialize('workspace-bundle', bundle, {
+            workspaceDbKey: this.workspaceDbKey,
+            store: this.buildTowerPgMaterializationStoreSnapshot(),
+          }),
+        },
+      ));
+    } catch (error) {
+      // Targeted freshness is additive. A missing signer or network pauses this
+      // lane but must not gate cached navigation or the established typed read.
+      flightDeckLog('warn', 'sync', 'visible record context refresh paused', {
+        family, id: target.id, error: error?.message || String(error),
+      });
+      this.scheduleBackgroundSync?.(1000);
+      return { paused: true, family, id: target.id };
+    }
   },
 
   async ensureTowerPgControlPlaneHydrated(options = {}) {

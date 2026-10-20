@@ -779,10 +779,11 @@ export function createShellState(options = {}) {
         }
       }
       await this.refreshAddressBook?.();
-      this.selectedBoardId = this.readStoredTaskBoardId();
+      const savedLaunchBoardId = this.readStoredTaskBoardId();
+      this.selectedBoardId = savedLaunchBoardId;
       this.collapsedSections = this.readStoredCollapsedSections();
       this.validateSelectedBoardId();
-      await this.applyRouteFromLocation();
+      await this.applyRouteFromLocation({ launch: true, savedLaunchBoardId });
       if (isTowerPgBackendMode()) {
         // Restore downloaded navigation and the route before waiting for Tower.
         // The service still authorizes and fences each future read/write.
@@ -934,7 +935,7 @@ export function createShellState(options = {}) {
       else window.history.pushState(state, '', nextUrl);
     },
 
-    async applyRouteFromLocation() {
+    async applyRouteFromLocation(options = {}) {
       const route = parseRouteLocation();
       const routeSection = normalizeEnabledFlightDeckSection(route.section, this);
       this.routeSyncPaused = true;
@@ -1025,10 +1026,13 @@ export function createShellState(options = {}) {
           }
           if (route.section === 'status' && !Object.entries(route.params).some(([key, value]) =>
             value && !['workspacekey', 'workspaceid', 'token'].includes(key))) {
-            // A destination-free Home route is workspace-wide, even if storage
-            // or closing a conversation restored an earlier project context.
-            // Canonical scoped URLs retain intentional navigation/history.
-            this.selectedBoardId = ALL_TASK_BOARD_ID;
+            // On saved-app launch, retain a still-valid destination only when
+            // the local cache proves it has useful content. Missing/empty
+            // destinations and ordinary returns to Home use All scopes.
+            const keepSavedLaunch = options.launch === true
+              && String(options.savedLaunchBoardId || '') === String(this.selectedBoardId || '')
+              && this.isUsefulLaunchBoard?.(this.selectedBoardId) === true;
+            if (!keepSavedLaunch) this.selectedBoardId = ALL_TASK_BOARD_ID;
             this.selectedChannelId = null;
             this.focusMessageId = null;
             this.persistSelectedBoardId(this.selectedBoardId);

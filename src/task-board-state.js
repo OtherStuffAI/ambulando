@@ -2180,6 +2180,32 @@ export const taskBoardStateMixin = {
     }
   },
 
+  isUsefulLaunchBoard(boardId = this.selectedBoardId) {
+    const id = String(boardId || '').trim();
+    if (!id || id === ALL_TASK_BOARD_ID || id === RECENT_TASK_BOARD_ID || id === UNSCOPED_TASK_BOARD_ID) return false;
+    const parsed = parsePgTaskBoardId(id);
+    const board = this.taskBoards.find(candidate => candidate.id === id) || (parsed.type === 'scope'
+      ? (this.scopes || []).some(scope => scope?.record_id === id && scope.record_state !== 'deleted')
+        ? { id, zoom: 'scope' }
+        : null
+      : parsed.type === 'channel'
+        ? { id, zoom: 'channel', channelId: parsed.channelId }
+        : parsed.type === 'thread'
+          ? { id, zoom: 'thread', channelId: parsed.channelId, threadId: parsed.threadId }
+          : null);
+    if (!board) return false;
+    const active = row => row && row.record_state !== 'deleted' && !row.deleted_at && !row.archived_at;
+    const rowScopeIds = row => [row.scope_id, row.scope_l1_id, row.scope_l2_id, row.scope_l3_id, row.scope_l4_id, row.scope_l5_id].filter(Boolean);
+    const rows = [...(this.tasks || []), ...(this.documents || []), ...(this.messages || [])].filter(active);
+    if (board.zoom === 'channel' && board.channelId) {
+      return rows.some(row => [row.channel_id, row.pg_channel_id].includes(board.channelId));
+    }
+    if (board.zoom === 'thread' && board.threadId) {
+      return rows.some(row => [row.thread_id, row.pg_thread_id, row.parent_message_id, row.record_id].includes(board.threadId));
+    }
+    return rows.some(row => rowScopeIds(row).includes(id));
+  },
+
   normalizeTaskFilterTags() {
     const availableTags = new Set(this.allTaskTags);
     this.taskFilterTags = this.taskFilterTags.filter((tag) => availableTags.has(tag));

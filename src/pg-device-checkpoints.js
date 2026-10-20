@@ -84,12 +84,17 @@ export async function discoverRecordCapabilities(context, readService) {
         return { protocolVersion, extension: protocolVersion === 2
           && service.record_sync.extensions?.includes('bounded_snapshot_v1') ? 'bounded_snapshot_v1' : null,
           largeRecords: protocolVersion === 2 && service.record_sync.extensions?.includes('bounded_snapshot_v1')
-            && service.record_sync.extensions?.includes('chunked_v1') ? 'chunked_v1' : null };
+            && service.record_sync.extensions?.includes('chunked_v1') ? 'chunked_v1' : null,
+          priorityFeed: service?.record_sync?.priority_feed === true,
+          contextClosure: service?.record_sync?.context_closure === true,
+          repairManifest: service?.record_sync?.repair_manifest === true,
+          selectiveRepair: service?.record_sync?.selective_repair === true };
       })
       .catch(error => {
         // Only absent service routes represent older servers. Authentication,
         // transport and authority failures must never silently negotiate down.
-        if ([404, 406, 501].includes(error.status)) return { protocolVersion: 1, extension: null };
+        if ([404, 406, 501].includes(error.status)) return { protocolVersion: 1, extension: null,
+          priorityFeed: false, contextClosure: false, repairManifest: false, selectiveRepair: false };
         discoveries.delete(key);
         throw error;
       });
@@ -136,7 +141,7 @@ export async function syncDeviceRecords({ context, options, readState, materiali
   if (state?.device?.extension && state.device.scope === scope && state.device.extension !== options.extension) throw new Error('Negotiated record sync extension is unavailable');
   if (state?.device?.largeRecords && state.device.scope === scope && state.device.largeRecords !== options.largeRecords) throw new Error('Negotiated large record extension is unavailable');
   await materialize({ protocol_version: 2, large_record_action: { type: 'discard' } });
-  let applied = 0, resets = 0;
+  let applied = 0, resets = 0, repairAttempted = false;
   const update = async action => {
     assertCurrent();
     state = await materialize({ protocol_version: 2, device_action: { ...action, scope,
@@ -267,6 +272,15 @@ export async function syncDeviceRecords({ context, options, readState, materiali
         throw error;
       }
       options.onProgress?.({ stage: 'recovery', recoveryReason: code, page: pages, applied, cursorPresent: Boolean(state.cursor), mode: 'unavailable', protocolVersion: 2 });
+      if (!repairAttempted && typeof options.repair === 'function') {
+        repairAttempted = true;
+        options.onProgress?.({ stage: 'repairing', recoveryReason: code, page: pages, applied,
+          cursorPresent: Boolean(state.cursor), mode: 'unavailable', protocolVersion: 2 });
+        await options.repair({ reason: code, cursor: state.cursor });
+        // Repair never advances or substitutes the v2 checkpoint. Retry the
+        // same durable position once before considering replacement snapshot.
+        continue;
+      }
       await replace(true);
       if (revoked || ++resets > 2) throw error;
     }

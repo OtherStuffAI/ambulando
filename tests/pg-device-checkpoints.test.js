@@ -205,7 +205,9 @@ describe('capability negotiation', () => {
     const ctx = { ...context, sessionNpub: crypto.randomUUID() };
     expect(await discoverRecordCapabilities(ctx, async () => ({ record_sync: {
       device_checkpoints: true, protocol_versions: [1, 2], extensions: ['bounded_snapshot_v1', 'chunked_v1'],
-    } }))).toEqual({ protocolVersion: 2, extension: 'bounded_snapshot_v1', largeRecords: 'chunked_v1' });
+      priority_feed: true, context_closure: true, repair_manifest: true, selective_repair: true,
+    } }))).toEqual({ protocolVersion: 2, extension: 'bounded_snapshot_v1', largeRecords: 'chunked_v1',
+      priorityFeed: true, contextClosure: true, repairManifest: true, selectiveRepair: true });
   });
   it.each([undefined, { protocol_versions: [1], device_checkpoints: false }, { protocol_versions: [1, 2], device_checkpoints: true }])('discovers %j once', async record_sync => {
     const ctx = { ...context, sessionNpub: crypto.randomUUID() }, read = vi.fn(async () => ({ record_sync }));
@@ -367,6 +369,18 @@ it.each(['reset_required', 'history_pruned', 'client_expired', 'client_not_regis
   h.remote.page.mockRejectedValueOnce(failure(code)); await h.run();
   expect((await state()).device.clientId).not.toBe(old); expect(await db.pending_writes.count()).toBe(1);
   expect(h.remote.client.mock.calls.filter(c => c[2].operation === 'retire').map(c => c[1])).toEqual([old]);
+});
+
+it('runs selective repair before snapshot replacement and retries the same durable cursor', async () => {
+  const h = harness(); await h.run();
+  const committed = await state();
+  const repair = vi.fn(async () => ({ repaired: 1 }));
+  h.remote.page.mockRejectedValueOnce(failure('reset_required'));
+  await h.run({ repair });
+  expect(repair).toHaveBeenCalledWith({ reason: 'reset_required', cursor: committed.cursor });
+  expect(h.remote.page.mock.calls.at(-1)[1].cursor).toBe(committed.cursor);
+  expect((await state()).device.clientId).toBe(committed.device.clientId);
+  expect(h.remote.client.mock.calls.filter(c => c[2].operation === 'retire')).toHaveLength(0);
 });
 
 it('retains revoked downloads and keeps pending commands for recovery', async () => {

@@ -28,6 +28,7 @@ async function installWorkspace(page, stored = null) {
               workspaceId: 'alpha-id', slug: 'alpha', name: 'Alpha', pgBackendMode: true,
               directHttpsUrl: 'http://127.0.0.1:3100' }];
             state.selectedWorkspaceKey = 'alpha-key';
+            state.currentWorkspaceSlug = 'alpha';
             state.backendUrl = 'http://127.0.0.1:3100';
             state.scopes = ['project-a', 'project-b'].map(record_id => ({ record_id, title: record_id, level: 'l1', record_state: 'active' }));
             state.scopesLoaded = true;
@@ -58,6 +59,7 @@ async function ready(page) {
 }
 
 async function expectAll(page) {
+  await expect.poll(() => page.evaluate(() => Alpine.store('chat').selectedBoardId)).toBe('__all__');
   await expect(page.locator('.flightdeck-summary-header p').first()).toHaveText('All workspace activity');
   expect(await page.evaluate(() => {
     const s = Alpine.store('chat');
@@ -67,22 +69,29 @@ async function expectAll(page) {
   })).toEqual({ section: 'status', scope: '__all__', home: true, tasks: ['task-a', 'task-b'], otherWorkspace: 'beta-project' });
 }
 
-for (const stored of [null, 'project-a']) {
-  test(`Home launch and reload show all accessible projects with saved selection ${stored}`, async ({ page }) => {
+test('Home launch without a useful saved destination shows all accessible projects', async ({ page }) => {
+    const stored = null;
     await installWorkspace(page, stored);
     await page.goto('/alpha', { waitUntil: 'domcontentloaded' });
     await ready(page);
     await expectAll(page);
-    // Reload a plain app entry while localStorage still names a project.
+    // A missing cached destination falls back to All on reload.
     await page.evaluate(() => {
-      localStorage.setItem('coworker:alpha:last-task-board-id', 'project-a');
+      localStorage.setItem('coworker:alpha:last-task-board-id', 'missing-project');
       history.replaceState(null, '', '/alpha');
     });
     await page.reload({ waitUntil: 'domcontentloaded' });
     await ready(page);
     await expectAll(page);
-  });
-}
+});
+
+test('Home launch preserves a useful cached project destination', async ({ page }) => {
+  await installWorkspace(page, 'project-a');
+  await page.goto('/alpha', { waitUntil: 'domcontentloaded' });
+  await ready(page);
+  expect(await page.evaluate(() => Alpine.store('chat').selectedBoardId)).toBe('project-a');
+  await expect(page.locator('.flightdeck-summary-header p').first()).not.toHaveText('All workspace activity');
+});
 
 test('explicit project links and intentional navigation survive reload and Back/Forward', async ({ page }) => {
   await installWorkspace(page, 'project-a');

@@ -14,10 +14,11 @@ test('cached chats hydrate before delayed updates and stay live through reload, 
       import Alpine from 'alpinejs'; import {liveQuery} from 'dexie';
       import {openWorkspaceDb,getChannelsByOwner,getScopesByOwner} from './src/db.js';
       import {applyPgRecordChanges,resetPgRecordAuthority,recordDeltaCursorKey} from './src/pg-record-delta.js';
+      import {materializeAuxiliaryChanges} from './src/pg-priority-sync.js';
       import {sectionLiveQueryMixin,readPgNavigationProjection,applyPgNavigationProjection} from './src/section-live-queries.js';
       import {channelsManagerMixin} from './src/channels-manager.js';
       import {createShellState} from './src/shell-state.js';
-      window.probe={Alpine,liveQuery,openWorkspaceDb,getChannelsByOwner,getScopesByOwner,applyPgRecordChanges,resetPgRecordAuthority,recordDeltaCursorKey,sectionLiveQueryMixin,readPgNavigationProjection,applyPgNavigationProjection,channelsManagerMixin,createShellState};
+      window.probe={Alpine,liveQuery,openWorkspaceDb,getChannelsByOwner,getScopesByOwner,applyPgRecordChanges,materializeAuxiliaryChanges,resetPgRecordAuthority,recordDeltaCursorKey,sectionLiveQueryMixin,readPgNavigationProjection,applyPgNavigationProjection,channelsManagerMixin,createShellState};
     ` } });
   const origin = new URL(baseURL).origin;
   let release, requested = false, denied = false, response;
@@ -30,7 +31,7 @@ test('cached chats hydrate before delayed updates and stay live through reload, 
       await new Promise(resolve => { release = resolve; });
       return route.fulfill(denied ? { status: 403, json: { error: 'denied' } } : { json: response });
     }
-    return route.fulfill({ contentType: 'text/html', body: `<!doctype html><script type="module" src="/harness.js"></script><main x-data><div data-chat-feed><template x-for="row in $store.cache.messages" :key="row.record_id"><p x-text="row.body"></p></template></div><textarea x-model="$store.cache.messageInput"></textarea></main>` });
+    return route.fulfill({ contentType: 'text/html', body: `<!doctype html><style>[data-chat-feed]{height:180px;overflow:auto}p{height:24px;margin:0}</style><script type="module" src="/harness.js"></script><main x-data><div data-chat-feed><template x-for="row in $store.cache.messages" :key="row.record_id"><p x-text="row.body"></p></template></div><textarea x-model="$store.cache.messageInput"></textarea></main>` });
   });
   const setup = async () => {
     await page.goto(`${origin}/fixture`); await page.waitForFunction(() => window.probe);
@@ -64,6 +65,12 @@ test('cached chats hydrate before delayed updates and stay live through reload, 
       window.started=performance.now();await store.bootstrapSelectedWorkspace();window.localReady=performance.now()-window.started;
       window.repair=async()=>{await m.resetPgRecordAuthority(store,{preserveViews:true});await m.applyPgNavigationProjection(store,await m.readPgNavigationProjection(store));store.startWorkspaceLiveQueries();};
       window.merge=async page=>m.applyPgRecordChanges(store,page,{expectedCursor:(await db.sync_state.get(m.recordDeltaCursorKey(store)))?.value?.cursor||null});
+      window.priorityCatchup=async changes=>{
+        for(let offset=0;offset<changes.length;offset+=32){
+          await m.materializeAuxiliaryChanges(store,changes.slice(offset,offset+32),{context:{workspaceId:store.currentWorkspace.workspaceId}});
+          await new Promise(resolve=>setTimeout(resolve,40));
+        }
+      };
       window.reconnect=()=>{store.stopWorkspaceLiveQueries();store.startWorkspaceLiveQueries();};
     }, fixture);
   };
@@ -75,12 +82,28 @@ test('cached chats hydrate before delayed updates and stay live through reload, 
   const domReadyMs=await page.evaluate(()=>performance.now()-window.started);
   expect(await page.evaluate(() => window.localReady)).toBeLessThan(1000);
   const before = await page.evaluate(() => window.db.chat_messages.count());
+  const backgroundChannelId = '30000000-0000-4000-8000-000000000099';
+  const priorityRows = Array.from({length:320},(_,index)=>({...cached,id:`60000000-0000-4000-8000-${String(index).padStart(12,'0')}`,
+    channel_id:backgroundChannelId,
+    version:String(100+index),row:{...cached.row,id:`60000000-0000-4000-8000-${String(index).padStart(12,'0')}`,
+      channel_id:backgroundChannelId,body:`Priority catch-up ${index}`,row_version:100+index,
+      updated_at:new Date(Date.parse(cached.row.updated_at)+index*1000).toISOString()}}));
+  await page.evaluate(rows=>{window.catchupPromise=window.priorityCatchup(rows)},priorityRows);
+  await expect.poll(()=>page.evaluate(()=>window.db.chat_messages.count())).toBeGreaterThan(before);
+  await page.locator('textarea').fill('draft survives catch-up');
+  await page.locator('[data-chat-feed]').evaluate(element=>{element.scrollTop=120});
+  const during = await page.evaluate(()=>({selected:window.store.selectedChannelId,scroll:document.querySelector('[data-chat-feed]').scrollTop}));
+  await page.evaluate(()=>window.catchupPromise);
+  expect(await page.locator('textarea').inputValue()).toBe('draft survives catch-up');
+  expect(await page.evaluate(()=>window.store.selectedChannelId)).toBe(during.selected);
+  expect(await page.locator('[data-chat-feed]').evaluate(element=>element.scrollTop)).toBe(during.scroll);
+  await expect(page.locator('[data-chat-feed]')).not.toContainText('Priority catch-up 319');
   await page.evaluate(() => window.repair());
   await page.evaluate(() => window.reconnect());
   await expect(page.locator('[data-chat-feed]')).toContainText(cached.row.body);
   // Match the reported 20-second delay, sampling throughout instead of only after convergence.
   for(let i=0;i<20;i++) { await expect(page.locator('[data-chat-feed]')).toContainText(cached.row.body); await page.waitForTimeout(1000); }
-  expect(await page.evaluate(() => window.db.chat_messages.count())).toBe(before);
+  expect(await page.evaluate(() => window.db.chat_messages.count())).toBe(before + priorityRows.length);
   release();
   await page.evaluate(() => window.store.stopWorkspaceLiveQueries());
   requested=false; await setup();

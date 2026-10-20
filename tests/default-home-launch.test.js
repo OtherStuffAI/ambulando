@@ -70,6 +70,16 @@ describe('default Home launch', () => {
     expect(shell.selectedBoardId).toBe('previous-project');
   });
 
+  it('preserves a useful saved Home project on launch', async () => {
+    const shell = client('/alpha', 'project-a');
+    shell.scopes = [{ record_id: 'project-a', title: 'Project A', record_state: 'active' }];
+    shell.scopesLoaded = true;
+    shell.tasks = [{ record_id: 'task-a', scope_id: 'project-a', record_state: 'active' }];
+    await shell.bootstrapSelectedWorkspace();
+    expect(shell.navSection).toBe('status');
+    expect(shell.selectedBoardId).toBe('project-a');
+  });
+
   it('returns to plain Home after closing a conversation restores its earlier project', async () => {
     const shell = client('/alpha/flight-deck', 'previous-project');
     shell.activeThreadId = 'old-thread';

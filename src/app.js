@@ -2545,10 +2545,11 @@ export function initApp() {
         await this.resumePgTaskWriteQueue();
       }
       await this.refreshAddressBook?.();
-      this.selectedBoardId = this.readStoredTaskBoardId();
+      const savedLaunchBoardId = this.readStoredTaskBoardId();
+      this.selectedBoardId = savedLaunchBoardId;
       this.collapsedSections = this.readStoredCollapsedSections();
       this.validateSelectedBoardId();
-      await this.applyRouteFromLocation();
+      await this.applyRouteFromLocation({ launch: true, savedLaunchBoardId });
       await this.refreshSyncStatus();
       if (this.navSection === 'status') {
         await this.refreshStatusRecentChanges({ force: true });

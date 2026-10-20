@@ -7,6 +7,7 @@ import { materializeFeedReaderEvent } from './feed/materialize.js';
 import { clampBranchEffectiveMessageIds, threadHistoryLineage, mergeThreadHistoryIds, threadHistoryAuthority as pgAuthorityToken } from './thread-history-coverage.js';
 import { FLIGHT_DECK_PG_APP_NPUB } from './app-identity.js';
 import { normalizeBackendUrl } from './utils/state-helpers.js';
+import { runManifestRepair, runPriorityLane } from './pg-priority-sync.js';
 import {
   getTowerPgFile,
   getTowerPgChannel,
@@ -1459,6 +1460,7 @@ function mapPgSyncGroup(group = {}, workspaceOwnerNpub = '') {
 }
 
 export async function hydrateTowerPgSyncBundle(store, bundle = {}, deps = {}) {
+  if (bundle.auxiliary_sync_action) return (await import('./pg-priority-sync.js')).commitAuxiliarySyncState(bundle.auxiliary_sync_action);
   if (bundle.large_record_action) return (await import('./pg-large-records.js')).materializeLargeRecord(store, bundle.large_record_action, bundle.local_apply_options);
   if (bundle.device_lock) return (await import('./pg-device-checkpoints.js')).commitDeviceLease(bundle.device_lock);
   if (bundle.thread_history_page) return materializeThreadHistoryPage(store, bundle.thread_history_page);
@@ -1747,8 +1749,32 @@ async function syncTowerPgRecordWorkspace(store, options, deps) {
   if (previousDevice?.extension && previousDevice.extension !== capabilities.extension) throw new Error('Negotiated record sync extension is unavailable');
   if (previousDevice?.largeRecords && previousDevice.largeRecords !== capabilities.largeRecords) throw new Error('Negotiated large record extension is unavailable');
   const deviceMaterialize = bundle => (deps.hydrateTowerPgSyncBundle || hydrateTowerPgSyncBundle)(store, bundle, deps);
+  const auxiliaryDeps = {
+    context,
+    materialize: deviceMaterialize,
+    readState: key => (deps.getSyncState || getSyncState)(key),
+    ...(deps.prioritySync || {}),
+  };
+  if (capabilities.priorityFeed && options.skipPriority !== true) {
+    try {
+      await runPriorityLane(store, { ...options, resume: false }, auxiliaryDeps);
+      // Persist one broader continuation before yielding to the independent
+      // completeness lane; later background rounds can continue recent coverage.
+      if (options.priorityContinuation !== false) {
+        await new Promise(resolve => setTimeout(resolve, 0));
+        await runPriorityLane(store, { ...options, resume: true, limit: 200 }, auxiliaryDeps);
+      }
+    } catch (error) {
+      options.onProgress?.({ stage: 'priority-paused', error: error?.message || String(error),
+        cursorPresent: false, protocolVersion: protocol });
+    }
+    await new Promise(resolve => setTimeout(resolve, 0));
+  }
   const runDevice = lease => syncDeviceRecords({
-    context, options: { ...options, extension: capabilities.extension, largeRecords: capabilities.largeRecords }, cursorKey: recordDeltaCursorKey(store),
+    context, options: { ...options, extension: capabilities.extension, largeRecords: capabilities.largeRecords,
+      repair: capabilities.repairManifest && capabilities.selectiveRepair
+        ? () => runManifestRepair(store, { ...options, resume: true }, auxiliaryDeps)
+        : null }, cursorKey: recordDeltaCursorKey(store),
     readState: deps.getSyncState || getSyncState,
     materialize: bundle => deviceMaterialize({ ...bundle, local_apply_options: { ...bundle.local_apply_options, ...(lease?.token ? { deviceLease: lease.token } : {}) } }),
     assertHeld: lease?.assertHeld,

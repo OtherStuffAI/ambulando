@@ -200,7 +200,10 @@ export async function applyPgRecordChanges(store, page, options = {}) {
   // A crash replays that opaque page; canonical versions make the committed
   // prefix idempotent. No cursor can skip unapplied changes.
   let result, applied = 0;
-  const size = options.reconcileOnly ? 200 : 32;
+  const requestedBatchSize = Number(options.batchSize);
+  const size = Number.isSafeInteger(requestedBatchSize) && requestedBatchSize > 0
+    ? Math.min(32, requestedBatchSize)
+    : options.reconcileOnly ? 200 : 32;
   for (let offset = 0; offset < Math.max(1, page.changes.length); offset += size) {
     const partial = offset + size < page.changes.length;
     result = await applyRecordPage(store, { ...page, changes: page.changes.slice(offset, offset + size),

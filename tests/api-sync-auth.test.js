@@ -871,6 +871,34 @@ it('signs exact v2 registration, page, acknowledgement, read and retirement requ
   } finally { globalThis.fetch = previousFetch; workspaceSecret = null; }
 });
 
+it('signs exact session-owned priority, context, manifest and selective repair requests', async () => {
+  const previousFetch = globalThis.fetch;
+  createNip98AuthHeaderMock.mockClear(); createNip98AuthHeaderForSecretMock.mockClear();
+  workspaceSecret = new Uint8Array(32).fill(7);
+  const requests = [];
+  globalThis.fetch = vi.fn(async (url, options) => {
+    requests.push({ url, ...options });
+    return { ok: true, status: 200, json: async () => ({}), text: async () => '' };
+  });
+  try {
+    const api = await import('../src/api.js');
+    const common = { baseUrl: 'http://localhost:3100', appNpub: 'app' };
+    await api.getTowerPgRecordPriority('workspace', { ...common, cursor: 'priority-cursor', limit: 32,
+      filters: { families: ['task', 'doc'], scopeId: 'scope' } });
+    await api.getTowerPgRecordContext('workspace', 'task', 'task-id', common);
+    await api.getTowerPgRecordRepairManifest('workspace', { ...common, cursor: 'manifest-cursor',
+      filters: { channelId: 'channel' } });
+    await api.postTowerPgRecordRepair('workspace', [{ family: 'task', id: 'task-id', version: '9' }], common);
+    expect(requests.map(request => request.method)).toEqual(['GET', 'GET', 'GET', 'POST']);
+    expect(requests[0].url).toContain('/record-sync/priority?limit=32&family=task&family=doc&scope_id=scope&cursor=priority-cursor');
+    expect(requests[1].url).toContain('/record-sync/context?resource_type=task&resource_id=task-id');
+    expect(requests[2].url).toContain('/record-sync/repair-manifest?limit=200&channel_id=channel&cursor=manifest-cursor');
+    expect(JSON.parse(requests[3].body)).toEqual({ records: [{ family: 'task', id: 'task-id', version: '9' }] });
+    expect(createNip98AuthHeaderMock).toHaveBeenCalledTimes(4);
+    expect(createNip98AuthHeaderForSecretMock).not.toHaveBeenCalled();
+  } finally { globalThis.fetch = previousFetch; workspaceSecret = null; }
+});
+
 it('signs the exact session-owned chunk URL and rejects oversized chunk responses', async () => {
   const previousFetch = globalThis.fetch;
   createNip98AuthHeaderMock.mockClear(); createNip98AuthHeaderForSecretMock.mockClear();
