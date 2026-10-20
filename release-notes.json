@@ -4423,6 +4423,14 @@
       "notes": [
         "Show endpoint controls when a Canvas arrow or line is selected so either end can be adjusted."
       ]
+    },
+    {
+      "buildNumber": 2479,
+      "label": "Clearer Canvas access",
+      "notes": [
+        "Create or update a Canvas in a responsive modal, then search and add named workspace people, agents, and groups without exposed identity lists.",
+        "Select multiple Canvas items and group them reliably, with selection state remaining visible while you work."
+      ]
     }
   ]
 }

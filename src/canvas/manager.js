@@ -5,6 +5,70 @@ import { createCanvasRecord, hydrateCanvasList, reorderCanvasRecords, updateCanv
 
 const runtimes = new WeakMap();
 const text = value => String(value ?? '').trim();
+const RAW_IDENTITY = /^(npub1|nprofile1|[0-9a-f]{8}-[0-9a-f-]{20,}|[0-9a-f]{32,})/i;
+
+export function truncateCanvasIdentity(value) {
+  const clean = text(value);
+  if (!clean) return '';
+  if (clean.length <= 18) return clean;
+  return `${clean.slice(0, 10)}…${clean.slice(-6)}`;
+}
+
+function readableCanvasLabel(value) {
+  const clean = text(value);
+  return clean && !RAW_IDENTITY.test(clean) && !/^(unknown|unnamed)(\s|$)/i.test(clean) ? clean : '';
+}
+
+export function buildCanvasPrincipalOptions({ members = [], groups = [], getSenderName, getSenderAvatar } = {}) {
+  const options = [];
+  const seen = new Set();
+  for (const member of members || []) {
+    const id = text(member?.actor_id || member?.id);
+    if (!id || seen.has(`actor:${id}`)) continue;
+    seen.add(`actor:${id}`);
+    const npub = text(member?.npub || member?.actor_npub);
+    const kind = text(member?.kind || member?.actor_kind || member?.actor?.kind).toLowerCase() === 'agent' ? 'agent' : 'person';
+    const profileName = npub ? readableCanvasLabel(getSenderName?.(npub)) : '';
+    const label = readableCanvasLabel(member?.display_name || member?.label || member?.name)
+      || profileName
+      || `Unnamed ${kind}`;
+    const role = readableCanvasLabel(member?.role);
+    const fallbackIdentity = !readableCanvasLabel(label) ? truncateCanvasIdentity(npub || id) : '';
+    options.push({
+      key: `actor:${id}`,
+      type: 'actor',
+      kind,
+      kindLabel: kind === 'agent' ? 'Agent' : 'Person',
+      id,
+      npub,
+      label,
+      subtitle: role || fallbackIdentity || (kind === 'agent' ? 'Workspace agent' : 'Workspace member'),
+      avatarUrl: npub ? text(getSenderAvatar?.(npub)) : '',
+      searchText: [label, role, npub, id, kind].map(text).join(' ').toLowerCase(),
+    });
+  }
+  for (const group of groups || []) {
+    const id = text(group?.group_id || group?.groupId || group?.id);
+    if (!id || seen.has(`group:${id}`)) continue;
+    seen.add(`group:${id}`);
+    const label = readableCanvasLabel(group?.name || group?.label) || 'Unnamed group';
+    const membersCount = (group?.effective_member_npubs || group?.member_npubs || group?.members || []).length;
+    const described = readableCanvasLabel(group?.subtitle || group?.description);
+    const fallbackIdentity = !readableCanvasLabel(label) ? truncateCanvasIdentity(id) : '';
+    options.push({
+      key: `group:${id}`,
+      type: 'group',
+      kind: 'group',
+      kindLabel: 'Group',
+      id,
+      label,
+      subtitle: described || (membersCount ? `${membersCount} ${membersCount === 1 ? 'member' : 'members'}` : fallbackIdentity || 'Workspace group'),
+      avatarUrl: '',
+      searchText: [label, described, id, 'group'].map(text).join(' ').toLowerCase(),
+    });
+  }
+  return options.sort((left, right) => left.label.localeCompare(right.label) || left.kindLabel.localeCompare(right.kindLabel));
+}
 
 function scheduleUiNextTick(callback) {
   const nextTick = globalThis.Alpine?.nextTick;
@@ -21,8 +85,14 @@ export const canvasManagerMixin = {
   canvasLoading: false,
   canvasError: '',
   canvasSaving: false,
+  canvasDialogError: '',
   canvasDraggedId: '',
   canvasDialog: { open: false, mode: 'create', id: '', rowVersion: null, title: '', visibilityMode: 'workspace', actorIds: [], groupIds: [] },
+  canvasPrincipalQuery: '',
+  canvasPrincipalPickerOpen: false,
+  canvasPrincipalPickerIndex: 0,
+  canvasPrincipalBusy: false,
+  canvasPrincipalError: '',
 
   get canvasPartition() {
     const context = canvasContext(this);
@@ -32,6 +102,51 @@ export const canvasManagerMixin = {
     return this.canvasContextKey === this.canvasPartition
       ? [...this.canvasRows].sort((a, b) => a.position - b.position || a.canvas_id.localeCompare(b.canvas_id))
       : [];
+  },
+  get canvasPrincipalOptions() {
+    const sourceGroups = Array.isArray(this.currentWorkspaceGroups) && this.currentWorkspaceGroups.length
+      ? this.currentWorkspaceGroups
+      : this.groups;
+    return buildCanvasPrincipalOptions({
+      members: this.pgWorkspaceMembers,
+      groups: sourceGroups,
+      getSenderName: npub => this.getSenderName?.(npub),
+      getSenderAvatar: npub => this.getSenderAvatar?.(npub),
+    });
+  },
+  get canvasSelectedPrincipalKeys() {
+    return new Set([
+      ...(this.canvasDialog.actorIds || []).map(id => `actor:${id}`),
+      ...(this.canvasDialog.groupIds || []).map(id => `group:${id}`),
+    ]);
+  },
+  get canvasPrincipalSearchResults() {
+    const query = text(this.canvasPrincipalQuery).toLowerCase();
+    const selected = this.canvasSelectedPrincipalKeys;
+    return this.canvasPrincipalOptions
+      .filter(option => !selected.has(option.key) && (!query || option.searchText.includes(query)))
+      .slice(0, 30);
+  },
+  get canvasSelectedPrincipals() {
+    const byKey = new Map(this.canvasPrincipalOptions.map(option => [option.key, option]));
+    return [
+      ...(this.canvasDialog.actorIds || []).map(id => byKey.get(`actor:${id}`) || {
+        key: `actor:${id}`, type: 'actor', kind: 'person', kindLabel: 'Person', id,
+        label: 'Unavailable person', subtitle: truncateCanvasIdentity(id), avatarUrl: '',
+      }),
+      ...(this.canvasDialog.groupIds || []).map(id => byKey.get(`group:${id}`) || {
+        key: `group:${id}`, type: 'group', kind: 'group', kindLabel: 'Group', id,
+        label: 'Unavailable group', subtitle: truncateCanvasIdentity(id), avatarUrl: '',
+      }),
+    ];
+  },
+  get canvasDialogSelectionCount() {
+    return (this.canvasDialog.actorIds || []).length + (this.canvasDialog.groupIds || []).length;
+  },
+  get canvasDialogCanSave() {
+    return Boolean(text(this.canvasDialog.title))
+      && !this.canvasSaving
+      && (this.canvasDialog.visibilityMode !== 'restricted' || this.canvasDialogSelectionCount > 0);
   },
   stopCanvases() {
     const runtime = runtimes.get(this);
@@ -80,11 +195,21 @@ export const canvasManagerMixin = {
     }
   },
   openCanvasCreateDialog() {
+    this.canvasDialogOpener = globalThis.document?.activeElement;
     this.canvasDialog = { open: true, mode: 'create', id: '', rowVersion: null, title: '', visibilityMode: 'workspace', actorIds: [], groupIds: [] };
-    scheduleUiNextTick(() => document.getElementById('canvas-settings-dialog')?.showModal());
+    this.canvasDialogError = '';
+    this.resetCanvasPrincipalPicker();
+    scheduleUiNextTick(() => {
+      const dialog = globalThis.document?.getElementById('canvas-settings-dialog');
+      if (!dialog?.open) dialog?.showModal();
+      dialog?.querySelector?.('[data-canvas-title-input]')?.focus();
+    });
+    void this.refreshCanvasPrincipals();
   },
   openCanvasSettingsDialog(canvas) {
     if (!canvas?.can_manage) return;
+    this.canvasDialogOpener = globalThis.document?.activeElement;
+    this.canvasDialogError = '';
     this.canvasDialog = {
       open: true,
       mode: 'edit',
@@ -95,11 +220,97 @@ export const canvasManagerMixin = {
       actorIds: [...(canvas.visibility?.actor_ids || [])],
       groupIds: [...(canvas.visibility?.group_ids || [])],
     };
-    scheduleUiNextTick(() => document.getElementById('canvas-settings-dialog')?.showModal());
+    this.resetCanvasPrincipalPicker();
+    scheduleUiNextTick(() => {
+      const dialog = globalThis.document?.getElementById('canvas-settings-dialog');
+      if (!dialog?.open) dialog?.showModal();
+      dialog?.querySelector?.('[data-canvas-title-input]')?.focus();
+    });
+    void this.refreshCanvasPrincipals();
   },
   closeCanvasSettingsDialog() {
-    document.getElementById('canvas-settings-dialog')?.close();
+    globalThis.document?.getElementById('canvas-settings-dialog')?.close();
     this.canvasDialog = { ...this.canvasDialog, open: false };
+    this.resetCanvasPrincipalPicker();
+    scheduleUiNextTick(() => this.canvasDialogOpener?.focus?.());
+  },
+  resetCanvasPrincipalPicker() {
+    this.canvasPrincipalQuery = '';
+    this.canvasPrincipalPickerOpen = false;
+    this.canvasPrincipalPickerIndex = 0;
+    this.canvasPrincipalError = '';
+  },
+  async refreshCanvasPrincipals() {
+    const loaders = [
+      typeof this.refreshTowerPgWorkspaceMembers === 'function'
+        ? this.refreshTowerPgWorkspaceMembers({ force: false, limit: 200 })
+        : null,
+      typeof this.refreshGroups === 'function'
+        ? this.refreshGroups({ force: false })
+        : null,
+    ].filter(Boolean);
+    if (!loaders.length) return;
+    this.canvasPrincipalBusy = true;
+    this.canvasPrincipalError = '';
+    try {
+      await Promise.all(loaders);
+    } catch {
+      this.canvasPrincipalError = 'Some workspace choices could not be refreshed. You can use the choices already loaded or try again.';
+    } finally {
+      this.canvasPrincipalBusy = false;
+    }
+  },
+  changeCanvasPrincipalQuery(value) {
+    this.canvasPrincipalQuery = value;
+    this.canvasPrincipalPickerIndex = 0;
+    this.canvasPrincipalPickerOpen = true;
+  },
+  openCanvasPrincipalPicker() {
+    this.canvasPrincipalPickerOpen = true;
+    this.canvasPrincipalPickerIndex = Math.min(this.canvasPrincipalPickerIndex, Math.max(0, this.canvasPrincipalSearchResults.length - 1));
+  },
+  closeCanvasPrincipalPicker({ restoreFocus = false } = {}) {
+    this.canvasPrincipalPickerOpen = false;
+    if (restoreFocus) scheduleUiNextTick(() => globalThis.document?.getElementById('canvas-principal-search')?.focus());
+  },
+  moveCanvasPrincipalPicker(index) {
+    const count = this.canvasPrincipalSearchResults.length;
+    this.canvasPrincipalPickerIndex = count ? Math.max(0, Math.min(index, count - 1)) : 0;
+    scheduleUiNextTick(() => globalThis.document?.getElementById(`canvas-principal-option-${this.canvasPrincipalPickerIndex}`)?.scrollIntoView?.({ block: 'nearest' }));
+  },
+  handleCanvasPrincipalKeydown(event) {
+    const count = this.canvasPrincipalSearchResults.length;
+    if (event.key === 'Escape' && this.canvasPrincipalPickerOpen) {
+      event.preventDefault(); event.stopPropagation(); this.closeCanvasPrincipalPicker(); return;
+    }
+    if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) {
+      event.preventDefault(); event.stopPropagation(); this.openCanvasPrincipalPicker();
+      if (event.key === 'Home') this.moveCanvasPrincipalPicker(0);
+      else if (event.key === 'End') this.moveCanvasPrincipalPicker(count - 1);
+      else this.moveCanvasPrincipalPicker(this.canvasPrincipalPickerIndex + (event.key === 'ArrowDown' ? 1 : -1));
+      return;
+    }
+    if (event.key === 'Enter' && this.canvasPrincipalPickerOpen) {
+      event.preventDefault(); event.stopPropagation();
+      const option = this.canvasPrincipalSearchResults[this.canvasPrincipalPickerIndex];
+      if (option) this.selectCanvasPrincipal(option);
+    }
+  },
+  selectCanvasPrincipal(option) {
+    if (!option?.id || !['actor', 'group'].includes(option.type)) return;
+    const field = option.type === 'group' ? 'groupIds' : 'actorIds';
+    if (!(this.canvasDialog[field] || []).includes(option.id)) {
+      this.canvasDialog = { ...this.canvasDialog, [field]: [...(this.canvasDialog[field] || []), option.id] };
+    }
+    this.canvasPrincipalQuery = '';
+    this.canvasPrincipalPickerIndex = 0;
+    this.canvasPrincipalPickerOpen = false;
+    scheduleUiNextTick(() => globalThis.document?.getElementById('canvas-principal-search')?.focus());
+  },
+  removeCanvasPrincipal(option) {
+    if (!option?.id || !['actor', 'group'].includes(option.type)) return;
+    const field = option.type === 'group' ? 'groupIds' : 'actorIds';
+    this.canvasDialog = { ...this.canvasDialog, [field]: (this.canvasDialog[field] || []).filter(id => id !== option.id) };
   },
   toggleCanvasVisibilityPrincipal(kind, id, checked) {
     const field = kind === 'group' ? 'groupIds' : 'actorIds';
@@ -109,7 +320,7 @@ export const canvasManagerMixin = {
   },
   async saveCanvasDialog() {
     const title = text(this.canvasDialog.title);
-    if (!title || this.canvasSaving) return;
+    if (!this.canvasDialogCanSave) return;
     const context = canvasContext(this);
     const body = {
       title,
@@ -120,7 +331,7 @@ export const canvasManagerMixin = {
       },
     };
     this.canvasSaving = true;
-    this.canvasError = '';
+    this.canvasDialogError = '';
     try {
       if (this.canvasDialog.mode === 'edit') {
         await updateCanvasRecord(context, this.canvasDialog.id, {
@@ -133,7 +344,7 @@ export const canvasManagerMixin = {
       this.closeCanvasSettingsDialog();
       await this.refreshCanvases();
     } catch (error) {
-      this.canvasError = error?.message || 'Could not save canvas.';
+      this.canvasDialogError = error?.message || 'Could not save canvas.';
     } finally { this.canvasSaving = false; }
   },
   openCanvas(canvas) {
