@@ -4431,6 +4431,13 @@
         "Create or update a Canvas in a responsive modal, then search and add named workspace people, agents, and groups without exposed identity lists.",
         "Select multiple Canvas items and group them reliably, with selection state remaining visible while you work."
       ]
+    },
+    {
+      "buildNumber": 2481,
+      "label": "Working Canvas grouping",
+      "notes": [
+        "Group a multi-selection reliably even when the Canvas selection toolbar has remained open during movement."
+      ]
     }
   ]
 }

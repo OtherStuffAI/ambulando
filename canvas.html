@@ -25,7 +25,7 @@
           <button type="button" title="Text (T)" :class="{ active: $store.canvas.tool === 'text' }" @click="$store.canvas.setTool('text')">T</button>
           <button type="button" title="Eraser (E)" :class="{ active: $store.canvas.tool === 'eraser' }" @click="$store.canvas.setTool('eraser')">⌫</button>
           <button type="button" title="Frame (F)" :class="{ active: $store.canvas.tool === 'frame' }" @click="$store.canvas.setTool('frame')">▣</button>
-          <button type="button" title="Group selected (Ctrl/Cmd+G)" :disabled="$store.canvas.selectedKeys.length < 2" @click="$store.canvas.createGroup()">Group</button>
+          <button type="button" title="Group selected (Ctrl/Cmd+G)" @click="$store.canvas.createGroup()">Group</button>
           <button type="button" title="Embed naplet" :class="{ active: $store.canvas.tool === 'embed' }" @click="$store.canvas.setTool('embed')">＋</button>
         </div>
         <div class="canvas-toolbar-group">
