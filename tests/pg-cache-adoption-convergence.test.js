@@ -7,7 +7,7 @@ import { recordDeltaCursorKey } from '../src/pg-record-delta.js';
 import { syncDeviceRecords } from '../src/pg-device-checkpoints.js';
 import { auxiliarySyncKey, runCacheAdoption, runDeferredRepair } from '../src/pg-priority-sync.js';
 
-// Reproduces Pete's device: a large cache downloaded by Tower snapshot pages,
+// Reproduces a real device: a large cache downloaded by Tower snapshot pages,
 // whose rows carry the snapshot boundary rather than their own journal
 // position, plus server edits, deletes and creates after that download.
 
@@ -304,7 +304,7 @@ describe('populated-cache adoption convergence', () => {
     expect(remote.calls.snapshotPages).toBe(snapshotPagesBefore);
   }, 180_000);
 
-  it('the exact-match adoption that stranded Pete converges once repairs land at the real position', async () => {
+  it('the exact-match adoption that stranded a real device converges once repairs land at the real position', async () => {
     const remote = tower({ exact: true });
     seed(remote);
     const h = harness(remote, { exact: true });
