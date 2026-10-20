@@ -1,4 +1,5 @@
 import 'fake-indexeddb/auto';
+import Dexie from 'dexie';
 import { afterEach, expect, it, vi } from 'vitest';
 
 const api = vi.hoisted(() => ({
@@ -78,4 +79,53 @@ it('serializes Canvas mutations and rehydrates each accepted row version through
   expect(api.updateTowerPgCanvas.mock.calls.map(call => call[2].expected_row_version)).toEqual([1, 2]);
   expect((await db.canvas_snapshots.get(canvasDefinitionKey(context, 'canvas'))).canvas.row_version).toBe(3);
   runtime.stop();
+});
+
+it('queues the complete Canvas projection before IndexedDB can auto-commit the transaction', async () => {
+  const db = openWorkspaceDb(`canvas-sync-transaction-${crypto.randomUUID()}`);
+  await db.open();
+  api.getTowerPgCanvasSnapshot.mockResolvedValue(payload(1, 'Atomic'));
+
+  const putSnapshot = db.canvas_snapshots.put.bind(db.canvas_snapshots);
+  const putDefinition = db.canvas_definitions.put.bind(db.canvas_definitions);
+  let releaseSnapshotWrite;
+  vi.spyOn(db.canvas_snapshots, 'put').mockImplementation(snapshot => {
+    const queuedWrite = putSnapshot(snapshot);
+    const schedulingGap = new Promise(resolve => {
+      releaseSnapshotWrite = resolve;
+      setTimeout(resolve, 0);
+    });
+    return Dexie.Promise.all([queuedWrite, schedulingGap]).then(([key]) => key);
+  });
+  vi.spyOn(db.canvas_definitions, 'put').mockImplementation(definition => {
+    releaseSnapshotWrite?.();
+    return putDefinition(definition);
+  });
+
+  const runtime = new CanvasSyncRuntime(context, 'canvas');
+  await expect(runtime.refresh()).resolves.toMatchObject({ canvas: { title: 'Atomic' } });
+  expect(await db.canvas_snapshots.get(canvasDefinitionKey(context, 'canvas'))).toMatchObject({
+    canvas: { title: 'Atomic' },
+  });
+  expect(await db.canvas_definitions.get(canvasDefinitionKey(context, 'canvas'))).toMatchObject({
+    title: 'Atomic',
+  });
+  runtime.stop();
+});
+
+it('aborts the atomic projection when the refresh generation changes during commit', async () => {
+  const db = openWorkspaceDb(`canvas-sync-generation-${crypto.randomUUID()}`);
+  await db.open();
+  api.getTowerPgCanvasSnapshot.mockResolvedValue(payload(1, 'Superseded'));
+
+  const runtime = new CanvasSyncRuntime(context, 'canvas');
+  const putDefinition = db.canvas_definitions.put.bind(db.canvas_definitions);
+  vi.spyOn(db.canvas_definitions, 'put').mockImplementation(definition => {
+    runtime.stop();
+    return putDefinition(definition);
+  });
+
+  await expect(runtime.refresh()).resolves.toBeNull();
+  expect(await db.canvas_snapshots.get(canvasDefinitionKey(context, 'canvas'))).toBeUndefined();
+  expect(await db.canvas_definitions.get(canvasDefinitionKey(context, 'canvas'))).toBeUndefined();
 });

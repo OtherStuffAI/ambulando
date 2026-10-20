@@ -1,4 +1,4 @@
-import { liveQuery } from 'dexie';
+import Dexie, { liveQuery } from 'dexie';
 import {
   createTowerPgCanvas,
   createTowerPgCanvasNaplet,
@@ -24,11 +24,30 @@ export async function hydrateCanvasList(context, { signal } = {}) {
   const db = getWorkspaceDb();
   const payload = await getTowerPgCanvases(context.workspaceId, apiOptions(context, signal));
   const rows = normalizeCanvasList(payload, context);
-  await db.transaction('rw', db.canvas_definitions, async () => {
-    await db.canvas_definitions.where('context').equals(partition).delete();
-    if (rows.length) await db.canvas_definitions.bulkPut(rows);
+  await db.transaction('rw', db.canvas_definitions, () => {
+    return db.canvas_definitions.where('context').equals(partition).delete()
+      .then(() => rows.length ? db.canvas_definitions.bulkPut(rows) : undefined);
   });
   return rows;
+}
+
+function canvasRefreshAbort() {
+  return new DOMException('Canvas context changed', 'AbortError');
+}
+
+function commitCanvasProjection(db, snapshot, isCurrent) {
+  return db.transaction('rw', db.canvas_snapshots, db.canvas_definitions, () => {
+    if (!isCurrent()) throw canvasRefreshAbort();
+    // Queue both IndexedDB requests before yielding. A native/non-Dexie async
+    // gap between these writes can let the browser auto-commit the transaction.
+    return Dexie.Promise.all([
+      db.canvas_snapshots.put(snapshot),
+      db.canvas_definitions.put(snapshot.canvas),
+    ]).then(() => {
+      if (!isCurrent()) throw canvasRefreshAbort();
+      return snapshot;
+    });
+  });
 }
 
 export async function createCanvasRecord(context, body, options = {}) {
@@ -94,11 +113,7 @@ export class CanvasSyncRuntime {
       );
       const snapshot = normalizeCanvasSnapshot(payload, this.context, this.canvasId, uuid());
       if (generation !== this.generation) return null;
-      await this.db.transaction('rw', this.db.canvas_snapshots, this.db.canvas_definitions, async () => {
-        if (generation !== this.generation) throw new DOMException('Canvas context changed', 'AbortError');
-        await this.db.canvas_snapshots.put(snapshot);
-        await this.db.canvas_definitions.put(snapshot.canvas);
-      });
+      await commitCanvasProjection(this.db, snapshot, () => generation === this.generation);
       if (generation !== this.generation) return null;
       this.authorized = true;
       this.onSnapshot?.(snapshot);

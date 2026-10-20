@@ -4321,6 +4321,20 @@
       "label": "Canvas settings concurrency",
       "notes": [],
       "noUserVisibleChanges": true
+    },
+    {
+      "buildNumber": 2457,
+      "label": "Priority-first resilient sync",
+      "notes": [
+        "Saved work opens immediately while the current screen and newest workspace changes refresh first, with interrupted catch-up and selective repair resuming quietly in the background."
+      ]
+    },
+    {
+      "buildNumber": 2459,
+      "label": "Reliable Canvas loading",
+      "notes": [
+        "Canvas now opens its live workspace naplets without the local transaction error that could interrupt snapshot loading."
+      ]
     }
   ]
 }
