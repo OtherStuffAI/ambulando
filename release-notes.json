@@ -4408,6 +4408,14 @@
         "Keep Inbox paging, navigation, scrolling, typing, selection and dialogs responsive while a large cached workspace continues background recovery.",
         "Refresh the newest workspace changes without automatically walking backward through historical priority pages during routine sync."
       ]
+    },
+    {
+      "buildNumber": 2477,
+      "label": "Richer Canvas interactions",
+      "notes": [
+        "Draw and reshape BYO-style directional arrows, box- or modifier-select multiple items, group them, and move selections or whole groups together.",
+        "Pan with the hand tool or ordinary wheel gestures, pinch or use Ctrl/Cmd-wheel to zoom, and interact inside embedded naplets without dragging them."
+      ]
     }
   ]
 }
