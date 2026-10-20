@@ -4379,6 +4379,14 @@
       "notes": [
         "See pending image attachments beside composer shortcuts, open the full preview from the compact thumbnail, and remove or retry the attachment from the preview."
       ]
+    },
+    {
+      "buildNumber": 2471,
+      "label": "Reliable Canvas and responsive catch-up",
+      "notes": [
+        "Keep cached conversations responsive while priority and repair updates extend a large local workspace, without repeatedly recounting the full downloaded cache.",
+        "Drag naplets and duplicate or edit Canvas items reliably without reactive browser state interrupting the action."
+      ]
     }
   ]
 }

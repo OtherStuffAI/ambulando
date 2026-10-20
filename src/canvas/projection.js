@@ -220,4 +220,3 @@ export function normalizeCanvasSnapshot(payload, context, canvasId, requestId) {
     comments,
   };
 }
-
