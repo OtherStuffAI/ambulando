@@ -4415,6 +4415,76 @@
       "notes": [
         "Create or update a Canvas in a responsive modal, then search and add named workspace people, agents, and groups without exposed identity lists."
       ]
+    },
+    {
+      "buildNumber": 2477,
+      "label": "Richer Canvas interactions",
+      "notes": [
+        "Draw and reshape BYO-style directional arrows, box- or modifier-select multiple items, group them, and move selections or whole groups together.",
+        "Pan with the hand tool or ordinary wheel gestures, pinch or use Ctrl/Cmd-wheel to zoom, and interact inside embedded naplets without dragging them."
+      ]
+    },
+    {
+      "buildNumber": 2478,
+      "label": "Visible arrow endpoint controls",
+      "notes": [
+        "Show endpoint controls when a Canvas arrow or line is selected so either end can be adjusted."
+      ]
+    },
+    {
+      "buildNumber": 2479,
+      "label": "Clearer Canvas access",
+      "notes": [
+        "Create or update a Canvas in a responsive modal, then search and add named workspace people, agents, and groups without exposed identity lists.",
+        "Select multiple Canvas items and group them reliably, with selection state remaining visible while you work."
+      ]
+    },
+    {
+      "buildNumber": 2481,
+      "label": "Working Canvas grouping",
+      "notes": [
+        "Group a multi-selection reliably even when the Canvas selection toolbar has remained open during movement."
+      ]
+    },
+    {
+      "buildNumber": 2483,
+      "label": "Stop redundant full workspace downloads",
+      "notes": [
+        "Verify an existing downloaded workspace against Tower and fetch only changed or deleted records before continuing with small delta updates.",
+        "Keep a genuinely new workspace on the paced complete-download path while cached work, drafts and pending changes remain available during recovery."
+      ]
+    },
+    {
+      "buildNumber": 2484,
+      "label": "Complete existing-cache repair",
+      "notes": [
+        "Finish verifying an existing workspace cache when Tower challenges a mix of changed records and deletions, without clearing downloads, drafts or pending changes."
+      ]
+    },
+    {
+      "buildNumber": 2485,
+      "label": "Stable device sync identity",
+      "notes": [
+        "Keep this device's sync identity through reloads and connection problems, so an already-downloaded workspace is briefly verified and then updated with only the changes instead of being downloaded again.",
+        "Retry an interrupted cache check automatically and fetch any leftover records in the background without blocking normal updates."
+      ]
+    },
+    {
+      "buildNumber": 2486,
+      "label": "Sync never freezes",
+      "notes": [
+        "Workspace updates no longer freeze on \"Refreshing recent work\": the post-update summary refresh now runs in short background steps and never blocks syncing.",
+        "Open tabs share the cache without blocking each other. One tab syncs, the others say \"Waiting for another Ambulando tab\", and another tab takes over within seconds if the syncing tab closes or stalls.",
+        "Stopped repeated reaction requests for messages in channels the server cannot authorise."
+      ]
+    },
+    {
+      "buildNumber": 2487,
+      "label": "Connect workspaces from NBrowser",
+      "notes": [
+        "Choose a disclosed NStack workspace in NBrowser and import it into the normal Tower connection flow without retyping server or workspace details.",
+        "Ambulando validates the descriptor and verifies Tower access with fresh Nostr authentication before saving the workspace; manual Tower setup remains available."
+      ]
     }
   ]
 }

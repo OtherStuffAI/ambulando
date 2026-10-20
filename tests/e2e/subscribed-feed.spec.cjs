@@ -119,7 +119,14 @@ for (const width of [1440, 390]) for (const format of ['json', 'rss']) {
     console.log('feeds-stage', format, width, 'rendered'); await page.evaluate(async () => { const s = window.Alpine.store('chat'); const item = s.subscribedFeedItems[0]; await s.setFeedFlag(item, 'saved', true); });
     await expect(reader.getByRole('button', { name: 'Unsave', exact: true })).toHaveCount(0); // dismissed by fixture state
     await page.evaluate(() => localStorage.removeItem('nostr_secure_auth_recovery_v1')); await page.reload(); await page.waitForFunction(() => Boolean(window.Alpine?.store?.('chat'))); await page.evaluate(configure, fixture);
-    console.log('feeds-stage', format, width, 'reloaded'); await reader.getByLabel('Show dismissed').check(); await expect(reader.getByText('Persistent headline', { exact: true })).toBeVisible();
-    await expect(reader.getByRole('button', { name: 'Unsave', exact: true })).toBeVisible(); await expect(reader.getByRole('button', { name: 'Mark unread', exact: true })).toBeVisible(); await expect(reader.getByRole('button', { name: 'Restore', exact: true })).toBeVisible();
+    console.log('feeds-stage', format, width, 'reloaded');
+    const widget = page.locator('[data-testid="deck-wapp-updates"]');
+    await widget.getByRole('button', { name: 'Feed options', exact: true }).click();
+    await widget.getByRole('menuitemcheckbox', { name: 'Show dismissed', exact: true }).click();
+    await expect(reader.getByText('Persistent headline', { exact: true })).toBeVisible();
+    await reader.getByRole('button', { name: 'Actions for Persistent headline', exact: true }).click();
+    await expect(reader.getByRole('menuitem', { name: 'Unsave', exact: true })).toBeVisible();
+    await expect(reader.getByRole('menuitem', { name: 'Mark unread', exact: true })).toBeVisible();
+    await expect(reader.getByRole('menuitem', { name: 'Restore', exact: true })).toBeVisible();
   });
 }

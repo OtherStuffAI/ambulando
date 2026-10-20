@@ -563,6 +563,9 @@ export function createShellState(options = {}) {
     // ── Lifecycle methods ─────────────────────────────────────
 
     async init() {
+      // NBrowser injects window.NStack at or just after document start. Probe
+      // without delaying ordinary startup, and retry again whenever Connect opens.
+      void this.initializeNStackConnection?.({ timeoutMs: 2500, pollIntervalMs: 50 });
       this.initDocEditLeaseLifecycle?.();
       this.startExtensionSignerWatch();
       this.initCommandPaletteShortcuts?.();

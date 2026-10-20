@@ -44,6 +44,23 @@ import {
 } from './crypto/group-keys.js';
 import { normalizedAutopilotLaunchUrl } from './autopilot-agents.js';
 import { hostedSignupConfig, hostedSignupIntent, submitHostedSignup } from './hosted-workspace-signup.js';
+import {
+  discoverNStackWorkspaces,
+  nstackUserMessage,
+  resolveNStackWorkspace,
+  waitForNStackProvider,
+} from './nstack-connection.js';
+
+const nstackRuntimeByStore = new WeakMap();
+
+function nstackRuntime(store) {
+  let runtime = nstackRuntimeByStore.get(store);
+  if (!runtime) {
+    runtime = { provider: null, unsubscribe: null, detection: null };
+    nstackRuntimeByStore.set(store, runtime);
+  }
+  return runtime;
+}
 
 function trimUrl(value) {
   return String(value || '').trim().replace(/\/+$/, '');
@@ -401,6 +418,85 @@ export const connectSettingsManagerMixin = {
   connectHostedNotice: '',
 
   connectHostedTermsAccepted: false,
+
+  nstackProviderState: 'checking',
+  nstackDiscoveryBusy: false,
+  nstackConnections: [],
+  nstackConnectError: '',
+  nstackNotice: '',
+
+  async initializeNStackConnection({ timeoutMs = 2500, pollIntervalMs = 50 } = {}) {
+    const runtime = nstackRuntime(this);
+    if (runtime.detection) return runtime.detection;
+    runtime.detection = (async () => {
+      const provider = await waitForNStackProvider({ timeoutMs, pollIntervalMs });
+      if (!provider) {
+        this.nstackProviderState = 'unavailable';
+        return null;
+      }
+      if (runtime.provider !== provider) {
+        runtime.unsubscribe?.();
+        runtime.provider = provider;
+        runtime.unsubscribe = provider.on('change', (event = {}) => {
+          this.nstackConnections = [];
+          this.nstackNotice = 'NBrowser changed or revoked this discovery. Your verified saved workspace was not changed.';
+          this.nstackConnectError = '';
+          this.nstackProviderState = 'available';
+          if (event?.reason === 'unavailable') this.nstackProviderState = 'unavailable';
+        });
+      }
+      this.nstackProviderState = 'available';
+      return provider;
+    })().finally(() => {
+      runtime.detection = null;
+    });
+    return runtime.detection;
+  },
+
+  async discoverFromNStack() {
+    if (this.nstackDiscoveryBusy) return;
+    this.nstackDiscoveryBusy = true;
+    this.nstackConnectError = '';
+    this.nstackNotice = '';
+    this.nstackConnections = [];
+    try {
+      const provider = await this.initializeNStackConnection({ timeoutMs: 2500, pollIntervalMs: 50 });
+      if (!provider) {
+        this.nstackConnectError = nstackUserMessage({ code: 'bridge_unavailable' });
+        return;
+      }
+      this.nstackConnections = await discoverNStackWorkspaces(provider);
+      this.nstackNotice = this.nstackConnections.length === 1
+        ? 'Choose the disclosed workspace to verify it with Tower.'
+        : `Choose one of ${this.nstackConnections.length} disclosed workspaces to verify with Tower.`;
+    } catch (error) {
+      this.nstackConnectError = nstackUserMessage(error);
+    } finally {
+      this.nstackDiscoveryBusy = false;
+    }
+  },
+
+  async connectFromNStack(connection) {
+    if (this.nstackDiscoveryBusy || !connection?.descriptor) return;
+    this.nstackDiscoveryBusy = true;
+    this.nstackConnectError = '';
+    this.nstackNotice = 'Approve fresh Tower access with your Nostr signer…';
+    try {
+      const provider = nstackRuntime(this).provider
+        || await this.initializeNStackConnection({ timeoutMs: 2500, pollIntervalMs: 50 });
+      const resolved = await resolveNStackWorkspace(provider, connection);
+      // connectWithPgDescriptor performs fresh signed descriptor and /me
+      // requests, then imports only the verified real descriptor shape.
+      await this.connectWithPgDescriptor(resolved.descriptor);
+      this.nstackConnections = [];
+      this.nstackNotice = '';
+    } catch (error) {
+      this.nstackConnectError = nstackUserMessage(error, 'tower');
+      this.nstackNotice = '';
+    } finally {
+      this.nstackDiscoveryBusy = false;
+    }
+  },
 
   async connectRequestHostedTower() {
     if (this.connectHostBusy) return;
@@ -801,11 +897,15 @@ export const connectSettingsManagerMixin = {
     this.connectHostedIntent = null;
     this.connectHostedPhase = 'idle';
     this.connectHostedTermsAccepted = false;
+    this.nstackConnections = [];
+    this.nstackConnectError = '';
+    this.nstackNotice = '';
     this.resetConnectPgBootstrapState();
     this.connectTokenInput = '';
     this.connectShowTokenFallback = false;
     this.showWorkspaceSwitcherMenu = false;
     this.mobileNavOpen = false;
+    void this.initializeNStackConnection({ timeoutMs: 2500, pollIntervalMs: 50 });
     this.refreshKnownHostsMetadata().catch(() => {});
   },
 

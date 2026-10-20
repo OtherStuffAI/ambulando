@@ -1,6 +1,8 @@
 const { test, expect } = require('playwright/test');
 const { serveBuiltFlightDeck } = require('./fixtures/serve-built-flightdeck.cjs');
 
+// Playwright requires a destructured fixtures argument even when none are used.
+// biome-ignore lint/correctness/noEmptyPattern: Playwright fixture signature
 test.afterEach(async ({}, info) => {
   if (info.errors.length) console.log('TOOLBOX_FAILURE', info.errors.map(error => error.message).join('\n'));
 });

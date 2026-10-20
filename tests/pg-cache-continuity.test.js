@@ -236,7 +236,9 @@ describe('authorized cache continuity', () => {
       .mockImplementationOnce(async () => { expect((await counts()).every(n => n > 0)).toBe(true); return delta(); });
     await syncTowerPgWorkspace(store, {}, ports(read));
     expect(await counts()).toEqual([1, 1, 2]);
-    expect(await db.pg_resource_attention.count()).toBe(3);
+    // The summary/attention backfill runs detached from the sync cycle, outside
+    // the device-cache lock, so the retained rows are summarised shortly after.
+    await vi.waitFor(async () => expect(await db.pg_resource_attention.count()).toBe(3), { timeout: 5_000 });
     expect(await db.pg_attention_counts.count()).toBe(0);
   });
 

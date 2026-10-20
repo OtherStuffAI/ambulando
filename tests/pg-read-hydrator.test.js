@@ -3199,7 +3199,12 @@ it('bounds stale reaction SSE reads and recovers a restored target after expiry'
     await hydrateTowerPgReactionTarget(target, 'message', 'stale', deps);
     expect(read).toHaveBeenCalledOnce();
     expect(replace).toHaveBeenCalledOnce();
-    now.mockReturnValue(31_001);
+    // A missing target stays suppressed for five minutes so identical signed
+    // requests are not repeated, then expires so a restored target recovers.
+    now.mockReturnValue(1000 + 5 * 60_000 - 1);
+    await hydrateTowerPgReactionTarget(target, 'message', 'stale', deps);
+    expect(read).toHaveBeenCalledOnce();
+    now.mockReturnValue(1000 + 5 * 60_000);
     await hydrateTowerPgReactionTarget(target, 'message', 'stale', deps);
     expect(read).toHaveBeenCalledTimes(2);
   } finally { now.mockRestore(); }

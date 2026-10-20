@@ -408,7 +408,9 @@ it('keeps a completed multi-page catch-up completed across ordinary launches who
   const deps = {
     getTowerPgService: async () => ({ record_sync: { device_checkpoints: true, protocol_versions: [1, 2], priority_feed: true } }),
     getTowerPgRecordSync: remote.page, towerPgRecordClient: remote.client,
-    deviceLocks: { request: (_name, _options, run) => run() },
+    // Web Locks always passes the granted Lock (or null when ifAvailable finds
+    // it held); an always-free lock grants immediately.
+    deviceLocks: { request: (name, options, run) => run({ name, mode: options?.mode || 'exclusive' }) },
     prioritySync: { readPriority },
     getTowerPgResourceViewStates: async () => ({}), getTowerPgWorkspaceMembers: async () => ({ members: [] }),
     getTowerPgWorkspaceGroups: async () => ({ groups: [] }), migrateLegacyAutopilotLaunchers: async () => {},
