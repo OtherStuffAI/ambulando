@@ -4438,6 +4438,14 @@
       "notes": [
         "Group a multi-selection reliably even when the Canvas selection toolbar has remained open during movement."
       ]
+    },
+    {
+      "buildNumber": 2483,
+      "label": "Stop redundant full workspace downloads",
+      "notes": [
+        "Verify an existing downloaded workspace against Tower and fetch only changed or deleted records before continuing with small delta updates.",
+        "Keep a genuinely new workspace on the paced complete-download path while cached work, drafts and pending changes remain available during recovery."
+      ]
     }
   ]
 }
