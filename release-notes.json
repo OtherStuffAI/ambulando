@@ -4461,6 +4461,15 @@
         "Keep this device's sync identity through reloads and connection problems, so an already-downloaded workspace is briefly verified and then updated with only the changes instead of being downloaded again.",
         "Retry an interrupted cache check automatically and fetch any leftover records in the background without blocking normal updates."
       ]
+    },
+    {
+      "buildNumber": 2486,
+      "label": "Sync never freezes",
+      "notes": [
+        "Workspace updates no longer freeze on \"Refreshing recent work\": the post-update summary refresh now runs in short background steps and never blocks syncing.",
+        "Open tabs share the cache without blocking each other. One tab syncs, the others say \"Waiting for another Ambulando tab\", and another tab takes over within seconds if the syncing tab closes or stalls.",
+        "Stopped repeated reaction requests for messages in channels the server cannot authorise."
+      ]
     }
   ]
 }
