@@ -921,7 +921,7 @@ export const syncManagerMixin = {
     });
   },
 
-  finishStartupSyncProgress(error = null) {
+  finishStartupSyncProgress(error = null, { waitingForTab = false } = {}) {
     if (this.startupSyncProgressTimer) clearTimeout(this.startupSyncProgressTimer);
     this.startupSyncProgressTimer = null;
     const elapsedMs = Date.now() - Number(this.startupSyncProgress?.startedAt || Date.now());
@@ -939,6 +939,13 @@ export const syncManagerMixin = {
         cursorPresent: this.startupSyncProgress.cursorPresent,
         error: this.startupSyncProgress.error,
       });
+      return;
+    }
+    if (waitingForTab) {
+      // Another tab holds the shared cache lock and is syncing the rows this
+      // tab renders, so an earlier failure here is no longer the state.
+      Object.assign(this.startupSyncProgress, { active: false, visible: true, stage: 'waiting-for-tab', elapsedMs, error: null });
+      flightDeckTrace('startup-sync', 'workspace sync deferred to another tab', { elapsedMs });
       return;
     }
     Object.assign(this.startupSyncProgress, {
@@ -987,6 +994,9 @@ export const syncManagerMixin = {
       const service = this.getTowerSyncService();
       const result = await syncTowerPgWorkspace(this, {
         ...options,
+        // The tab that held the shared cache released it (finished, stalled
+        // or closed); take over now instead of waiting for the next poll.
+        onDeviceLockReleased: () => this.scheduleBackgroundSync?.(250),
         onProgress: (update) => {
           if (!isCurrent()) return;
           this.updateStartupSyncProgress(update);
@@ -1000,7 +1010,7 @@ export const syncManagerMixin = {
       });
       if (isCurrent()) {
         await synchronizeThreadPins(this);
-        this.finishStartupSyncProgress();
+        this.finishStartupSyncProgress(null, { waitingForTab: result?.waitingForTab === true });
       }
       // Every committed workspace pull is connectivity evidence, including
       // startup and SSE catch-up pulls outside the background polling tick.
@@ -1032,6 +1042,7 @@ export const syncManagerMixin = {
   startupSyncProgressLabel() {
     const progress = this.startupSyncProgress || {};
     if (progress.stage === 'signing-paused') return 'Browser signing paused';
+    if (progress.stage === 'waiting-for-tab') return 'Waiting for another Ambulando tab';
     if (progress.error && progress.active) return 'Retrying updates…';
     if (progress.stage === 'error') return 'Update stalled';
     if (progress.stage === 'recent-refresh' || progress.stage === 'priority-paused') return 'Refreshing recent work';

@@ -190,15 +190,18 @@ export const reactionsManagerMixin = {
       getReactionsByTargets(commentTargetIds, commentFamilyHash),
       ]);
       if (isTowerPgBackendMode()) {
-        const ensurePg = async (targetType, targetId) => {
+        const ensurePg = async (targetType, targetId, channelId = null) => {
           await this.requestTowerSyncFamily?.(
             'reactions',
             pgTargetKey(targetType, targetId),
-            { targetType, targetId },
+            { targetType, targetId, ...(channelId ? { channelId } : {}) },
           );
         };
+        const chatChannelIds = new Map(visibleChatMessages
+          .filter((message) => message?.record_id && message?.channel_id)
+          .map((message) => [message.record_id, message.channel_id]));
         await Promise.all([
-          ...chatTargetIds.map((targetId) => ensurePg('message', targetId)),
+          ...chatTargetIds.map((targetId) => ensurePg('message', targetId, chatChannelIds.get(targetId))),
           ...(this.taskComments || [])
             .filter((comment) => comment?.pg_backend && comment?.record_id)
             .map((comment) => ensurePg('task_comment', comment.record_id)),

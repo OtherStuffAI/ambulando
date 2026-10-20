@@ -15,10 +15,16 @@ let boundWorkspaceKey = null;
 let materializationQueue = Promise.resolve();
 let foregroundQuietUntil = 0;
 
+// Continuous activity (typing, scrolling) keeps extending the quiet window.
+// Background work yields to it, but for a bounded time per batch boundary:
+// the queue is serial, so an unbounded wait would stall every request behind it.
+const FOREGROUND_YIELD_MAX_MS = 3_000;
+
 async function waitForForegroundIdle() {
   const startedAt = performance.now();
-  while (Date.now() < foregroundQuietUntil) {
-    await new Promise(resolve => setTimeout(resolve, Math.min(50, foregroundQuietUntil - Date.now())));
+  const deadline = Date.now() + FOREGROUND_YIELD_MAX_MS;
+  while (Date.now() < foregroundQuietUntil && Date.now() < deadline) {
+    await new Promise(resolve => setTimeout(resolve, Math.max(1, Math.min(50, foregroundQuietUntil - Date.now(), deadline - Date.now()))));
   }
   return performance.now() - startedAt;
 }

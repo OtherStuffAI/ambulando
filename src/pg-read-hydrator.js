@@ -115,7 +115,13 @@ import { recordFamilyHash as taskFamilyHash } from './translators/tasks.js';
 
 const DOC_COMMENT_HYDRATION_GENERATIONS = new WeakMap();
 const MISSING_REACTION_TARGETS = new WeakMap();
-const MISSING_REACTION_TARGET_RETRY_MS = 30_000;
+// Every read is a signed request. A channel Tower cannot authorise for
+// reactions fails identically for each of its visible messages, so the miss is
+// remembered for the channel as well as the target.
+const MISSING_REACTION_TARGET_RETRY_MS = 5 * 60_000;
+const MISSING_REACTION_CHANNEL_RETRY_MS = 10 * 60_000;
+const ABSENT_OPTIONAL_TARGETS = new WeakMap();
+const ABSENT_OPTIONAL_TARGET_RETRY_MS = 5 * 60_000;
 
 function beginDocCommentHydration(store, workspaceId, docId) {
   let generations = DOC_COMMENT_HYDRATION_GENERATIONS.get(store);
@@ -1735,6 +1741,38 @@ export async function hydrateTowerPgSyncBundle(store, bundle = {}, deps = {}) {
   };
 }
 
+// Summary/attention backfill after a cache reset or policy upgrade. It walks
+// every cached row, so it runs detached from the sync cycle and outside the
+// device-cache lock, one bounded worker slice at a time. Progress is durable
+// per batch; at most one tab runs it, and an interrupted run resumes on the
+// next delta cycle that still reports needsSummaryBackfill.
+const SUMMARY_BACKFILL_RUNS = new WeakMap();
+function scheduleSummaryBackfill(store, context, materialize, deps = {}) {
+  if (SUMMARY_BACKFILL_RUNS.get(store)) return SUMMARY_BACKFILL_RUNS.get(store);
+  const locks = deps.deviceLocks || globalThis.navigator?.locks;
+  const name = `flightdeck-summary-backfill:${store.workspaceDbKey || context.workspaceId}`;
+  const run = async () => {
+    for (let slice = 0; slice < 10_000; slice++) {
+      assertTowerPgWorkspaceCurrent(store, context);
+      const result = await materialize({ protocol_version: 2, rebuild_summaries: true });
+      if (!result || result.complete !== false) return;
+      await new Promise(resolve => setTimeout(resolve, 25));
+    }
+  };
+  const promise = (async () => {
+    try {
+      if (locks?.request) await locks.request(name, { mode: 'exclusive', ifAvailable: true }, lock => (lock ? run() : null));
+      else await run();
+    } catch (error) {
+      if (error?.message !== 'Workspace changed while loading Tower data') console.warn('[flightdeck] summary backfill paused', error?.message || error);
+    } finally {
+      SUMMARY_BACKFILL_RUNS.delete(store);
+    }
+  })();
+  SUMMARY_BACKFILL_RUNS.set(store, promise);
+  return promise;
+}
+
 async function syncTowerPgRecordWorkspace(store, options, deps) {
   const context = resolveTowerPgWorkspaceContext(store);
   const { recordDeltaCursorKey, PG_RECORD_DELTA_FAMILIES } = await import('./pg-record-delta.js');
@@ -1748,7 +1786,16 @@ async function syncTowerPgRecordWorkspace(store, options, deps) {
   const previousDevice = (await (deps.getSyncState || getSyncState)(recordDeltaCursorKey(store)))?.device;
   if (previousDevice?.extension && previousDevice.extension !== capabilities.extension) throw new Error('Negotiated record sync extension is unavailable');
   if (previousDevice?.largeRecords && previousDevice.largeRecords !== capabilities.largeRecords) throw new Error('Negotiated large record extension is unavailable');
-  const deviceMaterialize = bundle => (deps.hydrateTowerPgSyncBundle || hydrateTowerPgSyncBundle)(store, bundle, deps);
+  // The device-lock holder's watchdog observes every worker round-trip; an
+  // aborted (stalled) holder may not commit anything further.
+  let deviceGuard = null;
+  const deviceMaterialize = async bundle => {
+    const guard = deviceGuard;
+    if (guard?.signal.aborted) throw guard.signal.reason;
+    guard?.touch();
+    try { return await (deps.hydrateTowerPgSyncBundle || hydrateTowerPgSyncBundle)(store, bundle, deps); }
+    finally { guard?.touch(); }
+  };
   const auxiliaryDeps = {
     context,
     materialize: deviceMaterialize,
@@ -1772,10 +1819,15 @@ async function syncTowerPgRecordWorkspace(store, options, deps) {
       options.onProgress?.({ stage: 'priority-paused', error: error?.message || String(error),
         cursorPresent: false, protocolVersion: protocol });
     }
+    // The recent band is finished (or paused); never leave its label showing
+    // while the completeness lane waits for or runs under the device lock.
+    options.onProgress?.({ stage: 'opening', mode: 'unavailable', fullSnapshot: false, error: null,
+      cursorPresent: false, protocolVersion: protocol });
     await new Promise(resolve => setTimeout(resolve, 0));
   }
   const runDevice = lease => syncDeviceRecords({
-    context, options: { ...options, extension: capabilities.extension, largeRecords: capabilities.largeRecords,
+    context, options: { ...options, onProgress: update => { deviceGuard?.touch(); options.onProgress?.(update); },
+      extension: capabilities.extension, largeRecords: capabilities.largeRecords,
       cacheAdoption: capabilities.cacheAdoption,
       adopt: capabilities.cacheAdoption
         ? device => runCacheAdoption(store, { ...options, ...device }, auxiliaryDeps)
@@ -1792,7 +1844,10 @@ async function syncTowerPgRecordWorkspace(store, options, deps) {
     readPage: deps.getTowerPgRecordSync || getTowerPgRecordSync,
     readChunk: deps.getTowerPgRecordChunk || getTowerPgRecordChunk,
     client: deps.towerPgRecordClient || towerPgRecordClient,
-    assertCurrent: () => assertTowerPgWorkspaceCurrent(store, context),
+    assertCurrent: () => {
+      if (deviceGuard?.signal.aborted) throw deviceGuard.signal.reason;
+      assertTowerPgWorkspaceCurrent(store, context);
+    },
     preparePage: async (page, state) => {
       if (state.viewBaselineInitialized) return;
       await (deps.getTowerPgResourceViewStates || getTowerPgResourceViewStates)(context.workspaceId, {
@@ -1816,8 +1871,27 @@ async function syncTowerPgRecordWorkspace(store, options, deps) {
   });
   if (protocol === 2) {
     const locks = deps.deviceLocks || globalThis.navigator?.locks;
-    return locks?.request ? withDeviceCacheLock(store.workspaceDbKey || context.workspaceId, () => runDevice(), locks)
-      : withWorkerDeviceLease(deviceMaterialize, () => assertTowerPgWorkspaceCurrent(store, context), runDevice);
+    const backfill = result => {
+      if (result?.needsSummaryBackfill) scheduleSummaryBackfill(store, context, bundle => (deps.hydrateTowerPgSyncBundle || hydrateTowerPgSyncBundle)(store, bundle, deps), deps);
+      return result;
+    };
+    if (!locks?.request) return backfill(await withWorkerDeviceLease(deviceMaterialize, () => assertTowerPgWorkspaceCurrent(store, context), runDevice));
+    try {
+      return backfill(await withDeviceCacheLock(store.workspaceDbKey || context.workspaceId, guard => {
+        deviceGuard = guard;
+        return runDevice();
+      }, locks, {
+        onReleased: options.onDeviceLockReleased,
+        ...(deps.deviceLockOptions || {}),
+        onWaiting: () => options.onProgress?.({ stage: 'waiting-for-tab', mode: 'unavailable', fullSnapshot: false,
+          cursorPresent: false, protocolVersion: 2 }),
+      }));
+    } catch (error) {
+      // Another tab owns the shared cache and is syncing it; this tab's views
+      // read the same rows. Yield instead of failing; the next cycle retries.
+      if (error?.code !== 'device_lock_busy') throw error;
+      return { applied: 0, cursor: null, waitingForTab: true, protocolVersion: 2 };
+    }
   }
   const read = deps.getTowerPgRecordSync || getTowerPgRecordSync;
   let state = await (deps.getSyncState || getSyncState)(recordDeltaCursorKey(store));
@@ -1935,7 +2009,7 @@ async function syncTowerPgRecordWorkspace(store, options, deps) {
     cursor = result.cursor;
     if (!result.hasMore) {
       assertTowerPgWorkspaceCurrent(store, context);
-      if (result.needsSummaryBackfill) await materialize(store, { protocol_version: 1, rebuild_summaries: true }, deps);
+      if (result.needsSummaryBackfill) scheduleSummaryBackfill(store, context, bundle => materialize(store, bundle, deps), deps);
       options.onProgress?.({ stage: 'complete', page: pages, applied, cursorPresent: Boolean(cursor), mode: page.mode, fullSnapshot: page.mode === 'snapshot', hasMore: false, protocolVersion: 1 });
       return { ...result, applied, pages };
     }
@@ -2853,12 +2927,14 @@ export async function hydrateTowerPgReactionTarget(store, targetType, targetId, 
     missingTargets = new Map();
     MISSING_REACTION_TARGETS.set(store, missingTargets);
   }
-  const missingKey = JSON.stringify([context.workspaceId, context.baseUrl, context.appNpub,
-    store.session?.npub, store._workspaceSelectionGeneration, resolvedTargetType, resolvedTargetId]);
+  const missingScope = [context.workspaceId, context.baseUrl, context.appNpub, store.session?.npub, store._workspaceSelectionGeneration];
+  const missingKey = JSON.stringify([...missingScope, resolvedTargetType, resolvedTargetId]);
+  const channelId = trimText(deps.channelId);
+  const missingChannelKey = channelId ? JSON.stringify([...missingScope, 'channel', channelId]) : null;
   // Duplicate/replayed SSE hints cannot revive an absent target immediately.
-  // This short negative cache expires so restored targets remain recoverable.
+  // This negative cache expires so restored targets remain recoverable.
   for (const [key, retryAt] of missingTargets) if (Date.now() >= retryAt) missingTargets.delete(key);
-  if (missingTargets.has(missingKey)) return [];
+  if (missingTargets.has(missingKey) || (missingChannelKey && missingTargets.has(missingChannelKey))) return [];
 
   const readReactions = deps.getTowerPgReactions || getTowerPgReactions;
   const replaceReactions = deps.replacePgReactionsForTarget || replacePgReactionsForTarget;
@@ -2875,6 +2951,7 @@ export async function hydrateTowerPgReactionTarget(store, targetType, targetId, 
       assertTowerPgWorkspaceCurrent(store, context);
       await replaceReactions(targetFamilyHash, resolvedTargetId, []);
       missingTargets.set(missingKey, Date.now() + MISSING_REACTION_TARGET_RETRY_MS);
+      if (missingChannelKey) missingTargets.set(missingChannelKey, Date.now() + MISSING_REACTION_CHANNEL_RETRY_MS);
       return [];
     }
     throw error;
@@ -3041,7 +3118,15 @@ export async function hydrateTowerPgEventUpdates(store, events = [], deps = {}) 
   const absentTargets = [];
   // These reads are hints, not deletion authority. Reconcile missing resources
   // through the workspace journal before acknowledging their SSE batch.
+  let absentOptional = ABSENT_OPTIONAL_TARGETS.get(store);
+  if (!absentOptional) { absentOptional = new Map(); ABSENT_OPTIONAL_TARGETS.set(store, absentOptional); }
+  for (const [key, retryAt] of absentOptional) if (Date.now() >= retryAt) absentOptional.delete(key);
   const optionalTarget = async (family, id, load) => {
+    // Agent activity can emit several events a second for one target. Once a
+    // target is known to be unreadable, skip its signed read (and the
+    // workspace reconcile it would trigger) until the entry expires.
+    const absentKey = JSON.stringify([activityContext.workspaceId, activityContext.baseUrl, family, id]);
+    if (absentOptional.has(absentKey)) return undefined;
     try { return await load(); }
     catch (error) {
       let payload = error?.payload;
@@ -3049,6 +3134,7 @@ export async function hydrateTowerPgEventUpdates(store, events = [], deps = {}) 
       const absent = ['workroom', 'response-activity'].includes(family) && error?.status === 400 && payload?.code === 'resource-not-found'
         && payload?.required_permission === 'channel.read'
         && payload?.identity?.workspace_id === activityContext.workspaceId;
+      if (absent) absentOptional.set(absentKey, Date.now() + ABSENT_OPTIONAL_TARGET_RETRY_MS);
       (absent ? absentTargets : optionalFailures).push({ family, id, error });
     }
   };
@@ -3147,7 +3233,7 @@ export async function hydrateTowerPgEventUpdates(store, events = [], deps = {}) 
     } else if (entityType === 'reaction' && trimText(payload.target_type) && trimText(payload.target_id)) {
       const targetType = trimText(payload.target_type);
       const targetId = trimText(payload.target_id);
-      reactionTargets.set(`${targetType}:${targetId}`, { targetType, targetId });
+      reactionTargets.set(`${targetType}:${targetId}`, { targetType, targetId, channelId: trimText(payload.channel_id) || null });
     } else if (entityType === 'resource_view_state') {
       // Tower only exposes these outbox rows to the matching viewer.
       const state = mapTowerResourceViewState(payload);
@@ -3266,7 +3352,7 @@ export async function hydrateTowerPgEventUpdates(store, events = [], deps = {}) 
     ...[...docCommentTargets].map((docId) => hydrateTowerPgDocComments(store, docId, deps)),
     ...[...dailyTargets.values()].map(({ ownerActorId, noteDate, legacyChannelId }) => hydrateTowerPgDailyNoteTarget(store, ownerActorId, noteDate, { ...deps, legacyChannelId })),
     ...[...personalWappOwnerIds].map(() => hydrateTowerPgPersonalWapps(store, deps)),
-    ...[...reactionTargets.values()].map(({ targetType, targetId }) => hydrateTowerPgReactionTarget(store, targetType, targetId, deps)),
+    ...[...reactionTargets.values()].map(({ targetType, targetId, channelId }) => hydrateTowerPgReactionTarget(store, targetType, targetId, { ...deps, channelId })),
     ...feedEvents.map(event => optionalTarget('feed-reader', event.entity_id, () => materializeFeedReaderEvent(store, event))),
     ...responseActivityWrites.map((activity) => optionalTarget('response-activity', activity.target_id || activity.channel_id, () => (
       activity.target_type && activity.target_id
