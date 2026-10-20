@@ -172,6 +172,10 @@ test('dedicated Canvas route renders authorized sources and isolates trusted HTM
   const canvasPage = context.waitForEvent('page', { timeout: 5_000 });
   await original.evaluate(url => { window.open(url, '_blank'); return true; }, canvasUrl);
   const canvas = await canvasPage;
+  const canvasPageErrors = [];
+  const canvasConsoleErrors = [];
+  canvas.on('pageerror', error => canvasPageErrors.push(error.stack || error.message));
+  canvas.on('console', message => { if (message.type() === 'error') canvasConsoleErrors.push(message.text()); });
   await expect(canvas.getByRole('heading', { name: 'Delivery map' })).toBeVisible();
   await canvas.waitForTimeout(100);
   expect(snapshotRequests).toBe(1);
@@ -197,6 +201,7 @@ test('dedicated Canvas route renders authorized sources and isolates trusted HTM
   await expect(canvas).toHaveURL(/\/canvas\.html/);
 
   await canvas.getByRole('button', { name: 'Zoom in' }).click();
+  expect(await canvas.evaluate(() => ({ viewport: globalThis.Alpine.store('canvas').viewport, error: globalThis.Alpine.store('canvas').error }))).toMatchObject({ viewport: { scale: 1.1 }, error: '' });
   await expect(canvas.getByRole('button', { name: 'Reset zoom' })).toHaveText('110%');
   await expect.poll(() => mutations.filter(row => row.method === 'PATCH' && row.suffix === '').length).toBe(1);
   await canvas.getByRole('button', { name: 'Zoom in' }).click();
@@ -228,6 +233,8 @@ test('dedicated Canvas route renders authorized sources and isolates trusted HTM
   await expect.poll(() => canvas.isClosed()).toBe(true);
   await expect(original).toHaveTitle('seed');
   expect(original.isClosed()).toBe(false);
+  expect(canvasPageErrors).toEqual([]);
+  expect(canvasConsoleErrors).toEqual([]);
   console.log('CANVAS_BROWSER_EVIDENCE', JSON.stringify({ minimalChrome: true, napletFamilies: 4, deniedMetadataHidden: true, htmlInteractiveAndContained: true, sequentialCas: true, sourcePickerAndAddNaplet: true, persistentText: true, threadedCommentAnchor: true, closeReturnsToOriginalTab: true }));
 });
 

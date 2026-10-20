@@ -16,6 +16,25 @@ const clamp = (value, minimum, maximum) => Math.min(maximum, Math.max(minimum, v
 const clone = value => structuredClone(value);
 const pointDistance = (a, b) => Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
 const pointCenter = (a, b) => ({ clientX: (a.clientX + b.clientX) / 2, clientY: (a.clientY + b.clientY) / 2 });
+const canvasDom = Object.freeze({
+  stage: '.canvas-stage',
+  addDialog: '.canvas-add-dialog',
+  commentDialog: '.canvas-comment-dialog',
+  commentPanel: '.canvas-comment-panel',
+});
+
+function canvasElement(name) {
+  const element = document.querySelector(canvasDom[name]);
+  if (!element) throw new Error(`Canvas ${name} is unavailable.`);
+  return element;
+}
+
+function openCanvasDialog(name) {
+  Alpine.nextTick(() => {
+    const dialog = canvasElement(name);
+    if (!dialog.open) dialog.showModal();
+  });
+}
 
 function findWorkspace(settings, requestedKey) {
   return (settings?.knownWorkspaces || []).map(normalizeWorkspaceEntry).filter(Boolean)
@@ -80,7 +99,7 @@ export function canvasPageStore() {
       this.error = error?.status === 403 || error?.status === 404 ? 'Canvas unavailable.' : (error?.message || 'Canvas could not be refreshed.');
     },
     async refresh() { this.status = 'loading'; this.error = ''; await syncRuntime?.refresh().catch(() => undefined); },
-    stageRect() { return this.$refs.stage.getBoundingClientRect(); },
+    stageRect() { return canvasElement('stage').getBoundingClientRect(); },
     toWorld(event) { return worldPoint(this.viewport, event, this.stageRect()); },
     zoomBy(factor, origin = null) {
       const rect = this.stageRect(), point = origin || { clientX: rect.left + rect.width / 2, clientY: rect.top + rect.height / 2 };
@@ -175,7 +194,7 @@ export function canvasPageStore() {
       await this.mutate(() => syncRuntime.createElement({ kind: 'text', layout: { x: Math.round(point.x), y: Math.round(point.y), width: 240, height: 120, z: this.highestZ() + 1 }, data: { text: 'Text' } }));
       const created = this.elements.at(-1); if (created) { this.selected = { type: 'element', id: created.id }; this.beginTextEdit(created); } this.tool = 'select';
     },
-    beginTextEdit(element) { if (element.kind !== 'text') return; this.editingTextId = element.id; this.editingText = String(element.data.text || ''); this.$nextTick(() => document.querySelector(`[data-text-editor="${element.id}"]`)?.focus()); },
+    beginTextEdit(element) { if (element.kind !== 'text') return; this.editingTextId = element.id; this.editingText = String(element.data.text || ''); Alpine.nextTick(() => document.querySelector(`[data-text-editor="${element.id}"]`)?.focus()); },
     async saveTextEdit(element) {
       const next = this.editingText.trim() || 'Text', before = String(element.data.text || ''); this.editingTextId = ''; if (next === before) return;
       await this.mutate(() => syncRuntime.updateElement(element.id, { data: { ...element.data, text: next } }), { type: 'data', id: element.id, before: { ...element.data, text: before }, after: { ...element.data, text: next } });
@@ -206,7 +225,7 @@ export function canvasPageStore() {
     },
     async openAddDialog(point = null) {
       const rect = this.stageRect(); this.addDialog = { type: 'document', sourceId: '', title: '', point: point || this.toWorld({ clientX: rect.left + 80, clientY: rect.top + 80 }) };
-      this.sourceSearch = ''; await this.loadSourceOptions(); this.$nextTick(() => this.$refs.addDialog.showModal());
+      this.sourceSearch = ''; await this.loadSourceOptions(); openCanvasDialog('addDialog');
     },
     async loadSourceOptions() {
       const db = openWorkspaceDb(this.currentWorkspaceKey);
@@ -223,11 +242,11 @@ export function canvasPageStore() {
     async addNaplet() {
       const sourceId = text(this.addDialog.sourceId); if (!sourceId || this.saving) return; const point = this.addDialog.point || { x: 80, y: 80 };
       await this.mutate(() => syncRuntime.addNaplet({ source: { type: this.addDialog.type, id: sourceId }, title: text(this.addDialog.title) || undefined, layout: { x: Math.round(point.x), y: Math.round(point.y), width: 380, height: 280, z: this.highestZ() + 1 } }));
-      if (!this.error) this.$refs.addDialog.close();
+      if (!this.error) canvasElement('addDialog').close();
     },
-    openCommentDialog(anchor, parentCommentId = null) { if (anchor.type === 'naplet' && !anchor.naplet_id) return; this.commentDialog = { anchor, parentCommentId, body: '' }; this.$nextTick(() => this.$refs.commentDialog.showModal()); },
-    async submitComment() { const body = text(this.commentDialog.body); if (!body) return; await this.mutate(() => syncRuntime.createComment({ anchor: this.commentDialog.anchor, parent_comment_id: this.commentDialog.parentCommentId || undefined, body })); if (!this.error) this.$refs.commentDialog.close(); },
-    openCommentThread(comment) { this.activeCommentId = comment.id; this.$nextTick(() => this.$refs.commentPanel.showModal()); },
+    openCommentDialog(anchor, parentCommentId = null) { if (anchor.type === 'naplet' && !anchor.naplet_id) return; this.commentDialog = { anchor, parentCommentId, body: '' }; openCanvasDialog('commentDialog'); },
+    async submitComment() { const body = text(this.commentDialog.body); if (!body) return; await this.mutate(() => syncRuntime.createComment({ anchor: this.commentDialog.anchor, parent_comment_id: this.commentDialog.parentCommentId || undefined, body })); if (!this.error) canvasElement('commentDialog').close(); },
+    openCommentThread(comment) { this.activeCommentId = comment.id; openCanvasDialog('commentPanel'); },
     async setCommentResolved(comment, resolved) { await this.mutate(() => syncRuntime.setCommentResolved(comment.id, resolved)); },
     commentCountForNaplet(id) { return this.unresolvedComments.filter(row => row.anchor.type === 'naplet' && row.anchor.naplet_id === id).length; },
     commentStyle(comment) { if (comment.anchor.type === 'naplet') { const naplet = this.naplets.find(row => row.id === comment.anchor.naplet_id); if (!naplet) return 'display:none'; return `left:${naplet.layout.x + naplet.layout.width - 14}px;top:${naplet.layout.y - 14}px`; } return `left:${comment.anchor.x - 14}px;top:${comment.anchor.y - 14}px`; },
