@@ -361,7 +361,14 @@ it('keeps a completed multi-page catch-up completed across ordinary launches who
     getTowerPgResourceViewStates: async () => ({}), getTowerPgWorkspaceMembers: async () => ({ members: [] }),
     getTowerPgWorkspaceGroups: async () => ({ groups: [] }), migrateLegacyAutopilotLaunchers: async () => {},
   };
-  const relaunch = async () => { launch += 1; remote.page.mockClear(); await syncTowerPgWorkspace(store, { priorityContinuation: false }, deps); };
+  const launchProgress = [];
+  const relaunch = async () => {
+    launch += 1;
+    remote.page.mockClear();
+    const progress = [];
+    await syncTowerPgWorkspace(store, { priorityContinuation: false, onProgress: update => progress.push(update) }, deps);
+    launchProgress.push(progress);
+  };
   await relaunch();
   const completed = await state();
   expect(completed.converged).toBe(true);
@@ -377,6 +384,13 @@ it('keeps a completed multi-page catch-up completed across ordinary launches who
   expect(readPriority).toHaveBeenCalledTimes(4);
   expect(remote.client.mock.calls.filter(c => c[2].operation === 'register')).toHaveLength(1);
   expect(remote.client.mock.calls.filter(c => c[2].operation === 'retire')).toHaveLength(0);
+  expect(launchProgress.every(progress => progress.filter(event => event.stage === 'complete').length === 1)).toBe(true);
+  expect(launchProgress.flat().filter(event => event.stage === 'recovery')).toHaveLength(0);
+  expect(launchProgress.slice(1).flat().some(event => event.fullSnapshot === true)).toBe(false);
+  expect((await db.sync_state.get('record-sync-aux:device-test:priority')).value.status).toBe('complete');
+  expect((await db.sync_state.get('record-sync-aux:device-test:queue')).value).toMatchObject({
+    status: 'ready', items: [{ lane: 'completeness', durable: true }],
+  });
 });
 
 it('resumes a build-2460 cache whose owner count drifted below auxiliary growth without re-adoption', async () => {
