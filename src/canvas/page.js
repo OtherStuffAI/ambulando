@@ -126,7 +126,7 @@ export function canvasPageStore() {
     handleWheel(event) {
       if (this.tool !== 'hand' && event.target.closest?.('.canvas-naplet,.canvas-element')) return;
       event.preventDefault();
-      if (canvasWheelIntent(event) === 'zoom') this.viewport = zoomViewport(this.viewport, Math.exp(-event.deltaY * 0.002), event, this.stageRect());
+      if (canvasWheelIntent(event) === 'zoom') this.viewport = zoomViewport(this.viewport, Math.exp(-event.deltaY * 0.005), event, this.stageRect());
       else { this.viewport.x -= event.deltaX; this.viewport.y -= event.deltaY; }
       this.queueViewportSave();
     },
