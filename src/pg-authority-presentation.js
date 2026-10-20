@@ -34,6 +34,19 @@ export function clearPgAuthorityPresentation(store, { preserveDrafts = true } = 
 
 export function rememberPgRecoveryDestination(store, kind, id) {
   if (!store.pgNavigationRecoveryPending) return false;
+  const collection = kind === 'task' ? store.tasks
+    : kind === 'doc' ? store.documents
+      : kind === 'report' ? store.reports : null;
+  const downloaded = Array.isArray(collection)
+    ? collection.find((row) => row?.record_id === id && row.record_state !== 'deleted'
+      && (['stale', 'access-lost'].includes(row.pg_access_status)
+        || (row.can_read !== false && row.readable !== false)))
+    : null;
+  // Replacement recovery fences remote authority, not an already-downloaded
+  // row. Keep cached Tasks and Docs browsable while the authoritative refresh
+  // reconciles in the background. Missing destinations still remain routing
+  // intent until the replacement proves they are readable.
+  if (downloaded) return false;
   const intent = { ...(store.pgNavigationRecoverySelection || {}), workspaceKey: store.currentWorkspaceKey,
     boardId: store.selectedBoardId, section: kind === 'channel' ? 'chat' : kind === 'task' ? 'tasks' : kind === 'doc' ? 'docs' : 'reports',
     channelId: null, threadId: null, taskId: null, docId: null, reportId: null };

@@ -1820,6 +1820,10 @@
 
         <div class="content-scroll-area" :class="{ 'content-scroll-area-deck': $store.chat.navSection === 'status' && $store.chat.deckInboxEnabled }">
         <p class="auth-error" role="alert" x-show="$store.chat.workspaceSelectionError" x-text="$store.chat.workspaceSelectionError" x-cloak></p>
+        <div class="auth-error section-refresh-error" role="alert" x-show="$store.chat.sectionRefreshError && (($store.chat.sectionRefreshFamily === 'tasks' && $store.chat.navSection === 'tasks') || ($store.chat.sectionRefreshFamily === 'documents' && ['docs', 'files'].includes($store.chat.navSection)))" x-cloak>
+          <span x-text="$store.chat.sectionRefreshError"></span>
+          <button type="button" @click="$store.chat.retryActiveSectionRefresh()">Retry</button>
+        </div>
         <template x-if="$store.chat.contextEnabled && $store.chat.navSection === 'context'">
           <section class="context-tree-view" x-data="contextTreeView" x-effect="queueSync($store.chat.currentWorkspace?.workspaceId || $store.chat.currentWorkspace?.workspace_id, $store.chat.pgContextScope?.record_id || $store.chat.selectedBoardScope?.record_id, $store.chat.workspaceDbKey, $store.chat.pgContextScope?.title || $store.chat.selectedBoardScope?.title || '', $store.chat.isLoggedIn && $store.chat.isTowerPgMode)" aria-label="Scope Context Tree">
             <header class="context-tree-header">
@@ -2837,12 +2841,12 @@
         <!-- ═══ TASKS SECTION ═══ -->
         <div
           class="chat-task-page-backdrop"
-          x-show="$store.chat.chatTaskModalOpen && !$store.chat.pgNavigationRecoveryPending"
+          x-show="$store.chat.chatTaskModalOpen"
           x-cloak
           @click="$store.chat.closeChatTaskModal()"
         ></div>
 
-        <template x-if="!$store.chat.pgNavigationRecoveryPending && ($store.chat.navSection === 'tasks' || $store.chat.chatTaskModalOpen)">
+        <template x-if="$store.chat.navSection === 'tasks' || $store.chat.chatTaskModalOpen">
           <div
             class="tasks-section"
             :class="{ 'chat-task-inline-section': $store.chat.chatTaskModalOpen, 'chat-task-modal-fullscreen': $store.chat.chatTaskModalFullScreen }"
@@ -4849,12 +4853,12 @@
 
         <div
           class="chat-doc-page-backdrop"
-          x-show="$store.chat.chatDocModalOpen && !$store.chat.pgNavigationRecoveryPending"
+          x-show="$store.chat.chatDocModalOpen"
           x-cloak
           @click="$store.chat.closeChatDocModal()"
         ></div>
 
-        <template x-if="!$store.chat.pgNavigationRecoveryPending && ($store.chat.navSection === 'docs' || $store.chat.chatDocModalOpen)">
+        <template x-if="$store.chat.navSection === 'docs' || $store.chat.chatDocModalOpen">
           <div
             class="docs-section"
             x-data="{

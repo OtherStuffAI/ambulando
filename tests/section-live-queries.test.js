@@ -460,7 +460,7 @@ describe('section live query plan', () => {
     expect(store.refreshScopes).toHaveBeenCalledTimes(1);
     expect(store.refreshChannels).toHaveBeenCalledTimes(1);
     expect(store.requestTowerSyncFamily).toHaveBeenCalledWith('personal-wapps', '', { force: true });
-    expect(store.refreshTasks).not.toHaveBeenCalled();
+    expect(store.refreshTasks).toHaveBeenCalledTimes(1);
     expect(store.refreshDocuments).not.toHaveBeenCalled();
     expect(store.refreshAudioNotes).not.toHaveBeenCalled();
   });
@@ -533,7 +533,7 @@ describe('section live query plan', () => {
     sectionLiveQueryMixin.startWorkspaceLiveQueries.call(store);
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    expect(store.refreshTasks).not.toHaveBeenCalled();
+    expect(store.refreshTasks).toHaveBeenCalledTimes(1);
   });
 
   it('refreshes Tower PG files when the files route becomes active', async () => {
@@ -568,9 +568,53 @@ describe('section live query plan', () => {
 
     expect(store.refreshDocuments).toHaveBeenCalled();
   });
+
+  it('refreshes Tower PG documents when the Docs route becomes active', async () => {
+    const store = {
+      currentWorkspace: { pgBackendMode: true, workspaceKey: 'docs-refresh', workspaceId: 'workspace-1' },
+      currentWorkspaceKey: 'docs-refresh', workspaceOwnerNpub: 'npub1owner',
+      session: { npub: 'npub1user' }, backendUrl: 'https://tower.example', navSection: 'docs',
+      startSharedLiveQueries: vi.fn(), createLiveSubscription: vi.fn(() => ({ unsubscribe() {} })),
+      stopLiveSubscription: vi.fn(), initUnreadTracking: vi.fn(),
+      loadLocalWorkspaceCoreData: vi.fn(async () => ({ scopes: [], channels: [] })),
+      refreshGroups: vi.fn(async () => []), refreshScopes: vi.fn(async () => []),
+      refreshChannels: vi.fn(async () => []), refreshDocuments: vi.fn(async () => []),
+    };
+    openWorkspaceDb(store.currentWorkspaceKey);
+    sectionLiveQueryMixin.startWorkspaceLiveQueries.call(store);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(store.refreshDocuments).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps cached Tasks visible and exposes an actionable signing failure during refresh', async () => {
+    const store = {
+      currentWorkspace: { pgBackendMode: true, workspaceKey: 'tasks-auth-error', workspaceId: 'workspace-1' },
+      currentWorkspaceKey: 'tasks-auth-error', workspaceOwnerNpub: 'npub1owner',
+      session: { npub: 'npub1user' }, backendUrl: 'https://tower.example', navSection: 'tasks',
+      selectedBoardId: '__all__', pgNavigationRecoveryPending: true,
+      startSharedLiveQueries: vi.fn(), createLiveSubscription: vi.fn(() => ({ unsubscribe() {} })),
+      stopLiveSubscription: vi.fn(), initUnreadTracking: vi.fn(),
+      loadLocalWorkspaceCoreData: vi.fn(async () => ({ scopes: [], channels: [] })),
+      refreshGroups: vi.fn(async () => []), refreshScopes: vi.fn(async () => []),
+      refreshChannels: vi.fn(async () => []),
+      refreshTasks: vi.fn(async () => { throw Object.assign(new Error('NIP-98 signing timed out'), { status: 401, code: 'auth_timeout' }); }),
+    };
+    openWorkspaceDb(store.currentWorkspaceKey);
+    await getWorkspaceDb().tasks.put({ record_id: 'cached-task', owner_npub: 'npub1owner', title: 'Cached task', state: 'ready', record_state: 'active' });
+    sectionLiveQueryMixin.startWorkspaceLiveQueries.call(store);
+    const pages = await Promise.all(store.createLiveSubscription.mock.calls.map(async ([query]) => {
+      try { return await query(); } catch { return null; }
+    }));
+    const page = pages.find((value) => Array.isArray(value?.rows)
+      && value.rows.some((row) => row.record_id === 'cached-task'));
+    expect(page).toBeTruthy();
+    expect(page.rows.map((row) => row.record_id)).toContain('cached-task');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(store.sectionRefreshError).toContain('browser signing was interrupted');
+  });
 });
 
-// Checkpoint repair must not suspend the local chat subscription.
+// Checkpoint repair must not suspend local downloaded subscriptions.
 describe('retained chat during checkpoint recovery', () => {
   it.each(['chat', 'status'])('keeps downloaded %s messages subscribed while recovery is pending', (navSection) => {
     const store = { workspaceOwnerNpub: 'owner', currentWorkspaceKey: 'workspace', navSection,
@@ -578,6 +622,16 @@ describe('retained chat during checkpoint recovery', () => {
       pgNavigationRecoveryPending: true };
     const plan = getSectionLiveQueryPlan(store);
     expect(plan.detail.some(key => key.startsWith(navSection === 'chat' ? 'chat:messages:' : 'deck:messages:'))).toBe(true);
+  });
+
+  it.each(['tasks', 'docs'])('keeps downloaded %s detail subscribed while recovery is pending', (navSection) => {
+    const store = { workspaceOwnerNpub: 'owner', currentWorkspaceKey: 'workspace', navSection,
+      selectedBoardId: '__all__', activeTaskId: navSection === 'tasks' ? 'task-1' : null,
+      selectedDocId: navSection === 'docs' ? 'doc-1' : null, commentVisibleCount: 80,
+      selectedDocType: navSection === 'docs' ? 'document' : null,
+      pgNavigationRecoveryPending: true };
+    const plan = getSectionLiveQueryPlan(store);
+    expect(plan.detail.some(key => key.startsWith(navSection === 'tasks' ? 'tasks:selected-task:' : 'docs:selected-doc:'))).toBe(true);
   });
 });
 

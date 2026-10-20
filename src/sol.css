@@ -623,3 +623,5 @@ code, pre { font-family:var(--font-code); }
   .nstack-known-header { align-items:flex-start; flex-direction:column; gap:4px; }
   .nstack-known-workspaces { padding-left:8px; }
 }
+.section-refresh-error { align-items:center; display:flex; gap:12px; justify-content:space-between; margin:12px; }
+.section-refresh-error button { flex:0 0 auto; }

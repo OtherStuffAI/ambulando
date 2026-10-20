@@ -168,4 +168,15 @@ describe('detail authority review', () => {
     expect(s.pgNavigationRecoverySelection).toMatchObject({ section: 'docs', docId: 'different-doc', channelId: null });
     expect(s.selectedDocId).toBeUndefined(); expect(s.docEditorContent).toBeUndefined();
   });
+  it.each([
+    ['task', 'cached-task', 'tasks'],
+    ['doc', 'cached-doc', 'documents'],
+  ])('opens a downloaded %s while replacement recovery continues', async (kind, id, collection) => {
+    const { rememberPgRecoveryDestination } = await import('../src/pg-authority-presentation.js');
+    const s = client();
+    s.pgNavigationRecoveryPending = true;
+    s[collection] = [{ record_id: id, record_state: 'active', pg_access_status: 'stale' }];
+    expect(rememberPgRecoveryDestination(s, kind, id)).toBe(false);
+    expect(s.pgNavigationRecoverySelection).toBeUndefined();
+  });
 });

@@ -14,10 +14,12 @@ replacement state in one Dexie transaction. `resetting`, snapshot reconciliation
 and retirement mark an incomplete replacement. An empty or partial prefix cannot
 prove that the previously selected destination was revoked.
 
-During replacement, retain routing IDs and saved composer draft intent, clear
-old selected message, task, document and report content, editor buffers and modal
-models, and fence asynchronous
-selection work. Do not restore cached rows or composer content to hide the reset.
+During replacement, retain routing IDs, downloaded content and saved draft
+intent. Cached Tasks and Docs remain readable while the authoritative refresh
+reconciles in the background; a downloaded destination can be opened directly.
+Missing destinations remain routing intent until replacement proves they are
+readable. Fence stale asynchronous selection and materialization work without
+unmounting cached section chrome or clearing downloaded rows.
 Once replacement completes, restore a destination only if current rows still
 permit reading it and its scope is present and readable. Navigation during
 replacement updates routing intent without mounting a detail editor. Save task
@@ -29,7 +31,9 @@ A missing selected scope must not broaden the task list to other scopes.
 Routine replacement does not render a page-level recovery message. The avatar
 activity treatment shows `Syncing`, with detailed progress available from its
 profile disclosure. Actionable sync failures and browser re-authentication remain
-visible there.
+visible there. A Tasks or Docs foreground refresh failure also remains visible
+inside the active section with a retry action; it does not replace cached data
+with an empty pane or send a healthy session through login.
 
 This changes presentation only. It does not bypass epoch checks, delay revocation,
 retry uncertain writes, clear the entire database or eliminate the initial full

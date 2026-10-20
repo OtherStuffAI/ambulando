@@ -272,6 +272,8 @@ function scheduleTowerPgWorkspaceHydration(store, state) {
     })
     .finally(() => {
       state.pgHydratingWorkspaceKeys.delete(workspaceKey);
+      scheduleTowerPgTaskBoardRefresh(store, state);
+      scheduleTowerPgDocumentsRefresh(store, state);
     });
 }
 
@@ -307,8 +309,10 @@ function scheduleTowerPgTaskBoardRefresh(store, state) {
     .then(async () => {
       if (String(store.currentWorkspaceKey || '') !== workspaceKey) return;
       await store.refreshTasks();
+      clearSectionRefreshError(store, 'tasks');
     })
     .catch((error) => {
+      setSectionRefreshError(store, 'tasks', 'tasks', error);
       flightDeckLog('debug', 'pg', 'Tower PG task board refresh failed after route activation', {
         workspaceKey,
         boardId: String(store?.selectedBoardId || ''),
@@ -320,16 +324,42 @@ function scheduleTowerPgTaskBoardRefresh(store, state) {
     });
 }
 
-function buildTowerPgFilesRefreshKey(store) {
+function buildTowerPgDocumentsRefreshKey(store) {
   const workspaceKey = String(store?.currentWorkspaceKey || store?.currentWorkspace?.workspaceKey || '').trim();
   if (!workspaceKey) return '';
   const channelId = String(store?.pgContextSelectedChannelId || '').trim();
-  return channelId ? `${workspaceKey}:files:${channelId}` : `${workspaceKey}:files`;
+  const section = store?.navSection === 'docs' ? 'docs' : 'files';
+  return channelId ? `${workspaceKey}:${section}:${channelId}` : `${workspaceKey}:${section}`;
 }
 
-function scheduleTowerPgFilesRefresh(store, state) {
+function sectionRefreshErrorMessage(section, error) {
+  const label = section === 'tasks' ? 'Tasks' : 'Docs';
+  const status = Number(error?.status || 0);
+  const code = String(error?.code || '').toLowerCase();
+  const message = String(error?.message || '').toLowerCase();
+  if (status === 401 || code.includes('auth') || code.includes('sign') || message.includes('signing')) {
+    return `${label} could not refresh because browser signing was interrupted. Keep saved data intact, restore the browser signer, then retry.`;
+  }
+  if (status === 403 || code.includes('membership') || code.includes('forbidden') || code.includes('permission')) {
+    return `${label} refresh was denied for this workspace. Check workspace access or switch to an authorised workspace, then retry.`;
+  }
+  return `${label} could not refresh. Cached data remains available; check the connection and retry.`;
+}
+
+function setSectionRefreshError(store, family, section, error) {
+  store.sectionRefreshFamily = family;
+  store.sectionRefreshError = sectionRefreshErrorMessage(section, error);
+}
+
+function clearSectionRefreshError(store, family) {
+  if (store.sectionRefreshFamily !== family) return;
+  store.sectionRefreshFamily = '';
+  store.sectionRefreshError = '';
+}
+
+function scheduleTowerPgDocumentsRefresh(store, state) {
   if (!isTowerPgBackendMode()) return;
-  if (store?.navSection !== 'files') return;
+  if (!['docs', 'files'].includes(store?.navSection)) return;
   if (!store?.currentWorkspace?.pgBackendMode) return;
   if (!store?.session?.npub) return;
   if (!store?.backendUrl) return;
@@ -337,7 +367,7 @@ function scheduleTowerPgFilesRefresh(store, state) {
   const workspaceKey = String(store.currentWorkspaceKey || store.currentWorkspace?.workspaceKey || '').trim();
   if (!workspaceKey || !isWorkspaceDbOpenForKey(workspaceKey)) return;
 
-  const refreshKey = buildTowerPgFilesRefreshKey(store);
+  const refreshKey = buildTowerPgDocumentsRefreshKey(store);
   if (!refreshKey || state.pgRefreshingFilesKeys.has(refreshKey)) return;
   const lastRefreshAt = Number(state.pgFilesRefreshAt.get(refreshKey) || 0);
   if (Date.now() - lastRefreshAt < PG_FILES_REFRESH_MIN_MS) return;
@@ -348,10 +378,13 @@ function scheduleTowerPgFilesRefresh(store, state) {
     .then(async () => {
       if (String(store.currentWorkspaceKey || '') !== workspaceKey) return;
       await store.refreshDocuments();
+      clearSectionRefreshError(store, 'documents');
     })
     .catch((error) => {
-      flightDeckLog('debug', 'pg', 'Tower PG files refresh failed after route activation', {
+      setSectionRefreshError(store, 'documents', store?.navSection, error);
+      flightDeckLog('debug', 'pg', 'Tower PG documents refresh failed after route activation', {
         workspaceKey,
+        section: String(store?.navSection || ''),
         channelId: String(store?.pgContextSelectedChannelId || ''),
         error: error?.message || String(error),
       });
@@ -821,8 +854,8 @@ async function queryTaskBoard(store, ownerNpub) {
 }
 
 function buildDetailSpecs(store) {
-  // Recovery fences remote materialization, not downloaded chat reads.
-  if (store.pgNavigationRecoveryPending && !['chat', 'status'].includes(store.navSection)) return [];
+  // Recovery fences remote materialization, not downloaded reads. Cached task
+  // and document detail subscriptions remain live while catch-up reconciles.
   const ownerNpub = String(store?.workspaceOwnerNpub || '').trim();
   const workspaceKey = currentWorkspaceKey(store);
   if (!ownerNpub) return [];
@@ -1186,8 +1219,27 @@ export const sectionLiveQueryMixin = {
   pgNavigationGeneration: null,
   pgNavigationWorkspaceKey: '',
   pgNavigationProjectionRevision: 0,
+  sectionRefreshError: '',
+  sectionRefreshFamily: '',
   applyPgNavigationProjection(projection) {
     return applyPgNavigationProjection(this, projection);
+  },
+  retryActiveSectionRefresh() {
+    const family = this.navSection === 'tasks' ? 'tasks'
+      : ['docs', 'files'].includes(this.navSection) ? 'documents' : '';
+    if (!family) return Promise.resolve(false);
+    this.sectionRefreshError = '';
+    this.sectionRefreshFamily = family;
+    const refresh = family === 'tasks' ? this.refreshTasks?.bind(this) : this.refreshDocuments?.bind(this);
+    return Promise.resolve(refresh?.())
+      .then((result) => {
+        clearSectionRefreshError(this, family);
+        return result;
+      })
+      .catch((error) => {
+        setSectionRefreshError(this, family, this.navSection, error);
+        return false;
+      });
   },
   startSharedLiveQueries() {
     const state = getSectionState(this);
@@ -1254,7 +1306,8 @@ export const sectionLiveQueryMixin = {
     }
 
     scheduleTowerPgWorkspaceHydration(this, state);
-    scheduleTowerPgFilesRefresh(this, state);
+    scheduleTowerPgTaskBoardRefresh(this, state);
+    scheduleTowerPgDocumentsRefresh(this, state);
   },
 
   stopWorkspaceLiveQueries() {
