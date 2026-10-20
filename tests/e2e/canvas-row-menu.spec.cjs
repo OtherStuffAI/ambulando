@@ -53,7 +53,7 @@ async function openShortCanvas(page, rowCount = 1) {
 async function assertBottomEdgeMenu(page, { delayMenuLayout = false } = {}) {
   const panel = await openShortCanvas(page);
   const trigger = panel.getByRole('button', { name: 'Canvas options' });
-  const menu = page.getByRole('menu', { name: 'Canvas options' });
+  const menu = page.getByRole('menu', { name: 'Canvas options', includeHidden: true });
   const action = menu.getByRole('menuitem', { name: 'Rename and visibility…' });
 
   if (delayMenuLayout) {
