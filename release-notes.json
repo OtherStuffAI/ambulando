@@ -4394,6 +4394,12 @@
       "notes": [
         "Create a canvas from Deck and open canvas settings reliably, including when those actions run from the shared Alpine store."
       ]
+    },
+    {
+      "buildNumber": 2473,
+      "label": "Canvas controls release verification",
+      "notes": [],
+      "noUserVisibleChanges": true
     }
   ]
 }
