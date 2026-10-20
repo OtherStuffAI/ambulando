@@ -9,7 +9,7 @@ import {
   normalizeCanvasSnapshot,
 } from '../src/canvas/projection.js';
 import { buildCanvasHtmlDocument, CANVAS_HTML_CSP } from '../src/canvas/sandbox.js';
-import { canvasWheelIntent, worldPoint, zoomViewport } from '../src/canvas/interactions.js';
+import { canvasWheelIntent, cloneCanvasValue, worldPoint, zoomViewport } from '../src/canvas/interactions.js';
 
 const store = () => ({
   session: { npub: 'reader' },
@@ -89,6 +89,19 @@ it('pans ordinary wheel input and keeps modifier zoom centred under the pointer'
   const viewport = zoomViewport({ x: 10, y: 20, scale: 1 }, 2, { clientX: 110, clientY: 120 });
   expect(worldPoint(viewport, { clientX: 110, clientY: 120 })).toEqual({ x: 100, y: 100 });
   expect(zoomViewport({ x: 0, y: 0, scale: 3 }, 2, { clientX: 0, clientY: 0 }).scale).toBe(3);
+});
+
+it('copies reactive Canvas layout and data into structured-clone-safe history values', () => {
+  const reactiveLayout = new Proxy({ x: 12, y: 24, width: 360, height: 280, z: 2 }, {});
+  const reactiveData = new Proxy({ text: 'Note', points: [[0, 0], [10, 12]] }, {});
+  expect(() => structuredClone(reactiveLayout)).toThrow();
+  expect(() => structuredClone(reactiveData)).toThrow();
+
+  const layout = cloneCanvasValue(reactiveLayout);
+  const data = cloneCanvasValue(reactiveData);
+  expect(layout).toEqual({ x: 12, y: 24, width: 360, height: 280, z: 2 });
+  expect(data).toEqual({ text: 'Note', points: [[0, 0], [10, 12]] });
+  expect(() => structuredClone({ layout, data, history: { before: layout, after: { ...layout, x: 40 } } })).not.toThrow();
 });
 
 it('builds an opaque-origin HTML boundary with no host, network, form, frame or popup capability', () => {

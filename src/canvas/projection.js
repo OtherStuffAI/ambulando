@@ -1,4 +1,5 @@
 import { resolveTowerPgWorkspaceContext } from '../pg-workspace-context.js';
+import { cloneCanvasValue } from './interactions.js';
 
 export const CANVAS_SOURCE_TYPES = Object.freeze(['document', 'task_list', 'chat_thread', 'html']);
 export const CANVAS_ELEMENT_KINDS = Object.freeze(['text', 'rectangle', 'diamond', 'ellipse', 'arrow', 'line', 'draw', 'frame']);
@@ -158,7 +159,7 @@ export function normalizeCanvasElement(row) {
     id,
     kind,
     layout: normalizeElementLayout(row.layout),
-    data: structuredClone(data),
+    data: cloneCanvasValue(data),
     row_version: Number(row.row_version),
     created_at: text(row.created_at),
     updated_at: text(row.updated_at),
@@ -219,3 +220,4 @@ export function normalizeCanvasSnapshot(payload, context, canvasId, requestId) {
     comments,
   };
 }
+

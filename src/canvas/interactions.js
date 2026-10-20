@@ -1,4 +1,14 @@
+import { toRaw } from '../utils/state-helpers.js';
+
 const clamp = (value, minimum, maximum) => Math.min(maximum, Math.max(minimum, value));
+
+// Canvas layout, element data, and undo history are JSON contracts. Alpine wraps
+// each of them in reactive proxies after a snapshot enters the store, and browser
+// structured-clone consumers reject those proxies. Take one explicit plain-value
+// copy at the Canvas interaction boundary before retaining or transporting them.
+export function cloneCanvasValue(value) {
+  return toRaw(value);
+}
 
 export function canvasWheelIntent(event) {
   return event.ctrlKey || event.metaKey ? 'zoom' : 'pan';

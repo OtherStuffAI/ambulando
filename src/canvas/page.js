@@ -7,13 +7,12 @@ import { normalizeWorkspaceEntry } from '../workspaces.js';
 import { canvasContext, CANVAS_ACCESS_MESSAGE } from './projection.js';
 import { buildCanvasHtmlDocument } from './sandbox.js';
 import { CanvasSyncRuntime } from './sync-service.js';
-import { canvasWheelIntent, worldPoint, zoomViewport } from './interactions.js';
+import { canvasWheelIntent, cloneCanvasValue, worldPoint, zoomViewport } from './interactions.js';
 import '../ambulando-tokens.css';
 import './styles.css';
 
 const text = value => String(value ?? '').trim();
 const clamp = (value, minimum, maximum) => Math.min(maximum, Math.max(minimum, value));
-const clone = value => structuredClone(value);
 const pointDistance = (a, b) => Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
 const pointCenter = (a, b) => ({ clientX: (a.clientX + b.clientX) / 2, clientY: (a.clientY + b.clientY) / 2 });
 const canvasDom = Object.freeze({
@@ -148,7 +147,7 @@ export function canvasPageStore() {
       if (this.tool === 'eraser') { event.stopPropagation(); return this.deleteItem(type, item); }
       if (this.tool !== 'select' || event.button !== 0 || this.editingTextId) return;
       event.stopPropagation(); this.select(type, item.id); event.currentTarget.setPointerCapture?.(event.pointerId);
-      this.interaction = { type: action, pointerId: event.pointerId, itemType: type, id: item.id, startX: event.clientX, startY: event.clientY, before: clone(item.layout) };
+      this.interaction = { type: action, pointerId: event.pointerId, itemType: type, id: item.id, startX: event.clientX, startY: event.clientY, before: cloneCanvasValue(item.layout) };
     },
     movePointer(event) {
       pointers.set(event.pointerId, event); const state = this.interaction; if (!state) return;
@@ -180,7 +179,7 @@ export function canvasPageStore() {
       }
       const item = state.itemType === 'naplet' ? this.naplets.find(row => row.id === state.id) : this.elements.find(row => row.id === state.id);
       if (!item || JSON.stringify(state.before) === JSON.stringify(item.layout)) return;
-      const after = clone(item.layout);
+      const after = cloneCanvasValue(item.layout);
       await this.mutate(() => state.itemType === 'naplet' ? syncRuntime.updateNapletLayout(item.id, after) : syncRuntime.updateElement(item.id, { layout: after }), { type: 'layout', itemType: state.itemType, id: item.id, before: state.before, after });
     },
     cancelPointer(event) { pointers.delete(event.pointerId); this.interaction = null; void this.refresh(); },
@@ -197,7 +196,9 @@ export function canvasPageStore() {
     beginTextEdit(element) { if (element.kind !== 'text') return; this.editingTextId = element.id; this.editingText = String(element.data.text || ''); Alpine.nextTick(() => document.querySelector(`[data-text-editor="${element.id}"]`)?.focus()); },
     async saveTextEdit(element) {
       const next = this.editingText.trim() || 'Text', before = String(element.data.text || ''); this.editingTextId = ''; if (next === before) return;
-      await this.mutate(() => syncRuntime.updateElement(element.id, { data: { ...element.data, text: next } }), { type: 'data', id: element.id, before: { ...element.data, text: before }, after: { ...element.data, text: next } });
+      const beforeData = cloneCanvasValue({ ...element.data, text: before });
+      const afterData = cloneCanvasValue({ ...element.data, text: next });
+      await this.mutate(() => syncRuntime.updateElement(element.id, { data: afterData }), { type: 'data', id: element.id, before: beforeData, after: afterData });
     },
     async mutate(operation, history = null) {
       if (this.saving) return; this.saving = true; this.error = '';
@@ -209,8 +210,9 @@ export function canvasPageStore() {
     async duplicateSelected() {
       const item = this.findSelected(); if (!item) return;
       if (this.selected.type === 'naplet' && item.access !== 'ready') { this.error = 'Restricted items cannot be duplicated.'; return; }
-      if (this.selected.type === 'naplet') return this.mutate(() => syncRuntime.addNaplet({ source: item.source, title: item.access === 'ready' ? item.title : undefined, layout: { ...item.layout, x: item.layout.x + 24, y: item.layout.y + 24, z: this.highestZ() + 1 } }));
-      await this.mutate(() => syncRuntime.createElement({ kind: item.kind, data: clone(item.data), layout: { ...item.layout, x: item.layout.x + 24, y: item.layout.y + 24, z: this.highestZ() + 1 } }));
+      const layout = cloneCanvasValue({ ...item.layout, x: item.layout.x + 24, y: item.layout.y + 24, z: this.highestZ() + 1 });
+      if (this.selected.type === 'naplet') return this.mutate(() => syncRuntime.addNaplet({ source: cloneCanvasValue(item.source), title: item.access === 'ready' ? item.title : undefined, layout }));
+      await this.mutate(() => syncRuntime.createElement({ kind: item.kind, data: cloneCanvasValue(item.data), layout }));
     },
     async orderSelected(delta) { const item = this.findSelected(); if (!item) return; const layout = { ...item.layout, z: clamp(item.layout.z + delta, 1, 100000) }; await this.mutate(() => this.selected.type === 'naplet' ? syncRuntime.updateNapletLayout(item.id, layout) : syncRuntime.updateElement(item.id, { layout })); },
     async undoChange() { const action = undo.pop(); if (!action) return; if (action.type === 'layout') await this.mutate(() => action.itemType === 'naplet' ? syncRuntime.updateNapletLayout(action.id, action.before) : syncRuntime.updateElement(action.id, { layout: action.before })); if (action.type === 'data') await this.mutate(() => syncRuntime.updateElement(action.id, { data: action.before })); redo.push(action); this.historyTick -= 1; },
