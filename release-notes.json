@@ -4301,6 +4301,26 @@
       "notes": [
         "The Connection settings tab is now called NStack and appears first, before Workspace, because a server must be set up before a workspace."
       ]
+    },
+    {
+      "buildNumber": 2454,
+      "label": "Workspace Canvas",
+      "notes": [
+        "Create and order shared canvases from Deck, then open a focused pan-and-zoom workspace in a separate browser tab.",
+        "Arrange authorized documents, task lists, chat threads, and trusted interactive HTML as naplets while protected sources remain undisclosed."
+      ]
+    },
+    {
+      "buildNumber": 2455,
+      "label": "Canvas sync ownership",
+      "notes": [],
+      "noUserVisibleChanges": true
+    },
+    {
+      "buildNumber": 2456,
+      "label": "Canvas settings concurrency",
+      "notes": [],
+      "noUserVisibleChanges": true
     }
   ]
 }

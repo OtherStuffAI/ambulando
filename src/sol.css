@@ -566,11 +566,28 @@ code, pre { font-family:var(--font-code); }
 .pinned-thread-open .attention-card-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pinned-thread-open .attention-card-time { flex-shrink: 0; }
 @media (min-width: 769px) {
+  .deck-right-stack.has-canvases { height: auto; grid-template-rows: minmax(7.5rem, auto) minmax(7.5rem, 1fr) minmax(12rem, 1fr); }
   .deck-right-stack.has-pinned-threads { height: auto; grid-template-rows: auto minmax(7.5rem, 1fr) minmax(12rem, 1fr); }
+  .deck-right-stack.has-canvases.has-pinned-threads { grid-template-rows: auto minmax(7.5rem, auto) minmax(7.5rem, 1fr) minmax(12rem, 1fr); }
   .deck-right-stack > .flightdeck-summary-panel-pinned { min-height: 0; height: fit-content; align-self: start; }
   .flightdeck-summary-panel-pinned .pinned-thread-row { height: 48px; margin-bottom: 0; }
   .deck-right-stack > .flightdeck-summary-panel-pinned > .deck-card-scroll { flex: 0 1 auto; max-height: 488px; }
 }
+
+.flightdeck-summary-panel-canvas { --flightdeck-summary-accent: var(--primary); min-height: 7.5rem; }
+.canvas-deck-list { max-height: 20rem; }
+.canvas-deck-row { position: relative; display: flex; align-items: center; min-height: 44px; border: 1px solid transparent; border-radius: 8px; }
+.canvas-deck-row:hover { background: var(--surface-muted); border-color: var(--border); }
+.canvas-deck-row:has(.doc-actions-popover:not([style*="display: none"])) { z-index: 4; }
+.canvas-deck-open { display: flex; flex: 1; align-items: center; gap: 8px; min-width: 0; min-height: 44px; padding: 7px 4px; color: var(--foreground); background: transparent; border: 0; text-align: left; }
+.canvas-deck-open span:nth-child(2) { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.canvas-deck-open svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; }
+.canvas-deck-grip { color: var(--text-muted); cursor: grab; letter-spacing: -5px; padding-right: 4px; }
+.canvas-settings-dialog .modal-dialog-content { width: min(42rem, calc(100vw - 2rem)); max-height: min(42rem, calc(100dvh - 2rem)); overflow: auto; }
+.canvas-visibility-fields, .canvas-principal-grid fieldset { display: grid; gap: 8px; padding: 12px; border: 1px solid var(--border); border-radius: 8px; }
+.canvas-principal-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.canvas-principal-grid fieldset { max-height: 14rem; overflow: auto; }
+@media (max-width: 600px) { .canvas-principal-grid { grid-template-columns: 1fr; } }
 
 .pinned-item-type { display: inline-flex; align-items: center; flex: 0 0 16px; width: 16px; color: var(--text-muted); }
 .pinned-item-type svg { width: 16px; height: 16px; }

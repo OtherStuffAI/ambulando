@@ -66,6 +66,7 @@ const CACHE_NAME = \`\${CACHE_PREFIX}-\${BUILD_ID}\`;
 const PRECACHE_URLS = [
   '/',
   '/index.html',
+  '/canvas.html',
   '/manifest.json',
   '/apple-touch-icon.png',
   '/wingman-logo-192x192.png',
@@ -422,7 +423,7 @@ export default defineConfig({
   appType: 'spa',
   build: {
     outDir: 'dist',
-    rollupOptions: { input: { app: path.resolve(__dirname, 'index.html'), privacy: path.resolve(__dirname, 'legal/privacy.html'), terms: path.resolve(__dirname, 'legal/terms.html') } },
+    rollupOptions: { input: { app: path.resolve(__dirname, 'index.html'), canvas: path.resolve(__dirname, 'canvas.html'), privacy: path.resolve(__dirname, 'legal/privacy.html'), terms: path.resolve(__dirname, 'legal/terms.html') } },
   },
   test: {
     environment: 'node',

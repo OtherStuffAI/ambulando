@@ -2804,6 +2804,38 @@ export async function orgDataRequest(workspaceId, suffix, { baseUrl = _baseUrl, 
   return json(resp, { requestUrl: resolveTowerPgUrl(path, baseUrl), method, prefix: 'Organisation data' });
 }
 
+export async function canvasRequest(workspaceId, suffix = '', {
+  baseUrl = _baseUrl,
+  appNpub = FLIGHT_DECK_PG_APP_NPUB,
+  signal,
+  method = 'GET',
+  body,
+} = {}) {
+  const encodedWorkspaceId = encodeURIComponent(String(workspaceId || '').trim());
+  if (!encodedWorkspaceId) throw new Error('Tower PG workspace id is required');
+  const cleanSuffix = String(suffix || '').trim().replace(/^\/+/, '');
+  const requestPath = `/api/v4/flightdeck-pg/workspaces/${encodedWorkspaceId}/canvases${cleanSuffix ? `/${cleanSuffix}` : ''}`;
+  const requestUrl = resolveTowerPgUrl(requestPath, baseUrl);
+  const response = await signedTowerPgFetch(requestPath, {
+    baseUrl,
+    appNpub,
+    signal,
+    method,
+    useWorkspaceKey: false,
+    ...(body === undefined ? {} : { body }),
+  });
+  return json(response, { requestUrl, method, prefix: 'Canvas' });
+}
+
+export const getTowerPgCanvases = (workspaceId, options = {}) => canvasRequest(workspaceId, '', options);
+export const createTowerPgCanvas = (workspaceId, body, options = {}) => canvasRequest(workspaceId, '', { ...options, method: 'POST', body });
+export const getTowerPgCanvas = (workspaceId, canvasId, options = {}) => canvasRequest(workspaceId, encodeURIComponent(String(canvasId || '').trim()), options);
+export const updateTowerPgCanvas = (workspaceId, canvasId, body, options = {}) => canvasRequest(workspaceId, encodeURIComponent(String(canvasId || '').trim()), { ...options, method: 'PATCH', body });
+export const reorderTowerPgCanvases = (workspaceId, body, options = {}) => canvasRequest(workspaceId, 'order', { ...options, method: 'PUT', body });
+export const getTowerPgCanvasSnapshot = (workspaceId, canvasId, options = {}) => canvasRequest(workspaceId, `${encodeURIComponent(String(canvasId || '').trim())}/snapshot`, options);
+export const createTowerPgCanvasNaplet = (workspaceId, canvasId, body, options = {}) => canvasRequest(workspaceId, `${encodeURIComponent(String(canvasId || '').trim())}/naplets`, { ...options, method: 'POST', body });
+export const updateTowerPgCanvasNaplet = (workspaceId, canvasId, napletId, body, options = {}) => canvasRequest(workspaceId, `${encodeURIComponent(String(canvasId || '').trim())}/naplets/${encodeURIComponent(String(napletId || '').trim())}`, { ...options, method: 'PATCH', body });
+
 export async function getTowerPgScopeOrder(workspaceId, { baseUrl = _baseUrl, appNpub = FLIGHT_DECK_PG_APP_NPUB } = {}) {
   const requestPath = `/api/v4/flightdeck-pg/workspaces/${encodeURIComponent(workspaceId)}/me/scope-order`;
   return json(await signedTowerPgFetch(requestPath, { baseUrl, appNpub, useWorkspaceKey: false }), { requestUrl: resolveTowerPgUrl(requestPath, baseUrl), method: 'GET', prefix: 'Tower PG API' });

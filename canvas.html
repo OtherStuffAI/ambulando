@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="referrer" content="no-referrer">
+  <title>Canvas · Ambulando</title>
+  <link rel="icon" href="/ambulando/favicon-32.png">
+  <script>try{const v=localStorage.getItem('ambulando:theme')||'system';const d=v==='dark'||(v==='system'&&matchMedia('(prefers-color-scheme:dark)').matches);document.documentElement.dataset.theme=d?'dark':'light'}catch{}</script>
+</head>
+<body>
+  <main class="canvas-app" x-data x-init="$store.canvas.init()">
+    <header class="canvas-toolbar">
+      <div class="canvas-brand"><img src="/ambulando/confluence-approved.png" alt=""><h1 x-text="$store.canvas.canvas?.title || 'Canvas'"></h1></div>
+      <div class="canvas-toolbar-group" x-show="$store.canvas.status === 'ready'" x-cloak><button type="button" @click="$store.canvas.zoomBy(0.9)" aria-label="Zoom out">−</button><button type="button" @click="$store.canvas.resetViewport()" x-text="Math.round($store.canvas.viewport.scale * 100) + '%'" aria-label="Reset zoom"></button><button type="button" @click="$store.canvas.zoomBy(1.1)" aria-label="Zoom in">+</button></div>
+      <div class="canvas-toolbar-group" x-show="$store.canvas.status === 'ready'" x-cloak><button type="button" @click="$store.canvas.openAddDialog()">Add naplet</button><button type="button" @click="$store.canvas.refresh()">Refresh</button><button type="button" @click="window.close()" title="Close this canvas tab">Close</button></div>
+    </header>
+    <section class="canvas-status" x-show="$store.canvas.status !== 'ready'"><div><h1 x-text="$store.canvas.status === 'loading' ? 'Opening canvas…' : 'Canvas unavailable'"></h1><p :class="{ 'canvas-error': $store.canvas.status === 'error' }" x-text="$store.canvas.error"></p><button type="button" x-show="$store.canvas.status === 'error'" @click="$store.canvas.refresh()">Try again</button></div></section>
+    <section class="canvas-stage" x-ref="stage" x-show="$store.canvas.status === 'ready'" x-cloak @wheel="$store.canvas.handleWheel($event)" @pointerdown="$store.canvas.startPan($event)" @pointermove="$store.canvas.movePointer($event)" @pointerup="$store.canvas.endPointer($event)" @pointercancel="$store.canvas.endPointer($event)">
+      <div class="canvas-world" :style="{ transform: $store.canvas.transformStyle }">
+        <template x-for="naplet in $store.canvas.naplets" :key="naplet.id"><article class="canvas-naplet" :style="$store.canvas.napletStyle(naplet)">
+          <header class="canvas-naplet-header" @pointerdown="$store.canvas.startNapletMove(naplet, $event)" @pointermove="$store.canvas.movePointer($event)" @pointerup="$store.canvas.endPointer($event)"><strong x-text="naplet.access === 'denied' ? 'Restricted item' : naplet.title"></strong><span class="canvas-naplet-kind" x-text="naplet.access === 'denied' ? '' : naplet.source.type.replace('_', ' ')"></span></header>
+          <div class="canvas-denied" x-show="naplet.access === 'denied'"><p x-text="$store.canvas.accessMessage"></p></div>
+          <div class="canvas-naplet-body" x-show="naplet.access === 'ready' && naplet.source?.type === 'document'"><h2 x-text="naplet.content.title || naplet.title"></h2><pre x-text="naplet.content.body || ''"></pre></div>
+          <div class="canvas-naplet-body" x-show="naplet.access === 'ready' && naplet.source?.type === 'task_list'"><ol><template x-for="task in naplet.content.tasks || []" :key="task.id"><li><strong x-text="task.title"></strong><span x-text="task.state ? ' · ' + task.state : ''"></span></li></template></ol></div>
+          <div class="canvas-naplet-body" x-show="naplet.access === 'ready' && naplet.source?.type === 'chat_thread'"><ol><template x-for="message in naplet.content.messages || []" :key="message.id"><li><strong x-text="message.author || 'Workspace member'"></strong><pre x-text="message.body || ''"></pre></li></template></ol></div>
+          <iframe x-show="naplet.access === 'ready' && naplet.source?.type === 'html'" :title="naplet.title" sandbox="allow-scripts" credentialless referrerpolicy="no-referrer" :srcdoc="$store.canvas.htmlDocument(naplet)"></iframe>
+        </article></template>
+      </div>
+    </section>
+    <p class="canvas-toast" role="alert" x-show="$store.canvas.error && $store.canvas.status === 'ready'" x-text="$store.canvas.error" x-cloak></p>
+    <dialog class="canvas-add-dialog" x-ref="addDialog"><form method="dialog" @submit.prevent="$store.canvas.addNaplet()"><h2>Add naplet</h2><label>Type<select x-model="$store.canvas.addDialog.type"><option value="document">Document</option><option value="task_list">Task list</option><option value="chat_thread">Chat thread</option><option value="html">HTML artefact</option></select></label><label>Source record ID<input required autocomplete="off" x-model="$store.canvas.addDialog.sourceId"></label><label>Display title (optional)<input maxlength="120" x-model="$store.canvas.addDialog.title"></label><p>The source is checked independently. People without source access see no title, type, ID or content.</p><div class="canvas-dialog-actions"><button type="button" @click="$refs.addDialog.close()">Cancel</button><button type="submit" :disabled="$store.canvas.saving || !$store.canvas.addDialog.sourceId.trim()" x-text="$store.canvas.saving ? 'Adding…' : 'Add'"></button></div></form></dialog>
+  </main>
+  <script type="module" src="/src/canvas/page.js"></script>
+</body>
+</html>

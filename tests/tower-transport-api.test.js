@@ -120,3 +120,27 @@ it('org data signs and sends one JSON object for records and permission CAS', as
     expect(JSON.parse(options.headers.Authorization)).toMatchObject({ url, method: 'POST', body });
   }
 });
+
+it('Canvas uses exact NIP-98 workspace routes and signed mutation payloads', async () => {
+  const writes = [
+    () => api.createTowerPgCanvas('workspace/id', { title: 'Roadmap' }, { appNpub: 'app' }),
+    () => api.updateTowerPgCanvas('workspace/id', 'canvas/id', { viewport: { x: 1 } }, { appNpub: 'app' }),
+    () => api.reorderTowerPgCanvases('workspace/id', { canvas_ids: ['one', 'two'] }, { appNpub: 'app' }),
+    () => api.createTowerPgCanvasNaplet('workspace/id', 'canvas/id', { source: { type: 'document', id: 'doc' } }, { appNpub: 'app' }),
+    () => api.updateTowerPgCanvasNaplet('workspace/id', 'canvas/id', 'naplet/id', { layout: { x: 2 } }, { appNpub: 'app' }),
+  ];
+  for (const run of writes) await run();
+  await api.getTowerPgCanvasSnapshot('workspace/id', 'canvas/id', { appNpub: 'app' });
+  expect(native.fetch.mock.calls.map(([url, options]) => [url.replace(endpoint, ''), options.method])).toEqual([
+    ['/api/v4/flightdeck-pg/workspaces/workspace%2Fid/canvases', 'POST'],
+    ['/api/v4/flightdeck-pg/workspaces/workspace%2Fid/canvases/canvas%2Fid', 'PATCH'],
+    ['/api/v4/flightdeck-pg/workspaces/workspace%2Fid/canvases/order', 'PUT'],
+    ['/api/v4/flightdeck-pg/workspaces/workspace%2Fid/canvases/canvas%2Fid/naplets', 'POST'],
+    ['/api/v4/flightdeck-pg/workspaces/workspace%2Fid/canvases/canvas%2Fid/naplets/naplet%2Fid', 'PATCH'],
+    ['/api/v4/flightdeck-pg/workspaces/workspace%2Fid/canvases/canvas%2Fid/snapshot', 'GET'],
+  ]);
+  for (const [url, options] of native.fetch.mock.calls) {
+    expect(JSON.parse(options.headers.Authorization)).toMatchObject({ url, method: options.method });
+    expect(options.headers['x-flightdeck-pg-app-npub']).toBe('app');
+  }
+});

@@ -331,6 +331,12 @@ export function createWorkspaceDb(workspaceDbKey) {
     await tx.thread_pins.toCollection().modify(row => { row.key = row.record_id; row.resource_type ||= 'thread'; row.resource_id ||= row.thread_id; });
     await tx.thread_pin_outbox.toCollection().modify(row => { row.resourceType ||= 'thread'; row.targetKey ||= `${row.resourceType}:${row.threadId}`; });
   });
+  // Current-authority Canvas projections. Cached rows never render until the
+  // active viewer has completed a fresh signed list/snapshot read.
+  db.version(41).stores({
+    canvas_definitions: '&key, context, canvas_id, [context+position]',
+    canvas_snapshots: '&key, context, canvas_id, authorized_at',
+  });
   db.version(37).stores({ hosting_billing: '&key' });
   db.version(36).stores({ scope_orders: '&record_id, workspace_id', pg_archived_targets: '&key, family, id' });
   const commentFields = activityIndexFields;

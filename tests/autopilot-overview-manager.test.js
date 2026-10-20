@@ -1242,8 +1242,10 @@ describe('autopilot overview manager', () => {
     store.handleDeckColumnsScroll({ currentTarget: { clientWidth: 360, scrollLeft: 400 } });
     expect(store.deckMobileColumn).toBe('inbox');
     store.handleDeckColumnsScroll({ currentTarget: { clientWidth: 360, scrollLeft: 750 } });
-    expect(store.deckMobileColumn).toBe('wapp-updates');
+    expect(store.deckMobileColumn).toBe('canvas');
     store.handleDeckColumnsScroll({ currentTarget: { clientWidth: 360, scrollLeft: 1100 } });
+    expect(store.deckMobileColumn).toBe('wapp-updates');
+    store.handleDeckColumnsScroll({ currentTarget: { clientWidth: 360, scrollLeft: 1450 } });
     expect(store.deckMobileColumn).toBe('recent');
   });
 
@@ -1279,7 +1281,7 @@ describe('autopilot overview manager', () => {
 
       track.scrollLeft = 720;
       store.handleDeckColumnsScroll({ currentTarget: track });
-      expect(store.deckMobileColumn).toBe('wapp-updates');
+      expect(store.deckMobileColumn).toBe('canvas');
     } finally {
       globalThis.requestAnimationFrame = originalAnimationFrame;
     }

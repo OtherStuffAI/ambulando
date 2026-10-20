@@ -73,6 +73,7 @@ import { reportsManagerMixin } from './reports-manager.js';
 import { filesManagerMixin } from './files-manager.js';
 import { writeContextManagerMixin } from './write-context-manager.js';
 import { pinnedThreadsMixin } from './pinned-threads.js';
+import { canvasManagerMixin } from './canvas/manager.js';
 import { autopilotOverviewManagerMixin } from './autopilot-overview-manager.js';
 import { pipelineViewerManagerMixin } from './pipeline-viewer-manager.js';
 import { agentSpaceManagerMixin } from './agent-space-manager.js';
@@ -10445,6 +10446,7 @@ export function initApp() {
     filesManagerMixin,
     autopilotOverviewManagerMixin,
     pinnedThreadsMixin,
+    canvasManagerMixin,
     agentSpaceManagerMixin,
     pipelineViewerManagerMixin,
     threadLiveActivityManagerMixin,

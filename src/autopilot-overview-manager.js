@@ -831,6 +831,7 @@ const DECK_MOBILE_CARDS = Object.freeze([
   { id: 'hello-links', label: 'Hello and Links' },
   { id: 'inbox', label: 'Inbox' },
   { id: 'pinned', label: 'Pinned items' },
+  { id: 'canvas', label: 'Canvas' },
   { id: 'wapp-updates', label: 'Feed' },
   { id: 'recent', label: 'Recent' },
 ]);

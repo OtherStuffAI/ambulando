@@ -118,7 +118,7 @@ describe('flight deck summary template', () => {
     expect(styles).toMatch(/\.deck-right-stack > \.deck-column\s*\{[^}]*min-height:\s*0;/s);
   });
 
-  it('uses four mounted viewport-width snapping cards at narrow widths with Inbox selected initially', () => {
+  it('includes Canvas in the mounted viewport-width snapping cards with Inbox selected initially', () => {
     const html = readFileSync(INDEX_PATH, 'utf8');
     const styles = readFileSync(STYLES_PATH, 'utf8');
     const overviewManager = readFileSync(OVERVIEW_MANAGER_PATH, 'utf8');
@@ -130,8 +130,10 @@ describe('flight deck summary template', () => {
     expect(html).toContain('data-deck-column="hello-links" data-deck-hello-card role="region" aria-label="Hello and Links"');
     expect(track).toContain('x-for="card in $store.chat.deckMobileCards"');
     expect(overviewManager).toContain("track.insertBefore(helloCard, track.firstElementChild)");
-    expect(overviewManager).toMatch(/DECK_MOBILE_CARDS\s*=\s*Object\.freeze\(\[\s*\{ id: 'hello-links',[\s\S]*\{ id: 'inbox',[\s\S]*\{ id: 'wapp-updates',[\s\S]*\{ id: 'recent',/);
+    expect(overviewManager).toMatch(/DECK_MOBILE_CARDS\s*=\s*Object\.freeze\(\[\s*\{ id: 'hello-links',[\s\S]*\{ id: 'inbox',[\s\S]*\{ id: 'canvas',[\s\S]*\{ id: 'wapp-updates',[\s\S]*\{ id: 'recent',/);
     expect(track.indexOf('data-deck-column="inbox"')).toBeLessThan(track.indexOf('data-deck-column="wapp-updates"'));
+    expect(track.indexOf('data-deck-column="inbox"')).toBeLessThan(track.indexOf('data-deck-column="canvas"'));
+    expect(track.indexOf('data-deck-column="canvas"')).toBeLessThan(track.indexOf('data-deck-column="wapp-updates"'));
     expect(track.indexOf('data-deck-column="wapp-updates"')).toBeLessThan(track.indexOf('data-deck-column="recent"'));
     expect(styles).toMatch(/@media \(max-width: 720px\)[\s\S]*?\.deck-right-stack\s*\{[^}]*display:\s*contents;/s);
     expect(styles).toMatch(/\.deck-columns-track > \.deck-column,\s*\.deck-columns-track > \.deck-hello-card,\s*\.deck-right-stack > \.deck-column\s*\{[^}]*flex:\s*0 0 100%;[^}]*width:\s*100%;[^}]*scroll-snap-align:\s*start;[^}]*scroll-snap-stop:\s*always;/s);
