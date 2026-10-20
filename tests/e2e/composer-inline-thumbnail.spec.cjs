@@ -14,7 +14,7 @@ for (const width of [390, 1440]) {
         store.getRecentMentionChips = () => [{
           id: 'agent-1',
           type: 'agent',
-          label: 'Rick',
+          label: 'Helper',
           avatarUrl: '',
         }];
         const image = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="60" height="40"%3E%3Crect width="60" height="40" fill="navy"/%3E%3C/svg%3E';
@@ -33,7 +33,7 @@ for (const width of [390, 1440]) {
 
       const row = page.locator('.composer-shortcuts-row:visible');
       await expect(row).toBeVisible();
-      await expect(row.getByRole('button', { name: 'Mention Rick', exact: true })).toBeVisible();
+      await expect(row.getByRole('button', { name: 'Mention Helper', exact: true })).toBeVisible();
       const previews = row.locator('.chat-image-draft-inline');
       await expect(previews).toHaveCount(3);
       await expect(previews.locator('.chat-image-draft-status')).toHaveText(['Uploading…', 'Upload failed', 'Ready']);
