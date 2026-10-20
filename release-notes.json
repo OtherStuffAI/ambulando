@@ -4408,6 +4408,13 @@
         "Keep Inbox paging, navigation, scrolling, typing, selection and dialogs responsive while a large cached workspace continues background recovery.",
         "Refresh the newest workspace changes without automatically walking backward through historical priority pages during routine sync."
       ]
+    },
+    {
+      "buildNumber": 2476,
+      "label": "Clearer Canvas access",
+      "notes": [
+        "Create or update a Canvas in a responsive modal, then search and add named workspace people, agents, and groups without exposed identity lists."
+      ]
     }
   ]
 }

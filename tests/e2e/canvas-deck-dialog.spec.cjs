@@ -1,4 +1,6 @@
 const { test, expect } = require('playwright/test');
+const path = require('node:path');
+const { openFixture } = require('./fixtures/mobile-chat.cjs');
 
 test.use({ serviceWorkers: 'block', reducedMotion: 'reduce' });
 
@@ -23,7 +25,7 @@ test('Deck Create canvas opens and submits through Tower, then settings opens an
   }];
 
   await page.route('**/__canvas-deck-seed.html', route => route.fulfill({ contentType: 'text/html', body: '<!doctype html><title>seed</title>' }));
-  await page.route(`**/api/v4/flightdeck-pg/workspaces/${workspaceId}/canvases*`, async route => {
+  const handleCanvasRoute = async route => {
     const request = route.request();
     const url = new URL(request.url());
     const collectionPath = `/api/v4/flightdeck-pg/workspaces/${workspaceId}/canvases`;
@@ -50,7 +52,9 @@ test('Deck Create canvas opens and submits through Tower, then settings opens an
       return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ canvas: canvases.at(-1) }) });
     }
     return route.fulfill({ status: 404, contentType: 'application/json', body: '{}' });
-  });
+  };
+  await page.route(`**/api/v4/flightdeck-pg/workspaces/${workspaceId}/canvases`, handleCanvasRoute);
+  await page.route(`**/api/v4/flightdeck-pg/workspaces/${workspaceId}/canvases/**`, handleCanvasRoute);
 
   await page.goto('/__canvas-deck-seed.html');
   await page.evaluate(async ({ workspaceId, identity }) => {
@@ -102,6 +106,19 @@ test('Deck Create canvas opens and submits through Tower, then settings opens an
     const store = window.Alpine.store('chat');
     store.closeThread({ syncRoute: false });
     store.navSection = 'status';
+    store.refreshTowerPgWorkspaceMembers = async () => {};
+    store.refreshGroups = async () => {};
+    store.getSenderAvatar = () => '';
+    store.pgWorkspaceMembers = [
+      { actor_id: 'actor-person', npub: 'npub1personfixture00000000000000000000000000000000000000000000000000', kind: 'human', display_name: 'Avery Stone', role: 'member' },
+      { actor_id: 'actor-agent', npub: 'npub1agentfixture000000000000000000000000000000000000000000000000000', kind: 'agent', display_name: 'Research agent', role: 'agent' },
+    ];
+    store.groups = [{ group_id: 'group-delivery', owner_npub: store.workspaceOwnerNpub, name: 'Delivery team', member_npubs: ['npub1personfixture00000000000000000000000000000000000000000000000000'] }];
+    Object.defineProperty(store, 'canvasPrincipalOptions', { configurable: true, get: () => [
+      { key: 'actor:actor-person', type: 'actor', kind: 'person', kindLabel: 'Person', id: 'actor-person', label: 'Avery Stone', subtitle: 'member', avatarUrl: '', searchText: 'avery stone member actor-person' },
+      { key: 'actor:actor-agent', type: 'actor', kind: 'agent', kindLabel: 'Agent', id: 'actor-agent', label: 'Research agent', subtitle: 'agent', avatarUrl: '', searchText: 'research agent actor-agent' },
+      { key: 'group:group-delivery', type: 'group', kind: 'group', kindLabel: 'Group', id: 'group-delivery', label: 'Delivery team', subtitle: '1 member', avatarUrl: '', searchText: 'delivery team group-delivery' },
+    ] });
   });
 
   const panel = page.getByTestId('deck-canvases');
@@ -109,8 +126,29 @@ test('Deck Create canvas opens and submits through Tower, then settings opens an
   await panel.getByRole('button', { name: 'Create canvas', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Create canvas' });
   await expect(dialog).toBeVisible();
-  await dialog.getByLabel('Name').fill('Planning canvas');
-  await dialog.getByRole('button', { name: 'Save' }).click();
+  await page.evaluate(() => {
+    const store = window.Alpine.store('chat');
+    store.pgWorkspaceMembers = [
+      { actor_id: 'actor-person', npub: 'npub1personfixture00000000000000000000000000000000000000000000000000', kind: 'human', display_name: 'Avery Stone', role: 'member' },
+      { actor_id: 'actor-agent', npub: 'npub1agentfixture000000000000000000000000000000000000000000000000000', kind: 'agent', display_name: 'Research agent', role: 'agent' },
+    ];
+    store.groups = [{ group_id: 'group-delivery', owner_npub: store.workspaceOwnerNpub, name: 'Delivery team', member_npubs: ['npub1personfixture00000000000000000000000000000000000000000000000000'] }];
+  });
+  await dialog.getByLabel('Canvas name').fill('Planning canvas');
+  await dialog.getByText('Specific people, agents or groups', { exact: true }).click();
+  const picker = dialog.getByRole('combobox', { name: 'Add people, agents or groups' });
+  await picker.fill('Research');
+  await picker.press('ArrowDown');
+  await picker.press('Enter');
+  await expect(dialog.getByText('Research agent', { exact: true })).toBeVisible();
+  await picker.fill('Avery');
+  await dialog.getByRole('option', { name: /Avery Stone/ }).click();
+  await picker.fill('Delivery');
+  await dialog.getByRole('option', { name: /Delivery team/ }).click();
+  await dialog.getByRole('button', { name: 'Remove Avery Stone' }).click();
+  await expect(dialog.getByRole('button', { name: 'Remove Avery Stone' })).toHaveCount(0);
+  await page.screenshot({ path: path.resolve(__dirname, '../../tmp/docs/handoffs/canvas-access-modal-review-desktop.png'), animations: 'disabled' });
+  await dialog.getByRole('button', { name: 'Create canvas' }).click();
   await expect(dialog).toBeHidden();
   await expect(panel.getByText('Planning canvas')).toBeVisible();
   expect(requests[0]).toEqual({
@@ -118,7 +156,7 @@ test('Deck Create canvas opens and submits through Tower, then settings opens an
     pathname: `/api/v4/flightdeck-pg/workspaces/${workspaceId}/canvases`,
     body: {
       title: 'Planning canvas',
-      visibility: { mode: 'workspace', actor_ids: [], group_ids: [] },
+      visibility: { mode: 'restricted', actor_ids: ['actor-agent'], group_ids: ['group-delivery'] },
     },
   });
 
@@ -127,8 +165,10 @@ test('Deck Create canvas opens and submits through Tower, then settings opens an
   await page.getByRole('menuitem', { name: 'Rename and visibility…' }).click();
   const settings = page.getByRole('dialog', { name: 'Canvas settings' });
   await expect(settings).toBeVisible();
-  await settings.getByLabel('Name').fill('Planning wall');
-  await settings.getByRole('button', { name: 'Save' }).click();
+  await expect(settings.getByText('Research agent', { exact: true })).toBeVisible();
+  await expect(settings.getByText('Delivery team', { exact: true })).toBeVisible();
+  await settings.getByLabel('Canvas name').fill('Planning wall');
+  await settings.getByRole('button', { name: 'Save changes' }).click();
   await expect(settings).toBeHidden();
   await expect(panel.getByText('Planning wall')).toBeVisible();
   expect(requests[1]).toMatchObject({
@@ -136,4 +176,70 @@ test('Deck Create canvas opens and submits through Tower, then settings opens an
     pathname: `/api/v4/flightdeck-pg/workspaces/${workspaceId}/canvases/canvas-created`,
     body: { title: 'Planning wall', expected_row_version: 1 },
   });
+});
+
+test('Canvas access modal stays usable in a narrow, short viewport without full identity overflow', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 520 });
+  await openFixture(page, true);
+  const fullNpub = `npub1${'z'.repeat(58)}`;
+  await page.evaluate(({ fullNpub }) => {
+    const store = window.Alpine.store('chat');
+    store.closeThread({ syncRoute: false });
+    store.syncCanvasContext = () => {};
+    store.refreshTowerPgWorkspaceMembers = async () => {};
+    store.refreshGroups = async () => {};
+    store.getSenderAvatar = () => '';
+    store.navSection = 'status';
+    store.canvasContextKey = store.canvasPartition;
+    store.pgWorkspaceMembers = Array.from({ length: 12 }, (_, index) => ({
+      actor_id: `actor-${index}`,
+      npub: index === 0 ? fullNpub : `npub1fixture${String(index).padStart(2, '0')}`,
+      kind: index % 3 === 0 ? 'agent' : 'human',
+      display_name: index === 0 ? fullNpub : `Workspace choice ${index}`,
+    }));
+    store.groups = [{ group_id: 'group-one', owner_npub: store.workspaceOwnerNpub, name: 'Delivery group' }];
+    const options = store.pgWorkspaceMembers.map((member, index) => ({
+      key: `actor:${member.actor_id}`, type: 'actor', kind: member.kind === 'agent' ? 'agent' : 'person',
+      kindLabel: member.kind === 'agent' ? 'Agent' : 'Person', id: member.actor_id,
+      label: index === 0 ? 'Unnamed person' : member.display_name,
+      subtitle: index === 0 ? 'npub1zzzzz…zzzzzz' : 'Workspace member', avatarUrl: '',
+      searchText: `${member.display_name} ${member.npub} ${member.actor_id}`.toLowerCase(),
+    }));
+    options.push({ key: 'group:group-one', type: 'group', kind: 'group', kindLabel: 'Group', id: 'group-one', label: 'Delivery group', subtitle: 'Workspace group', avatarUrl: '', searchText: 'delivery group group-one' });
+    Object.defineProperty(store, 'canvasPrincipalOptions', { configurable: true, get: () => options });
+    store.openCanvasCreateDialog();
+  }, { fullNpub });
+
+  const dialog = page.getByRole('dialog', { name: 'Create canvas' });
+  await expect(dialog).toBeVisible();
+  await dialog.getByText('Specific people, agents or groups', { exact: true }).click();
+  const picker = dialog.locator('#canvas-principal-search');
+  await picker.fill('Workspace');
+  for (let index = 1; index <= 8; index += 1) {
+    await dialog.getByRole('option', { name: new RegExp(`Workspace choice ${index}(?:\\s|$)`) }).click();
+    await picker.fill('Workspace');
+  }
+  await picker.press('Escape');
+  await expect(dialog.getByRole('listbox', { name: 'People, agents and groups' })).toBeHidden();
+  await expect(dialog).toBeVisible();
+
+  const geometry = await dialog.evaluate((node) => {
+    const rect = node.getBoundingClientRect();
+    const surface = node.querySelector('.canvas-settings-surface');
+    const actions = node.querySelector('.canvas-settings-actions').getBoundingClientRect();
+    return {
+      left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom,
+      scrollWidth: surface.scrollWidth, clientWidth: surface.clientWidth,
+      actionsTop: actions.top, actionsBottom: actions.bottom,
+    };
+  });
+  expect(geometry.left).toBeGreaterThanOrEqual(0);
+  expect(geometry.right).toBeLessThanOrEqual(390);
+  expect(geometry.top).toBeGreaterThanOrEqual(0);
+  expect(geometry.bottom).toBeLessThanOrEqual(520);
+  expect(geometry.scrollWidth).toBeLessThanOrEqual(geometry.clientWidth);
+  expect(geometry.actionsTop).toBeGreaterThanOrEqual(0);
+  expect(geometry.actionsBottom).toBeLessThanOrEqual(520);
+  await expect(dialog).not.toContainText(fullNpub);
+  await page.screenshot({ path: path.resolve(__dirname, '../../tmp/docs/handoffs/canvas-access-modal-review.png'), animations: 'disabled' });
 });

@@ -11651,18 +11651,126 @@
     </div>
     <iframe x-show="$store.chat.orgDataFrameReady && ($store.chat.orgDataBundleVisible || $store.chat.orgDataRetainDraft)" :title="$store.chat.orgDataDisplayTitle + ' dashboard'" sandbox="allow-scripts" referrerpolicy="no-referrer" :src="$store.chat.orgDataSrc || 'about:blank'" :srcdoc="$store.chat.orgDataSrcdoc || null"></iframe>
   </dialog>
-  <dialog id="canvas-settings-dialog" class="modal-dialog canvas-settings-dialog" aria-labelledby="canvas-settings-title" @close="$store.chat.canvasDialog = { ...$store.chat.canvasDialog, open: false }">
-    <form method="dialog" class="modal-dialog-content" @submit.prevent="$store.chat.saveCanvasDialog()">
-      <div class="modal-dialog-header"><h2 id="canvas-settings-title" x-text="$store.chat.canvasDialog.mode === 'create' ? 'Create canvas' : 'Canvas settings'"></h2><button type="button" class="modal-close" aria-label="Close canvas settings" @click="$store.chat.closeCanvasSettingsDialog()">×</button></div>
-      <label class="settings-field"><span>Name</span><input type="text" maxlength="120" required x-model="$store.chat.canvasDialog.title"></label>
-      <fieldset class="canvas-visibility-fields"><legend>Who sees this canvas on Deck</legend><label><input type="radio" name="canvas-visibility" value="workspace" x-model="$store.chat.canvasDialog.visibilityMode"> Everyone in the workspace</label><label><input type="radio" name="canvas-visibility" value="restricted" x-model="$store.chat.canvasDialog.visibilityMode"> Specific people and groups</label></fieldset>
-      <div class="canvas-principal-grid" x-show="$store.chat.canvasDialog.visibilityMode === 'restricted'">
-        <fieldset><legend>People</legend><template x-for="member in $store.chat.pgWorkspaceMembers" :key="member.actor_id"><label><input type="checkbox" :checked="$store.chat.canvasDialog.actorIds.includes(member.actor_id)" @change="$store.chat.toggleCanvasVisibilityPrincipal('actor', member.actor_id, $event.target.checked)"> <span x-text="member.display_name || member.npub || member.actor_id"></span></label></template></fieldset>
-        <fieldset><legend>Groups</legend><template x-for="group in $store.chat.groups" :key="group.group_id"><label><input type="checkbox" :checked="$store.chat.canvasDialog.groupIds.includes(group.group_id)" @change="$store.chat.toggleCanvasVisibilityPrincipal('group', group.group_id, $event.target.checked)"> <span x-text="group.name || group.group_id"></span></label></template></fieldset>
+  <dialog
+    id="canvas-settings-dialog"
+    class="modal-dialog canvas-settings-dialog"
+    aria-labelledby="canvas-settings-title"
+    aria-describedby="canvas-settings-description"
+    @cancel.prevent="$store.chat.canvasPrincipalPickerOpen ? $store.chat.closeCanvasPrincipalPicker() : $store.chat.closeCanvasSettingsDialog()"
+    @click.self="$store.chat.closeCanvasSettingsDialog()"
+    @close="$store.chat.canvasDialog = { ...$store.chat.canvasDialog, open: false }"
+  >
+    <form method="dialog" class="modal-dialog-content canvas-settings-surface" @submit.prevent="$store.chat.saveCanvasDialog()">
+      <header class="modal-dialog-header canvas-settings-header">
+        <div>
+          <p class="canvas-settings-eyebrow">Canvas access</p>
+          <h2 id="canvas-settings-title" x-text="$store.chat.canvasDialog.mode === 'create' ? 'Create canvas' : 'Canvas settings'"></h2>
+          <p id="canvas-settings-description" x-text="$store.chat.canvasDialog.mode === 'create' ? 'Name the canvas and choose who can find it on Deck.' : 'Update the canvas name and who can find it on Deck.'"></p>
+        </div>
+        <button type="button" class="modal-close canvas-settings-close" aria-label="Close canvas settings" @click="$store.chat.closeCanvasSettingsDialog()">×</button>
+      </header>
+
+      <div class="canvas-settings-scroll">
+        <label class="canvas-settings-field" for="canvas-name-input">
+          <span>Canvas name</span>
+          <input id="canvas-name-input" data-canvas-title-input type="text" maxlength="120" required autocomplete="off" x-model="$store.chat.canvasDialog.title" placeholder="For example, Delivery plan">
+        </label>
+
+        <section class="canvas-visibility-section" aria-labelledby="canvas-visibility-label">
+          <div class="canvas-settings-label-row">
+            <h3 id="canvas-visibility-label">Who can see this canvas?</h3>
+            <span>Deck visibility</span>
+          </div>
+          <div class="canvas-visibility-choices" role="radiogroup" aria-labelledby="canvas-visibility-label">
+            <label class="canvas-visibility-choice" :class="{ 'selected': $store.chat.canvasDialog.visibilityMode === 'workspace' }">
+              <input type="radio" name="canvas-visibility" value="workspace" x-model="$store.chat.canvasDialog.visibilityMode" @change="$store.chat.closeCanvasPrincipalPicker()">
+              <span class="canvas-choice-icon" aria-hidden="true">◎</span>
+              <span class="canvas-choice-copy"><strong>Everyone in the workspace</strong><small>Any current workspace member can find it on Deck.</small></span>
+              <span class="canvas-choice-check" aria-hidden="true">✓</span>
+            </label>
+            <label class="canvas-visibility-choice" :class="{ 'selected': $store.chat.canvasDialog.visibilityMode === 'restricted' }">
+              <input type="radio" name="canvas-visibility" value="restricted" x-model="$store.chat.canvasDialog.visibilityMode">
+              <span class="canvas-choice-icon" aria-hidden="true">◇</span>
+              <span class="canvas-choice-copy"><strong>Specific people, agents or groups</strong><small>Only the workspace choices you add below can find it.</small></span>
+              <span class="canvas-choice-check" aria-hidden="true">✓</span>
+            </label>
+          </div>
+        </section>
+
+        <section class="canvas-principal-section" x-show="$store.chat.canvasDialog.visibilityMode === 'restricted'" x-cloak aria-labelledby="canvas-principal-label">
+          <div class="canvas-settings-label-row">
+            <h3 id="canvas-principal-label">Add people, agents or groups</h3>
+            <span x-text="$store.chat.canvasDialogSelectionCount ? `${$store.chat.canvasDialogSelectionCount} selected` : 'Required'"></span>
+          </div>
+          <div class="canvas-principal-combobox" @click.outside="$store.chat.closeCanvasPrincipalPicker()" @focusout="if (!$el.contains($event.relatedTarget)) $store.chat.closeCanvasPrincipalPicker()">
+            <div class="canvas-principal-input-wrap">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
+              <input
+                id="canvas-principal-search"
+                type="search"
+                role="combobox"
+                aria-labelledby="canvas-principal-label"
+                aria-autocomplete="list"
+                aria-controls="canvas-principal-results"
+                :aria-expanded="$store.chat.canvasPrincipalPickerOpen.toString()"
+                :aria-activedescendant="$store.chat.canvasPrincipalPickerOpen && $store.chat.canvasPrincipalSearchResults.length ? `canvas-principal-option-${$store.chat.canvasPrincipalPickerIndex}` : null"
+                autocomplete="off"
+                placeholder="Search workspace names or identifiers…"
+                :value="$store.chat.canvasPrincipalQuery"
+                @focus="$store.chat.openCanvasPrincipalPicker()"
+                @input="$store.chat.changeCanvasPrincipalQuery($event.target.value)"
+                @keydown="$store.chat.handleCanvasPrincipalKeydown($event)"
+              >
+              <span class="canvas-principal-spinner" x-show="$store.chat.canvasPrincipalBusy" aria-label="Refreshing workspace choices"></span>
+            </div>
+            <div class="canvas-principal-results" x-show="$store.chat.canvasPrincipalPickerOpen" x-cloak>
+              <ul id="canvas-principal-results" role="listbox" aria-label="People, agents and groups">
+                <template x-for="(option, index) in $store.chat.canvasPrincipalSearchResults" :key="option.key">
+                  <li
+                    :id="`canvas-principal-option-${index}`"
+                    role="option"
+                    :aria-selected="(index === $store.chat.canvasPrincipalPickerIndex).toString()"
+                    :class="{ 'active': index === $store.chat.canvasPrincipalPickerIndex }"
+                    @mouseenter="$store.chat.moveCanvasPrincipalPicker(index)"
+                    @mousedown.prevent="$store.chat.selectCanvasPrincipal(option)"
+                  >
+                    <span class="canvas-principal-avatar" :class="`kind-${option.kind}`">
+                      <template x-if="option.avatarUrl"><img :src="option.avatarUrl" alt="" @error="$event.currentTarget.remove()"></template>
+                      <span x-text="option.kind === 'group' ? '⌘' : $store.chat.getInitials(option.label)"></span>
+                    </span>
+                    <span class="canvas-principal-copy"><strong x-text="option.label"></strong><small x-text="option.subtitle"></small></span>
+                    <span class="canvas-principal-kind" x-text="option.kindLabel"></span>
+                  </li>
+                </template>
+              </ul>
+              <p class="canvas-principal-empty" role="status" x-show="!$store.chat.canvasPrincipalBusy && $store.chat.canvasPrincipalSearchResults.length === 0" x-text="$store.chat.canvasPrincipalOptions.length === $store.chat.canvasDialogSelectionCount ? 'Everyone available is already selected.' : ($store.chat.canvasPrincipalQuery ? 'No workspace choices match that search.' : 'No workspace people, agents or groups are available.')"></p>
+            </div>
+          </div>
+
+          <div class="canvas-selected-principals" x-show="$store.chat.canvasSelectedPrincipals.length">
+            <template x-for="option in $store.chat.canvasSelectedPrincipals" :key="option.key">
+              <div class="canvas-selected-principal">
+                <span class="canvas-principal-avatar" :class="`kind-${option.kind}`">
+                  <template x-if="option.avatarUrl"><img :src="option.avatarUrl" alt="" @error="$event.currentTarget.remove()"></template>
+                  <span x-text="option.kind === 'group' ? '⌘' : $store.chat.getInitials(option.label)"></span>
+                </span>
+                <span class="canvas-principal-copy"><strong x-text="option.label"></strong><small><span class="canvas-principal-kind" x-text="option.kindLabel"></span><span x-text="option.subtitle"></span></small></span>
+                <button type="button" class="canvas-principal-remove" :aria-label="`Remove ${option.label}`" @click="$store.chat.removeCanvasPrincipal(option)">×</button>
+              </div>
+            </template>
+          </div>
+          <p class="canvas-principal-required" role="status" x-show="$store.chat.canvasDialogSelectionCount === 0">Add at least one workspace person, agent or group for restricted access.</p>
+          <p class="canvas-principal-refresh-error" role="status" x-show="$store.chat.canvasPrincipalError" x-text="$store.chat.canvasPrincipalError"></p>
+        </section>
+
+        <p class="canvas-source-access-note">Canvas visibility controls whether this canvas appears on Deck. Each naplet still follows its source record’s own access rules.</p>
+        <p class="error-text canvas-settings-error" role="alert" x-show="$store.chat.canvasDialogError" x-text="$store.chat.canvasDialogError"></p>
       </div>
-      <p class="settings-field-help">Canvas visibility only controls whether this canvas appears. Every naplet still applies its source record’s own access rules.</p>
-      <p class="settings-error" role="alert" x-show="$store.chat.canvasError" x-text="$store.chat.canvasError"></p>
-      <div class="modal-dialog-actions"><button type="button" class="btn-secondary" @click="$store.chat.closeCanvasSettingsDialog()">Cancel</button><button type="submit" class="btn-primary" :disabled="$store.chat.canvasSaving || !$store.chat.canvasDialog.title.trim()" x-text="$store.chat.canvasSaving ? 'Saving…' : 'Save'"></button></div>
+
+      <footer class="modal-dialog-actions canvas-settings-actions">
+        <button type="button" class="btn-secondary" @click="$store.chat.closeCanvasSettingsDialog()">Cancel</button>
+        <button type="submit" class="btn-primary" :disabled="!$store.chat.canvasDialogCanSave" x-text="$store.chat.canvasSaving ? 'Saving…' : ($store.chat.canvasDialog.mode === 'create' ? 'Create canvas' : 'Save changes')"></button>
+      </footer>
     </form>
   </dialog>
   <script type="module" src="/src/main.js"></script>
