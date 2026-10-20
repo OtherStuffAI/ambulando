@@ -17,6 +17,7 @@ function findWorkspace(settings, requestedKey) {
 }
 
 function canvasPageStore() {
+  let syncRuntime = null;
   return {
     status: 'loading',
     error: '',
@@ -28,7 +29,6 @@ function canvasPageStore() {
     currentPgActorId: '',
     canvas: null,
     naplets: [],
-    syncRuntime: null,
     viewport: { x: 0, y: 0, scale: 1 },
     interaction: null,
     saving: false,
@@ -57,14 +57,15 @@ function canvasPageStore() {
         this.currentPgActorId = text(workspace.pgMe?.actor?.actor_id);
         this.session = { pubkey: storedAuth.pubkey, npub, method: storedAuth.method };
         setActiveSessionNpub(npub);
-        openWorkspaceDb(workspace.workspaceKey);
+        const db = openWorkspaceDb(workspace.workspaceKey);
+        await db.open();
         const context = this.context();
-        this.syncRuntime = new CanvasSyncRuntime(context, this.canvasId, {
+        syncRuntime = new CanvasSyncRuntime(context, this.canvasId, {
           onSnapshot: snapshot => this.applySnapshot(snapshot),
           onError: error => this.applySyncError(error),
         });
-        addEventListener('pagehide', () => this.syncRuntime?.stop(), { once: true });
-        this.syncRuntime.start();
+        addEventListener('pagehide', () => syncRuntime?.stop(), { once: true });
+        syncRuntime.start();
       } catch (error) {
         this.status = 'error';
         this.error = error?.message || 'Canvas could not be opened.';
@@ -88,7 +89,7 @@ function canvasPageStore() {
     async refresh() {
       this.status = 'loading';
       this.error = '';
-      await this.syncRuntime?.refresh().catch(() => undefined);
+      await syncRuntime?.refresh().catch(() => undefined);
     },
     zoomBy(delta, origin = null) {
       const previous = this.viewport.scale;
@@ -137,7 +138,7 @@ function canvasPageStore() {
       const naplet = this.naplets.find(row => row.id === state.id);
       if (!naplet) return;
       try {
-        await this.syncRuntime.updateNapletLayout(naplet.id, { ...naplet.layout });
+        await syncRuntime.updateNapletLayout(naplet.id, { ...naplet.layout });
       } catch (error) { this.error = error?.message || 'Could not save naplet position.'; await this.refresh(); }
     },
     queueViewportSave() {
@@ -148,7 +149,7 @@ function canvasPageStore() {
       if (!this.canvas || this.viewportSaving) return;
       this.viewportSaving = true;
       try {
-        await this.syncRuntime.updateViewport({ ...this.viewport });
+        await syncRuntime.updateViewport({ ...this.viewport });
       } catch (error) {
         this.error = error?.message || 'Could not save canvas view.';
         await this.refresh();
@@ -162,7 +163,7 @@ function canvasPageStore() {
       if (!sourceId || this.saving) return;
       this.saving = true;
       try {
-        await this.syncRuntime.addNaplet({
+        await syncRuntime.addNaplet({
           source: { type: this.addDialog.type, id: sourceId },
           title: text(this.addDialog.title) || undefined,
           layout: { x: Math.round(-this.viewport.x / this.viewport.scale + 80), y: Math.round(-this.viewport.y / this.viewport.scale + 80), width: 380, height: 280, z: this.naplets.length + 1 },

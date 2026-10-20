@@ -9,7 +9,7 @@
   <script>try{const v=localStorage.getItem('ambulando:theme')||'system';const d=v==='dark'||(v==='system'&&matchMedia('(prefers-color-scheme:dark)').matches);document.documentElement.dataset.theme=d?'dark':'light'}catch{}</script>
 </head>
 <body>
-  <main class="canvas-app" x-data x-init="$store.canvas.init()">
+  <main class="canvas-app" x-data>
     <header class="canvas-toolbar">
       <div class="canvas-brand"><img src="/ambulando/confluence-approved.png" alt=""><h1 x-text="$store.canvas.canvas?.title || 'Canvas'"></h1></div>
       <div class="canvas-toolbar-group" x-show="$store.canvas.status === 'ready'" x-cloak><button type="button" @click="$store.canvas.zoomBy(0.9)" aria-label="Zoom out">−</button><button type="button" @click="$store.canvas.resetViewport()" x-text="Math.round($store.canvas.viewport.scale * 100) + '%'" aria-label="Reset zoom"></button><button type="button" @click="$store.canvas.zoomBy(1.1)" aria-label="Zoom in">+</button></div>
