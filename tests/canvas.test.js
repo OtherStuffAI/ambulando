@@ -9,6 +9,7 @@ import {
   normalizeCanvasSnapshot,
 } from '../src/canvas/projection.js';
 import { buildCanvasHtmlDocument, CANVAS_HTML_CSP } from '../src/canvas/sandbox.js';
+import { canvasWheelIntent, worldPoint, zoomViewport } from '../src/canvas/interactions.js';
 
 const store = () => ({
   session: { npub: 'reader' },
@@ -67,6 +68,27 @@ it('persists Canvas in dedicated viewer projections', async () => {
   await db.canvas_snapshots.put(snapshot);
   expect(await db.canvas_snapshots.get(canvasDefinitionKey(context, 'canvas'))).toMatchObject({ canvas_id: 'canvas', request_id: 'request' });
   expect(db.canvas_definitions).toBeTruthy();
+});
+
+it('normalizes native elements and redacts denied naplet comment anchors', () => {
+  const context = canvasContext(store());
+  const snapshot = normalizeCanvasSnapshot({
+    workspace_id: 'workspace', identity, complete: true, canvas: definition(),
+    naplets: [{ id: 'denied', access: 'denied', row_version: 1, layout: {} }],
+    elements: [{ id: 'text-1', kind: 'text', row_version: 1, layout: { x: 4, y: 5, width: 30, height: 20, z: 2 }, data: { text: 'Hello' } }],
+    comments: [{ id: 'comment-1', row_version: 1, body: 'Discuss', parent_comment_id: null, anchor: { type: 'naplet', naplet_id: 'denied' }, author: { actor_id: 'actor', label: 'Person' }, created_at: '2026-10-20T00:00:00Z' }],
+  }, context, 'canvas', 'request');
+  expect(snapshot.elements[0]).toMatchObject({ kind: 'text', data: { text: 'Hello' } });
+  expect(snapshot.comments[0].anchor).toEqual({ type: 'canvas', x: 0, y: 0 });
+  expect(JSON.stringify(snapshot.comments[0].anchor)).not.toContain('denied');
+});
+
+it('pans ordinary wheel input and keeps modifier zoom centred under the pointer', () => {
+  expect(canvasWheelIntent({ ctrlKey: false, metaKey: false })).toBe('pan');
+  expect(canvasWheelIntent({ ctrlKey: true, metaKey: false })).toBe('zoom');
+  const viewport = zoomViewport({ x: 10, y: 20, scale: 1 }, 2, { clientX: 110, clientY: 120 });
+  expect(worldPoint(viewport, { clientX: 110, clientY: 120 })).toEqual({ x: 100, y: 100 });
+  expect(zoomViewport({ x: 0, y: 0, scale: 3 }, 2, { clientX: 0, clientY: 0 }).scale).toBe(3);
 });
 
 it('builds an opaque-origin HTML boundary with no host, network, form, frame or popup capability', () => {

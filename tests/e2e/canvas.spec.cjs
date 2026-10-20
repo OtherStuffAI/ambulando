@@ -51,7 +51,7 @@ test.beforeAll(async () => {
   })).outputFiles[0].text;
 });
 
-function definition(rowVersion = 1) {
+function definition(rowVersion = 1, viewport = { x: 0, y: 0, scale: 1 }) {
   return {
     id: canvasId,
     title: 'Delivery map',
@@ -59,7 +59,7 @@ function definition(rowVersion = 1) {
     row_version: rowVersion,
     can_manage: true,
     visibility: { mode: 'restricted', actor_ids: ['actor-reader'], group_ids: [] },
-    viewport: { x: 0, y: 0, scale: 1 },
+    viewport,
   };
 }
 
@@ -92,6 +92,15 @@ async function seedSessionAndWorkspace(page) {
       pgDescriptor: { identity },
     });
     await module.saveSettings({ knownWorkspaces: [workspace], currentWorkspaceKey: workspace.workspaceKey });
+    const db = module.createWorkspaceDb(workspace.workspaceKey);
+    await db.open();
+    await Promise.all([
+      db.documents.put({ record_id: 'doc-2', title: 'New reference', record_state: 'active' }),
+      db.channels.put({ record_id: 'scope-2', name: 'Delivery', record_state: 'active' }),
+      db.chat_messages.put({ record_id: 'thread-2', title: 'Launch discussion', pg_record_type: 'thread', record_state: 'active' }),
+      db.documents.put({ record_id: 'file-2', title: 'Interactive report', pg_record_type: 'file', pg_storage_version_id: 'package-2', content_type: 'text/html', record_state: 'active' }),
+    ]);
+    db.close();
     return workspace.workspaceKey;
   }, { workspaceId, identity });
 }
@@ -99,7 +108,10 @@ async function seedSessionAndWorkspace(page) {
 test('dedicated Canvas route renders authorized sources and isolates trusted HTML', async ({ page, context }) => {
   test.setTimeout(30_000);
   let canvasVersion = 1;
+  let canvasViewport = { x: 0, y: 0, scale: 1 };
   let naplets = baseNaplets();
+  let elements = [];
+  let comments = [];
   const mutations = [];
   let snapshotRequests = 0;
   await context.route('**/*', async route => {
@@ -112,13 +124,14 @@ test('dedicated Canvas route renders authorized sources and isolates trusted HTM
       const suffix = url.pathname.slice(url.pathname.indexOf(`/canvases/${canvasId}`) + `/canvases/${canvasId}`.length);
       if (request.method() === 'GET' && suffix === '/snapshot') {
         snapshotRequests += 1;
-        return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ workspace_id: workspaceId, identity, complete: true, canvas: definition(canvasVersion), naplets }) });
+        return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ workspace_id: workspaceId, identity, complete: true, canvas: definition(canvasVersion, canvasViewport), naplets, elements, comments }) });
       }
       const body = request.postDataJSON();
       mutations.push({ method: request.method(), suffix, body });
       if (request.method() === 'PATCH' && suffix === '') {
+        canvasViewport = body.viewport || canvasViewport;
         canvasVersion += 1;
-        return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ canvas: definition(canvasVersion) }) });
+        return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ canvas: definition(canvasVersion, canvasViewport) }) });
       }
       if (request.method() === 'PATCH' && suffix.startsWith('/naplets/')) {
         const id = suffix.split('/').pop();
@@ -130,6 +143,24 @@ test('dedicated Canvas route renders authorized sources and isolates trusted HTM
       if (request.method() === 'POST' && suffix === '/naplets') {
         naplets = [...naplets, { id: 'added', access: 'ready', row_version: 1, title: body.title || 'Added source', source: body.source, layout: body.layout, content: { title: 'Added source', body: 'Fresh source projection' } }];
         return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ naplet: naplets.at(-1) }) });
+      }
+      if (request.method() === 'POST' && suffix === '/elements') {
+        elements = [...elements, { id: `element-${elements.length + 1}`, row_version: 1, created_at: '2026-10-20T01:00:00Z', updated_at: '2026-10-20T01:00:00Z', ...body }];
+        return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ element: elements.at(-1) }) });
+      }
+      if (request.method() === 'PATCH' && suffix.startsWith('/elements/')) {
+        const id = suffix.split('/').pop(), element = elements.find(row => row.id === id);
+        Object.assign(element, body.layout ? { layout: body.layout } : {}, body.data ? { data: body.data } : {}, { row_version: element.row_version + 1 });
+        return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ element }) });
+      }
+      if (request.method() === 'POST' && suffix === '/comments') {
+        comments = [...comments, { id: `comment-${comments.length + 1}`, row_version: 1, parent_comment_id: body.parent_comment_id || null, body: body.body, anchor: body.anchor, resolved_at: null, author: { actor_id: 'actor-reader', npub: 'npub-reader', label: 'Test collaborator' }, created_at: '2026-10-20T01:00:00Z', updated_at: '2026-10-20T01:00:00Z' }];
+        return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ comment: comments.at(-1) }) });
+      }
+      if (request.method() === 'PATCH' && suffix.startsWith('/comments/')) {
+        const id = suffix.split('/').pop(), comment = comments.find(row => row.id === id);
+        comment.resolved_at = body.resolved ? '2026-10-20T01:01:00Z' : null; comment.row_version += 1;
+        return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ comment }) });
       }
     }
     return serveBuiltFlightDeck(route);
@@ -173,18 +204,31 @@ test('dedicated Canvas route renders authorized sources and isolates trusted HTM
   expect(mutations.filter(row => row.method === 'PATCH' && row.suffix === '').map(row => row.body.expected_row_version)).toEqual([1, 2]);
 
   await canvas.getByRole('button', { name: 'Add naplet' }).click();
-  await canvas.getByLabel('Source record ID').fill('doc-2');
-  await canvas.getByLabel('Display title (optional)').fill('New reference');
+  await canvas.getByRole('button', { name: 'New reference', exact: true }).click();
   await canvas.getByRole('button', { name: 'Add', exact: true }).click();
   await expect(canvas.locator('.canvas-naplet')).toHaveCount(6);
   await expect(canvas.getByText('Fresh source projection')).toBeVisible();
   expect(mutations.find(row => row.method === 'POST').body.source).toEqual({ type: 'document', id: 'doc-2' });
 
+  await canvas.getByTitle('Text (T)').click();
+  await canvas.locator('.canvas-stage').click({ position: { x: 180, y: 160 } });
+  await expect(canvas.locator('.canvas-element.kind-text')).toHaveCount(1);
+  const editor = canvas.locator('.canvas-element.kind-text textarea');
+  await editor.fill('Persistent note');
+  await editor.blur();
+  await expect(canvas.getByText('Persistent note')).toBeVisible();
+
+  await canvas.getByTitle('Comment (C)').click();
+  await canvas.locator('.canvas-stage').click({ position: { x: 460, y: 160 } });
+  await canvas.getByLabel('Comment').fill('Please verify this area.');
+  await canvas.getByRole('button', { name: 'Post' }).click();
+  await expect(canvas.locator('.canvas-comment-marker')).toHaveCount(1);
+
   await canvas.getByRole('button', { name: 'Close' }).click();
   await expect.poll(() => canvas.isClosed()).toBe(true);
   await expect(original).toHaveTitle('seed');
   expect(original.isClosed()).toBe(false);
-  console.log('CANVAS_BROWSER_EVIDENCE', JSON.stringify({ minimalChrome: true, napletFamilies: 4, deniedMetadataHidden: true, htmlInteractiveAndContained: true, sequentialCas: true, addNaplet: true, closeReturnsToOriginalTab: true }));
+  console.log('CANVAS_BROWSER_EVIDENCE', JSON.stringify({ minimalChrome: true, napletFamilies: 4, deniedMetadataHidden: true, htmlInteractiveAndContained: true, sequentialCas: true, sourcePickerAndAddNaplet: true, persistentText: true, threadedCommentAnchor: true, closeReturnsToOriginalTab: true }));
 });
 
 test('Canvas starts one runtime across clean, current-v41, and v40 upgrade databases', async ({ browser }) => {

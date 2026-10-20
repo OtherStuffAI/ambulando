@@ -4349,6 +4349,21 @@
       "notes": [
         "Open Canvas reliably from clean and existing workspaces without duplicate startup or a local transaction error."
       ]
+    },
+    {
+      "buildNumber": 2464,
+      "label": "Tasks and Docs restored",
+      "notes": [
+        "Browse cached Tasks and Docs immediately while workspace updates reconcile, with clear retry guidance if browser signing or access interrupts a refresh."
+      ]
+    },
+    {
+      "buildNumber": 2465,
+      "label": "Canvas whiteboard and comments",
+      "notes": [
+        "Create and edit text, shapes, connectors, drawings and frames on Canvas, with selection, resize, ordering, undo, fit and natural pan-and-zoom controls.",
+        "Choose visible records when adding naplets, and leave threaded comments on canvas space or naplets with resolve and reopen controls."
+      ]
     }
   ]
 }

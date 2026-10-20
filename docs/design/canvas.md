@@ -6,12 +6,12 @@ canvases visible to the signed-in actor and opens one in a new browser tab at
 load the normal scope, channel, Inbox, or Deck shell. Closing the tab therefore
 returns the user to the already-open Ambulando tab without rebuilding its state.
 
-This first slice provides an infinite pan-and-zoom surface, persisted viewport
-and naplet layout, workspace/restricted canvas visibility, ordering in Deck, and
-read-only document, task-list, chat-thread, and trusted HTML naplets. Canonical
-source editing remains in Ambulando's existing editors. A naplet stores a source
-reference and layout only; it does not create a second document, task, or chat
-store.
+Canvas provides an infinite pan-and-zoom surface, persistent native text and
+shape elements, threaded comments, workspace/restricted visibility, ordering in
+Deck, and read-only document, task-list, chat-thread, and trusted HTML naplets.
+Canonical source editing remains in Ambulando's existing editors. A naplet
+stores a source reference and layout only; it does not create a second document,
+task, or chat store.
 
 ## Authority and storage contract
 
@@ -28,6 +28,12 @@ contract is:
 - `POST /canvases/:canvasId/naplets` adds a source reference and layout.
 - `PATCH /canvases/:canvasId/naplets/:napletId` updates naplet layout using
   `expected_row_version`.
+- `DELETE /canvases/:canvasId/naplets/:napletId` tombstones a naplet using
+  `expected_row_version`.
+- `POST /canvases/:canvasId/elements` creates text, shape, connector, drawing,
+  or frame rows; element PATCH/DELETE routes use `expected_row_version`.
+- `GET/POST /canvases/:canvasId/comments` reads and creates canvas or naplet
+  threads; comment PATCH resolves or reopens a root thread using CAS.
 
 Every response is bound to `workspace_id` and an `identity` object containing
 `workspace_id`, `app_npub`, `tower_service_npub`, and
@@ -35,8 +41,9 @@ Every response is bound to `workspace_id` and an `identity` object containing
 client rejects incomplete, duplicate, foreign-workspace, or foreign-authority
 payloads instead of merging them into local state.
 
-The intended Tower schema has a workspace-scoped canvas definition table, a
-canvas visibility principal table (actor or group), and a naplet table with
+The Tower schema has a workspace-scoped canvas definition table, a canvas
+visibility principal table (actor or group), naplet and native-element tables,
+and a threaded-comment table. Naplets retain
 source type, source UUID, layout JSON, immutable HTML package version/digest
 where applicable, position, and monotonic row version. Deletes should use the
 same tombstone and cursor conventions as other Tower record families. Tower
@@ -82,6 +89,24 @@ entry use this boundary; the latter starts no broad shell subscriptions and
 renders only its `liveQuery` snapshot. It never renders a saved snapshot until
 a fresh signed snapshot succeeds; failed authorization clears that snapshot.
 Dexie is not an offline authority or an alternative synchronization owner.
+Signed network work completes outside Dexie transactions; projection commits
+use Dexie-owned promises only, preventing transactions from auto-committing
+while external/native promise work is pending.
+
+## Whiteboard interaction and comments
+
+The dedicated page exposes selection and hand tools; text, rectangle, diamond,
+ellipse, arrow, line, free-draw, and frame elements; erasing, duplicate,
+forward/back ordering, resize, undo/redo, reset, and fit. Ordinary wheel input
+pans. Ctrl/Cmd-wheel and two-touch pinch zoom around the pointer or gesture
+centre, while one-touch dragging pans without allowing the page to take over.
+
+The naplet picker lists cached, visible typed sources rather than accepting raw
+record IDs. Tower still re-authorizes the chosen source at creation and every
+snapshot read. Comments may be anchored to canvas coordinates or a naplet and
+support one reply level plus resolve/reopen state. If the viewer loses access
+to an anchored naplet, Tower emits a coordinate anchor and never exposes the
+protected naplet identifier or metadata through the comment projection.
 
 ## Trusted HTML naplets
 

@@ -1,6 +1,7 @@
 import { resolveTowerPgWorkspaceContext } from '../pg-workspace-context.js';
 
 export const CANVAS_SOURCE_TYPES = Object.freeze(['document', 'task_list', 'chat_thread', 'html']);
+export const CANVAS_ELEMENT_KINDS = Object.freeze(['text', 'rectangle', 'diamond', 'ellipse', 'arrow', 'line', 'draw', 'frame']);
 export const CANVAS_ACCESS_MESSAGE = 'Ask your workspace owner for access.';
 
 const text = value => String(value ?? '').trim();
@@ -103,6 +104,16 @@ function normalizeLayout(value) {
   };
 }
 
+function normalizeElementLayout(value) {
+  return {
+    x: Math.round(finite(value?.x, 0)),
+    y: Math.round(finite(value?.y, 0)),
+    width: Math.max(8, Math.min(4000, Math.round(finite(value?.width, 180)))),
+    height: Math.max(8, Math.min(4000, Math.round(finite(value?.height, 100)))),
+    z: Math.max(1, Math.min(100000, Math.round(finite(value?.z, 1)))),
+  };
+}
+
 function normalizeContent(type, value) {
   const content = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
   if (type === 'document') return { title: text(content.title), body: String(content.body ?? ''), updated_at: text(content.updated_at) };
@@ -138,6 +149,45 @@ export function normalizeCanvasNaplet(row) {
   return normalizeReadyNaplet({ ...row, id });
 }
 
+export function normalizeCanvasElement(row) {
+  const id = text(row?.id);
+  const kind = text(row?.kind);
+  const data = row?.data && typeof row.data === 'object' && !Array.isArray(row.data) ? row.data : {};
+  if (!id || !CANVAS_ELEMENT_KINDS.includes(kind) || !Number.isSafeInteger(Number(row?.row_version)) || Number(row.row_version) < 1) throw new Error('Invalid Canvas element');
+  return {
+    id,
+    kind,
+    layout: normalizeElementLayout(row.layout),
+    data: structuredClone(data),
+    row_version: Number(row.row_version),
+    created_at: text(row.created_at),
+    updated_at: text(row.updated_at),
+  };
+}
+
+export function normalizeCanvasComment(row, napletIds) {
+  const id = text(row?.id);
+  const parentCommentId = text(row?.parent_comment_id) || null;
+  const author = row?.author && typeof row.author === 'object' && !Array.isArray(row.author) ? row.author : {};
+  const anchor = row?.anchor && typeof row.anchor === 'object' && !Array.isArray(row.anchor) ? row.anchor : {};
+  if (!id || !text(row?.body) || !text(author.actor_id || author.npub) || !Number.isSafeInteger(Number(row?.row_version)) || Number(row.row_version) < 1) throw new Error('Invalid Canvas comment');
+  const napletId = text(anchor.naplet_id);
+  const safeAnchor = anchor.type === 'naplet' && napletId && napletIds.has(napletId)
+    ? { type: 'naplet', naplet_id: napletId }
+    : { type: 'canvas', x: Math.round(finite(anchor.x, 0)), y: Math.round(finite(anchor.y, 0)) };
+  return {
+    id,
+    anchor: safeAnchor,
+    parent_comment_id: parentCommentId,
+    body: String(row.body),
+    resolved_at: text(row.resolved_at) || null,
+    author: { actor_id: text(author.actor_id), npub: text(author.npub), label: text(author.label || author.npub) || 'Workspace member' },
+    row_version: Number(row.row_version),
+    created_at: text(row.created_at),
+    updated_at: text(row.updated_at),
+  };
+}
+
 export function normalizeCanvasSnapshot(payload, context, canvasId, requestId) {
   assertIdentity(payload, context);
   if (payload?.complete !== true || text(payload?.canvas?.id || payload?.canvas?.canvas_id) !== text(canvasId)
@@ -150,6 +200,13 @@ export function normalizeCanvasSnapshot(payload, context, canvasId, requestId) {
     seen.add(normalized.id);
     return normalized;
   });
+  const elements = (Array.isArray(payload.elements) ? payload.elements : []).map(normalizeCanvasElement);
+  if (new Set(elements.map(row => row.id)).size !== elements.length) throw new Error('Duplicate Canvas element');
+  const napletIds = new Set(naplets.filter(row => row.access === 'ready').map(row => row.id));
+  const comments = (Array.isArray(payload.comments) ? payload.comments : []).map(row => normalizeCanvasComment(row, napletIds));
+  if (new Set(comments.map(row => row.id)).size !== comments.length) throw new Error('Duplicate Canvas comment');
+  const commentIds = new Set(comments.map(row => row.id));
+  if (comments.some(row => row.parent_comment_id && !commentIds.has(row.parent_comment_id))) throw new Error('Orphan Canvas comment reply');
   return {
     key: canvasDefinitionKey(context, canvasId),
     context: canvasPartition(context),
@@ -158,5 +215,7 @@ export function normalizeCanvasSnapshot(payload, context, canvasId, requestId) {
     authorized_at: new Date().toISOString(),
     canvas: definition,
     naplets,
+    elements,
+    comments,
   };
 }

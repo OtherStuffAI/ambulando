@@ -1,11 +1,17 @@
 import Dexie, { liveQuery } from 'dexie';
 import {
   createTowerPgCanvas,
+  createTowerPgCanvasComment,
+  createTowerPgCanvasElement,
   createTowerPgCanvasNaplet,
+  deleteTowerPgCanvasElement,
+  deleteTowerPgCanvasNaplet,
   getTowerPgCanvases,
   getTowerPgCanvasSnapshot,
   reorderTowerPgCanvases,
   updateTowerPgCanvas,
+  updateTowerPgCanvasComment,
+  updateTowerPgCanvasElement,
   updateTowerPgCanvasNaplet,
 } from '../api.js';
 import { getWorkspaceDb } from '../db.js';
@@ -164,6 +170,68 @@ export class CanvasSyncRuntime {
     return this.enqueueMutation(async () => {
       if (!this.authorized) throw new Error('Canvas authorization must be refreshed.');
       await createTowerPgCanvasNaplet(this.context.workspaceId, this.canvasId, body, apiOptions(this.context));
+      return this.refresh();
+    });
+  }
+
+  createElement(body) {
+    return this.enqueueMutation(async () => {
+      if (!this.authorized) throw new Error('Canvas authorization must be refreshed.');
+      await createTowerPgCanvasElement(this.context.workspaceId, this.canvasId, body, apiOptions(this.context));
+      return this.refresh();
+    });
+  }
+
+  updateElement(elementId, patch) {
+    return this.enqueueMutation(async () => {
+      const snapshot = await this.db.canvas_snapshots.get(this.key);
+      const element = snapshot?.elements?.find(row => row.id === elementId);
+      if (!this.authorized || !element) throw new Error('Canvas element authorization must be refreshed.');
+      await updateTowerPgCanvasElement(this.context.workspaceId, this.canvasId, elementId, {
+        ...patch,
+        expected_row_version: element.row_version,
+      }, apiOptions(this.context));
+      return this.refresh();
+    });
+  }
+
+  deleteElement(elementId) {
+    return this.enqueueMutation(async () => {
+      const snapshot = await this.db.canvas_snapshots.get(this.key);
+      const element = snapshot?.elements?.find(row => row.id === elementId);
+      if (!this.authorized || !element) throw new Error('Canvas element authorization must be refreshed.');
+      await deleteTowerPgCanvasElement(this.context.workspaceId, this.canvasId, elementId, { expected_row_version: element.row_version }, apiOptions(this.context));
+      return this.refresh();
+    });
+  }
+
+  deleteNaplet(napletId) {
+    return this.enqueueMutation(async () => {
+      const snapshot = await this.db.canvas_snapshots.get(this.key);
+      const naplet = snapshot?.naplets?.find(row => row.id === napletId);
+      if (!this.authorized || !naplet) throw new Error('Canvas naplet authorization must be refreshed.');
+      await deleteTowerPgCanvasNaplet(this.context.workspaceId, this.canvasId, napletId, { expected_row_version: naplet.row_version }, apiOptions(this.context));
+      return this.refresh();
+    });
+  }
+
+  createComment(body) {
+    return this.enqueueMutation(async () => {
+      if (!this.authorized) throw new Error('Canvas authorization must be refreshed.');
+      await createTowerPgCanvasComment(this.context.workspaceId, this.canvasId, body, apiOptions(this.context));
+      return this.refresh();
+    });
+  }
+
+  setCommentResolved(commentId, resolved) {
+    return this.enqueueMutation(async () => {
+      const snapshot = await this.db.canvas_snapshots.get(this.key);
+      const comment = snapshot?.comments?.find(row => row.id === commentId);
+      if (!this.authorized || !comment) throw new Error('Canvas comment authorization must be refreshed.');
+      await updateTowerPgCanvasComment(this.context.workspaceId, this.canvasId, commentId, {
+        resolved,
+        expected_row_version: comment.row_version,
+      }, apiOptions(this.context));
       return this.refresh();
     });
   }

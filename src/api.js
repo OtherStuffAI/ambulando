@@ -2895,6 +2895,13 @@ export const reorderTowerPgCanvases = (workspaceId, body, options = {}) => canva
 export const getTowerPgCanvasSnapshot = (workspaceId, canvasId, options = {}) => canvasRequest(workspaceId, `${encodeURIComponent(String(canvasId || '').trim())}/snapshot`, options);
 export const createTowerPgCanvasNaplet = (workspaceId, canvasId, body, options = {}) => canvasRequest(workspaceId, `${encodeURIComponent(String(canvasId || '').trim())}/naplets`, { ...options, method: 'POST', body });
 export const updateTowerPgCanvasNaplet = (workspaceId, canvasId, napletId, body, options = {}) => canvasRequest(workspaceId, `${encodeURIComponent(String(canvasId || '').trim())}/naplets/${encodeURIComponent(String(napletId || '').trim())}`, { ...options, method: 'PATCH', body });
+export const deleteTowerPgCanvasNaplet = (workspaceId, canvasId, napletId, body, options = {}) => canvasRequest(workspaceId, `${encodeURIComponent(String(canvasId || '').trim())}/naplets/${encodeURIComponent(String(napletId || '').trim())}`, { ...options, method: 'DELETE', body });
+export const createTowerPgCanvasElement = (workspaceId, canvasId, body, options = {}) => canvasRequest(workspaceId, `${encodeURIComponent(String(canvasId || '').trim())}/elements`, { ...options, method: 'POST', body });
+export const updateTowerPgCanvasElement = (workspaceId, canvasId, elementId, body, options = {}) => canvasRequest(workspaceId, `${encodeURIComponent(String(canvasId || '').trim())}/elements/${encodeURIComponent(String(elementId || '').trim())}`, { ...options, method: 'PATCH', body });
+export const deleteTowerPgCanvasElement = (workspaceId, canvasId, elementId, body, options = {}) => canvasRequest(workspaceId, `${encodeURIComponent(String(canvasId || '').trim())}/elements/${encodeURIComponent(String(elementId || '').trim())}`, { ...options, method: 'DELETE', body });
+export const getTowerPgCanvasComments = (workspaceId, canvasId, options = {}) => canvasRequest(workspaceId, `${encodeURIComponent(String(canvasId || '').trim())}/comments`, options);
+export const createTowerPgCanvasComment = (workspaceId, canvasId, body, options = {}) => canvasRequest(workspaceId, `${encodeURIComponent(String(canvasId || '').trim())}/comments`, { ...options, method: 'POST', body });
+export const updateTowerPgCanvasComment = (workspaceId, canvasId, commentId, body, options = {}) => canvasRequest(workspaceId, `${encodeURIComponent(String(canvasId || '').trim())}/comments/${encodeURIComponent(String(commentId || '').trim())}`, { ...options, method: 'PATCH', body });
 
 export async function getTowerPgScopeOrder(workspaceId, { baseUrl = _baseUrl, appNpub = FLIGHT_DECK_PG_APP_NPUB } = {}) {
   const requestPath = `/api/v4/flightdeck-pg/workspaces/${encodeURIComponent(workspaceId)}/me/scope-order`;

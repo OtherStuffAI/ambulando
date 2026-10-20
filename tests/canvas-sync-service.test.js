@@ -4,11 +4,17 @@ import { afterEach, expect, it, vi } from 'vitest';
 
 const api = vi.hoisted(() => ({
   createTowerPgCanvas: vi.fn(),
+  createTowerPgCanvasComment: vi.fn(),
+  createTowerPgCanvasElement: vi.fn(),
   createTowerPgCanvasNaplet: vi.fn(),
+  deleteTowerPgCanvasElement: vi.fn(),
+  deleteTowerPgCanvasNaplet: vi.fn(),
   getTowerPgCanvases: vi.fn(),
   getTowerPgCanvasSnapshot: vi.fn(),
   reorderTowerPgCanvases: vi.fn(),
   updateTowerPgCanvas: vi.fn(),
+  updateTowerPgCanvasComment: vi.fn(),
+  updateTowerPgCanvasElement: vi.fn(),
   updateTowerPgCanvasNaplet: vi.fn(),
 }));
 
