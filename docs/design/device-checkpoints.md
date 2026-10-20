@@ -211,6 +211,42 @@ Inbox cards and Recent Channels agree before responses arrive and through
 repair, reconnect and reload. New conversations merge into the Inbox and
 explicit message tombstones disappear without waiting for network convergence.
 
+## Existing-cache adoption
+
+When discovery advertises `record_sync.cache_adoption.version: 1`, a populated
+same-reader cache that is resetting or still bound to an incomplete snapshot is
+verified before any replacement body snapshot continues. Flight Deck first
+captures an unfiltered repair-manifest cursor, persists that cursor and a stable
+request UUID, then answers Tower's bounded identity/state/version challenges
+from canonical `pg_record_rows`. A missing inventory entry means genuinely
+absent canonical data; local pending writes remain separate and are never
+reported as proof of Tower state.
+
+Exact matches transfer no canonical body. Only identities returned as
+`repair_required` use selective repair. The worker commits those upserts or
+explicit tombstones before the client acknowledges their exact canonical
+versions. Omitted or no-longer-visible rows remain downloaded under the existing
+retention policy. Each rotating response cursor is persisted before the next
+challenge, and the start request's UUID and manifest cursor are durable before
+the first POST, so reload and lost responses resume idempotently without
+allocating another adoption session.
+
+Tower supersedes the old snapshot only in its successful adoption transaction.
+The client then commits the returned normal v2 checkpoint and deletes its local
+adoption cursor in one Dexie transaction while clearing incomplete snapshot and
+retirement state. The next ordinary request therefore starts at the adopted
+checkpoint in delta mode. Failure, suspension, signer loss or authority drift
+leaves the cache, drafts, pending writes and recoverable snapshot state intact;
+it does not trigger an active-use body snapshot. Servers that do not advertise
+adoption keep the prior checkpoint recovery behavior. A genuinely empty cache
+still follows the paced, resumable snapshot path and remains foreground-
+preemptible between bounded materialisation transactions.
+
+Startup progress presents these lanes separately as recent refresh, cached-data
+verification/repair, initial workspace download and delta catch-up. Adoption is
+activated only after Tower discovery, OpenAPI and signed live behavior have been
+verified against the same contract.
+
 ## Interrupted bounded page recovery
 
 The bounded handover certificate and opaque cursor commit together only after

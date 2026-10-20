@@ -41,7 +41,7 @@ export async function commitDeviceMetadata(cursorKey, action) {
       // Auxiliary lanes only add Tower-authorized rows for this owner; builds
       // before 2462 did so without recounting. Fewer rows means lost bodies.
       const countRegressed = identityMatches && canonicalCount < Number(owner.canonicalCount || 0);
-      return { state, owner, identityMatches, countRegressed, cacheMatches: identityMatches && !countRegressed };
+      return { state, owner, canonicalCount, identityMatches, countRegressed, cacheMatches: identityMatches && !countRegressed };
     }
     if (action.type === 'owner_count') {
       const owner = (await db.sync_state.get(DEVICE_CACHE_OWNER_KEY))?.value;
@@ -75,6 +75,26 @@ export async function commitDeviceMetadata(cursorKey, action) {
       await db.sync_state.put({ key: cursorKey, value: next });
       return next;
     }
+    if (action.type === 'adopted') {
+      validateCheckpoint(action.checkpoint, device);
+      const checkpoint = action.checkpoint;
+      if (!checkpoint.checkpoint_cursor || BigInt(checkpoint.checkpoint_revision) <= BigInt(device.revision)) {
+        throw new Error('Invalid adopted Tower device checkpoint');
+      }
+      const next = { ...state, cursor: checkpoint.checkpoint_cursor, resetting: false, applyingPage: null,
+        snapshotId: null, snapshotRetirement: null, snapshotReconciliationPending: false,
+        snapshotComplete: true, converged: true, handover: null,
+        device: { ...device, registered: true, authorityEpoch: checkpoint.authority_epoch,
+          revision: checkpoint.checkpoint_revision, pendingAck: null } };
+      await db.sync_state.put({ key: cursorKey, value: next });
+      if (action.adoptionStateKey) {
+        if (!String(action.adoptionStateKey).startsWith('record-sync-aux:')) throw new Error('Invalid cache adoption state key');
+        await db.sync_state.delete(action.adoptionStateKey);
+      }
+      await db.sync_state.put({ key: DEVICE_CACHE_OWNER_KEY, value: { ...owner,
+        cursorKey, scope: device.scope, clientId: device.clientId, canonicalCount: await db.pg_record_rows.count() } });
+      return next;
+    }
     if (action.type === 'retired') {
       const next = { ...state, obsoleteDevices: (state.obsoleteDevices || []).filter(d => d.clientId !== action.obsoleteClientId) };
       await db.sync_state.put({ key: cursorKey, value: next });
@@ -99,13 +119,14 @@ export async function discoverRecordCapabilities(context, readService) {
           priorityFeed: service?.record_sync?.priority_feed === true,
           contextClosure: service?.record_sync?.context_closure === true,
           repairManifest: service?.record_sync?.repair_manifest === true,
-          selectiveRepair: service?.record_sync?.selective_repair === true };
+          selectiveRepair: service?.record_sync?.selective_repair === true,
+          cacheAdoption: service?.record_sync?.cache_adoption?.version === 1 };
       })
       .catch(error => {
         // Only absent service routes represent older servers. Authentication,
         // transport and authority failures must never silently negotiate down.
         if ([404, 406, 501].includes(error.status)) return { protocolVersion: 1, extension: null,
-          priorityFeed: false, contextClosure: false, repairManifest: false, selectiveRepair: false };
+          priorityFeed: false, contextClosure: false, repairManifest: false, selectiveRepair: false, cacheAdoption: false };
         discoveries.delete(key);
         throw error;
       });
@@ -223,12 +244,22 @@ export async function syncDeviceRecords({ context, options, readState, materiali
   };
   for (let pages = 1; pages <= (options.maxPages || 1000); pages++) {
     try {
-      await retireObsolete();
       if (!state.device.registered) {
         const checkpoint = validateCheckpoint(await client(context.workspaceId, state.device.clientId,
           { ...transport, operation: 'register' }), state.device);
         await update({ type: 'registered', checkpoint, extension: options.extension, largeRecords: options.largeRecords });
       }
+      const adoptionNeeded = options.cacheAdoption === true && Number(inspection.canonicalCount || 0) > 0
+        && (state.resetting === true || state.snapshotReconciliationPending === true);
+      if (adoptionNeeded) {
+        if (typeof options.adopt !== 'function') throw new Error('Tower advertised cache adoption without a client implementation');
+        options.onProgress?.({ stage: 'verifying-cache', page: pages, applied, cursorPresent: Boolean(state.cursor),
+          mode: 'adoption', fullSnapshot: false, protocolVersion: 2 });
+        const adopted = await options.adopt({ clientId: state.device.clientId,
+          expectedCheckpointRevision: state.device.revision });
+        await update({ type: 'adopted', checkpoint: adopted.checkpoint, adoptionStateKey: adopted.stateKey });
+      }
+      await retireObsolete();
       if (state.snapshotRetirement) {
         await materialize({ protocol_version: 2, resume_snapshot_retirement: true, local_apply_options: {
           expectedGeneration: Number(state.localGeneration || 0), terminalCursor: state.snapshotRetirement.nextCursor,

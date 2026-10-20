@@ -7,7 +7,7 @@ import { materializeFeedReaderEvent } from './feed/materialize.js';
 import { clampBranchEffectiveMessageIds, threadHistoryLineage, mergeThreadHistoryIds, threadHistoryAuthority as pgAuthorityToken } from './thread-history-coverage.js';
 import { FLIGHT_DECK_PG_APP_NPUB } from './app-identity.js';
 import { normalizeBackendUrl } from './utils/state-helpers.js';
-import { runManifestRepair, runPriorityLane } from './pg-priority-sync.js';
+import { runCacheAdoption, runManifestRepair, runPriorityLane } from './pg-priority-sync.js';
 import {
   getTowerPgFile,
   getTowerPgChannel,
@@ -1757,6 +1757,8 @@ async function syncTowerPgRecordWorkspace(store, options, deps) {
   };
   if (capabilities.priorityFeed && options.skipPriority !== true) {
     try {
+      options.onProgress?.({ stage: 'recent-refresh', mode: 'priority', fullSnapshot: false,
+        cursorPresent: false, protocolVersion: protocol });
       await runPriorityLane(store, { ...options, resume: false }, auxiliaryDeps);
       // Historical priority continuation is never routine work. Keep its
       // independent cursor durable, but advance it only for an explicit idle or
@@ -1774,6 +1776,10 @@ async function syncTowerPgRecordWorkspace(store, options, deps) {
   }
   const runDevice = lease => syncDeviceRecords({
     context, options: { ...options, extension: capabilities.extension, largeRecords: capabilities.largeRecords,
+      cacheAdoption: capabilities.cacheAdoption,
+      adopt: capabilities.cacheAdoption
+        ? device => runCacheAdoption(store, { ...options, ...device }, auxiliaryDeps)
+        : null,
       repair: capabilities.repairManifest && capabilities.selectiveRepair
         ? () => runManifestRepair(store, { ...options, resume: true }, auxiliaryDeps)
         : null }, cursorKey: recordDeltaCursorKey(store),

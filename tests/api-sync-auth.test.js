@@ -871,7 +871,7 @@ it('signs exact v2 registration, page, acknowledgement, read and retirement requ
   } finally { globalThis.fetch = previousFetch; workspaceSecret = null; }
 });
 
-it('signs exact session-owned priority, context, manifest and selective repair requests', async () => {
+it('signs exact session-owned priority, context, manifest, repair and adoption requests', async () => {
   const previousFetch = globalThis.fetch;
   createNip98AuthHeaderMock.mockClear(); createNip98AuthHeaderForSecretMock.mockClear();
   workspaceSecret = new Uint8Array(32).fill(7);
@@ -889,12 +889,16 @@ it('signs exact session-owned priority, context, manifest and selective repair r
     await api.getTowerPgRecordRepairManifest('workspace', { ...common, cursor: 'manifest-cursor',
       filters: { channelId: 'channel' } });
     await api.postTowerPgRecordRepair('workspace', [{ family: 'task', id: 'task-id', version: '9' }], common);
-    expect(requests.map(request => request.method)).toEqual(['GET', 'GET', 'GET', 'POST']);
+    const adoption = { request_id: '10000000-0000-4000-8000-000000000001', manifest_cursor: '20000000-0000-4000-8000-000000000002', expected_checkpoint_revision: '7' };
+    await api.postTowerPgRecordAdoption('workspace', '30000000-0000-4000-8000-000000000003', adoption, common);
+    expect(requests.map(request => request.method)).toEqual(['GET', 'GET', 'GET', 'POST', 'POST']);
     expect(requests[0].url).toContain('/record-sync/priority?limit=32&family=task&family=doc&scope_id=scope&cursor=priority-cursor');
     expect(requests[1].url).toContain('/record-sync/context?resource_type=task&resource_id=task-id');
     expect(requests[2].url).toContain('/record-sync/repair-manifest?limit=200&channel_id=channel&cursor=manifest-cursor');
     expect(JSON.parse(requests[3].body)).toEqual({ records: [{ family: 'task', id: 'task-id', version: '9' }] });
-    expect(createNip98AuthHeaderMock).toHaveBeenCalledTimes(4);
+    expect(requests[4].url).toContain('/record-sync/clients/30000000-0000-4000-8000-000000000003/adoption?protocol_version=2');
+    expect(JSON.parse(requests[4].body)).toEqual(adoption);
+    expect(createNip98AuthHeaderMock).toHaveBeenCalledTimes(5);
     expect(createNip98AuthHeaderForSecretMock).not.toHaveBeenCalled();
   } finally { globalThis.fetch = previousFetch; workspaceSecret = null; }
 });

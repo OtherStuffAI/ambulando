@@ -994,6 +994,17 @@ export async function postTowerPgRecordRepair(workspaceId, records, { baseUrl = 
   return json(response, { requestUrl, method: 'POST', prefix: 'Tower PG selective record repair' });
 }
 
+export async function postTowerPgRecordAdoption(workspaceId, clientId, body, { baseUrl = _baseUrl, appNpub = FLIGHT_DECK_PG_APP_NPUB, timeoutMs = 30_000, diagnosticOperation } = {}) {
+  if (!clientId || !body || typeof body !== 'object' || Array.isArray(body)) throw new Error('Invalid cache adoption request');
+  const path = `/api/v4/flightdeck-pg/workspaces/${encodeURIComponent(workspaceId)}/record-sync/clients/${encodeURIComponent(clientId)}/adoption?protocol_version=2`;
+  const requestUrl = resolveTowerPgUrl(path, baseUrl);
+  const response = await signedTowerPgFetch(path, {
+    method: 'POST', body, baseUrl, appNpub, timeoutMs,
+    diagnosticOperation, useWorkspaceKey: false,
+  });
+  return json(response, { requestUrl, method: 'POST', prefix: 'Tower PG record cache adoption' });
+}
+
 export async function towerPgRecordClient(workspaceId, clientId, { operation = 'read', cursor, expectedRevision, largeRecordReceipts, baseUrl = _baseUrl, appNpub = FLIGHT_DECK_PG_APP_NPUB, timeoutMs = 30_000, diagnosticOperation } = {}) {
   if (!['read', 'register', 'ack', 'retire'].includes(operation)) throw new Error('Invalid checkpoint operation');
   const method = { read: 'GET', register: 'POST', ack: 'POST', retire: 'DELETE' }[operation];
