@@ -846,6 +846,7 @@ function buildDetailSpecs(store) {
       onNext: messages => {
         if (!isCurrent() || (store.threadVisibleReplyCount || store.THREAD_REPLY_PAGE_SIZE || 6) !== replyLimit) return;
         const result = store.applyMessages(messages, { isCurrent, threadDetail: true, deferEnrichment: true });
+        Promise.resolve(result).finally(() => { if (isCurrent()) store.threadLocalDetailReady = true; });
         void store.startThreadLiveActivity?.();
         return result;
       },

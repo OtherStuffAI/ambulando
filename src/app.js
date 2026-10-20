@@ -863,6 +863,8 @@ export function initApp() {
     threadVisibleReplyCount: 6,
     threadHistoryCursor: null,
     threadHistoryLoading: false,
+    threadHistoryPending: false,
+    threadLocalDetailReady: true,
     threadHistoryLoadAll: false,
     threadHistoryGeneration: 0,
     threadHistoryError: '',

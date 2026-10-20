@@ -110,7 +110,8 @@ describe('real Inbox thread history path', () => {
     s.requestTowerSyncFamily = (family, ...args) => family === 'thread-history-page' ? historyRead(...args) : Promise.resolve();
     const open = async () => {
       await s.openAutopilotOverviewThread({ id: 'thread-a', rootRecordId: 'thread-a', channelId: 'channel-a' });
-      await vi.waitFor(() => expect(s.threadHistoryLoading).toBe(false));
+      // Pending covers the local coverage read; loading covers network pages.
+      await vi.waitFor(() => expect(s.threadHistoryLoading || s.threadHistoryPending).toBe(false));
     };
     await open();
     expect(s.threadHistoryCursor).toBe('next');

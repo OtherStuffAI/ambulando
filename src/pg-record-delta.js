@@ -540,6 +540,14 @@ async function applyRecordPage(store, page, options = {}) {
     }
     if (!options.reconcileOnly && page.protocol_version === 2) await db.sync_state.put({ key: DEVICE_CACHE_OWNER_KEY,
       value: { cursorKey, scope: state.device.scope, clientId: state.device.clientId, canonicalCount: await db.pg_record_rows.count() } });
+    if (options.reconcileOnly && changedKeys.size && state.device) {
+      // Priority/context/repair rows are Tower-authorized for this same owner.
+      // Count them in the same commit so growth never reads as a foreign cache.
+      const owner = (await db.sync_state.get(DEVICE_CACHE_OWNER_KEY))?.value;
+      if (owner?.cursorKey === cursorKey && owner.clientId === state.device.clientId && owner.scope === state.device.scope) {
+        await db.sync_state.put({ key: DEVICE_CACHE_OWNER_KEY, value: { ...owner, canonicalCount: await db.pg_record_rows.count() } });
+      }
+    }
     return { applied, localGeneration: Number(state.localGeneration || 0), cursor: page.next_cursor, retirementPending, hasMore: page.has_more, fullSnapshot: page.mode === 'snapshot', protocolVersion: 1, needsSummaryBackfill: Boolean(state.snapshotComplete && state.assignmentPolicyVersion !== 1 && page.mode === 'delta' && !page.has_more) };
   });
 }

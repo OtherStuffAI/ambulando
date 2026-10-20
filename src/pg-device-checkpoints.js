@@ -35,9 +35,20 @@ export async function commitDeviceMetadata(cursorKey, action) {
     const state = (await db.sync_state.get(cursorKey))?.value || { cursor: null };
     if (action.type === 'inspect') {
       const owner = (await db.sync_state.get(DEVICE_CACHE_OWNER_KEY))?.value;
-      return { state, owner, cacheMatches: Boolean(owner && state.device && owner.cursorKey === cursorKey
-        && owner.clientId === state.device.clientId && owner.scope === state.device.scope
-        && owner.canonicalCount === await db.pg_record_rows.count()) };
+      const identityMatches = Boolean(owner && state.device && owner.cursorKey === cursorKey
+        && owner.clientId === state.device.clientId && owner.scope === state.device.scope);
+      const canonicalCount = await db.pg_record_rows.count();
+      // Auxiliary lanes only add Tower-authorized rows for this owner; builds
+      // before 2462 did so without recounting. Fewer rows means lost bodies.
+      const countRegressed = identityMatches && canonicalCount < Number(owner.canonicalCount || 0);
+      return { state, owner, identityMatches, countRegressed, cacheMatches: identityMatches && !countRegressed };
+    }
+    if (action.type === 'owner_count') {
+      const owner = (await db.sync_state.get(DEVICE_CACHE_OWNER_KEY))?.value;
+      if (!state.device || owner?.cursorKey !== cursorKey || owner.clientId !== state.device.clientId
+        || owner.scope !== state.device.scope || state.device.scope !== action.scope) throw new Error('Device cache generation changed');
+      await db.sync_state.put({ key: DEVICE_CACHE_OWNER_KEY, value: { ...owner, canonicalCount: await db.pg_record_rows.count() } });
+      return state;
     }
     const device = state.device;
     const owner = (await db.sync_state.get(DEVICE_CACHE_OWNER_KEY))?.value;
@@ -155,7 +166,20 @@ export async function syncDeviceRecords({ context, options, readState, materiali
     } });
     state = await readState(cursorKey);
   };
-  if (!inspection.cacheMatches || !state?.device || state.device.scope !== scope || !canonicalClientId(state.device.clientId)) {
+  const ownedHere = state?.device && state.device.scope === scope && canonicalClientId(state.device.clientId);
+  if (ownedHere && inspection.countRegressed && typeof options.repair === 'function') {
+    // Rows below the committed owner count were lost locally. Restore only the
+    // missing/stale bodies from the manifest and keep the durable checkpoint.
+    options.onProgress?.({ stage: 'repairing', recoveryReason: 'cache_count_regressed', applied: 0,
+      cursorPresent: Boolean(state.cursor), mode: 'unavailable', protocolVersion: 2 });
+    await options.repair({ reason: 'cache_count_regressed', cursor: state.cursor });
+    assertCurrent();
+    inspection.cacheMatches = true;
+  }
+  if (ownedHere && inspection.cacheMatches) {
+    state = await materialize({ protocol_version: 2, device_action: { type: 'owner_count', scope } });
+  }
+  if (!inspection.cacheMatches || !ownedHere) {
     // Adoption replaces the authoritative snapshot, never upgrades a v1 cursor.
     // An unrelated authority must be hidden, whereas the same cache's v1 views
     // remain available until the replacement's snapshot handover completes.

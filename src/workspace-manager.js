@@ -878,10 +878,14 @@ export const workspaceManagerMixin = {
   },
 
   async loadLocalWorkspaceCoreData(options = {}) {
-    const [scopes, channels, dailyNotes] = await Promise.all([
+    // Daily notes render from Dexie via liveQuery. Their Tower refresh is
+    // additive and must never gate cached live queries on a network round-trip.
+    const dailyNotes = typeof this.refreshDailyNotes === 'function'
+      ? Promise.resolve().then(() => this.refreshDailyNotes()).catch(() => [])
+      : Promise.resolve([]);
+    const [scopes, channels] = await Promise.all([
       typeof this.loadLocalScopes === 'function' ? this.loadLocalScopes() : Promise.resolve([]),
       typeof this.loadLocalChannels === 'function' ? this.loadLocalChannels(options) : Promise.resolve([]),
-      typeof this.refreshDailyNotes === 'function' ? this.refreshDailyNotes().catch(() => []) : Promise.resolve([]),
     ]);
     return { scopes, channels, dailyNotes };
   },

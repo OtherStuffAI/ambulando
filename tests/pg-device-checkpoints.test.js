@@ -323,6 +323,96 @@ it('adopts a populated v1 cache through a new snapshot, preserving pending write
   expect(h.remote.page.mock.calls.filter(c => c[1].cursor.startsWith('initial:'))).toHaveLength(1);
 });
 
+const auxiliaryMessage = id => {
+  const base = fixture.one_message_delta.changes[0];
+  return { ...base, id, version: '40', row: { ...base.row, id, body: `Auxiliary ${id}` } };
+};
+const applyAuxiliary = changes => hydrateTowerPgSyncBundle(store, { protocol_version: 1, mode: 'delta',
+  families: fixture.canonical_upserts.families, changes, actors: [], next_cursor: `auxiliary-${changes[0].id}`,
+  has_more: false, snapshot_id: null, local_apply_options: { reconcileOnly: true } },
+{ migrateLegacyAutopilotLaunchers: async () => {} });
+
+it('keeps the committed checkpoint after priority/context/repair rows grow the cache', async () => {
+  const h = harness(); await h.run();
+  const committed = await state();
+  await applyAuxiliary([auxiliaryMessage('50000000-0000-4000-8000-000000000101')]);
+  expect((await db.sync_state.get(DEVICE_CACHE_OWNER_KEY)).value.canonicalCount).toBe(await db.pg_record_rows.count());
+  h.remote.page.mockClear();
+  await h.run();
+  expect((await state()).device.clientId).toBe(committed.device.clientId);
+  expect(h.remote.client.mock.calls.filter(c => c[2].operation === 'register')).toHaveLength(1);
+  expect(h.remote.client.mock.calls.filter(c => c[2].operation === 'retire')).toHaveLength(0);
+  // A second ordinary launch requests one bounded delta from the durable cursor.
+  expect(h.remote.page.mock.calls.map(c => c[1].cursor)).toEqual([committed.cursor]);
+});
+
+it('keeps a completed multi-page catch-up completed across ordinary launches whose priority band adds rows', async () => {
+  store.backendUrl = 'http://localhost:3197'; context = resolveTowerPgWorkspaceContext(store); key = recordDeltaCursorKey(store);
+  const remote = server();
+  let launch = 0;
+  const readPriority = vi.fn(async () => ({ changes: [auxiliaryMessage(`50000000-0000-4000-8000-00000000020${launch}`)],
+    has_more: false, next_cursor: null, captured_head: String(10 + launch), coverage: {}, retention_policy: 'retain_downloaded' }));
+  const deps = {
+    getTowerPgService: async () => ({ record_sync: { device_checkpoints: true, protocol_versions: [1, 2], priority_feed: true } }),
+    getTowerPgRecordSync: remote.page, towerPgRecordClient: remote.client,
+    deviceLocks: { request: (_name, _options, run) => run() },
+    prioritySync: { readPriority },
+    getTowerPgResourceViewStates: async () => ({}), getTowerPgWorkspaceMembers: async () => ({ members: [] }),
+    getTowerPgWorkspaceGroups: async () => ({ groups: [] }), migrateLegacyAutopilotLaunchers: async () => {},
+  };
+  const relaunch = async () => { launch += 1; remote.page.mockClear(); await syncTowerPgWorkspace(store, { priorityContinuation: false }, deps); };
+  await relaunch();
+  const completed = await state();
+  expect(completed.converged).toBe(true);
+  expect(remote.page.mock.calls.length).toBeGreaterThan(1);
+  for (let i = 0; i < 3; i++) {
+    const before = await state();
+    await relaunch();
+    // Only one bounded delta from the durable head: no registration, no snapshot.
+    expect(remote.page.mock.calls.map(c => c[1].cursor)).toEqual([before.cursor]);
+    expect((await state()).device.clientId).toBe(completed.device.clientId);
+    expect((await state()).converged).toBe(true);
+  }
+  expect(readPriority).toHaveBeenCalledTimes(4);
+  expect(remote.client.mock.calls.filter(c => c[2].operation === 'register')).toHaveLength(1);
+  expect(remote.client.mock.calls.filter(c => c[2].operation === 'retire')).toHaveLength(0);
+});
+
+it('resumes a build-2460 cache whose owner count drifted below auxiliary growth without re-adoption', async () => {
+  const h = harness(); await h.run();
+  const committed = await state();
+  // Builds 2457–2460 committed auxiliary rows without refreshing the owner count.
+  const owner = (await db.sync_state.get(DEVICE_CACHE_OWNER_KEY)).value;
+  await applyAuxiliary([auxiliaryMessage('50000000-0000-4000-8000-000000000102')]);
+  await db.sync_state.put({ key: DEVICE_CACHE_OWNER_KEY, value: owner });
+  h.remote.page.mockClear();
+  await h.run();
+  expect((await state()).device.clientId).toBe(committed.device.clientId);
+  expect(h.remote.page.mock.calls.map(c => c[1].cursor)).toEqual([committed.cursor]);
+  expect(h.remote.page.mock.calls.some(c => String(c[1].cursor).startsWith('initial:'))).toBe(false);
+  expect((await db.sync_state.get(DEVICE_CACHE_OWNER_KEY)).value.canonicalCount).toBe(await db.pg_record_rows.count());
+});
+
+it('repairs canonical rows lost below the committed owner count before considering a replacement snapshot', async () => {
+  const h = harness(); await h.run();
+  const committed = await state();
+  await db.pg_record_rows.delete('message:50000000-0000-4000-8000-000000000004');
+  const repair = vi.fn(async () => ({ repaired: 1 }));
+  h.remote.page.mockClear();
+  await h.run({ repair });
+  expect(repair).toHaveBeenCalledWith({ reason: 'cache_count_regressed', cursor: committed.cursor });
+  expect((await state()).device.clientId).toBe(committed.device.clientId);
+  expect(h.remote.page.mock.calls.map(c => c[1].cursor)).toEqual([committed.cursor]);
+});
+
+it('replaces a cache that lost canonical rows when selective repair is unavailable', async () => {
+  const h = harness(); await h.run();
+  const old = (await state()).device.clientId;
+  await db.pg_record_rows.delete('message:50000000-0000-4000-8000-000000000004');
+  await h.run();
+  expect((await state()).device.clientId).not.toBe(old);
+});
+
 it('rolls back a failed page transaction and sends no acknowledgement; reload resumes bootstrap', async () => {
   const h = harness(), original = h.ports.materialize;
   h.ports.materialize = async bundle => original(bundle.changes ? { ...bundle, local_apply_options: { ...bundle.local_apply_options, beforeCommit: () => { throw new Error('crash before commit'); } } } : bundle);

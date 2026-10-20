@@ -849,6 +849,7 @@ export const autopilotOverviewManagerMixin = {
   deckThreadChannelId: '',
   deckThreadChannelRecord: null,
   deckThreadChannelState: 'idle',
+  deckThreadSeedTitle: '',
   deckThreadChannelError: '',
   deckThreadChannelRequestId: 0,
   deckThreadTowerId: '',
@@ -1125,6 +1126,10 @@ export const autopilotOverviewManagerMixin = {
     this.deckThreadChannelRecord = null;
     this.deckThreadChannelState = 'loading';
     this.deckThreadChannelError = '';
+    this.deckThreadSeedTitle = normalizeString(options.title);
+    // A downloaded channel is ready now; only an uncached one waits on Dexie/Tower.
+    const cachedChannel = (this.channels || []).find((channel) => normalizeString(channel?.record_id) === normalizedChannelId);
+    if (cachedChannel) this.setDeckThreadChannelReady(cachedChannel);
     const channelMessages = (Array.isArray(this.fileMessages) ? this.fileMessages : [])
       .filter((message) => normalizeString(message?.channel_id) === normalizedChannelId);
     const matchingMessage = channelMessages.find((message) => (
@@ -1172,7 +1177,10 @@ export const autopilotOverviewManagerMixin = {
     if (!normalizedChannelId || normalizedChannelId !== normalizeString(this.deckThreadChannelId)) return false;
     const requestId = Number(this.deckThreadChannelRequestId || 0) + 1;
     this.deckThreadChannelRequestId = requestId;
-    this.deckThreadChannelState = 'loading';
+    // Revalidating a ready cached channel must not disable the composer.
+    if (!(this.deckThreadChannelState === 'ready' && normalizeString(this.deckThreadChannelRecord?.record_id) === normalizedChannelId)) {
+      this.deckThreadChannelState = 'loading';
+    }
     this.deckThreadChannelError = '';
     const context = resolveTowerPgWorkspaceContext(this);
     const sourceThreadId = this.activeThreadId;
@@ -1311,6 +1319,7 @@ export const autopilotOverviewManagerMixin = {
     this.deckThreadChannelError = '';
     this.deckThreadChannelRequestId = Number(this.deckThreadChannelRequestId || 0) + 1;
     this.deckThreadTowerId = '';
+    this.deckThreadSeedTitle = '';
     this.deckThreadNavigationRows = [];
     this.deckThreadSwipeStart = null;
     if (options.syncRoute !== false) this.syncRoute?.(true);
@@ -1918,6 +1927,7 @@ export const autopilotOverviewManagerMixin = {
       await this.openDeckThread(thread.channelId, threadId, {
         requestId,
         towerThreadId: thread.id,
+        title: thread.title,
         captureReturnContext: options.preserveNavigationRows !== true,
         replaceRoute: options.replaceRoute === true,
       });

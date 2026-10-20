@@ -4468,7 +4468,7 @@
                 </div>
                 <p x-show="$store.chat.linkedThreadOpening && !$store.chat.internalLinkOpening" role="status">Opening linked conversation…</p>
                 <p x-show="$store.chat.linkedThreadOpenError && !$store.chat.internalLinkOpenError" x-text="$store.chat.linkedThreadOpenError" role="alert"></p>
-                <p x-show="($store.chat.threadHistoryLoading && !$store.chat.threadHasLocalContent) || $store.chat.threadHistoryLoadAll" role="status">Loading conversation history…</p>
+                <p x-show="($store.chat.threadHistoryLoading && $store.chat.threadLocalDetailReady && !$store.chat.threadHasLocalContent) || $store.chat.threadHistoryLoadAll" role="status">Loading conversation history…</p>
                 <p x-show="$store.chat.threadHistoryLoading && $store.chat.threadHasLocalContent && !$store.chat.threadHistoryLoadAll" role="status">Refreshing conversation…</p>
                 <p x-show="$store.chat.threadHistoryError" x-text="$store.chat.threadHistoryError" role="alert"></p>
                 <button

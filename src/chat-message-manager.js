@@ -1861,14 +1861,24 @@ export const chatMessageManagerMixin = {
     this.threadHistoryError = '';
     this.linkedThreadOpenError = '';
     this.threadHistoryLoading = false;
+    this.threadHistoryPending = false;
     this.threadHistoryLoadAll = false;
     this.activeThreadId = recordId;
+    this.threadLocalDetailReady = !(this.navSection === 'status' && this.deckThreadChannelId);
     if (this.navSection === 'status' && this.deckThreadChannelId) {
       // Retain only this selection. Dexie liveQuery publishes the latest rows;
-      // never reuse an unvalidated cross-thread presentation cache.
+      // never reuse an unvalidated cross-thread presentation cache. Home's
+      // downloaded Inbox rows for this same thread paint the cached title and
+      // latest messages until the dedicated detail window commits.
       const threadId = this.deckThreadTowerId || message?.pg_thread_id || recordId;
-      this.messages = this.messages.filter(row => row.channel_id === this.deckThreadChannelId
-        && (row.pg_thread_id === threadId || row.record_id === recordId || row.parent_message_id === recordId));
+      const belongsToThread = row => row?.channel_id === this.deckThreadChannelId
+        && row.record_state !== 'deleted'
+        && (row.pg_thread_id === threadId || row.record_id === recordId || row.parent_message_id === recordId);
+      const seeded = new Map();
+      for (const row of [...(Array.isArray(this.fileMessages) ? this.fileMessages : []), ...this.messages]) {
+        if (belongsToThread(row)) seeded.set(row.record_id, row);
+      }
+      this.messages = sortMessagesByUpdatedAt([...seeded.values()]);
     }
     this.threadMenuOpen = false;
     this.threadTitleEditing = false;
@@ -1883,6 +1893,7 @@ export const chatMessageManagerMixin = {
       this.threadHistoryCursor = null;
       this.threadHistoryError = '';
       this.threadHistoryLoading = false;
+      this.threadHistoryPending = false;
       void this.loadDeckThreadHistoryPage({ initial: true });
     }
     const actualThreadId = String(message?.pg_thread_id
@@ -1895,7 +1906,7 @@ export const chatMessageManagerMixin = {
   },
 
   async loadDeckThreadHistoryPage({ all = false, initial = false } = {}) {
-    if (this.threadHistoryLoading || !this.requestTowerSyncFamily) return;
+    if (this.threadHistoryLoading || this.threadHistoryPending || !this.requestTowerSyncFamily) return;
     const rootId = this.activeThreadId;
     const channelId = this.navSection === 'status' ? this.deckThreadChannelId : this.selectedChannelId;
     let threadId = (this.navSection === 'status' ? this.deckThreadTowerId : null) || resolvePgThreadId(this, rootId);
@@ -1905,8 +1916,10 @@ export const chatMessageManagerMixin = {
     const isCurrent = () => this.activeThreadId === rootId
       && (this.navSection === 'status' ? this.deckThreadChannelId : this.selectedChannelId) === channelId
       && this.currentWorkspaceKey === workspaceKey && this.threadHistoryGeneration === generation;
-    this.threadHistoryLoading = true;
     this.threadHistoryError = '';
+    // Hold the request slot during the local coverage read without presenting
+    // a network load; cached detail stays authoritative for presentation.
+    this.threadHistoryPending = true;
     try {
       if (!threadId) threadId = (await getMessageById(rootId))?.pg_thread_id || rootId;
       if (!isCurrent()) return;
@@ -1916,6 +1929,7 @@ export const chatMessageManagerMixin = {
         this.threadHistoryCursor = coverage?.nextCursor || null;
         if (coverage?.fresh) return;
       }
+      this.threadHistoryLoading = true;
       const seen = new Set();
       let firstPage = initial;
       do {
@@ -1933,7 +1947,10 @@ export const chatMessageManagerMixin = {
     } catch (error) {
       if (isCurrent()) this.threadHistoryError = error?.message || 'Unable to load conversation history';
     } finally {
-      if (isCurrent()) this.threadHistoryLoading = false;
+      if (isCurrent()) {
+        this.threadHistoryLoading = false;
+        this.threadHistoryPending = false;
+      }
     }
   },
 
@@ -1950,8 +1967,10 @@ export const chatMessageManagerMixin = {
     if (options.saveDraft !== false) this.saveChatComposerDraft?.('thread');
     this.threadHistoryGeneration = (this.threadHistoryGeneration || 0) + 1;
     this.threadHistoryLoading = false;
+    this.threadHistoryPending = false;
     this.threadHistoryLoadAll = false;
     this.activeThreadId = null;
+    this.threadLocalDetailReady = true;
     this.threadMenuOpen = false;
     this.threadTitleEditing = false;
     this.threadTitleDraft = '';
@@ -1970,7 +1989,7 @@ export const chatMessageManagerMixin = {
   },
 
   async showMoreThreadMessages() {
-    if (this.threadHistoryLoading || this.threadHistoryLoadAll) return;
+    if (this.threadHistoryLoading || this.threadHistoryPending || this.threadHistoryLoadAll) return;
     const generation = this.threadHistoryGeneration;
     const rootId = this.activeThreadId;
     const workspace = this.currentWorkspaceKey;
@@ -2030,7 +2049,14 @@ export const chatMessageManagerMixin = {
 
   getActiveThreadTitle() {
     const thread = this.getActiveThreadRecord();
-    return String(thread?.title || thread?.body || 'Untitled thread').trim() || 'Untitled thread';
+    const title = String(thread?.title || thread?.body || '').trim();
+    if (title) return title;
+    // The opened Home card already carries its cached title; keep it until the
+    // local detail rows commit rather than downgrading to a placeholder.
+    if (this.navSection !== 'status' || !this.activeThreadId) return 'Untitled thread';
+    const activeId = String(this.activeThreadId).trim();
+    const card = (this.deckThreadNavigationRows || []).find(row => String(row?.rootRecordId || row?.id || '') === activeId);
+    return String(card?.title || this.deckThreadSeedTitle || '').trim() || 'Untitled thread';
   },
 
   canRenameThreadTitle(message) {
