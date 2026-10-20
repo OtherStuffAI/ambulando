@@ -28,7 +28,7 @@ export function cleanSharedUrl(value) {
 }
 
 export function cleanSharedText(text) {
-  return String(text).replace(/https?:\/\/[^\s<>"\u0000-\u001f]+/g, match => {
+  return String(text).replace(/https?:\/\/[^\s<>"\p{Cc}]+/gu, match => {
     // Delimiters belong to surrounding prose/Markdown. Balanced URL parentheses
     // remain part of a URL (e.g. Wikipedia article names).
     let url = match, suffix = '';
