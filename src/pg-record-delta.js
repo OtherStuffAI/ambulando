@@ -201,6 +201,7 @@ export async function applyPgRecordChanges(store, page, options = {}) {
   // prefix idempotent. No cursor can skip unapplied changes.
   let result, applied = 0;
   const deferredAffectedChannels = new Set();
+  const deferredAffectedResources = new Map();
   let transactionCount = 0, totalTransactionMs = 0, maxTransactionMs = 0, foregroundWaitMs = 0;
   const requestedBatchSize = Number(options.batchSize);
   const size = Number.isSafeInteger(requestedBatchSize) && requestedBatchSize > 0
@@ -218,6 +219,7 @@ export async function applyPgRecordChanges(store, page, options = {}) {
       has_more: partial ? true : page.has_more },
     { ...options, partialPage: partial, pageOffset: offset + size,
       deferredAffectedChannels: [...deferredAffectedChannels],
+      deferredAffectedResources: [...deferredAffectedResources.values()],
       beforeCommit: partial ? undefined : options.beforeCommit });
     const transactionMs = performance.now() - transactionStartedAt;
     transactionCount += 1;
@@ -225,6 +227,7 @@ export async function applyPgRecordChanges(store, page, options = {}) {
     maxTransactionMs = Math.max(maxTransactionMs, transactionMs);
     applied += result.applied;
     for (const channelId of result.affectedChannels || []) deferredAffectedChannels.add(channelId);
+    for (const [type, id] of result.affectedResources || []) deferredAffectedResources.set(`${type}:${id}`, [type, id]);
     if (result.replay) break;
     if (partial) await new Promise(resolve => setTimeout(resolve, Math.max(0, Number(options.backgroundBatchDelayMs) || 0)));
   }
@@ -511,7 +514,12 @@ async function applyRecordPage(store, page, options = {}) {
     if (resolvedConflictKeys.size) await db.pg_record_conflicts.bulkDelete([...resolvedConflictKeys]);
     if (!options.partialPage) await refreshChannelSummaries(db,
       [...new Set([...(options.deferredAffectedChannels || []), ...affectedChannels])]);
-    await updateResourceAttentions(db, [...affectedResources.values()], store, members);
+    if (!options.partialPage) {
+      const pageResources = new Map((options.deferredAffectedResources || [])
+        .map(([type, id]) => [`${type}:${id}`, [type, id]]));
+      for (const [key, resource] of affectedResources) pageResources.set(key, resource);
+      await updateResourceAttentions(db, [...pageResources.values()], store, members);
+    }
     // Retirement checkpoints commit in separate bounded transactions. The
     // terminal cursor remains at the preceding page until all omissions commit.
     const retirementPending = !options.reconcileOnly && state.snapshotComplete
@@ -550,7 +558,7 @@ async function applyRecordPage(store, page, options = {}) {
     // Startup accepts growth, rejects only row loss, and performs one owner
     // recount before v2 resumes. Recounting or rewriting this checkpoint in
     // each auxiliary transaction can starve foreground IndexedDB work.
-    return { applied, affectedChannels: [...affectedChannels].filter(Boolean), localGeneration: Number(state.localGeneration || 0), cursor: page.next_cursor, retirementPending, hasMore: page.has_more, fullSnapshot: page.mode === 'snapshot', protocolVersion: 1, needsSummaryBackfill: Boolean(state.snapshotComplete && state.assignmentPolicyVersion !== 1 && page.mode === 'delta' && !page.has_more) };
+    return { applied, affectedChannels: [...affectedChannels].filter(Boolean), affectedResources: [...affectedResources.values()], localGeneration: Number(state.localGeneration || 0), cursor: page.next_cursor, retirementPending, hasMore: page.has_more, fullSnapshot: page.mode === 'snapshot', protocolVersion: 1, needsSummaryBackfill: Boolean(state.snapshotComplete && state.assignmentPolicyVersion !== 1 && page.mode === 'delta' && !page.has_more) };
   });
 }
 

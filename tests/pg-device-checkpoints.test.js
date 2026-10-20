@@ -351,8 +351,11 @@ it('keeps a completed multi-page catch-up completed across ordinary launches who
   store.backendUrl = 'http://localhost:3197'; context = resolveTowerPgWorkspaceContext(store); key = recordDeltaCursorKey(store);
   const remote = server();
   let launch = 0;
-  const readPriority = vi.fn(async () => ({ changes: [auxiliaryMessage(`50000000-0000-4000-8000-00000000020${launch}`)],
-    has_more: false, next_cursor: null, captured_head: String(10 + launch), coverage: {}, retention_policy: 'retain_downloaded' }));
+  const readPriority = vi.fn(async (_workspaceId, options) => ({
+    changes: [auxiliaryMessage(`50000000-0000-4000-8000-00000000020${launch}`)],
+    has_more: true, next_cursor: `historical-${launch}`, captured_head: String(10 + launch),
+    coverage: {}, retention_policy: 'retain_downloaded', requested_cursor: options.cursor,
+  }));
   const deps = {
     getTowerPgService: async () => ({ record_sync: { device_checkpoints: true, protocol_versions: [1, 2], priority_feed: true } }),
     getTowerPgRecordSync: remote.page, towerPgRecordClient: remote.client,
@@ -366,7 +369,7 @@ it('keeps a completed multi-page catch-up completed across ordinary launches who
     launch += 1;
     remote.page.mockClear();
     const progress = [];
-    await syncTowerPgWorkspace(store, { priorityContinuation: false, onProgress: update => progress.push(update) }, deps);
+    await syncTowerPgWorkspace(store, { onProgress: update => progress.push(update) }, deps);
     launchProgress.push(progress);
   };
   await relaunch();
@@ -382,14 +385,17 @@ it('keeps a completed multi-page catch-up completed across ordinary launches who
     expect((await state()).converged).toBe(true);
   }
   expect(readPriority).toHaveBeenCalledTimes(4);
+  expect(readPriority.mock.calls.every(([, options]) => options.cursor === null && options.limit === 32)).toBe(true);
   expect(remote.client.mock.calls.filter(c => c[2].operation === 'register')).toHaveLength(1);
   expect(remote.client.mock.calls.filter(c => c[2].operation === 'retire')).toHaveLength(0);
   expect(launchProgress.every(progress => progress.filter(event => event.stage === 'complete').length === 1)).toBe(true);
   expect(launchProgress.flat().filter(event => event.stage === 'recovery')).toHaveLength(0);
   expect(launchProgress.slice(1).flat().some(event => event.fullSnapshot === true)).toBe(false);
-  expect((await db.sync_state.get('record-sync-aux:device-test:priority')).value.status).toBe('complete');
+  expect((await db.sync_state.get('record-sync-aux:device-test:priority')).value).toMatchObject({
+    status: 'pending', cursor: 'historical-1',
+  });
   expect((await db.sync_state.get('record-sync-aux:device-test:queue')).value).toMatchObject({
-    status: 'ready', items: [{ lane: 'completeness', durable: true }],
+    status: 'ready', items: [{ lane: 'priority', cursor: 'historical-1' }, { lane: 'completeness', durable: true }],
   });
 });
 

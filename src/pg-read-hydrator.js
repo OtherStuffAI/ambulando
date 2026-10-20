@@ -1758,9 +1758,11 @@ async function syncTowerPgRecordWorkspace(store, options, deps) {
   if (capabilities.priorityFeed && options.skipPriority !== true) {
     try {
       await runPriorityLane(store, { ...options, resume: false }, auxiliaryDeps);
-      // Persist one broader continuation before yielding to the independent
-      // completeness lane; later background rounds can continue recent coverage.
-      if (options.priorityContinuation !== false) {
+      // Historical priority continuation is never routine work. Keep its
+      // independent cursor durable, but advance it only for an explicit idle or
+      // recovery request; ordinary launches refresh the bounded newest band and
+      // then yield to the durable completeness lane.
+      if (options.priorityContinuation === true) {
         await new Promise(resolve => setTimeout(resolve, 0));
         await runPriorityLane(store, { ...options, resume: true, limit: 200 }, auxiliaryDeps);
       }

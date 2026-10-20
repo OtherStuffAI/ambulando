@@ -5,11 +5,11 @@ import { hydrateTowerPgSyncBundle } from '../pg-read-hydrator.js';
 const REQUEST_TYPE = 'tower-pg-materializer:request';
 const RESPONSE_TYPE = 'tower-pg-materializer:response';
 const FOREGROUND_TYPE = 'tower-pg-materializer:foreground';
-const BACKGROUND_BATCH_SIZE = 16;
-// Foreground signals impose a real quiet window at every bounded transaction
-// boundary. An additional fixed sleep only prolongs catch-up after the user is
-// idle and is not part of the pre-emption guarantee.
-const BACKGROUND_BATCH_DELAY_MS = 0;
+const BACKGROUND_BATCH_SIZE = 12;
+// Give local Dexie/liveQuery reads and rendering an event-loop turn even when
+// no explicit foreground signal is present. Foreground signals extend this to
+// a genuine quiet window at the next bounded transaction boundary.
+const BACKGROUND_BATCH_DELAY_MS = 4;
 
 let boundWorkspaceKey = null;
 let materializationQueue = Promise.resolve();

@@ -1265,6 +1265,43 @@ describe('stopBackgroundSync', () => {
   });
 });
 
+describe('Tower PG foreground activity governor', () => {
+  it('uses one capture-phase governor for navigation, scrolling, typing, selection, and modal focus', () => {
+    const previousDocument = globalThis.document;
+    const listeners = new Map();
+    const documentStub = {
+      hidden: false,
+      addEventListener: vi.fn((type, handler) => listeners.set(type, handler)),
+      removeEventListener: vi.fn(),
+    };
+    Object.defineProperty(globalThis, 'document', { configurable: true, value: documentStub });
+    try {
+      const markTowerPgForegroundActivity = vi.fn();
+      const { store } = bindMethod('ensureTowerPgForegroundActivityGovernor', { markTowerPgForegroundActivity });
+      store.ensureTowerPgForegroundActivityGovernor();
+      store.ensureTowerPgForegroundActivityGovernor();
+
+      for (const type of ['pointerdown', 'keydown', 'input', 'change', 'focusin', 'scroll', 'selectionchange']) {
+        listeners.get(type)?.({ type });
+      }
+
+      expect(documentStub.addEventListener).toHaveBeenCalledTimes(7);
+      expect(documentStub.addEventListener.mock.calls.every(([, , options]) => options.capture && options.passive)).toBe(true);
+      expect(markTowerPgForegroundActivity.mock.calls.map(([reason]) => reason)).toEqual([
+        'user:pointerdown', 'user:keydown', 'user:input', 'user:change',
+        'user:focusin', 'user:scroll', 'user:selectionchange',
+      ]);
+
+      store.disposeTowerPgForegroundActivityGovernor();
+      expect(documentStub.removeEventListener).toHaveBeenCalledTimes(7);
+      expect(store.towerPgForegroundActivityHandler).toBeNull();
+    } finally {
+      if (previousDocument === undefined) delete globalThis.document;
+      else Object.defineProperty(globalThis, 'document', { configurable: true, value: previousDocument });
+    }
+  });
+});
+
 describe('scheduleBackgroundSync', () => {
   it('sets a timer', () => {
     const { fn, store } = bindMethod('scheduleBackgroundSync', {

@@ -165,6 +165,10 @@ const DETAIL_FAMILY_FRESH_MS = 15_000;
 const STARTUP_SYNC_PROGRESS_DELAY_MS = 1_500;
 const OFFLINE_MESSAGE_RESYNC_DELAY_MS = 250;
 const OFFLINE_MESSAGE_RESYNC_IDLE_TIMEOUT_MS = 1_500;
+const FOREGROUND_ACTIVITY_QUIET_MS = 1_250;
+const FOREGROUND_ACTIVITY_EVENTS = Object.freeze([
+  'pointerdown', 'keydown', 'input', 'change', 'focusin', 'scroll', 'selectionchange',
+]);
 const FOREGROUND_SYNC_FAMILIES = new Set([
   'channel', 'channel-messages', 'thread-history', 'thread-history-page',
   'task', 'task-comments', 'document', 'document-comments',
@@ -615,6 +619,28 @@ export const syncManagerMixin = {
     } catch {
       return false;
     }
+  },
+
+  markTowerPgForegroundActivity(reason = 'user-activity') {
+    return this.prioritizeTowerPgForeground(reason, FOREGROUND_ACTIVITY_QUIET_MS);
+  },
+
+  ensureTowerPgForegroundActivityGovernor() {
+    if (this.towerPgForegroundActivityHandler || typeof document === 'undefined') return;
+    this.towerPgForegroundActivityHandler = (event) => {
+      if (document.hidden) return;
+      this.markTowerPgForegroundActivity?.(`user:${event?.type || 'activity'}`);
+    };
+    for (const type of FOREGROUND_ACTIVITY_EVENTS) {
+      document.addEventListener(type, this.towerPgForegroundActivityHandler, { capture: true, passive: true });
+    }
+  },
+
+  disposeTowerPgForegroundActivityGovernor() {
+    const handler = this.towerPgForegroundActivityHandler;
+    if (!handler || typeof document === 'undefined') return;
+    for (const type of FOREGROUND_ACTIVITY_EVENTS) document.removeEventListener(type, handler, true);
+    this.towerPgForegroundActivityHandler = null;
   },
 
   disposeTowerPgMaterializationWorker(reason = 'dispose') {
@@ -3452,6 +3478,7 @@ export const syncManagerMixin = {
     const service = this._towerSyncService;
     if (this.backgroundSyncTimer) clearTimeout(this.backgroundSyncTimer);
     this.cancelScheduledOfflineMessageResync?.();
+    this.disposeTowerPgForegroundActivityGovernor?.();
     this.disposeTowerSyncService('stop-background-sync');
     if (this.visibilityHandler && typeof document !== 'undefined') {
       document.removeEventListener('visibilitychange', this.visibilityHandler);
@@ -3478,6 +3505,7 @@ export const syncManagerMixin = {
   },
 
   ensureBackgroundSync(runSoon = false) {
+    this.ensureTowerPgForegroundActivityGovernor?.();
     if (!this.visibilityHandler && typeof document !== 'undefined') {
       this.visibilityHandler = (event) => {
         if (document.hidden) return;

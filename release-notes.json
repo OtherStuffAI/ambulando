@@ -4400,6 +4400,14 @@
       "label": "Canvas controls release verification",
       "notes": [],
       "noUserVisibleChanges": true
+    },
+    {
+      "buildNumber": 2475,
+      "label": "Responsive sync during active use",
+      "notes": [
+        "Keep Inbox paging, navigation, scrolling, typing, selection and dialogs responsive while a large cached workspace continues background recovery.",
+        "Refresh the newest workspace changes without automatically walking backward through historical priority pages during routine sync."
+      ]
     }
   ]
 }

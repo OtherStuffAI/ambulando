@@ -128,7 +128,8 @@ describe('Tower PG materialisation worker runner', () => {
       await vi.advanceTimersByTimeAsync(1);
       await waiting;
       expect(settled).toBe(true);
-      expect(backgroundOptions.backgroundBatchDelayMs).toBe(0);
+      expect(backgroundOptions.batchSize).toBe(12);
+      expect(backgroundOptions.backgroundBatchDelayMs).toBe(4);
     } finally {
       vi.useRealTimers();
     }
