@@ -162,6 +162,13 @@ export function recordCheckpointError(error) {
   return { code: error.code || payload.code || payload.error, payload };
 }
 
+export const CACHE_ADOPTION_RESTARTS = 3;
+export function isRestartableAdoptionError(error) {
+  const { code, payload } = recordCheckpointError(error);
+  return error?.status === 409 && (String(code || '').startsWith('adoption_')
+    || code === 'client_already_checkpointed' || payload?.recovery?.strategy === 'restart_cache_adoption');
+}
+
 // Network orchestration is invoked by the service's cursor recovery port;
 // every mutation is dispatched to its existing worker materialisation port.
 export async function syncDeviceRecords({ context, options, readState, materialize, readPage, readChunk, client, assertCurrent, cursorKey, preparePage, assertHeld = async () => {} }) {
@@ -174,19 +181,27 @@ export async function syncDeviceRecords({ context, options, readState, materiali
   if (state?.device?.largeRecords && state.device.scope === scope && state.device.largeRecords !== options.largeRecords) throw new Error('Negotiated large record extension is unavailable');
   await materialize({ protocol_version: 2, large_record_action: { type: 'discard' } });
   let applied = 0, resets = 0, repairAttempted = false;
+  let cachedRows = Number(inspection.canonicalCount || 0);
   const update = async action => {
     assertCurrent();
     state = await materialize({ protocol_version: 2, device_action: { ...action, scope,
       clientId: state.device.clientId, localGeneration: Number(state.localGeneration || 0) } });
     assertCurrent();
   };
-  const replace = async (preserveViews, accessLost = false) => {
+  const replace = async (preserveViews, accessLost = false, newDeviceIdentity = false) => {
     assertCurrent();
     await materialize({ protocol_version: 2, reset_authority: true, local_apply_options: {
       preserveViews, accessLost, expectedCursor: state?.cursor || null, expectedGeneration: Number(state?.localGeneration || 0), deviceScope: scope,
+      newDeviceIdentity,
     } });
+    if (!preserveViews) cachedRows = 0;
     state = await readState(cursorKey);
   };
+  // Keep this device's identity only when its retained rows will be adopted.
+  // Without adoption a reused id would re-snapshot behind Tower's committed
+  // checkpoint, so that fallback still registers a fresh cache.
+  const recover = (identityBoundary = false) => replace(true, false,
+    identityBoundary || !(options.cacheAdoption === true && cachedRows > 0));
   const ownedHere = state?.device && state.device.scope === scope && canonicalClientId(state.device.clientId);
   if (ownedHere && inspection.countRegressed && typeof options.repair === 'function') {
     // Rows below the committed owner count were lost locally. Restore only the
@@ -204,13 +219,17 @@ export async function syncDeviceRecords({ context, options, readState, materiali
     // Adoption replaces the authoritative snapshot, never upgrades a v1 cursor.
     // An unrelated authority must be hidden, whereas the same cache's v1 views
     // remain available until the replacement's snapshot handover completes.
-    await replace((!inspection.owner || inspection.owner.scope === scope)
-      && (!state?.device || state.device.scope === scope));
+    // A v1 fallback reset records an owner without a device scope for this
+    // same cache; it remains the same physical cache, not another identity.
+    const sameOwner = !inspection.owner || inspection.owner.scope === scope
+      || (inspection.owner.scope == null && inspection.owner.cursorKey === cursorKey);
+    await replace(sameOwner && (!state?.device || state.device.scope === scope), false,
+      !(options.cacheAdoption === true && cachedRows > 0));
   }
   // Interrupted prefixes keep the preceding opaque cursor. Tower may repin a
   // completed round on replay; older clients also saved that prefix's target.
   // Re-authorize through a fresh snapshot instead of accepting target drift.
-  if (options.extension === 'bounded_snapshot_v1' && state.applyingPage) await replace(true);
+  if (options.extension === 'bounded_snapshot_v1' && state.applyingPage) await recover();
   const retireObsolete = async () => {
     for (const obsolete of state.obsoleteDevices || []) {
       if (obsolete.scope !== scope || obsolete.clientId === state.device.clientId || !canonicalClientId(obsolete.clientId)) continue;
@@ -242,6 +261,36 @@ export async function syncDeviceRecords({ context, options, readState, materiali
       if (intent.largeRecordReceipts?.length) throw Object.assign(new Error('Large record checkpoint needs authorised repair'), { status: 409, code: 'reset_required' });
     }
   };
+  // Adoption failures restart adoption with a fresh session; they never escalate
+  // to a snapshot or another device id. A checkpoint race rebases onto the
+  // server revision of this same client.
+  const adoptCache = async () => {
+    let expectedCheckpointRevision = state.device.revision;
+    for (let attempt = 0; ; attempt++) {
+      try {
+        return await options.adopt({ clientId: state.device.clientId, expectedCheckpointRevision, restart: attempt > 0 });
+      } catch (error) {
+        if (!isRestartableAdoptionError(error) || attempt >= CACHE_ADOPTION_RESTARTS) throw error;
+        const { code } = recordCheckpointError(error);
+        options.onProgress?.({ stage: 'recovery', recoveryReason: code, applied, cursorPresent: Boolean(state.cursor),
+          mode: 'adoption', fullSnapshot: false, protocolVersion: 2 });
+        await new Promise(resolve => setTimeout(resolve, Math.min(4000, (options.adoptionBackoffMs ?? 250) * 2 ** attempt)));
+        assertCurrent();
+        const checkpoint = validateCheckpoint(await client(context.workspaceId, state.device.clientId, { ...transport, operation: 'read' }), state.device);
+        expectedCheckpointRevision = checkpoint.checkpoint_revision;
+      }
+    }
+  };
+  const settleDeferred = async () => {
+    if (typeof options.repairDeferred !== 'function') return;
+    try { await options.repairDeferred(); }
+    catch (error) {
+      // Deferred identities stay durable for the next sync; they never block delta.
+      options.onProgress?.({ stage: 'repair-deferred-paused', error: error?.message || String(error), applied,
+        cursorPresent: Boolean(state.cursor), mode: 'unavailable', protocolVersion: 2 });
+    }
+  };
+  let deferredSettled = false;
   for (let pages = 1; pages <= (options.maxPages || 1000); pages++) {
     try {
       if (!state.device.registered) {
@@ -249,16 +298,21 @@ export async function syncDeviceRecords({ context, options, readState, materiali
           { ...transport, operation: 'register' }), state.device);
         await update({ type: 'registered', checkpoint, extension: options.extension, largeRecords: options.largeRecords });
       }
-      const adoptionNeeded = options.cacheAdoption === true && Number(inspection.canonicalCount || 0) > 0
-        && (state.resetting === true || state.snapshotReconciliationPending === true);
+      // Any position that would download a snapshot over a populated cache —
+      // a reset, an interrupted snapshot or a not-yet-converged registration —
+      // is replaced by adoption of the rows this device already holds.
+      const adoptionNeeded = options.cacheAdoption === true && cachedRows > 0
+        && (state.resetting === true || state.snapshotReconciliationPending === true
+          || (!state.converged && state.device.revision === '0'));
       if (adoptionNeeded) {
         if (typeof options.adopt !== 'function') throw new Error('Tower advertised cache adoption without a client implementation');
         options.onProgress?.({ stage: 'verifying-cache', page: pages, applied, cursorPresent: Boolean(state.cursor),
           mode: 'adoption', fullSnapshot: false, protocolVersion: 2 });
-        const adopted = await options.adopt({ clientId: state.device.clientId,
-          expectedCheckpointRevision: state.device.revision });
+        const adopted = await adoptCache();
         await update({ type: 'adopted', checkpoint: adopted.checkpoint, adoptionStateKey: adopted.stateKey });
+        deferredSettled = false;
       }
+      if (!deferredSettled) { deferredSettled = true; await settleDeferred(); }
       await retireObsolete();
       if (state.snapshotRetirement) {
         await materialize({ protocol_version: 2, resume_snapshot_retirement: true, local_apply_options: {
@@ -327,6 +381,16 @@ export async function syncDeviceRecords({ context, options, readState, materiali
         throw error;
       }
       options.onProgress?.({ stage: 'recovery', recoveryReason: code, page: pages, applied, cursorPresent: Boolean(state.cursor), mode: 'unavailable', protocolVersion: 2 });
+      // Tower's authority-epoch change is an identity boundary: rows stay
+      // visible until handover, but the device registers as a new cache. A
+      // locally raised reset_required (large-record repair) is not.
+      const identityBoundary = code === 'reset_required' && (payload?.error === 'reset_required' || payload?.code === 'reset_required');
+      if (options.cacheAdoption === true && cachedRows > 0) {
+        // Recover the populated cache through adoption under the same id.
+        await recover(identityBoundary);
+        if (++resets > 2) throw error;
+        continue;
+      }
       if (!repairAttempted && typeof options.repair === 'function') {
         repairAttempted = true;
         options.onProgress?.({ stage: 'repairing', recoveryReason: code, page: pages, applied,
@@ -336,7 +400,7 @@ export async function syncDeviceRecords({ context, options, readState, materiali
         // same durable position once before considering replacement snapshot.
         continue;
       }
-      await replace(true);
+      await recover(identityBoundary);
       if (revoked || ++resets > 2) throw error;
     }
     await new Promise(resolve => setTimeout(resolve, 0));

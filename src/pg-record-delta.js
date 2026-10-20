@@ -315,7 +315,11 @@ async function applyRecordPage(store, page, options = {}) {
       const key = rawKey(c.family, c.id);
       const prior = versions.get(key);
       if (prior && prior.generation === generation && BigInt(prior.version) >= BigInt(c.version) && !(options.reconcileKeys || []).includes(key)) continue;
-      if (prior && BigInt(prior.version) > BigInt(c.version)) continue;
+      // Snapshot pages label rows with their boundary, so an authoritative
+      // repair may carry a lower real position. It replaces the row only when
+      // its captured head covers the local label; a newer delta row stays.
+      if (prior && BigInt(prior.version) > BigInt(c.version) && !((options.reconcileKeys || []).includes(key)
+        && /^\d+$/.test(String(options.reconcileHead ?? '')) && BigInt(options.reconcileHead) >= BigInt(prior.version))) continue;
       if (c.operation === 'delete' && ['scope', 'channel'].includes(c.family)) await markPgTargetArchived(c.family, c.id, db);
       if (c.operation === 'upsert' && ['scope', 'channel'].includes(c.family)) await db.pg_archived_targets.delete(`${c.family}:${c.id}`);
       const raw = { ...c, key, generation, parent_id: c.row?.task_id || c.row?.thread_id || prior?.parent_id || null, source_message_id: c.row?.source_message_id || prior?.source_message_id || prior?.row?.source_message_id || null };
@@ -675,7 +679,7 @@ export async function markPgRecordAccessLost(store, options = {}) {
   });
 }
 
-export async function resetPgRecordAuthority(store, { preserveViews = false, accessLost = false, expectedCursor, expectedGeneration, deviceScope = null, deviceLease } = {}) {
+export async function resetPgRecordAuthority(store, { preserveViews = false, accessLost = false, expectedCursor, expectedGeneration, deviceScope = null, deviceLease, newDeviceIdentity = false } = {}) {
   const db = getWorkspaceDb();
   const cursorKey = recordDeltaCursorKey(store);
   // Cursor expiry/epoch changes invalidate the download, not cached visibility.
@@ -689,12 +693,21 @@ export async function resetPgRecordAuthority(store, { preserveViews = false, acc
     if (expectedGeneration !== undefined && Number(priorState?.localGeneration || 0) !== expectedGeneration
       || expectedCursor !== undefined && (priorState?.cursor || null) !== expectedCursor) throw new Error('Record-delta authority changed before reset');
     const localGeneration = Number(priorState?.localGeneration || 0) + 1;
+    // Tower treats every client id as a separate device needing a full snapshot.
+    // A reset that keeps this cache's rows keeps its identity, re-registers it,
+    // and adopts the retained rows. Only an empty cache, a different scope or
+    // an explicit identity boundary mints a new id.
+    const priorDevice = priorState?.device || priorState?.retainedDevice || null;
+    const keepIdentity = preserveViews && !newDeviceIdentity && canonicalClientId(priorDevice?.clientId)
+      && (!deviceScope || priorDevice.scope === deviceScope);
+    const keptClientId = keepIdentity ? priorDevice.clientId : null;
     const obsoleteDevices = [...(priorState?.obsoleteDevices || []), ...(priorState?.device ? [priorState.device] : []),
-      ...(ownerState?.device ? [ownerState.device] : [])];
+      ...(ownerState?.device ? [ownerState.device] : [])].filter(device => device.clientId !== keptClientId);
     const replacement = { cursor: null, resetting: true, accessLost, accessPartitions: preserveViews ? priorState?.accessPartitions : {}, accessRevision: preserveViews ? priorState?.accessRevision : undefined, localGeneration, obsoleteDevices,
-      ...(deviceScope ? { device: { scope: deviceScope, clientId: createDeviceCacheId(), registered: false, revision: '0', pendingAck: null,
+      ...(deviceScope ? { device: { scope: deviceScope, clientId: keptClientId || createDeviceCacheId(), registered: false, revision: '0', pendingAck: null,
         extension: priorState?.device?.scope === deviceScope ? priorState.device.extension || null : null,
-        largeRecords: priorState?.device?.scope === deviceScope ? priorState.device.largeRecords || null : null } } : {}) };
+        largeRecords: priorState?.device?.scope === deviceScope ? priorState.device.largeRecords || null : null } }
+        : keptClientId ? { retainedDevice: { scope: priorDevice.scope, clientId: keptClientId } } : {}) };
     await publishAccessProjection(db, cursorKey, replacement);
     await db.sync_state.put({ key: DEVICE_CACHE_OWNER_KEY, value: { cursorKey, scope: deviceScope,
       clientId: replacement.device?.clientId || null, canonicalCount: preserveViews ? await db.pg_record_rows.count() : 0 } });
