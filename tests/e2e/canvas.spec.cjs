@@ -223,6 +223,16 @@ test('dedicated Canvas route renders authorized sources and isolates trusted HTM
   await editor.blur();
   await expect(canvas.getByText('Persistent note')).toBeVisible();
 
+  await canvas.getByTitle('Arrow (A)').click();
+  const stage = await canvas.locator('.canvas-stage').boundingBox();
+  await canvas.mouse.move(stage.x + 220, stage.y + 220);
+  await canvas.mouse.down();
+  await canvas.mouse.move(stage.x + 340, stage.y + 300);
+  await canvas.mouse.up();
+  const arrow = canvas.locator('.canvas-element.kind-arrow');
+  await expect(arrow).toHaveCount(1);
+  await expect(canvas.getByRole('button', { name: 'Adjust arrow end' })).toBeVisible();
+
   await canvas.getByTitle('Comment (C)').click();
   await canvas.locator('.canvas-stage').click({ position: { x: 460, y: 160 } });
   await canvas.getByLabel('Comment').fill('Please verify this area.');
