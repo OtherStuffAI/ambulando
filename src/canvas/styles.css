@@ -25,6 +25,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .canvas-stage.tool-eraser { cursor: cell; }
 .canvas-stage:active { cursor: grabbing; }
 .canvas-world { position: absolute; inset: 0; transform-origin: 0 0; will-change: transform; }
+.canvas-pan-shield { position: absolute; inset: 0; z-index: 2147483646; touch-action: none; cursor: grab; }
+.canvas-selection-box { position: absolute; z-index: 2147483645; pointer-events: none; border: 1px solid var(--primary); background: color-mix(in srgb, var(--primary) 14%, transparent); }
 .canvas-naplet { position: absolute; display: grid; grid-template-rows: auto 1fr; overflow: visible; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); box-shadow: 0 8px 24px color-mix(in srgb, var(--foreground) 12%, transparent); }
 .canvas-naplet.selected, .canvas-element.selected { outline: 2px solid var(--primary); outline-offset: 2px; }
 .canvas-naplet-header { display: flex; align-items: center; gap: 8px; min-height: 42px; padding: 7px 10px; border-bottom: 1px solid var(--border); cursor: move; user-select: none; }
@@ -42,6 +44,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .canvas-element.kind-ellipse .canvas-shape { border-radius: 50%; }
 .canvas-element.kind-frame .canvas-shape { border-style: dashed; background: transparent; }
 .canvas-element.kind-frame .canvas-shape span { display: inline-block; padding: 2px 6px; transform: translateY(-100%); background: var(--surface-muted); color: var(--muted-foreground); font-size: 12px; }
+.canvas-element.canvas-group { pointer-events: none; }
+.canvas-element.canvas-group .canvas-shape { pointer-events: auto; border-color: color-mix(in srgb, var(--primary) 58%, var(--border)); background: color-mix(in srgb, var(--primary) 5%, transparent); }
 .canvas-element.kind-text { display: grid; min-width: 8px; min-height: 8px; border-radius: 8px; background: var(--surface); box-shadow: 0 3px 14px color-mix(in srgb, var(--foreground) 10%, transparent); }
 .canvas-text { margin: 0; padding: 12px; overflow: auto; white-space: pre-wrap; font-size: 16px; }
 .canvas-element textarea { width: 100%; height: 100%; resize: none; padding: 10px; border: 0; border-radius: inherit; color: inherit; background: var(--surface); }
@@ -49,6 +53,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .canvas-element svg polyline { fill: none; stroke-linecap: round; stroke-linejoin: round; }
 .canvas-preview { pointer-events: none; opacity: .65; }
 .canvas-resize { position: absolute; right: -7px; bottom: -7px; z-index: 4; min-width: 16px; width: 16px; min-height: 16px; height: 16px; padding: 0; border: 2px solid var(--surface); border-radius: 50%; background: var(--primary); cursor: nwse-resize; }
+.canvas-arrow-handle { position: absolute; z-index: 5; width: 16px; min-width: 16px; height: 16px; min-height: 16px; padding: 0; transform: translate(-50%, -50%); border: 2px solid var(--surface); border-radius: 50%; background: var(--primary); cursor: move; }
 .canvas-comment-marker { position: absolute; z-index: 100001; display: grid; place-items: center; min-width: 30px; width: 30px; height: 30px; padding: 0; border-radius: 50%; box-shadow: 0 3px 12px rgb(0 0 0 / .22); }
 .canvas-denied { display: grid; place-items: center; height: 100%; padding: 20px; text-align: center; color: var(--muted-foreground); }
 .canvas-status { display: grid; place-items: center; height: 100%; padding: 24px; text-align: center; }

@@ -7,7 +7,10 @@ import { normalizeWorkspaceEntry } from '../workspaces.js';
 import { canvasContext, CANVAS_ACCESS_MESSAGE } from './projection.js';
 import { buildCanvasHtmlDocument } from './sandbox.js';
 import { CanvasSyncRuntime } from './sync-service.js';
-import { canvasWheelIntent, cloneCanvasValue, worldPoint, zoomViewport } from './interactions.js';
+import {
+  arrowGeometry, canvasItemKey, canvasWheelIntent, cloneCanvasValue, enclosedItemKeys,
+  groupBounds, groupDelta, moveArrowEndpoint, movementItems, selectionRect, worldPoint, zoomViewport,
+} from './interactions.js';
 import '../ambulando-tokens.css';
 import './styles.css';
 
@@ -49,7 +52,7 @@ export function canvasPageStore() {
     status: 'loading', error: '', workspace: null, session: null, currentWorkspace: null,
     currentWorkspaceKey: '', currentViewerNpub: '', currentPgActorId: '', canvas: null,
     naplets: [], elements: [], comments: [], viewport: { x: 0, y: 0, scale: 1 },
-    interaction: null, tool: 'select', selected: null, saving: false, viewportSaving: false,
+    interaction: null, tool: 'select', selectedKeys: [], selectionBox: null, saving: false, viewportSaving: false,
     editingTextId: '', editingText: '', sourceOptions: [], sourceSearch: '',
     addDialog: { type: 'document', sourceId: '', title: '' },
     commentDialog: { anchor: null, parentCommentId: null, body: '' }, activeCommentId: '',
@@ -59,6 +62,13 @@ export function canvasPageStore() {
     get transformStyle() { return `translate(${this.viewport.x}px, ${this.viewport.y}px) scale(${this.viewport.scale})`; },
     get canUndo() { return this.historyTick >= 0 && undo.length > 0; },
     get canRedo() { return this.historyTick >= 0 && redo.length > 0; },
+    get selected() {
+      const [key] = this.selectedKeys;
+      if (!key) return null;
+      const separator = key.indexOf(':');
+      return { type: key.slice(0, separator), id: key.slice(separator + 1) };
+    },
+    get canGroup() { return this.selectedKeys.length >= 2; },
     get unresolvedComments() { return this.comments.filter(row => !row.parent_comment_id && !row.resolved_at); },
     get activeComment() { return this.comments.find(row => row.id === this.activeCommentId) || null; },
     get activeReplies() { return this.comments.filter(row => row.parent_comment_id === this.activeCommentId); },
@@ -90,7 +100,8 @@ export function canvasPageStore() {
     applySnapshot(snapshot) {
       this.canvas = snapshot.canvas; this.naplets = snapshot.naplets; this.elements = snapshot.elements || []; this.comments = snapshot.comments || [];
       this.viewport = { ...snapshot.canvas.viewport };
-      if (this.selected && !this.findSelected()) this.selected = null;
+      const available = new Set(this.allCanvasItems().map(row => row.key));
+      this.selectedKeys = this.selectedKeys.filter(key => available.has(key));
       document.title = `${snapshot.canvas.title} · Canvas · Ambulando`; this.status = 'ready'; this.error = '';
     },
     applySyncError(error) {
@@ -113,14 +124,31 @@ export function canvasPageStore() {
       this.viewport = { x: (rect.width - (bounds.maxX - bounds.minX) * scale) / 2 - bounds.minX * scale, y: (rect.height - (bounds.maxY - bounds.minY) * scale) / 2 - bounds.minY * scale, scale }; this.queueViewportSave();
     },
     handleWheel(event) {
+      if (this.tool !== 'hand' && event.target.closest?.('.canvas-naplet,.canvas-element')) return;
       event.preventDefault();
       if (canvasWheelIntent(event) === 'zoom') this.viewport = zoomViewport(this.viewport, Math.exp(-event.deltaY * 0.002), event, this.stageRect());
       else { this.viewport.x -= event.deltaX; this.viewport.y -= event.deltaY; }
       this.queueViewportSave();
     },
-    setTool(tool) { this.tool = tool; if (tool !== 'select') this.selected = null; },
-    select(type, id) { if (this.tool === 'comment') return; this.tool = 'select'; this.selected = { type, id }; },
+    setTool(tool) { this.tool = tool; if (tool !== 'select') this.selectedKeys = []; },
+    select(type, id, { additive = false, toggle = false } = {}) {
+      if (this.tool === 'comment') return;
+      const key = canvasItemKey(type, id), selected = new Set(additive ? this.selectedKeys : []);
+      if (toggle && selected.has(key)) selected.delete(key); else selected.add(key);
+      this.tool = 'select'; this.selectedKeys = [...selected];
+    },
+    selectionHas(type, id) { return this.selectedKeys.includes(canvasItemKey(type, id)); },
+    allCanvasItems() {
+      return [
+        ...this.naplets.map(item => ({ key: canvasItemKey('naplet', item.id), type: 'naplet', item })),
+        ...this.elements.map(item => ({ key: canvasItemKey('element', item.id), type: 'element', item })),
+      ];
+    },
     findSelected() { return this.selected?.type === 'naplet' ? this.naplets.find(row => row.id === this.selected.id) : this.elements.find(row => row.id === this.selected?.id); },
+    selectionBoxStyle() {
+      const box = this.selectionBox;
+      return box ? `left:${box.left}px;top:${box.top}px;width:${box.right - box.left}px;height:${box.bottom - box.top}px` : '';
+    },
     handleStagePointerDown(event) {
       pointers.set(event.pointerId, event); event.currentTarget.setPointerCapture?.(event.pointerId);
       if (event.pointerType === 'touch' && pointers.size === 2) {
@@ -130,7 +158,11 @@ export function canvasPageStore() {
       const point = this.toWorld(event);
       if (this.tool === 'comment') return this.openCommentDialog({ type: 'canvas', x: point.x, y: point.y });
       if (this.tool === 'hand' || (event.pointerType === 'touch' && this.tool === 'select')) { this.interaction = { type: 'pan', pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, x: this.viewport.x, y: this.viewport.y }; return; }
-      if (this.tool === 'select') { this.selected = null; return; }
+      if (this.tool === 'select') {
+        this.selectedKeys = []; this.selectionBox = null;
+        this.interaction = { type: 'select', pointerId: event.pointerId, startX: event.clientX, startY: event.clientY };
+        return;
+      }
       if (this.tool === 'text') return this.createTextAt(point);
       if (this.tool === 'embed') return this.openAddDialog(point);
       const kind = this.tool;
@@ -146,8 +178,14 @@ export function canvasPageStore() {
       }
       if (this.tool === 'eraser') { event.stopPropagation(); return this.deleteItem(type, item); }
       if (this.tool !== 'select' || event.button !== 0 || this.editingTextId) return;
-      event.stopPropagation(); this.select(type, item.id); event.currentTarget.setPointerCapture?.(event.pointerId);
-      this.interaction = { type: action, pointerId: event.pointerId, itemType: type, id: item.id, startX: event.clientX, startY: event.clientY, before: cloneCanvasValue(item.layout) };
+      event.stopPropagation();
+      const key = canvasItemKey(type, item.id), additive = event.shiftKey || event.metaKey || event.ctrlKey;
+      if (additive && action === 'move') this.select(type, item.id, { additive: true, toggle: true });
+      else if (!this.selectedKeys.includes(key)) this.select(type, item.id);
+      if (!this.selectedKeys.includes(key)) return;
+      event.currentTarget.setPointerCapture?.(event.pointerId);
+      const moving = action === 'move' ? movementItems(this.allCanvasItems(), this.selectedKeys) : [];
+      this.interaction = { type: action, pointerId: event.pointerId, itemType: type, id: item.id, startX: event.clientX, startY: event.clientY, before: cloneCanvasValue(item.layout), beforeData: cloneCanvasValue(item.data || {}), moving };
     },
     movePointer(event) {
       pointers.set(event.pointerId, event); const state = this.interaction; if (!state) return;
@@ -157,14 +195,32 @@ export function canvasPageStore() {
       }
       if (state.pointerId !== event.pointerId) return;
       if (state.type === 'pan') { this.viewport.x = state.x + event.clientX - state.startX; this.viewport.y = state.y + event.clientY - state.startY; return; }
+      if (state.type === 'select') {
+        const rect = this.stageRect(), box = selectionRect({ x: state.startX, y: state.startY }, { x: event.clientX, y: event.clientY });
+        this.selectionBox = { left: box.left - rect.left, top: box.top - rect.top, right: box.right - rect.left, bottom: box.bottom - rect.top };
+        const nodes = [...canvasElement('stage').querySelectorAll('[data-canvas-key]')].map(node => {
+          const bounds = node.getBoundingClientRect();
+          return { key: node.dataset.canvasKey, left: bounds.left, top: bounds.top, right: bounds.right, bottom: bounds.bottom };
+        });
+        this.selectedKeys = enclosedItemKeys(nodes, box); return;
+      }
       if (state.type === 'create') {
         const point = this.toWorld(event), dx = point.x - state.start.x, dy = point.y - state.start.y;
-        state.element.layout = { ...state.element.layout, x: Math.round(Math.min(point.x, state.start.x)), y: Math.round(Math.min(point.y, state.start.y)), width: Math.max(8, Math.round(Math.abs(dx))), height: Math.max(8, Math.round(Math.abs(dy))) };
+        if (state.element.kind === 'arrow' || state.element.kind === 'line') {
+          const geometry = arrowGeometry(state.start, point);
+          state.element.layout = { ...state.element.layout, ...geometry.layout }; state.element.data = geometry.data;
+        } else state.element.layout = { ...state.element.layout, x: Math.round(Math.min(point.x, state.start.x)), y: Math.round(Math.min(point.y, state.start.y)), width: Math.max(8, Math.round(Math.abs(dx))), height: Math.max(8, Math.round(Math.abs(dy))) };
         if (state.element.kind === 'draw') state.element.data.points.push([Math.round(point.x - state.start.x), Math.round(point.y - state.start.y)]); return;
       }
       const item = state.itemType === 'naplet' ? this.naplets.find(row => row.id === state.id) : this.elements.find(row => row.id === state.id); if (!item) return;
       const dx = (event.clientX - state.startX) / this.viewport.scale, dy = (event.clientY - state.startY) / this.viewport.scale;
-      item.layout = state.type === 'resize'
+      if (state.type === 'move') {
+        const delta = groupDelta(state.moving, dx, dy);
+        for (const original of state.moving) original.item.layout = { ...original.item.layout, x: Math.round(original.before.x + delta.x), y: Math.round(original.before.y + delta.y) };
+      } else if (state.type === 'arrow-start' || state.type === 'arrow-end') {
+        const next = moveArrowEndpoint(state.before, state.beforeData, state.type.slice(6), this.toWorld(event));
+        item.layout = next.layout; item.data = next.data;
+      } else item.layout = state.type === 'resize'
         ? { ...item.layout, width: Math.max(state.itemType === 'naplet' ? 220 : 8, Math.round(state.before.width + dx)), height: Math.max(state.itemType === 'naplet' ? 160 : 8, Math.round(state.before.height + dy)) }
         : { ...item.layout, x: Math.round(state.before.x + dx), y: Math.round(state.before.y + dy) };
     },
@@ -173,16 +229,29 @@ export function canvasPageStore() {
       if (!state || state.type === 'pinch') { if (pointers.size < 2 && state?.type === 'pinch') { this.interaction = null; this.queueViewportSave(); } return; }
       if (state.pointerId !== event.pointerId) return; this.interaction = null;
       if (state.type === 'pan') return this.saveViewport();
+      if (state.type === 'select') { this.selectionBox = null; return; }
       if (state.type === 'create') {
         const element = state.element; if (element.kind === 'arrow' || element.kind === 'line') element.data = { ...element.data, direction: 'forward' };
-        await this.mutate(() => syncRuntime.createElement(element)); this.tool = 'select'; const created = this.elements.at(-1); if (created) this.selected = { type: 'element', id: created.id }; return;
+        const previous = new Set(this.elements.map(row => row.id));
+        await this.mutate(() => syncRuntime.createElement(element)); this.tool = 'select'; const created = this.elements.find(row => !previous.has(row.id)); if (created) this.selectedKeys = [canvasItemKey('element', created.id)]; return;
+      }
+      if (state.type === 'move') {
+        const changes = state.moving.filter(original => JSON.stringify(original.before) !== JSON.stringify(original.item.layout)).map(original => ({ itemType: original.type, id: original.item.id, before: original.before, after: cloneCanvasValue(original.item.layout) }));
+        if (!changes.length) return;
+        return this.mutate(async () => {
+          for (const change of changes) {
+            if (change.itemType === 'naplet') await syncRuntime.updateNapletLayout(change.id, change.after);
+            else await syncRuntime.updateElement(change.id, { layout: change.after });
+          }
+        }, { type: 'layouts', changes });
       }
       const item = state.itemType === 'naplet' ? this.naplets.find(row => row.id === state.id) : this.elements.find(row => row.id === state.id);
-      if (!item || JSON.stringify(state.before) === JSON.stringify(item.layout)) return;
+      if (!item || (JSON.stringify(state.before) === JSON.stringify(item.layout) && JSON.stringify(state.beforeData) === JSON.stringify(item.data || {}))) return;
       const after = cloneCanvasValue(item.layout);
-      await this.mutate(() => state.itemType === 'naplet' ? syncRuntime.updateNapletLayout(item.id, after) : syncRuntime.updateElement(item.id, { layout: after }), { type: 'layout', itemType: state.itemType, id: item.id, before: state.before, after });
+      const afterData = cloneCanvasValue(item.data || {});
+      await this.mutate(() => state.itemType === 'naplet' ? syncRuntime.updateNapletLayout(item.id, after) : syncRuntime.updateElement(item.id, { layout: after, ...(JSON.stringify(state.beforeData) !== JSON.stringify(afterData) ? { data: afterData } : {}) }), { type: 'layout', itemType: state.itemType, id: item.id, before: state.before, after });
     },
-    cancelPointer(event) { pointers.delete(event.pointerId); this.interaction = null; void this.refresh(); },
+    cancelPointer(event) { pointers.delete(event.pointerId); this.interaction = null; this.selectionBox = null; void this.refresh(); },
     queueViewportSave() { clearTimeout(this._viewportTimer); this._viewportTimer = setTimeout(() => this.saveViewport(), 350); },
     async saveViewport() {
       if (!this.canvas || this.viewportSaving) return; this.viewportSaving = true;
@@ -191,7 +260,7 @@ export function canvasPageStore() {
     highestZ() { return Math.max(0, ...this.naplets.map(row => row.layout.z), ...this.elements.map(row => row.layout.z)); },
     async createTextAt(point) {
       await this.mutate(() => syncRuntime.createElement({ kind: 'text', layout: { x: Math.round(point.x), y: Math.round(point.y), width: 240, height: 120, z: this.highestZ() + 1 }, data: { text: 'Text' } }));
-      const created = this.elements.at(-1); if (created) { this.selected = { type: 'element', id: created.id }; this.beginTextEdit(created); } this.tool = 'select';
+      const created = this.elements.at(-1); if (created) { this.selectedKeys = [canvasItemKey('element', created.id)]; this.beginTextEdit(created); } this.tool = 'select';
     },
     beginTextEdit(element) { if (element.kind !== 'text') return; this.editingTextId = element.id; this.editingText = String(element.data.text || ''); Alpine.nextTick(() => document.querySelector(`[data-text-editor="${element.id}"]`)?.focus()); },
     async saveTextEdit(element) {
@@ -206,7 +275,17 @@ export function canvasPageStore() {
       catch (error) { this.error = error?.message || 'Canvas change could not be saved.'; await this.refresh(); }
       finally { this.saving = false; }
     },
-    async deleteItem(type = this.selected?.type, item = this.findSelected()) { if (!item) return; await this.mutate(() => type === 'naplet' ? syncRuntime.deleteNaplet(item.id) : syncRuntime.deleteElement(item.id)); this.selected = null; },
+    async deleteItem(type = this.selected?.type, item = this.findSelected()) { if (!item) return; await this.mutate(() => type === 'naplet' ? syncRuntime.deleteNaplet(item.id) : syncRuntime.deleteElement(item.id)); this.selectedKeys = this.selectedKeys.filter(key => key !== canvasItemKey(type, item.id)); },
+    async createGroup() {
+      const selected = this.allCanvasItems().filter(row => this.selectedKeys.includes(row.key)); if (selected.length < 2) return;
+      const bounds = groupBounds(selected.map(row => row.item)), previous = new Set(this.elements.map(row => row.id));
+      await this.mutate(() => syncRuntime.createElement({
+        kind: 'frame',
+        layout: { ...bounds, z: Math.max(1, Math.min(...selected.map(row => row.item.layout.z)) - 1) },
+        data: { role: 'group', label: 'Group', members: selected.map(row => row.key) },
+      }));
+      const created = this.elements.find(row => !previous.has(row.id)); if (created) this.selectedKeys = [canvasItemKey('element', created.id)];
+    },
     async duplicateSelected() {
       const item = this.findSelected(); if (!item) return;
       if (this.selected.type === 'naplet' && item.access !== 'ready') { this.error = 'Restricted items cannot be duplicated.'; return; }
@@ -215,12 +294,14 @@ export function canvasPageStore() {
       await this.mutate(() => syncRuntime.createElement({ kind: item.kind, data: cloneCanvasValue(item.data), layout }));
     },
     async orderSelected(delta) { const item = this.findSelected(); if (!item) return; const layout = { ...item.layout, z: clamp(item.layout.z + delta, 1, 100000) }; await this.mutate(() => this.selected.type === 'naplet' ? syncRuntime.updateNapletLayout(item.id, layout) : syncRuntime.updateElement(item.id, { layout })); },
-    async undoChange() { const action = undo.pop(); if (!action) return; if (action.type === 'layout') await this.mutate(() => action.itemType === 'naplet' ? syncRuntime.updateNapletLayout(action.id, action.before) : syncRuntime.updateElement(action.id, { layout: action.before })); if (action.type === 'data') await this.mutate(() => syncRuntime.updateElement(action.id, { data: action.before })); redo.push(action); this.historyTick -= 1; },
-    async redoChange() { const action = redo.pop(); if (!action) return; if (action.type === 'layout') await this.mutate(() => action.itemType === 'naplet' ? syncRuntime.updateNapletLayout(action.id, action.after) : syncRuntime.updateElement(action.id, { layout: action.after })); if (action.type === 'data') await this.mutate(() => syncRuntime.updateElement(action.id, { data: action.after })); undo.push(action); this.historyTick += 1; },
+    async applyLayoutHistory(changes, side) { for (const change of changes) { if (change.itemType === 'naplet') await syncRuntime.updateNapletLayout(change.id, change[side]); else await syncRuntime.updateElement(change.id, { layout: change[side] }); } },
+    async undoChange() { const action = undo.pop(); if (!action) return; if (action.type === 'layout') await this.mutate(() => action.itemType === 'naplet' ? syncRuntime.updateNapletLayout(action.id, action.before) : syncRuntime.updateElement(action.id, { layout: action.before })); if (action.type === 'layouts') await this.mutate(() => this.applyLayoutHistory(action.changes, 'before')); if (action.type === 'data') await this.mutate(() => syncRuntime.updateElement(action.id, { data: action.before })); redo.push(action); this.historyTick -= 1; },
+    async redoChange() { const action = redo.pop(); if (!action) return; if (action.type === 'layout') await this.mutate(() => action.itemType === 'naplet' ? syncRuntime.updateNapletLayout(action.id, action.after) : syncRuntime.updateElement(action.id, { layout: action.after })); if (action.type === 'layouts') await this.mutate(() => this.applyLayoutHistory(action.changes, 'after')); if (action.type === 'data') await this.mutate(() => syncRuntime.updateElement(action.id, { data: action.after })); undo.push(action); this.historyTick += 1; },
     handleKeydown(event) {
       if (event.target?.matches('input,textarea,[contenteditable="true"]')) return;
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'z') { event.preventDefault(); return event.shiftKey ? this.redoChange() : this.undoChange(); }
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'd') { event.preventDefault(); return this.duplicateSelected(); }
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'g') { event.preventDefault(); return this.createGroup(); }
       if (event.key === 'Delete' || event.key === 'Backspace') { event.preventDefault(); return this.deleteItem(); }
       const keys = { v: 'select', h: 'hand', r: 'rectangle', d: 'diamond', o: 'ellipse', a: 'arrow', l: 'line', p: 'draw', t: 'text', e: 'eraser', f: 'frame', c: 'comment' };
       if (keys[event.key.toLowerCase()]) this.setTool(keys[event.key.toLowerCase()]);
@@ -254,6 +335,11 @@ export function canvasPageStore() {
     commentStyle(comment) { if (comment.anchor.type === 'naplet') { const naplet = this.naplets.find(row => row.id === comment.anchor.naplet_id); if (!naplet) return 'display:none'; return `left:${naplet.layout.x + naplet.layout.width - 14}px;top:${naplet.layout.y - 14}px`; } return `left:${comment.anchor.x - 14}px;top:${comment.anchor.y - 14}px`; },
     napletStyle(naplet) { const layout = naplet.layout; return `left:${layout.x}px;top:${layout.y}px;width:${layout.width}px;height:${layout.height}px;z-index:${layout.z}`; },
     elementStyle(element) { const layout = element.layout; return `left:${layout.x}px;top:${layout.y}px;width:${layout.width}px;height:${layout.height}px;z-index:${layout.z}`; },
+    isGroup(element) { return element.kind === 'frame' && element.data?.role === 'group'; },
+    vectorViewBox(element) { return `0 0 ${element.layout.width} ${element.layout.height}`; },
+    vectorStart(element) { return Array.isArray(element.data?.start) ? element.data.start : [0, element.layout.height]; },
+    vectorEnd(element) { return Array.isArray(element.data?.end) ? element.data.end : [element.layout.width, 0]; },
+    arrowHandleStyle(element, endpoint) { const point = endpoint === 'start' ? this.vectorStart(element) : this.vectorEnd(element); return `left:${point[0]}px;top:${point[1]}px`; },
     drawPoints(element) { return (element.data.points || []).map(point => point.join(',')).join(' '); },
     htmlDocument(naplet) { return buildCanvasHtmlDocument(naplet?.content?.html); },
   };

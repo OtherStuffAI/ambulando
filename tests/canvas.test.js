@@ -9,7 +9,20 @@ import {
   normalizeCanvasSnapshot,
 } from '../src/canvas/projection.js';
 import { buildCanvasHtmlDocument, CANVAS_HTML_CSP } from '../src/canvas/sandbox.js';
-import { canvasWheelIntent, cloneCanvasValue, worldPoint, zoomViewport } from '../src/canvas/interactions.js';
+import {
+  arrowGeometry,
+  canvasItemKey,
+  canvasWheelIntent,
+  cloneCanvasValue,
+  enclosedItemKeys,
+  groupBounds,
+  groupDelta,
+  moveArrowEndpoint,
+  movementItems,
+  selectionRect,
+  worldPoint,
+  zoomViewport,
+} from '../src/canvas/interactions.js';
 
 const store = () => ({
   session: { npub: 'reader' },
@@ -89,6 +102,37 @@ it('pans ordinary wheel input and keeps modifier zoom centred under the pointer'
   const viewport = zoomViewport({ x: 10, y: 20, scale: 1 }, 2, { clientX: 110, clientY: 120 });
   expect(worldPoint(viewport, { clientX: 110, clientY: 120 })).toEqual({ x: 100, y: 100 });
   expect(zoomViewport({ x: 0, y: 0, scale: 3 }, 2, { clientX: 0, clientY: 0 }).scale).toBe(3);
+});
+
+it('ports BYO Freedom enclosure, multi-move and persisted group expansion', () => {
+  const box = selectionRect({ x: 90, y: 80 }, { x: 0, y: 0 });
+  expect(enclosedItemKeys([
+    { key: 'naplet:a', left: 10, top: 10, right: 40, bottom: 40 },
+    { key: 'element:b', left: 50, top: 20, right: 85, bottom: 70 },
+    { key: 'element:outside', left: 80, top: 70, right: 110, bottom: 100 },
+  ], box)).toEqual(['naplet:a', 'element:b']);
+
+  const items = [
+    { key: 'element:group', type: 'element', item: { id: 'group', layout: { x: 0, y: 0, width: 200, height: 160 }, data: { role: 'group', members: ['naplet:a', 'element:b'] } } },
+    { key: 'naplet:a', type: 'naplet', item: { id: 'a', layout: { x: 10, y: 20, width: 40, height: 50 } } },
+    { key: 'element:b', type: 'element', item: { id: 'b', layout: { x: 70, y: 80, width: 30, height: 20 }, data: {} } },
+  ];
+  const moving = movementItems(items, ['element:group']);
+  expect(moving.map(row => row.key)).toEqual(['element:group', 'naplet:a', 'element:b']);
+  expect(groupDelta(moving, -60000, 12)).toEqual({ x: -50000, y: 12 });
+  expect(groupBounds(items.slice(1).map(row => row.item), 10)).toEqual({ x: 0, y: 10, width: 110, height: 100 });
+  expect(canvasItemKey('naplet', 'a')).toBe('naplet:a');
+});
+
+it('creates and edits directional arrow endpoints without changing the Tower element contract', () => {
+  const created = arrowGeometry({ x: 90, y: 20 }, { x: 10, y: 70 });
+  expect(created).toEqual({
+    layout: { x: 10, y: 20, width: 80, height: 50 },
+    data: { start: [80, 0], end: [0, 50] },
+  });
+  const edited = moveArrowEndpoint(created.layout, created.data, 'end', { x: 130, y: 90 });
+  expect(edited.layout).toEqual({ x: 90, y: 20, width: 40, height: 70 });
+  expect(edited.data).toEqual({ start: [0, 0], end: [40, 70] });
 });
 
 it('copies reactive Canvas layout and data into structured-clone-safe history values', () => {
