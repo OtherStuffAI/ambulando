@@ -803,15 +803,24 @@ async function reconcileConflictBatch(store, { acceptRemoteKey = null, after = n
   });
 }
 
+// One call is a bounded slice: it commits small batches, persists its
+// position after each one and returns once sliceMs is spent, so the caller
+// resumes it later. It never runs under the device-cache lock.
+export const SUMMARY_REBUILD_SLICE_MS = 1_500;
 export async function rebuildPgRecordSummaries(store, options = {}) {
   const { batchSize = 32 } = options;
+  const sliceMs = Number(options.sliceMs) > 0 ? Number(options.sliceMs) : SUMMARY_REBUILD_SLICE_MS;
   const db = getWorkspaceDb(), key = `${recordDeltaCursorKey(store)}:summary-backfill-assignment-v2`;
   let after = (await db.sync_state.get(key))?.value?.after || null;
   let processed = 0;
+  const startedAt = Date.now();
+  const tables = [db.sync_state, db.pg_record_rows, db.workspace_members, db.tasks, db.pending_writes, db.comments,
+    db.resource_view_states, db.pg_resource_attention, db.pg_attention_counts, db.chat_messages, db.channel_summaries];
   while (true) {
+    if (Date.now() - startedAt >= sliceMs) return { processed, complete: false };
     if (typeof options.yieldToForeground === 'function') await options.yieldToForeground();
     let count = 0;
-    await db.transaction('rw', db.tables, async () => {
+    await db.transaction('rw', tables, async () => {
       const rows = await (after ? db.pg_record_rows.where(':id').above(after) : db.pg_record_rows.toCollection()).limit(Math.min(32,batchSize)).toArray();
       count = rows.length;
       const members = await db.workspace_members.toArray();
@@ -835,7 +844,7 @@ export async function rebuildPgRecordSummaries(store, options = {}) {
       }
     });
     processed += count;
-    if (!count) return {processed};
+    if (!count) return { processed, complete: true };
     await new Promise(resolve=>setTimeout(resolve,Math.max(0,Number(options.backgroundBatchDelayMs)||0)));
   }
 }

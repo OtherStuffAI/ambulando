@@ -151,9 +151,125 @@ export function validateBoundedHandover(page, authorityEpoch) {
   return h;
 }
 
-export function withDeviceCacheLock(name, run, locks = globalThis.navigator?.locks) {
+// One tab syncs the shared cache at a time; the other tabs keep rendering the
+// same cached rows. A waiting tab gives up after waitMs and is woken by a
+// shared-mode release watcher when the holder lets go, so a closed syncing tab
+// is replaced within seconds. The holder records a progress heartbeat; a
+// waiter steals the lock once that heartbeat is older than stealMs, and the
+// holder fails itself after stallMs without progress. Either way the stale
+// holder's signal aborts, fencing its later writes.
+export const DEVICE_LOCK_WAIT_MS = 10_000;
+export const DEVICE_LOCK_STALL_MS = 45_000;
+export const DEVICE_LOCK_STEAL_MS = 30_000;
+const DEVICE_LOCK_WATCH_MS = 5 * 60_000;
+const DEVICE_LOCK_TAB_ID = (() => {
+  try { return globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`; }
+  catch { return `${Date.now()}-${Math.random()}`; }
+})();
+const releaseWatchers = new Map();
+export function deviceLockBusyError() {
+  return Object.assign(new Error('Another Ambulando tab is syncing this workspace'), { code: 'device_lock_busy' });
+}
+export function deviceSyncStalledError(stallMs) {
+  return Object.assign(new Error(`Workspace sync made no progress for ${Math.round(stallMs / 1000)}s`), { code: 'sync_stalled' });
+}
+function deviceLockStolenError() {
+  return Object.assign(new Error('Another Ambulando tab took over this stalled workspace sync'), { code: 'sync_stalled' });
+}
+function readHeartbeat(storage, key) {
+  try { const value = JSON.parse(storage?.getItem(key) || 'null'); return Number.isFinite(value?.at) ? value : null; }
+  catch { return null; }
+}
+function watchDeviceLockRelease(locks, lockName, onReleased) {
+  if (typeof onReleased !== 'function' || releaseWatchers.has(lockName)) return;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), DEVICE_LOCK_WATCH_MS);
+  releaseWatchers.set(lockName, controller);
+  // A shared request is granted only after the exclusive holder releases; it
+  // returns at once, so it never delays the next exclusive owner.
+  Promise.resolve(locks.request(lockName, { mode: 'shared', signal: controller.signal }, () => true))
+    .then(granted => { if (granted) onReleased(); }, () => {})
+    .finally(() => { clearTimeout(timer); if (releaseWatchers.get(lockName) === controller) releaseWatchers.delete(lockName); });
+}
+export async function withDeviceCacheLock(name, run, locks = globalThis.navigator?.locks, {
+  waitMs = DEVICE_LOCK_WAIT_MS, stallMs = DEVICE_LOCK_STALL_MS, stealMs = DEVICE_LOCK_STEAL_MS,
+  onWaiting, onReleased, storage = globalThis.localStorage, now = () => Date.now(),
+} = {}) {
   if (!locks?.request) throw new Error('Device checkpoints require browser Web Locks to coordinate this cache');
-  return locks.request(`flightdeck-record-cache:${name}`, { mode: 'exclusive' }, run);
+  const lockName = `flightdeck-record-cache:${name}`;
+  const heartbeatKey = `${lockName}:heartbeat`;
+  const BUSY = Symbol('busy');
+  const attempt = async (options, grant = {}) => {
+    const controller = new AbortController();
+    let acquired = false;
+    const holder = async lock => {
+      if (!lock) return BUSY;
+      acquired = true;
+      grant.acquired = true;
+      let lastActivity = now(), lastBeat = 0, timer = null;
+      const beat = () => {
+        if (now() - lastBeat < 1_000) return;
+        lastBeat = now();
+        try { storage?.setItem(heartbeatKey, JSON.stringify({ at: lastBeat, tab: DEVICE_LOCK_TAB_ID })); } catch {}
+      };
+      const touch = () => { lastActivity = now(); beat(); };
+      beat();
+      const stalled = new Promise((_, reject) => {
+        const check = () => {
+          const idle = now() - lastActivity;
+          if (idle < stallMs) { timer = setTimeout(check, Math.max(1_000, stallMs - idle)); return; }
+          const error = deviceSyncStalledError(stallMs);
+          controller.abort(error);
+          reject(error);
+        };
+        timer = setTimeout(check, stallMs);
+        controller.signal.addEventListener('abort', () => reject(controller.signal.reason), { once: true });
+      });
+      stalled.catch(() => {});
+      // Returning (or rejecting) releases the lock even if the stalled work is
+      // still parked on an await; the abort signal fences its later writes.
+      try { return await Promise.race([run({ signal: controller.signal, touch }), stalled]); }
+      finally {
+        clearTimeout(timer);
+        try { if (readHeartbeat(storage, heartbeatKey)?.tab === DEVICE_LOCK_TAB_ID) storage?.removeItem(heartbeatKey); } catch {}
+      }
+    };
+    try { return await locks.request(lockName, { mode: 'exclusive', ...options }, holder); }
+    catch (error) {
+      // A steal rejects the stalled holder's request while its callback is
+      // still running; abort it so none of its later writes commit.
+      if (acquired && !controller.signal.aborted) controller.abort(deviceLockStolenError());
+      throw acquired && error?.name === 'AbortError' ? controller.signal.reason : error;
+    }
+  };
+  const immediate = await attempt({ ifAvailable: true });
+  if (immediate !== BUSY) return immediate;
+  const stale = heartbeat => heartbeat && now() - heartbeat.at > stealMs;
+  const steal = heartbeat => {
+    console.warn('[flightdeck] taking over a stalled workspace sync from another tab', { heartbeatAgeMs: heartbeat ? now() - heartbeat.at : null });
+    return attempt({ steal: true });
+  };
+  // A holder that has already gone quiet is replaced without the bounded wait.
+  const current = readHeartbeat(storage, heartbeatKey);
+  if (stale(current)) return steal(current);
+  onWaiting?.();
+  const signal = typeof AbortSignal?.timeout === 'function' ? AbortSignal.timeout(waitMs) : (() => {
+    const controller = new AbortController();
+    setTimeout(() => controller.abort(), waitMs);
+    return controller.signal;
+  })();
+  const grant = {};
+  try {
+    return await attempt({ signal }, grant);
+  } catch (error) {
+    if (grant.acquired || !signal.aborted) throw error;
+  }
+  // Still held after waitMs. A holder without recent progress (or an older
+  // build that never records one) is replaced; a live one is left to finish.
+  const heartbeat = readHeartbeat(storage, heartbeatKey);
+  if (!heartbeat || stale(heartbeat)) return steal(heartbeat);
+  watchDeviceLockRelease(locks, lockName, onReleased);
+  throw deviceLockBusyError();
 }
 
 export function recordCheckpointError(error) {
@@ -363,7 +479,8 @@ export async function syncDeviceRecords({ context, options, readState, materiali
       state = await readState(cursorKey);
       await acknowledge();
       if (!result.hasMore && !state.device.pendingAck) {
-        if (result.needsSummaryBackfill) await materialize({ protocol_version: 2, rebuild_summaries: true });
+        // A summary backfill walks every cached row. The caller runs it in
+        // bounded slices after this lock is released (needsSummaryBackfill).
         options.onProgress?.({ stage: 'complete', page: pages, applied, cursorPresent: Boolean(state.cursor), mode: page.mode, fullSnapshot: page.mode === 'snapshot', hasMore: false, protocolVersion: 2 });
         return { ...result, applied, pages, protocolVersion: 2, clientId: state.device.clientId, checkpointRevision: state.device.revision };
       }

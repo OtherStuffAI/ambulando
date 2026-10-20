@@ -3,10 +3,20 @@ const REQUEST_TYPE = 'tower-pg-materializer:request';
 const RESPONSE_TYPE = 'tower-pg-materializer:response';
 const FOREGROUND_TYPE = 'tower-pg-materializer:foreground';
 const DEFAULT_FOREGROUND_QUIET_MS = 750;
+// A bounded page commits in seconds. A request still unanswered after this is
+// wedged (stuck IDB transaction or starved queue); nothing behind it can run.
+const DEFAULT_REQUEST_TIMEOUT_MS = 90_000;
 
 function createAbortError(reason = 'disposed') {
   const error = new Error(`Tower PG materialisation cancelled: ${reason}`);
   error.name = 'AbortError';
+  return error;
+}
+
+function createTimeoutError(elapsedMs) {
+  const error = new Error(`Tower PG materialisation did not finish within ${Math.round(elapsedMs / 1000)}s`);
+  error.name = 'TimeoutError';
+  error.code = 'materialization_timeout';
   return error;
 }
 
@@ -34,12 +44,13 @@ function defaultWorkerFactory() {
  * publish a late completion or continue an old transaction.
  */
 export class TowerPgMaterializationWorkerClient {
-  constructor({ workspaceKey, workerFactory = defaultWorkerFactory, onDiagnostic = detail => console.warn('[Tower materializer] Slow operation', detail), diagnosticDelayMs = 10000 } = {}) {
+  constructor({ workspaceKey, workerFactory = defaultWorkerFactory, onDiagnostic = detail => console.warn('[Tower materializer] Slow operation', detail), diagnosticDelayMs = 10000, requestTimeoutMs = DEFAULT_REQUEST_TIMEOUT_MS } = {}) {
     this.workspaceKey = String(workspaceKey || '').trim();
     if (!this.workspaceKey) throw new Error('Tower PG materialisation worker requires a workspace key');
     this.workerFactory = workerFactory;
     this.onDiagnostic = onDiagnostic;
     this.diagnosticDelayMs = diagnosticDelayMs;
+    this.requestTimeoutMs = requestTimeoutMs;
     this.worker = null;
     this.nextRequestId = 1;
     this.pending = new Map();
@@ -62,7 +73,18 @@ export class TowerPgMaterializationWorkerClient {
           changeCount: bundle?.changes?.length || 0, pendingCount: this.pending.size,
           elapsedMs: this.diagnosticDelayMs });
       }, this.diagnosticDelayMs);
-      this.pending.set(id, { resolve, reject, diagnosticTimer });
+      // Watchdog: a wedged worker is terminated, which rolls back its open
+      // transaction and fails every queued request, so callers can release
+      // their locks and retry on a fresh worker instead of waiting forever.
+      const timeoutTimer = this.requestTimeoutMs > 0 ? setTimeout(() => {
+        if (!this.pending.has(id) || this.worker !== worker) return;
+        this.onDiagnostic?.({ operation: 'watchdog-terminate', pendingCount: this.pending.size, elapsedMs: this.requestTimeoutMs });
+        emitDiagnostic({ source: 'worker', level: 'error', code: 'worker', name: 'materialization_timeout',
+          pendingCount: this.pending.size, durationMs: this.requestTimeoutMs });
+        this.failPending(createTimeoutError(this.requestTimeoutMs));
+        this.destroyWorker();
+      }, this.requestTimeoutMs) : null;
+      this.pending.set(id, { resolve, reject, diagnosticTimer, timeoutTimer });
     });
     try {
       worker.postMessage({
@@ -75,6 +97,7 @@ export class TowerPgMaterializationWorkerClient {
       });
     } catch (error) {
       clearTimeout(this.pending.get(id)?.diagnosticTimer);
+      clearTimeout(this.pending.get(id)?.timeoutTimer);
       this.pending.delete(id);
       throw error;
     }
@@ -96,10 +119,18 @@ export class TowerPgMaterializationWorkerClient {
     if (this.disposed) return;
     this.disposed = true;
     this.disposeReason = String(reason || 'dispose');
-    const error = createAbortError(this.disposeReason);
-    for (const request of this.pending.values()) { clearTimeout(request.diagnosticTimer); request.reject(error); }
-    this.pending.clear();
+    this.failPending(createAbortError(this.disposeReason));
     this.destroyWorker();
+  }
+
+  failPending(error) {
+    const requests = [...this.pending.values()];
+    this.pending.clear();
+    for (const request of requests) {
+      clearTimeout(request.diagnosticTimer);
+      clearTimeout(request.timeoutTimer);
+      request.reject(error);
+    }
   }
 
   ensureWorker() {
@@ -134,6 +165,7 @@ export class TowerPgMaterializationWorkerClient {
     const request = this.pending.get(message.id);
     if (!request) return;
     clearTimeout(request.diagnosticTimer);
+    clearTimeout(request.timeoutTimer);
     this.pending.delete(message.id);
     if (message.ok) request.resolve(message.value);
     else request.reject(deserializeWorkerError(message.error));
@@ -144,8 +176,7 @@ export class TowerPgMaterializationWorkerClient {
     const error = event?.error instanceof Error
       ? event.error
       : new Error(event?.message || 'Tower PG materialisation worker crashed');
-    for (const request of this.pending.values()) { clearTimeout(request.diagnosticTimer); request.reject(error); }
-    this.pending.clear();
+    this.failPending(error);
     this.destroyWorker();
   };
 
