@@ -4453,6 +4453,14 @@
       "notes": [
         "Finish verifying an existing workspace cache when Tower challenges a mix of changed records and deletions, without clearing downloads, drafts or pending changes."
       ]
+    },
+    {
+      "buildNumber": 2485,
+      "label": "Stable device sync identity",
+      "notes": [
+        "Keep this device's sync identity through reloads and connection problems, so an already-downloaded workspace is briefly verified and then updated with only the changes instead of being downloaded again.",
+        "Retry an interrupted cache check automatically and fetch any leftover records in the background without blocking normal updates."
+      ]
     }
   ]
 }
