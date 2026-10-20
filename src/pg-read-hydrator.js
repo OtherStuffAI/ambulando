@@ -7,7 +7,7 @@ import { materializeFeedReaderEvent } from './feed/materialize.js';
 import { clampBranchEffectiveMessageIds, threadHistoryLineage, mergeThreadHistoryIds, threadHistoryAuthority as pgAuthorityToken } from './thread-history-coverage.js';
 import { FLIGHT_DECK_PG_APP_NPUB } from './app-identity.js';
 import { normalizeBackendUrl } from './utils/state-helpers.js';
-import { runCacheAdoption, runManifestRepair, runPriorityLane } from './pg-priority-sync.js';
+import { runCacheAdoption, runDeferredRepair, runManifestRepair, runPriorityLane } from './pg-priority-sync.js';
 import {
   getTowerPgFile,
   getTowerPgChannel,
@@ -1779,6 +1779,9 @@ async function syncTowerPgRecordWorkspace(store, options, deps) {
       cacheAdoption: capabilities.cacheAdoption,
       adopt: capabilities.cacheAdoption
         ? device => runCacheAdoption(store, { ...options, ...device }, auxiliaryDeps)
+        : null,
+      repairDeferred: capabilities.cacheAdoption && capabilities.selectiveRepair
+        ? () => runDeferredRepair(store, options, auxiliaryDeps)
         : null,
       repair: capabilities.repairManifest && capabilities.selectiveRepair
         ? () => runManifestRepair(store, { ...options, resume: true }, auxiliaryDeps)

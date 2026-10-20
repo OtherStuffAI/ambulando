@@ -60,7 +60,8 @@ export async function materializeAuxiliaryChanges(store, changes, deps = {}) {
     snapshot_id: null,
     materialization_priority: deps.materializationPriority || 'background',
     local_apply_options: { reconcileOnly: true, batchSize: AUXILIARY_MATERIALIZE_BATCH,
-      ...(Array.isArray(deps.reconcileKeys) ? { reconcileKeys: deps.reconcileKeys } : {}) },
+      ...(Array.isArray(deps.reconcileKeys) ? { reconcileKeys: deps.reconcileKeys } : {}),
+      ...(/^\d+$/.test(String(deps.reconcileHead ?? '')) ? { reconcileHead: String(deps.reconcileHead) } : {}) },
   };
   if (changes.some(change => change.workspace_id !== workspaceId)) throw new Error('Auxiliary sync response belongs to another workspace');
   if (deps.materialize) return deps.materialize(bundle);
@@ -141,10 +142,32 @@ export async function runPriorityLane(store, options = {}, deps = {}) {
   }
 }
 
+// Snapshot pages label each row with their snapshot boundary rather than the
+// row's own journal position. A label is never older than the content it
+// carries, so a matching state at an equal or higher version is current.
+export function versionCovers(local, authoritative) {
+  return /^\d+$/.test(String(local ?? '')) && /^\d+$/.test(String(authoritative ?? ''))
+    && BigInt(local) >= BigInt(authoritative);
+}
+
 function manifestMismatch(local, entry) {
   if (!local) return true;
-  if (String(local.version || '') !== String(entry.version || '')) return true;
-  return (local.operation === 'delete') !== (entry.state === 'deleted');
+  if ((local.operation === 'delete') !== (entry.state === 'deleted')) return true;
+  return !versionCovers(local.version, entry.version);
+}
+
+const DEFERRED_LANE = 'adoption-deferred';
+const DEFERRED_LIMIT = 5000;
+const deferredKey = entry => `${entry.family}:${entry.id}`;
+
+function mergeDeferred(existing = [], additions = []) {
+  const merged = new Map(existing.map(entry => [deferredKey(entry), entry]));
+  for (const entry of additions) {
+    if (!entry?.family || !entry?.id) continue;
+    merged.set(deferredKey(entry), { family: entry.family, id: entry.id,
+      ...(entry.version ? { version: String(entry.version) } : {}) });
+  }
+  return [...merged.values()].slice(0, DEFERRED_LIMIT);
 }
 
 function adoptionInventory(entries, rows) {
@@ -183,14 +206,17 @@ export async function runCacheAdoption(store, options = {}, deps = {}) {
   const expectedRevision = String(options.expectedCheckpointRevision || '');
   if (!clientId || !/^\d+$/.test(expectedRevision)) throw new Error('Cache adoption requires a registered device checkpoint');
   let prior = await readState(store, lane, deps);
-  if (prior?.clientId !== clientId || prior?.expectedRevision !== expectedRevision) prior = null;
+  // A restart after an adoption_* rejection discards the old session entirely:
+  // a fresh manifest and request id, never the failing cursor or response.
+  if (options.restart === true || prior?.clientId !== clientId || prior?.expectedRevision !== expectedRevision) prior = null;
   const readRows = async entries => {
     const keys = entries.map(entry => `${entry.family}:${entry.id}`);
     return deps.readCanonicalRows ? deps.readCanonicalRows(keys) : getWorkspaceDb().pg_record_rows.bulkGet(keys);
   };
   const adopt = body => (deps.adopt || postTowerPgRecordAdoption)(context.workspaceId, clientId, body, transport(context, options));
   let response = prior?.response || null;
-  const requestId = prior?.requestId || options.requestId || globalThis.crypto.randomUUID();
+  const requestId = prior?.requestId || (options.restart === true ? null : options.requestId) || globalThis.crypto.randomUUID();
+  let deferred = Array.isArray(prior?.deferred) ? prior.deferred : [];
   try {
     if (!response) {
       let manifestCursor = prior?.manifestCursor || null;
@@ -214,8 +240,16 @@ export async function runCacheAdoption(store, options = {}, deps = {}) {
       await writeState(store, lane, prior, deps);
     }
     for (let steps = 0; steps < (options.maxSteps || 10_000); steps++) {
+      if (Array.isArray(response.deferred) && response.deferred.length) deferred = mergeDeferred(deferred, response.deferred);
       if (response.status === 'adopted') {
-        const complete = { ...prior, status: 'complete', response, capturedHead: response.captured_head,
+        // Persist deferred identities before the caller commits the checkpoint;
+        // they are repaired lazily and survive a crash after adoption.
+        if (deferred.length) {
+          const pendingRepairs = await readState(store, DEFERRED_LANE, deps);
+          await writeState(store, DEFERRED_LANE, { lane: DEFERRED_LANE, status: 'pending', clientId,
+            entries: mergeDeferred(pendingRepairs?.entries, deferred), updatedAt: Date.now() }, deps);
+        }
+        const complete = { ...prior, status: 'complete', response, capturedHead: response.captured_head, deferred,
           checkpointRevision: response.checkpoint.checkpoint_revision, completedAt: Date.now(), updatedAt: Date.now(),
           stateKey: auxiliarySyncKey(store, lane) };
         // The caller commits this checkpoint and deletes stateKey in the same
@@ -236,13 +270,14 @@ export async function runCacheAdoption(store, options = {}, deps = {}) {
         const repair = await (deps.repair || postTowerPgRecordRepair)(context.workspaceId,
           records.map(({ family, id, version }) => ({ family, id, version })), transport(context, options));
         await materializeAuxiliaryChanges(store, repair.changes || [], { ...deps, context,
-          reconcileKeys: records.map(({ family, id }) => `${family}:${id}`) });
-        const repaired = adoptionInventory(records, await readRows(records));
-        if (repaired.some(entry => entry.state === 'missing')) throw new Error('Tower cache adoption repair did not materialize every mismatch');
+          reconcileKeys: records.map(({ family, id }) => `${family}:${id}`), reconcileHead: repair.captured_head });
+        // Receipts describe only rows actually committed locally. Unavailable or
+        // unmaterialised identities are omitted; Tower returns them as deferred.
+        const repaired = adoptionInventory(records, await readRows(records)).filter(entry => entry.state !== 'missing');
         response = validateAdoptionResponse(await adopt({ cursor: response.cursor, repaired }), clientId);
       }
       prior = { ...prior, lane, status: 'pending', clientId, expectedRevision, requestId,
-        response, capturedHead: response.captured_head, updatedAt: Date.now() };
+        response, capturedHead: response.captured_head, deferred, updatedAt: Date.now() };
       await writeState(store, lane, prior, deps);
       await new Promise(resolve => setTimeout(resolve, 0));
     }
@@ -250,6 +285,36 @@ export async function runCacheAdoption(store, options = {}, deps = {}) {
   } catch (error) {
     await writeState(store, lane, { ...prior, lane, status: 'paused', clientId, expectedRevision,
       requestId, response, pausedAt: Date.now(), pauseReason: error?.code || error?.message || 'unavailable' }, deps).catch(() => {});
+    throw error;
+  }
+}
+
+// Lazily repairs identities Tower deferred during adoption. Each batch commits
+// before the lane advances; omission or unavailability never deletes cache.
+export async function runDeferredRepair(store, options = {}, deps = {}) {
+  const context = deps.context;
+  let prior = await readState(store, DEFERRED_LANE, deps);
+  let entries = Array.isArray(prior?.entries) ? prior.entries : [];
+  let repaired = 0, unresolved = 0;
+  try {
+    while (entries.length) {
+      const batch = entries.slice(0, 200);
+      const repair = await (deps.repair || postTowerPgRecordRepair)(context.workspaceId,
+        batch.map(({ family, id }) => ({ family, id })), transport(context, options));
+      const result = await materializeAuxiliaryChanges(store, repair.changes || [], { ...deps, context,
+        reconcileKeys: batch.map(deferredKey), reconcileHead: repair.captured_head });
+      repaired += Number(result.applied || 0);
+      unresolved += Array.isArray(repair.unresolved) ? repair.unresolved.length : 0;
+      entries = entries.slice(batch.length);
+      prior = { ...prior, lane: DEFERRED_LANE, status: entries.length ? 'pending' : 'complete', entries,
+        repaired: Number(prior?.repaired || 0) + Number(result.applied || 0), updatedAt: Date.now(),
+        completedAt: entries.length ? null : Date.now() };
+      await writeState(store, DEFERRED_LANE, prior, deps);
+      if (entries.length) await new Promise(resolve => setTimeout(resolve, 0));
+    }
+    return { repaired, unresolved, remaining: 0 };
+  } catch (error) {
+    await writeState(store, DEFERRED_LANE, { ...pausedState(prior, DEFERRED_LANE, error), entries }, deps).catch(() => {});
     throw error;
   }
 }
@@ -276,7 +341,7 @@ export async function runManifestRepair(store, options = {}, deps = {}) {
         const repair = await (deps.repair || postTowerPgRecordRepair)(context.workspaceId,
           mismatches.map(entry => ({ family: entry.family, id: entry.id, version: entry.version })), transport(context, options));
         const result = await materializeAuxiliaryChanges(store, repair.changes || [], { ...deps, context,
-          reconcileKeys: mismatches.map(({ family, id }) => `${family}:${id}`) });
+          reconcileKeys: mismatches.map(({ family, id }) => `${family}:${id}`), reconcileHead: repair.captured_head });
         repaired += Number(result.applied || 0);
       }
       checked += page.entries?.length || 0;
