@@ -200,6 +200,7 @@ export async function applyPgRecordChanges(store, page, options = {}) {
   // A crash replays that opaque page; canonical versions make the committed
   // prefix idempotent. No cursor can skip unapplied changes.
   let result, applied = 0;
+  const deferredAffectedChannels = new Set();
   let transactionCount = 0, totalTransactionMs = 0, maxTransactionMs = 0, foregroundWaitMs = 0;
   const requestedBatchSize = Number(options.batchSize);
   const size = Number.isSafeInteger(requestedBatchSize) && requestedBatchSize > 0
@@ -216,12 +217,14 @@ export async function applyPgRecordChanges(store, page, options = {}) {
       snapshot_complete: partial ? false : page.snapshot_complete,
       has_more: partial ? true : page.has_more },
     { ...options, partialPage: partial, pageOffset: offset + size,
+      deferredAffectedChannels: [...deferredAffectedChannels],
       beforeCommit: partial ? undefined : options.beforeCommit });
     const transactionMs = performance.now() - transactionStartedAt;
     transactionCount += 1;
     totalTransactionMs += transactionMs;
     maxTransactionMs = Math.max(maxTransactionMs, transactionMs);
     applied += result.applied;
+    for (const channelId of result.affectedChannels || []) deferredAffectedChannels.add(channelId);
     if (result.replay) break;
     if (partial) await new Promise(resolve => setTimeout(resolve, Math.max(0, Number(options.backgroundBatchDelayMs) || 0)));
   }
@@ -296,6 +299,7 @@ async function applyRecordPage(store, page, options = {}) {
     };
     const accessPartitions = mergePgAccessState(state, page, PG_RECORD_DELTA_FAMILIES, context.workspaceId);
     const changedKeys = new Set();
+    const resolvedConflictKeys = new Set();
     const affectedTasks = new Set();
     const affectedChannels = new Set();
     const affectedResources = new Map();
@@ -378,7 +382,7 @@ async function applyRecordPage(store, page, options = {}) {
           };
           if (!sameLogicalValue(prior, mapped)) { await table.put(mapped); applied++; }
         }
-        await db.pg_record_conflicts.delete(raw.key);
+        resolvedConflictKeys.add(raw.key);
         return;
       }
       const clientRecordId = raw.row?.metadata?.client_record_id;
@@ -469,7 +473,7 @@ async function applyRecordPage(store, page, options = {}) {
           && source.pg_thread_id === raw.id && !source.parent_message_id
           && source.record_state !== 'deleted') {
           if (prior && !pending(prior)) await table.delete(localId);
-          await db.pg_record_conflicts.delete(raw.key);
+          resolvedConflictKeys.add(raw.key);
           return;
         }
       }
@@ -485,7 +489,7 @@ async function applyRecordPage(store, page, options = {}) {
         const placeholder = await db.chat_messages.get(canonical.thread_id);
         if (placeholder?.pg_record_type === 'thread' && !Array.isArray(placeholder.pg_effective_message_ids) && !pending(placeholder)) await db.chat_messages.delete(canonical.thread_id);
       }
-      await db.pg_record_conflicts.delete(raw.key);
+      resolvedConflictKeys.add(raw.key);
     };
     for (const key of changedKeys) await materialize(versions.get(key));
     for (const id of affectedTasks) {
@@ -504,13 +508,15 @@ async function applyRecordPage(store, page, options = {}) {
         }
       }
     }
-    await refreshChannelSummaries(db, [...affectedChannels]);
+    if (resolvedConflictKeys.size) await db.pg_record_conflicts.bulkDelete([...resolvedConflictKeys]);
+    if (!options.partialPage) await refreshChannelSummaries(db,
+      [...new Set([...(options.deferredAffectedChannels || []), ...affectedChannels])]);
     await updateResourceAttentions(db, [...affectedResources.values()], store, members);
     // Retirement checkpoints commit in separate bounded transactions. The
     // terminal cursor remains at the preceding page until all omissions commit.
     const retirementPending = !options.reconcileOnly && state.snapshotComplete
       && state.snapshotReconciliationPending === true && page.mode === 'delta' && !page.has_more;
-    if (page.changes.length) await db.context_reference_resolutions.clear();
+    if (page.changes.length && !options.partialPage) await db.context_reference_resolutions.clear();
     const contextDirty = state.contextDirty || page.changes.some(c => c.family.startsWith('context_') || c.family === 'scope');
     if (!options.reconcileOnly && !options.partialPage && (contextDirty || await db.context_coverage.where('status').equals('loading').count()) && page.mode === 'delta' && !page.has_more && !retirementPending && page.families.includes('context_component') && page.families.includes('context_reference')) {
       await publishContextAuthority(db, context.workspaceId, state);
@@ -540,15 +546,11 @@ async function applyRecordPage(store, page, options = {}) {
     }
     if (!options.reconcileOnly && page.protocol_version === 2) await db.sync_state.put({ key: DEVICE_CACHE_OWNER_KEY,
       value: { cursorKey, scope: state.device.scope, clientId: state.device.clientId, canonicalCount: await db.pg_record_rows.count() } });
-    if (options.reconcileOnly && changedKeys.size && state.device) {
-      // Priority/context/repair rows are Tower-authorized for this same owner.
-      // Count them in the same commit so growth never reads as a foreign cache.
-      const owner = (await db.sync_state.get(DEVICE_CACHE_OWNER_KEY))?.value;
-      if (owner?.cursorKey === cursorKey && owner.clientId === state.device.clientId && owner.scope === state.device.scope) {
-        await db.sync_state.put({ key: DEVICE_CACHE_OWNER_KEY, value: { ...owner, canonicalCount: await db.pg_record_rows.count() } });
-      }
-    }
-    return { applied, localGeneration: Number(state.localGeneration || 0), cursor: page.next_cursor, retirementPending, hasMore: page.has_more, fullSnapshot: page.mode === 'snapshot', protocolVersion: 1, needsSummaryBackfill: Boolean(state.snapshotComplete && state.assignmentPolicyVersion !== 1 && page.mode === 'delta' && !page.has_more) };
+    // Auxiliary lanes intentionally leave the durable owner count alone.
+    // Startup accepts growth, rejects only row loss, and performs one owner
+    // recount before v2 resumes. Recounting or rewriting this checkpoint in
+    // each auxiliary transaction can starve foreground IndexedDB work.
+    return { applied, affectedChannels: [...affectedChannels].filter(Boolean), localGeneration: Number(state.localGeneration || 0), cursor: page.next_cursor, retirementPending, hasMore: page.has_more, fullSnapshot: page.mode === 'snapshot', protocolVersion: 1, needsSummaryBackfill: Boolean(state.snapshotComplete && state.assignmentPolicyVersion !== 1 && page.mode === 'delta' && !page.has_more) };
   });
 }
 

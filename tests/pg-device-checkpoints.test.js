@@ -336,12 +336,13 @@ it('keeps the committed checkpoint after priority/context/repair rows grow the c
   const h = harness(); await h.run();
   const committed = await state();
   await applyAuxiliary([auxiliaryMessage('50000000-0000-4000-8000-000000000101')]);
-  expect((await db.sync_state.get(DEVICE_CACHE_OWNER_KEY)).value.canonicalCount).toBe(await db.pg_record_rows.count());
+  expect((await db.sync_state.get(DEVICE_CACHE_OWNER_KEY)).value.canonicalCount).toBeLessThan(await db.pg_record_rows.count());
   h.remote.page.mockClear();
   await h.run();
   expect((await state()).device.clientId).toBe(committed.device.clientId);
   expect(h.remote.client.mock.calls.filter(c => c[2].operation === 'register')).toHaveLength(1);
   expect(h.remote.client.mock.calls.filter(c => c[2].operation === 'retire')).toHaveLength(0);
+  expect((await db.sync_state.get(DEVICE_CACHE_OWNER_KEY)).value.canonicalCount).toBe(await db.pg_record_rows.count());
   // A second ordinary launch requests one bounded delta from the durable cursor.
   expect(h.remote.page.mock.calls.map(c => c[1].cursor)).toEqual([committed.cursor]);
 });
