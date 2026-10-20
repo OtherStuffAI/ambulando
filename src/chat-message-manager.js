@@ -1844,6 +1844,7 @@ export const chatMessageManagerMixin = {
   },
 
   openThread(recordId, options = {}) {
+    this.prioritizeTowerPgForeground?.(`thread-open:${String(recordId || '').trim()}`);
     if (recordId !== this.activeThreadId) this.closeIdentityCard?.();
     if (options.saveDraft !== false) this.saveChatComposerDraft?.('thread');
     const message = this.messages.find((item) => item.record_id === recordId) || null;

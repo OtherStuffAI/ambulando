@@ -200,25 +200,35 @@ export async function applyPgRecordChanges(store, page, options = {}) {
   // A crash replays that opaque page; canonical versions make the committed
   // prefix idempotent. No cursor can skip unapplied changes.
   let result, applied = 0;
+  let transactionCount = 0, totalTransactionMs = 0, maxTransactionMs = 0, foregroundWaitMs = 0;
   const requestedBatchSize = Number(options.batchSize);
   const size = Number.isSafeInteger(requestedBatchSize) && requestedBatchSize > 0
     ? Math.min(32, requestedBatchSize)
     : options.reconcileOnly ? 200 : 32;
   for (let offset = 0; offset < Math.max(1, page.changes.length); offset += size) {
+    if (typeof options.yieldToForeground === 'function') {
+      foregroundWaitMs += Number(await options.yieldToForeground()) || 0;
+    }
     const partial = offset + size < page.changes.length;
+    const transactionStartedAt = performance.now();
     result = await applyRecordPage(store, { ...page, changes: page.changes.slice(offset, offset + size),
       actors: offset === 0 ? page.actors : [],
       snapshot_complete: partial ? false : page.snapshot_complete,
       has_more: partial ? true : page.has_more },
     { ...options, partialPage: partial, pageOffset: offset + size,
       beforeCommit: partial ? undefined : options.beforeCommit });
+    const transactionMs = performance.now() - transactionStartedAt;
+    transactionCount += 1;
+    totalTransactionMs += transactionMs;
+    maxTransactionMs = Math.max(maxTransactionMs, transactionMs);
     applied += result.applied;
     if (result.replay) break;
-    if (partial) await new Promise(resolve => setTimeout(resolve, 0));
+    if (partial) await new Promise(resolve => setTimeout(resolve, Math.max(0, Number(options.backgroundBatchDelayMs) || 0)));
   }
-  if (!result.retirementPending) return { ...result, applied };
+  const materializationTiming = { transactionCount, totalTransactionMs, maxTransactionMs, foregroundWaitMs };
+  if (!result.retirementPending) return { ...result, applied, materializationTiming };
   await retireSnapshotOmissions(store, { ...options, expectedGeneration: result.localGeneration, terminalCursor: page.next_cursor });
-  return { ...result, applied, cursor: page.next_cursor, retirementPending: false };
+  return { ...result, applied, cursor: page.next_cursor, retirementPending: false, materializationTiming };
 }
 
 async function applyRecordPage(store, page, options = {}) {
@@ -541,6 +551,7 @@ export async function retireSnapshotOmissions(store, options) {
   const db = getWorkspaceDb(), cursorKey = recordDeltaCursorKey(store);
   const tables = [...new Set(Object.values(FAMILY).map(([name]) => name).filter(name => !name.startsWith('context_'))), 'pg_record_rows', 'pg_actors', 'pg_resource_attention', 'pg_attention_counts'];
   while (true) {
+    if (typeof options.yieldToForeground === 'function') await options.yieldToForeground();
     const done = await db.transaction('rw', db.tables, async () => {
       const state = (await db.sync_state.get(cursorKey))?.value;
       await assertDeviceLease(db, options.deviceLease);
@@ -629,7 +640,7 @@ export async function retireSnapshotOmissions(store, options) {
     });
     if (done) return;
     options.onRetirementProgress?.();
-    await new Promise(resolve => setTimeout(resolve, 0));
+    await new Promise(resolve => setTimeout(resolve, Math.max(0, Number(options.backgroundBatchDelayMs) || 0)));
   }
 }
 
@@ -761,11 +772,13 @@ async function reconcileConflictBatch(store, { acceptRemoteKey = null, after = n
   });
 }
 
-export async function rebuildPgRecordSummaries(store, { batchSize = 32 } = {}) {
+export async function rebuildPgRecordSummaries(store, options = {}) {
+  const { batchSize = 32 } = options;
   const db = getWorkspaceDb(), key = `${recordDeltaCursorKey(store)}:summary-backfill-assignment-v2`;
   let after = (await db.sync_state.get(key))?.value?.after || null;
   let processed = 0;
   while (true) {
+    if (typeof options.yieldToForeground === 'function') await options.yieldToForeground();
     let count = 0;
     await db.transaction('rw', db.tables, async () => {
       const rows = await (after ? db.pg_record_rows.where(':id').above(after) : db.pg_record_rows.toCollection()).limit(Math.min(32,batchSize)).toArray();
@@ -792,6 +805,6 @@ export async function rebuildPgRecordSummaries(store, { batchSize = 32 } = {}) {
     });
     processed += count;
     if (!count) return {processed};
-    await new Promise(resolve=>setTimeout(resolve,0));
+    await new Promise(resolve=>setTimeout(resolve,Math.max(0,Number(options.backgroundBatchDelayMs)||0)));
   }
 }

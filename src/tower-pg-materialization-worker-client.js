@@ -1,6 +1,8 @@
 import { emitDiagnostic } from './diagnostics-events.js';
 const REQUEST_TYPE = 'tower-pg-materializer:request';
 const RESPONSE_TYPE = 'tower-pg-materializer:response';
+const FOREGROUND_TYPE = 'tower-pg-materializer:foreground';
+const DEFAULT_FOREGROUND_QUIET_MS = 750;
 
 function createAbortError(reason = 'disposed') {
   const error = new Error(`Tower PG materialisation cancelled: ${reason}`);
@@ -79,6 +81,17 @@ export class TowerPgMaterializationWorkerClient {
     return pending;
   }
 
+  prioritizeForeground({ durationMs = DEFAULT_FOREGROUND_QUIET_MS, reason = 'visible-read' } = {}) {
+    this.assertActive();
+    const worker = this.ensureWorker();
+    worker.postMessage({
+      type: FOREGROUND_TYPE,
+      workspaceKey: this.workspaceKey,
+      durationMs: Math.min(5_000, Math.max(0, Number(durationMs) || 0)),
+      reason: String(reason || 'visible-read'),
+    });
+  }
+
   dispose(reason = 'dispose') {
     if (this.disposed) return;
     this.disposed = true;
@@ -144,4 +157,5 @@ export class TowerPgMaterializationWorkerClient {
 export const TOWER_PG_MATERIALIZATION_WORKER_PROTOCOL = Object.freeze({
   request: REQUEST_TYPE,
   response: RESPONSE_TYPE,
+  foreground: FOREGROUND_TYPE,
 });

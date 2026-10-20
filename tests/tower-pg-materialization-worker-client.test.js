@@ -81,6 +81,18 @@ describe('Tower PG materialisation worker client', () => {
     await expect(pending).resolves.toEqual({ applied: 4, cursor: 'cursor-2' });
   });
 
+  it('signals a bounded foreground quiet window without creating a materialisation request', () => {
+    const { client, worker } = create();
+    client.prioritizeForeground({ durationMs: 900, reason: 'thread-open' });
+    expect(worker.messages).toEqual([{
+      type: TOWER_PG_MATERIALIZATION_WORKER_PROTOCOL.foreground,
+      workspaceKey: client.workspaceKey,
+      durationMs: 900,
+      reason: 'thread-open',
+    }]);
+    expect(client.pending.size).toBe(0);
+  });
+
   it('surfaces worker transaction failures without acknowledging completion', async () => {
     const { client, worker } = create();
     const pending = client.materialize({ workspaceDbKey: 'workspace-db', store: {}, bundle: {} });

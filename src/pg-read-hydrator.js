@@ -1472,7 +1472,7 @@ export async function hydrateTowerPgSyncBundle(store, bundle = {}, deps = {}) {
   if ([1, 2].includes(bundle.protocol_version)) {
     const { applyPgRecordChanges, resetPgRecordAuthority, markPgRecordAccessLost, reconcilePgRecordConflicts, rebuildPgRecordSummaries, retireSnapshotOmissions } = await import('./pg-record-delta.js');
     if (bundle.resume_snapshot_retirement) return retireSnapshotOmissions(store, bundle.local_apply_options);
-    if (bundle.rebuild_summaries) return rebuildPgRecordSummaries(store);
+    if (bundle.rebuild_summaries) return rebuildPgRecordSummaries(store, bundle.local_apply_options || {});
     if (bundle.reconcile_commands) return reconcilePgRecordConflicts(store, { acceptRemoteKey: bundle.accept_remote_key || null });
     if (bundle.reference_directory) {
       const context = resolveTowerPgWorkspaceContext(store);

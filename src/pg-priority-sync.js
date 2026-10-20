@@ -57,6 +57,7 @@ export async function materializeAuxiliaryChanges(store, changes, deps = {}) {
     next_cursor: `auxiliary-${Date.now()}`,
     has_more: false,
     snapshot_id: null,
+    materialization_priority: deps.materializationPriority || 'background',
     local_apply_options: { reconcileOnly: true, batchSize: AUXILIARY_MATERIALIZE_BATCH },
   };
   if (changes.some(change => change.workspace_id !== workspaceId)) throw new Error('Auxiliary sync response belongs to another workspace');
@@ -92,7 +93,9 @@ export async function hydratePriorityContext(store, resourceType, resourceId, op
     && Date.now() - Number(prior.completedAt || 0) < Number(options.freshMs ?? 15_000)) return { fresh: true, ...prior };
   try {
     const page = await (deps.readContext || getTowerPgRecordContext)(context.workspaceId, resourceType, resourceId, transport(context, options));
-    const result = await materializeAuxiliaryChanges(store, page.changes || [], { ...deps, context });
+    const result = await materializeAuxiliaryChanges(store, page.changes || [], {
+      ...deps, context, materializationPriority: 'foreground',
+    });
     const next = { lane, status: 'complete', resourceType, resourceId, capturedHead: page.captured_head,
       dependencies: page.dependencies || [], applied: result.applied || 0, completedAt: Date.now() };
     await writeState(store, lane, next, deps);

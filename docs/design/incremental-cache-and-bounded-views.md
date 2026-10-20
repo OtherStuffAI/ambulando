@@ -6,6 +6,16 @@ TowerSyncService remains the network owner. Its existing materialisation worker
 commits Dexie changes, and liveQuery supplies Alpine. Views do not fetch records
 directly. No React/native or workspace-storage redesign is involved.
 
+Foreground detail work pre-empts completeness materialisation. Opening a cached
+thread, task, document, or channel signals a bounded quiet window to the
+workspace materialisation worker. Targeted context and transcript commits may
+run in that window, while v2 snapshot/catch-up, priority continuation, repair,
+summary rebuild, and retirement work pause between fenced transactions. The
+background lane uses paced 16-record transactions and reports transaction/wait
+timing; cursor publication remains atomic at the original page boundary. The
+quiet window never clears the cache, cancels the durable checkpoint, or treats
+omission as deletion.
+
 The producer contract is Tower's `docs/design/flightdeck-record-delta-v1.md`;
 the exact fixture is copied to `tests/fixtures/flightdeck-record-delta-v1.json`.
 `/record-sync?protocol_version=1` is negotiated before consumer activation.

@@ -108,6 +108,32 @@ describe('Tower PG materialisation worker runner', () => {
     await waitForPosted(3); expect(posted.map(row => row.id)).toEqual([2, 1, 3]);
   });
 
+  it('holds background batches for a foreground quiet window while allowing transcript work through', async () => {
+    vi.useFakeTimers();
+    try {
+      hydrateTowerPgSyncBundle.mockResolvedValueOnce({ count: 2 }).mockResolvedValueOnce({ applied: 32 });
+      dispatch({ type: 'tower-pg-materializer:foreground', workspaceKey: 'workspace-a', durationMs: 750, reason: 'thread-open' });
+      dispatch({ type: 'tower-pg-materializer:request', id: 1, workspaceKey: 'workspace-a', workspaceDbKey: 'db-a', store: {},
+        bundle: { protocol_version: 2, mode: 'snapshot', changes: [] } });
+      dispatch({ type: 'tower-pg-materializer:request', id: 2, workspaceKey: 'workspace-a', workspaceDbKey: 'db-a', store: {},
+        bundle: { thread_history_page: {} } });
+      await flush();
+      expect(hydrateTowerPgSyncBundle).toHaveBeenCalledTimes(2);
+      expect(hydrateTowerPgSyncBundle.mock.calls[0][1]).toEqual({ thread_history_page: {} });
+      const backgroundOptions = hydrateTowerPgSyncBundle.mock.calls[1][1].local_apply_options;
+      let settled = false;
+      const waiting = backgroundOptions.yieldToForeground().then(() => { settled = true; });
+      await vi.advanceTimersByTimeAsync(749);
+      expect(settled).toBe(false);
+      await vi.advanceTimersByTimeAsync(1);
+      await waiting;
+      expect(settled).toBe(true);
+      expect(backgroundOptions.backgroundBatchDelayMs).toBeGreaterThan(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('serializes bundle transactions so concurrent requests cannot reorder cursor commits', async () => {
     let releaseFirst;
     hydrateTowerPgSyncBundle

@@ -165,6 +165,10 @@ const DETAIL_FAMILY_FRESH_MS = 15_000;
 const STARTUP_SYNC_PROGRESS_DELAY_MS = 1_500;
 const OFFLINE_MESSAGE_RESYNC_DELAY_MS = 250;
 const OFFLINE_MESSAGE_RESYNC_IDLE_TIMEOUT_MS = 1_500;
+const FOREGROUND_SYNC_FAMILIES = new Set([
+  'channel', 'channel-messages', 'thread-history', 'thread-history-page',
+  'task', 'task-comments', 'document', 'document-comments',
+]);
 
 function isBrowserOffline() {
   return typeof navigator !== 'undefined' && navigator?.onLine === false;
@@ -601,6 +605,18 @@ export const syncManagerMixin = {
     });
   },
 
+  prioritizeTowerPgForeground(reason = 'visible-read', durationMs = 750) {
+    if (!isTowerPgBackendMode() || !this.workspaceDbKey) return false;
+    try {
+      const worker = this._towerPgMaterializationWorker;
+      if (!worker || worker.disposed) return false;
+      worker.prioritizeForeground({ reason, durationMs });
+      return true;
+    } catch {
+      return false;
+    }
+  },
+
   disposeTowerPgMaterializationWorker(reason = 'dispose') {
     const worker = this._towerPgMaterializationWorker;
     this._towerPgMaterializationWorker = null;
@@ -670,6 +686,9 @@ export const syncManagerMixin = {
     // Network reads and worker round-trips must never inherit a live Dexie
     // transaction zone from the UI write that requested the refresh.
     return Dexie.ignoreTransaction(async () => {
+      if (FOREGROUND_SYNC_FAMILIES.has(family)) {
+        this.prioritizeTowerPgForeground?.(`${family}:${String(id || '').trim()}`);
+      }
       const service = this._towerSyncService || null;
       for (let attempt = 0; ; attempt++) {
         try {

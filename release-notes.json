@@ -4335,6 +4335,13 @@
       "notes": [
         "Canvas now opens its live workspace naplets without the local transaction error that could interrupt snapshot loading."
       ]
+    },
+    {
+      "buildNumber": 2460,
+      "label": "Responsive background catch-up",
+      "notes": [
+        "Open cached conversations and keep typing smoothly while a large workspace catch-up pauses for foreground work and continues at a controlled pace."
+      ]
     }
   ]
 }
