@@ -4342,6 +4342,13 @@
       "notes": [
         "Open cached conversations and keep typing smoothly while a large workspace catch-up pauses for foreground work and continues at a controlled pace."
       ]
+    },
+    {
+      "buildNumber": 2461,
+      "label": "Reliable Canvas startup",
+      "notes": [
+        "Open Canvas reliably from clean and existing workspaces without duplicate startup or a local transaction error."
+      ]
     }
   ]
 }
