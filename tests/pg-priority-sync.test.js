@@ -226,3 +226,82 @@ describe('auxiliary materialisation retention', () => {
     expect(await db.tasks.get(unrelated.id)).toBeTruthy();
   });
 });
+
+describe('cache adoption repair materialisation', () => {
+  let db;
+  const adoptionStore = { ...store, workspaceDbKey: 'priority-adoption-repair' };
+
+  beforeEach(async () => {
+    db = openWorkspaceDb('priority-adoption-repair'); await db.open();
+    await Promise.all(db.tables.map(table => table.clear()));
+  });
+  afterEach(async () => deleteWorkspaceDb('priority-adoption-repair'));
+
+  it('commits mixed upsert and equal-version tombstone repairs before acknowledging adoption', async () => {
+    const clientId = '10000000-0000-4000-8000-000000000021';
+    const current = { family: 'task', id: 'current', version: '5', state: 'active', relationships: {} };
+    const stale = { family: 'audio_note', id: 'stale', version: '7', state: 'active', relationships: {} };
+    const tombstone = { family: 'doc', id: 'deleted', version: '9', state: 'deleted', relationships: {} };
+    await db.pg_record_rows.bulkPut([
+      { key: 'task:current', family: 'task', id: 'current', version: '5', operation: 'upsert', generation: 'delta', row: {} },
+      { key: 'audio_note:stale', family: 'audio_note', id: 'stale', version: '6', operation: 'upsert', generation: 'delta', row: {} },
+      // A prior cache can retain the old operation at the canonical version.
+      // Selective repair must replace it with Tower's explicit tombstone.
+      { key: 'doc:deleted', family: 'doc', id: 'deleted', version: '9', operation: 'upsert', generation: 'delta', row: {} },
+    ]);
+    const snapshotState = { cursor: 'snapshot-page', snapshotId: 'existing-snapshot',
+      snapshotReconciliationPending: true, snapshotComplete: false };
+    await db.sync_state.put({ key: recordDeltaCursorKey(adoptionStore), value: snapshotState });
+    await db.pending_writes.add({ record_id: 'pending-local-edit', envelope: { title: 'keep me' } });
+    await db.document_drafts.put({ draft_key: 'workspace:doc', workspace_id: workspaceId,
+      document_id: 'doc', body: 'unfinished draft' });
+    const checkpoint = { protocol_version: 2, client_id: clientId, authority_epoch: 'epoch',
+      initial_cursor: 'adopted', checkpoint_cursor: 'adopted', checkpoint_revision: '1' };
+    const base = { protocol_version: 2, adoption_id: 'adoption', captured_head: '70', authority_epoch: 'epoch',
+      access_revision: '3', checkpoint_revision: '0', bounds: { max_rows: 200, max_bytes: 1048576 }, retention_policy: 'retain_downloaded' };
+    let repairReceipts = 0;
+    const adopt = vi.fn(async (_workspaceId, _clientId, body) => {
+      if (body.request_id) return { ...base, status: 'inventory_required', cursor: 'inventory',
+        challenge: [current, stale, tombstone], has_more: false };
+      if (body.inventory) return { ...base, status: 'repair_required', cursor: 'repair',
+        records: [stale, tombstone], repair_route: '/repair' };
+      expect(body.repaired).toEqual([
+        { family: 'audio_note', id: 'stale', state: 'active', version: '7' },
+        { family: 'doc', id: 'deleted', state: 'deleted', version: '9' },
+      ]);
+      if (repairReceipts++ === 0) throw Object.assign(new Error('Tower PG record cache adoption 409: adoption_repair_incomplete'), {
+        status: 409, code: 'adoption_repair_incomplete',
+      });
+      return { ...base, status: 'adopted', checkpoint };
+    });
+    const repair = vi.fn(async () => ({ changes: [
+      { family: 'audio_note', id: 'stale', version: '7', operation: 'upsert', workspace_id: workspaceId,
+        row: { id: 'stale', workspace_id: workspaceId, row_version: 2 } },
+      { family: 'doc', id: 'deleted', version: '9', operation: 'delete', workspace_id: workspaceId, row: null },
+    ] }));
+
+    const options = {
+      clientId, expectedCheckpointRevision: '0', requestId: '20000000-0000-4000-8000-000000000021',
+    };
+    const deps = { context, adopt, repair,
+      readManifest: async () => ({ coverage: 'authorized_manifest', next_cursor: 'manifest' }) };
+    await expect(runCacheAdoption(adoptionStore, options, deps)).rejects.toMatchObject({
+      status: 409, code: 'adoption_repair_incomplete',
+    });
+
+    expect((await db.sync_state.get(recordDeltaCursorKey(adoptionStore))).value).toEqual(snapshotState);
+    expect(await db.pending_writes.where('record_id').equals('pending-local-edit').count()).toBe(1);
+    expect(await db.document_drafts.get('workspace:doc')).toMatchObject({ body: 'unfinished draft' });
+    expect((await db.sync_state.get(auxiliarySyncKey(adoptionStore, 'adoption'))).value).toMatchObject({
+      status: 'paused', response: { status: 'repair_required', cursor: 'repair' },
+      pauseReason: 'adoption_repair_incomplete',
+    });
+
+    const result = await runCacheAdoption(adoptionStore, options, deps);
+
+    expect(result.checkpoint).toEqual(checkpoint);
+    expect(repair).toHaveBeenCalledTimes(2);
+    expect(await db.pg_record_rows.get('audio_note:stale')).toMatchObject({ operation: 'upsert', version: '7' });
+    expect(await db.pg_record_rows.get('doc:deleted')).toMatchObject({ operation: 'delete', version: '9' });
+  });
+});

@@ -59,7 +59,8 @@ export async function materializeAuxiliaryChanges(store, changes, deps = {}) {
     has_more: false,
     snapshot_id: null,
     materialization_priority: deps.materializationPriority || 'background',
-    local_apply_options: { reconcileOnly: true, batchSize: AUXILIARY_MATERIALIZE_BATCH },
+    local_apply_options: { reconcileOnly: true, batchSize: AUXILIARY_MATERIALIZE_BATCH,
+      ...(Array.isArray(deps.reconcileKeys) ? { reconcileKeys: deps.reconcileKeys } : {}) },
   };
   if (changes.some(change => change.workspace_id !== workspaceId)) throw new Error('Auxiliary sync response belongs to another workspace');
   if (deps.materialize) return deps.materialize(bundle);
@@ -234,7 +235,8 @@ export async function runCacheAdoption(store, options = {}, deps = {}) {
           repairing: records.length });
         const repair = await (deps.repair || postTowerPgRecordRepair)(context.workspaceId,
           records.map(({ family, id, version }) => ({ family, id, version })), transport(context, options));
-        await materializeAuxiliaryChanges(store, repair.changes || [], { ...deps, context });
+        await materializeAuxiliaryChanges(store, repair.changes || [], { ...deps, context,
+          reconcileKeys: records.map(({ family, id }) => `${family}:${id}`) });
         const repaired = adoptionInventory(records, await readRows(records));
         if (repaired.some(entry => entry.state === 'missing')) throw new Error('Tower cache adoption repair did not materialize every mismatch');
         response = validateAdoptionResponse(await adopt({ cursor: response.cursor, repaired }), clientId);
@@ -273,7 +275,8 @@ export async function runManifestRepair(store, options = {}, deps = {}) {
       if (mismatches.length) {
         const repair = await (deps.repair || postTowerPgRecordRepair)(context.workspaceId,
           mismatches.map(entry => ({ family: entry.family, id: entry.id, version: entry.version })), transport(context, options));
-        const result = await materializeAuxiliaryChanges(store, repair.changes || [], { ...deps, context });
+        const result = await materializeAuxiliaryChanges(store, repair.changes || [], { ...deps, context,
+          reconcileKeys: mismatches.map(({ family, id }) => `${family}:${id}`) });
         repaired += Number(result.applied || 0);
       }
       checked += page.entries?.length || 0;
