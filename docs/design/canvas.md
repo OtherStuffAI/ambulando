@@ -21,7 +21,7 @@ contract is:
 
 - `GET /canvases` returns a complete, ordered list filtered by canvas visibility.
 - `POST /canvases` creates a definition; `PATCH /canvases/:canvasId` updates its
-  title, visibility, or viewport using `expected_row_version` when supplied.
+  title, visibility, or viewport and requires `expected_row_version`.
 - `PUT /canvases/order` accepts the complete visible `canvas_ids` order.
 - `GET /canvases/:canvasId/snapshot` returns one authorized canvas and its
   independently authorized naplets.
