@@ -1805,7 +1805,7 @@ describe('PG workspace startup progress', () => {
       expect(store.startupSyncProgress.visible).toBe(false);
       vi.advanceTimersByTime(1);
       expect(store.startupSyncProgress).toMatchObject({ active: true, visible: true, stage: 'receiving', page: 1 });
-      expect(syncManagerMixin.startupSyncProgressLabel.call(store)).toBe('Syncing');
+      expect(syncManagerMixin.startupSyncProgressLabel.call(store)).toBe('Preparing updates');
       expect(syncManagerMixin.startupSyncProgressMeta.call(store)).toBe('Page 1');
 
       resolveSync({ applied: 4, pages: 1 });
@@ -1836,8 +1836,21 @@ describe('PG workspace startup progress', () => {
 
     expect(store.showAvatarMenu).toBe(false);
     expect(store.startupSyncProgress).toMatchObject({ active: true, visible: true, page: 2, applied: 50 });
-    expect(syncManagerMixin.startupSyncProgressLabel.call(store)).toBe('Syncing');
+    expect(syncManagerMixin.startupSyncProgressLabel.call(store)).toBe('Preparing updates');
     expect(syncManagerMixin.startupSyncProgressMeta.call(store)).toBe('Page 2 · 50 changes applied');
+  });
+
+  it.each([
+    ['recent-refresh', 'priority', false, 'Refreshing recent work', 'Recent refresh'],
+    ['verifying-cache', 'adoption', false, 'Verifying cached data', 'Cache verification'],
+    ['repairing-cache', 'adoption', false, 'Repairing cached data', 'Cache verification'],
+    ['applying', 'snapshot', true, 'Downloading workspace data', 'Initial download'],
+    ['applying', 'delta', false, 'Catching up', 'Delta catch-up'],
+  ])('distinguishes %s startup progress', (stage, mode, fullSnapshot, label, meta) => {
+    const { store } = bindMethod('startupSyncProgressLabel');
+    store.startupSyncProgress = { active: true, visible: true, stage, mode, fullSnapshot, page: 0, applied: 0 };
+    expect(syncManagerMixin.startupSyncProgressLabel.call(store)).toBe(label);
+    expect(syncManagerMixin.startupSyncProgressMeta.call(store)).toBe(meta);
   });
 
   it('keeps a failed update visible with a retry action state', async () => {

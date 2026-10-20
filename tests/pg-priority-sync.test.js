@@ -6,6 +6,7 @@ import {
   auxiliarySyncKey,
   hydratePriorityContext,
   materializeAuxiliaryChanges,
+  runCacheAdoption,
   runManifestRepair,
   runPriorityLane,
 } from '../src/pg-priority-sync.js';
@@ -112,6 +113,93 @@ describe('priority-first auxiliary sync lanes', () => {
     await runPriorityLane(store, { resume: false }, { ...ports, context, readPriority: fresh });
     expect(fresh.mock.calls[0][1].cursor).toBeNull();
     expect(ports.state.get(priorityKey)).toMatchObject({ status: 'pending', cursor: 'older-head', capturedHead: '50' });
+  });
+
+  it('adopts matching cache identities, repairs only mismatches, and returns the durable checkpoint for atomic commit', async () => {
+    const ports = memoryPorts();
+    const clientId = '10000000-0000-4000-8000-000000000001';
+    const current = { family: 'task', id: 'current', version: '5', state: 'active', relationships: {} };
+    const stale = { family: 'doc', id: 'stale', version: '7', state: 'active', relationships: {} };
+    const local = new Map([
+      ['task:current', { family: 'task', id: 'current', version: '5', operation: 'upsert' }],
+      ['doc:stale', { family: 'doc', id: 'stale', version: '6', operation: 'upsert' }],
+    ]);
+    const checkpoint = { protocol_version: 2, client_id: clientId, authority_epoch: 'epoch',
+      initial_cursor: 'adopted', checkpoint_cursor: 'adopted', checkpoint_revision: '8' };
+    const base = { protocol_version: 2, adoption_id: 'adoption', captured_head: '70', authority_epoch: 'epoch',
+      access_revision: '3', checkpoint_revision: '7', bounds: { max_rows: 200, max_bytes: 1048576 }, retention_policy: 'retain_downloaded' };
+    const adopt = vi.fn(async (_workspaceId, _clientId, body) => {
+      if (body.request_id) return { ...base, status: 'inventory_required', cursor: 'inventory', challenge: [current, stale], has_more: false };
+      if (body.inventory) {
+        expect(body.inventory).toEqual([
+          { family: 'task', id: 'current', state: 'active', version: '5' },
+          { family: 'doc', id: 'stale', state: 'active', version: '6' },
+        ]);
+        return { ...base, status: 'repair_required', cursor: 'repair', records: [stale], repair_route: '/repair' };
+      }
+      expect(body.repaired).toEqual([{ family: 'doc', id: 'stale', state: 'active', version: '7' }]);
+      return { ...base, status: 'adopted', checkpoint };
+    });
+    const repair = vi.fn(async (_workspaceId, records) => ({ changes: records.map(record => ({
+      ...record, operation: 'upsert', workspace_id: workspaceId,
+      row: { id: record.id, workspace_id: workspaceId, row_version: Number(record.version), title: 'repaired' },
+    })) }));
+    const materialize = vi.fn(async bundle => {
+      if (bundle.auxiliary_sync_action) {
+        ports.state.set(bundle.auxiliary_sync_action.key, bundle.auxiliary_sync_action.value);
+        return bundle.auxiliary_sync_action.value;
+      }
+      for (const change of bundle.changes || []) local.set(`${change.family}:${change.id}`, change);
+      return { applied: bundle.changes?.length || 0 };
+    });
+    const deps = { context, readState: ports.readState, materialize, adopt, repair,
+      readManifest: async () => ({ coverage: 'authorized_manifest', next_cursor: 'manifest' }),
+      readCanonicalRows: async keys => keys.map(key => local.get(key)),
+    };
+    const result = await runCacheAdoption(store, { clientId, expectedCheckpointRevision: '7', requestId: '20000000-0000-4000-8000-000000000002' }, deps);
+    expect(result).toMatchObject({ status: 'complete', checkpoint });
+    expect(repair).toHaveBeenCalledWith(workspaceId, [{ family: 'doc', id: 'stale', version: '7' }], expect.any(Object));
+    expect(adopt).toHaveBeenCalledTimes(3);
+    expect(result.stateKey).toBe(auxiliarySyncKey(store, 'adoption'));
+    expect(ports.state.get(auxiliarySyncKey(store, 'adoption'))).toMatchObject({ status: 'pending', response: { status: 'adopted' } });
+
+    await runCacheAdoption(store, { clientId, expectedCheckpointRevision: '7' }, deps);
+    expect(adopt).toHaveBeenCalledTimes(3);
+  });
+
+  it('adopts an exact cache without transferring bodies and resumes a lost start with the same idempotency key', async () => {
+    const ports = memoryPorts();
+    const clientId = '10000000-0000-4000-8000-000000000011';
+    const entry = { family: 'task', id: 'current', version: '5', state: 'active', relationships: {} };
+    const checkpoint = { protocol_version: 2, client_id: clientId, authority_epoch: 'epoch',
+      initial_cursor: 'adopted', checkpoint_cursor: 'adopted', checkpoint_revision: '2' };
+    const base = { protocol_version: 2, adoption_id: 'adoption', captured_head: '70', authority_epoch: 'epoch',
+      access_revision: '3', checkpoint_revision: '1', bounds: { max_rows: 200, max_bytes: 1048576 }, retention_policy: 'retain_downloaded' };
+    let loseStart = true;
+    const starts = [];
+    const adopt = vi.fn(async (_workspaceId, _clientId, body) => {
+      if (body.request_id) {
+        starts.push(body);
+        if (loseStart) { loseStart = false; throw new Error('response lost'); }
+        return { ...base, status: 'inventory_required', cursor: 'inventory', challenge: [entry], has_more: false };
+      }
+      expect(body.inventory).toEqual([{ family: 'task', id: 'current', state: 'active', version: '5' }]);
+      return { ...base, status: 'adopted', checkpoint };
+    });
+    const repair = vi.fn();
+    const deps = { ...ports, context, adopt, repair,
+      readManifest: vi.fn(async () => ({ coverage: 'authorized_manifest', next_cursor: 'manifest' })),
+      readCanonicalRows: async () => [{ family: 'task', id: 'current', version: '5', operation: 'upsert' }],
+    };
+    await expect(runCacheAdoption(store, { clientId, expectedCheckpointRevision: '1' }, deps)).rejects.toThrow('response lost');
+    const saved = ports.state.get(auxiliarySyncKey(store, 'adoption'));
+    expect(saved).toMatchObject({ requestId: expect.any(String), manifestCursor: 'manifest', response: null, status: 'paused' });
+    const result = await runCacheAdoption(store, { clientId, expectedCheckpointRevision: '1' }, deps);
+    expect(result.checkpoint).toEqual(checkpoint);
+    expect(starts).toHaveLength(2);
+    expect(starts[1]).toEqual(starts[0]);
+    expect(repair).not.toHaveBeenCalled();
+    expect(deps.readManifest).toHaveBeenCalledTimes(1);
   });
 });
 

@@ -206,8 +206,9 @@ describe('capability negotiation', () => {
     expect(await discoverRecordCapabilities(ctx, async () => ({ record_sync: {
       device_checkpoints: true, protocol_versions: [1, 2], extensions: ['bounded_snapshot_v1', 'chunked_v1'],
       priority_feed: true, context_closure: true, repair_manifest: true, selective_repair: true,
+      cache_adoption: { version: 1 },
     } }))).toEqual({ protocolVersion: 2, extension: 'bounded_snapshot_v1', largeRecords: 'chunked_v1',
-      priorityFeed: true, contextClosure: true, repairManifest: true, selectiveRepair: true });
+      priorityFeed: true, contextClosure: true, repairManifest: true, selectiveRepair: true, cacheAdoption: true });
   });
   it.each([undefined, { protocol_versions: [1], device_checkpoints: false }, { protocol_versions: [1, 2], device_checkpoints: true }])('discovers %j once', async record_sync => {
     const ctx = { ...context, sessionNpub: crypto.randomUUID() }, read = vi.fn(async () => ({ record_sync }));
@@ -321,6 +322,54 @@ it('adopts a populated v1 cache through a new snapshot, preserving pending write
   expect((await state()).converged).toBe(true); expect((await state()).device.pendingAck).toBeNull();
   await h.run(); expect(h.remote.client.mock.calls.filter(c => c[2].operation === 'register')).toHaveLength(1);
   expect(h.remote.page.mock.calls.filter(c => c[1].cursor.startsWith('initial:'))).toHaveLength(1);
+});
+
+it('atomically adopts an already-issued snapshot and requests only delta from the adopted checkpoint', async () => {
+  await applyPgRecordChanges(store, fixture.canonical_upserts);
+  await db.chat_messages.put({ record_id: 'draft', body: 'local user write', sync_status: 'pending' });
+  await db.pending_writes.add({ record_id: 'draft' });
+  const h = harness();
+  await expect(h.run({ maxPages: 1 })).rejects.toThrow('maximum page count');
+  const incomplete = await state();
+  expect(incomplete.snapshotReconciliationPending).toBe(true);
+  expect(h.remote.page.mock.calls[0][1].cursor).toMatch(/^initial:/);
+  const adoptionStateKey = 'record-sync-aux:device-test:adoption';
+  await db.sync_state.put({ key: adoptionStateKey, value: { status: 'pending', response: { status: 'adopted' } } });
+  const adopt = vi.fn(async ({ clientId, expectedCheckpointRevision }) => {
+    const serverClient = h.remote.clients.get(clientId);
+    expect(expectedCheckpointRevision).toBe(String(serverClient.revision));
+    serverClient.cursor = 'adopted:cursor'; serverClient.position = 1; serverClient.revision += 1;
+    h.remote.tokens.set('adopted:cursor', { id: clientId, position: 1, revision: serverClient.revision });
+    return { stateKey: adoptionStateKey, checkpoint: {
+      protocol_version: 2, client_id: clientId, authority_epoch: 'epoch', initial_cursor: 'adopted:cursor',
+      checkpoint_cursor: 'adopted:cursor', checkpoint_revision: String(serverClient.revision),
+    } };
+  });
+  h.remote.page.mockClear();
+  await h.run({ cacheAdoption: true, adopt });
+  const adopted = await state();
+  expect(adopt).toHaveBeenCalledTimes(1);
+  expect(h.remote.page.mock.calls.map(call => call[1].cursor)).toEqual(['adopted:cursor']);
+  await expect(h.remote.page.mock.results[0].value).resolves.toMatchObject({ mode: 'delta' });
+  expect(adopted).toMatchObject({ resetting: false, snapshotReconciliationPending: false,
+    snapshotRetirement: null, snapshotId: null, converged: true });
+  expect(await db.sync_state.get(adoptionStateKey)).toBeUndefined();
+  expect(await db.pending_writes.count()).toBe(1);
+  expect((await db.chat_messages.get('draft')).body).toBe('local user write');
+});
+
+it('retains the incomplete snapshot and cache when adoption pauses', async () => {
+  await applyPgRecordChanges(store, fixture.canonical_upserts);
+  const h = harness();
+  await expect(h.run({ maxPages: 1 })).rejects.toThrow('maximum page count');
+  const incomplete = await state();
+  const adopt = vi.fn(async () => { throw Object.assign(new Error('offline'), { status: 503 }); });
+  h.remote.page.mockClear();
+  await expect(h.run({ cacheAdoption: true, adopt })).rejects.toThrow('offline');
+  expect(await state()).toEqual(incomplete);
+  expect(await db.pg_record_rows.count()).toBeGreaterThan(0);
+  expect(h.remote.page).not.toHaveBeenCalled();
+  expect(h.remote.client.mock.calls.filter(call => call[2].operation === 'retire')).toHaveLength(0);
 });
 
 const auxiliaryMessage = id => {

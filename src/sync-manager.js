@@ -1034,14 +1034,21 @@ export const syncManagerMixin = {
     if (progress.stage === 'signing-paused') return 'Browser signing paused';
     if (progress.error && progress.active) return 'Retrying updates…';
     if (progress.stage === 'error') return 'Update stalled';
-    return 'Syncing';
+    if (progress.stage === 'recent-refresh' || progress.stage === 'priority-paused') return 'Refreshing recent work';
+    if (progress.stage === 'verifying-cache') return 'Verifying cached data';
+    if (progress.stage === 'repairing-cache') return 'Repairing cached data';
+    if (progress.fullSnapshot || progress.mode === 'snapshot') return 'Downloading workspace data';
+    if (progress.mode === 'delta') return 'Catching up';
+    return 'Preparing updates';
   },
 
   startupSyncProgressMeta() {
     const progress = this.startupSyncProgress || {};
     const details = [];
-    if (progress.mode === 'snapshot') details.push('Snapshot');
-    else if (progress.mode === 'delta') details.push('Delta');
+    if (progress.mode === 'snapshot') details.push('Initial download');
+    else if (progress.mode === 'adoption') details.push('Cache verification');
+    else if (progress.mode === 'priority') details.push('Recent refresh');
+    else if (progress.mode === 'delta') details.push('Delta catch-up');
     const page = Number(progress.page || 0);
     const applied = Number(progress.applied || 0);
     if (page > 0) details.push(`Page ${page}`);
