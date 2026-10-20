@@ -41,7 +41,7 @@ describe('chat file drop upload', () => {
 
   it('uses the existing thread composer DOM for Deck create mode instead of a parallel composer', () => {
     expect(indexSource).not.toContain('class="doc-modal-card deck-thread-composer-modal"');
-    expect(indexSource).toContain('x-show="$store.chat.activeThreadId || $store.chat.deckThreadComposerOpen"');
+    expect(indexSource).toContain('x-show="$store.chat.deckThreadComposerOpen || ($store.chat.activeThreadId && $store.chat.threadLocalDetailReady)"');
     expect(indexSource).toContain("@change=\"$store.chat.handleChatAttachmentSelection($event, 'thread'); open = false\"");
     expect(indexSource).toContain("$store.chat.deckThreadComposerOpen ? $store.chat.sendDeckThread() : $store.chat.sendThreadReply()");
     expect(indexSource.match(/data-chat-composer="thread"/g)).toHaveLength(2);

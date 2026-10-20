@@ -4372,6 +4372,13 @@
         "Keep Canvas row actions fully visible and anchored on short lists and bottom-edge rows, including responsive touch layouts.",
         "Open previously downloaded conversations with the cached title and replies already present in the first visible frame, even while refresh and catch-up continue."
       ]
+    },
+    {
+      "buildNumber": 2467,
+      "label": "Compact composer attachment previews",
+      "notes": [
+        "See pending image attachments beside composer shortcuts, open the full preview from the compact thumbnail, and remove or retry the attachment from the preview."
+      ]
     }
   ]
 }

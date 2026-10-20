@@ -171,6 +171,11 @@
       <p role="status" x-show="$store.chat.chatImagePreviewModal.loading">Loading file…</p>
       <p role="alert" x-show="$store.chat.chatImagePreviewModal.error" x-text="$store.chat.chatImagePreviewModal.error"></p>
       <template x-if="$store.chat.chatImagePreviewModal.src"><img :src="$store.chat.chatImagePreviewModal.src" :alt="$store.chat.chatImagePreviewModal.alt" @error="$store.chat.chatImagePreviewModal.error = 'Could not display image. You can still save it locally.'" /></template>
+      <p class="chat-image-preview-draft-status" x-show="$store.chat.chatImagePreviewDraft()" x-text="$store.chat.chatImagePreviewDraft()?.status === 'uploading' ? 'Uploading attachment…' : $store.chat.chatImagePreviewDraft()?.status === 'error' ? 'Upload failed' : 'Ready to send'"></p>
+      <div class="chat-image-preview-draft-actions" x-show="$store.chat.chatImagePreviewDraft()">
+        <button type="button" class="btn-secondary" x-show="$store.chat.chatImagePreviewDraft()?.status === 'error'" @click="$store.chat.retryChatImagePreviewDraft()">Retry upload</button>
+        <button type="button" class="btn-danger" @click="$store.chat.removeChatImagePreviewDraft()">Remove attachment</button>
+      </div>
       <p x-show="$store.chat.chatImagePreviewModal.objectId && !$store.chat.chatImagePreviewModal.loading && !$store.chat.chatImagePreviewModal.src && !$store.chat.chatImagePreviewModal.error">This file is ready to save locally.</p>
       <button type="button" class="btn-secondary" x-show="$store.chat.chatImagePreviewModal.objectId" :disabled="!$store.chat.chatImagePreviewModal.backendUrl || $store.chat.chatImagePreviewModal.loading || $store.chat.chatImagePreviewModal.downloading" @click="$store.chat.saveFilePreviewLocally()" x-text="$store.chat.chatImagePreviewModal.downloading ? 'Saving…' : 'Save locally'"></button>
     </section>
@@ -4402,9 +4407,8 @@
 
             <div
               class="chat-thread-modal-backdrop"
-              x-show="$store.chat.activeThreadId || $store.chat.deckThreadComposerOpen"
+              x-show="$store.chat.deckThreadComposerOpen || ($store.chat.activeThreadId && $store.chat.threadLocalDetailReady)"
               x-cloak
-              x-transition
               @click.self="$store.chat.deckThreadComposerOpen ? $store.chat.closeDeckThreadComposer() : $store.chat.closeVisibleThread()"
               @keydown.escape.window="($store.chat.activeThreadId || $store.chat.deckThreadComposerOpen) && !$store.chat.chatTaskModalOpen && !$store.chat.chatDocModalOpen && ($store.chat.deckThreadComposerOpen ? $store.chat.closeDeckThreadComposer() : $store.chat.closeVisibleThread())"
             >
@@ -4753,7 +4757,7 @@
                   <div><strong>Editing reply</strong><span x-show="$store.chat.messageEdit.error" x-text="$store.chat.messageEdit.error"></span></div>
                   <button type="button" @click="$store.chat.cancelMessageEdit()" :disabled="$store.chat.messageEdit.submitting">Cancel</button>
                 </div>
-                <div class="recent-mention-chips" x-show="$store.chat.getRecentMentionChips('thread').length" x-cloak aria-label="Recently mentioned participants">
+                <div class="recent-mention-chips composer-shortcuts-row" x-show="$store.chat.getRecentMentionChips('thread').length || $store.chat.threadFileDrafts.some(d => d.kind === 'image')" x-cloak aria-label="Composer shortcuts and pending image attachments">
                   <template x-for="person in $store.chat.getRecentMentionChips('thread')" :key="person.id">
                     <div class="recent-mention-chip-group">
                       <button type="button" class="recent-mention-chip" @click="$store.chat.insertRecentMention('thread', person, $event)" :aria-label="'Mention ' + person.label">
@@ -4764,6 +4768,12 @@
                       <button type="button" class="recent-mention-chip recent-mention-update-chip" x-show="person.type === 'agent'" @click="$store.chat.insertRecentMention('thread', person, $event, ' update please?')" :aria-label="'Ask ' + person.label + ' for an update'">
                         <span x-text="'@' + person.label + ' update please?'"></span>
                       </button>
+                    </div>
+                  </template>
+                  <template x-for="draft in $store.chat.threadFileDrafts.filter(d => d.kind === 'image')" :key="draft.draft_id">
+                    <div class="chat-image-draft chat-image-draft-inline" :class="{ 'chat-image-draft-error': draft.status === 'error' }">
+                      <button type="button" class="chat-image-draft-open" @click="$store.chat.openChatImagePreview(draft, 'thread', $event.currentTarget)" :aria-label="'Open ' + draft.filename + ' preview, ' + (draft.status === 'uploading' ? 'uploading' : draft.status === 'error' ? 'upload failed' : 'ready to send')"><img :src="draft.preview_url" alt="" /></button>
+                      <span class="chat-image-draft-status" aria-hidden="true" x-text="draft.status === 'uploading' ? 'Uploading…' : draft.status === 'error' ? 'Upload failed' : 'Ready'"></span>
                     </div>
                   </template>
                 </div>
@@ -4823,16 +4833,6 @@
                       </div>
                     </div>
                     <button type="button" class="audio-card-remove" @click="$store.chat.removeAudioDraft('thread', draft.draft_id)">&times;</button>
-                  </div>
-                </template>
-              </div>
-              <div class="chat-image-draft-list" x-show="$store.chat.threadFileDrafts.some(d => d.kind === 'image')" x-cloak aria-label="Pending reply images">
-                <template x-for="draft in $store.chat.threadFileDrafts.filter(d => d.kind === 'image')" :key="draft.draft_id">
-                  <div class="chat-image-draft" :class="{ 'chat-image-draft-error': draft.status === 'error' }">
-                    <button type="button" class="chat-image-draft-open" @click="$store.chat.openChatImagePreview(draft, $event.currentTarget)" :aria-label="'Open ' + draft.filename + ' preview'"><img :src="draft.preview_url" :alt="draft.filename" /></button>
-                    <span class="chat-image-draft-status" x-text="draft.status === 'uploading' ? 'Uploading…' : draft.status === 'error' ? 'Upload failed' : 'Ready'"></span>
-                    <button type="button" class="chat-image-draft-retry" x-show="draft.status === 'error'" @click="$store.chat.uploadChatFileDraft(draft.draft_id, 'thread')">Retry</button>
-                    <button type="button" class="chat-image-draft-remove" :aria-label="'Remove ' + draft.filename" @click="$store.chat.removeChatFileDraft(draft.draft_id, 'thread')">&times;</button>
                   </div>
                 </template>
               </div>

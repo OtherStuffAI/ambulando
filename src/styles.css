@@ -23891,16 +23891,21 @@ button.task-desc-toggle:focus-visible {
 
 .chat-image-draft-list { display:flex; flex-wrap:wrap; gap:0.55rem; padding:0.55rem 0; }
 .chat-image-draft { position:relative; width:5rem; height:5rem; overflow:hidden; border:1px solid var(--border); border-radius:var(--radius-panel); background:var(--surface); }
+.chat-image-draft-inline { flex:0 0 2.75rem; width:2.75rem; height:2.75rem; border-radius:var(--radius-control); }
 .chat-image-draft-open { width:100%; height:100%; padding:0; border:0; background:transparent; cursor:zoom-in; }
+.chat-image-draft-open:focus-visible { outline:2px solid var(--ring); outline-offset:-3px; }
 .chat-image-draft-open img { width:100%; height:100%; display:block; object-fit:cover; }
 .chat-image-draft-remove,
 .chat-image-preview-close { position:absolute; top:0.25rem; right:0.25rem; z-index:1; width:1.65rem; height:1.65rem; padding:0; border:0; border-radius:999px; background:var(--primary); color:var(--primary-foreground); cursor:pointer; }
-.chat-image-draft-status { position:absolute; left:0; right:0; bottom:0; padding:0.15rem 0.25rem; background:color-mix(in srgb, var(--primary) 75%, transparent); color:var(--primary-foreground); font-size:0.68rem; text-align:center; }
+.chat-image-draft-status { position:absolute; left:0; right:0; bottom:0; padding:0.15rem 0.25rem; background:color-mix(in srgb, var(--primary) 82%, transparent); color:var(--primary-foreground); font-size:0.68rem; line-height:1.1; text-align:center; pointer-events:none; }
+.chat-image-draft-inline .chat-image-draft-status { padding:0.1rem; font-size:0.52rem; }
 .chat-image-draft-retry { position:absolute; left:50%; top:50%; translate:-50% -50%; padding:0.25rem 0.4rem; border:0; border-radius:var(--radius-panel); background:var(--card); color:var(--destructive); font-size:0.72rem; cursor:pointer; }
 .chat-image-draft-error { border-color:var(--danger); }
 .chat-image-preview-backdrop { position:fixed; inset:0; z-index:1300; display:grid; place-items:center; padding:1rem; background:color-mix(in srgb, var(--primary) 82%, transparent); }
 .chat-image-preview-modal { position:relative; display:grid; place-items:center; width:min(92vw, 70rem); max-height:92vh; padding:2.75rem 1rem 1rem; border-radius:var(--radius-panel); background:var(--surface); }
 .chat-image-preview-modal img { display:block; max-width:100%; max-height:calc(92vh - 4rem); object-fit:contain; }
+.chat-image-preview-draft-status { margin:0.75rem 0 0; color:var(--muted-foreground); font-size:0.82rem; }
+.chat-image-preview-draft-actions { display:flex; flex-wrap:wrap; justify-content:center; gap:0.5rem; margin-top:0.5rem; }
 
 .record-transfer-modal { width:min(31rem, calc(100vw - 2rem)); display:grid; gap:0.9rem; color:var(--text); background:var(--surface); }
 .record-transfer-modal h3, .record-transfer-modal p { margin:0; }

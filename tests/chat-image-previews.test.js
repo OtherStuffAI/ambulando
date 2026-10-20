@@ -301,8 +301,15 @@ describe('chat composer image previews', () => {
     document.body.append(trigger);
     const focus = vi.spyOn(trigger, 'focus');
 
-    store.openChatImagePreview({ preview_url: 'blob:screen.png', filename: 'screen.png' }, trigger);
-    expect(store.chatImagePreviewModal).toEqual({ open: true, src: 'blob:screen.png', alt: 'screen.png' });
+    store.openChatImagePreview({ preview_url: 'blob:screen.png', filename: 'screen.png' }, '', trigger);
+    expect(store.chatImagePreviewModal).toEqual({
+      open: true,
+      src: 'blob:screen.png',
+      alt: 'screen.png',
+      filename: 'screen.png',
+      draftId: '',
+      context: '',
+    });
     store.closeChatImagePreview();
 
     expect(store.chatImagePreviewModal.open).toBe(false);
@@ -316,7 +323,7 @@ describe('chat composer image previews', () => {
     close.dataset.chatImagePreviewClose = '';
     const trigger = document.createElement('button');
     document.body.append(close, trigger);
-    store.openChatImagePreview({ preview_url: 'blob:preview', filename: 'preview.png' }, trigger);
+    store.openChatImagePreview({ preview_url: 'blob:preview', filename: 'preview.png' }, '', trigger);
     expect(document.activeElement).toBe(close);
     store.closeChatImagePreview();
     expect(document.activeElement).toBe(trigger);
@@ -346,6 +353,28 @@ describe('chat composer image previews', () => {
     expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:one.png');
   });
 
+  it('keeps retry and removal in the draft preview modal with the correct composer context', async () => {
+    const store = await createStore();
+    const editor = document.createElement('div');
+    editor.dataset.chatComposer = 'thread';
+    editor.tabIndex = 0;
+    document.body.append(editor);
+    store.addChatFileDraft(new File(['one'], 'one.png', { type: 'image/png' }), 'thread');
+    const [draft] = store.threadFileDrafts;
+    store.threadFileDrafts = [{ ...draft, status: 'error' }];
+    store.uploadChatFileDraft = vi.fn();
+
+    store.openChatImagePreview(store.threadFileDrafts[0], 'thread');
+    expect(store.chatImagePreviewDraft()).toMatchObject({ draft_id: draft.draft_id, status: 'error' });
+    store.retryChatImagePreviewDraft();
+    expect(store.uploadChatFileDraft).toHaveBeenCalledWith(draft.draft_id, 'thread');
+
+    store.removeChatImagePreviewDraft();
+    expect(store.threadFileDrafts).toEqual([]);
+    expect(store.chatImagePreviewModal.open).toBe(false);
+    expect(document.activeElement).toBe(editor);
+  });
+
   it('cleans both composer preview sets during teardown', async () => {
     const store = await createStore();
     store.addChatFileDraft(new File(['one'], 'one.png', { type: 'image/png' }), 'message');
@@ -358,11 +387,17 @@ describe('chat composer image previews', () => {
     expect(URL.revokeObjectURL).toHaveBeenCalledTimes(2);
   });
 
-  it('renders the modal thumbnail strip, removal controls, and shared lightbox', () => {
+  it('renders ordered thumbnails in the shared shortcuts row with modal-only draft actions', () => {
     const html = readFileSync(`${process.cwd()}/index.html`, 'utf8');
-    expect(html.match(/class="chat-image-draft-list"/g)).toHaveLength(1);
+    expect(html).toContain('class="recent-mention-chips composer-shortcuts-row"');
+    expect(html).toContain("threadFileDrafts.filter(d => d.kind === 'image')");
+    expect(html).not.toContain('class="chat-image-draft-list"');
+    expect(html).not.toContain('class="chat-image-draft-remove"');
+    expect(html).not.toContain('class="chat-image-draft-retry"');
     expect(html).not.toContain("removeChatFileDraft(draft.draft_id, 'message')");
-    expect(html).toContain("removeChatFileDraft(draft.draft_id, 'thread')");
+    expect(html).toContain('@click="$store.chat.removeChatImagePreviewDraft()"');
+    expect(html).toContain('@click="$store.chat.retryChatImagePreviewDraft()"');
+    expect(html).toContain("$store.chat.openChatImagePreview(draft, 'thread', $event.currentTarget)");
     expect(html).toContain('data-chat-image-preview-close');
     expect(html).toContain('@keydown.escape.window="$store.chat.chatImagePreviewModal.open');
   });

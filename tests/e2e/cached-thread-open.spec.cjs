@@ -119,17 +119,31 @@ test('previously loaded thread opens from cache without an untitled/loading repl
   const channelId = fixture.canonical_upserts.changes.find(row => row.family === 'channel').id;
   // Drive the production Home card handler with the card's cached shape. The
   // cold variant drops Home's downloaded rows so Dexie detail is the only source.
-  const openAndTrace = async ({ cold = false } = {}) => {
+  const openAndTrace = async ({ cold = false, localDelayMs = 0 } = {}) => {
     await page.waitForFunction(() => window.s?.workspaceOwnerNpub && window.s.navSection === 'status');
-    await page.evaluate(({ cold, threadId, channelId, threadTitle }) => {
-      if (cold) window.s.fileMessages = [];
+    await page.evaluate(({ cold, localDelayMs, threadId, channelId, threadTitle }) => {
+      if (cold) {
+        window.s.fileMessages = [];
+        window.s.messages = [];
+      }
+      if (localDelayMs) {
+        const startWorkspaceLiveQueries = window.s.startWorkspaceLiveQueries.bind(window.s);
+        window.s.startWorkspaceLiveQueries = () => {
+          clearTimeout(window.delayedLocalDetailTimer);
+          window.delayedLocalDetailTimer = setTimeout(() => {
+            window.s.startWorkspaceLiveQueries = startWorkspaceLiveQueries;
+            startWorkspaceLiveQueries();
+          }, localDelayMs);
+        };
+      }
       window.threadFrames = [];
       const sample = () => {
         const panel = document.querySelector('.chat-thread-modal-backdrop');
-        if (panel && getComputedStyle(panel).display !== 'none') {
+        const visible = Boolean(panel && getComputedStyle(panel).display !== 'none');
+        if (panel) {
           const statuses = [...panel.querySelectorAll('.thread-replies > p[role="status"]')]
             .filter(el => getComputedStyle(el).display !== 'none').map(el => el.textContent.trim());
-          window.threadFrames.push({ at: performance.now(), title: panel.querySelector('.thread-title-display')?.textContent?.trim() || '',
+          window.threadFrames.push({ at: performance.now(), visible, title: panel.querySelector('.thread-title-display')?.textContent?.trim() || '',
             replies: panel.querySelectorAll('[data-thread-reply]').length, statuses,
             store: { loading: window.s.threadHistoryLoading, ready: window.s.threadLocalDetailReady, local: window.s.threadHasLocalContent,
               thread: window.s.threadMessages.length, msgs: window.s.messages.length, channel: window.s.deckThreadChannelState } });
@@ -139,28 +153,31 @@ test('previously loaded thread opens from cache without an untitled/loading repl
       window.threadClickAt = performance.now();
       sample();
       void window.s.openAutopilotOverviewThread({ id: threadId, rootRecordId: threadId, channelId, title: threadTitle, inboxKind: 'chat' });
-    }, { cold, threadId, channelId, threadTitle });
+    }, { cold, localDelayMs, threadId, channelId, threadTitle });
     await expect(page.locator('.thread-title-display')).toHaveText(threadTitle);
     await expect(page.locator('[data-thread-reply]', { hasText: 'Cached reply 7' })).toBeVisible();
     await page.waitForTimeout(1000);
-    return page.evaluate(() => {
+    const result = await page.evaluate(() => {
       cancelAnimationFrame(window.threadFrameRaf);
-      window.s.closeDeckThread({ syncRoute: false });
       const frames = window.threadFrames;
-      const ready = frames.find(frame => frame.title && frame.replies > 0);
-      return { frames, readyMs: ready ? ready.at - window.threadClickAt : null };
+      const ready = frames.find(frame => frame.visible && frame.title && frame.replies > 0);
+      return { frames, readyMs: ready ? ready.at - window.threadClickAt : null,
+        hiddenPendingFrames: frames.filter(frame => !frame.visible && !frame.store.ready).length };
     });
+    await page.evaluate(() => window.s.closeDeckThread({ syncRoute: false, fromRoute: true }));
+    await expect(page.locator('.chat-thread-modal-backdrop')).toBeHidden();
+    return result;
   };
 
   try {
     await setup();
     const first = await openAndTrace();
-    const cold = await openAndTrace({ cold: true });
+    const cold = await openAndTrace({ cold: true, localDelayMs: 350 });
     // Reload with the same Dexie cache: the thread was loaded before.
     await page.evaluate(() => window.s?.stopAllLiveQueries());
     for (const release of releases.splice(0)) await release();
     await setup();
-    const reloaded = await openAndTrace({ cold: true });
+    const reloaded = await openAndTrace({ cold: true, localDelayMs: 350 });
     // Reopen while a large unrelated catch-up keeps committing to the same
     // Dexie tables, as on the reported device.
     await page.evaluate(async fixture => {
@@ -183,18 +200,19 @@ test('previously loaded thread opens from cache without an untitled/loading repl
       })().catch(error => { window.catchupError = error?.message || String(error); });
     }, fixture);
     await expect.poll(() => page.evaluate(() => window.catchupError || window.catchupApplied)).toBeGreaterThan(0);
-    const duringCatchup = await openAndTrace({ cold: true });
+    const duringCatchup = await openAndTrace({ cold: true, localDelayMs: 350 });
     const catchup = await page.evaluate(async () => { const applied = window.catchupApplied; window.catchupRunning = false; await window.catchup; return { applied, error: window.catchupError || null }; });
     expect(catchup.error).toBeNull();
     for (const run of [first, cold, reloaded, duringCatchup]) {
-      const degraded = run.frames.filter(frame => frame.title === 'Untitled thread'
+      const degraded = run.frames.filter(frame => frame.visible && (frame.title === 'Untitled thread'
         || frame.statuses.some(text => text.startsWith('Loading conversation history'))
-        || frame.replies === 0);
+        || frame.replies === 0));
       console.log('CACHED_THREAD_FRAMES', JSON.stringify({ readyMs: run.readyMs, frames: run.frames.length,
         degraded: degraded.length, sample: degraded.slice(0, 3) }));
       expect(degraded).toEqual([]);
       expect(run.readyMs).not.toBeNull();
     }
+    for (const run of [cold, reloaded, duringCatchup]) expect(run.hiddenPendingFrames).toBeGreaterThan(5);
     console.log('CACHED_THREAD_TIMING', JSON.stringify({ firstReadyMs: Math.round(first.readyMs), coldReadyMs: Math.round(cold.readyMs), reloadReadyMs: Math.round(reloaded.readyMs),
       catchupReadyMs: Math.round(duringCatchup.readyMs), catchupRowsWhileOpening: catchup.applied, networkDelayed: true }));
   } finally {

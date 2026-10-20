@@ -430,7 +430,7 @@ code, pre { font-family:var(--font-code); }
   .chat-thread-panel .thread-input-actions :is(.chat-composer-menu-trigger, .thread-reply-btn) { height:44px; min-width:48px; padding:4px 8px; font-size:12px; }
   .chat-thread-panel .chat-editing-banner { padding:0 4px; gap:4px; font-size:12px; }
   .chat-thread-panel .recent-mention-chips { flex-wrap:nowrap; overflow-x:auto; }
-  .chat-thread-panel :is(.chat-file-draft-list, .chat-image-draft-list, .audio-draft-list) { margin:0; padding:4px 8px; }
+  .chat-thread-panel :is(.chat-file-draft-list, .audio-draft-list) { margin:0; padding:4px 8px; }
   .chat-thread-panel .chat-composer-menu-popover { position:fixed; bottom:calc(100dvh - var(--sol-visual-top, 0px) - var(--sol-visual-height, 100dvh) + 58px); right:16px; max-height:calc(var(--sol-visual-height, 100dvh) - 80px); overflow-y:auto; }
 }
 

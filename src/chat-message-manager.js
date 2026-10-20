@@ -1863,8 +1863,11 @@ export const chatMessageManagerMixin = {
     this.threadHistoryLoading = false;
     this.threadHistoryPending = false;
     this.threadHistoryLoadAll = false;
-    this.activeThreadId = recordId;
     this.threadLocalDetailReady = !(this.navSection === 'status' && this.deckThreadChannelId);
+    // Close the Home modal gate before changing the selected thread. Alpine
+    // can flush between reactive assignments; selecting first briefly painted
+    // an empty panel while the first Dexie detail query was still pending.
+    this.activeThreadId = recordId;
     if (this.navSection === 'status' && this.deckThreadChannelId) {
       // Retain only this selection. Dexie liveQuery publishes the latest rows;
       // never reuse an unvalidated cross-thread presentation cache. Home's

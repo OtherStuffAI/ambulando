@@ -10077,12 +10077,42 @@ export function initApp() {
       (this.$nextTick || Alpine.nextTick)(() => document.querySelector('[data-chat-image-preview-close]')?.focus());
     },
 
-    openChatImagePreview(draft, trigger = null) {
+    chatImagePreviewDraft() {
+      const draftId = String(this.chatImagePreviewModal?.draftId || '');
+      const context = String(this.chatImagePreviewModal?.context || '');
+      if (!draftId || !['message', 'thread'].includes(context)) return null;
+      return this.getChatFileDrafts(context).find((draft) => draft.draft_id === draftId) || null;
+    },
+
+    retryChatImagePreviewDraft() {
+      const draft = this.chatImagePreviewDraft();
+      if (!draft || draft.status !== 'error') return;
+      return this.uploadChatFileDraft(draft.draft_id, this.chatImagePreviewModal.context);
+    },
+
+    removeChatImagePreviewDraft() {
+      const draft = this.chatImagePreviewDraft();
+      if (!draft) return;
+      const context = this.chatImagePreviewModal.context;
+      this.chatImagePreviewReturnFocus = typeof document === 'undefined'
+        ? null
+        : document.querySelector(`[data-chat-composer="${context}"]`);
+      this.removeChatFileDraft(draft.draft_id, context);
+    },
+
+    openChatImagePreview(draft, context = '', trigger = null) {
       const src = String(draft?.preview_url || '');
       if (!src) return;
       this.closeChatImagePreview({ restoreFocus: false });
       this.chatImagePreviewReturnFocus = trigger || (typeof document !== 'undefined' ? document.activeElement : null);
-      this.chatImagePreviewModal = { open: true, src, alt: draft.filename || 'Image preview' };
+      this.chatImagePreviewModal = {
+        open: true,
+        src,
+        alt: draft.filename || 'Image preview',
+        filename: draft.filename || '',
+        draftId: draft.draft_id || '',
+        context: ['message', 'thread'].includes(context) ? context : '',
+      };
       this.focusChatImagePreviewClose();
     },
 

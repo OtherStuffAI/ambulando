@@ -20,7 +20,7 @@ describe('Deck thread modal rendered visibility', () => {
 
     expect(template?.getAttribute('x-if')).toContain("$store.chat.navSection === 'status' && ($store.chat.activeThreadId || $store.chat.deckThreadComposerOpen)");
     expect(chatLayout?.getAttribute('x-show')).toBe("$store.chat.navSection === 'chat'");
-    expect(modal?.getAttribute('x-show')).toBe('$store.chat.activeThreadId || $store.chat.deckThreadComposerOpen');
+    expect(modal?.getAttribute('x-show')).toBe('$store.chat.deckThreadComposerOpen || ($store.chat.activeThreadId && $store.chat.threadLocalDetailReady)');
     expect(chatLayout?.contains(modal)).toBe(false);
     expect(modal?.parentElement).toBe(template?.content.querySelector('.chat-section'));
   });
