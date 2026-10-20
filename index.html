@@ -2399,9 +2399,9 @@
                     <button type="button" class="canvas-deck-open" :aria-label="'Open canvas ' + canvas.title + ' in a new tab'" @click="$store.chat.openCanvas(canvas)">
                       <span class="canvas-deck-grip" aria-hidden="true">⋮⋮</span><span x-text="canvas.title"></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 3h6v6"></path><path d="m10 14 11-11"></path><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path></svg>
                     </button>
-                    <div class="doc-actions-menu" x-data="{ open: false }" x-show="canvas.can_manage" @click.outside="open = false" @keydown.escape.stop.prevent="open = false">
-                      <button type="button" class="doc-actions-toggle" aria-label="Canvas options" aria-haspopup="menu" :aria-expanded="open.toString()" @click="open = !open">⋯</button>
-                      <div class="doc-actions-popover" x-show="open" x-cloak role="menu" aria-label="Canvas options"><button type="button" role="menuitem" @click="$store.chat.openCanvasSettingsDialog(canvas); open = false">Rename and visibility…</button></div>
+                    <div class="doc-actions-menu canvas-actions-menu" x-data="{ open: false }" x-show="canvas.can_manage" @click.outside="open = false">
+                      <button type="button" class="doc-actions-toggle" aria-label="Canvas options" aria-haspopup="menu" :aria-expanded="open.toString()" @click="open = !open; if (open) $nextTick(() => requestAnimationFrame(() => $el.parentElement.querySelector('[role=menuitem]')?.focus({ preventScroll: true })))">⋯</button>
+                      <div class="doc-actions-popover canvas-actions-popover" x-show="open" x-cloak x-sol-anchor-menu="open" x-sol-menu="open" role="menu" aria-label="Canvas options"><button type="button" role="menuitem" @click="$store.chat.openCanvasSettingsDialog(canvas); open = false">Rename and visibility…</button></div>
                     </div>
                   </div>
                 </template>

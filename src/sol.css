@@ -579,6 +579,8 @@ code, pre { font-family:var(--font-code); }
 .canvas-deck-row { position: relative; display: flex; align-items: center; min-height: 44px; border: 1px solid transparent; border-radius: 8px; }
 .canvas-deck-row:hover { background: var(--surface-muted); border-color: var(--border); }
 .canvas-deck-row:has(.doc-actions-popover:not([style*="display: none"])) { z-index: 4; }
+.canvas-actions-popover { position: fixed; inset: auto; max-width: calc(100vw - 16px); overflow-y: auto; z-index: 400; }
+.canvas-actions-popover[data-positioned="false"] { visibility: hidden; pointer-events: none; }
 .canvas-deck-open { display: flex; flex: 1; align-items: center; gap: 8px; min-width: 0; min-height: 44px; padding: 7px 4px; color: var(--foreground); background: transparent; border: 0; text-align: left; }
 .canvas-deck-open span:nth-child(2) { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .canvas-deck-open svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; }

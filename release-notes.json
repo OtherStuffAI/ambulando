@@ -4364,6 +4364,14 @@
         "Create and edit text, shapes, connectors, drawings and frames on Canvas, with selection, resize, ordering, undo, fit and natural pan-and-zoom controls.",
         "Choose visible records when adding naplets, and leave threaded comments on canvas space or naplets with resolve and reopen controls."
       ]
+    },
+    {
+      "buildNumber": 2466,
+      "label": "Visible Canvas row actions",
+      "notes": [
+        "Keep Canvas row actions fully visible and anchored on short lists and bottom-edge rows, including responsive touch layouts.",
+        "Open previously downloaded conversations with the cached title and replies already present in the first visible frame, even while refresh and catch-up continue."
+      ]
     }
   ]
 }
