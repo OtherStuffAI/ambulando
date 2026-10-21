@@ -248,3 +248,20 @@ It uses the production store/template with synthetic records and blocked backend
 requests; it does not establish authenticated permissions or physical-device
 zoom behavior. Optional `SOL_EVIDENCE_DIR` writes screenshots only to ignored,
 untracked evidence storage.
+
+## Feed source switcher
+
+Feeds keeps All, RSS and Nostr source controls beside the title, Add feed and
+options menu. The three native icon buttons expose accessible names, descriptive
+tooltips and `aria-pressed`, with a contrasting selected surface and keyboard
+focus ring. All uses a grid, RSS uses radio waves and Nostr uses an original
+inline Nostrich outline. Hit areas are 40×36px on desktop and 44×44px on phones
+or coarse pointers. The controls write the existing `feedSourceFilter` values
+(`all`, `feeds`, `nostr`); reader filtering and preference lifecycle are unchanged.
+
+`tests/e2e/feed-source-switcher.spec.cjs` uses synthetic RSS and Nostr items in
+the production store against the configured runtime, blocking external requests.
+It checks filtering, pressed state, Tab/Enter/Space, accessible names and same-row
+placement at 320/390/1440px in both themes. It does not establish authenticated
+feed or relay delivery. `SOL_EVIDENCE_DIR` optionally captures screenshots in
+verified ignored handoff storage.

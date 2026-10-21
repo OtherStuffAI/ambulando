@@ -1814,8 +1814,12 @@ export const channelsManagerMixin = {
   },
 
   canManageChannel(channel) {
-    if (!channel?.record_id || channel.record_state === 'deleted' || isDmChannel(channel)
-      || channel.virtual || channel.system_key || (channel.pg_kind || channel.channel_type) === 'system') return false;
+    return !isDmChannel(channel) && this.canDeleteChannel(channel);
+  },
+
+  canDeleteChannel(channel) {
+    if (!channel?.record_id || channel.record_state === 'deleted'
+      || channel.virtual || channel.system_key || channel.metadata?.system_key || (channel.pg_kind || channel.channel_type) === 'system') return false;
     if (!isTowerPgBackendMode()) return Boolean(this.canAdminWorkspace);
     if (this.canAdminWorkspace || pgMePermissionNames(this.currentWorkspace || {}).includes('channel.manage')) return true;
     return canManagePgChannelFromRows({
@@ -1827,6 +1831,11 @@ export const channelsManagerMixin = {
         ? this.currentWorkspaceGroups
         : (this.groups || []),
     });
+  },
+
+  get canDeleteSettingsChannel() {
+    const channelId = this.channelSettingsChannelId || this.selectedChannelId;
+    return this.canDeleteChannel((this.channels || []).find((channel) => channel.record_id === channelId));
   },
 
   get canManageSettingsChannel() {
@@ -1891,9 +1900,38 @@ export const channelsManagerMixin = {
   },
 
   canReorderChannel(channel) {
-    if (!isTowerPgBackendMode()) return Boolean(this.canAdminWorkspace);
-    return String(channel?.record_id || '').trim() === String(this.selectedChannelId || '').trim()
-      && this.canReorderSelectedChannel;
+    return this.canManageChannel(channel);
+  },
+
+  channelOrderBusy: false,
+  channelOrderNotice: '',
+  channelOrderError: '',
+
+  async moveScopeChannel(channelId, position) {
+    if (this.channelOrderBusy) return;
+    this.channelOrderBusy = true;
+    this.channelOrderError = '';
+    this.channelOrderNotice = '';
+    try {
+      await this.moveChannelToPosition(channelId, position);
+      this.channelOrderNotice = 'Channel order saved.';
+    } catch (error) {
+      this.channelOrderError = `${error?.message || 'Could not save channel order.'} Previous order restored. Try again using Move Up or Move Down.`;
+    } finally {
+      this.channelOrderBusy = false;
+    }
+  },
+
+  async dropScopeChannel(channelId, event) {
+    event?.preventDefault?.();
+    event?.stopPropagation?.();
+    const sourceId = this.channelDragSourceId;
+    this.endChannelTabDrag();
+    const source = (this.channels || []).find(channel => channel.record_id === sourceId);
+    const target = (this.channels || []).find(channel => channel.record_id === channelId);
+    if (!source || !target || source.scope_id !== target.scope_id || sourceId === channelId) return;
+    const siblings = this.scopeSetupChannels(source.scope_id);
+    await this.moveScopeChannel(sourceId, siblings.findIndex(channel => channel.record_id === channelId) + 1);
   },
 
   get canAttemptSelectedPgChannelGrantRead() {
@@ -2000,7 +2038,11 @@ export const channelsManagerMixin = {
       const { workspaceId, baseUrl, appNpub, workspaceOwnerNpub } = resolveTowerPgWorkspaceContext(this);
       if (!workspaceId || !baseUrl) throw new Error('Flight Deck PG workspace is not connected');
       const result = await reorderTowerPgChannel(this, workspaceId, targetId, position, { baseUrl, appNpub });
-      const authoritativeTarget = mapPgChannelToLocal(result.channel, { workspaceOwnerNpub });
+      if (!result?.channel?.id) throw new Error('Tower did not confirm the channel order.');
+      const authoritativeTarget = { ...target, ...mapPgChannelToLocal(result.channel, { workspaceOwnerNpub }) };
+      if (!Array.isArray(result.channel.channel_grants) && !Array.isArray(result.channel.grants)) {
+        authoritativeTarget.channel_grants = target.channel_grants || [];
+      }
       await upsertChannel(authoritativeTarget);
       this.channels = sortChannelsByScopePosition((this.channels || []).map((channel) =>
         channel?.record_id === targetId ? { ...channel, ...authoritativeTarget } : channel
@@ -3156,7 +3198,7 @@ export const channelsManagerMixin = {
 
   startChannelTabDrag(recordId, event = null) {
     const sourceId = String(recordId || '').trim();
-    if (!sourceId) return;
+    if (!sourceId || this.channelOrderBusy) { event?.preventDefault?.(); return; }
     const source = (this.channels || []).find((channel) => channel?.record_id === sourceId);
     if (isTowerPgBackendMode() && !this.canReorderChannel(source)) {
       event?.preventDefault?.();
@@ -3172,6 +3214,9 @@ export const channelsManagerMixin = {
   handleChannelTabDragOver(recordId, event = null) {
     const targetId = String(recordId || '').trim();
     if (!this.channelDragSourceId || !targetId || this.channelDragSourceId === targetId) return;
+    const source = (this.channels || []).find(channel => channel.record_id === this.channelDragSourceId);
+    const target = (this.channels || []).find(channel => channel.record_id === targetId);
+    if (isTowerPgBackendMode() && (!source || !target || source.scope_id !== target.scope_id)) return;
     event?.preventDefault?.();
     this.channelDragTargetId = targetId;
     if (event?.dataTransfer) event.dataTransfer.dropEffect = 'move';

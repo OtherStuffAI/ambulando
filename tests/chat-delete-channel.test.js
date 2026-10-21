@@ -41,7 +41,7 @@ import { isTowerPgBackendMode } from '../src/backend-mode.js';
 
 function createStore(overrides = {}) {
   const store = {
-    canManageChannel: vi.fn(() => true),
+    canDeleteChannel: vi.fn(() => true),
     channels: [],
     messages: [],
     selectedChannelId: null,
@@ -111,7 +111,7 @@ describe('deleteSelectedChannel', () => {
   it('blocks unauthorized PG deletion before arming or writing', async () => {
     isTowerPgBackendMode.mockReturnValue(true);
     deleteTowerPgChannel.mockClear();
-    const store = createStore({ channels: [{ record_id: 'ch-1' }], selectedChannelId: 'ch-1', canManageChannel: () => false });
+    const store = createStore({ channels: [{ record_id: 'ch-1' }], selectedChannelId: 'ch-1', canDeleteChannel: () => false });
     await store.deleteSelectedChannel();
     expect(store.channelDeleteConfirmArmed).toBe(false);
     expect(store.channelSettingsError).toContain('Manage access');

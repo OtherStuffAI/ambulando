@@ -2452,6 +2452,11 @@
               <div class="autopilot-panel-heading wapp-updates-heading" data-deck-mobile-sticky-heading>
                 <div><h3>Feeds</h3></div>
                 <button type="button" class="btn-secondary btn-compact" aria-label="Add feed" @click="$store.chat.openFeedAdd()">+</button>
+                <div class="feed-source-switcher" role="group" aria-label="Feed source filter">
+                  <button type="button" aria-label="All" title="All activity" :aria-pressed="($store.chat.feedSourceFilter === 'all').toString()" @click="$store.chat.feedSourceFilter = 'all'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></button>
+                  <button type="button" aria-label="RSS" title="Subscribed feeds (RSS)" :aria-pressed="($store.chat.feedSourceFilter === 'feeds').toString()" @click="$store.chat.feedSourceFilter = 'feeds'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="5" cy="19" r="1"/><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"/></svg></button>
+                  <button type="button" aria-label="Nostr" title="Nostr notifications (Nostrich)" :aria-pressed="($store.chat.feedSourceFilter === 'nostr').toString()" @click="$store.chat.feedSourceFilter = 'nostr'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 14c0-3 3-5 7-4l3 1V5a3 3 0 0 1 6 0v2h-3v7c0 3-3 4-6 3H7c-2 0-3-1-3-3Z"/><path d="m20 5 3 2h-3M8 17l-1 5m5-5 2 5M5 12l-3-2"/><circle cx="18" cy="4" r=".5" fill="currentColor" stroke="none"/></svg></button>
+                </div>
                 <div class="doc-actions-menu feed-options-menu" x-data="{ open: false }" @click.outside="open = false" @keydown.escape.stop.prevent="open = false; $el.closest('.doc-actions-menu').querySelector('[aria-haspopup]').focus()" @focusout="if (!$el.contains($event.relatedTarget)) open = false">
                   <button type="button" class="doc-actions-toggle" aria-label="Feed options" title="Feed options" aria-haspopup="menu" :aria-expanded="open.toString()" x-ref="trigger" @click="const menu = $event.currentTarget.closest('.doc-actions-menu'); open = !open; if (open) $nextTick(() => requestAnimationFrame(() => menu.querySelector('[role=menu] button').focus()))">⋯</button>
                   <div class="doc-actions-popover feed-options-popover" x-show="open" x-cloak role="menu" aria-label="Feed options" @keydown.arrow-down.prevent="const buttons = [...$el.querySelectorAll('button')]; buttons[(buttons.indexOf(document.activeElement) + 1) % buttons.length].focus()" @keydown.arrow-up.prevent="const buttons = [...$el.querySelectorAll('button')]; buttons[(buttons.indexOf(document.activeElement) + buttons.length - 1) % buttons.length].focus()">
@@ -2462,7 +2467,6 @@
                 </div>
               </div>
               <div class="wapp-updates-body deck-card-scroll feeds-reader" aria-label="Feeds">
-                <label class="settings-field-help">Show <select aria-label="Feed source filter" x-model="$store.chat.feedSourceFilter"><option value="all">All activity</option><option value="feeds">Subscribed feeds</option><option value="nostr">Nostr notifications</option></select></label>
                 <p class="settings-field-help" role="status" x-show="$store.chat.nostrNotificationStatus && $store.chat.feedSourceFilter !== 'feeds'" x-text="$store.chat.nostrNotificationStatus"></p>
                 <p class="error-text" role="status" x-show="$store.chat.subscribedFeedError" x-text="$store.chat.subscribedFeedError"></p>
                 <div class="feed-source-panel" x-show="sourcesOpen" x-cloak><div class="feed-source-heading"><strong>Sources</strong><button type="button" class="doc-actions-toggle" aria-label="Close sources" @click="sourcesOpen = false">×</button></div><p class="settings-field-help" x-show="!$store.chat.subscribedFeedSources.length">No sources yet. Add a feed with +.</p><template x-for="source in $store.chat.subscribedFeedSources" :key="source.key"><div class="feed-source-row"><strong x-text="source.title || source.source.url || source.source.feed_id"></strong><small x-text="$store.chat.feedSourceStatus(source.id)"></small><button type="button" class="btn-secondary btn-compact" @click="$store.chat.setFeedSubscriptionStatus(source, source.status === 'active' ? 'unsubscribed' : 'active')" x-text="source.status === 'active' ? 'Unsubscribe' : 'Resubscribe'"></button></div></template></div>
@@ -8542,7 +8546,26 @@
 
                   <div class="scope-setup-channels" x-show="expanded && $store.chat.isTowerPgMode">
                     <div class="scope-setup-channel-heading"><strong>Channels</strong><button type="button" class="btn-secondary" x-show="$store.chat.canCreateChannelInScope(s1)" @click="$store.chat.openNewChannelModal({ scopeId: s1.record_id })">Add channel</button></div>
-                    <template x-for="channel in $store.chat.scopeSetupChannels(s1.record_id)" :key="channel.record_id"><div class="scope-setup-channel-row"><span x-text="channel.title || 'Untitled channel'"></span><button type="button" class="btn-secondary" x-show="$store.chat.canManageChannel(channel)" @click="$store.chat.openChannelSettings(channel.record_id)" :aria-label="'Edit channel ' + channel.title">Edit channel</button></div></template>
+                    <p class="scope-edit-hint">Drag channels to reorder within this scope, or use Move Up / Move Down. This order is shared.</p>
+                    <template x-for="(channel, channelIndex) in $store.chat.scopeSetupChannels(s1.record_id)" :key="channel.record_id">
+                      <div class="scope-setup-channel-row"
+                        :draggable="$store.chat.canReorderChannel(channel) && !$store.chat.channelOrderBusy"
+                        :class="{ 'channel-order-dragging': $store.chat.channelDragSourceId === channel.record_id, 'channel-order-target': $store.chat.channelDragTargetId === channel.record_id }"
+                        @dragstart.stop="$store.chat.startChannelTabDrag(channel.record_id, $event)"
+                        @dragover.stop="$store.chat.handleChannelTabDragOver(channel.record_id, $event)"
+                        @drop="$store.chat.dropScopeChannel(channel.record_id, $event)"
+                        @dragend.stop="$store.chat.endChannelTabDrag()">
+                        <span x-text="channel.title || 'Untitled channel'"></span>
+                        <div class="channel-order-controls" x-show="$store.chat.canReorderChannel(channel)">
+                          <button type="button" class="btn-secondary" :disabled="$store.chat.channelOrderBusy || channelIndex === 0" :aria-label="'Move ' + channel.title + ' up'" @click.stop="$store.chat.moveScopeChannel(channel.record_id, channelIndex)">Move Up</button>
+                          <button type="button" class="btn-secondary" :disabled="$store.chat.channelOrderBusy || channelIndex === $store.chat.scopeSetupChannels(s1.record_id).length - 1" :aria-label="'Move ' + channel.title + ' down'" @click.stop="$store.chat.moveScopeChannel(channel.record_id, channelIndex + 2)">Move Down</button>
+                          <button type="button" class="btn-secondary" @click.stop="$store.chat.openChannelSettings(channel.record_id)" :aria-label="'Edit channel ' + channel.title">Edit channel</button>
+                        </div>
+                      </div>
+                    </template>
+                    <p role="status" x-show="$store.chat.channelOrderBusy">Saving channel order…</p>
+                    <p role="status" x-text="$store.chat.channelOrderNotice"></p>
+                    <p role="alert" x-text="$store.chat.channelOrderError"></p>
                     <p class="scope-edit-hint" x-show="!$store.chat.scopeSetupChannels(s1.record_id).length">No visible channels in this scope.</p>
                   </div>
 
@@ -10144,7 +10167,7 @@
             </section>
             <p role="alert" class="channel-access-error" x-show="$store.chat.channelSettingsError" x-text="$store.chat.channelSettingsError"></p>
             <p role="status" class="settings-success" x-show="$store.chat.channelSettingsNotice" x-text="$store.chat.channelSettingsNotice"></p>
-            <p x-show="$store.chat.isTowerPgMode && $store.chat.channelDeleteConfirmArmed">This archives the channel, including nonempty channels. Stored tasks, documents, messages and files remain intact in Tower; this channel is no longer accessible. There is no restore control in Ambulando.</p>
+            <p x-show="$store.chat.isTowerPgMode && $store.chat.channelDeleteConfirmArmed">This archives the channel, including nonempty channels. Stored tasks, documents, messages and files remain intact in Tower; this channel is no longer accessible to any participant. This applies to direct conversations too, and does not just hide them for you. There is no restore control in Ambulando.</p>
             <button type="button" class="btn-cancel" x-show="$store.chat.channelDeleteConfirmArmed" :disabled="$store.chat.channelDeleteSubmitting" @click="$store.chat.channelDeleteConfirmArmed = false">Cancel deletion</button>
 
             <section class="channel-metadata-panel" x-show="$store.chat.isTowerPgMode">
@@ -10374,7 +10397,7 @@
                 type="button"
                 class="btn-delete-doc"
                 :class="{ 'btn-delete-doc-confirm': $store.chat.channelDeleteConfirmArmed }"
-                x-show="!$store.chat.isTowerPgMode || $store.chat.canManageSettingsChannel"
+                x-show="!$store.chat.isTowerPgMode || $store.chat.canDeleteSettingsChannel"
                 :disabled="$store.chat.channelDeleteSubmitting || $store.chat.channelRenameSaving"
                 @click.stop.prevent="$store.chat.deleteSelectedChannel()"
                 x-text="$store.chat.channelDeleteSubmitting ? 'Deleting...' : ($store.chat.channelDeleteConfirmArmed ? 'Confirm delete' : 'Delete channel')"></button>

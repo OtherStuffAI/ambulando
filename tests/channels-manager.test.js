@@ -2227,7 +2227,7 @@ describe('channels-manager pure utilities', () => {
     });
 
     it('marks and clears the prospective channel drop target', () => {
-      const store = createStore({ channelDragSourceId: 'ch3' });
+      const store = createStore({ channelDragSourceId: 'ch3', channels: orderedChannels });
       const event = { preventDefault: vi.fn(), dataTransfer: {} };
 
       channelsManagerMixin.handleChannelTabDragOver.call(store, 'ch1', event);
@@ -2324,6 +2324,33 @@ describe('channels-manager pure utilities', () => {
       expect(store.channelSettingsError).toBe('Tower unavailable');
       expect(store.channelSettingsPosition).toBe('1');
       expect(store.channelPositionSaving).toBe(false);
+    });
+
+    it('allows moving an unselected managed channel without changing navigation', async () => {
+      const store = createStore({ channels: [
+        { record_id: 'channel-1', scope_id: 'scope-a', position: 1, channel_grants: [{ principal_type: 'actor', principal_id: 'manager' }] },
+        { record_id: 'channel-2', scope_id: 'scope-a', position: 2 },
+      ], selectedChannelId: 'channel-2', canAdminWorkspace: true,
+      currentWorkspace: { pgBackendMode: true, workspaceId: 'workspace-1', workspaceOwnerNpub: 'npub1owner', directHttpsUrl: 'https://tower.example', appNpub: 'flightdeck_pg' } });
+      applyChannelMixin(store);
+      expect(store.canReorderChannel(store.channels[0])).toBe(true);
+      await store.moveScopeChannel('channel-1', 2);
+      expect(store.channels.find(c => c.record_id === 'channel-1').channel_grants).toEqual([{ principal_type: 'actor', principal_id: 'manager' }]);
+      expect(store.selectedChannelId).toBe('channel-2');
+      expect(store.channelOrderNotice).toBe('Channel order saved.');
+    });
+
+    it('rejects cross-scope drops and reports recoverable save failures', async () => {
+      const store = createStore({ channels: [
+        { record_id: 'a', scope_id: 'one' }, { record_id: 'b', scope_id: 'two' },
+      ], channelDragSourceId: 'a' });
+      applyChannelMixin(store);
+      store.moveChannelToPosition = vi.fn().mockRejectedValue(new Error('Forbidden'));
+      await store.dropScopeChannel('b', { preventDefault() {}, stopPropagation() {} });
+      expect(store.moveChannelToPosition).not.toHaveBeenCalled();
+      await store.moveScopeChannel('a', 2);
+      expect(store.channelOrderError).toContain('Previous order restored. Try again');
+      expect(store.channelOrderBusy).toBe(false);
     });
 
     it('validates the 1-based PG position before writing', async () => {
@@ -3110,6 +3137,13 @@ describe('PG channel lifecycle controls', () => {
     expect(state.canManageChannel(channel)).toBe(true);
     expect(state.canManageChannel({ ...channel, channel_type: 'dm' })).toBe(false);
     expect(state.canManageChannel({ ...channel, channel_type: 'system' })).toBe(false);
+    expect(state.canDeleteChannel({ ...channel, channel_type: 'dm' })).toBe(true);
+    expect(state.canDeleteChannel({ ...channel, channel_type: 'system' })).toBe(false);
+    expect(state.canDeleteChannel({ ...channel, channel_type: 'dm', system_key: 'notes' })).toBe(false);
+    expect(state.canDeleteChannel({ ...channel, channel_type: 'dm', metadata: { system_key: 'notes' } })).toBe(false);
+    state.canAdminWorkspace = false;
+    expect(state.canDeleteChannel({ ...channel, channel_type: 'dm' })).toBe(false);
+    expect(state.canDeleteChannel({ ...channel, channel_type: 'dm', channel_grants: [{ principal_type: 'actor', principal_id: 'actor-manager', permissions: ['channel.manage'] }] })).toBe(true);
   });
 
   it('uses hydrated group membership when the workspace group projection is still empty', () => {

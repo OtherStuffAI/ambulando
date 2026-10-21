@@ -512,7 +512,7 @@ export const chatMessageManagerMixin = {
   },
 
   getChatComposerDraftKey(context = 'message', destination = {}) {
-    const channelId = String(destination.channelId ?? (context === 'thread' ? this.activeThreadChannelId : this.selectedChannelId) ?? this.selectedChannelId ?? '').trim();
+    const channelId = String(destination.channelId ?? (context === 'thread' ? (this.deckThreadComposerOpen ? this.deckThreadComposerChannelId : this.activeThreadChannelId) : this.selectedChannelId) ?? this.selectedChannelId ?? '').trim();
     if (!channelId) return '';
     const channel = (this.channels || []).find((item) => item?.record_id === channelId) || null;
     const workspaceId = String(
@@ -525,7 +525,7 @@ export const chatMessageManagerMixin = {
     ).trim();
     const scopeId = String(destination.scopeId ?? channel?.scope_id ?? channel?.scope_l1_id ?? '').trim();
     const threadId = context === 'thread'
-      ? String(destination.threadId ?? this.activeThreadId ?? '').trim() || (this.deckThreadComposerOpen ? '__new_thread__' : '')
+      ? String(destination.threadId ?? (this.deckThreadComposerOpen ? '__new_thread__' : this.activeThreadId) ?? '').trim()
       : '';
     if (context === 'thread' && !threadId) return '';
     return [workspaceId, scopeId, channelId, threadId || '__channel__'].join(':');
@@ -539,8 +539,15 @@ export const chatMessageManagerMixin = {
     const mentions = live?.actorMentions ?? this.selectedAgentMentionsByComposer?.[context] ?? [];
     const value = live?.value ?? String(this[inputKey] || '');
     const drafts = { ...(this.chatComposerDrafts || {}) };
-    if (!value && mentions.length === 0) delete drafts[key];
-    else drafts[key] = { value, mentions: [...mentions] };
+    const createState = context === 'thread' && this.deckThreadComposerOpen ? {
+      title: this.threadTitleDraft,
+      titleManuallyEdited: this.deckThreadTitleManuallyEdited,
+      requestId: this.deckThreadCreateRequestId,
+      fileDrafts: [...(this.threadFileDrafts || [])],
+      audioDrafts: [...(this.threadAudioDrafts || [])],
+    } : null;
+    if (!value && mentions.length === 0 && !createState) delete drafts[key];
+    else drafts[key] = { ...drafts[key], value, mentions: [...mentions], ...(createState || {}) };
     this.chatComposerDrafts = drafts;
   },
 
@@ -555,6 +562,13 @@ export const chatMessageManagerMixin = {
       ...(this.selectedAgentMentionsByComposer || {}),
       [context]: Array.isArray(draft?.mentions) ? [...draft.mentions] : [],
     };
+    if (context === 'thread' && this.deckThreadComposerOpen) {
+      this.threadTitleDraft = draft?.title || '';
+      this.deckThreadTitleManuallyEdited = Boolean(draft?.titleManuallyEdited);
+      this.deckThreadCreateRequestId = draft?.requestId || this.deckThreadCreateRequestId;
+      this.threadFileDrafts = [...(draft?.fileDrafts || [])];
+      this.threadAudioDrafts = [...(draft?.audioDrafts || [])];
+    }
     this.scheduleComposerAutosize?.(context);
   },
 
@@ -2329,7 +2343,7 @@ export const chatMessageManagerMixin = {
       return;
     }
     if (isTowerPgBackendMode()) {
-      if (!this.canManageChannel(channel)) {
+      if (!this.canDeleteChannel(channel)) {
         this.channelSettingsError = 'You need Manage access to delete this channel.';
         return;
       }

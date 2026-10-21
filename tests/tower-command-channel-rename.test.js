@@ -1,10 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { updateChannel } = vi.hoisted(() => ({ updateChannel: vi.fn() }));
+const { updateChannel, reorderChannel } = vi.hoisted(() => ({ updateChannel: vi.fn(), reorderChannel: vi.fn() }));
 
 vi.mock('../src/api.js', async (original) => ({
   ...await original(),
   updateTowerPgChannel: updateChannel,
+  reorderTowerPgChannel: reorderChannel,
 }));
 
 import {
@@ -15,7 +16,7 @@ import {
   upsertChannel,
 } from '../src/db.js';
 import { prepareTowerWorkspaceCommand } from '../src/tower-command-port.js';
-import { updateTowerPgChannel } from '../src/tower-command-intents.js';
+import { updateTowerPgChannel, reorderTowerPgChannel } from '../src/tower-command-intents.js';
 import { TowerSyncService } from '../src/tower-sync-service.js';
 
 const OWNER = 'npub_channel_rename_owner';
@@ -97,4 +98,15 @@ describe('channel rename commands', () => {
 
     expect(await getChannelById(CHANNEL_ID)).toMatchObject({ title: 'Nostr Browser', version: 3 });
   });
+});
+
+// Repeat moves must have distinct command identities even for the same channel.
+it('saves every subsequent channel move through TowerSyncService', async () => {
+  reorderChannel.mockResolvedValueOnce({ channel: canonical('Channel', 2), position: 2 })
+    .mockResolvedValueOnce({ channel: canonical('Channel', 3), position: 1 });
+  const store = commandStore();
+  await reorderTowerPgChannel(store, 'workspace-1', CHANNEL_ID, 2);
+  const result = await reorderTowerPgChannel(store, 'workspace-1', CHANNEL_ID, 1);
+  expect(reorderChannel).toHaveBeenCalledTimes(2);
+  expect(result.position).toBe(1);
 });

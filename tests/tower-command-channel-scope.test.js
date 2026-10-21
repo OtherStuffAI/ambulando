@@ -68,6 +68,18 @@ describe('channel and scope command descriptors', () => {
     expect(mocks.upsertChannel).toHaveBeenNthCalledWith(2, previous);
   });
 
+  it('reconciles a DM archive into the same durable marker without clearing retained data', async () => {
+    const previous = { record_id: 'dm-1', channel_type: 'dm', title: 'Test DM', record_state: 'active' };
+    const descriptor = prepareTowerWorkspaceCommand({ workspaceOwnerNpub: 'owner', channels: [previous] }, 'channel.delete', {
+      args: ['workspace', 'dm-1', {}], entityId: 'dm-1',
+    });
+    await descriptor.optimistic();
+    await descriptor.reconcile({ channel: { id: 'dm-1', kind: 'dm', archived_at: '2026-10-21T00:00:00Z' } });
+    expect(mocks.upsertChannel).toHaveBeenLastCalledWith(expect.objectContaining({ record_id: 'dm-1', channel_type: 'dm', record_state: 'deleted', sync_status: 'synced' }));
+    const db = openWorkspaceDb('channel-scope-command');
+    expect(await db.pg_archived_targets.get('channel:dm-1')).toBeTruthy();
+  });
+
   it('writes cloneable plain rows for proxied scope delete state', async () => {
     const previous = {
       record_id: 'scope-1',

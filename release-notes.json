@@ -4505,6 +4505,34 @@
       "notes": [
         "Rename a channel and keep its new name after sync, reload and edits from another browser; superseded saves now show a clear error without replacing the newer name."
       ]
+    },
+    {
+      "buildNumber": 2491,
+      "label": "Rearrange channels within a scope",
+      "notes": [
+        "Drag channels in Scope Management or use Move Up and Move Down to save their shared order. Failed saves restore the previous order and offer a clear retry."
+      ]
+    },
+    {
+      "buildNumber": 2492,
+      "label": "Remove direct conversations",
+      "notes": [
+        "People with Manage access can remove a direct conversation for all participants. The confirmation explains that stored content is retained; system conversations remain protected."
+      ]
+    },
+    {
+      "buildNumber": 2495,
+      "label": "Switch feed sources from the header",
+      "notes": [
+        "Choose All, RSS or Nostr with compact icon buttons beside the Feeds title. Each has a clear selected state, keyboard focus and padded click areas."
+      ]
+    },
+    {
+      "buildNumber": 2496,
+      "label": "Keep unfinished new threads",
+      "notes": [
+        "Reopen New thread in the same channel to recover unsent text, title, mentions and prepared attachments. Drafts stay separate between destinations and remain available after a failed send."
+      ]
     }
   ]
 }

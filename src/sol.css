@@ -697,3 +697,20 @@ code, pre { font-family:var(--font-code); }
 }
 .section-refresh-error { align-items:center; display:flex; gap:12px; justify-content:space-between; margin:12px; }
 .section-refresh-error button { flex:0 0 auto; }
+
+.channel-order-controls { display:flex; flex-wrap:wrap; gap:6px; }
+.scope-setup-channel-row[draggable="true"] { cursor:grab; }
+.channel-order-dragging { opacity:.5; }
+.channel-order-target { outline:2px solid var(--ring); outline-offset:-2px; }
+
+/* Compact source controls stay beside the Feeds title, including narrow columns. */
+.wapp-updates-heading { gap:6px; flex-wrap:nowrap; }
+.wapp-updates-heading > div:first-child { flex:0 0 auto; }
+.feed-source-switcher { display:flex; flex:0 0 auto; border:1px solid var(--border); border-radius:6px; overflow:visible; }
+.feed-source-switcher button { display:inline-flex; align-items:center; justify-content:center; width:40px; min-height:36px; padding:8px 11px; border:0; border-radius:4px; background:transparent; color:var(--muted-foreground); cursor:pointer; }
+.feed-source-switcher button + button { border-left:1px solid var(--border); }
+.feed-source-switcher button:hover { background:var(--muted); }
+.feed-source-switcher button[aria-pressed="true"] { background:var(--primary); color:var(--primary-foreground); }
+.feed-source-switcher button:focus-visible { outline:2px solid var(--ring); outline-offset:2px; }
+.feed-source-switcher svg { width:18px; height:18px; flex:none; }
+@media (max-width:767px), (pointer:coarse) { .feed-source-switcher button { width:44px; min-height:44px; padding-inline:12px; } }

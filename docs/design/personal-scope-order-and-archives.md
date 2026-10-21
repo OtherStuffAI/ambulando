@@ -23,7 +23,10 @@ Scope/channel archives retain tasks, documents, messages, files and grants.
 Archiving a scope archives its channels in one transaction. Existing capture
 triggers emit scope/channel tombstones; route audit and wake events commit with
 them. Authorized DELETE retries return the archived row without duplicate audit.
-DM scopes and DM/system channels are protected. Management permissions are
+DM scopes, system channels and channels with a system_key remain protected.
+DM conversations support the same global archive with channel.manage permission;
+this removes access for all participants, not an actor-only hide. DM rename and
+sharing controls remain separate. Management permissions are
 checked again inside the serialized archive transaction.
 
 An archive alone does not rotate the record epoch. Current actor/group grants
@@ -54,3 +57,13 @@ IndexedDB and liveQuery, preference reload, archive fallback and unchanged
 pending edits/caches/cursors with exact cursor-only request assertions. The
 browser harness and signed Tower tests are separate; it is not a live end-to-end
 browser authentication test.
+
+Scope Management also supports shared channel ordering within each expanded
+scope. Drag a manageable channel onto a sibling, or use its Move Up / Move Down
+buttons. Both use the existing 1-based channel reorder command and authoritative
+Tower channel positions, independent of personal scope order. Unselected channels
+use their own embedded grants for management checks. Channel drag events stop at
+the channel row so they cannot reorder the containing scope. Saving disables
+further channel moves; a rejected save restores the previous positions and shows
+an explicit retry message. Reorder acknowledgements preserve embedded grants
+when Tower returns a sparse channel projection.
