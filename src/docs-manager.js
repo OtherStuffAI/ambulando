@@ -1,3 +1,4 @@
+import { decodeDocumentContent } from './docs/stored-content.js';
 import { restoreReferenceComposerDraft } from './internal-reference-navigation.js';
 import { visibleWikiIntegrityText } from './docs/editor/wiki-visible-text.js';
 import { bindWikiState } from './docs/wiki-links.js';
@@ -227,10 +228,7 @@ function decodeStoredRecoveryContent(bodyResult = {}) {
   const binary = globalThis.atob(encoded);
   const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
   const raw = new TextDecoder().decode(bytes);
-  const parsed = JSON.parse(raw);
-  return parsed?.content_model && typeof parsed.content_model === 'object'
-    ? parsed.content_model
-    : parsed;
+  return decodeDocumentContent(raw, { allowLegacyModel: true });
 }
 
 export function isDocumentContentReadyForEditor(item = {}) {

@@ -4647,6 +4647,20 @@
       "notes": [
         "Canvas window options keep compact, content-sized rows in normal and full-screen windows, with scrolling only when needed."
       ]
+    },
+    {
+      "buildNumber": 2517,
+      "label": "Read stored Canvas documents",
+      "notes": [
+        "Canvas documents decode saved content envelopes and retain native rich formatting instead of displaying storage JSON."
+      ]
+    },
+    {
+      "buildNumber": 2518,
+      "label": "Reliable personal scope ordering",
+      "notes": [
+        "Dragging scopes and Move Up / Move Down save using the current revision, recover from conflicts, and preserve the saved order across reloads."
+      ]
     }
   ]
 }

@@ -76,3 +76,27 @@ it('contains one-finger reading at canvas zoom and removes touch handlers on dis
   send('touchmove', 0, 0);
   expect([scroll.scrollLeft, scroll.scrollTop]).toEqual([10, 20]);
 });
+
+it.each([
+  JSON.stringify({ format: 'document_content_v1', content_model: { content: '# Stored heading\n\n| Name | Value |\n| --- | --- |\n| A | B |' } }),
+  { format: 'document_content_v1', content_model: { content: '# Stored heading' } },
+])('decodes stored envelopes before Markdown conversion', async body => {
+  const create = vi.fn(() => ({ destroy() {} }));
+  loader.mockResolvedValue({ createTiptapEditorAdapter: create });
+  const reader = mount(body);
+  await vi.waitFor(() => expect(create).toHaveBeenCalledOnce());
+  const state = create.mock.calls[0][0].editorState;
+  expect(state.content[0]).toMatchObject({ type: 'heading', content: [{ text: 'Stored heading' }] });
+  expect(JSON.stringify(state)).not.toContain('content_model');
+  reader.dispose();
+});
+
+it('retains native rich state and metadata rather than rebuilding from fallback Markdown', async () => {
+  const native = { type: 'doc', content: [{ type: 'paragraph', attrs: { fdBlockId: 'anchor' }, content: [{ type: 'text', text: 'Rich source', marks: [{ type: 'bold' }] }] }] };
+  const create = vi.fn(() => ({ destroy() {} }));
+  loader.mockResolvedValue({ createTiptapEditorAdapter: create });
+  const reader = mount(JSON.stringify({ format: 'document_content_v1', content_model: { content: 'Fallback', content_format: 'prosemirror', content_blocks: [], editor_state: native } }));
+  await vi.waitFor(() => expect(create).toHaveBeenCalledOnce());
+  expect(create.mock.calls[0][0].editorState).toEqual(native);
+  reader.dispose();
+});

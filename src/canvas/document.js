@@ -1,5 +1,7 @@
 import { loadTiptapEditorAdapter } from '../docs/editor/lazy-tiptap-editor.js';
-import { markdownToProseMirrorDoc } from '../docs/editor/markdown-to-prosemirror.js';
+import { resolveDocumentProseMirrorState } from '../docs/editor/markdown-to-prosemirror.js';
+
+import { canvasDocumentModel } from '../docs/stored-content.js';
 
 // Keep editor instances out of Alpine proxies; dispose when a source is removed
 // or access is revoked. Layout-only snapshots must retain selection and scroll.
@@ -26,14 +28,14 @@ export function registerCanvasDocument(Alpine) {
     const update = () => {
       if (!adapter || rendered === latest) return;
       const top = scroll?.scrollTop || 0, left = scroll?.scrollLeft || 0;
-      adapter.setContent(markdownToProseMirrorDoc(latest), { preserveSelection: true });
+      adapter.setContent(resolveDocumentProseMirrorState(canvasDocumentModel(latest)), { preserveSelection: true });
       rendered = latest;
       if (scroll) { scroll.scrollTop = top; scroll.scrollLeft = left; }
     };
-    effect(() => evaluate(value => { latest = String(value ?? ''); update(); }));
+    effect(() => evaluate(value => { latest = value ?? ''; update(); }));
     loadTiptapEditorAdapter().then(({ createTiptapEditorAdapter }) => {
       if (disposed) return;
-      adapter = createTiptapEditorAdapter({ element, editable: false, editorState: markdownToProseMirrorDoc(latest) });
+      adapter = createTiptapEditorAdapter({ element, editable: false, editorState: resolveDocumentProseMirrorState(canvasDocumentModel(latest)) });
       rendered = latest;
     }).catch(() => {
       if (!disposed) element.textContent = 'Document preview unavailable. Open in Ambulando to read or edit.';

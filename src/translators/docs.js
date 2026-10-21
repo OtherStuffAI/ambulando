@@ -1,3 +1,4 @@
+import { decodeDocumentContent } from '../docs/stored-content.js';
 import { recordFamilyHash } from './chat.js';
 import { APP_NPUB } from '../app-identity.js';
 import { buildGroupPayloads as buildEncryptedGroupPayloads, decryptRecordPayload, encryptOwnerPayload } from './record-crypto.js';
@@ -45,10 +46,8 @@ async function resolveDocumentContent(data = {}) {
     const raw = new TextDecoder().decode(bytes);
     let model;
     try {
-      const parsed = JSON.parse(raw);
-      model = parsed?.content_model && typeof parsed.content_model === 'object'
-        ? parsed.content_model
-        : parsed;
+      model = decodeDocumentContent(raw, { allowLegacyModel: true });
+      if (!model) throw new Error('Invalid document content model');
     } catch (parseError) {
       const contentType = String(storage.content_storage_content_type || '').toLowerCase();
       const storageFormat = String(storage.content_storage_format || '').toLowerCase();

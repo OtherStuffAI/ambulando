@@ -197,3 +197,16 @@ the visible surface. It repairs the adapter only when recovered text matches,
 and checkpoints an explicit recovery row so a stale adapter cannot replace it.
 If rich recovery is unverifiable, visible text is preserved separately and the
 original DOM remains open. Duplicate/stale surfaces cannot bypass the guard.
+
+## Canvas stored content
+
+Docs writes `document_content_v1` envelopes containing `content_model`. PG body
+hydration, legacy storage translation and recovery-body decoding share
+`docs/stored-content.js`. Storage callers explicitly permit historical unwrapped
+models and unversioned wrappers; canvas recognizes only the versioned envelope
+in string bodies, so ordinary JSON-looking Markdown remains readable content.
+Malformed envelopes fall back to their original text in canvas without changing
+stored records. The decoded model retains content format, blocks and native
+editor state. Canvas uses the same `resolveDocumentProseMirrorState` as Docs:
+a native doc tree wins over Markdown, whose fallback receives content blocks.
+Regression fixtures contain only generic synthetic content.

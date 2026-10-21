@@ -20,9 +20,12 @@ for (const width of [1440, 390]) for (const theme of ['light', 'dark']) {
       store.canvas = { title: 'Document reading fixture', can_manage: false };
       store.naplets = [{ id: 'reader', access: 'ready', row_version: 1, title: 'Source brief', source: { type: 'document', id: 'exact-document' }, layout: { x: 16, y: 16, width: Math.min(width - 32, 640), height: 420, z: 1 }, content: { title: 'Source brief', body: '# Heading\n\n- Bullet\n\n1. Ordered\n\n> Quote\n\n[Reference](https://example.com/)\n\n```js\nconst answer = 42;\n```\n\n| Name | Value |\n| --- | --- |\n| Answer | 42 |\n\n' + 'Reading paragraph.\n\n'.repeat(80) } }];
     }, { theme, width });
+    await page.evaluate(() => { const item = Alpine.store('canvas').naplets[0]; item.content.body = JSON.stringify({ format: 'document_content_v1', content_model: { content: item.content.body } }); });
     const doc = page.locator('[data-canvas-key="naplet:reader"]');
     const prose = doc.locator('.ProseMirror');
     await expect(prose).toHaveAttribute('contenteditable', 'false');
+    await expect(prose).not.toContainText('document_content_v1');
+    await expect(prose).not.toContainText('content_model');
     await expect(prose.locator('h1')).toHaveText('Heading');
     await expect(prose.locator('ul li')).toHaveText('Bullet');
     await expect(prose.locator('ol li')).toHaveText('Ordered');
@@ -45,10 +48,19 @@ for (const width of [1440, 390]) for (const theme of ['light', 'dark']) {
     expect(geometry).toEqual({ background: 'rgb(255, 255, 255)', ink: 'rgb(32, 39, 51)', bounded: true, fits: true });
     await prose.evaluate(el => { el.dataset.retained = 'yes'; });
     const readingPosition = await scroll.evaluate(el => el.scrollTop);
-    await page.evaluate(() => { Alpine.store('canvas').naplets[0].content.body += '\n\n## Updated source'; });
+    await page.evaluate(() => { const item = Alpine.store('canvas').naplets[0]; const saved = JSON.parse(item.content.body); saved.content_model.content += '\n\n## Updated source'; item.content.body = JSON.stringify(saved); });
     await expect(prose.locator('h2')).toHaveText('Updated source');
     await expect(prose).toHaveAttribute('data-retained', 'yes');
     expect(await scroll.evaluate(el => el.scrollTop)).toBe(readingPosition);
+    await page.evaluate(() => {
+      Alpine.store('canvas').naplets[0].content.body = JSON.stringify({ format: 'document_content_v1', content_model: {
+        content: 'Stale fallback', content_format: 'flightdeck_prosemirror_v1', content_blocks: [],
+        editor_state: { type: 'doc', content: [{ type: 'paragraph', attrs: { fdBlockId: 'native-anchor' }, content: [{ type: 'text', text: 'Native rich text', marks: [{ type: 'bold' }] }] }] }
+      } });
+    });
+    await expect(prose.locator('strong')).toHaveText('Native rich text');
+    await expect(prose.locator('p')).toHaveAttribute('data-fd-block-id', 'native-anchor');
+    await expect(prose).not.toContainText('Stale fallback');
     const destination = context.waitForEvent('page');
     await doc.getByRole('link', { name: 'Open in Ambulando to edit' }).click();
     const opened = await destination;
