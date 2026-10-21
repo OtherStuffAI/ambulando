@@ -54,15 +54,40 @@
           <button class="canvas-resize" x-show="$store.canvas.selected?.type === 'element' && $store.canvas.selected.id === element.id" aria-label="Resize element" @pointerdown.stop="$store.canvas.startItemInteraction('element', element, $event, 'resize')"></button>
         </article></template>
         <article class="canvas-element canvas-preview" x-show="$store.canvas.interaction?.type === 'create'" :class="'kind-' + ($store.canvas.interaction?.element?.kind || '')" :style="$store.canvas.interaction?.element ? $store.canvas.elementStyle($store.canvas.interaction.element) : ''"><div class="canvas-shape"></div></article>
-        <template x-for="naplet in $store.canvas.naplets" :key="naplet.id"><article class="canvas-naplet" :data-canvas-key="'naplet:' + naplet.id" :class="{ selected: $store.canvas.selectionHas('naplet', naplet.id) }" :style="$store.canvas.napletStyle(naplet)">
-          <header class="canvas-naplet-header" @pointerdown.stop="$store.canvas.startItemInteraction('naplet', naplet, $event)"><strong x-text="naplet.access === 'denied' ? 'Restricted item' : naplet.title"></strong><span class="canvas-naplet-kind" x-text="naplet.access === 'denied' ? '' : naplet.source.type.replace('_', ' ')"></span><span class="canvas-count" x-show="$store.canvas.commentCountForNaplet(naplet.id)" x-text="$store.canvas.commentCountForNaplet(naplet.id)"></span></header>
+        <template x-for="naplet in $store.canvas.naplets" :key="naplet.id"><dialog class="canvas-naplet" x-data="canvasWindow" :class="{ 'window-minimised': minimised, 'window-expanded': expanded, selected: $store.canvas.selectionHas('naplet', naplet.id) }" @close="didClose()" @cancel="rememberModalScroll()" @wheel="if (expanded) $event.stopPropagation()" :aria-label="naplet.access === 'denied' ? 'Restricted item' : naplet.title" :data-canvas-key="'naplet:' + naplet.id" :style="$store.canvas.napletStyle(naplet)">
+          <header class="canvas-naplet-header" @pointerdown.stop="if (!expanded) $store.canvas.startItemInteraction('naplet', naplet, $event)">
+            <strong x-text="naplet.access === 'denied' ? 'Restricted item' : naplet.title"></strong>
+            <span class="canvas-count" x-show="$store.canvas.commentCountForNaplet(naplet.id)" x-text="$store.canvas.commentCountForNaplet(naplet.id)"></span>
+            <div class="canvas-window-controls" @pointerdown.stop @dblclick.stop>
+              <button type="button" class="canvas-window-control window-minimise" :aria-label="minimised ? 'Restore window' : 'Minimise window'" :title="minimised ? 'Restore window' : 'Minimise window'" :aria-expanded="!minimised" @click="toggleMinimise()"><span aria-hidden="true" x-text="minimised ? '+' : '−'"></span></button>
+              <button type="button" class="canvas-window-control window-popout" :aria-label="expanded ? 'Restore from full screen' : 'Open full screen'" :title="expanded ? 'Restore from full screen' : 'Open full screen'" :aria-expanded="expanded" @click="toggleExpanded()"><span aria-hidden="true" x-text="expanded ? '↙' : '↗'"></span></button>
+              <button type="button" class="canvas-window-control window-options" aria-label="Window options" title="Window options" aria-haspopup="menu" :aria-expanded="optionsOpen" x-ref="optionsButton" @click="toggleOptions()"><span aria-hidden="true">⚙</span></button>
+            </div>
+          </header>
+          <div class="canvas-window-options" popover="auto" role="menu" aria-label="Window options" x-ref="options" @toggle="optionsOpen = $event.newState === 'open'" @keydown="menuKeydown($event)" @pointerdown.stop @wheel.stop>
+            <button type="button" role="menuitem" @click="toggleMinimise()" x-text="minimised ? 'Restore window' : 'Minimise window'"></button>
+            <button type="button" role="menuitem" @click="toggleExpanded()" x-text="expanded ? 'Restore from full screen' : 'Open full screen'"></button>
+            <a role="menuitem" x-show="naplet.access === 'ready' &amp;&amp; naplet.source?.type === 'document'" :href="$store.canvas.documentUrl(naplet)" target="_blank" rel="noopener" @click="closeOptions()">Open in Ambulando to edit ↗</a>
+            <button type="button" role="menuitem" x-show="naplet.access === 'ready'" @click="comment()">Comment…</button>
+            <button type="button" role="menuitem" x-show="$store.canvas.canvas?.can_manage &amp;&amp; naplet.access === 'ready'" @click="action('duplicateSelected')">Duplicate</button>
+            <button type="button" role="menuitem" x-show="$store.canvas.canvas?.can_manage" @click="action('orderSelected', -1)">Send backward</button>
+            <button type="button" role="menuitem" x-show="$store.canvas.canvas?.can_manage" @click="action('orderSelected', 1)">Bring forward</button>
+            <button type="button" role="menuitem" x-show="$store.canvas.canvas?.can_manage" @click="action('deleteItem')">Remove from Canvas</button>
+          </div>
+          <div class="canvas-window-content" x-show="!minimised">
           <div class="canvas-denied" x-show="naplet.access === 'denied'"><p x-text="$store.canvas.accessMessage"></p></div>
-          <div class="canvas-naplet-body" x-show="naplet.access === 'ready' && naplet.source?.type === 'document'"><h2 x-text="naplet.content.title || naplet.title"></h2><pre x-text="naplet.content.body || ''"></pre></div>
-          <div class="canvas-naplet-body" x-show="naplet.access === 'ready' && naplet.source?.type === 'task_list'"><ol><template x-for="task in naplet.content.tasks || []" :key="task.id"><li><strong x-text="task.title"></strong><span x-text="task.state ? ' · ' + task.state : ''"></span></li></template></ol></div>
-          <div class="canvas-naplet-body" x-show="naplet.access === 'ready' && naplet.source?.type === 'chat_thread'"><ol><template x-for="message in naplet.content.messages || []" :key="message.id"><li><strong x-text="message.author || 'Workspace member'"></strong><pre x-text="message.body || ''"></pre></li></template></ol></div>
+          <template x-if="naplet.access === 'ready' && naplet.source?.type === 'document'"><section class="canvas-document" @pointerdown.stop @keydown.stop @wheel.stop>
+            <a class="canvas-document-open" :href="$store.canvas.documentUrl(naplet)" target="_blank" rel="noopener">Open in Ambulando to edit ↗</a>
+            <div class="canvas-document-scroll" tabindex="0" role="region" :aria-label="(naplet.content.title || naplet.title) + ' document'">
+              <div class="canvas-document-paper"><h2 x-text="naplet.content.title || naplet.title"></h2><div class="doc-rich-editor" x-canvas-document="naplet.content.body || ''"></div></div>
+            </div>
+          </section></template>
+          <div class="canvas-naplet-body" x-show="naplet.access === 'ready' && naplet.source?.type === 'task_list'"><ol><template x-for="task in naplet.content?.tasks || []" :key="task.id"><li><strong x-text="task.title"></strong><span x-text="task.state ? ' · ' + task.state : ''"></span></li></template></ol></div>
+          <div class="canvas-naplet-body" x-show="naplet.access === 'ready' && naplet.source?.type === 'chat_thread'"><ol><template x-for="message in naplet.content?.messages || []" :key="message.id"><li><strong x-text="message.author || 'Workspace member'"></strong><pre x-text="message.body || ''"></pre></li></template></ol></div>
           <iframe x-show="naplet.access === 'ready' && naplet.source?.type === 'html'" :title="naplet.title" sandbox="allow-scripts" credentialless referrerpolicy="no-referrer" :srcdoc="$store.canvas.htmlDocument(naplet)"></iframe>
-          <button class="canvas-resize" x-show="$store.canvas.selected?.type === 'naplet' && $store.canvas.selected.id === naplet.id" aria-label="Resize naplet" @pointerdown.stop="$store.canvas.startItemInteraction('naplet', naplet, $event, 'resize')"></button>
-        </article></template>
+          </div>
+          <button class="canvas-resize" x-show="!minimised &amp;&amp; !expanded &amp;&amp; $store.canvas.selected?.type === 'naplet' && $store.canvas.selected.id === naplet.id" aria-label="Resize naplet" @pointerdown.stop="$store.canvas.startItemInteraction('naplet', naplet, $event, 'resize')"></button>
+        </dialog></template>
         <template x-for="comment in $store.canvas.unresolvedComments" :key="comment.id"><button type="button" class="canvas-comment-marker" :style="$store.canvas.commentStyle(comment)" :aria-label="'Open comment by ' + comment.author.label" @pointerdown.stop @click.stop="$store.canvas.openCommentThread(comment)">💬</button></template>
       </div>
       <div class="canvas-pan-shield" x-show="$store.canvas.tool === 'hand'" aria-hidden="true"></div>

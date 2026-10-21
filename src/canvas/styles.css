@@ -61,7 +61,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .canvas-status h1 { font-size: 20px; }
 .canvas-error { color: var(--destructive); }
 .canvas-toast { position: fixed; right: 16px; bottom: 16px; z-index: 100; max-width: min(32rem, calc(100vw - 32px)); padding: 10px 12px; border: 1px solid var(--destructive); border-radius: 8px; background: var(--surface); color: var(--destructive); }
-.canvas-dialog { width: min(34rem, calc(100vw - 2rem)); max-height: min(44rem, calc(100vh - 2rem)); padding: 0; border: 1px solid var(--border); border-radius: 10px; color: var(--foreground); background: var(--surface); }
+/* Canvas loads theme tokens without the shell's legacy surface aliases. */
+.canvas-dialog { width: min(34rem, calc(100vw - 2rem)); max-height: min(44rem, calc(100vh - 2rem)); padding: 0; border: 1px solid var(--border); border-radius: 10px; color: var(--card-foreground); background: var(--card); }
 .canvas-dialog::backdrop { background: rgb(0 0 0 / 0.45); }
 .canvas-dialog form, .canvas-comment-panel > div { display: grid; gap: 14px; padding: 18px; }
 .canvas-dialog h2 { margin: 0; }
@@ -77,3 +78,79 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .canvas-comment-panel article p { margin: 8px 0 0; white-space: pre-wrap; }
 .canvas-dialog-actions { display: flex; justify-content: flex-end; gap: 8px; }
 @media (max-width: 700px) { .canvas-toolbar { display: grid; grid-template-columns: 1fr; gap: 4px; padding: 6px 8px; } .canvas-brand img { width: 24px; height: 24px; } .canvas-toolbar-scroll { width: 100%; padding-bottom: 3px; } .canvas-toolbar button { min-height: 44px; } }
+
+/* Documents keep the Docs paper ink in either shell theme. The naplet, rather
+   than the infinite canvas or browser page, owns reading overflow. */
+.canvas-naplet { grid-template-rows: auto minmax(0, 1fr); }
+.canvas-document { display: flex; flex-direction: column; min-height: 0; min-width: 0; overflow: hidden; border-radius: 0 0 10px 10px; }
+.canvas-document-open { flex: none; padding: 8px 12px; color: var(--primary); background: var(--surface); text-underline-offset: 3px; }
+.canvas-document-open:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
+.canvas-document-scroll { min-height: 0; overflow: auto; overscroll-behavior: contain; padding: 12px; background: var(--background); touch-action: pan-x pan-y; cursor: auto; }
+.canvas-document-paper {
+  --foreground: #202733; --text: #202733; --muted-foreground: #526071;
+  --primary: #244f78; --card: #fff; --border: #c8cdd3; --muted: #f1f3f5;
+  --code-background: #f1f3f5; --code-foreground: #202733;
+  min-height: 100%; padding: clamp(16px, 4vw, 32px); background: #fff; color: var(--text);
+  color-scheme: light; border: 1px solid var(--border); box-shadow: 0 2px 8px #00000014;
+  font-size: 16px; line-height: 1.6; overflow-wrap: anywhere; user-select: text;
+}
+.canvas-document-paper > h2 { margin: 0 0 1rem; font-size: 1.3rem; }
+.canvas-document-paper .doc-rich-editor, .canvas-document-paper .ProseMirror { min-height: 0; }
+.canvas-document-paper .ProseMirror a { color: var(--primary); }
+.canvas-document-paper .ProseMirror pre { white-space: pre; font-family: monospace; }
+.canvas-document-paper .ProseMirror ul, .canvas-document-paper .ProseMirror ol { padding-left: 1.25rem; }
+.canvas-document-paper .tableWrapper { overflow-x: auto; }
+.canvas-document-paper input[type="checkbox"] { pointer-events: none; }
+
+/* Native dialog/popover top layers retain a single content tree in both modes. */
+.canvas-naplet {
+  display: grid; margin: 0; padding: 0; max-width: none; max-height: none;
+  color: var(--card-foreground); background: var(--card); border-color: #d7d4cd;
+  box-shadow: 0 4px 16px #00000024;
+}
+.canvas-naplet-header {
+  min-height: 50px; padding: 7px 12px; gap: 8px;
+  border-radius: 9px 9px 0 0; border-bottom-color: #d7d4cd;
+  background: linear-gradient(#f6f4ee, #e8e5dd); color: #303436;
+}
+.canvas-naplet-header strong { min-width: 0; font-size: 14px; }
+.canvas-window-controls { display: flex; align-items: center; flex: none; gap: 8px; }
+.canvas-window-control {
+  display: grid; place-items: center; width: 28px; min-width: 28px; height: 28px; min-height: 28px;
+  padding: 0; border: 1px solid #aaa79e; border-radius: 50%; color: #49504d; line-height: 1;
+  background: #deddd7; box-shadow: inset 0 0 0 1px #ffffff40;
+}
+.canvas-window-control:hover { filter: brightness(.94); }
+.canvas-window-control:focus-visible { outline-color: #244f78; }
+.canvas-window-control.window-minimise { background: #ffce62; border-color: #c4a44e; }
+.canvas-window-control.window-popout { background: #8bd5a2; border-color: #69a37b; }
+.canvas-window-content { display: grid; grid-template-rows: minmax(0, 1fr); min-height: 0; overflow: hidden; border-radius: 0 0 9px 9px; }
+.canvas-window-content > iframe { min-height: 0; }
+.canvas-naplet.window-minimised { height: 50px !important; grid-template-rows: 50px; }
+.canvas-naplet.window-minimised .canvas-naplet-header { border-radius: 9px; border-bottom: 0; }
+.canvas-naplet.window-expanded {
+  position: fixed; inset: 0 !important; width: 100% !important; height: 100% !important;
+  max-width: 100%; max-height: 100%; border-radius: 0; outline: none;
+  grid-template-rows: auto minmax(0, 1fr);
+}
+.canvas-naplet.window-expanded .canvas-naplet-header { border-radius: 0; cursor: default; padding-top: max(7px, env(safe-area-inset-top)); }
+.canvas-naplet::backdrop { background: #00000073; }
+.canvas-window-options {
+  position: fixed; inset: auto; margin: 0; width: min(240px, calc(100vw - 16px));
+  max-height: calc(100dvh - 16px); overflow-y: auto; padding: 6px;
+  border: 1px solid var(--border); border-radius: 10px;
+  background: var(--card); color: var(--card-foreground); box-shadow: 0 6px 24px #00000035;
+}
+.canvas-window-options:popover-open { display: grid; gap: 2px; }
+.canvas-window-options button, .canvas-window-options a {
+  display: block; width: 100%; min-height: 36px; padding: 8px 10px; text-align: left;
+  border: 0; border-radius: 5px; color: inherit; background: transparent; text-decoration: none;
+}
+.canvas-window-options button:hover, .canvas-window-options a:hover { background: var(--muted); }
+@media (pointer: coarse), (max-width: 700px) {
+  .canvas-window-controls { gap: 2px; }
+  .canvas-window-control { width: 40px; min-width: 40px; height: 40px; min-height: 40px; background-clip: padding-box; }
+  .canvas-window-options button, .canvas-window-options a { min-height: 44px; }
+  .canvas-naplet.window-minimised { height: 56px !important; grid-template-rows: 56px; }
+  .canvas-naplet-header { padding-inline: 8px; }
+}

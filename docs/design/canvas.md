@@ -146,3 +146,63 @@ prove that a live Tower has the Canvas schema/routes, that its source-family ACL
 queries are correct, or that trusted package ingestion is active. Production
 activation requires the owning Tower release plus an authenticated two-actor
 integration pass covering allowed, denied, revoked, and concurrent updates.
+
+## Document naplet reading
+
+Authorized document projections render Markdown through the existing Docs
+Tiptap adapter and converter with `editable: false`, sharing document typography.
+Each naplet owns and disposes its reader; source-body updates retain the reader,
+selection and scroll, while layout-only updates leave content untouched. No
+checkout, save or editable draft is created by the canvas reader.
+
+The paper stays white with local ink colors in either shell theme, surrounded
+by the shell background. Reading scroll stays inside the naplet; text selection,
+touch reading and keyboard input in the document do not invoke canvas gestures
+or shortcuts. Header dragging, the resize handle and the explicit hand tool
+retain canvas control. The visible “Open in Ambulando to edit” link opens
+`/docs` with the current workspace key and exact source document ID in a new tab.
+The existing Docs Edit action retains its normal permission and checkout gates.
+
+The Canvas browser fixture checks Markdown headings, lists, links, quotes, code
+and tables, read-only input, source refresh without remount, white paper in both
+themes at desktop and narrow widths, bounded wheel scrolling and exact link
+parameters. This is synthetic client evidence, not authenticated Tower editing.
+
+## Dialog surfaces
+
+The standalone Canvas entry imports theme tokens without the main shell's
+legacy surface aliases. All three native dialog panels use the opaque `--card`
+and paired `--card-foreground` tokens: Add naplet (all four source types), New
+comment/Reply, and Comment thread. Reply stacks the comment editor above the
+thread. Their existing translucent native backdrops remain independent of the
+panel background. Text editing is inline; Canvas has no separate confirmation
+modal. The Deck's Create canvas/Canvas settings dialog uses its existing opaque
+`--popover` inner surface and principal picker.
+
+`tests/e2e/canvas-modal-opacity.spec.cjs` checks computed panel colors, native
+backdrop, nested reply dismissal, keyboard focus, scrolling and viewport bounds
+at 1440px and 390px in light, dark and both system-resolved themes. It uses
+synthetic busy Canvas state and blocked backend requests; authenticated Tower
+mutations and physical phone behavior remain separate integration checks.
+
+## Naplet window controls
+
+Each naplet has a pale rounded title bar with yellow minimise, green full-screen
+and neutral options controls. Minimise hides the content while retaining its DOM;
+restore recovers its size and reading position. Full-screen uses `showModal()` on
+the same dialog element, avoiding iframe reloads or duplicate document readers.
+Native modal focus containment and Escape restore the window; the opener regains
+focus. These presentation states are local to the open page, leaving stored
+layout and viewport unchanged.
+
+The options popover shares existing source-opening, comment, duplicate, ordering
+and removal actions. It enters the native top layer after the modal so controls
+remain usable above full-screen content, with arrow/Home/End navigation, Escape,
+light dismiss, bounded mobile positioning and larger touch targets. Restricted
+items retain the generic title and access message. Management actions follow the
+existing canvas capability; Tower remains authoritative for mutations.
+
+Naplet windows also enter the native modal top layer when expanded. Their root
+panel uses the same opaque card pair, independently of document paper or HTML
+package content. The opacity suite covers expanded document, task-list,
+chat-thread, HTML and restricted windows plus their opaque options popover.

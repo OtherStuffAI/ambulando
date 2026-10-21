@@ -1,3 +1,4 @@
+@import "./docs/editor/document-typography.css";
 @import "./ambulando-tokens.css";
 
 :root {
@@ -11844,76 +11845,6 @@ html.wingman-iphone-webview .chat-channel-tab-scroll * {
   box-shadow: none;
 }
 
-.doc-rich-editor {
-  min-height: 420px;
-  color: var(--text);
-  line-height: 1.65;
-}
-
-.doc-rich-editor .ProseMirror {
-  min-height: 420px;
-  outline: none;
-}
-
-.doc-rich-editor .ProseMirror p {
-  margin: 0 0 0.75rem;
-}
-
-.doc-rich-editor .ProseMirror h1 {
-  font-size: 1.4rem;
-  margin: 1rem 0 0.4rem;
-}
-
-.doc-rich-editor .ProseMirror h2 {
-  font-size: 1.15rem;
-  margin: 0.85rem 0 0.35rem;
-}
-
-.doc-rich-editor .ProseMirror h3 {
-  font-size: 1rem;
-  margin: 0.75rem 0 0.3rem;
-}
-
-.doc-rich-editor .ProseMirror pre {
-  background: var(--code-background);
-  color: var(--code-foreground);
-  padding: 0.85rem 1rem;
-  border-radius: var(--radius-panel);
-  overflow-x: auto;
-}
-
-.doc-rich-editor .ProseMirror code {
-  background: var(--card);
-  padding: 0.1rem 0.35rem;
-  border-radius: var(--radius-panel);
-  font-size: 0.92em;
-}
-
-.doc-rich-editor .ProseMirror pre code {
-  background: transparent;
-  color: inherit;
-  overflow-wrap: normal;
-  word-break: normal;
-  white-space: pre;
-  padding: 0;
-}
-
-.doc-rich-editor .ProseMirror ul,
-.doc-rich-editor .ProseMirror ol {
-  margin: 0 0 0.75rem 1.25rem;
-}
-
-.doc-rich-editor .ProseMirror blockquote {
-  margin: 0 0 0.75rem;
-  padding-left: 0.85rem;
-  border-left: 3px solid var(--border);
-  color: var(--muted-foreground);
-}
-
-.doc-rich-editor .ProseMirror img {
-  max-width: min(100%, 38rem);
-  max-height: 28rem;
-}
 
 .doc-rich-upload-placeholder {
   display: inline-flex;
@@ -11943,23 +11874,7 @@ html.wingman-iphone-webview .chat-channel-tab-scroll * {
   to { transform:rotate(360deg); }
 }
 
-.doc-rich-editor .ProseMirror table {
-  width: 100%;
-  border-collapse: collapse;
-  margin: 0 0 0.75rem;
-}
 
-.doc-rich-editor .ProseMirror th,
-.doc-rich-editor .ProseMirror td {
-  border: 1px solid var(--border);
-  padding: 0.35rem 0.5rem;
-  vertical-align: top;
-}
-
-.doc-rich-editor .fd-mention {
-  color: var(--primary);
-  font-weight: 600;
-}
 
 .doc-block-rendered {
   color: var(--text);

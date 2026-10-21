@@ -4567,6 +4567,66 @@
       "label": "Composer validation checkpoint",
       "notes": [],
       "noUserVisibleChanges": true
+    },
+    {
+      "buildNumber": 2502,
+      "label": "Readable canvas documents",
+      "notes": [
+        "Canvas document naplets render Markdown on white paper with contained scrolling and a link to open the exact document in Ambulando for editing."
+      ]
+    },
+    {
+      "buildNumber": 2503,
+      "label": "Opaque Canvas dialogs",
+      "notes": [
+        "Canvas panels for adding naplets, comments and nested replies now have opaque backgrounds in light and dark themes."
+      ]
+    },
+    {
+      "buildNumber": 2504,
+      "label": "Canvas window controls",
+      "notes": [
+        "Canvas windows now have circular minimise, full-screen and options controls. Expand and restore without losing reading position or interactive content, with the same options available in full screen."
+      ]
+    },
+    {
+      "buildNumber": 2506,
+      "label": "Opaque expanded Canvas windows",
+      "notes": [
+        "Expanded naplet windows keep opaque theme-aware backing behind documents, task lists, conversations, HTML and restricted content."
+      ]
+    },
+    {
+      "buildNumber": 2508,
+      "label": "Canvas validation checkpoint",
+      "notes": [],
+      "noUserVisibleChanges": true
+    },
+    {
+      "buildNumber": 2509,
+      "label": "Canvas window preservation checks",
+      "notes": [],
+      "noUserVisibleChanges": true
+    },
+    {
+      "buildNumber": 2510,
+      "label": "Choose a Nostr viewer",
+      "notes": [
+        "Setup now lets you save a Nostr viewer base URL on this device. Existing Nostr feed links use it immediately; reset returns to njump."
+      ]
+    },
+    {
+      "buildNumber": 2512,
+      "label": "Preserve Canvas reading positions",
+      "notes": [
+        "Canvas windows restore separate reading positions in inline and full-screen views, and restricted items render safely without source content."
+      ]
+    },
+    {
+      "buildNumber": 2513,
+      "label": "Canvas opacity review checkpoint",
+      "notes": [],
+      "noUserVisibleChanges": true
     }
   ]
 }

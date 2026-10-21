@@ -1,4 +1,8 @@
 import Alpine from 'alpinejs';
+import { registerCanvasWindow } from './window.js';
+import { registerCanvasDocument } from './document.js';
+import { buildSectionUrl } from '../route-helpers.js';
+import '../docs/editor/document-typography.css';
 import { tryAutoLoginFromStorage, pubkeyToNpub } from '../auth/nostr.js';
 import { setActiveSessionNpub } from '../crypto/group-keys.js';
 import { getSettings, openWorkspaceDb } from '../db.js';
@@ -298,6 +302,7 @@ export function canvasPageStore() {
     async undoChange() { const action = undo.pop(); if (!action) return; if (action.type === 'layout') await this.mutate(() => action.itemType === 'naplet' ? syncRuntime.updateNapletLayout(action.id, action.before) : syncRuntime.updateElement(action.id, { layout: action.before })); if (action.type === 'layouts') await this.mutate(() => this.applyLayoutHistory(action.changes, 'before')); if (action.type === 'data') await this.mutate(() => syncRuntime.updateElement(action.id, { data: action.before })); redo.push(action); this.historyTick -= 1; },
     async redoChange() { const action = redo.pop(); if (!action) return; if (action.type === 'layout') await this.mutate(() => action.itemType === 'naplet' ? syncRuntime.updateNapletLayout(action.id, action.after) : syncRuntime.updateElement(action.id, { layout: action.after })); if (action.type === 'layouts') await this.mutate(() => this.applyLayoutHistory(action.changes, 'after')); if (action.type === 'data') await this.mutate(() => syncRuntime.updateElement(action.id, { data: action.after })); undo.push(action); this.historyTick += 1; },
     handleKeydown(event) {
+      if (event.defaultPrevented || document.querySelector('dialog[open], :popover-open')) return;
       if (event.target?.matches('input,textarea,[contenteditable="true"]')) return;
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'z') { event.preventDefault(); return event.shiftKey ? this.redoChange() : this.undoChange(); }
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'd') { event.preventDefault(); return this.duplicateSelected(); }
@@ -341,10 +346,16 @@ export function canvasPageStore() {
     vectorEnd(element) { return Array.isArray(element.data?.end) ? element.data.end : [element.layout.width, 0]; },
     arrowHandleStyle(element, endpoint) { const point = endpoint === 'start' ? this.vectorStart(element) : this.vectorEnd(element); return `left:${point[0]}px;top:${point[1]}px`; },
     drawPoints(element) { return (element.data.points || []).map(point => point.join(',')).join(' '); },
+    documentUrl(naplet) {
+      if (naplet.access !== 'ready' || naplet.source?.type !== 'document') return null;
+      return buildSectionUrl({ section: 'docs', params: { workspacekey: this.currentWorkspaceKey, docid: naplet.source.id } });
+    },
     htmlDocument(naplet) { return buildCanvasHtmlDocument(naplet?.content?.html); },
   };
 }
 
+registerCanvasWindow(Alpine);
+registerCanvasDocument(Alpine);
 Alpine.store('canvas', canvasPageStore());
 window.Alpine = Alpine;
 Alpine.start();
