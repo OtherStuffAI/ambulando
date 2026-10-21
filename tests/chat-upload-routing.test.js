@@ -162,6 +162,23 @@ test('delayed complete patches saved owning composer, preserves destination', as
   assert.equal(x.store.messageInput, 'destination draft');
   assert.equal(x.store.chatComposerDrafts.source.value, 'unsent ![fixture](storage://object)');
 });
+test('completed upload remains prepared in a dismissed new-thread draft', async () => {
+  const x = fixture(candidate, { delay: 'complete' });
+  const pending = x.store.uploadChatFileDraft('one');
+  await tick();
+  const files = [...x.store.drafts];
+  x.switchComposer();
+  Object.assign(x.store.chatComposerDrafts.source, { title: 'Retained title', fileDrafts: files });
+  x.wait.release();
+  await pending;
+  const saved = x.store.chatComposerDrafts.source;
+  assert.equal(saved.fileDrafts[0].status, 'ready');
+  assert.equal(saved.fileDrafts[0].storage_object_id, 'object');
+  assert.equal(saved.fileDrafts[0].upload_inflight, false);
+  assert.equal(saved.title, 'Retained title');
+  assert.equal(saved.value, 'unsent ![fixture](storage://object)');
+  assert.equal(x.store.drafts.length, 0);
+});
 for (const stage of ['prepare', 'transfer', 'complete'])
   test(`failure during ${stage} preserves unsent draft and file; never marks ready`, async () => {
     const x = fixture(candidate, { fail: stage });

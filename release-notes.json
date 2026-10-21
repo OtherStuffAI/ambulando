@@ -4533,6 +4533,13 @@
       "notes": [
         "Reopen New thread in the same channel to recover unsent text, title, mentions and prepared attachments. Drafts stay separate between destinations and remain available after a failed send."
       ]
+    },
+    {
+      "buildNumber": 2497,
+      "label": "Preserve drafts when switching workspaces",
+      "notes": [
+        "Unfinished new threads keep their title, mentions and prepared attachments when you leave their channel or workspace. A send in progress finishes before you switch workspaces."
+      ]
     }
   ]
 }

@@ -642,6 +642,36 @@ describe('PG workspace manager mode', () => {
     expect(store.currentWorkspace.workspaceId).toBe('beta');
   });
 
+  it('keeps the workspace and draft in place until a thread send finishes', async () => {
+    const first = { workspaceKey: 'pg:alpha', workspaceId: 'alpha', workspaceOwnerNpub: 'npub1owner', pgBackendMode: true };
+    const next = { ...first, workspaceKey: 'pg:beta', workspaceId: 'beta' };
+    const reset = vi.fn();
+    const store = await buildStore({ knownWorkspaces: [first, next], selectedWorkspaceKey: first.workspaceKey,
+      deckThreadComposerOpen: true, deckThreadComposerBusy: true, resetDeckThreadCreateState: reset,
+    });
+    await store.selectWorkspace(next.workspaceKey, { pgVerified: true });
+    expect(store.currentWorkspace.workspaceId).toBe('alpha');
+    expect(reset).not.toHaveBeenCalled();
+    expect(store.workspaceSelectionError).toContain('finish sending');
+  });
+
+  it('detaches a new-thread draft before activating a different workspace', async () => {
+    const first = { workspaceKey: 'pg:alpha', workspaceId: 'alpha', workspaceOwnerNpub: 'npub1owner', pgBackendMode: true };
+    const next = { ...first, workspaceKey: 'pg:beta', workspaceId: 'beta' };
+    const snapshots = [];
+    const store = await buildStore({ knownWorkspaces: [first, next], selectedWorkspaceKey: first.workspaceKey,
+      localWorkspaceCoreLoadedForKey: first.workspaceKey, deckThreadComposerOpen: true,
+      resetDeckThreadCreateState(options) {
+        snapshots.push({ workspace: this.currentWorkspace.workspaceId, options });
+        this.deckThreadComposerOpen = false;
+      },
+    });
+    await store.selectWorkspace(next.workspaceKey, { pgVerified: true });
+    expect(snapshots).toEqual([{ workspace: 'alpha', options: { preserveDraft: true } }]);
+    expect(store.currentWorkspace.workspaceId).toBe('beta');
+    expect(store.deckThreadComposerOpen).toBe(false);
+  });
+
   it('switches same-owner workspaces without clearing either persisted partition', async () => {
     const db = await import('../src/db.js');
     const first = { workspaceKey: 'pg:alpha', workspaceId: 'alpha', workspaceOwnerNpub: 'npub1owner', pgBackendMode: true };

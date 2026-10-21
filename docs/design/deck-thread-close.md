@@ -22,3 +22,24 @@ history with synthetic conversations. Use the managed Sol runtime and installed
 browser; do not start a separate preview server. Backend requests remain blocked
 in the synthetic fixture. This coverage does not establish authenticated Tower
 delivery or physical iPhone WebKit behavior.
+
+New-thread dismissal also retains an in-memory draft in `chatComposerDrafts`,
+keyed by workspace, channel scope, channel and `__new_thread__`. The new-thread
+key takes precedence over an existing reply selection. Close, backdrop, Escape
+and returning to channel routing save the live editor value and mentions plus
+the title, manual-title flag, request ID, file preparations and audio drafts.
+Dismissal detaches attachments without revoking their draft-owned preview URLs.
+Upload callbacks update the saved owning attachment even when another composer
+is visible. Channel preparation completes before the new draft is restored, so
+navigation saves cannot overwrite it with an empty editor. Workspace activation
+saves and detaches an open draft before changing identity or channel metadata;
+an in-progress send must finish before switching. Failed sends retain
+the same draft and request ID; accepted sends clear it through the existing
+composer success lifecycle. These drafts do not survive a page reload and add
+no Tower records or contracts.
+
+`tests/e2e/new-thread-drafts.spec.cjs` covers real modal Escape/backdrop dismissal,
+mention rehydration, prepared files, destination switching and simulated failed
+and accepted sends at phone and desktop widths. Upload-stage behavior is covered
+separately in `tests/chat-upload-routing.test.js`; synthetic browser sends do not
+attest authenticated Tower delivery.

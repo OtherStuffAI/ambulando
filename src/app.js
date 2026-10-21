@@ -9956,6 +9956,13 @@ export function initApp() {
       const patchDraft = (patch) => {
         Object.assign(draft, patch);
         this.setChatFileDrafts(context, this.getChatFileDrafts(context).map(item => item.draft_id === draftId ? { ...item, ...patch } : item));
+        const key = draft.composer_draft_key;
+        const saved = this.chatComposerDrafts?.[key];
+        if (saved?.fileDrafts?.some(item => item.draft_id === draftId)) {
+          this.chatComposerDrafts = { ...this.chatComposerDrafts, [key]: {
+            ...saved, fileDrafts: saved.fileDrafts.map(item => item.draft_id === draftId ? { ...item, ...patch } : item),
+          } };
+        }
       };
       const operation = createDiagnosticOperation('upload');
       uploadContext.options.diagnosticOperation = operation;
@@ -9965,9 +9972,7 @@ export function initApp() {
         stage = value;
         emitDiagnostic({ ...operation, source: 'browser', level: 'info', code: 'recovery', stage, outcome: 'attempt', durationMs: Date.now() - startedAt });
       };
-      this.setChatFileDrafts(context, this.getChatFileDrafts(context).map((item) => (
-        item.draft_id === draftId ? { ...item, status: 'uploading', error: '', upload_inflight: true } : item
-      )));
+      patchDraft({ status: 'uploading', error: '', upload_inflight: true });
       try {
         assertActive();
         if (!retained && draft.kind === 'image' && isNoteToSelf(context === 'thread' ? this.activeThreadChannel : this.selectedChannel, this.session?.npub)) {
@@ -10019,11 +10024,7 @@ export function initApp() {
           }, uploadContext.options);
         }
         controller.signal.throwIfAborted();
-        this.setChatFileDrafts(context, this.getChatFileDrafts(context).map((item) => (
-          item.draft_id === draftId
-            ? { ...item, storage_object_id: prepared.object_id, status: 'ready', error: '', upload_inflight: false }
-            : item
-        )));
+        patchDraft({ storage_object_id: prepared.object_id, status: 'ready', error: '', upload_inflight: false });
         this.resolveChatFileDraftInlineToken(draftId, context, this.createStorageMarkdown(
           prepared.object_id,
           draft.filename,
@@ -10032,11 +10033,7 @@ export function initApp() {
       } catch (error) {
         finishDiagnosticOperation(operation, controller.signal.aborted || error?.code === 'upload_context_changed' ? 'cancelled' : 'failed', error, { stage, durationMs: Date.now() - startedAt });
         if (controller.signal.aborted) return;
-        this.setChatFileDrafts(context, this.getChatFileDrafts(context).map((item) => (
-          item.draft_id === draftId
-            ? { ...item, status: 'error', error: error?.message || 'Upload failed.', upload_inflight: false }
-            : item
-        )));
+        patchDraft({ status: 'error', error: error?.message || 'Upload failed.', upload_inflight: false });
         this.resolveChatFileDraftInlineToken(draftId, context, '[ Image upload failed ]', draft);
       } finally {
         if (this._chatUploadControllers.get(draftId) === controller) this._chatUploadControllers.delete(draftId);

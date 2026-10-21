@@ -1445,6 +1445,15 @@ export const workspaceManagerMixin = {
       }
       if (this._workspaceSelectionRequest !== selectionGeneration) return;
     }
+    if (previousWorkspaceKey !== nextWorkspaceKey && this.deckThreadComposerOpen) {
+      if (this.deckThreadComposerBusy || this.composerSendPending?.thread) {
+        this.workspaceSelectionError = 'Wait for the new thread to finish sending before switching workspaces.';
+        return;
+      }
+      // Save while the outgoing workspace and channel metadata still own it.
+      this.resetDeckThreadCreateState?.({ preserveDraft: true });
+      this.deckThreadReturnContext = null;
+    }
     if (previousWorkspaceKey && previousWorkspaceKey !== nextWorkspaceKey) {
       this.disposeTowerSyncService?.('workspace-switch');
     }

@@ -958,7 +958,8 @@ export const autopilotOverviewManagerMixin = {
     return String(this.selectedChannelId || '') === normalizedChannelId;
   },
 
-  resetDeckThreadCreateState({ preserveRouting = false } = {}) {
+  resetDeckThreadCreateState({ preserveRouting = false, preserveDraft = false } = {}) {
+    if (preserveDraft && this.deckThreadComposerOpen) this.saveChatComposerDraft?.('thread');
     this.deckThreadComposerOpen = false;
     this.deckThreadComposerChannelId = '';
     this.deckThreadComposerBusy = false;
@@ -974,7 +975,7 @@ export const autopilotOverviewManagerMixin = {
       ...(this.selectedAgentMentionsByComposer || {}),
       thread: [],
     };
-    if (typeof this.clearChatFileDrafts === 'function') this.clearChatFileDrafts('thread');
+    if (!preserveDraft && typeof this.clearChatFileDrafts === 'function') this.clearChatFileDrafts('thread');
     else this.threadFileDrafts = [];
     this.scheduleComposerAutosize?.('thread');
   },
@@ -999,7 +1000,6 @@ export const autopilotOverviewManagerMixin = {
     this.resetDeckThreadCreateState({ preserveRouting: true });
     this.deckThreadComposerRouted = routed;
     this.deckThreadComposerChannelId = normalizedChannelId;
-    this.deckThreadComposerOpen = true;
     this.deckThreadCreateRequestId = crypto.randomUUID();
     this.error = null;
     const ready = await this.prepareDeckComposerChannel(normalizedChannelId);
@@ -1008,6 +1008,8 @@ export const autopilotOverviewManagerMixin = {
       this.error = 'Could not prepare that channel for a new thread.';
       return false;
     }
+    this.deckThreadComposerOpen = true;
+    this.restoreChatComposerDraft?.('thread');
     const focusComposer = () => document.querySelector?.('[data-chat-composer="thread"]')?.focus?.();
     if (typeof document !== 'undefined') {
       if (typeof requestAnimationFrame === 'function') requestAnimationFrame(focusComposer);
@@ -1042,7 +1044,7 @@ export const autopilotOverviewManagerMixin = {
   closeDeckThreadComposer() {
     if (this.deckThreadComposerBusy) return;
     const returnContext = this.deckThreadReturnContext;
-    this.resetDeckThreadCreateState();
+    this.resetDeckThreadCreateState({ preserveDraft: true });
     this.restoreDeckReturnContext(returnContext);
     this.deckThreadReturnContext = null;
   },
@@ -1050,7 +1052,7 @@ export const autopilotOverviewManagerMixin = {
   cancelDeckThreadRouting() {
     const returnContext = this.deckThreadReturnContext;
     this.showWriteContextModal = false;
-    this.resetDeckThreadCreateState();
+    this.resetDeckThreadCreateState({ preserveDraft: true });
     this.restoreDeckReturnContext(returnContext);
     this.deckThreadReturnContext = null;
   },
@@ -1060,7 +1062,7 @@ export const autopilotOverviewManagerMixin = {
     const channelId = normalizeString(this.deckThreadComposerChannelId);
     const channel = this.deckThreadComposerChannelOptions.find((entry) => entry.record_id === channelId) || null;
     const scopeId = normalizeString(getPgChannelScopeId(channel));
-    this.resetDeckThreadCreateState();
+    this.resetDeckThreadCreateState({ preserveDraft: true });
     this.writeContextPendingAction = {
       type: 'deck-thread-create',
       payload: { options: { boardId: this.deckThreadReturnContext?.selectedBoardId || this.selectedBoardId } },
@@ -1096,6 +1098,7 @@ export const autopilotOverviewManagerMixin = {
       if (!created?.record_id || !created?.pg_thread_id) return false;
       const returnContext = this.deckThreadReturnContext;
       const createdChannelId = channelId;
+      this.clearCurrentChatComposerDraft?.('thread');
       this.resetDeckThreadCreateState();
       this.restoreDeckReturnContext(returnContext);
       this.deckThreadReturnContext = null;

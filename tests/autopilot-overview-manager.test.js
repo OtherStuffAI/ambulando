@@ -21,6 +21,7 @@ import {
 import { buildPgChannelTaskBoardId } from '../src/pg-record-context.js';
 import { computeBoardColumns } from '../src/task-board-state.js';
 import { recordFamilyHash } from '../src/translators/chat.js';
+import { chatMessageManagerMixin } from '../src/chat-message-manager.js';
 import { channelsManagerMixin } from '../src/channels-manager.js';
 
 describe('autopilot overview manager', () => {
@@ -1336,6 +1337,67 @@ describe('autopilot overview manager', () => {
       ...overrides,
     });
   }
+
+  it('restores new-thread state after dismissal with destination and send isolation', async () => {
+    const store = createDeckComposerStore({
+      currentWorkspaceKey: 'workspace-a', activeThreadId: 'old-thread',
+      selectedChannelId: 'chan-a', restoreDeckReturnContext: vi.fn(),
+      ...Object.fromEntries(['getChatComposerDraftKey', 'saveChatComposerDraft', 'restoreChatComposerDraft', 'clearCurrentChatComposerDraft']
+        .map(key => [key, chatMessageManagerMixin[key]])),
+      sendMessage: vi.fn().mockResolvedValueOnce(false).mockResolvedValueOnce({ record_id: 'root', pg_thread_id: 'thread' }),
+      openDeckThread: vi.fn(),
+    });
+    await store.beginDeckThreadCreate('chan-a');
+    store.threadInput = 'Unsent @[Agent](mention:agent:npub1agent)';
+    store.editDeckThreadCreateTitle('Custom title');
+    store.selectedAgentMentionsByComposer.thread = [{ npub: 'npub1agent' }];
+    const file = { draft_id: 'file', status: 'ready', storage_object_id: 'object' };
+    store.threadFileDrafts = [file];
+    store.threadAudioDrafts = [{ storage_object_id: 'audio' }];
+    const requestId = store.deckThreadCreateRequestId;
+    const key = store.getChatComposerDraftKey('thread');
+    expect(key).toContain('__new_thread__');
+    store.clearChatFileDrafts.mockClear();
+    store.closeDeckThreadComposer();
+    expect(store.clearChatFileDrafts).not.toHaveBeenCalled();
+    expect(store.chatComposerDrafts[key].fileDrafts[0]).toBe(file);
+    await store.beginDeckThreadCreate('chan-b');
+    expect(store.threadInput).toBe('');
+    expect(store.threadFileDrafts).toEqual([]);
+    store.closeDeckThreadComposer();
+    store.currentWorkspaceKey = 'workspace-b';
+    await store.beginDeckThreadCreate('chan-a');
+    expect(store.threadInput).toBe('');
+    store.closeDeckThreadComposer();
+    store.currentWorkspaceKey = 'workspace-a';
+    const originalScope = store.channels.find(row => row.record_id === 'chan-a').scope_id;
+    expect(store.getChatComposerDraftKey('thread', { channelId: 'chan-a', scopeId: 'other-scope', threadId: '__new_thread__' })).not.toBe(key);
+    // Channel hydration may save/clear the outgoing editor. It must happen
+    // before restoring the saved create-mode snapshot.
+    store.selectChannel = async function(id) {
+      this.saveChatComposerDraft('thread');
+      this.threadInput = '';
+      this.selectedChannelId = id;
+    };
+    expect(store.channels.find(row => row.record_id === 'chan-a').scope_id).toBe(originalScope);
+    await store.beginDeckThreadCreate('chan-a');
+    expect(store.threadInput).toContain('Unsent');
+    expect(store.threadTitleDraft).toBe('Custom title');
+    expect(store.deckThreadTitleManuallyEdited).toBe(true);
+    expect(store.threadFileDrafts[0]).toBe(file);
+    expect(store.threadAudioDrafts).toHaveLength(1);
+    expect(store.selectedAgentMentionsByComposer.thread).toEqual([{ npub: 'npub1agent' }]);
+    expect(store.deckThreadCreateRequestId).toBe(requestId);
+    expect(await store.sendDeckThread()).toBe(false);
+    store.closeDeckThreadComposer();
+    await store.beginDeckThreadCreate('chan-a');
+    expect(store.threadInput).toContain('Unsent');
+    expect(await store.sendDeckThread()).toBe(true);
+    expect(store.chatComposerDrafts[key]).toBeUndefined();
+    await store.beginDeckThreadCreate('chan-a');
+    expect(store.threadInput).toBe('');
+    expect(store.threadFileDrafts).toEqual([]);
+  });
 
   it('opens the shared create-mode thread surface directly for concrete channel context', async () => {
     const store = createDeckComposerStore({
