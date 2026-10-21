@@ -16,8 +16,8 @@ function mutationKey(row = {}, suffix = '') {
   return [row?.record_id, row?.version, row?.updated_at, suffix].map((value) => String(value ?? '').trim()).join(':');
 }
 
-function issueTypedApi(store, name, args, entityId = '') {
-  return issue(store, name, { args, entityId }, entityId);
+function issueTypedApi(store, name, args, entityId = '', clientMutationId = entityId) {
+  return issue(store, name, { args, entityId }, clientMutationId);
 }
 
 export const createTowerPgWorkroom = (store, ...args) => issueTypedApi(store, 'workroom.create', args, args[1]?.client_record_id || args[1]?.record_id);
@@ -57,7 +57,7 @@ export const decideTowerPgApproval = (store, ...args) => issueTypedApi(store, 'w
 export const createTowerPgReaction = (store, ...args) => issueTypedApi(store, 'reaction.create', args, args[1]?.client_record_id || args[1]?.record_id);
 export const deleteTowerPgReaction = (store, ...args) => issueTypedApi(store, 'reaction.delete', args, args[1]);
 export const createTowerPgPersonalWapp = (store, ...args) => issueTypedApi(store, 'wapp.create', args, args[1]?.client_record_id || args[1]?.record_id);
-export const updateTowerPgPersonalWapp = (store, ...args) => issueTypedApi(store, 'wapp.update', args, args[1]);
+export const updateTowerPgPersonalWapp = (store, ...args) => issueTypedApi(store, 'wapp.update', args, args[1], crypto.randomUUID());
 export const deleteTowerPgPersonalWapp = (store, ...args) => issueTypedApi(store, 'wapp.delete', args, args[1]);
 export const reorderTowerPgPersonalWapps = (store, ...args) => issueTypedApi(store, 'wapp.reorder', args, 'personal-wapps');
 export const putTowerPgWappPublishingGrant = (store, ...args) => issueTypedApi(store, 'wapp-publishing-grant.put', args, args[1]);

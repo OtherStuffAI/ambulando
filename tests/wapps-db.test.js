@@ -7,6 +7,7 @@ import {
   getWappById,
   getWappsByOwner,
   openWorkspaceDb,
+  replacePgPersonalWappsForOwner,
   replaceWappPublishingGrants,
   upsertWapp,
 } from '../src/db.js';
@@ -53,6 +54,33 @@ describe('wapp db helpers', () => {
 
     expect((await getWappById('wapp-record-1'))?.title).toBe('Budget Builder');
     expect(await getWappsByOwner(TEST_OWNER)).toHaveLength(1);
+  });
+
+  it('rejects stale command and list materialisations after a newer rename', async () => {
+    const ownerActorId = 'actor-owner';
+    const renamed = wapp({
+      owner_actor_id: ownerActorId,
+      pg_backend: true,
+      pg_record_type: 'personal_wapp',
+      title: 'Nostr Browser',
+      version: 3,
+      updated_at: '2026-10-21T01:00:03.000Z',
+    });
+    const stale = {
+      ...renamed,
+      title: 'Wingman App',
+      version: 2,
+      updated_at: '2026-10-21T01:00:02.000Z',
+    };
+
+    await upsertWapp(renamed);
+    await upsertWapp(stale);
+    await replacePgPersonalWappsForOwner(ownerActorId, [stale]);
+
+    expect(await getWappById(renamed.record_id)).toMatchObject({
+      title: 'Nostr Browser',
+      version: 3,
+    });
   });
 
   it('loads WApps by workspace owner when the app owner differs', async () => {

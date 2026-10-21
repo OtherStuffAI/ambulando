@@ -1500,7 +1500,13 @@ export async function getDailyNoteById(recordId) {
 // ---------------------------------------------------------------------------
 
 export async function upsertWapp(wapp) {
-  return wsDb().wapps.put(sanitizeForStorage(wapp));
+  const db = wsDb();
+  const row = sanitizeForStorage(wapp);
+  return db.transaction('rw', db.wapps, async () => {
+    const existing = await db.wapps.get(row.record_id);
+    if (existing && Number(existing.version || 0) > Number(row.version || 0)) return row.record_id;
+    return db.wapps.put(row);
+  });
 }
 
 export async function getWappsByOwner(ownerNpub) {
@@ -1539,7 +1545,11 @@ export async function replacePgPersonalWappsForOwner(ownerActorId, personalWapps
     const incomingIds = new Set(rows.map((wapp) => wapp.record_id));
     const existingById = new Map(existingRows.map((wapp) => [wapp.record_id, wapp]));
     const deleteIds = existingRows.map((wapp) => wapp.record_id).filter((id) => id && !incomingIds.has(id));
-    const changedRows = rows.filter((wapp) => !sameLogicalValue(existingById.get(wapp.record_id), wapp));
+    const acceptedRows = rows.filter((wapp) => {
+      const existingRow = existingById.get(wapp.record_id);
+      return !existingRow || Number(existingRow.version || 0) <= Number(wapp.version || 0);
+    });
+    const changedRows = acceptedRows.filter((wapp) => !sameLogicalValue(existingById.get(wapp.record_id), wapp));
     if (deleteIds.length > 0) await db.wapps.bulkDelete(deleteIds);
     if (changedRows.length > 0) await db.wapps.bulkPut(changedRows);
     return rows.length;

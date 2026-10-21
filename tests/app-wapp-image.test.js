@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { clearRuntimeData, getWappById, openWorkspaceDb } from '../src/db.js';
 const { alpineStore, createWapp, updateWapp } = vi.hoisted(() => ({ alpineStore: vi.fn(), createWapp: vi.fn(), updateWapp: vi.fn() }));
 vi.mock('alpinejs', () => ({ default: { store: alpineStore, start: vi.fn() } }));
 vi.mock('../src/tower-command-intents.js', async original => ({ ...await original(), createTowerPgPersonalWapp: createWapp, updateTowerPgPersonalWapp: updateWapp }));
@@ -9,7 +10,12 @@ async function store() {
   Object.assign(s, { backendUrl: 'https://tower.example', selectedWorkspaceKey: 'one', knownWorkspaces: [{ workspaceKey: 'one', workspaceId: 'workspace-1', workspaceOwnerNpub: 'npub-human', directHttpsUrl: 'https://tower.example', appNpub: 'flightdeck_pg', pgBackendMode: true, pgMe: { actor: { actor_id: 'synthetic-reader' } } }] });
   return s;
 }
-beforeEach(() => { alpineStore.mockClear(); createWapp.mockReset(); updateWapp.mockReset(); });
+beforeEach(async () => {
+  alpineStore.mockClear(); createWapp.mockReset(); updateWapp.mockReset();
+  const db = openWorkspaceDb('one');
+  await db.open();
+  await clearRuntimeData();
+});
 describe('Add/Edit WApp image integration', () => {
   it('saves the uploaded URL and renders it from the returned launcher row after reopening', async () => {
     const s = await store(); s.openPersonalWappEditor();
@@ -18,7 +24,7 @@ describe('Add/Edit WApp image integration', () => {
     await s.savePersonalWappEditor();
     expect(createWapp.mock.calls[0][2].icon_url).toBe('https://blossom.primal.net/icon.png');
     expect(s.personalWappEditorOpen).toBe(false);
-    const row = s.wapps.find(w => w.record_id === 'wapp-1');
+    const row = await getWappById('wapp-1');
     expect(s.getPersonalWappIconUrl(row)).toBe('https://blossom.primal.net/icon.png');
     s.openPersonalWappEditor(row);
     expect(s.personalWappFormIconUrl).toBe(row.icon_url);
@@ -45,5 +51,24 @@ describe('Add/Edit WApp image integration', () => {
     expect(s.personalWappEditorOpen).toBe(true); expect(s.personalWappFormIconUrl).toBe('https://image.example/icon.png');
     expect(s.getPersonalWappIconUrl({ launch_url: 'https://app.example/path' })).toBe('https://app.example/favicon.ico');
     s.closePersonalWappEditor(); expect(s.personalWappEditorOpen).toBe(false);
+  });
+  it('keeps the editor open when Tower does not confirm the save or placement persistence fails', async () => {
+    const s = await store();
+    s.openPersonalWappEditor({ record_id: 'wapp-1', title: 'Wingman App', launch_url: 'https://app.example' });
+    s.personalWappFormTitle = 'Nostr Browser';
+    updateWapp.mockResolvedValue({ stale: true, acknowledgement: { personal_wapp: { id: 'wapp-1', title: 'Wingman App' } } });
+
+    await s.savePersonalWappEditor();
+
+    expect(s.personalWappEditorOpen).toBe(true);
+    expect(s.personalWappEditorError).toContain('superseded');
+    expect(s.personalWappFormTitle).toBe('Nostr Browser');
+
+    updateWapp.mockResolvedValue({ personal_wapp: { id: 'wapp-1', title: 'Nostr Browser', launch_url: 'https://app.example', row_version: 2 } });
+    s.saveAppEditorPlacement = vi.fn(async () => { throw new Error('Placement storage unavailable'); });
+    await s.savePersonalWappEditor();
+
+    expect(s.personalWappEditorOpen).toBe(true);
+    expect(s.personalWappEditorError).toBe('Placement storage unavailable');
   });
 });

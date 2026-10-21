@@ -4485,6 +4485,13 @@
         "Choose a disclosed NStack workspace in NBrowser and import it into the normal Tower connection flow without retyping server or workspace details.",
         "Ambulando validates the descriptor and verifies Tower access with fresh Nostr authentication before saving the workspace; manual Tower setup remains available."
       ]
+    },
+    {
+      "buildNumber": 2488,
+      "label": "Personal app renames stick",
+      "notes": [
+        "Rename a personal app and keep the new title after sync, reload and edits from another browser; failed server or placement saves now stay open with a clear error."
+      ]
     }
   ]
 }

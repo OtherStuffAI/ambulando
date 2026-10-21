@@ -224,6 +224,7 @@ import {
   upsertSchedule,
   getScheduleById,
   upsertDailyNote,
+  upsertWapp,
   getScopesByOwner,
   getPendingWrites,
   removePendingWrite,
@@ -3888,15 +3889,16 @@ export function initApp() {
               appNpub: context.appNpub,
             });
         const next = response?.personal_wapp;
-        if (next) {
-          await this.saveAppEditorPlacement('wapp:' + (next.id || next.record_id), placementPartition, placementDraft, placementOrder);
-          if (placementPartition && placementPartition !== this.appPlacementPartition) return;
-          const row = mapPgPersonalWappToLocal(next, { workspaceOwnerNpub: context.workspaceOwnerNpub });
-          this.wapps = [
-            ...(this.wapps || []).filter((entry) => entry.record_id !== row.record_id),
-            row,
-          ];
+        if (!next) {
+          throw new Error(response?.stale
+            ? 'A newer app edit superseded this save. Reopen the editor and try again.'
+            : 'Tower did not confirm the app save. Please try again.');
         }
+        const row = mapPgPersonalWappToLocal(next, { workspaceOwnerNpub: context.workspaceOwnerNpub });
+        if (!row.record_id) throw new Error('Tower returned an invalid app after saving. Please try again.');
+        await upsertWapp(row);
+        await this.saveAppEditorPlacement('wapp:' + row.record_id, placementPartition, placementDraft, placementOrder);
+        if (placementPartition && placementPartition !== this.appPlacementPartition) return;
         this.personalWappEditorSaving = false;
         this.closePersonalWappEditor();
       } catch (error) {
