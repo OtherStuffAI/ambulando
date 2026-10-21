@@ -206,3 +206,13 @@ Naplet windows also enter the native modal top layer when expanded. Their root
 panel uses the same opaque card pair, independently of document paper or HTML
 package content. The opacity suite covers expanded document, task-list,
 chat-thread, HTML and restricted windows plus their opaque options popover.
+
+Window options explicitly use `max-content` height and grid rows with start
+alignment, so top-layer/grid sizing cannot distribute spare height between
+commands. The viewport height remains a scrolling cap; rows retain their normal
+36px minimum or 44px touch/narrow minimum. The focused
+`canvas-window-menu.spec.cjs` checks row height/gaps, content sizing, opaque colors,
+keyboard focus, short-viewport scrolling and read-only restricted menus across
+normal/expanded windows, all five naplet variants, three widths and four theme
+modes. These are synthetic client checks; native Safari and physical touch
+behavior need separate device verification.

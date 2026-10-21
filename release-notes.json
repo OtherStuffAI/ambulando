@@ -4640,6 +4640,13 @@
       "notes": [
         "Setup includes the Canopy event viewer base URL as an example; njump remains the default."
       ]
+    },
+    {
+      "buildNumber": 2516,
+      "label": "Compact Canvas window options",
+      "notes": [
+        "Canvas window options keep compact, content-sized rows in normal and full-screen windows, with scrolling only when needed."
+      ]
     }
   ]
 }
