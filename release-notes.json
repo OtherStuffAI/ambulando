@@ -4627,6 +4627,12 @@
       "label": "Canvas opacity review checkpoint",
       "notes": [],
       "noUserVisibleChanges": true
+    },
+    {
+      "buildNumber": 2514,
+      "label": "Nostr viewer validation checkpoint",
+      "notes": [],
+      "noUserVisibleChanges": true
     }
   ]
 }

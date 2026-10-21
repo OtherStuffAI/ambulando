@@ -6,7 +6,7 @@ const STORAGE_KEY = 'ambulando:nostr-viewer';
 export function normalizeNostrViewer(value = '') {
   const input = String(value).trim();
   if (!input) return DEFAULT_VIEWER;
-  if (!/^https?:\/\//i.test(input) || /[\s\\\u0000-\u001f\u007f]/.test(input)) throw new Error('Enter an absolute HTTP(S) URL without credentials, query or fragment.');
+  if (!/^https?:\/\//i.test(input) || (/[\s\\]/.test(input) || [...input].some(char => char.charCodeAt(0) < 32 || char.charCodeAt(0) === 127))) throw new Error('Enter an absolute HTTP(S) URL without credentials, query or fragment.');
   const url = new URL(input);
   if (url.username || url.password || url.search || url.hash || input.includes('?') || input.includes('#')) throw new Error('Enter an absolute HTTP(S) URL without credentials, query or fragment.');
   url.pathname = url.pathname.replace(/\/+$/, '') + '/';
