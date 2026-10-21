@@ -219,8 +219,25 @@ test('dedicated Canvas route renders authorized sources and isolates trusted HTM
   expect(mutations.find(row => row.suffix === '/naplets/doc').body).toMatchObject({ expected_row_version: 1, layout: { z: 2 } });
   await doc.getByRole('button', { name: 'Restore from full screen', exact: true }).click();
   await expect(doc).toHaveJSProperty('open', false);
+  await expect(doc).not.toHaveClass(/window-expanded/);
   await expect.poll(() => scroll.evaluate(el => el.scrollTop)).toBe(readingPosition);
   await expect(prose).toHaveAttribute('data-window-retained', 'yes');
+  const header = await doc.locator('.canvas-naplet-header strong').boundingBox();
+  await canvas.mouse.move(header.x + 8, header.y + 8);
+  await canvas.mouse.down();
+  await expect.poll(() => canvas.evaluate(() => Alpine.store('canvas').interaction?.type)).toBe('move');
+  await canvas.mouse.move(header.x + 28, header.y + 20, { steps: 4 });
+  await canvas.mouse.up();
+  await expect.poll(() => naplets[0].layout.x).toBe(50);
+  expect(naplets[0].layout.y).toBe(42);
+  await expect(doc).toHaveClass(/selected/);
+  const resize = await doc.getByRole('button', { name: 'Resize naplet' }).boundingBox();
+  await canvas.mouse.move(resize.x + resize.width / 2, resize.y + resize.height / 2);
+  await canvas.mouse.down();
+  await canvas.mouse.move(resize.x + resize.width / 2 + 30, resize.y + resize.height / 2 + 20, { steps: 4 });
+  await canvas.mouse.up();
+  await expect.poll(() => naplets[0].layout.width).toBe(350);
+  expect(naplets[0].layout.height).toBe(240);
   for (const width of [1440, 390]) {
     await canvas.setViewportSize({ width, height: 900 });
     for (const theme of ['light', 'dark']) {
@@ -241,7 +258,9 @@ test('dedicated Canvas route renders authorized sources and isolates trusted HTM
   await expect(prose.locator('h2')).toHaveText('Fresh source update');
   await expect(prose).toHaveAttribute('data-retained', 'yes');
   await scroll.evaluate(el => { el.scrollTop = 0; });
-  await scroll.focus(); await canvas.keyboard.type('do not edit');
+  await scroll.focus();
+  await expect(scroll).toBeFocused();
+  await canvas.keyboard.type('do not edit');
   await expect(prose).not.toContainText('do not edit');
   await expect(canvas.getByTitle('Select (V)')).toHaveClass(/active/);
 
