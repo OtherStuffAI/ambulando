@@ -747,7 +747,13 @@ export async function getChannelsByOwner(ownerNpub) {
 }
 
 export async function upsertChannel(channel) {
-  return wsDb().channels.put(sanitizeForStorage(channel));
+  const db = wsDb();
+  const row = sanitizeForStorage(channel);
+  return db.transaction('rw', db.channels, async () => {
+    const existing = await db.channels.get(row.record_id);
+    if (existing && Number(existing.version || 0) > Number(row.version || 0)) return row.record_id;
+    return db.channels.put(row);
+  });
 }
 
 export async function upsertPgListedChannel(channel) {
@@ -777,7 +783,12 @@ export async function replaceChannelsForOwner(ownerNpub, channels = []) {
       if (row.pg_backend) await db.channels.update(row.record_id, { pg_access_status: 'stale' });
       else await db.channels.delete(row.record_id);
     }
-    if (rows.length > 0) await db.channels.bulkPut(rows);
+    const existingById = new Map(retained.map((row) => [row.record_id, row]));
+    const acceptedRows = rows.filter((row) => {
+      const existingRow = existingById.get(row.record_id);
+      return !existingRow || Number(existingRow.version || 0) <= Number(row.version || 0);
+    });
+    if (acceptedRows.length > 0) await db.channels.bulkPut(acceptedRows);
     return rows.length;
   });
 }

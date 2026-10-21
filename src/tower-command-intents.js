@@ -23,7 +23,7 @@ function issueTypedApi(store, name, args, entityId = '', clientMutationId = enti
 export const createTowerPgWorkroom = (store, ...args) => issueTypedApi(store, 'workroom.create', args, args[1]?.client_record_id || args[1]?.record_id);
 export const startTowerPgWorkroom = (store, ...args) => issueTypedApi(store, 'workroom.start', args, args[1]);
 export const archiveTowerPgWorkroom = (store, ...args) => issueTypedApi(store, 'workroom.archive', args, args[1]);
-export const updateTowerPgChannel = (store, ...args) => issueTypedApi(store, 'channel.update', args, args[1]);
+export const updateTowerPgChannel = (store, ...args) => issueTypedApi(store, 'channel.update', args, args[1], crypto.randomUUID());
 export const createTowerPgScopeChannel = (store, workspaceId, scopeId, body = {}, options) => {
   const commandBody = { ...body, client_record_id: body.client_record_id || body.record_id || crypto.randomUUID() };
   return issueTypedApi(store, 'channel.create', [workspaceId, scopeId, commandBody, options], commandBody.client_record_id);

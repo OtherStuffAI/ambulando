@@ -4488,9 +4488,22 @@
     },
     {
       "buildNumber": 2488,
+      "label": "Release verification",
+      "notes": [],
+      "noUserVisibleChanges": true
+    },
+    {
+      "buildNumber": 2489,
       "label": "Personal app renames stick",
       "notes": [
         "Rename a personal app and keep the new title after sync, reload and edits from another browser; failed server or placement saves now stay open with a clear error."
+      ]
+    },
+    {
+      "buildNumber": 2490,
+      "label": "Channel renames stick",
+      "notes": [
+        "Rename a channel and keep its new name after sync, reload and edits from another browser; superseded saves now show a clear error without replacing the newer name."
       ]
     }
   ]

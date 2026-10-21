@@ -3089,6 +3089,19 @@ describe('PG channel lifecycle controls', () => {
     expect(upsertChannel).not.toHaveBeenCalled();
   });
 
+  it('keeps channel settings open with a clear error for a superseded rename', async () => {
+    updateTowerPgChannel.mockResolvedValueOnce({ stale: true });
+    const state = store({ showChannelSettingsModal: true });
+
+    await state.renameSettingsChannel();
+
+    expect(state.showChannelSettingsModal).toBe(true);
+    expect(state.channelSettingsError).toContain('superseded');
+    expect(state.channelSettingsName).toBe('  Renamed  ');
+    expect(state.channels[0].title).toBe('Original');
+    expect(upsertChannel).not.toHaveBeenCalled();
+  });
+
   it('gates management separately from grant management and protects system/DM channels', () => {
     const state = store({ canAdminWorkspace: false });
     expect(state.canManageChannel(channel)).toBe(false);

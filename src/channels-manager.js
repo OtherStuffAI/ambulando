@@ -1857,7 +1857,11 @@ export const channelsManagerMixin = {
         throw new Error('The workspace changed. Close settings and select the channel again.');
       }
       const result = await updateTowerPgChannel(this, workspaceId, channel.record_id, { name }, { baseUrl, appNpub });
-      if (!result?.channel?.id) throw new Error('Tower did not return the renamed channel. Refresh and try again.');
+      if (!result?.channel?.id) {
+        throw new Error(result?.stale
+          ? 'A newer channel edit superseded this rename. Refresh and try again.'
+          : 'Tower did not return the renamed channel. Refresh and try again.');
+      }
       const updated = { ...channel, ...mapPgChannelToLocal(result.channel, { workspaceOwnerNpub }) };
       // PATCH responses need not repeat the grants from the readable channel projection.
       if (!Array.isArray(result.channel.channel_grants) && !Array.isArray(result.channel.grants)) updated.channel_grants = channel.channel_grants || [];
