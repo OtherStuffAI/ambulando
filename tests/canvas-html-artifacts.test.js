@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const api = vi.hoisted(() => ({
   getTowerPgCanvasSnapshot: vi.fn(),
+  getTowerPgFile: vi.fn(),
   getTowerPgCanvasNapletHtml: vi.fn(),
   updateTowerPgCanvasNaplet: vi.fn(),
   getTowerPgFileVersionObjectBytes: vi.fn(),

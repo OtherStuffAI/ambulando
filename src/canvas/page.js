@@ -17,7 +17,7 @@ import { normalizeWorkspaceEntry } from '../workspaces.js';
 import { canvasContext, CANVAS_ACCESS_MESSAGE } from './projection.js';
 import { CanvasSyncRuntime } from './sync-service.js';
 import {
-  arrowGeometry, canvasItemKey, canvasWheelIntent, cloneCanvasValue, enclosedItemKeys,
+  arrowGeometry, arrowPoints, arrowPath, canvasItemKey, canvasWheelIntent, cloneCanvasValue, enclosedItemKeys,
   groupBounds, groupDelta, moveArrowEndpoint, movementItems, selectionRect, worldPoint, zoomViewport,
 } from './interactions.js';
 import '../ambulando-tokens.css';
@@ -243,7 +243,7 @@ export function canvasPageStore() {
       if (state.type === 'move') {
         const delta = groupDelta(state.moving, dx, dy);
         for (const original of state.moving) original.item.layout = { ...original.item.layout, x: Math.round(original.before.x + delta.x), y: Math.round(original.before.y + delta.y) };
-      } else if (state.type === 'arrow-start' || state.type === 'arrow-end') {
+      } else if (state.type === 'arrow-start' || state.type === 'arrow-end' || state.type === 'arrow-middle') {
         const next = moveArrowEndpoint(state.before, state.beforeData, state.type.slice(6), this.toWorld(event));
         item.layout = next.layout; item.data = next.data;
       } else item.layout = state.type === 'resize'
@@ -275,7 +275,7 @@ export function canvasPageStore() {
       if (!item || (JSON.stringify(state.before) === JSON.stringify(item.layout) && JSON.stringify(state.beforeData) === JSON.stringify(item.data || {}))) return;
       const after = cloneCanvasValue(item.layout);
       const afterData = cloneCanvasValue(item.data || {});
-      await this.mutate(() => state.itemType === 'naplet' ? syncRuntime.updateNapletLayout(item.id, after) : syncRuntime.updateElement(item.id, { layout: after, ...(JSON.stringify(state.beforeData) !== JSON.stringify(afterData) ? { data: afterData } : {}) }), { type: 'layout', itemType: state.itemType, id: item.id, before: state.before, after });
+      await this.mutate(() => state.itemType === 'naplet' ? syncRuntime.updateNapletLayout(item.id, after) : syncRuntime.updateElement(item.id, { layout: after, ...(JSON.stringify(state.beforeData) !== JSON.stringify(afterData) ? { data: afterData } : {}) }), { type: 'layout', itemType: state.itemType, id: item.id, before: state.before, after, beforeData: state.beforeData, afterData });
     },
     cancelPointer(event) { pointers.delete(event.pointerId); this.interaction = null; this.selectionBox = null; void this.refresh(); },
     queueViewportSave() { clearTimeout(this._viewportTimer); this._viewportTimer = setTimeout(() => this.saveViewport(), 350); },
@@ -322,12 +322,12 @@ export function canvasPageStore() {
     },
     async orderSelected(delta) { const item = this.findSelected(); if (!item) return; const layout = { ...item.layout, z: clamp(item.layout.z + delta, 1, 100000) }; await this.mutate(() => this.selected.type === 'naplet' ? syncRuntime.updateNapletLayout(item.id, layout) : syncRuntime.updateElement(item.id, { layout })); },
     async applyLayoutHistory(changes, side) { for (const change of changes) { if (change.itemType === 'naplet') await syncRuntime.updateNapletLayout(change.id, change[side]); else await syncRuntime.updateElement(change.id, { layout: change[side] }); } },
-    async undoChange() { const action = undo.pop(); if (!action) return; if (action.type === 'layout') await this.mutate(() => action.itemType === 'naplet' ? syncRuntime.updateNapletLayout(action.id, action.before) : syncRuntime.updateElement(action.id, { layout: action.before })); if (action.type === 'layouts') await this.mutate(() => this.applyLayoutHistory(action.changes, 'before')); if (action.type === 'data') await this.mutate(() => syncRuntime.updateElement(action.id, { data: action.before })); redo.push(action); this.historyTick -= 1; },
-    async redoChange() { const action = redo.pop(); if (!action) return; if (action.type === 'layout') await this.mutate(() => action.itemType === 'naplet' ? syncRuntime.updateNapletLayout(action.id, action.after) : syncRuntime.updateElement(action.id, { layout: action.after })); if (action.type === 'layouts') await this.mutate(() => this.applyLayoutHistory(action.changes, 'after')); if (action.type === 'data') await this.mutate(() => syncRuntime.updateElement(action.id, { data: action.after })); undo.push(action); this.historyTick += 1; },
+    async undoChange() { const action = undo.pop(); if (!action) return; if (action.type === 'layout') await this.mutate(() => action.itemType === 'naplet' ? syncRuntime.updateNapletLayout(action.id, action.before) : syncRuntime.updateElement(action.id, { layout: action.before, ...(action.beforeData ? { data: action.beforeData } : {}) })); if (action.type === 'layouts') await this.mutate(() => this.applyLayoutHistory(action.changes, 'before')); if (action.type === 'data') await this.mutate(() => syncRuntime.updateElement(action.id, { data: action.before })); redo.push(action); this.historyTick -= 1; },
+    async redoChange() { const action = redo.pop(); if (!action) return; if (action.type === 'layout') await this.mutate(() => action.itemType === 'naplet' ? syncRuntime.updateNapletLayout(action.id, action.after) : syncRuntime.updateElement(action.id, { layout: action.after, ...(action.afterData ? { data: action.afterData } : {}) })); if (action.type === 'layouts') await this.mutate(() => this.applyLayoutHistory(action.changes, 'after')); if (action.type === 'data') await this.mutate(() => syncRuntime.updateElement(action.id, { data: action.after })); undo.push(action); this.historyTick += 1; },
     handleKeydown(event) {
       if (event.key === 'Escape' && this.linkDrag) { event.preventDefault(); this.linkDrag = null; return; }
       if (event.defaultPrevented || document.querySelector('dialog:modal, :popover-open') || event.target.closest?.('.canvas-comment-panel,.canvas-comment-dialog')) return;
-      if (event.target?.matches('input,textarea,[contenteditable="true"]')) return;
+      if (event.target?.matches('input,textarea,select,button,[contenteditable="true"]')) return;
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'z') { event.preventDefault(); return event.shiftKey ? this.redoChange() : this.undoChange(); }
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'd') { event.preventDefault(); return this.duplicateSelected(); }
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'g') { event.preventDefault(); return this.createGroup(); }
@@ -448,7 +448,28 @@ export function canvasPageStore() {
     vectorViewBox(element) { return `0 0 ${element.layout.width} ${element.layout.height}`; },
     vectorStart(element) { return Array.isArray(element.data?.start) ? element.data.start : [0, element.layout.height]; },
     vectorEnd(element) { return Array.isArray(element.data?.end) ? element.data.end : [element.layout.width, 0]; },
-    arrowHandleStyle(element, endpoint) { const point = endpoint === 'start' ? this.vectorStart(element) : this.vectorEnd(element); return `left:${point[0]}px;top:${point[1]}px`; },
+    arrowHandleStyle(element, endpoint) { const point = arrowPoints(element.layout, element.data)[endpoint]; return `left:${point[0]}px;top:${point[1]}px`; },
+    vectorPath(element) { return arrowPath(element.layout, element.data); },
+    vectorDash(element) { return ({ dotted: '1 7', dashed: '10 7' })[element.data?.lineStyle] || ''; },
+    arrowhead(element, endpoint) { return element.data?.[endpoint + 'Arrowhead'] || (endpoint === 'end' && element.kind === 'arrow' ? 'triangle' : 'none'); },
+    arrowMarker(element, endpoint) { return this.arrowhead(element, endpoint) === 'none' ? '' : `url(#${endpoint}-arrow-${element.id})`; },
+    arrowheadPath(element, endpoint) { return ({ arrow: 'M1,1 L7,4 L1,7', triangle: 'M1,1 L7,4 L1,7 Z', diamond: 'M0,4 L4,1 L8,4 L4,7 Z', circle: 'M7,4 A3,3 0 1,1 1,4 A3,3 0 1,1 7,4' })[this.arrowhead(element, endpoint)] || ''; },
+    textSize(element) { const size = Number(element?.data?.fontSize); return Number.isInteger(size) && size >= 12 && size <= 144 ? size : 16; },
+    get selectedVector() { const item = this.findSelected(); return this.selectedKeys.length === 1 && ['arrow', 'line'].includes(item?.kind) ? item : null; },
+    get selectedText() { const item = this.findSelected(); return this.selectedKeys.length === 1 && item?.kind === 'text' ? item : null; },
+    async setElementOption(field, value) {
+      const item = this.findSelected(); if (!this.canvas?.can_manage || !item || this.selected?.type !== 'element') return;
+      if (field === 'fontSize') { value = Number(value); if (item.kind !== 'text' || !Number.isInteger(value) || value < 12 || value > 144) return; }
+      else if (!['arrow', 'line'].includes(item.kind)) return;
+      else if (field === 'lineStyle' ? !['solid', 'dotted', 'dashed'].includes(value) : !['startArrowhead', 'endArrowhead'].includes(field) || !['none', 'arrow', 'triangle', 'diamond', 'circle'].includes(value)) return;
+      const before = cloneCanvasValue(item.data), after = { ...before, [field]: value };
+      await this.mutate(() => syncRuntime.updateElement(item.id, { data: after }), { type: 'data', id: item.id, before, after });
+    },
+    async straightenArrow() {
+      const item = this.selectedVector; if (!item || !this.canvas?.can_manage) return;
+      const before = cloneCanvasValue(item.data), after = { ...before }; delete after.curve;
+      await this.mutate(() => syncRuntime.updateElement(item.id, { data: after }), { type: 'data', id: item.id, before, after });
+    },
     drawPoints(element) { return (element.data.points || []).map(point => point.join(',')).join(' '); },
     documentUrl(naplet) {
       if (naplet.access !== 'ready' || naplet.source?.type !== 'document') return null;

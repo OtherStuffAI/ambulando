@@ -19,6 +19,7 @@ export function canvasBoardStore() {
     boardCreate: { title: '', channelId: '', mode: 'create' },
     boardChannels: [],
     boardSave: { fileId: '', summary: '' },
+    boardRename: { fileId: '', title: '', saving: false, error: '' },
     boardHistoryOpen: {},
     boardCreating: false,
 
@@ -109,6 +110,40 @@ export function canvasBoardStore() {
       if (!naplet) { dialog?.close(); return; }
       if (await this.saveBoard(naplet, this.boardSave.summary)) dialog?.close();
     },
+    openBoardRename(naplet) {
+      if (naplet?.access !== 'ready' || naplet.source?.type !== 'excalidraw' || !this.boardState(naplet).can_write || this.boardRename.saving) return;
+      this.boardRename = { fileId: naplet.source.id, title: naplet.title, saving: false, error: '' };
+      queueMicrotask(() => {
+        const dialog = document.querySelector('.canvas-board-rename-dialog');
+        dialog?.showModal();
+        dialog?.querySelector('input')?.select();
+      });
+    },
+    async submitBoardRename() {
+      const form = this.boardRename;
+      if (form.saving) return false;
+      form.error = '';
+      const name = text(form.title);
+      if (!name || name.length > BOARD_LIMITS.title) { form.error = 'Enter a board name of 1–200 characters.'; return false; }
+      const naplet = this.naplets.find(row => row.access === 'ready' && row.source?.type === 'excalidraw' && row.source.id === form.fileId);
+      if (!naplet || !this.boardState(naplet).can_write || !runtime) { form.error = 'You cannot rename this board.'; return false; }
+      form.saving = true;
+      try {
+        await runtime.renameBoard(form.fileId, name);
+        for (const row of this.naplets) if (row.access === 'ready' && row.source?.type === 'excalidraw' && row.source.id === form.fileId) row.title = name;
+        const controller = controllers.get(form.fileId);
+        if (controller?.meta) controller.meta.title = name;
+        // Keep cached File pickers consistent; Tower remains authoritative on reopen.
+        await runtime.db.documents.where('record_id').equals(form.fileId).modify({ title: name, file_name: name }).catch(() => undefined);
+        this.sourceOptions = this.sourceOptions?.map(row => row.type === 'excalidraw' && row.id === form.fileId ? { ...row, title: name } : row) || [];
+        document.querySelector('.canvas-board-rename-dialog')?.close();
+        await this.refreshBoardsSnapshot?.();
+        return true;
+      } catch (error) {
+        form.error = error?.status === 403 ? 'You cannot rename this board.' : (error?.message || 'The board could not be renamed.');
+        return false;
+      } finally { form.saving = false; }
+    },
     loadLatestBoard(naplet) { return this.boardController(naplet?.source?.id)?.loadLatest(); },
     mergeLatestBoard(naplet) { return this.boardController(naplet?.source?.id)?.mergeLatest(); },
     async toggleBoardHistory(naplet) {
@@ -133,7 +168,7 @@ export function canvasBoardStore() {
       const choices = new Map();
       for (const row of documents) if (active(row) && isBoardFileRow(row) && row.record_id) choices.set(row.record_id, text(row.title || row.file_name).replace(/\.excalidraw$/i, '') || 'Board');
       // Boards already readable on this canvas can be linked again (one canonical board).
-      for (const naplet of this.naplets || []) if (naplet.access === 'ready' && naplet.source?.type === 'excalidraw' && !choices.has(naplet.source.id)) choices.set(naplet.source.id, naplet.title);
+      for (const naplet of this.naplets || []) if (naplet.access === 'ready' && naplet.source?.type === 'excalidraw') choices.set(naplet.source.id, naplet.title);
       return [...choices].map(([id, title]) => ({ type: 'excalidraw', id, title }));
     },
     /** Create a persistent board File, then link this naplet to it immediately. */

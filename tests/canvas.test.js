@@ -11,6 +11,8 @@ import {
 import { buildCanvasHtmlDocument, CANVAS_HTML_CSP } from '../src/canvas/sandbox.js';
 import {
   arrowGeometry,
+  arrowPoints,
+  arrowPath,
   canvasItemKey,
   canvasWheelIntent,
   cloneCanvasValue,
@@ -167,4 +169,31 @@ it('retains board marker coordinates independently of an explicit readable naple
     comments: [{ id: 'comment', row_version: 1, body: 'Discuss', anchor: { type: 'naplet', naplet_id: 'naplet', x: 80, y: 400 }, author: { actor_id: 'actor' } }],
   }, context, 'canvas', 'request');
   expect(snapshot.comments[0].anchor).toEqual({ type: 'naplet', naplet_id: 'naplet', x: 80, y: 400 });
+});
+
+it('bends legacy and directional arrows with a handle on the curve and fixed opposite endpoints', () => {
+  const layout = { x: 100, y: 200, width: 200, height: 80, z: 3 };
+  const data = { direction: 'forward', custom: 'preserved' };
+  expect(arrowPath(layout, data)).toBe('M 0 80 L 200 0');
+  const bent = moveArrowEndpoint(layout, data, 'middle', { x: 200, y: 160 });
+  const world = (row, key) => arrowPoints(row.layout, row.data)[key].map((v, i) => v + (i ? row.layout.y : row.layout.x));
+  expect(world(bent, 'start')).toEqual([100, 280]);
+  expect(world(bent, 'end')).toEqual([300, 200]);
+  expect(world(bent, 'middle')).toEqual([200, 160]);
+  expect(bent.data.custom).toBe('preserved');
+  expect(arrowPath(bent.layout, bent.data)).toContain(' Q ');
+  const moved = moveArrowEndpoint(bent.layout, bent.data, 'start', { x: 350, y: 300 });
+  expect(world(moved, 'start')).toEqual([350, 300]);
+  expect(world(moved, 'end')).toEqual([300, 200]);
+  expect(moved.layout.z).toBe(3);
+  expect(moved.data.curve.map((v, i) => v + (i ? moved.layout.y : moved.layout.x))).toEqual(bent.data.curve.map((v, i) => v + (i ? bent.layout.y : bent.layout.x)));
+});
+
+it('keeps horizontal, vertical, and reversed arrow geometry finite', () => {
+  for (const end of [{ x: 100, y: 0 }, { x: 0, y: -100 }, { x: -100, y: -50 }]) {
+    const row = arrowGeometry({ x: 0, y: 0 }, end);
+    expect(row.layout.width).toBeGreaterThanOrEqual(8);
+    expect(row.layout.height).toBeGreaterThanOrEqual(8);
+    expect(arrowPoints(row.layout, row.data).end.map((v, i) => v + (i ? row.layout.y : row.layout.x))).toEqual([end.x, end.y]);
+  }
 });

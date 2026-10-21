@@ -4808,6 +4808,35 @@
       "notes": [
         "Saving a board now waits for every open editor to confirm its latest strokes. If an editor does not respond, nothing is saved, your draft is kept and you can try Save again."
       ]
+    },
+    {
+      "buildNumber": 2547,
+      "label": "Canvas arrows and text controls",
+      "notes": [
+        "Draw arrows directly between points, drag endpoints or a middle handle to bend them, and choose solid, dotted or dashed lines and arrowheads.",
+        "Select canvas text to set its font size. Existing arrows and text keep their appearance until edited."
+      ]
+    },
+    {
+      "buildNumber": 2548,
+      "label": "Rename Excalidraw boards",
+      "notes": [
+        "Rename an Excalidraw board from its naplet options. The accessible dialog keeps the drawing intact, validates the name and reports save errors. Board names persist when you reopen the canvas."
+      ]
+    },
+    {
+      "buildNumber": 2550,
+      "label": "Board rename validation and focus",
+      "notes": [
+        "Board rename dialogs return keyboard focus to window options. Repeated board links use the saved File title when reopened."
+      ]
+    },
+    {
+      "buildNumber": 2551,
+      "label": "Canvas board refresh resilience",
+      "notes": [
+        "Keep the rest of a canvas available when one linked board cannot be checked. Refresh retries the restricted board without losing other content."
+      ]
     }
   ]
 }

@@ -7,6 +7,7 @@ import {
   getTowerPgFileVersions,
   prepareTowerPgStorageObject,
   uploadStorageObject,
+  updateTowerPgFile,
 } from '../api.js';
 import { getWorkspaceDb } from '../db.js';
 import { buildStoragePrepareBody } from '../storage-payloads.js';
@@ -33,6 +34,7 @@ export const BOARD_DEFAULT_API = Object.freeze({
   getTowerPgFileVersions,
   prepareTowerPgStorageObject,
   uploadStorageObject,
+  updateTowerPgFile,
 });
 
 export class BoardStaleError extends Error {
@@ -156,6 +158,16 @@ export class CanvasBoardRuntime {
     const fileId = uuid(payload?.file?.id);
     if (!fileId) throw new Error('Tower did not return the new board.');
     return { file_id: fileId, version_id: uuid(payload?.file?.current_version_id), title: name };
+  }
+
+  /** Rename metadata only: no scene upload, new version or permission mutation. */
+  async renameBoard(fileId, title) {
+    const name = text(title);
+    if (!uuid(fileId)) throw new Error('This board is unavailable.');
+    if (!name || name.length > BOARD_LIMITS.title) throw new Error('Enter a board name of 1–200 characters.');
+    const payload = await this.api.updateTowerPgFile(this.context.workspaceId, fileId, { display_name: name }, this.options());
+    if (payload?.file?.id !== fileId || payload.file.display_name !== name) throw new Error('Tower did not confirm the new board name. Refresh before retrying.');
+    return name;
   }
 
   /**

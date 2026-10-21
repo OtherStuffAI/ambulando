@@ -327,3 +327,31 @@ keyboard focus, short-viewport scrolling and read-only restricted menus across
 normal/expanded windows, all five naplet variants, three widths and four theme
 modes. These are synthetic client checks; native Safari and physical touch
 behavior need separate device verification.
+
+## Native arrow and text controls
+
+Arrow and line tools preview the stroke directly between the pointer's start and
+end. Selecting the stroke shows endpoint handles and one middle handle on the
+curve; the generic rectangle outline and resize handle do not apply to lines.
+Dragging the middle handle bends the quadratic curve through that point. Endpoint
+edits hold the opposite endpoint and existing control point in world coordinates.
+The selected line's toolbar offers solid, dotted and dashed strokes, independent
+start/end heads (none, open arrow, triangle, diamond, circle), and Straighten.
+Selected text exposes a 12–144px font-size field used by both its reader and editor.
+
+These options remain in the existing native element JSON: `start`/`end` and
+optional quadratic `curve` are layout-relative coordinate pairs; `lineStyle`,
+`startArrowhead`, `endArrowhead` and `fontSize` are optional data fields. No backend
+or schema migration is required. Legacy arrows without endpoints retain the
+bottom-left to top-right fallback, arrows default to a triangle end head, lines
+to no head, and text without a size stays at 16px. Unknown data fields survive
+edits. Moving a stroke moves its layout; bending/endpoints save layout and data
+together, including undo/redo. Native creation retains its existing history scope.
+
+`tests/canvas.test.js` checks geometry including legacy, reversed, horizontal and
+vertical arrows. The native controls scenarios in `tests/e2e/canvas.spec.cjs` use
+a dedicated signed synthetic Tower fixture and can exercise the registered app's
+actual served assets with `SOL_RUNTIME_ASSETS=1`. They cover mouse and emulated
+touch handle/stroke movement, live creation preview, styles, text sizing/editing,
+undo/redo, persisted reload and zoom/pan. Physical touch/Safari and authenticated
+live workspace writes remain separate integration checks.

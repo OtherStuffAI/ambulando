@@ -104,3 +104,17 @@ round-trip, history and restore, read-only viewers and revocation purge.
 `tests/excalidraw-board-cli.test.js` covers the agent helper end to end against a signed fake Tower.
 `tests/e2e/canvas-excalidraw.spec.cjs` drives the real editor in the canvas page. These are client
 and protocol checks. Live use additionally requires the Tower `excalidraw` naplet source type.
+
+## Board names
+
+Writable board naplets offer **Rename…**. The native modal dialog starts with the
+visible name, selects it for editing, rejects empty/whitespace-only names and
+keeps errors visible until a successful save. Cancel and Escape make no request.
+Saving uses the existing File PATCH with only `display_name`; it does not publish
+a drawing version, change attachments, move the File or alter a naplet or ACL.
+Tower rechecks File write permission. Every ready board naplet resolves its
+canonical File display name during snapshot hydration (one File GET per distinct
+board), so legacy naplet title overrides cannot mask a rename after reopening.
+Repeated naplets, their accessible titles, the controller's save filename and
+cached source choices update after confirmation. Browser coverage uses a signed
+synthetic Tower; a real-workspace permission smoke test remains a review step.

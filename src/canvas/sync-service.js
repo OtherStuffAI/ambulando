@@ -10,6 +10,7 @@ import {
   getTowerPgCanvases,
   getTowerPgCanvasNapletHtml,
   getTowerPgCanvasSnapshot,
+  getTowerPgFile,
   reorderTowerPgCanvases,
   updateTowerPgCanvas,
   updateTowerPgCanvasComment,
@@ -122,6 +123,22 @@ export class CanvasSyncRuntime {
         apiOptions(this.context, controller.signal),
       );
       const snapshot = normalizeCanvasSnapshot(payload, this.context, this.canvasId, uuid());
+      // Legacy naplet display_title overrides must not mask a renamed board File.
+      const boardIds = [...new Set(snapshot.naplets.filter(row => row.access === 'ready' && row.source?.type === 'excalidraw').map(row => row.source.id))];
+      await Promise.all(boardIds.map(async fileId => {
+        try {
+          const result = await getTowerPgFile(this.context.workspaceId, fileId, apiOptions(this.context, controller.signal));
+          if (result?.file?.id !== fileId || !String(result.file.display_name || '').trim()) throw new Error('Board title could not be refreshed.');
+          for (const naplet of snapshot.naplets) if (naplet.access === 'ready' && naplet.source?.type === 'excalidraw' && naplet.source.id === fileId) naplet.title = result.file.display_name;
+        } catch (error) {
+          if (error?.name === 'AbortError') throw error;
+          // A failed File recheck must neither expose its old title nor remove
+          // unrelated canvas content. Retry the board on the next refresh.
+          snapshot.naplets = snapshot.naplets.map(naplet => naplet.access === 'ready' && naplet.source?.type === 'excalidraw' && naplet.source.id === fileId
+            ? { id: naplet.id, access: 'denied', layout: naplet.layout, row_version: naplet.row_version }
+            : naplet);
+        }
+      }));
       if (generation !== this.generation) return null;
       await commitCanvasProjection(this.db, snapshot, () => generation === this.generation);
       if (generation !== this.generation) return null;

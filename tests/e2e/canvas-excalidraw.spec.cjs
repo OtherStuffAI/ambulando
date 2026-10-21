@@ -20,7 +20,7 @@ const element = (id, type = 'rectangle', extra = {}) => ({ id, type, x: 40, y: 4
 /** Synthetic signed Tower: Files, immutable versions with base_version_id CAS, canvas naplets. */
 function fakeTower() {
   const objects = new Map(), files = new Map(), log = [];
-  const state = { naplets: [], revoked: false, canvasRow: 1 };
+  const state = { naplets: [], revoked: false, canvasRow: 1, renameError: false, readOnly: false };
   const addVersion = (file, bytes, author, summary = null) => {
     const objectId = uid(); objects.set(objectId, Buffer.from(bytes));
     const version = { id: uid(), version_number: file.versions.length + 1, storage_object_id: objectId, sha256_hex: sha(bytes), size_bytes: bytes.length, content_type: CONTENT_TYPE, created_by_actor_npub: author, summary, created_at: new Date(Date.UTC(2026, 9, 21, 6, file.versions.length)).toISOString() };
@@ -28,7 +28,7 @@ function fakeTower() {
     return version;
   };
   const sceneBytes = elements => Buffer.from(JSON.stringify({ type: 'excalidraw', version: 2, elements, appState: { viewBackgroundColor: '#ffffff' }, files: {} }));
-  const meta = file => { const current = file.versions.at(-1); return { file_id: file.id, current_version_id: current.id, current_version_number: current.version_number, content_type: CONTENT_TYPE, size_bytes: current.size_bytes, sha256: current.sha256_hex, can_write: true }; };
+  const meta = file => { const current = file.versions.at(-1); return { file_id: file.id, current_version_id: current.id, current_version_number: current.version_number, content_type: CONTENT_TYPE, size_bytes: current.size_bytes, sha256: current.sha256_hex, can_write: !state.readOnly }; };
   const naplets = () => state.naplets.map(naplet => {
     const file = files.get(naplet.source.id);
     return state.revoked || !file
@@ -69,6 +69,16 @@ function fakeTower() {
         files.set(file.id, file);
         const bytes = objects.get(body.storage_object_id); const version = addVersion(file, bytes, 'npub1me');
         return json({ file: { id: file.id, current_version_id: version.id } }, 201);
+      }
+      if ((match = suffix.match(/^\/files\/([^/]+)$/))) {
+        const file = files.get(match[1]);
+        if (!file || state.revoked) return json({ error: 'not found' }, 404);
+        if (method === 'PATCH') {
+          expect(Object.keys(body)).toEqual(['display_name']);
+          if (state.renameError || state.readOnly) return json({ error: 'Rename refused' }, 403);
+          file.display_name = body.display_name;
+        }
+        return json({ identity, file: { id: file.id, display_name: file.display_name } });
       }
       if ((match = suffix.match(/^\/files\/([^/]+)\/versions$/))) {
         const file = files.get(match[1]);
@@ -270,7 +280,7 @@ test('stale saves keep the draft, merge brings agent work, refresh loads latest 
   const dialog = page.locator('.canvas-add-dialog');
   await dialog.getByLabel('Type').selectOption('excalidraw');
   await dialog.getByRole('radio', { name: 'Link existing board' }).check();
-  await expect(dialog.locator('.canvas-source-list button')).toHaveText(['Shared']);
+  await expect(dialog.locator('.canvas-source-list button')).toHaveText(['Shared.excalidraw']);
   await dialog.getByRole('button', { name: 'Cancel' }).click();
 
   // An agent saves v2 while I draw: my Save is rejected and the draft is kept.
@@ -333,4 +343,52 @@ test('stale saves keep the draft, merge brings agent work, refresh loads latest 
     return drafts;
   })).toBe(0);
   expect(errors).toEqual([]);
+});
+
+
+test('board Rename validates, cancels, reports failure and persists canonical titles without touching scenes', async ({ page, context }) => {
+  const tower = fakeTower();
+  const file = tower.createBoard('Original', [element('kept')]);
+  const layout = { x: 50, y: 50, width: 650, height: 450, z: 1 };
+  tower.state.naplets = [0, 1].map(i => ({ id: uid(), source: { type: 'excalidraw', id: file.id }, title: 'Legacy override', layout: { ...layout, x: 50 + i * 680 } }));
+  const original = JSON.stringify(file);
+  const scene = tower.versionScene(file.id, 1);
+  const ids = tower.state.naplets.map(row => row.id);
+  await openCanvas(page, context, tower);
+  const rename = async () => {
+    await boardWindow(page).getByRole('button', { name: 'Window options', exact: true }).click();
+    await boardWindow(page).getByRole('menuitem', { name: 'Rename…', exact: true }).click();
+  };
+  await expect(boardWindow(page).locator('header strong')).toHaveText('Original.excalidraw');
+  await rename();
+  const dialog = page.getByRole('dialog', { name: 'Rename board', exact: true });
+  const input = dialog.getByRole('textbox', { name: 'Board name' });
+  await expect(input).toBeFocused();
+  await expect(input).toHaveValue('Original.excalidraw');
+  await input.fill('Cancel this');
+  await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await expect(boardWindow(page).getByRole('button', { name: 'Window options', exact: true })).toBeFocused();
+  await rename(); await input.fill('Escape this'); await input.press('Escape');
+  expect(JSON.stringify(file)).toBe(original);
+  await rename(); await input.fill('   '); await dialog.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(dialog.getByRole('alert')).toContainText('Enter a board name');
+  expect(JSON.stringify(file)).toBe(original);
+  tower.state.renameError = true;
+  await input.fill('Planning'); await dialog.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(dialog.getByRole('alert')).toContainText('cannot rename');
+  await expect(dialog).toBeVisible(); expect(JSON.stringify(file)).toBe(original);
+  tower.state.renameError = false;
+  await dialog.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(dialog).not.toBeVisible();
+  await expect(page.locator('.canvas-naplet header strong')).toHaveText(['Planning', 'Planning']);
+  await expect(page.getByRole('dialog', { name: 'Planning', exact: true })).toHaveCount(2);
+  await page.reload();
+  await expect(page.locator('.canvas-naplet header strong')).toHaveText(['Planning', 'Planning']);
+  expect(file.versions).toHaveLength(1);
+  expect(tower.versionScene(file.id, 1)).toEqual(scene);
+  expect(tower.state.naplets.map(row => row.id)).toEqual(ids);
+  expect(file.id).toBe(JSON.parse(original).id);
+  tower.state.readOnly = true; await page.reload();
+  await boardWindow(page).getByRole('button', { name: 'Window options', exact: true }).click();
+  await expect(boardWindow(page).getByRole('menuitem', { name: 'Rename…', exact: true })).not.toBeVisible();
 });

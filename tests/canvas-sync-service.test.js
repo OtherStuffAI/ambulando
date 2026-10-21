@@ -12,6 +12,7 @@ const api = vi.hoisted(() => ({
   deleteTowerPgCanvasNaplet: vi.fn(),
   getTowerPgCanvases: vi.fn(),
   getTowerPgCanvasSnapshot: vi.fn(),
+  getTowerPgFile: vi.fn(),
   reorderTowerPgCanvases: vi.fn(),
   updateTowerPgCanvas: vi.fn(),
   updateTowerPgCanvasComment: vi.fn(),
@@ -152,5 +153,44 @@ it('deletes using the confirmed revision and reply set, rehydrates Dexie, and re
   expect((await db.canvas_snapshots.get(runtime.key)).comments).toEqual([]);
   await expect(runtime.deleteComment('root', {})).rejects.toThrow('cannot delete');
   await expect(runtime.retargetComment('root', {})).rejects.toThrow('cannot change');
+  runtime.stop();
+});
+
+
+it('hydrates one canonical File title for repeated board naplets and persists it in the snapshot', async () => {
+  const db = openWorkspaceDb(`canvas-board-title-${crypto.randomUUID()}`); await db.open();
+  const fileId = '10000000-0000-4000-8000-000000000001';
+  const raw = payload(1);
+  raw.naplets = [1, 2].map(n => ({ id: `naplet-${n}`, access: 'ready', title: 'Legacy override', source: { type: 'excalidraw', id: fileId }, content: { file_id: fileId, can_write: true }, row_version: 1, layout: { x: 0, y: 0, width: 640, height: 480, z: n } }));
+  api.getTowerPgCanvasSnapshot.mockResolvedValue(raw);
+  api.getTowerPgFile.mockResolvedValue({ file: { id: fileId, display_name: 'Renamed' } });
+  const runtime = new CanvasSyncRuntime(context, 'canvas');
+  const snapshot = await runtime.refresh();
+  expect(snapshot.naplets.map(row => row.title)).toEqual(['Renamed', 'Renamed']);
+  expect(api.getTowerPgFile).toHaveBeenCalledTimes(1);
+  expect((await db.canvas_snapshots.get(canvasDefinitionKey(context, 'canvas'))).naplets.map(row => row.title)).toEqual(['Renamed', 'Renamed']);
+  runtime.stop();
+});
+
+
+it.each([403, 404, 503])('isolates a failed board title lookup (%s) without retaining restricted metadata or blanking unrelated naplets', async status => {
+  const db = openWorkspaceDb(`canvas-board-title-failure-${crypto.randomUUID()}`); await db.open();
+  const fileId = '10000000-0000-4000-8000-000000000002';
+  const raw = payload(1);
+  const layout = { x: 0, y: 0, width: 640, height: 480, z: 1 };
+  raw.naplets = [
+    { id: 'board', access: 'ready', title: 'Secret board', source: { type: 'excalidraw', id: fileId }, content: { file_id: fileId, can_write: true }, row_version: 1, layout },
+    { id: 'doc', access: 'ready', title: 'Useful document', source: { type: 'document', id: 'doc-id' }, content: { title: 'Useful document', body: 'Keep visible' }, row_version: 1, layout },
+  ];
+  api.getTowerPgCanvasSnapshot.mockResolvedValue(raw);
+  api.getTowerPgFile.mockRejectedValue(Object.assign(new Error('Failed'), { status }));
+  const runtime = new CanvasSyncRuntime(context, 'canvas');
+  const snapshot = await runtime.refresh();
+  expect(runtime.authorized).toBe(true);
+  expect(snapshot.naplets[0]).toEqual({ id: 'board', access: 'denied', layout, row_version: 1 });
+  expect(snapshot.naplets[1]).toMatchObject({ title: 'Useful document', content: { body: 'Keep visible' } });
+  expect(JSON.stringify(await db.canvas_snapshots.get(canvasDefinitionKey(context, 'canvas')))).not.toContain('Secret board');
+  api.getTowerPgFile.mockResolvedValue({ file: { id: fileId, display_name: 'Recovered' } });
+  expect((await runtime.refresh()).naplets[0]).toMatchObject({ title: 'Recovered', access: 'ready' });
   runtime.stop();
 });

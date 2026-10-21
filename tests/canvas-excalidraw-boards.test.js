@@ -10,6 +10,7 @@ const api = vi.hoisted(() => ({
   getTowerPgFileVersions: vi.fn(),
   prepareTowerPgStorageObject: vi.fn(),
   uploadStorageObject: vi.fn(),
+  updateTowerPgFile: vi.fn(),
 }));
 vi.mock('../src/api.js', () => api);
 
@@ -499,5 +500,23 @@ describe('canvas page board store', () => {
     expect(await store.createBoardNaplet({ x: 0, y: 0, width: 600, height: 420, z: 1 }, addNaplet)).toBe(false);
     expect(store.error).toMatch(/source_type is invalid.*“Orphan” was saved/);
     store.stopBoards();
+  });
+});
+
+
+describe('board metadata rename', () => {
+  it('patches only display_name, rejects blanks and reports failed or unconfirmed saves', async () => {
+    const runtime = new CanvasBoardRuntime(context, { api, db: {} });
+    const fileId = uuid(90);
+    api.updateTowerPgFile.mockResolvedValue({ file: { id: fileId, display_name: 'Planning' } });
+    expect(await runtime.renameBoard(fileId, '  Planning  ')).toBe('Planning');
+    expect(api.updateTowerPgFile).toHaveBeenLastCalledWith(context.workspaceId, fileId, { display_name: 'Planning' }, expect.objectContaining({ baseUrl: context.baseUrl }));
+    const calls = api.updateTowerPgFile.mock.calls.length;
+    await expect(runtime.renameBoard(fileId, '   ')).rejects.toThrow('Enter a board name');
+    expect(api.updateTowerPgFile).toHaveBeenCalledTimes(calls);
+    api.updateTowerPgFile.mockRejectedValueOnce(Object.assign(new Error('Forbidden'), { status: 403 }));
+    await expect(runtime.renameBoard(fileId, 'Denied')).rejects.toThrow('Forbidden');
+    api.updateTowerPgFile.mockResolvedValueOnce({ file: { id: fileId, display_name: 'Other' } });
+    await expect(runtime.renameBoard(fileId, 'Planning')).rejects.toThrow('did not confirm');
   });
 });

@@ -43,7 +43,7 @@ test.beforeAll(async () => {
   const v40Source = dbSource.replace(
     /\n  \/\/ Current-authority Canvas projections\.[\s\S]*?\n  db\.version\(41\)\.stores\(\{[\s\S]*?\n  \}\);\n/,
     '\n',
-  );
+  ).replace(/\n  db\.version\(43\)\.stores\(\{[^\n]+\}\);/, '');
   if (v40Source === dbSource) throw new Error('Could not derive the v40 Canvas migration fixture');
   v40DbBundle = (await build({
     bundle: true,
@@ -310,7 +310,7 @@ test('dedicated Canvas route renders authorized sources and isolates trusted HTM
 
   await canvas.getByTitle('Comment (C)').click();
   await canvas.locator('.canvas-stage').click({ position: { x: 1000, y: 500 } });
-  await canvas.getByLabel('Comment', { exact: true }).fill('Please verify this area.');
+  await canvas.locator('.canvas-comment-dialog').getByRole('textbox', { name: 'Comment', exact: true }).fill('Please verify this area.');
   await canvas.getByRole('button', { name: 'Post' }).click();
   await expect(canvas.locator('.canvas-comment-marker')).toHaveCount(1);
 
@@ -564,4 +564,137 @@ for (const width of [1440, 390]) test(`Canvas comments persist subjects and safe
   await expect(panel.getByRole('button', { name: 'Link subject', exact: true })).not.toBeVisible();
   expect(errors).toEqual([]);
   console.log('CANVAS_COMMENT_EVIDENCE', JSON.stringify({ width, compact, runtimeAssets: process.env.SOL_RUNTIME_ASSETS === '1', visiblePointerLine: true, keyboardTouchFallback: true, nonmodal: true, draggableAndBounded: true, boardUsable: true, explicitTargetSurvivesReloadAndFollows: true, connectorOnlyOpen: true, repliesAndDeletionSurviveReload: true, resolveReopen: true, changedReplySetProtected: true, permissionGated: true }));
+});
+
+test.afterEach(async ({ page }, info) => { if (info.status !== info.expectedStatus) console.log('CANVAS_FAILURE', JSON.stringify({ url: page.url(), errors: info.errors })); });
+
+for (const touch of [false, true]) test(`native arrow and text controls persist with history (${touch ? 'touch' : 'mouse'})`, async ({ page, context, baseURL }, testInfo) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  test.setTimeout(90_000);
+  const errors = []; page.on('pageerror', error => { errors.push(error.message); console.log('CANVAS_ERROR', error.message); });
+  let viewport = { x: 0, y: 0, scale: 1 }, version = 1;
+  let elements = [
+    { id: 'legacy-arrow', kind: 'arrow', row_version: 1, layout: { x: 50, y: 100, width: 200, height: 80, z: 1 }, data: { direction: 'forward', custom: 'retain' } },
+    { id: 'legacy-text', kind: 'text', row_version: 1, layout: { x: 50, y: 320, width: 260, height: 160, z: 2 }, data: { text: 'Legacy text', custom: 'retain' } },
+    { id: 'rectangle', kind: 'rectangle', row_version: 1, layout: { x: 1050, y: 400, width: 100, height: 100, z: 3 }, data: {} },
+  ];
+  await context.route('**/*', async route => {
+    const request = route.request(), url = new URL(request.url());
+    if (url.pathname === '/__canvas-seed.js') return route.fulfill({ contentType: 'text/javascript', body: seedBundle });
+    if (url.pathname === '/__canvas-seed.html') return route.fulfill({ contentType: 'text/html', body: '<!doctype html><title>seed</title>' });
+    const root = `/api/v4/flightdeck-pg/workspaces/${workspaceId}/canvases/${canvasId}`;
+    const respond = body => route.fulfill({ contentType: 'application/json', body: JSON.stringify(body) });
+    if (url.pathname.startsWith(root)) {
+      const suffix = url.pathname.slice(root.length);
+      if (suffix === '/snapshot') return respond({ workspace_id: workspaceId, identity, complete: true, canvas: definition(version, viewport), elements, naplets: [], comments: [] });
+      const body = request.postDataJSON();
+      if (suffix === '') { viewport = body.viewport || viewport; version++; return respond({ canvas: definition(version, viewport) }); }
+      if (suffix === '/elements') { const element = { ...body, id: `created-${elements.length}`, row_version: 1 }; elements.push(element); return respond({ element }); }
+      if (suffix.startsWith('/elements/')) {
+        const element = elements.find(row => row.id === suffix.split('/').pop());
+        expect(body.expected_row_version).toBe(element.row_version);
+        if (body.layout) element.layout = body.layout;
+        if (body.data) element.data = body.data;
+        element.row_version++;
+        return respond({ element });
+      }
+    }
+    // Test real registered runtime assets when requested; all API writes stay synthetic.
+    if (process.env.SOL_RUNTIME_ASSETS === '1' && url.origin === new URL(baseURL).origin && !url.pathname.startsWith('/api/')) return route.continue();
+    return serveBuiltFlightDeck(route);
+  });
+  const workspaceKey = await seedSessionAndWorkspace(page);
+  await page.goto(`/canvas.html?workspacekey=${encodeURIComponent(workspaceKey)}&canvasid=${canvasId}`);
+  await expect(page.locator('.canvas-stage')).toBeVisible();
+  const stage = await page.locator('.canvas-stage').boundingBox();
+  const drag = async (from, to) => {
+    if (!touch) { await page.mouse.move(from.x, from.y); await page.mouse.down(); await page.mouse.move(to.x, to.y, { steps: 8 }); await page.mouse.up(); }
+    else {
+      const client = await context.newCDPSession(page);
+      await client.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: from.x, y: from.y }] });
+      for (let i = 1; i <= 8; i++) await client.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: from.x + (to.x - from.x) * i / 8, y: from.y + (to.y - from.y) * i / 8 }] });
+      await client.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] }); await client.detach();
+    }
+  };
+  const handleDrag = async (label, dx, dy) => { const box = await page.getByRole('button', { name: label, exact: true }).boundingBox(); await drag({ x: box.x + box.width / 2, y: box.y + box.height / 2 }, { x: box.x + box.width / 2 + dx, y: box.y + box.height / 2 + dy }); await expect.poll(() => page.evaluate(() => Alpine.store('canvas').saving)).toBe(false); };
+  await expect(page.locator('[data-canvas-key="element:legacy-text"] .canvas-text')).toHaveCSS('font-size', '16px');
+  await page.getByTitle('Arrow (A)', { exact: true }).click();
+  const drawingTouch = touch ? await context.newCDPSession(page) : null;
+  if (drawingTouch) {
+    await drawingTouch.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: 500, y: stage.y + 140 }] });
+    await drawingTouch.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: 800, y: stage.y + 220 }] });
+  } else { await page.mouse.move(500, stage.y + 140); await page.mouse.down(); await page.mouse.move(800, stage.y + 220, { steps: 5 }); }
+  await expect(page.locator('.canvas-preview .canvas-vector-line')).toHaveAttribute('d', 'M 0 0 L 300 80');
+  await expect(page.locator('.canvas-preview .canvas-shape')).toBeHidden();
+  if (drawingTouch) { await drawingTouch.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] }); await drawingTouch.detach(); } else await page.mouse.up();
+  await expect.poll(() => elements.length).toBe(4);
+  await expect(page.getByRole('button', { name: 'Bend arrow', exact: true })).toBeVisible();
+  const arrow = page.locator('[data-canvas-key="element:created-3"]');
+  await expect(arrow.locator('.canvas-resize')).toBeHidden();
+  await expect(arrow).toHaveCSS('outline-style', 'none');
+  await handleDrag('Bend arrow', 0, -90);
+  await expect(arrow.locator('.canvas-vector-line')).toHaveAttribute('d', / Q /);
+  const bent = structuredClone(elements[3]);
+  await page.getByTitle('Undo (Ctrl/Cmd+Z)', { exact: true }).click();
+  await expect(arrow.locator('.canvas-vector-line')).not.toHaveAttribute('d', / Q /);
+  await page.getByTitle('Redo (Ctrl/Cmd+Shift+Z)', { exact: true }).click();
+  await expect(arrow.locator('.canvas-vector-line')).toHaveAttribute('d', / Q /);
+  await handleDrag('Adjust arrow start', -30, 20);
+  await handleDrag('Adjust arrow end', 40, 20);
+  expect(elements[3].data.curve).toBeDefined();
+  for (const style of ['dotted', 'dashed', 'solid']) { await page.getByLabel('Line style', { exact: true }).selectOption(style); await expect.poll(() => elements[3].data.lineStyle).toBe(style); }
+  for (const head of ['arrow','triangle','diamond','circle','none']) { await page.getByLabel('End arrowhead', { exact: true }).selectOption(head); await expect.poll(() => elements[3].data.endArrowhead).toBe(head); }
+  await page.getByLabel('End arrowhead', { exact: true }).selectOption('arrow');
+  await page.getByLabel('Start arrowhead', { exact: true }).selectOption('circle');
+  await page.getByLabel('Line style', { exact: true }).selectOption('dashed');
+  await expect.poll(() => elements[3].data.lineStyle).toBe('dashed');
+  await page.getByRole('button', { name: 'Straighten', exact: true }).click();
+  await expect(arrow.locator('.canvas-vector-line')).not.toHaveAttribute('d', / Q /);
+  await page.getByTitle('Undo (Ctrl/Cmd+Z)', { exact: true }).click();
+  await expect(arrow.locator('.canvas-vector-line')).toHaveAttribute('d', / Q /);
+  // Move the whole curved stroke away from its handles, with pointer/touch capture.
+  const curvePoint = (row, t) => {
+    const s = row.data.start, e = row.data.end, c = row.data.curve;
+    return { x: row.layout.x + (1-t)**2*s[0] + 2*(1-t)*t*c[0] + t*t*e[0], y: stage.y + row.layout.y + (1-t)**2*s[1] + 2*(1-t)*t*c[1] + t*t*e[1] };
+  };
+  const beforeMove = structuredClone(elements[3]), point = curvePoint(beforeMove, .25);
+  await drag(point, { x: point.x + 30, y: point.y + 25 });
+  await expect.poll(() => elements[3].layout.x).toBe(beforeMove.layout.x + 30);
+  expect(elements[3].layout.y).toBe(beforeMove.layout.y + 25);
+  expect(elements[3].data).toEqual(beforeMove.data);
+  await expect(arrow.getByRole('button', { name: 'Bend arrow', exact: true })).toBeVisible();
+  await testInfo.attach('curved-arrow-controls', { body: await page.screenshot({ path: testInfo.outputPath('curved-arrow-controls.png') }), contentType: 'image/png' });
+  // Selecting a legacy line on its visible stroke preserves fallback geometry.
+  await page.mouse.click(150, stage.y + 140);
+  await handleDrag('Bend arrow', 0, -30);
+  expect(elements[0].data.custom).toBe('retain');
+  await page.locator('[data-canvas-key="element:legacy-text"] .canvas-text').click();
+  await page.getByLabel('Text size', { exact: true }).fill('48'); await page.getByLabel('Text size', { exact: true }).press('Tab');
+  await expect(page.locator('[data-canvas-key="element:legacy-text"] .canvas-text')).toHaveCSS('font-size', '48px');
+  expect(elements[1].data).toEqual({ text: 'Legacy text', custom: 'retain', fontSize: 48 });
+  await page.locator('[data-canvas-key="element:legacy-text"] .canvas-text').dblclick();
+  await expect(page.locator('[data-text-editor="legacy-text"]')).toHaveCSS('font-size', '48px');
+  await page.locator('[data-text-editor="legacy-text"]').fill('Resized legacy text');
+  await page.locator('[data-text-editor="legacy-text"]').press('Control+Enter');
+  await expect.poll(() => elements[1].data.text).toBe('Resized legacy text');
+  await page.getByLabel('Zoom in', { exact: true }).click();
+  await expect.poll(() => viewport.scale).toBeCloseTo(1.1);
+  await page.getByTitle('Hand / pan (H)', { exact: true }).click();
+  await drag({ x: 900, y: stage.y + 500 }, { x: 930, y: stage.y + 530 });
+  await expect.poll(() => viewport.x).not.toBe(0);
+  await page.reload(); await expect(page.locator('.canvas-stage')).toBeVisible();
+  await expect(arrow.locator('.canvas-vector-line')).toHaveAttribute('d', / Q /);
+  await expect(arrow.locator('.canvas-vector-line')).toHaveAttribute('stroke-dasharray', '10 7');
+  await expect(page.locator('[data-canvas-key="element:legacy-text"] .canvas-text')).toHaveText('Resized legacy text');
+  await expect(page.locator('[data-canvas-key="element:legacy-text"] .canvas-text')).toHaveCSS('font-size', '48px');
+  // Handles remain aligned with the rendered line after persisted zoom/pan.
+  const p = curvePoint(elements[3], .25);
+  await page.mouse.click((p.x * viewport.scale) + viewport.x, ((p.y - stage.y) * viewport.scale) + viewport.y + stage.y);
+  const beforeZoomEdit = structuredClone(elements[3]);
+  await handleDrag('Adjust arrow end', 22, 11);
+  const endWorld = row => row.data.end.map((v, i) => v + (i ? row.layout.y : row.layout.x));
+  expect(endWorld(elements[3])).toEqual(endWorld(beforeZoomEdit).map((v, i) => v + (i ? 10 : 20)));
+  expect(elements[2].layout).toEqual({ x: 1050, y: 400, width: 100, height: 100, z: 3 });
+  expect(bent.data.curve).toBeDefined();
+  expect(errors).toEqual([]);
 });
