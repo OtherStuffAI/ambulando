@@ -4755,6 +4755,14 @@
       "label": "Channel pin release validation",
       "notes": [],
       "noUserVisibleChanges": true
+    },
+    {
+      "buildNumber": 2538,
+      "label": "Personal pin ordering",
+      "notes": [
+        "Pinned channels show a hashtag icon. Drag handles or use keyboard controls to arrange channels, conversations, tasks and documents in one personal list.",
+        "Your order synchronizes across devices on updated Tower connections. Conflicting moves keep the latest saved state and let you retry."
+      ]
     }
   ]
 }

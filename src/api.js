@@ -2936,6 +2936,11 @@ export async function putTowerPgThreadPin(workspaceId, threadId, body, { baseUrl
   return json(await signedTowerPgFetch(requestPath, { method: 'PUT', body, baseUrl, appNpub, signal, useWorkspaceKey: false }), { requestUrl: resolveTowerPgUrl(requestPath, baseUrl), method: 'PUT', prefix: 'Personal thread pin' });
 }
 
+export async function postTowerPgPersonalPinOrder(workspaceId, body, { baseUrl = _baseUrl, appNpub = FLIGHT_DECK_PG_APP_NPUB } = {}) {
+  const path = `/api/v4/flightdeck-pg/workspaces/${encodeURIComponent(workspaceId)}/me/pin-order`;
+  return json(await signedTowerPgFetch(path, { baseUrl, appNpub, method: 'POST', body, useWorkspaceKey: false }), { requestUrl: resolveTowerPgUrl(path, baseUrl), method: 'POST', prefix: 'Tower PG API' });
+}
+
 export async function putTowerPgPersonalPin(workspaceId, resourceType, resourceId, body, { baseUrl = _baseUrl, appNpub = FLIGHT_DECK_PG_APP_NPUB, signal } = {}) {
   if (!['thread','task','document','channel'].includes(resourceType)) throw new Error('Invalid pin type');
   const requestPath = `/api/v4/flightdeck-pg/workspaces/${encodeURIComponent(workspaceId)}/me/pins/${resourceType}/${encodeURIComponent(resourceId)}`;

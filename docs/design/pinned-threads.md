@@ -92,3 +92,33 @@ open paths in `tests/e2e/personal-pins.spec.cjs`. Cross-device runtime activatio
 must be reported separately from these disposable production-route tests.
 
 Channel pins use resource_type `channel` in the same personal_pin family and outbox. The channel Inbox heading includes its current name and an accessible pin toggle. Pinned channels open through selectDeckChannel, independent of the selected scope. Their blue state follows isChannelUnread and clears through the existing read flows; pinning and opening the Deck do not themselves write read receipts. Missing, archived or inaccessible channels retain a removable unavailable pin without exposing their cached title.
+
+Personal order uses Tower's `POST /me/pin-order` move contract. Channel pins have
+an explicit hashtag; conversation pins keep their chat icon. All four pin types
+share drag handles, a destination line and edge scrolling. Focus a handle and
+press Space/Enter to pick up, Arrow Up/Down or Home/End to choose a position,
+Enter/Space to save, or Escape to cancel. Touch dragging is confined to the
+44px handle so the rest of the list retains native scrolling and opening.
+Moving never opens/unpins an item or changes a read receipt. Unavailable items
+remain movable and removable without exposing cached titles.
+
+Null/missing `order_position` rows sort first by descending pin timestamp and
+typed ASCII key, preserving legacy ordering and placing new/repinned items first.
+Positioned rows follow by position. Moving submits one typed target and optional
+before-anchor, each with its canonical revision. Tower normalizes active rows;
+concurrent additions stay selected and stale target/anchor moves conflict.
+An immutable order operation lives in `thread_pin_outbox` with its original
+mutation ID and revisions, projects immediately through liveQuery and retries
+through the existing TowerSyncService pin family. Another move waits while any
+pin operation is pending, avoiding guessed normalization revisions. Pin/unpin
+remains available. A terminal conflict removes the move, requests normal cursor
+recovery and asks the user to try again; there is no silent rebase. Old order
+acknowledgements cannot overwrite newer rows or unpin tombstones. Clearing local
+browser data can lose unacknowledged moves, as with other pending pin changes.
+
+Support is learned from `personal_pin_order_version: 1` on record-sync pages. Older Tower servers
+retain existing pins and show an explanation on a move attempt until upgraded.
+Real signed HTTP/Postgres two-client ordering coverage is in
+`tests/thread-pin-sync.integration.test.js`; production-panel pointer, Chromium
+touch and keyboard checks are in `tests/e2e/personal-pins.spec.cjs`. These do not
+establish physical phone behavior or live Tower activation.

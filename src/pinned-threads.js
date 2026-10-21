@@ -1,16 +1,20 @@
 import { resolvePgReaderActorId } from './pg-reader-identity.js';
-import { queueThreadPin, readThreadPinProjection, threadPinContext, threadPinSupportKey, threadPinMigrationKey } from './thread-pin-store.js';
+import { queuePersonalPinMove, queueThreadPin, readThreadPinProjection, threadPinContext, threadPinSupportKey, threadPinMigrationKey } from './thread-pin-store.js';
 import { resolveTowerPgWorkspaceContext } from './pg-workspace-context.js';
 import { liveQuery } from 'dexie';
 import { getSettings, getWorkspaceDb, getCurrentWorkspaceDbKey, getPinnedThreadRows, saveThreadPin } from './db.js';
 
+import { legacyPinCompare, pinReorderMixin } from './pin-reorder.js';
+
 const subscriptions = new WeakMap();
 export const pinnedThreadsMixin = {
+  ...pinReorderMixin,
   pinnedThreadRows: [],
   pinnedThreadsContext: '',
   pinnedThreadsError: '',
   threadPinSaving: {},
   stopPinnedThreads() {
+    this.cancelPinMove();
     subscriptions.get(this)?.subscription?.unsubscribe();
     subscriptions.delete(this);
     this.pinnedThreadRows = [];
@@ -27,11 +31,12 @@ export const pinnedThreadsMixin = {
     return this.pinnedThreadRows.map(row => ({ ...row, isUnread: !row.unavailable && (row.type === 'channel' ? this.isChannelUnread?.(row.id) === true : (row.persistedUnread ?? (this.isTowerPgMode
       ? (!row.type || row.type === 'thread') && Boolean(this._unreadThreadItems?.[row.id] || this.inboxUnreadThreads?.[row.id])
       : Boolean(this._unreadChannels?.[row.channelId])))) }))
-      .sort((a, b) => b.pinnedAt.localeCompare(a.pinnedAt) || (a.key || a.id).localeCompare(b.key || b.id));
+      .sort((a, b) => a.orderIndex != null && b.orderIndex != null ? a.orderIndex - b.orderIndex : legacyPinCompare(a, b));
   },
   syncPinnedThreadsContext(partition) {
     const queryKey = JSON.stringify([partition, getCurrentWorkspaceDbKey(), resolvePgReaderActorId(this)]);
     if (subscriptions.get(this)?.key === queryKey) return;
+    this.cancelPinMove();
     subscriptions.get(this)?.subscription?.unsubscribe();
     this.pinnedThreadRows = [];
     this.pinnedThreadsContext = partition;
@@ -105,6 +110,17 @@ export const pinnedThreadsMixin = {
       const next = { ...this.threadPinSaving };
       delete next[key];
       this.threadPinSaving = next;
+    }
+  },
+  async savePersonalPinMove(key, beforeKey) {
+    const partition = this.pinnedThreadsPartition;
+    try {
+      await queuePersonalPinMove(getWorkspaceDb(), threadPinContext(this), key, beforeKey);
+      if (partition !== this.pinnedThreadsPartition) return;
+      this.pinMoveAnnouncement = 'Pin order saved. Synchronizing across devices.';
+      void this.requestTowerSyncFamily?.('thread-pins').catch(() => {});
+    } catch (error) {
+      if (partition === this.pinnedThreadsPartition) this.pinMoveAnnouncement = this.pinnedThreadsError = error.message;
     }
   },
   async openPinnedThread(thread) {

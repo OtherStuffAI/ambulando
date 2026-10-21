@@ -7,7 +7,7 @@ import { nip19 } from 'nostr-tools';
 import { openWorkspaceDb, createWorkspaceDb, saveSettings, getSettings } from '../src/db.js';
 import { TowerSyncService } from '../src/tower-sync-service.js';
 import { prepareThreadPinCommand, synchronizeThreadPins } from '../src/thread-pin-sync.js';
-import { applyThreadPinOperation, queueThreadPin, readThreadPinProjection, threadPinContext, threadPinSupportKey } from '../src/thread-pin-store.js';
+import { applyThreadPinOperation, queuePersonalPinMove, queueThreadPin, readThreadPinProjection, threadPinContext, threadPinSupportKey } from '../src/thread-pin-store.js';
 import { getTowerPgRecordSync, putTowerPgThreadPin, putTowerPgPersonalPin } from '../src/api.js';
 import { applyPgRecordChanges, recordDeltaCursorKey } from '../src/pg-record-delta.js';
 import { storeCredentials, clearCredentials } from '../src/auth/secure-store.js';
@@ -183,6 +183,45 @@ describe.skipIf(!process.env.RECORD_TEST_PORT)('two isolated clients against rea
     expect((await projection(b)).rows.some(r=>r.type==='channel')).toBe(false);
     expect((await projection(b)).rows.some(r=>r.type==='thread')).toBe(true);
     await login(1);await expect(putTowerPgPersonalPin(backend.workspaceId,'channel',backend.channelId,{pinned:true,expected_row_version:0,mutation_id:crypto.randomUUID()},a.context)).rejects.toMatchObject({status:403});await login(0);
+  },30000);
+
+  it('persists mixed order across clients/reload, preserves concurrent additions and rejects stale offline moves without resurrection',async()=>{
+    const [a,b]=clients;await login(0);await pull(a);await pull(b);
+    const resources=[{id:backend.channelId,type:'channel'},{id:backend.taskId,type:'task'},{id:backend.documentId,type:'document'}];
+    for(const r of resources){await queueThreadPin(a.db,a.context,r,true);await flush(a);}
+    await pull(a);await pull(b);
+    const keys=async c=>(await projection(c)).rows.map(r=>r.key);
+    const target=`channel:${backend.channelId}`,anchor=`document:${backend.documentId}`;
+    const reads=await a.db.resource_view_states.toArray();
+    await queuePersonalPinMove(a.db,a.context,target,anchor);
+    const [op]=await a.db.thread_pin_outbox.toArray();
+    expect(op.kind).toBe('order');
+    await flush(a);await pull(a);await pull(b);
+    expect(await keys(a)).toEqual(await keys(b));
+    expect((await keys(a)).indexOf(target)+1).toBe((await keys(a)).indexOf(anchor));
+    b.db.close();await b.db.open();await pull(b);expect(await keys(a)).toEqual(await keys(b));
+    // Stale A move queued offline, B unpins its target. Membership must win.
+    await queuePersonalPinMove(a.db,a.context,target,null);
+    await queueThreadPin(b.db,b.context,resources[0],false);await flush(b);
+    await flush(a);await pull(a);await pull(b);
+    expect(await keys(a)).not.toContain(target);expect((await projection(a)).error).toContain('another device');
+    expect(await a.db.thread_pin_outbox.count()).toBe(0);
+    // Add a pin on B while A has a move. The request moves one item, never replaces membership.
+    await queuePersonalPinMove(a.db,a.context,anchor,null);
+    await queueThreadPin(b.db,b.context,resources[0],true);await flush(b);
+    await flush(a);await pull(a);await pull(b);
+    expect(await keys(a)).toContain(target);expect(await keys(a)).toEqual(await keys(b));
+    // Lost order acknowledgement, followed by a newer unpin: immutable replay is monotonic locally.
+    await queuePersonalPinMove(a.db,a.context,anchor,null);
+    const [uncertain]=await a.db.thread_pin_outbox.toArray();
+    const {postTowerPgPersonalPinOrder}=await import('../src/api.js');
+    await postTowerPgPersonalPinOrder(backend.workspaceId,uncertain.body,a.context);
+    await pull(b);await queueThreadPin(b.db,b.context,resources[2],false);await flush(b);await pull(a);
+    await flush(a);await pull(a);await pull(b);
+    expect(await keys(a)).not.toContain(anchor);expect(await keys(a)).toEqual(await keys(b));
+    expect(await a.db.resource_view_states.toArray()).toEqual(reads);
+    expect(await a.db.pending_writes.count()).toBe(0);
+    console.log('PIN_ORDER_REAL_HTTP two clients, reload, stale offline target, concurrent add, lost ack replay, mixed typed pins and unchanged reads verified');
   },30000);
 
 });

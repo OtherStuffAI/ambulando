@@ -748,3 +748,15 @@ code, pre { font-family:var(--font-code); }
   .inbox-panel-heading.has-channel-inbox .inbox-read-menu { grid-column: 4; grid-row: 2; }
   .inbox-panel-heading.has-channel-inbox .inbox-search-form:focus-within { grid-column: 1 / -1; grid-row: 3; }
 }
+
+/* Reordering uses handles so list scrolling and ordinary opening stay native. */
+.pin-reorder-handle { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 28px; width: 28px; min-height: 44px; padding: 0; border: 0; border-radius: 6px; color: var(--text-muted); background: transparent; cursor: grab; touch-action: none; user-select: none; }
+.pin-reorder-handle:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
+.pin-reorder-handle[aria-pressed="true"] { cursor: grabbing; color: var(--primary); }
+.pin-reorder-help { font-size: 12px; color: var(--text-muted); margin: 0 8px 6px; }
+.pinned-thread-row { position: relative; }
+.pinned-thread-row.pin-moving { outline: 2px dashed var(--primary); outline-offset: -2px; }
+.pin-insert-before::before, .pin-insert-after::after { content: ""; position: absolute; left: 0; right: 0; height: 3px; background: var(--primary); pointer-events: none; z-index: 1; }
+.pin-insert-before::before { top: 0; }
+.pin-insert-after::after { bottom: 0; }
+@media (max-width: 768px), (pointer: coarse) { .pin-reorder-handle { flex-basis: 44px; width: 44px; } }
