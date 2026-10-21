@@ -122,7 +122,7 @@ export const subscribedReaderMixin = {
     });
   },
   openFeedItem(item) {
-    if (!item.url) return; let url; try { url = safeFeedUrl(nostrViewerUrl(item.url, this.nostrViewerBaseUrl)); } catch { return; }
+    if (!item.url) return; let url; try { url = safeFeedUrl(nostrViewerUrl(item.url, this.nostrViewerContext ? this.getNostrViewerBaseUrl() : this.nostrViewerBaseUrl)); } catch { return; }
     // Exactly one window open, synchronously within the intentional click.
     window.open(url, '_blank', 'noopener,noreferrer');
   },

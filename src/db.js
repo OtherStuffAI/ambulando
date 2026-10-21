@@ -333,6 +333,7 @@ export function createWorkspaceDb(workspaceDbKey) {
   });
   // Current-authority Canvas projections. Cached rows never render until the
   // active viewer has completed a fresh signed list/snapshot read.
+  db.version(42).stores({ private_preferences: '&key, context' });
   db.version(41).stores({
     canvas_definitions: '&key, context, canvas_id, [context+position]',
     canvas_snapshots: '&key, context, canvas_id, authorized_at',

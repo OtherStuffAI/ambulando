@@ -103,7 +103,7 @@ that evidence must remain distinct from authenticated human acceptance.
 
 ## Configurable viewer
 
-Setup → Deck layout provides a device-local Nostr viewer base URL. The default
+Setup → Deck layout provides a private, actor/workspace-bound Nostr viewer base URL. The default
 is `https://njump.me/`; saving a blank value or Reset restores it. Saving accepts
 absolute HTTP(S) URLs without credentials, query strings, fragments, whitespace
 inside the URL or backslashes. Trailing slashes normalize to one; path prefixes
@@ -115,7 +115,10 @@ Only exact njump hosts with a supported NIP-19 identifier and no query/fragment
 are rewritten. The complete identifier is appended unchanged to the base prefix;
 other URLs and cached records remain untouched. Existing notifications therefore
 use a newly saved viewer immediately without fetching or ingesting them again.
-The preference stays on this browser/device and does not synchronize via Tower.
+Tower synchronizes the preference across devices through TowerSyncService, worker-backed
+Dexie rows and liveQuery. Offline intent retries unchanged; stale version conflicts
+keep the authoritative choice. See [private viewer preferences](private-viewer-preferences.md)
+for the API, legacy migration and privacy boundaries.
 
 Viewer routing is an append-only base prefix: a viewer expecting `/event/<nevent>`
 needs an `/event/` base. Canopy uses that event route and a separate

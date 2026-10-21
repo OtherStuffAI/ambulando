@@ -1,3 +1,4 @@
+import { applyPrivatePreferenceOperation } from '../private-preference-store.js';
 import { applyThreadPinOperation } from '../thread-pin-store.js';
 import { openWorkspaceDb } from '../db.js';
 import { hydrateTowerPgSyncBundle } from '../pg-read-hydrator.js';
@@ -55,6 +56,7 @@ async function applyBundle(message) {
   }
   boundWorkspaceKey = workspaceKey;
   openWorkspaceDb(workspaceDbKey);
+  if (message.bundle?.private_preference_operation) return applyPrivatePreferenceOperation(message.bundle.private_preference_operation);
   if (message.bundle?.thread_pin_operation) return applyThreadPinOperation(message.store || {}, message.bundle.thread_pin_operation);
   const bundle = message.bundle || {};
   const backgroundRecordPage = [1, 2].includes(bundle.protocol_version)

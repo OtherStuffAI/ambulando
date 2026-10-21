@@ -4668,6 +4668,27 @@
       "notes": [
         "Scope move menus close when a move starts, keeping repeated drag and menu changes accessible."
       ]
+    },
+    {
+      "buildNumber": 2520,
+      "label": "Canvas comment popovers and subjects",
+      "notes": [
+        "Read and write canvas comments in movable popovers while using the board. Supported Tower versions allow safe thread/reply deletion and explicit naplet subject links."
+      ]
+    },
+    {
+      "buildNumber": 2522,
+      "label": "Private Nostr viewer sync",
+      "notes": [
+        "Your Nostr viewer choice now syncs privately across devices for your signed-in workspace identity, including resets and existing cached links."
+      ]
+    },
+    {
+      "buildNumber": 2525,
+      "label": "Nostr viewer synchronization recovery",
+      "notes": [
+        "Private viewer settings recover after offline changes and keep the latest saved choice when devices disagree."
+      ]
     }
   ]
 }

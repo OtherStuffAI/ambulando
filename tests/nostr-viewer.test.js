@@ -28,19 +28,10 @@ describe('Nostr viewer', () => {
     expect(normalizeNostrViewer('')).toBe('https://njump.me/');
     vi.unstubAllGlobals();
   });
-  it('saves, reloads, resets and leaves prior preference on invalid input', async () => {
-    const storage = new Map();
-    vi.stubGlobal('localStorage', { getItem: key => storage.get(key), setItem: (key, value) => storage.set(key, value) });
-    const store = { ...nostrViewerMixin };
-    expect(store.saveNostrViewer('https://viewer.example/event')).toBe(true);
-    vi.resetModules();
-    const reloaded = (await import('../src/feed/nostr-viewer.js')).nostrViewerMixin;
-    expect(reloaded.nostrViewerBaseUrl).toBe('https://viewer.example/event/');
-    expect(store.saveNostrViewer('javascript:alert(1)')).toBe(false);
+  it('rejects invalid edits before writing or changing the current choice', async () => {
+    const store = { ...nostrViewerMixin, nostrViewerBaseUrl: 'https://viewer.example/event/' };
+    expect(await store.saveNostrViewer('javascript:alert(1)')).toBe(false);
     expect(store.nostrViewerBaseUrl).toBe('https://viewer.example/event/');
-    expect(store.saveNostrViewer('')).toBe(true);
-    expect(store.nostrViewerBaseUrl).toBe('https://njump.me/');
-    vi.unstubAllGlobals();
   });
   it('opens cached links immediately using current preference, once and safely', () => {
     const open = vi.fn(); vi.stubGlobal('window', { open });

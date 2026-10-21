@@ -2940,3 +2940,9 @@ export async function putTowerPgPersonalPin(workspaceId, resourceType, resourceI
   const requestPath = `/api/v4/flightdeck-pg/workspaces/${encodeURIComponent(workspaceId)}/me/pins/${resourceType}/${encodeURIComponent(resourceId)}`;
   return json(await signedTowerPgFetch(requestPath, { method: 'PUT', body, baseUrl, appNpub, signal, useWorkspaceKey: false }), { requestUrl: resolveTowerPgUrl(requestPath, baseUrl), method: 'PUT', prefix: 'Personal pin' });
 }
+
+export async function towerPgPrivatePreference(workspaceId, key, { baseUrl = _baseUrl, appNpub = FLIGHT_DECK_PG_APP_NPUB, signal, body } = {}) {
+  const path = `/api/v4/flightdeck-pg/workspaces/${encodeURIComponent(workspaceId)}/me/preferences/${encodeURIComponent(key)}`;
+  const method = body === undefined ? 'GET' : 'PUT';
+  return json(await signedTowerPgFetch(path, { baseUrl, appNpub, signal, method, ...(body === undefined ? {} : { body }), useWorkspaceKey: false }), { requestUrl: resolveTowerPgUrl(path, baseUrl), method, prefix: 'Private preference' });
+}
