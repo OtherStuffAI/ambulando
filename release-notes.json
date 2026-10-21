@@ -4661,6 +4661,13 @@
       "notes": [
         "Dragging scopes and Move Up / Move Down save using the current revision, recover from conflicts, and preserve the saved order across reloads."
       ]
+    },
+    {
+      "buildNumber": 2519,
+      "label": "Scope reorder menu recovery",
+      "notes": [
+        "Scope move menus close when a move starts, keeping repeated drag and menu changes accessible."
+      ]
     }
   ]
 }
