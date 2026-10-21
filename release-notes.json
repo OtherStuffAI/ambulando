@@ -4763,6 +4763,13 @@
         "Pinned channels show a hashtag icon. Drag handles or use keyboard controls to arrange channels, conversations, tasks and documents in one personal list.",
         "Your order synchronizes across devices on updated Tower connections. Conflicting moves keep the latest saved state and let you retry."
       ]
+    },
+    {
+      "buildNumber": 2540,
+      "label": "Pin ordering mobile containment",
+      "notes": [
+        "Keep the pinned-items pane within the phone viewport while announcing keyboard and drag moves."
+      ]
     }
   ]
 }

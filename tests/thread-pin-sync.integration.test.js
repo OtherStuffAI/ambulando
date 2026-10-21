@@ -219,6 +219,14 @@ describe.skipIf(!process.env.RECORD_TEST_PORT)('two isolated clients against rea
     await pull(b);await queueThreadPin(b.db,b.context,resources[2],false);await flush(b);await pull(a);
     await flush(a);await pull(a);await pull(b);
     expect(await keys(a)).not.toContain(anchor);expect(await keys(a)).toEqual(await keys(b));
+    // Two devices prepare competing moves at the same canonical revision.
+    const current=await keys(a),other=current.find(key=>key!==target);
+    const destination=current[0]===target?null:other;
+    await queuePersonalPinMove(a.db,a.context,target,destination);
+    await queuePersonalPinMove(b.db,b.context,target,destination);
+    await flush(a);await flush(b);await pull(a);await pull(b);
+    expect(await keys(a)).toEqual(await keys(b));expect((await projection(b)).error).toContain('another device');
+    expect(await b.db.thread_pin_outbox.count()).toBe(0);
     expect(await a.db.resource_view_states.toArray()).toEqual(reads);
     expect(await a.db.pending_writes.count()).toBe(0);
     console.log('PIN_ORDER_REAL_HTTP two clients, reload, stale offline target, concurrent add, lost ack replay, mixed typed pins and unchanged reads verified');

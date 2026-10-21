@@ -163,6 +163,7 @@ for(const width of [375,1440])test(`mixed personal pins reorder with pointer, ke
  if(width<769)await page.getByRole('button',{name:'Show Pinned items',exact:true}).click();
  const panel=page.getByTestId('deck-pinned-threads'),rows=panel.locator('.pinned-thread-row');
  await expect(rows).toHaveCount(3);
+ if(width<769)await expect.poll(async()=>(await panel.boundingBox()).x).toBeLessThan(20);
  expect(await rows.first().locator('.pinned-item-type svg').innerHTML()).toContain('M4 9h16');
  const keys=()=>rows.evaluateAll(els=>els.map(e=>e.dataset.pinKey));
  expect(await keys()).toEqual(['channel:same','task:same','document:same']);
@@ -192,7 +193,10 @@ for(const width of [375,1440])test(`mixed personal pins reorder with pointer, ke
  await expect.poll(keys).toEqual(['task:same','document:same','channel:same']);
  expect(await page.evaluate(async()=>({opens:window.Alpine.store('chat').testPinOpens,reads:await window.personalPinDb.resource_view_states.count(),writes:await window.personalPinDb.pending_writes.count(),pins:await window.personalPinDb.thread_pins.count()}))).toEqual({opens:0,reads:0,writes:0,pins:3});
  console.log('PIN_ORDER_LAYOUT',await panel.evaluate(el=>{const s=window.Alpine.store('chat');return {column:s.deckMobileColumn,scroll:document.documentElement.scrollLeft,width:innerWidth,box:el.getBoundingClientRect().toJSON()};}));
- if(width<769)await page.getByRole('button',{name:'Show Pinned items',exact:true}).click();
+ if(width<769){
+  await expect.poll(async()=>(await panel.boundingBox()).x).toBeLessThan(20);
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+ }
  await page.screenshot({path:`tmp/docs/handoffs/pin-order-${width}.png`,fullPage:false});
  console.log('PIN_ORDER_BROWSER',JSON.stringify({width,pointer:true,touch:true,keyboard:true,persistedProjection:true,typedCollision:true,noAccidentalOpenOrRead:true}));
 

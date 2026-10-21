@@ -760,3 +760,6 @@ code, pre { font-family:var(--font-code); }
 .pin-insert-before::before { top: 0; }
 .pin-insert-after::after { bottom: 0; }
 @media (max-width: 768px), (pointer: coarse) { .pin-reorder-handle { flex-basis: 44px; width: 44px; } }
+
+/* Contain the absolute live region inside the horizontally paged column. */
+.flightdeck-summary-panel-pinned .deck-card-scroll { position: relative; }
