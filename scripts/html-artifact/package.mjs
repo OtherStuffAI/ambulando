@@ -187,7 +187,7 @@ export async function packageArtifactFolder(folder, { entry = 'index.html' } = {
   // Script bodies are opaque to the remaining rewrites (markup inside JS strings
   // must not be altered); they are restored verbatim at the end.
   const maskedScripts = [];
-  html = html.replace(/<script\b[^>]*>[\s\S]*?<\/script\s*>/gi, whole => `\u0000script-${maskedScripts.push(whole) - 1}\u0000`);
+  html = html.replace(/<script\b[^>]*>[\s\S]*?<\/script\s*>/gi, whole => `\uE000script-${maskedScripts.push(whole) - 1}\uE000`);
 
   // Inline <style> blocks and style attributes.
   const styleBlocks = [];
@@ -241,7 +241,7 @@ export async function packageArtifactFolder(folder, { entry = 'index.html' } = {
     if (style && /url\(/i.test(style)) tagReplacements.push([match[0], serializeTag(match[1], attributes, match[3] === '/')]);
   }
   for (const [from, to] of tagReplacements) html = html.replace(from, () => to);
-  html = html.replace(/\u0000script-(\d+)\u0000/g, (_, index) => maskedScripts[Number(index)]);
+  html = html.replace(/\uE000script-(\d+)\uE000/g, (_, index) => maskedScripts[Number(index)]);
 
   const list = [...assets.values()];
   if (list.length > LIMITS.assets) errors.push(`${list.length} images exceed the ${LIMITS.assets}-image limit`);
