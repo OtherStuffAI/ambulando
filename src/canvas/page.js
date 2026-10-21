@@ -1,4 +1,5 @@
 import Alpine from 'alpinejs';
+import { registerCanvasCommentPopover } from './comment-popover.js';
 import { registerCanvasWindow } from './window.js';
 import { registerCanvasDocument } from './document.js';
 import { buildSectionUrl } from '../route-helpers.js';
@@ -38,7 +39,8 @@ function canvasElement(name) {
 function openCanvasDialog(name) {
   Alpine.nextTick(() => {
     const dialog = canvasElement(name);
-    if (!dialog.open) dialog.showModal();
+    if (name === 'addDialog') { if (!dialog.open) dialog.showModal(); }
+    else dispatchEvent(new CustomEvent('canvas-comment-open', { detail: name }));
   });
 }
 
@@ -60,6 +62,7 @@ export function canvasPageStore() {
     editingTextId: '', editingText: '', sourceOptions: [], sourceSearch: '',
     addDialog: { type: 'document', sourceId: '', title: '' },
     commentDialog: { anchor: null, parentCommentId: null, body: '' }, activeCommentId: '',
+    commentDelete: null, linkDrag: null, subjectPicker: false, subjectNapletId: '',
     accessMessage: CANVAS_ACCESS_MESSAGE, historyTick: 0,
 
     get canvasId() { return text(new URLSearchParams(location.search).get('canvasid')); },
@@ -106,7 +109,9 @@ export function canvasPageStore() {
       this.viewport = { ...snapshot.canvas.viewport };
       const available = new Set(this.allCanvasItems().map(row => row.key));
       this.selectedKeys = this.selectedKeys.filter(key => available.has(key));
-      document.title = `${snapshot.canvas.title} · Canvas · Ambulando`; this.status = 'ready'; this.error = '';
+      if (this.activeCommentId && !this.activeComment) { canvasElement('commentPanel').close(); this.activeCommentId = ''; }
+      if (this.commentDialog.parentCommentId && !this.comments.some(row => row.id === this.commentDialog.parentCommentId)) canvasElement('commentDialog').close();
+      document.title = `${snapshot.canvas.title} · Canvas · Ambulando`; this.status = 'ready';
     },
     applySyncError(error) {
       this.canvas = null; this.naplets = []; this.elements = []; this.comments = []; this.status = 'error';
@@ -276,8 +281,9 @@ export function canvasPageStore() {
     async mutate(operation, history = null) {
       if (this.saving) return; this.saving = true; this.error = '';
       try { await operation(); if (history) { undo.push(history); redo.length = 0; this.historyTick += 1; } }
-      catch (error) { this.error = error?.message || 'Canvas change could not be saved.'; await this.refresh(); }
+      catch (error) { const message = error?.message || 'Canvas change could not be saved.'; await syncRuntime?.refresh().catch(() => undefined); this.error = message; return false; }
       finally { this.saving = false; }
+      return true;
     },
     async deleteItem(type = this.selected?.type, item = this.findSelected()) { if (!item) return; await this.mutate(() => type === 'naplet' ? syncRuntime.deleteNaplet(item.id) : syncRuntime.deleteElement(item.id)); this.selectedKeys = this.selectedKeys.filter(key => key !== canvasItemKey(type, item.id)); },
     async createGroup() {
@@ -302,7 +308,8 @@ export function canvasPageStore() {
     async undoChange() { const action = undo.pop(); if (!action) return; if (action.type === 'layout') await this.mutate(() => action.itemType === 'naplet' ? syncRuntime.updateNapletLayout(action.id, action.before) : syncRuntime.updateElement(action.id, { layout: action.before })); if (action.type === 'layouts') await this.mutate(() => this.applyLayoutHistory(action.changes, 'before')); if (action.type === 'data') await this.mutate(() => syncRuntime.updateElement(action.id, { data: action.before })); redo.push(action); this.historyTick -= 1; },
     async redoChange() { const action = redo.pop(); if (!action) return; if (action.type === 'layout') await this.mutate(() => action.itemType === 'naplet' ? syncRuntime.updateNapletLayout(action.id, action.after) : syncRuntime.updateElement(action.id, { layout: action.after })); if (action.type === 'layouts') await this.mutate(() => this.applyLayoutHistory(action.changes, 'after')); if (action.type === 'data') await this.mutate(() => syncRuntime.updateElement(action.id, { data: action.after })); undo.push(action); this.historyTick += 1; },
     handleKeydown(event) {
-      if (event.defaultPrevented || document.querySelector('dialog[open], :popover-open')) return;
+      if (event.key === 'Escape' && this.linkDrag) { event.preventDefault(); this.linkDrag = null; return; }
+      if (event.defaultPrevented || document.querySelector('dialog:modal, :popover-open') || event.target.closest?.('.canvas-comment-panel,.canvas-comment-dialog')) return;
       if (event.target?.matches('input,textarea,[contenteditable="true"]')) return;
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'z') { event.preventDefault(); return event.shiftKey ? this.redoChange() : this.undoChange(); }
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'd') { event.preventDefault(); return this.duplicateSelected(); }
@@ -332,12 +339,63 @@ export function canvasPageStore() {
       await this.mutate(() => syncRuntime.addNaplet({ source: { type: this.addDialog.type, id: sourceId }, title: text(this.addDialog.title) || undefined, layout: { x: Math.round(point.x), y: Math.round(point.y), width: 380, height: 280, z: this.highestZ() + 1 } }));
       if (!this.error) canvasElement('addDialog').close();
     },
-    openCommentDialog(anchor, parentCommentId = null) { if (anchor.type === 'naplet' && !anchor.naplet_id) return; this.commentDialog = { anchor, parentCommentId, body: '' }; openCanvasDialog('commentDialog'); },
+    openCommentDialog(anchor, parentCommentId = null) { if (anchor.type === 'naplet' && !anchor.naplet_id) return; if (anchor.type === 'naplet' && !parentCommentId && !Number.isFinite(anchor.x)) { const point = this.commentPoint({ anchor }); if (point) anchor = { ...anchor, ...point }; } this.commentDialog = { anchor, parentCommentId, body: '' }; openCanvasDialog('commentDialog'); },
     async submitComment() { const body = text(this.commentDialog.body); if (!body) return; await this.mutate(() => syncRuntime.createComment({ anchor: this.commentDialog.anchor, parent_comment_id: this.commentDialog.parentCommentId || undefined, body })); if (!this.error) canvasElement('commentDialog').close(); },
-    openCommentThread(comment) { this.activeCommentId = comment.id; openCanvasDialog('commentPanel'); },
-    async setCommentResolved(comment, resolved) { await this.mutate(() => syncRuntime.setCommentResolved(comment.id, resolved)); },
+    openCommentThread(comment) { this.activeCommentId = comment.id; this.commentDelete = null; this.subjectPicker = false; this.subjectNapletId = comment.anchor.naplet_id || ''; openCanvasDialog('commentPanel'); },
+    async setCommentResolved(comment, resolved) { if (comment?.can_resolve !== false) await this.mutate(() => syncRuntime.setCommentResolved(comment.id, resolved)); },
+    requestCommentDelete(comment) {
+      if (!comment?.can_delete || this.saving) return;
+      const replies = this.comments.filter(row => row.parent_comment_id === comment.id);
+      this.commentDelete = { id: comment.id, expected_row_version: comment.row_version, expected_reply_versions: Object.fromEntries(replies.map(row => [row.id, row.row_version])), replyCount: replies.length, isRoot: !comment.parent_comment_id };
+    },
+    async confirmCommentDelete() {
+      const request = this.commentDelete;
+      if (!request || this.saving) return;
+      const success = await this.mutate(() => syncRuntime.deleteComment(request.id, request));
+      this.commentDelete = null;
+      if (success && request.id === this.activeCommentId) canvasElement('commentPanel').close();
+    },
+    commentPoint(comment) {
+      if (Number.isFinite(comment?.anchor.x) && Number.isFinite(comment?.anchor.y)) return { x: comment.anchor.x, y: comment.anchor.y };
+      if (comment?.anchor.type === 'naplet') {
+        const naplet = this.naplets.find(row => row.id === comment.anchor.naplet_id && row.access === 'ready');
+        return naplet ? { x: naplet.layout.x + naplet.layout.width, y: naplet.layout.y } : null;
+      }
+      return comment ? { x: comment.anchor.x, y: comment.anchor.y } : null;
+    },
+    get commentConnector() {
+      const comment = this.activeComment, start = this.commentPoint(comment);
+      if (!start) return null;
+      const target = this.naplets.find(row => row.id === comment.anchor.naplet_id && row.access === 'ready');
+      const end = this.linkDrag?.point || (target ? { x: target.layout.x + target.layout.width / 2, y: target.layout.y + target.layout.height / 2 } : null);
+      return end ? { x1: start.x, y1: start.y, x2: end.x, y2: end.y } : null;
+    },
+    startCommentLink(event) {
+      if (!this.activeComment?.can_retarget || this.saving || event.button !== 0) return;
+      event.preventDefault(); event.currentTarget.setPointerCapture?.(event.pointerId);
+      this.linkDrag = { pointerId: event.pointerId, point: this.toWorld(event) };
+    },
+    moveCommentLink(event) { if (this.linkDrag?.pointerId === event.pointerId) this.linkDrag.point = this.toWorld(event); },
+    async finishCommentLink(event) {
+      if (this.linkDrag?.pointerId !== event.pointerId) return;
+      this.linkDrag = null;
+      const node = document.elementsFromPoint(event.clientX, event.clientY).map(node => node.closest?.('[data-canvas-key]')).find(Boolean);
+      const id = node?.dataset.canvasKey?.replace(/^naplet:/, '');
+      const target = this.naplets.find(row => row.id === id && row.access === 'ready');
+      if (target) await this.setCommentSubject(target.id);
+      else this.error = 'Drop the link on a readable naplet. The subject was not changed.';
+    },
+    async setCommentSubject(napletId) {
+      const comment = this.activeComment;
+      if (!comment?.can_retarget || this.saving) return;
+      const target = this.naplets.find(row => row.id === napletId && row.access === 'ready');
+      if (napletId && !target) return;
+      const point = this.commentPoint(comment);
+      const anchor = target ? { type: 'naplet', naplet_id: target.id, ...point } : { type: 'canvas', ...point };
+      if (await this.mutate(() => syncRuntime.retargetComment(comment.id, anchor))) { this.subjectPicker = false; this.subjectNapletId = target?.id || ''; }
+    },
     commentCountForNaplet(id) { return this.unresolvedComments.filter(row => row.anchor.type === 'naplet' && row.anchor.naplet_id === id).length; },
-    commentStyle(comment) { if (comment.anchor.type === 'naplet') { const naplet = this.naplets.find(row => row.id === comment.anchor.naplet_id); if (!naplet) return 'display:none'; return `left:${naplet.layout.x + naplet.layout.width - 14}px;top:${naplet.layout.y - 14}px`; } return `left:${comment.anchor.x - 14}px;top:${comment.anchor.y - 14}px`; },
+    commentStyle(comment) { const point = this.commentPoint(comment); return point ? `left:${point.x - 14}px;top:${point.y - 14}px` : 'display:none'; },
     napletStyle(naplet) { const layout = naplet.layout; return `left:${layout.x}px;top:${layout.y}px;width:${layout.width}px;height:${layout.height}px;z-index:${layout.z}`; },
     elementStyle(element) { const layout = element.layout; return `left:${layout.x}px;top:${layout.y}px;width:${layout.width}px;height:${layout.height}px;z-index:${layout.z}`; },
     isGroup(element) { return element.kind === 'frame' && element.data?.role === 'group'; },
@@ -354,6 +412,7 @@ export function canvasPageStore() {
   };
 }
 
+registerCanvasCommentPopover(Alpine);
 registerCanvasWindow(Alpine);
 registerCanvasDocument(Alpine);
 Alpine.store('canvas', canvasPageStore());

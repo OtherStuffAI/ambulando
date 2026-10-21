@@ -7,6 +7,7 @@ const api = vi.hoisted(() => ({
   createTowerPgCanvasComment: vi.fn(),
   createTowerPgCanvasElement: vi.fn(),
   createTowerPgCanvasNaplet: vi.fn(),
+  deleteTowerPgCanvasComment: vi.fn(),
   deleteTowerPgCanvasElement: vi.fn(),
   deleteTowerPgCanvasNaplet: vi.fn(),
   getTowerPgCanvases: vi.fn(),
@@ -134,4 +135,22 @@ it('aborts the atomic projection when the refresh generation changes during comm
   await expect(runtime.refresh()).resolves.toBeNull();
   expect(await db.canvas_snapshots.get(canvasDefinitionKey(context, 'canvas'))).toBeUndefined();
   expect(await db.canvas_definitions.get(canvasDefinitionKey(context, 'canvas'))).toBeUndefined();
+});
+
+
+it('deletes using the confirmed revision and reply set, rehydrates Dexie, and refuses unauthorized actions', async () => {
+  const db = openWorkspaceDb(`canvas-comments-${crypto.randomUUID()}`); await db.open();
+  const source = { ...payload(1), comments: [{ id: 'root', anchor: { type: 'canvas', x: 30, y: 40 }, body: 'Root', author: { actor_id: 'actor' }, row_version: 3, can_delete: true, can_retarget: true, retarget_preserves_position: true }] };
+  api.getTowerPgCanvasSnapshot.mockResolvedValue(source);
+  const runtime = new CanvasSyncRuntime(context, 'canvas');
+  await runtime.refresh();
+  await runtime.retargetComment('root', { type: 'canvas', x: 50, y: 60 });
+  expect(api.updateTowerPgCanvasComment).toHaveBeenCalledWith('workspace', 'canvas', 'root', { anchor: { type: 'canvas', x: 50, y: 60 }, expected_row_version: 3 }, expect.any(Object));
+  api.getTowerPgCanvasSnapshot.mockResolvedValue(payload(1));
+  await runtime.deleteComment('root', { expected_row_version: 2, expected_reply_versions: { reply: 4 } });
+  expect(api.deleteTowerPgCanvasComment).toHaveBeenCalledWith('workspace', 'canvas', 'root', { expected_row_version: 2, expected_reply_versions: { reply: 4 } }, expect.any(Object));
+  expect((await db.canvas_snapshots.get(runtime.key)).comments).toEqual([]);
+  await expect(runtime.deleteComment('root', {})).rejects.toThrow('cannot delete');
+  await expect(runtime.retargetComment('root', {})).rejects.toThrow('cannot change');
+  runtime.stop();
 });

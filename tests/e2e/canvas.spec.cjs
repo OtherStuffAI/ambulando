@@ -19,6 +19,7 @@ const identity = {
 let seedBundle;
 let v40DbBundle;
 let canvasHtmlSource;
+let currentDbVersion;
 
 test.beforeAll(async () => {
   canvasHtmlSource = await fs.readFile(path.resolve(__dirname, '../../canvas.html'), 'utf8');
@@ -38,6 +39,7 @@ test.beforeAll(async () => {
     },
   })).outputFiles[0].text;
   const dbSource = await fs.readFile(path.resolve(__dirname, '../../src/db.js'), 'utf8');
+  currentDbVersion = Math.max(...[...dbSource.matchAll(/db\.version\((\d+)\)/g)].map(match => Number(match[1]))) * 10;
   const v40Source = dbSource.replace(
     /\n  \/\/ Current-authority Canvas projections\.[\s\S]*?\n  db\.version\(41\)\.stores\(\{[\s\S]*?\n  \}\);\n/,
     '\n',
@@ -308,7 +310,7 @@ test('dedicated Canvas route renders authorized sources and isolates trusted HTM
 
   await canvas.getByTitle('Comment (C)').click();
   await canvas.locator('.canvas-stage').click({ position: { x: 1000, y: 500 } });
-  await canvas.getByLabel('Comment').fill('Please verify this area.');
+  await canvas.getByLabel('Comment', { exact: true }).fill('Please verify this area.');
   await canvas.getByRole('button', { name: 'Post' }).click();
   await expect(canvas.locator('.canvas-comment-marker')).toHaveCount(1);
 
@@ -322,11 +324,11 @@ test('dedicated Canvas route renders authorized sources and isolates trusted HTM
   console.log('CANVAS_BROWSER_EVIDENCE', JSON.stringify({ minimalChrome: true, napletFamilies: 4, deniedMetadataHidden: true, htmlInteractiveAndContained: true, sequentialCas: true, sourcePickerAndAddNaplet: true, persistentText: true, threadedCommentAnchor: true, closeReturnsToOriginalTab: true }));
 });
 
-test('Canvas starts one runtime across clean, current-v41, and v40 upgrade databases', async ({ browser }) => {
+test('Canvas starts one runtime across clean, current-schema, and v40 upgrade databases', async ({ browser }) => {
   test.setTimeout(45_000);
   expect(canvasHtmlSource).not.toContain('x-init="$store.canvas.init()"');
   const evidence = [];
-  for (const databaseState of ['clean', 'current-v41', 'upgrade-v40']) {
+  for (const databaseState of ['clean', 'current-schema', 'upgrade-v40']) {
     const context = await browser.newContext({ serviceWorkers: 'block', reducedMotion: 'reduce' });
     const page = await context.newPage();
     let snapshotRequests = 0;
@@ -416,10 +418,114 @@ test('Canvas starts one runtime across clean, current-v41, and v40 upgrade datab
       db.close();
       return { version, pending: pending.some(row => row.record_id === 'preserve-pending'), draft: draft?.draft_key === 'preserve-draft' };
     }, { workspaceKey, databaseState });
-    expect(persisted.version).toBe(410);
+    expect(persisted.version).toBe(currentDbVersion);
     if (databaseState !== 'clean') expect(persisted).toMatchObject({ pending: true, draft: true });
     evidence.push({ databaseState, snapshotRequests, indexedDbVersion: persisted.version, preservedPendingAndDraft: databaseState === 'clean' ? null : true });
     await context.close();
   }
   console.log('CANVAS_STARTUP_EVIDENCE', JSON.stringify(evidence));
+});
+
+
+for (const width of [1440, 390]) test(`Canvas comments persist subjects and safe deletions in nonmodal movable popovers at ${width}px`, async ({ page, context }) => {
+  test.setTimeout(60_000);
+  await page.setViewportSize({ width, height: 850 });
+  const author = { actor_id: 'actor-reader', npub: 'npub-reader', label: 'Reviewer' };
+  const makeComment = (id, parent = null) => ({ id, parent_comment_id: parent, body: id === 'root' ? 'Review this naplet' : 'A reply', anchor: { type: 'canvas', x: 80, y: 400 }, row_version: 1, author, can_delete: true, can_retarget: !parent, retarget_preserves_position: true, can_resolve: !parent, resolved_at: null });
+  let comments = [makeComment('root'), makeComment('reply', 'root')];
+  const naplets = [baseNaplets()[1]];
+  naplets[0].layout = { x: 20, y: 20, width: 260, height: 180, z: 1 };
+  const requests = [], errors = [];
+  page.on('pageerror', error => errors.push(error.message));
+  await context.route('**/*', async route => {
+    const request = route.request(), url = new URL(request.url());
+    if (url.pathname === '/__canvas-seed.js') return route.fulfill({ contentType: 'text/javascript', body: seedBundle });
+    if (url.pathname === '/__canvas-seed.html') return route.fulfill({ contentType: 'text/html', body: '<!doctype html><title>seed</title>' });
+    const root = `/api/v4/flightdeck-pg/workspaces/${workspaceId}/canvases/${canvasId}`;
+    if (!url.pathname.startsWith(root)) return serveBuiltFlightDeck(route);
+    expect(request.headers().authorization).toMatch(/^Nostr /);
+    const suffix = url.pathname.slice(root.length);
+    const respond = (body, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
+    if (suffix === '/snapshot') return respond({ workspace_id: workspaceId, identity, complete: true, canvas: definition(), naplets, elements: [], comments });
+    const body = request.postDataJSON(); requests.push({ suffix, method: request.method(), body });
+    if (suffix.startsWith('/naplets/')) { Object.assign(naplets[0], { layout: body.layout, row_version: naplets[0].row_version + 1 }); return respond({}); }
+    if (suffix === '/comments' && request.method() === 'POST') { comments.push({ ...makeComment('new-reply', body.parent_comment_id), body: body.body, anchor: body.anchor }); return respond({}); }
+    const comment = comments.find(row => row.id === suffix.split('/').pop());
+    if (body.expected_row_version !== comment?.row_version) return respond({ error: 'stale_row_version', message: 'Comment changed; refresh and try again' }, 409);
+    if (request.method() === 'DELETE') {
+      const replies = comments.filter(row => row.parent_comment_id === comment.id);
+      if (!comment.parent_comment_id && JSON.stringify(body.expected_reply_versions) !== JSON.stringify(Object.fromEntries(replies.map(row => [row.id, row.row_version])))) return respond({ error: 'stale_row_version', message: 'Replies changed; refresh and confirm again' }, 409);
+      comments = comments.filter(row => row.id !== comment.id && row.parent_comment_id !== comment.id); return respond({});
+    }
+    if (body.anchor) { comment.anchor = body.anchor; for (const row of comments.filter(row => row.parent_comment_id === comment.id)) { row.anchor = body.anchor; row.row_version++; } }
+    if (typeof body.resolved === 'boolean') comment.resolved_at = body.resolved ? '2026-10-21T04:00:00Z' : null;
+    comment.row_version++; return respond({});
+  });
+  const key = await seedSessionAndWorkspace(page);
+  await page.goto(`/canvas.html?workspacekey=${encodeURIComponent(key)}&canvasid=${canvasId}`);
+  await page.getByRole('button', { name: 'Open comment by Reviewer' }).click();
+  const panel = page.locator('.canvas-comment-panel'), editor = page.locator('.canvas-comment-dialog');
+  await expect(panel).toBeVisible();
+  expect(await panel.evaluate(node => node.matches(':modal'))).toBe(false);
+  const handle = panel.locator('[data-popover-drag]');
+  // Keyboard and pointer movement remain bounded even on a narrow viewport.
+  await expect(handle).toBeVisible();
+  await handle.focus(); const initial = await panel.boundingBox(); await page.keyboard.press('ArrowLeft');
+  const afterKey = await panel.boundingBox();
+  expect(afterKey.x).toBeLessThanOrEqual(initial.x);
+  const headerBox = await handle.boundingBox();
+  await page.mouse.move(headerBox.x + 50, headerBox.y + 15); await page.mouse.down(); await page.mouse.move(50, 640, { steps: 8 }); await page.mouse.up();
+  const moved = await panel.boundingBox(); expect(moved.y).toBeGreaterThan(initial.y); expect(moved.x).toBeGreaterThanOrEqual(0); expect(moved.x + moved.width).toBeLessThanOrEqual(width);
+  // Board selection works while the comment is open.
+  await page.locator('.canvas-naplet-header').click({ position: { x: 90, y: 15 } });
+  await expect(page.locator('.canvas-naplet')).toHaveClass(/selected/);
+  await expect(panel).toBeVisible();
+  await panel.getByRole('button', { name: 'Link subject', exact: true }).scrollIntoViewIfNeeded();
+  const link = await panel.getByRole('button', { name: 'Link subject', exact: true }).boundingBox();
+  const target = await page.locator('.canvas-naplet-header').boundingBox();
+  await page.mouse.move(link.x + 20, link.y + 15); await page.mouse.down(); await page.mouse.move(target.x + 100, target.y + 20, { steps: 12 }); await page.mouse.up();
+  await expect(panel.getByText('Subject: Tasks', { exact: true })).toBeVisible();
+  expect(requests.find(row => row.body.anchor)?.body.anchor).toEqual({ type: 'naplet', naplet_id: 'tasks', x: 80, y: 400 });
+  if (process.env.SOL_EVIDENCE_DIR) await page.screenshot({ path: `${process.env.SOL_EVIDENCE_DIR}/canvas-comment-linked-${width}.png` });
+  const line = page.locator('.canvas-comment-connector'); await expect(line).toBeVisible();
+  const before = await line.locator('line').getAttribute('x2');
+  const markerPosition = await page.locator('.canvas-comment-marker').getAttribute('style');
+  expect(markerPosition).toBe('left:66px;top:386px');
+  await page.mouse.move(target.x + 100, target.y + 20); await page.mouse.down(); await page.mouse.move(target.x + 140, target.y + 40, { steps: 6 }); await page.mouse.up();
+  await expect.poll(() => line.locator('line').getAttribute('x2')).not.toBe(before);
+  await expect(page.locator('.canvas-comment-marker')).toHaveAttribute('style', markerPosition);
+  await panel.getByRole('button', { name: 'Close', exact: true }).scrollIntoViewIfNeeded(); await panel.getByRole('button', { name: 'Close', exact: true }).click(); await expect(line).not.toBeVisible();
+  await page.reload(); await page.getByRole('button', { name: 'Open comment by Reviewer' }).click();
+  await expect(panel.getByText('Subject: Tasks', { exact: true })).toBeVisible();
+  await expect(line).toBeVisible();
+  await expect(page.locator('.canvas-comment-marker')).toHaveAttribute('style', markerPosition);
+  await panel.getByRole('button', { name: 'Reply', exact: true }).click(); await editor.getByLabel('Comment', { exact: true }).fill('Reply stays in this thread');
+  expect(await editor.evaluate(node => node.matches(':modal'))).toBe(false);
+  await editor.getByRole('button', { name: 'Post', exact: true }).click();
+  await expect(panel.getByText('Reply stays in this thread')).toBeVisible();
+  await panel.getByRole('button', { name: 'Delete reply', exact: true }).first().click();
+  await panel.getByRole('button', { name: 'Confirm delete', exact: true }).click();
+  await expect(panel.getByRole('button', { name: 'Delete reply', exact: true })).toHaveCount(1);
+  await page.reload(); await page.getByRole('button', { name: 'Open comment by Reviewer' }).click(); await expect(panel.getByRole('button', { name: 'Delete reply', exact: true })).toHaveCount(1);
+  await panel.getByRole('button', { name: 'Resolve', exact: true }).click(); await expect(page.locator('.canvas-comment-marker')).toHaveCount(0);
+  await panel.getByRole('button', { name: 'Reopen', exact: true }).click(); await expect(page.locator('.canvas-comment-marker')).toHaveCount(1);
+  // Confirmation captures the reply set; an arriving reply must cause conflict.
+  await panel.getByRole('button', { name: 'Delete thread', exact: true }).click(); comments.push(makeComment('arrived', 'root'));
+  await panel.getByRole('button', { name: 'Confirm delete', exact: true }).click();
+  await expect(page.getByRole('alert')).toContainText('Replies changed'); await expect(panel).toBeVisible();
+  await panel.getByRole('button', { name: 'Delete thread', exact: true }).click(); await expect(panel.getByText(/Delete this thread and 2 replies/)).toBeVisible();
+  await panel.getByRole('button', { name: 'Confirm delete', exact: true }).click(); await expect(panel).not.toBeVisible();
+  await page.reload(); await expect(page.locator('.canvas-comment-marker')).toHaveCount(0);
+  // Server capability projection gates actions; no guessed permission from visibility.
+  comments = [{ ...makeComment('root'), can_delete: false, can_retarget: false, can_resolve: false }];
+  await page.reload(); await page.getByRole('button', { name: 'Open comment by Reviewer' }).click();
+  await expect(panel.getByRole('button', { name: 'Delete thread', exact: true })).not.toBeVisible();
+  await expect(panel.getByRole('button', { name: 'Link subject', exact: true })).not.toBeVisible();
+  await expect(panel.getByRole('button', { name: 'Resolve', exact: true })).not.toBeVisible();
+  await page.keyboard.press('Escape'); await expect(panel).not.toBeVisible();
+  comments = [{ ...makeComment('root'), retarget_preserves_position: false }];
+  await page.reload(); await page.getByRole('button', { name: 'Open comment by Reviewer' }).click();
+  await expect(panel.getByRole('button', { name: 'Link subject', exact: true })).not.toBeVisible();
+  expect(errors).toEqual([]);
+  console.log('CANVAS_COMMENT_EVIDENCE', JSON.stringify({ width, nonmodal: true, draggableAndBounded: true, boardUsable: true, explicitTargetSurvivesReloadAndFollows: true, connectorOnlyOpen: true, repliesAndDeletionSurviveReload: true, resolveReopen: true, changedReplySetProtected: true, permissionGated: true }));
 });

@@ -174,10 +174,13 @@ export function normalizeCanvasComment(row, napletIds) {
   if (!id || !text(row?.body) || !text(author.actor_id || author.npub) || !Number.isSafeInteger(Number(row?.row_version)) || Number(row.row_version) < 1) throw new Error('Invalid Canvas comment');
   const napletId = text(anchor.naplet_id);
   const safeAnchor = anchor.type === 'naplet' && napletId && napletIds.has(napletId)
-    ? { type: 'naplet', naplet_id: napletId }
+    ? { type: 'naplet', naplet_id: napletId, ...(Number.isFinite(anchor.x) && Number.isFinite(anchor.y) ? { x: Math.round(anchor.x), y: Math.round(anchor.y) } : {}) }
     : { type: 'canvas', x: Math.round(finite(anchor.x, 0)), y: Math.round(finite(anchor.y, 0)) };
   return {
     id,
+    can_delete: row.can_delete === true,
+    can_retarget: row.can_retarget === true && row.retarget_preserves_position === true,
+    can_resolve: row.can_resolve !== false,
     anchor: safeAnchor,
     parent_comment_id: parentCommentId,
     body: String(row.body),

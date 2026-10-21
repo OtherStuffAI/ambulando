@@ -158,3 +158,13 @@ it('builds an opaque-origin HTML boundary with no host, network, form, frame or 
   expect(html.indexOf('window.open=()=>null')).toBeLessThan(html.lastIndexOf('window.open('));
   expect(html).toContain("closest('a[href],form')");
 });
+
+
+it('retains board marker coordinates independently of an explicit readable naplet subject', () => {
+  const context = canvasContext(store());
+  const snapshot = normalizeCanvasSnapshot({ workspace_id: 'workspace', identity, complete: true, canvas: definition(),
+    naplets: [{ id: 'naplet', access: 'ready', row_version: 1, layout: {}, source: { type: 'task_list', id: 'channel' }, content: {} }],
+    comments: [{ id: 'comment', row_version: 1, body: 'Discuss', anchor: { type: 'naplet', naplet_id: 'naplet', x: 80, y: 400 }, author: { actor_id: 'actor' } }],
+  }, context, 'canvas', 'request');
+  expect(snapshot.comments[0].anchor).toEqual({ type: 'naplet', naplet_id: 'naplet', x: 80, y: 400 });
+});

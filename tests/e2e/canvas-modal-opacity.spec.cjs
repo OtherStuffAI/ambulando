@@ -38,7 +38,7 @@ for (const width of [1440, 390]) {
         store.status = 'ready'; store.error = '';
         store.canvas = { title: 'Busy Canvas', can_manage: true };
         store.elements = Array.from({ length: 24 }, (_, i) => ({ id: `shape-${i}`, kind: 'rectangle', data: {}, layout: { x: (i % 6) * 180, y: Math.floor(i / 6) * 150, width: 160, height: 130, z: i } }));
-        store.comments = [{ id: 'root', body: 'Please review this area. '.repeat(160), author: { label: 'Reviewer' }, anchor: { type: 'canvas', x: 100, y: 100 }, created_at: '2026-10-21', resolved_at: null }];
+        store.comments = [{ id: 'root', body: 'Please review this area. '.repeat(160), author: { label: 'Reviewer' }, can_resolve: true, anchor: { type: 'canvas', x: 100, y: 100 }, created_at: '2026-10-21', resolved_at: null }];
         store.loadSourceOptions = async () => {};
       });
       await page.getByRole('button', { name: 'Add naplet', exact: true }).click();
@@ -60,7 +60,8 @@ for (const width of [1440, 390]) {
       const thread = page.locator('.canvas-comment-panel');
       await assertPanel(thread, expected, width);
       const backdrop = await thread.evaluate(node => getComputedStyle(node, '::backdrop').backgroundColor);
-      expect(backdrop).toBe('rgba(0, 0, 0, 0.45)');
+      expect(backdrop).toBe('rgba(0, 0, 0, 0)');
+      expect(await thread.evaluate(node => node.matches(':modal'))).toBe(false);
       if (process.env.SOL_EVIDENCE_DIR) await page.screenshot({ path: `${process.env.SOL_EVIDENCE_DIR}/canvas-thread-${mode}-${width}.png` });
       expect(await thread.evaluate(node => node.scrollHeight > node.clientHeight)).toBe(true);
       await thread.getByRole('button', { name: 'Reply', exact: true }).click();

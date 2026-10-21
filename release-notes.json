@@ -4689,6 +4689,20 @@
       "notes": [
         "Private viewer settings recover after offline changes and keep the latest saved choice when devices disagree."
       ]
+    },
+    {
+      "buildNumber": 2526,
+      "label": "Keep canvas comments in place when linked",
+      "notes": [
+        "Linking a comment to a naplet preserves its board position. Its dotted subject line follows the naplet while the thread is open."
+      ]
+    },
+    {
+      "buildNumber": 2528,
+      "label": "Position-safe canvas comment links",
+      "notes": [
+        "Subject linking waits for server support that preserves comment marker coordinates. Comment popovers remain movable and the board stays usable."
+      ]
     }
   ]
 }

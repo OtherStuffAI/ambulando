@@ -33,7 +33,10 @@ contract is:
 - `POST /canvases/:canvasId/elements` creates text, shape, connector, drawing,
   or frame rows; element PATCH/DELETE routes use `expected_row_version`.
 - `GET/POST /canvases/:canvasId/comments` reads and creates canvas or naplet
-  threads; comment PATCH resolves or reopens a root thread using CAS.
+  threads; comment PATCH resolves, reopens or retargets a root using CAS.
+- Comment DELETE tombstones one reply or an entire confirmed root/reply set.
+  Root requests include `expected_reply_versions` and `expected_row_version`;
+  concurrent reply changes require a fresh confirmation.
 
 Every response is bound to `workspace_id` and an `identity` object containing
 `workspace_id`, `app_npub`, `tower_service_npub`, and
@@ -168,22 +171,65 @@ and tables, read-only input, source refresh without remount, white paper in both
 themes at desktop and narrow widths, bounded wheel scrolling and exact link
 parameters. This is synthetic client evidence, not authenticated Tower editing.
 
-## Dialog surfaces
+## Comment popovers and explicit subjects
 
-The standalone Canvas entry imports theme tokens without the main shell's
-legacy surface aliases. All three native dialog panels use the opaque `--card`
-and paired `--card-foreground` tokens: Add naplet (all four source types), New
-comment/Reply, and Comment thread. Reply stacks the comment editor above the
-thread. Their existing translucent native backdrops remain independent of the
-panel background. Text editing is inline; Canvas has no separate confirmation
-modal. The Deck's Create canvas/Canvas settings dialog uses its existing opaque
-`--popover` inner surface and principal picker.
+Comment reading and composition use nonmodal native dialogs (`show()`), opaque
+card colors and no dimming backdrop. The board stays interactive. Drag a heading
+to move a panel, or focus its heading and use arrow keys (Shift for larger steps).
+Panels clamp to the viewport on drag, resize and content changes. Escape closes
+the focused panel and returns focus to its opener; Tab can leave the panel.
+Reply opens a separate movable editor. An expanded naplet restores before opening
+a comment editor, so it cannot make the nonmodal editor inert. Failed writes
+leave drafts open and display an error after refreshing canonical state.
 
-`tests/e2e/canvas-modal-opacity.spec.cjs` checks computed panel colors, native
-backdrop, nested reply dismissal, keyboard focus, scrolling and viewport bounds
-at 1440px and 390px in light, dark and both system-resolved themes. It uses
-synthetic busy Canvas state and blocked backend requests; authenticated Tower
-mutations and physical phone behavior remain separate integration checks.
+Actions follow Tower's `can_delete`, `can_resolve` and `can_retarget` projections.
+Authors may delete their own replies, or roots containing only their own replies;
+canvas managers may delete any thread. Deleting a root asks for confirmation with
+the reply count; deleting a reply preserves its root and siblings. The confirmed
+reply id/version set is sent unchanged. Tower serializes reply creation/deletion
+on the root and emits individual tombstones atomically. Concurrent replies require
+fresh confirmation. Older Tower versions lack delete/retarget capabilities, so
+those controls remain hidden until backend activation. Retargeting additionally
+requires `retarget_preserves_position: true`; an older active server cannot
+silently snap a board-positioned marker to the subject corner.
+
+While a thread is open, drag **Link subject** onto a readable naplet, or click it
+to choose a subject with the keyboard. Dropping elsewhere leaves the subject
+unchanged. The persisted anchor names the naplet id; a dotted line appears only
+for the open thread and follows the target layout. Optional naplet-anchor x/y
+preserve the independently positioned marker in existing JSONB storage; no new
+record family or database migration is needed. Legacy anchors without marker
+coordinates retain their corner fallback until explicitly relinked. Clearing the
+subject returns to a coordinate anchor. Linking never uses proximity or alters
+source records.
+The shared contract supports canvas and naplet anchors only: native text, shapes,
+frames and other elements cannot be explicit subjects in this release.
+
+## Agent spatial reading
+
+Agents use the same signed Tower snapshot as humans. It already includes naplet
+layout (x/y/width/height/z), native-element layout/data and comment anchors. The
+additive `spatial_context` on that existing route provides canvas-world bounds,
+comment positions, root ids, explicit naplet targets and up to five nearest
+geometric candidates. It is built after source authorization and excludes
+restricted naplet identities. Replies use their root's effective subject. Explicit
+targets carry `authority: explicit`; candidates carry `basis: geometric_inference`
+and never assign intent. This is a Tower response, not browser-only metadata or
+a new Autopilot endpoint. Older backends retain the original raw geometry until
+activation of the summary.
+
+`tests/e2e/canvas.spec.cjs` exercises signed synthetic deletion/reload, replies,
+changed reply sets, subject persistence, connector movement/visibility, popover
+drag, board interaction and permissions at 1440px and 390px. The opacity suite
+checks panel colors, transparent comment backdrops, nested reply dismissal,
+focus, scrolling and bounds across themes. Tower signed-route tests exercise
+author/manager permissions, CAS, atomic deletion and source ACLs against a
+disposable local Postgres database. Production mutations and physical phone
+behavior remain separate integration checks.
+
+Add naplet and expanded naplet windows retain native modal semantics. The Deck's
+Create canvas/Canvas settings dialog retains its opaque popover surface and
+principal picker.
 
 ## Naplet window controls
 
