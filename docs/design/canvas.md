@@ -193,8 +193,13 @@ those controls remain hidden until backend activation. Retargeting additionally
 requires `retarget_preserves_position: true`; an older active server cannot
 silently snap a board-positioned marker to the subject corner.
 
-While a thread is open, drag **Link subject** onto a readable naplet, or click it
-to choose a subject with the keyboard. Dropping elsewhere leaves the subject
+Comment panels are 320px wide and content-sized, with compact reply/resolve,
+delete and close controls. Deletion confirmation appears only on request.
+While a thread is open, drag the small chain handle beside its controls onto a
+readable naplet. The dotted line starts at the actual marker and tracks the pointer
+during the drag. Clicking, tapping or keyboard-activating the chain reveals a
+compact direct-choice target list with an Unlink action for existing links.
+The target list stays hidden in the normal comment view. Dropping elsewhere leaves the subject
 unchanged. The persisted anchor names the naplet id; a dotted line appears only
 for the open thread and follows the target layout. Optional naplet-anchor x/y
 preserve the independently positioned marker in existing JSONB storage; no new

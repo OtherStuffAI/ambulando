@@ -4709,6 +4709,19 @@
       "label": "Canvas managed-runtime verification",
       "notes": [],
       "noUserVisibleChanges": true
+    },
+    {
+      "buildNumber": 2530,
+      "label": "Compact canvas comments",
+      "notes": [
+        "Canvas comments use a small movable popover. Drag the chain handle to a naplet to link it, with a dotted line following your pointer; tap or use the keyboard for a compact target list."
+      ]
+    },
+    {
+      "buildNumber": 2531,
+      "label": "Canvas link keyboard verification",
+      "notes": [],
+      "noUserVisibleChanges": true
     }
   ]
 }

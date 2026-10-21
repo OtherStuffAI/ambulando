@@ -62,7 +62,7 @@ export function canvasPageStore() {
     editingTextId: '', editingText: '', sourceOptions: [], sourceSearch: '',
     addDialog: { type: 'document', sourceId: '', title: '' },
     commentDialog: { anchor: null, parentCommentId: null, body: '' }, activeCommentId: '',
-    commentDelete: null, linkDrag: null, subjectPicker: false, subjectNapletId: '',
+    commentDelete: null, linkDrag: null, subjectPicker: false, suppressLinkClick: false,
     accessMessage: CANVAS_ACCESS_MESSAGE, historyTick: 0,
 
     get canvasId() { return text(new URLSearchParams(location.search).get('canvasid')); },
@@ -341,7 +341,7 @@ export function canvasPageStore() {
     },
     openCommentDialog(anchor, parentCommentId = null) { if (anchor.type === 'naplet' && !anchor.naplet_id) return; if (anchor.type === 'naplet' && !parentCommentId && !Number.isFinite(anchor.x)) { const point = this.commentPoint({ anchor }); if (point) anchor = { ...anchor, ...point }; } this.commentDialog = { anchor, parentCommentId, body: '' }; openCanvasDialog('commentDialog'); },
     async submitComment() { const body = text(this.commentDialog.body); if (!body) return; await this.mutate(() => syncRuntime.createComment({ anchor: this.commentDialog.anchor, parent_comment_id: this.commentDialog.parentCommentId || undefined, body })); if (!this.error) canvasElement('commentDialog').close(); },
-    openCommentThread(comment) { this.activeCommentId = comment.id; this.commentDelete = null; this.subjectPicker = false; this.subjectNapletId = comment.anchor.naplet_id || ''; openCanvasDialog('commentPanel'); },
+    openCommentThread(comment) { this.activeCommentId = comment.id; this.commentDelete = null; this.subjectPicker = false; this.suppressLinkClick = false; openCanvasDialog('commentPanel'); },
     async setCommentResolved(comment, resolved) { if (comment?.can_resolve !== false) await this.mutate(() => syncRuntime.setCommentResolved(comment.id, resolved)); },
     requestCommentDelete(comment) {
       if (!comment?.can_delete || this.saving) return;
@@ -370,15 +370,32 @@ export function canvasPageStore() {
       const end = this.linkDrag?.point || (target ? { x: target.layout.x + target.layout.width / 2, y: target.layout.y + target.layout.height / 2 } : null);
       return end ? { x1: start.x, y1: start.y, x2: end.x, y2: end.y } : null;
     },
+    commentTime(comment) {
+      const date = new Date(comment?.created_at);
+      return Number.isNaN(date.getTime()) ? '' : date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    },
+    toggleCommentTargets(event) {
+      if (event?.detail === 0) this.suppressLinkClick = false;
+      if (this.suppressLinkClick) { this.suppressLinkClick = false; return; }
+      this.subjectPicker = !this.subjectPicker;
+    },
     startCommentLink(event) {
       if (!this.activeComment?.can_retarget || this.saving || event.button !== 0) return;
       event.preventDefault(); event.currentTarget.setPointerCapture?.(event.pointerId);
-      this.linkDrag = { pointerId: event.pointerId, point: this.toWorld(event) };
+      this.suppressLinkClick = false;
+      this.linkDrag = { pointerId: event.pointerId, origin: { x: event.clientX, y: event.clientY }, point: this.toWorld(event), moved: false };
     },
-    moveCommentLink(event) { if (this.linkDrag?.pointerId === event.pointerId) this.linkDrag.point = this.toWorld(event); },
+    moveCommentLink(event) {
+      if (this.linkDrag?.pointerId !== event.pointerId) return;
+      this.linkDrag.point = this.toWorld(event);
+      if (Math.hypot(event.clientX - this.linkDrag.origin.x, event.clientY - this.linkDrag.origin.y) > 5) this.linkDrag.moved = true;
+    },
     async finishCommentLink(event) {
       if (this.linkDrag?.pointerId !== event.pointerId) return;
+      const moved = this.linkDrag.moved;
       this.linkDrag = null;
+      if (!moved) return;
+      this.suppressLinkClick = true;
       const node = document.elementsFromPoint(event.clientX, event.clientY).map(node => node.closest?.('[data-canvas-key]')).find(Boolean);
       const id = node?.dataset.canvasKey?.replace(/^naplet:/, '');
       const target = this.naplets.find(row => row.id === id && row.access === 'ready');
@@ -392,7 +409,7 @@ export function canvasPageStore() {
       if (napletId && !target) return;
       const point = this.commentPoint(comment);
       const anchor = target ? { type: 'naplet', naplet_id: target.id, ...point } : { type: 'canvas', ...point };
-      if (await this.mutate(() => syncRuntime.retargetComment(comment.id, anchor))) { this.subjectPicker = false; this.subjectNapletId = target?.id || ''; }
+      if (await this.mutate(() => syncRuntime.retargetComment(comment.id, anchor))) { this.subjectPicker = false; }
     },
     commentCountForNaplet(id) { return this.unresolvedComments.filter(row => row.anchor.type === 'naplet' && row.anchor.naplet_id === id).length; },
     commentStyle(comment) { const point = this.commentPoint(comment); return point ? `left:${point.x - 14}px;top:${point.y - 14}px` : 'display:none'; },

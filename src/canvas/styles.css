@@ -157,7 +157,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 }
 
 /* Comments float over a usable board, without a native modal backdrop. */
-.canvas-comment-popover { position: fixed; inset: auto; left: max(8px, calc(100vw - 440px)); top: 88px; margin: 0; width: min(420px, calc(100vw - 16px)); max-height: calc(100dvh - 16px); overflow: auto; z-index: 2147483646; box-shadow: 0 8px 32px #00000040; overscroll-behavior: contain; }
+.canvas-comment-popover { position: fixed; inset: auto; left: max(8px, calc(100vw - 344px)); top: 88px; margin: 0; width: min(320px, calc(100vw - 16px)); max-height: calc(100dvh - 16px); overflow: auto; z-index: 2147483646; box-shadow: 0 8px 32px #00000040; overscroll-behavior: contain; }
 .canvas-comment-dialog { z-index: 2147483647; }
 .canvas-comment-popover::backdrop { background: transparent; }
 .canvas-comment-popover [data-popover-drag] { display: flex; align-items: center; justify-content: space-between; gap: 12px; cursor: move; touch-action: none; user-select: none; }
@@ -167,8 +167,23 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .canvas-comment-panel article p { overflow-wrap: anywhere; }
 .canvas-comment-panel article > button { margin-top: 8px; }
 .canvas-comment-delete { border: 1px solid var(--destructive); border-radius: 8px; padding: 10px; }
-.canvas-comment-policy { font-size: 12px; color: var(--muted-foreground); }
+
 .canvas-comment-link-handle { cursor: crosshair; touch-action: none; }
 .canvas-comment-connector { position: absolute; left: 0; top: 0; width: 1px; height: 1px; overflow: visible; z-index: 100000; pointer-events: none; }
 .canvas-comment-connector line { stroke: var(--primary); stroke-width: 2; stroke-dasharray: 2 6; stroke-linecap: round; vector-effect: non-scaling-stroke; }
 @media (max-width: 700px) { .canvas-comment-popover button { min-height: 44px; } }
+
+/* Comment-sized surfaces keep the board available; extra actions expand on demand. */
+.canvas-comment-popover form, .canvas-comment-panel > div { gap: 10px; padding: 12px; }
+.canvas-comment-popover h2 { font-size: 14px; }
+.canvas-comment-popover textarea { min-height: 72px; }
+.canvas-comment-popover button { padding: 5px 8px; font-size: 12px; }
+.canvas-comment-controls { display: flex; align-items: center; gap: 2px; }
+.canvas-comment-controls button { display: grid; place-items: center; width: 28px; height: 28px; padding: 4px; border-color: transparent; }
+.canvas-comment-panel article { position: relative; padding: 8px; font-size: 13px; }
+.canvas-comment-panel article > button { position: absolute; right: 4px; top: 0; margin: 0; }
+.canvas-comment-panel article:has(> button) { padding-right: 34px; }
+.canvas-comment-targets { display: grid; gap: 4px; max-height: 160px; overflow: auto; }
+.canvas-comment-targets button { text-align: left; overflow-wrap: anywhere; }
+.canvas-comment-targets button[aria-pressed="true"] { border-color: var(--primary); }
+@media (max-width: 700px) { .canvas-comment-controls button { width: 36px; min-height: 44px; } }
