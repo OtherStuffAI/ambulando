@@ -1,3 +1,4 @@
+import { TowerSyncService } from '../src/tower-sync-service.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   hydrateTowerPgChannels,
@@ -3208,6 +3209,57 @@ it('bounds stale reaction SSE reads and recovers a restored target after expiry'
     await hydrateTowerPgReactionTarget(target, 'message', 'stale', deps);
     expect(read).toHaveBeenCalledTimes(2);
   } finally { now.mockRestore(); }
+});
+
+it.each([false, true])('expires service-owned reaction misses with channel coverage %s', async withChannel => {
+  const target = store();
+  const missing = Object.assign(new Error('missing channel'), { status: 400,
+    responseText: JSON.stringify({ code: 'resource-not-found', required_permission: 'channel.read' }) });
+  const restored = { id: 'restored-reaction', target_type: 'message', target_id: 'stale',
+    emoji: 'thumbs_up', reactor_npub: 'npub1alice' };
+  const read = vi.fn().mockRejectedValueOnce(missing).mockResolvedValue({ reactions: [restored] });
+  const replace = vi.fn(async () => 0);
+  const service = new TowerSyncService({ workspaceKey: 'reaction-expiry', families: {
+    reactions: { freshMs: 30_000,
+      load: (id, options) => hydrateTowerPgReactionTarget(target, options.targetType, id, options),
+      materialize: result => result },
+  } });
+  const options = { force: true, targetType: 'message',
+    ...(withChannel ? { channelId: 'missing-channel' } : {}),
+    getTowerPgReactions: read, replacePgReactionsForTarget: replace };
+  // Force bypasses the service's 30s freshness window, so these assertions
+  // exercise the negative cache rather than accidentally testing freshness.
+  const load = id => service.ensureLoaded('reactions', id, options);
+  const start = 1_000;
+  const now = vi.spyOn(Date, 'now').mockReturnValue(start);
+  try {
+    await expect(load('stale')).resolves.toEqual([]);
+    now.mockReturnValue(start + 30_000);
+    await load('stale');
+    now.mockReturnValue(start + 5 * 60_000 - 1);
+    await load('stale');
+    expect(read).toHaveBeenCalledOnce();
+    now.mockReturnValue(start + 5 * 60_000);
+    await load('stale');
+    if (withChannel) {
+      // Target expiry cannot override channel suppression, even for a sibling.
+      await load('sibling');
+      expect(read).toHaveBeenCalledOnce();
+      now.mockReturnValue(start + 10 * 60_000 - 1);
+      await load('stale');
+      await load('sibling');
+      expect(read).toHaveBeenCalledOnce();
+      now.mockReturnValue(start + 10 * 60_000);
+      await load('stale');
+    }
+    expect(read).toHaveBeenCalledTimes(2);
+    expect(replace).toHaveBeenCalledTimes(2);
+    expect(replace.mock.calls[0][2]).toEqual([]);
+    expect(replace.mock.calls[1][2]).toEqual([expect.objectContaining({ record_id: 'restored-reaction' })]);
+    // Successful restoration is not remembered as another negative result.
+    await load('stale');
+    expect(read).toHaveBeenCalledTimes(3);
+  } finally { service.dispose('test-complete'); now.mockRestore(); }
 });
 
 it.each([

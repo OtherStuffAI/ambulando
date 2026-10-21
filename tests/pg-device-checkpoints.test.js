@@ -632,9 +632,47 @@ it.each(['actor', 'backend', 'workspace'])('does not reuse an ID or cursor after
 });
 
 it('gives independent caches different IDs and serializes tabs sharing the same cache', async () => {
-  const h = harness(); let tail = Promise.resolve();
-  const locks = { request: vi.fn((_name, _options, callback) => { const run = tail.then(callback); tail = run.catch(() => {}); return run; }) };
-  const [a, b] = await Promise.all([withDeviceCacheLock('same', h.run, locks), withDeviceCacheLock('same', h.run, locks)]);
+  const h = harness();
+  // Exclusive Web Locks grant a Lock, or null for a busy ifAvailable request.
+  // Callback return values must never become the next request's lock argument.
+  let held = false;
+  const queue = [];
+  const grants = [];
+  const locks = { request: vi.fn((name, options, callback) => {
+    if (held && options.ifAvailable) {
+      grants.push(null);
+      return Promise.resolve(callback(null));
+    }
+    return new Promise((resolve, reject) => {
+      const acquire = async () => {
+        held = true;
+        const lock = { name, mode: options.mode };
+        grants.push(lock);
+        try { resolve(await callback(lock)); }
+        catch (error) { reject(error); }
+        finally { held = false; queue.shift()?.(); }
+      };
+      if (held) queue.push(acquire);
+      else acquire();
+    });
+  }) };
+  let releaseFirst;
+  const firstGate = new Promise(resolve => { releaseFirst = resolve; });
+  const waiting = vi.fn();
+  const firstRun = vi.fn(async () => { await firstGate; return h.run(); });
+  const secondRun = vi.fn(h.run);
+  const first = withDeviceCacheLock('same', firstRun, locks, { storage: null });
+  const second = withDeviceCacheLock('same', secondRun, locks, { storage: null, onWaiting: waiting });
+  await vi.waitFor(() => expect(waiting).toHaveBeenCalledOnce());
+  expect(firstRun).toHaveBeenCalledOnce();
+  expect(secondRun).not.toHaveBeenCalled();
+  expect(grants).toEqual([{ name: 'flightdeck-record-cache:same', mode: 'exclusive' }, null]);
+  expect(locks.request.mock.calls[2][1]).toMatchObject({ mode: 'exclusive', signal: expect.any(AbortSignal) });
+  releaseFirst();
+  const [a, b] = await Promise.all([first, second]);
+  expect(secondRun).toHaveBeenCalledOnce();
+  expect(grants[2]).toEqual({ name: 'flightdeck-record-cache:same', mode: 'exclusive' });
+  expect(held).toBe(false);
   expect(a.clientId).toBe(b.clientId); expect(h.remote.client.mock.calls.filter(c => c[2].operation === 'register')).toHaveLength(1);
   db = openWorkspaceDb('independent-device-test'); await db.open(); await Promise.all(db.tables.map(t => t.clear()));
   const c = await h.run(); expect(c.clientId).not.toBe(a.clientId);
