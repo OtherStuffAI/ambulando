@@ -4547,6 +4547,26 @@
       "notes": [
         "Your saved personal scope order now applies to the sidebar, Deck and task scope selectors, and scope pickers. Scope parents and shared channel order stay intact."
       ]
+    },
+    {
+      "buildNumber": 2499,
+      "label": "Compact composer controls",
+      "notes": [
+        "Composer Menu and paper-airplane send controls now stay vertically stacked as icons on desktop and mobile, leaving more room for your draft."
+      ]
+    },
+    {
+      "buildNumber": 2500,
+      "label": "Stacked controls with the keyboard open",
+      "notes": [
+        "Keep both composer icon buttons reachable when the phone keyboard reduces the visible conversation height."
+      ]
+    },
+    {
+      "buildNumber": 2501,
+      "label": "Composer validation checkpoint",
+      "notes": [],
+      "noUserVisibleChanges": true
     }
   ]
 }

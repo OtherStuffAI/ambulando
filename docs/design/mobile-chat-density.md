@@ -15,10 +15,12 @@ existing handlers. A bounded header scrolls if title-edit errors need more room;
 the menu floats outside that scroll box.
 
 The footer groups the composer, editing state, recent mentions and attachment
-previews. It may use at most 30% of the visual viewport (180px maximum). Ancillary
+previews. Its height cap is 30% of the visual viewport (180px maximum), with a 105px
+floor to keep both stacked 44px controls reachable when the keyboard is open. Ancillary
 state scrolls in that footer rather than displacing history. The draft itself
 has an independent scroll box, capped at 22% of visual height (112px maximum).
-Menu and Reply share a horizontal row beside it. Safe-area padding remains.
+Menu and the paper-airplane action occupy two vertically stacked icon rows
+beside it at every viewport width. Safe-area padding remains.
 The editor DOM, selection, IME handlers, draft model and send guards are retained.
 A phone-only footer directive keeps the focused editor fully visible when chips,
 edit status or keyboard resizing change its position. It scrolls only that footer,

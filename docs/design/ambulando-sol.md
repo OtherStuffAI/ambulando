@@ -265,3 +265,16 @@ It checks filtering, pressed state, Tab/Enter/Space, accessible names and same-r
 placement at 320/390/1440px in both themes. It does not establish authenticated
 feed or relay delivery. `SOL_EVIDENCE_DIR` optionally captures screenshots in
 verified ignored handoff storage.
+
+
+## Composer action column
+
+New-thread, reply/edit and workroom reply composers use a Menu icon above a
+paper-airplane action in one compact column at every width. Native buttons keep
+Menu and the current Start thread/Reply/Save/pending action as accessible names
+and title tooltips. Existing handlers, send guards, busy state, drafts and
+attachment previews are retained. Targets are 36px on desktop and 44px on phones
+or coarse pointers. `tests/e2e/composer-icons.spec.cjs` exercises responsive
+geometry, keyboard menu/send callbacks and pending/edit labels using synthetic
+records in the production template; authenticated Tower delivery and physical
+phone behavior remain separate smoke checks.

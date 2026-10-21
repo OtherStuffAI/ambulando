@@ -49,8 +49,8 @@ describe('Chat channel rendering hooks', () => {
     const controls = html.slice(composerStart, composerEnd);
 
     expect(composerStart).toBeGreaterThan(-1);
-    expect(controls.indexOf('>Menu</button>')).toBeGreaterThan(-1);
-    expect(controls.indexOf('>Menu</button>')).toBeLessThan(controls.indexOf('class="thread-reply-btn"'));
+    expect(controls.indexOf('aria-label="Menu"')).toBeGreaterThan(-1);
+    expect(controls.indexOf('aria-label="Menu"')).toBeLessThan(controls.indexOf('class="thread-reply-btn"'));
     expect(styles).toMatch(/\.thread-input-actions\s*\{[\s\S]*flex-direction:\s*column;/);
     expect(styles).toMatch(/@media \(max-width: 640px\)[\s\S]*\.thread-input-actions\s*\{[\s\S]*flex-direction:\s*column;/);
   });
