@@ -4837,6 +4837,20 @@
       "notes": [
         "Keep the rest of a canvas available when one linked board cannot be checked. Refresh retries the restricted board without losing other content."
       ]
+    },
+    {
+      "buildNumber": 2552,
+      "label": "Visible arrow bend handle",
+      "notes": [
+        "Selected arrows show a visible centre bend handle in light and dark themes, with contrasting endpoint handles."
+      ]
+    },
+    {
+      "buildNumber": 2553,
+      "label": "Arrow handle hover visibility",
+      "notes": [
+        "Arrow bend and endpoint handles keep their contrasting fill while hovered."
+      ]
     }
   ]
 }

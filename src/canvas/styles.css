@@ -53,7 +53,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .canvas-element svg polyline { fill: none; stroke-linecap: round; stroke-linejoin: round; }
 .canvas-preview { pointer-events: none; opacity: .65; }
 .canvas-resize { position: absolute; right: -7px; bottom: -7px; z-index: 4; min-width: 16px; width: 16px; min-height: 16px; height: 16px; padding: 0; border: 2px solid var(--surface); border-radius: 50%; background: var(--primary); cursor: nwse-resize; }
-.canvas-arrow-handle { position: absolute; z-index: 5; width: 16px; min-width: 16px; height: 16px; min-height: 16px; padding: 0; transform: translate(-50%, -50%); border: 2px solid var(--surface); border-radius: 50%; background: var(--primary); cursor: move; }
+.canvas-arrow-handle { position: absolute; z-index: 5; width: 16px; min-width: 16px; height: 16px; min-height: 16px; padding: 0; transform: translate(-50%, -50%); border: 2px solid var(--card); border-radius: 50%; background: var(--primary); cursor: move; }
 .canvas-comment-marker { position: absolute; z-index: 100001; display: grid; place-items: center; min-width: 30px; width: 30px; height: 30px; padding: 0; border-radius: 50%; box-shadow: 0 3px 12px rgb(0 0 0 / .22); }
 .canvas-denied { display: grid; place-items: center; height: 100%; padding: 20px; text-align: center; color: var(--muted-foreground); }
 .canvas-status { display: grid; place-items: center; height: 100%; padding: 24px; text-align: center; }
@@ -228,7 +228,9 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .canvas-vector-line { fill: none; stroke-linecap: round; stroke-linejoin: round; }
 .canvas-element .canvas-vector-hit { fill: none; stroke: transparent; stroke-width: 18; pointer-events: stroke; cursor: move; }
 .canvas-element.kind-arrow .canvas-arrow-handle, .canvas-element.kind-line .canvas-arrow-handle { pointer-events: auto; touch-action: none; }
-.canvas-arrow-middle { background: var(--surface); border-color: var(--primary); }
+/* Standalone Canvas has card tokens, but no shell-only --surface alias. */
+.canvas-arrow-handle:hover { background: var(--primary); }
+.canvas-arrow-middle, .canvas-arrow-middle:hover { background: var(--card); border-color: var(--primary); box-shadow: 0 0 0 1px var(--card); }
 .canvas-element-options label { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
 .canvas-element-options select, .canvas-element-options input { color: var(--foreground); background: var(--surface); border: 1px solid var(--border); border-radius: 6px; min-height: 36px; padding: 4px; }
 .canvas-element-options input { width: 72px; }

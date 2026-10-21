@@ -632,7 +632,28 @@ for (const touch of [false, true]) test(`native arrow and text controls persist 
   const arrow = page.locator('[data-canvas-key="element:created-3"]');
   await expect(arrow.locator('.canvas-resize')).toBeHidden();
   await expect(arrow).toHaveCSS('outline-style', 'none');
+  const checkHandlePaint = async state => {
+    for (const theme of ['light', 'dark']) {
+      await page.evaluate(theme => { document.documentElement.dataset.theme = theme; }, theme);
+      const paint = await arrow.locator('.canvas-arrow-handle').evaluateAll(handles => handles.map(handle => {
+        const style = getComputedStyle(handle);
+        return { fill: style.backgroundColor, border: style.borderTopColor, width: style.borderTopWidth, style: style.borderTopStyle };
+      }));
+      expect(paint).toHaveLength(3);
+      for (const handle of paint) {
+        expect(handle.fill).not.toBe('rgba(0, 0, 0, 0)');
+        expect(handle.border).not.toBe('rgba(0, 0, 0, 0)');
+        expect(handle.width).toBe('2px');
+        expect(handle.style).toBe('solid');
+        expect(handle.fill).not.toBe(handle.border);
+      }
+      console.log('HANDLE_PAINT', JSON.stringify({ state, theme, touch, paint }));
+      await testInfo.attach(`${state}-${theme}`, { body: await page.screenshot({ path: testInfo.outputPath(`${state}-${theme}.png`) }), contentType: 'image/png' });
+    }
+  };
+  await checkHandlePaint('straight');
   await handleDrag('Bend arrow', 0, -90);
+  await checkHandlePaint('bent');
   await expect(arrow.locator('.canvas-vector-line')).toHaveAttribute('d', / Q /);
   const bent = structuredClone(elements[3]);
   await page.getByTitle('Undo (Ctrl/Cmd+Z)', { exact: true }).click();
@@ -690,6 +711,7 @@ for (const touch of [false, true]) test(`native arrow and text controls persist 
   // Handles remain aligned with the rendered line after persisted zoom/pan.
   const p = curvePoint(elements[3], .25);
   await page.mouse.click((p.x * viewport.scale) + viewport.x, ((p.y - stage.y) * viewport.scale) + viewport.y + stage.y);
+  await checkHandlePaint('zoomed');
   const beforeZoomEdit = structuredClone(elements[3]);
   await handleDrag('Adjust arrow end', 22, 11);
   const endWorld = row => row.data.end.map((v, i) => v + (i ? row.layout.y : row.layout.x));
