@@ -67,3 +67,13 @@ the channel row so they cannot reorder the containing scope. Saving disables
 further channel moves; a rejected save restores the previous positions and shows
 an explicit retry message. Reorder acknowledgements preserve embedded grants
 when Tower returns a sparse channel projection.
+
+The reader/workspace-validated preference also drives expanded sidebar scope
+navigation, Deck and task scope selectors, scope search and creation defaults.
+Each projection retains its existing fallback order for scopes absent from the
+preference; All and DM shortcuts retain their dedicated placement. Scope levels
+and parent links remain authoritative: personal order changes sibling placement,
+not shared hierarchy. In PG workspaces, scopes are top-level work areas, so a
+scope immediately below another in the saved order is still a sibling. Live
+preference materialization updates these projections without rewriting scopes or
+channel positions; Dexie retains the preference across reload.

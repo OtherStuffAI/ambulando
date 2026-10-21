@@ -257,10 +257,14 @@ export const scopesManagerMixin = {
     return Boolean(this.canAdminWorkspace || (this.isTowerPgMode && (this.scopes || []).length) || (this.scopes || []).some((scope) => this.canManageScope(scope)));
   },
 
-  get personallyOrderedScopes() {
+  get personalScopeOrderIds() {
     const order = this.personalScopeOrder;
     const valid = order?.actor_id === resolvePgReaderActorId(this) && order?.workspace_id === this.currentWorkspace?.workspaceId;
-    return sortScopesPersonally(this.scopes || [], valid ? order.scope_ids : []);
+    return valid ? order.scope_ids : [];
+  },
+
+  get personallyOrderedScopes() {
+    return sortScopesPersonally(this.scopes || [], this.personalScopeOrderIds);
   },
 
   get personalOrderScopes() {
@@ -998,7 +1002,7 @@ export const scopesManagerMixin = {
   // --- scope picker / navigation ---
 
   get scopePickerResults() {
-    return searchScopes(this.scopePickerQuery, this.scopes, this.scopesMap);
+    return searchScopes(this.scopePickerQuery, this.personallyOrderedScopes || this.scopes, this.scopesMap);
   },
 
   get scopePickerFlat() {
@@ -1007,7 +1011,7 @@ export const scopesManagerMixin = {
   },
 
   scopePickerFlatFor(query) {
-    const r = searchScopes(query, this.scopes, this.scopesMap);
+    const r = searchScopes(query, this.personallyOrderedScopes || this.scopes, this.scopesMap);
     return [...(r.l1 || []), ...(r.l2 || []), ...(r.l3 || []), ...(r.l4 || []), ...(r.l5 || [])];
   },
 

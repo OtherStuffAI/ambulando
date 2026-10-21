@@ -1239,7 +1239,7 @@
               <span>Board</span>
               <select x-model="$store.chat.commandPaletteNewWorkScopeId">
                 <option value="">Current board</option>
-                <template x-for="scope in $store.chat.scopes.filter((item) => item.record_state !== 'deleted')" :key="`new-work-scope-${scope.record_id}`">
+                <template x-for="scope in $store.chat.personallyOrderedScopes.filter((item) => item.record_state !== 'deleted')" :key="`new-work-scope-${scope.record_id}`">
                   <option :value="scope.record_id" x-text="$store.chat.getScopeBreadcrumb(scope.record_id) || scope.title || scope.record_id"></option>
                 </template>
               </select>
@@ -7483,7 +7483,7 @@
                         data-testid="chat-thread-flow-dispatch-scope-select"
                       >
                         <option value="">Use automatic resolution</option>
-                        <template x-for="scope in $store.chat.scopes.filter(entry => entry.record_state !== 'deleted')" :key="scope.record_id">
+                        <template x-for="scope in $store.chat.personallyOrderedScopes.filter(entry => entry.record_state !== 'deleted')" :key="scope.record_id">
                           <option :value="scope.record_id" x-text="$store.chat.getTaskBoardOptionLabel(scope.record_id)"></option>
                         </template>
                       </select>
@@ -8221,7 +8221,7 @@
               @change="$store.chat.persistCommandPaletteNewWorkDefaultScopeId($event.target.value)"
             >
               <option value="">Current board</option>
-              <template x-for="scope in $store.chat.scopes.filter((item) => item.record_state !== 'deleted')" :key="`new-work-default-scope-${scope.record_id}`">
+              <template x-for="scope in $store.chat.personallyOrderedScopes.filter((item) => item.record_state !== 'deleted')" :key="`new-work-default-scope-${scope.record_id}`">
                 <option :value="scope.record_id" x-text="$store.chat.getScopeBreadcrumb(scope.record_id) || scope.title || scope.record_id"></option>
               </template>
             </select>
@@ -8232,7 +8232,7 @@
               @change="$store.chat.persistCommandPaletteQuickDocScopeId($event.target.value)"
             >
               <option value="">Current scope</option>
-              <template x-for="scope in $store.chat.scopes.filter((item) => item.record_state !== 'deleted')" :key="`quick-doc-scope-${scope.record_id}`">
+              <template x-for="scope in $store.chat.personallyOrderedScopes.filter((item) => item.record_state !== 'deleted')" :key="`quick-doc-scope-${scope.record_id}`">
                 <option :value="scope.record_id" x-text="$store.chat.getScopeBreadcrumb(scope.record_id) || scope.title || scope.record_id"></option>
               </template>
             </select>
@@ -9507,7 +9507,7 @@
                 :disabled="$store.chat.legacyDocScopeRepairBusy"
               >
                 <option value="">Only inherit from scoped parent folders</option>
-                <template x-for="scope in $store.chat.scopes.filter(entry => entry.record_state !== 'deleted')" :key="scope.record_id">
+                <template x-for="scope in $store.chat.personallyOrderedScopes.filter(entry => entry.record_state !== 'deleted')" :key="scope.record_id">
                   <option :value="scope.record_id" x-text="$store.chat.getTaskBoardOptionLabel(scope.record_id)"></option>
                 </template>
               </select>

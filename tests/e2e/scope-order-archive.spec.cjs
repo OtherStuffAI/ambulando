@@ -104,3 +104,58 @@ test('mixed normal, system and DM navigation exposes only eligible move controls
   await page.evaluate(async () => { const s=Alpine.store('chat');s.startScopeDrag('mixed-3');await s.dropScopeBefore('mixed-1'); });
   expect(await page.evaluate(() => window.savedScopeIds)).toEqual(['mixed-3','mixed-1']);
 });
+
+test('saved sibling order reaches sidebar and scope selectors after live updates and reload', async ({ page }) => {
+  test.setTimeout(45000);
+  const { serveBuiltFlightDeck } = require('./fixtures/serve-built-flightdeck.cjs');
+  const { buildGroupsAccessFixture, seedGroupsAccess } = require('./fixtures/groups-access-seed.cjs');
+  const fx = buildGroupsAccessFixture();
+  const source = `
+import {liveQuery} from 'dexie';
+import {openWorkspaceDb} from './src/db.js';
+window.startNavigationOrderProbe = async (actor) => {
+ const db = openWorkspaceDb('personal-navigation-browser'); await db.open();
+ if (!await db.scopes.count()) {
+  await db.scopes.bulkPut(['other','prt','apps','new'].map(id => ({record_id:id,title:{apps:'Petes Applications',prt:'PRT',other:'Other Stuff',new:'Unordered'}[id],level:'l1',parent_id:null,record_state:'active'})));
+  await db.scope_orders.put({record_id:actor,actor_id:actor,workspace_id:'groups-access-workspace',scope_ids:['apps','prt','other'],row_version:1});
+ }
+ window.navigationOrderDb = db;
+ liveQuery(async()=>({scopes:await db.scopes.toArray(),order:await db.scope_orders.get(actor)})).subscribe(({scopes,order}) => {
+  const s=Alpine.store('chat');s.scopes=scopes;s.personalScopeOrder=order;
+ });
+};`;
+  const bundle = await build({ stdin: { contents: source, resolveDir: path.resolve(__dirname, '../..') }, bundle: true, write: false, format: 'iife', logLevel: 'silent', define: { __FLIGHT_DECK_PG_APP_NPUB__: JSON.stringify('npub1test') } });
+  await page.route('**/*', route => serveBuiltFlightDeck(route));
+  async function boot() {
+    await seedGroupsAccess(page, fx);
+    await page.addScriptTag({ content: bundle.outputFiles[0].text });
+    await page.evaluate(async actor => {
+      const s=Alpine.store('chat');s.navSection='settings';s.settingsTab='scopes';
+      s.channels=[{record_id:'prt-first',title:'First',scope_id:'prt',position:1},{record_id:'prt-second',title:'Second',scope_id:'prt',position:2}];
+      s.selectedChannelId='prt-first';s.selectedBoardId='__pg_channel__:prt-first';
+      await window.startNavigationOrderProbe(actor);
+    }, fx.viewer.actor_id);
+  }
+  await page.goto('/'); await boot();
+  const sidebar = page.locator('.sidebar-scope-heading .sidebar-scope-heading-control');
+  const cards = page.locator('.scope-cards > .scope-card .scope-card-title');
+  const expected=['Petes Applications','PRT','Other Stuff','Unordered'];
+  await expect(sidebar).toHaveText(expected); await expect(cards).toHaveText(expected);
+  await expect.poll(() => page.evaluate(() => Alpine.store('chat').flightDeckScopeOptions.filter(b=>['apps','prt','other','new'].includes(b.id)).map(b=>b.id))).toEqual(['apps','prt','other','new']);
+  // A remote preference materialization changes every projection without moving
+  // shared scopes, the selected channel, or its sibling positions.
+  await page.evaluate(async actor => { await navigationOrderDb.scope_orders.update(actor,{scope_ids:['other','apps','prt'],row_version:2}); }, fx.viewer.actor_id);
+  await expect(sidebar).toHaveText(['Other Stuff','Petes Applications','PRT','Unordered']);
+  await expect(cards).toHaveText(['Other Stuff','Petes Applications','PRT','Unordered']);
+  await page.reload(); await boot();
+  await expect(sidebar).toHaveText(['Other Stuff','Petes Applications','PRT','Unordered']);
+  await expect(cards).toHaveText(['Other Stuff','Petes Applications','PRT','Unordered']);
+  expect(await page.evaluate(async () => ({
+    parents:(await navigationOrderDb.scopes.toArray()).map(r=>r.parent_id),
+    selected:Alpine.store('chat').selectedChannelId,
+    channels:Alpine.store('chat').sidebarScopeChannelGroups.find(g=>g.scope.record_id==='prt').channels.map(c=>c.record_id),
+  }))).toEqual({parents:[null,null,null,null],selected:'prt-first',channels:['prt-first','prt-second']});
+  // Changing readers must not apply the previous reader's private preference.
+  await page.evaluate(() => {Alpine.store('chat').personalScopeOrder={...Alpine.store('chat').personalScopeOrder,actor_id:'someone-else'};});
+  await expect(sidebar).toHaveText(['Petes Applications','Unordered','Other Stuff','PRT']);
+});

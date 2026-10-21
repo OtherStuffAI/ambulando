@@ -4540,6 +4540,13 @@
       "notes": [
         "Unfinished new threads keep their title, mentions and prepared attachments when you leave their channel or workspace. A send in progress finishes before you switch workspaces."
       ]
+    },
+    {
+      "buildNumber": 2498,
+      "label": "Keep your scope order across navigation",
+      "notes": [
+        "Your saved personal scope order now applies to the sidebar, Deck and task scope selectors, and scope pickers. Scope parents and shared channel order stay intact."
+      ]
     }
   ]
 }

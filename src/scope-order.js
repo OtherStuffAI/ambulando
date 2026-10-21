@@ -3,9 +3,9 @@ import { getWorkspaceDb } from './db.js';
 import { getTowerPgScopeOrder } from './api.js';
 import { resolveTowerPgWorkspaceContext } from './pg-read-hydrator.js';
 
-export function sortScopesPersonally(scopes = [], order = []) {
+export function sortScopesPersonally(scopes = [], order = [], getId = scope => scope.record_id) {
   const positions = new Map(order.map((id, index) => [id, index]));
-  return [...scopes].sort((a, b) => (positions.get(a.record_id) ?? Infinity) - (positions.get(b.record_id) ?? Infinity));
+  return [...scopes].sort((a, b) => (positions.get(getId(a)) ?? Infinity) - (positions.get(getId(b)) ?? Infinity));
 }
 export function mapScopeOrder(row) {
   if (!row?.workspace_id || !row.actor_id || !Array.isArray(row.scope_ids) || !Number.isSafeInteger(row.row_version)) throw new Error('Invalid personal scope order');
