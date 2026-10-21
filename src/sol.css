@@ -735,3 +735,16 @@ code, pre { font-family:var(--font-code); }
     padding:4px;
   }
 }
+
+.pinned-thread-row.pinned-channel-unread { background: var(--inbox-working-blue); }
+
+@media (max-width: 768px) {
+  .inbox-panel-heading.has-channel-inbox[data-deck-mobile-sticky-heading] { grid-template-columns: minmax(0, 1fr) 44px 44px 44px; }
+  .inbox-panel-heading.has-channel-inbox h3 { grid-column: 1 / -1; grid-row: 1; }
+  .inbox-panel-heading.has-channel-inbox .deck-inbox-title > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .inbox-panel-heading.has-channel-inbox .inbox-type-toggles { grid-column: 1; grid-row: 2; }
+  .inbox-panel-heading.has-channel-inbox .inbox-search-form { grid-column: 2; grid-row: 2; }
+  .inbox-panel-heading.has-channel-inbox .deck-new-thread-button { grid-column: 3; grid-row: 2; }
+  .inbox-panel-heading.has-channel-inbox .inbox-read-menu { grid-column: 4; grid-row: 2; }
+  .inbox-panel-heading.has-channel-inbox .inbox-search-form:focus-within { grid-column: 1 / -1; grid-row: 3; }
+}

@@ -171,4 +171,18 @@ describe.skipIf(!process.env.RECORD_TEST_PORT)('two isolated clients against rea
     console.log('PIN_SYNC_REAL_HTTP thread/task/document typed independence, propagation, reload, privacy, conflicts and unchanged read/edit state verified');
   },30000);
 
+  it('synchronizes channel pins across clients and reloads without changing read state',async()=>{
+    const [a,b]=clients;await login(0);await pull(a);await pull(b);
+    const channel={id:backend.channelId,type:'channel',channelId:backend.channelId};
+    const reads=await a.db.resource_view_states.toArray();
+    await queueThreadPin(a.db,a.context,channel,true);await flush(a);await pull(a);await pull(b);
+    for(const c of clients)expect((await projection(c)).rows.filter(r=>r.type==='channel')).toEqual([expect.objectContaining({id:backend.channelId,title:'Fixture',unavailable:false})]);
+    b.db.close();await b.db.open();await pull(b);expect((await projection(b)).rows.filter(r=>r.type==='channel')).toHaveLength(1);
+    await a.db.open();expect(await a.db.resource_view_states.toArray()).toEqual(reads);
+    await queueThreadPin(a.db,a.context,channel,false);await flush(a);await pull(b);
+    expect((await projection(b)).rows.some(r=>r.type==='channel')).toBe(false);
+    expect((await projection(b)).rows.some(r=>r.type==='thread')).toBe(true);
+    await login(1);await expect(putTowerPgPersonalPin(backend.workspaceId,'channel',backend.channelId,{pinned:true,expected_row_version:0,mutation_id:crypto.randomUUID()},a.context)).rejects.toMatchObject({status:403});await login(0);
+  },30000);
+
 });

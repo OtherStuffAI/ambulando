@@ -71,3 +71,20 @@ it('projects typed resources with canonical titles and attention, and scopes ope
  expect((await db.thread_pin_outbox.toArray()).map(r=>r.resourceType)).toEqual(['document']);
  await db.documents.update('same',{record_state:'deleted'});projection=await readThreadPinProjection(db,context,'typed');expect(projection.rows[0]).toMatchObject({title:'Document unavailable',unavailable:true});
 });
+
+it('projects channel pins with canonical titles, safe unavailable states and immutable typed retries',async()=>{
+ await db.channels.put({record_id:'channel',title:'Across scopes',scope_id:'other',record_state:'active'});
+ await queueThreadPin(db,context,{id:'channel'},true,'channel');
+ const [op]=await db.thread_pin_outbox.toArray();
+ expect(op).toMatchObject({resourceType:'channel',targetKey:'channel:channel',body:{expected_row_version:0,pinned:true}});
+ expect((await readThreadPinProjection(db,context,'channels')).rows[0]).toMatchObject({type:'channel',title:'Across scopes',channelId:'channel',unavailable:false});
+ await applyThreadPinOperation(store,{action:'ack',seq:op.seq,mutationId:op.body.mutation_id,pin:{id:'channel-pin',workspace_id:workspace,actor_id:actor,resource_type:'channel',resource_id:'channel',channel_id:'channel',pinned:true,pinned_at:op.pinnedAt,row_version:1}},db);
+ expect(await db.thread_pin_outbox.count()).toBe(0);
+ expect((await readThreadPinProjection(db,context,'channels')).rows).toHaveLength(1);
+ await db.pg_archived_targets.put({key:'scope:other'});
+ expect((await readThreadPinProjection(db,context,'channels')).rows[0]).toMatchObject({title:'Channel unavailable',unavailable:true});
+ await queueThreadPin(db,context,{id:'channel'},false,'channel');
+ expect((await db.thread_pin_outbox.toArray())[0].body.expected_row_version).toBe(1);
+ expect((await readThreadPinProjection(db,context,'channels')).rows).toEqual([]);
+ expect(await db.resource_view_states.count()).toBe(0);expect(await db.pending_writes.count()).toBe(0);
+});

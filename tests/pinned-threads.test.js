@@ -102,3 +102,12 @@ it('keeps the canonical thread identity when an Inbox navigation row also carrie
  const s=store();await s.toggleThreadPin({...pin,recordId:'source'});
  expect(Object.keys((await getSettings()).threadPins[s.pinnedThreadsPartition])).toEqual(['thread']);
 });
+
+it('derives channel blue state from authoritative channel unread and follows read clearing without moving pins',()=>{
+ const s=store();s.isChannelUnread=id=>s._unreadChannels[id]===true;s._unreadChannels={channel:true};
+ s.pinnedThreadsContext=s.pinnedThreadsPartition;s.pinnedThreadRows=[{id:'channel',type:'channel',pinnedAt:'2026-10-01',unavailable:false}];
+ expect(s.pinnedThreads[0].isUnread).toBe(true);s._unreadChannels={channel:false};expect(s.pinnedThreads[0].isUnread).toBe(false);
+ s.channels=[{record_id:'channel',title:'Other scope'}];s.autopilotOverviewContext={channelId:'channel'};
+ expect(s.deckInboxTitle).toBe('Inbox: Other scope');s.autopilotOverviewContext={channelId:''};expect(s.deckInboxTitle).toBe('Inbox');
+ s.currentViewerNpub='bob';expect(s.pinnedThreads).toEqual([]);
+});

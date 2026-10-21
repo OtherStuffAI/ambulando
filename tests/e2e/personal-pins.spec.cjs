@@ -97,3 +97,43 @@ test('canonical thread pins survive late reader hydration and subsequent refresh
  },families);
  await expect(page.locator('[data-testid="deck-pinned-threads"]')).toBeVisible();
 });
+
+for(const width of [375,1440])test(`channel Inbox pins persist and navigate across scopes at ${width}px`,async({page})=>{
+ await page.setViewportSize({width,height:1000});
+ await page.route('**/*',route=>new URL(route.request().url()).pathname==='/__personal-pins.js'?route.fulfill({contentType:'text/javascript',body:bundle}):serveBuiltFlightDeck(route));
+ await openFixture(page,true);
+ await page.evaluate(async()=>{
+  const m=await import('/__personal-pins.js'),s=window.Alpine.store('chat');
+  s.closeThread({syncRoute:false});s.stopBackgroundSync();s.requestTowerSyncFamily=async()=>{};
+  const key='channel-pin-browser',workspaceId='workspace',actor='actor';
+  const db=m.openWorkspaceDb(key);await db.open();window.personalPinDb=db;
+  Object.defineProperties(s,Object.getOwnPropertyDescriptors(m.pinnedThreadsMixin));
+  s.knownWorkspaces=[{workspaceKey:key,workspaceId,workspaceOwnerNpub:s.session.npub,appNpub:'npub1test',directHttpsUrl:'http://127.0.0.1:3100',pgBackendMode:true,pgMe:{actor:{actor_id:actor,npub:s.session.npub}}}];
+  s.selectedWorkspaceKey=key;s.workspaceDbKey=key;s.isTowerPgMode=true;
+  await db.channels.bulkPut(JSON.parse(JSON.stringify(s.channels)));
+  s.navSection='status';s.deckInboxEnabled=true;s.selectPgChannelContext('sol-channel');
+  s.syncPinnedThreadsContext(s.pinnedThreadsPartition);
+ });
+ const toggle=page.getByTestId('personal-pin-channel');await expect(toggle).toBeVisible();
+ await expect(page.locator('.deck-inbox-title')).toContainText('Inbox:');
+ if(width<769){const boxes=await page.locator('.deck-inbox-title, .inbox-type-toggles').evaluateAll(els=>els.map(e=>{const r=e.getBoundingClientRect();return {top:r.top,bottom:r.bottom};}));expect(boxes[0].bottom).toBeLessThanOrEqual(boxes[1].top);expect(await toggle.evaluate(el=>el.getBoundingClientRect().height)).toBeGreaterThanOrEqual(44);await page.screenshot({path:`tmp/docs/handoffs/channel-pins-inbox-${width}.png`,fullPage:true});}
+ await toggle.focus();await page.keyboard.press('Enter');await expect(toggle).toHaveAttribute('aria-pressed','true');
+ await page.evaluate(()=>{const s=window.Alpine.store('chat');s._unreadChannels={'sol-channel':true};});
+ const panel=page.getByTestId('deck-pinned-threads');
+ if(width<769)await page.getByRole('button',{name:'Show Pinned items',exact:true}).click();
+ await expect(panel.locator('.pinned-thread-row')).toHaveCount(1);
+ await expect(panel.locator('.pinned-thread-row')).toHaveClass(/inbox-unread/);
+ await expect(panel.locator('.pinned-thread-row')).toHaveClass(/pinned-channel-unread/);
+ await page.screenshot({path:`tmp/docs/handoffs/channel-pins-${width}.png`,fullPage:true});
+ await page.evaluate(()=>{const s=window.Alpine.store('chat');s.stopPinnedThreads();s.syncPinnedThreadsContext(s.pinnedThreadsPartition);s.selectedBoardId='pg:scope:other';});
+ await expect(panel.locator('.pinned-thread-row')).toHaveCount(1);
+ await panel.locator('.pinned-thread-open').click();
+ await expect.poll(()=>page.evaluate(()=>window.Alpine.store('chat').autopilotOverviewContext.channelId)).toBe('sol-channel');
+ expect(await page.evaluate(()=>window.Alpine.store('chat').navSection)).toBe('status');
+ await page.evaluate(()=>{window.Alpine.store('chat')._unreadChannels={'sol-channel':false};});
+ await expect(panel.locator('.pinned-thread-row')).not.toHaveClass(/inbox-unread/);
+ expect(await page.evaluate(async()=>({writes:await window.personalPinDb.pending_writes.count(),reads:await window.personalPinDb.resource_view_states.count(),pins:await window.personalPinDb.thread_pin_outbox.count()}))).toEqual({writes:0,reads:0,pins:1});
+ await page.evaluate(async()=>{await window.personalPinDb.channels.update('sol-channel',{record_state:'deleted'});});
+ await expect(panel).toContainText('Channel unavailable');await expect(panel.locator('.pinned-thread-open')).toBeDisabled();
+ await panel.getByRole('button',{name:'Unpin Channel unavailable',exact:true}).click();await expect(panel).toBeHidden();
+});

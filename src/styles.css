@@ -25593,3 +25593,8 @@ button.task-desc-toggle:focus-visible {
 .feeds-reader .wapp-update-card { position:relative; }
 .feeds-reader .wapp-update-card:has(.feed-item-menu [aria-expanded="true"]) { z-index:2; min-height:180px; }
 @media (max-width:600px) { .feed-options-menu .doc-actions-toggle, .feed-item-menu .doc-actions-toggle { min-width:36px; min-height:36px; } }
+
+.deck-inbox-title { display: flex; align-items: center; gap: 0.35rem; min-width: 0; }
+.deck-inbox-title > span { overflow-wrap: anywhere; }
+.deck-inbox-title .thread-pin-button { flex-shrink: 0; min-width: 44px; min-height: 44px; }
+@media (min-width: 769px) { .deck-inbox-title .thread-pin-button { min-width: 36px; min-height: 36px; } }

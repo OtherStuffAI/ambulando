@@ -24,9 +24,9 @@ export const pinnedThreadsMixin = {
   },
   get pinnedThreads() {
     if (this.pinnedThreadsContext !== this.pinnedThreadsPartition) return [];
-    return this.pinnedThreadRows.map(row => ({ ...row, isUnread: !row.unavailable && (row.persistedUnread ?? (this.isTowerPgMode
+    return this.pinnedThreadRows.map(row => ({ ...row, isUnread: !row.unavailable && (row.type === 'channel' ? this.isChannelUnread?.(row.id) === true : (row.persistedUnread ?? (this.isTowerPgMode
       ? (!row.type || row.type === 'thread') && Boolean(this._unreadThreadItems?.[row.id] || this.inboxUnreadThreads?.[row.id])
-      : Boolean(this._unreadChannels?.[row.channelId]))) }))
+      : Boolean(this._unreadChannels?.[row.channelId])))) }))
       .sort((a, b) => b.pinnedAt.localeCompare(a.pinnedAt) || (a.key || a.id).localeCompare(b.key || b.id));
   },
   syncPinnedThreadsContext(partition) {
@@ -61,6 +61,15 @@ export const pinnedThreadsMixin = {
     const selected = this.deckMobileColumn === 'pinned' && !this.pinnedThreads.length ? 'inbox' : this.deckMobileColumn;
     this.deckMobileColumn = selected;
     requestAnimationFrame(() => { if (this.deckMobileMediaQuery?.matches) this.positionDeckMobileCard?.(selected); });
+  },
+  get deckInboxChannel() {
+    const id = this.autopilotOverviewContext?.channelId;
+    return (this.channels || []).find(row => row.record_id === id && !['deleted','archived'].includes(row.record_state)
+      && !['stale','access-lost'].includes(row.pg_access_status) && row.can_read !== false && row.readable !== false) || null;
+  },
+  get deckInboxTitle() {
+    const channel = this.deckInboxChannel;
+    return channel ? `Inbox: ${this.getChannelLabel?.(channel) || channel.title || channel.name || 'Untitled channel'}` : 'Inbox';
   },
   isPersonalPinned(type, id) { return this.pinnedThreads.some(row => (row.type || 'thread') === type && row.id === id); },
   isThreadPinned(id) { return this.isPersonalPinned('thread', id); },
@@ -101,6 +110,14 @@ export const pinnedThreadsMixin = {
   async openPinnedThread(thread) {
     const type = thread.type || 'thread';
     if (thread.unavailable || !this.isPersonalPinned(type, thread.id)) return false;
+    if (type === 'channel') {
+      const partition = this.pinnedThreadsPartition;
+      const db = getWorkspaceDb();
+      const projection = await readThreadPinProjection(db, threadPinContext(this), partition);
+      if (partition !== this.pinnedThreadsPartition || !projection.rows.some(row => row.type === 'channel' && row.id === thread.id && !row.unavailable)) return false;
+      await this.selectDeckChannel(thread.id);
+      return partition === this.pinnedThreadsPartition;
+    }
     if (type !== 'thread') return this.handleMentionNavigate(type === 'document' ? 'doc' : 'task', thread.id);
     return this.openAutopilotOverviewThread(thread);
   },

@@ -90,3 +90,5 @@ Verification includes the real HTTP/Postgres two-client test in
 `tests/thread-pin-store.test.js`, and task/document browser controls and existing
 open paths in `tests/e2e/personal-pins.spec.cjs`. Cross-device runtime activation
 must be reported separately from these disposable production-route tests.
+
+Channel pins use resource_type `channel` in the same personal_pin family and outbox. The channel Inbox heading includes its current name and an accessible pin toggle. Pinned channels open through selectDeckChannel, independent of the selected scope. Their blue state follows isChannelUnread and clears through the existing read flows; pinning and opening the Deck do not themselves write read receipts. Missing, archived or inaccessible channels retain a removable unavailable pin without exposing their cached title.

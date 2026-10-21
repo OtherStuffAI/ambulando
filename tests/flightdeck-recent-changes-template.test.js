@@ -148,7 +148,7 @@ describe('flight deck summary template', () => {
     const feed = track.slice(track.indexOf('data-testid="deck-wapp-updates"'), track.indexOf('data-testid="deck-recent-channels"'));
     const recent = track.slice(track.indexOf('data-testid="deck-recent-channels"'));
 
-    expect(inbox).toContain('class="autopilot-panel-heading inbox-panel-heading" data-deck-mobile-sticky-heading');
+    expect(inbox).toContain('class="autopilot-panel-heading inbox-panel-heading" :class="{ \'has-channel-inbox\': Boolean($store.chat.deckInboxChannel) }" data-deck-mobile-sticky-heading');
     expect(feed).toContain('class="autopilot-panel-heading wapp-updates-heading" data-deck-mobile-sticky-heading');
     expect(recent).toContain('class="autopilot-panel-heading" data-deck-mobile-sticky-heading');
     const mobileStyles = styles.slice(styles.indexOf('@media (max-width: 720px)'), styles.indexOf('@media (max-width: 720px)', styles.indexOf('@media (max-width: 720px)') + 1));
@@ -184,12 +184,12 @@ describe('flight deck summary template', () => {
     const inboxStart = html.indexOf('data-testid="flightdeck-summary-inbox"');
     const recentStart = html.indexOf('data-testid="deck-recent-channels"');
     const inbox = html.slice(inboxStart, recentStart);
-    const headingStart = inbox.indexOf('<div class="autopilot-panel-heading inbox-panel-heading" data-deck-mobile-sticky-heading>');
+    const headingStart = inbox.indexOf('<div class="autopilot-panel-heading inbox-panel-heading" :class="{ \'has-channel-inbox\': Boolean($store.chat.deckInboxChannel) }" data-deck-mobile-sticky-heading>');
     const headingEnd = inbox.indexOf('</div>\n              <p class="inbox-read-notice"', headingStart);
     const heading = inbox.slice(headingStart, headingEnd);
 
     expect(inbox).not.toContain('<span>Search Inbox</span>');
-    expect(heading).toMatch(/<h3>Inbox<\/h3>\s*<div class="inbox-type-toggles"/);
+    expect(heading).toMatch(/<h3 class="deck-inbox-title"[^>]*>[\s\S]*?deckInboxTitle[\s\S]*?personal-pin-channel[\s\S]*?<\/h3>\s*<div class="inbox-type-toggles"/);
     expect(heading).toContain('<form class="inbox-search-form" role="search" @submit.prevent="$store.chat.applyDeckInboxSearch()">');
     expect(heading).toContain('type="search" autocomplete="off" aria-label="Search Inbox"');
     expect(heading).toContain('placeholder="Search"');

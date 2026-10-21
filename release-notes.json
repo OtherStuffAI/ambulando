@@ -4722,6 +4722,39 @@
       "label": "Canvas link keyboard verification",
       "notes": [],
       "noUserVisibleChanges": true
+    },
+    {
+      "buildNumber": 2532,
+      "label": "Channel pins",
+      "notes": [
+        "Pin a channel from its named Deck Inbox, jump back to it across scopes, and see blue highlighting when it has unread messages."
+      ]
+    },
+    {
+      "buildNumber": 2533,
+      "label": "Channel pin touch controls",
+      "notes": [
+        "Channel Inbox pin controls keep a full touch target on phones."
+      ]
+    },
+    {
+      "buildNumber": 2534,
+      "label": "Readable channel Inbox on phones",
+      "notes": [
+        "Channel names and pin controls have their own phone header row, keeping search and filters reachable."
+      ]
+    },
+    {
+      "buildNumber": 2535,
+      "label": "Channel pin layout verification",
+      "notes": [],
+      "noUserVisibleChanges": true
+    },
+    {
+      "buildNumber": 2536,
+      "label": "Channel pin release validation",
+      "notes": [],
+      "noUserVisibleChanges": true
     }
   ]
 }
