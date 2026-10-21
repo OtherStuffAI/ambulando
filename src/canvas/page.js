@@ -2,6 +2,9 @@ import Alpine from 'alpinejs';
 import { registerCanvasCommentPopover } from './comment-popover.js';
 import { registerCanvasWindow } from './window.js';
 import { registerCanvasDocument } from './document.js';
+import { registerCanvasHtml } from './html-naplet.js';
+import { CanvasHtmlAssetStore } from './html-assets.js';
+import { HtmlViewSequencer, htmlDisplayedAssets, htmlPolicyKey, reconcileHtmlViews } from './html-views.js';
 import { buildSectionUrl } from '../route-helpers.js';
 import '../docs/editor/document-typography.css';
 import { tryAutoLoginFromStorage, pubkeyToNpub } from '../auth/nostr.js';
@@ -10,7 +13,6 @@ import { getSettings, openWorkspaceDb } from '../db.js';
 import { initializeTowerTransports } from '../tower-transport.js';
 import { normalizeWorkspaceEntry } from '../workspaces.js';
 import { canvasContext, CANVAS_ACCESS_MESSAGE } from './projection.js';
-import { buildCanvasHtmlDocument } from './sandbox.js';
 import { CanvasSyncRuntime } from './sync-service.js';
 import {
   arrowGeometry, canvasItemKey, canvasWheelIntent, cloneCanvasValue, enclosedItemKeys,
@@ -49,9 +51,14 @@ function findWorkspace(settings, requestedKey) {
     .find(workspace => workspace.workspaceKey === requestedKey || workspace.workspaceId === requestedKey) || null;
 }
 function sourceTitle(row, fallback) { return text(row?.title || row?.name || row?.subject || row?.file_name || fallback); }
+// HTML artefacts are Files; older cached rows may only carry a version id.
+function isHtmlFile(row) {
+  return row?.pg_record_type === 'file' && (/html/i.test(row.content_storage_content_type || row.content_type || row.mime_type || '') || /\.x?html?$/i.test(text(row.title)));
+}
 
 export function canvasPageStore() {
-  let syncRuntime = null;
+  let syncRuntime = null, assetStore = null, htmlAuthority = '';
+  const htmlSequencer = new HtmlViewSequencer(), versionLoads = new Map();
   const pointers = new Map(), undo = [], redo = [];
   let keydown = null;
   return {
@@ -63,7 +70,7 @@ export function canvasPageStore() {
     addDialog: { type: 'document', sourceId: '', title: '' },
     commentDialog: { anchor: null, parentCommentId: null, body: '' }, activeCommentId: '',
     commentDelete: null, linkDrag: null, subjectPicker: false, suppressLinkClick: false,
-    accessMessage: CANVAS_ACCESS_MESSAGE, historyTick: 0,
+    accessMessage: CANVAS_ACCESS_MESSAGE, historyTick: 0, htmlViews: {},
 
     get canvasId() { return text(new URLSearchParams(location.search).get('canvasid')); },
     get transformStyle() { return `translate(${this.viewport.x}px, ${this.viewport.y}px) scale(${this.viewport.scale})`; },
@@ -97,15 +104,17 @@ export function canvasPageStore() {
         Object.assign(this, { workspace, currentWorkspace: workspace, currentWorkspaceKey: workspace.workspaceKey, currentViewerNpub: npub, currentPgActorId: text(workspace.pgMe?.actor?.actor_id), session: { pubkey: storedAuth.pubkey, npub, method: storedAuth.method } });
         setActiveSessionNpub(npub);
         const db = openWorkspaceDb(workspace.workspaceKey); await db.open();
+        assetStore = new CanvasHtmlAssetStore(this.context());
         syncRuntime = new CanvasSyncRuntime(this.context(), this.canvasId, { onSnapshot: snapshot => this.applySnapshot(snapshot), onError: error => this.applySyncError(error) });
         keydown = event => this.handleKeydown(event); addEventListener('keydown', keydown);
-        addEventListener('pagehide', () => { syncRuntime?.stop(); removeEventListener('keydown', keydown); }, { once: true });
+        addEventListener('pagehide', () => { syncRuntime?.stop(); assetStore?.clear(); removeEventListener('keydown', keydown); }, { once: true });
         syncRuntime.start();
       } catch (error) { this.status = 'error'; this.error = error?.message || 'Canvas could not be opened.'; }
     },
     context() { return canvasContext(this); },
     applySnapshot(snapshot) {
       this.canvas = snapshot.canvas; this.naplets = snapshot.naplets; this.elements = snapshot.elements || []; this.comments = snapshot.comments || [];
+      this.reconcileHtmlViews(snapshot.request_id);
       this.viewport = { ...snapshot.canvas.viewport };
       const available = new Set(this.allCanvasItems().map(row => row.key));
       this.selectedKeys = this.selectedKeys.filter(key => available.has(key));
@@ -115,6 +124,7 @@ export function canvasPageStore() {
     },
     applySyncError(error) {
       this.canvas = null; this.naplets = []; this.elements = []; this.comments = []; this.status = 'error';
+      this.clearHtmlViews();
       this.error = error?.status === 403 || error?.status === 404 ? 'Canvas unavailable.' : (error?.message || 'Canvas could not be refreshed.');
     },
     async refresh() { this.status = 'loading'; this.error = ''; await syncRuntime?.refresh().catch(() => undefined); },
@@ -330,7 +340,8 @@ export function canvasPageStore() {
         ...documents.filter(row => active(row) && !row.pg_storage_version_id && row.pg_record_type !== 'file').map(row => ({ type: 'document', id: row.record_id, title: sourceTitle(row, 'Untitled document') })),
         ...channels.filter(active).map(row => ({ type: 'task_list', id: row.record_id, title: `${sourceTitle(row, 'Channel')} tasks` })),
         ...messages.filter(row => active(row) && (row.pg_record_type === 'thread' || row.record_type === 'thread')).map(row => ({ type: 'chat_thread', id: row.record_id, title: sourceTitle(row, 'Chat thread') })),
-        ...documents.filter(row => active(row) && row.pg_storage_version_id && /html/i.test(row.content_type || row.mime_type || '')).map(row => ({ type: 'html', id: row.pg_storage_version_id, title: sourceTitle(row, 'HTML artefact') })),
+        ...documents.filter(row => active(row) && isHtmlFile(row)).map(row => ({ type: 'html', id: row.record_id, title: sourceTitle(row, 'HTML artefact') })),
+        ...documents.filter(row => active(row) && row.pg_storage_version_id && !isHtmlFile(row) && /html/i.test(row.content_type || row.mime_type || '')).map(row => ({ type: 'html', id: row.pg_storage_version_id, title: sourceTitle(row, 'HTML artefact') })),
       ].filter(row => row.id && row.title).sort((a, b) => a.title.localeCompare(b.title));
     },
     chooseSource(option) { this.addDialog.sourceId = option.id; this.addDialog.title = option.title; },
@@ -425,13 +436,123 @@ export function canvasPageStore() {
       if (naplet.access !== 'ready' || naplet.source?.type !== 'document') return null;
       return buildSectionUrl({ section: 'docs', params: { workspacekey: this.currentWorkspaceKey, docid: naplet.source.id } });
     },
-    htmlDocument(naplet) { return buildCanvasHtmlDocument(naplet?.content?.html); },
+    assetStore() { return assetStore; },
+    // Viewer-local HTML version browsing. The naplet's shared policy changes only
+    // through pin/follow, which are manager mutations re-authorized by Tower.
+    htmlView(naplet) { return this.htmlViews[naplet?.id] || null; },
+    htmlContent(naplet) { return this.htmlView(naplet)?.content || naplet?.content || {}; },
+    htmlVersions(naplet) { return this.htmlView(naplet)?.versions || []; },
+    htmlIsBrowsing(naplet) { const view = this.htmlView(naplet); return Boolean(view?.content && view.content.version_id !== naplet?.content?.version_id); },
+    htmlVersionLabel(naplet) {
+      const content = this.htmlContent(naplet), base = naplet?.content || {};
+      const number = content.version_number ? `v${content.version_number}` : (content.version ? `v${content.version}` : '');
+      const latest = base.current_version_number ? `v${base.current_version_number}` : '';
+      if (this.htmlIsBrowsing(naplet)) return `Viewing ${number}${content.version_id === base.current_version_id ? ' (latest)' : ''}`;
+      if (base.follows_latest) return `Latest · ${number}`;
+      return `Pinned · ${number}${latest && latest !== number ? ` (latest ${latest})` : ''}`;
+    },
+    htmlAssetSummary(naplet) {
+      const assets = this.htmlContent(naplet).assets || [], missing = assets.filter(row => row.status !== 'ready').length;
+      return missing ? `${missing} image${missing === 1 ? '' : 's'} unavailable` : '';
+    },
+    // Called for every snapshot; `authority` is the snapshot's request id.
+    reconcileHtmlViews(authority) {
+      if (authority !== htmlAuthority) { htmlAuthority = authority; htmlSequencer.advance(); }
+      const { views, revalidate, keep } = reconcileHtmlViews(this.htmlViews, this.naplets, authority);
+      this.htmlViews = views;
+      assetStore?.retain(keep);
+      for (const row of revalidate) void this.showHtmlVersion(this.readyHtmlNaplet(row.napletId), row.versionId, { revalidate: true });
+    },
+    clearHtmlViews() { htmlAuthority = ''; htmlSequencer.advance(); versionLoads.clear(); this.htmlViews = {}; assetStore?.clear(); },
+    retainHtmlAssets() { assetStore?.retain(htmlDisplayedAssets(this.naplets, this.htmlViews)); },
+    readyHtmlNaplet(id) { return this.naplets.find(row => row.id === id && row.access === 'ready' && row.source?.type === 'html') || null; },
+    patchHtmlView(id, patch) {
+      const naplet = this.readyHtmlNaplet(id);
+      if (!naplet) return;
+      const view = this.htmlViews[id] || { versions: [], policyKey: htmlPolicyKey(naplet), content: null, authority: htmlAuthority };
+      this.htmlViews = { ...this.htmlViews, [id]: { ...view, ...patch } };
+    },
+    /**
+     * Browse read guarded against reordering: only the newest request per key
+     * applies, only while the naplet keeps its policy, and a read that raced a
+     * fresh snapshot is repeated under the new authority.
+     */
+    async readHtmlGuarded(key, napletId, versionId) {
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        const naplet = this.readyHtmlNaplet(napletId);
+        if (!naplet || !syncRuntime) return { skipped: 'gone' };
+        const ticket = htmlSequencer.begin(key), policyKey = htmlPolicyKey(naplet);
+        let result = null, failure = null;
+        try { result = await syncRuntime.readNapletHtml(napletId, versionId); } catch (error) { failure = error; }
+        if (htmlSequencer.superseded(ticket)) return { skipped: 'superseded' };
+        const current = this.readyHtmlNaplet(napletId);
+        if (!current || htmlPolicyKey(current) !== policyKey) return { skipped: 'gone' };
+        if (htmlSequencer.authorityMoved(ticket)) continue;
+        if (failure) throw failure;
+        return { result };
+      }
+      return { skipped: 'gone' };
+    },
+    loadHtmlVersions(naplet) {
+      const view = this.htmlView(naplet);
+      if (!naplet?.id || view?.versions?.length) return Promise.resolve(view?.versions || []);
+      if (!versionLoads.has(naplet.id)) {
+        const load = this.readHtmlGuarded(`${naplet.id}:versions`, naplet.id, '')
+          .then(({ result }) => { if (result) this.patchHtmlView(naplet.id, { versions: result.versions }); return this.htmlVersions(naplet); })
+          .catch(error => { this.error = error?.status === 404 ? 'This artefact version is unavailable.' : (error?.message || 'Versions could not be loaded.'); return []; })
+          .finally(() => { if (versionLoads.get(naplet.id) === load) versionLoads.delete(naplet.id); });
+        versionLoads.set(naplet.id, load);
+      }
+      return versionLoads.get(naplet.id);
+    },
+    async showHtmlVersion(naplet, versionId, { revalidate = false } = {}) {
+      if (!versionId || naplet?.access !== 'ready' || naplet.source?.type !== 'html') return;
+      if (versionId === naplet.content.version_id && !revalidate) {
+        htmlSequencer.begin(naplet.id);
+        this.patchHtmlView(naplet.id, { content: null, loading: false });
+        this.retainHtmlAssets();
+        return;
+      }
+      this.patchHtmlView(naplet.id, { loading: true });
+      try {
+        const { result, skipped } = await this.readHtmlGuarded(naplet.id, naplet.id, versionId);
+        if (skipped === 'superseded') return;
+        const content = result && result.content.version_id !== this.readyHtmlNaplet(naplet.id)?.content.version_id ? result.content : null;
+        this.patchHtmlView(naplet.id, { content, loading: false, authority: htmlAuthority, ...(result ? { versions: result.versions } : {}) });
+      } catch (error) {
+        // A browsed version that cannot be re-authorized is closed, not kept.
+        this.patchHtmlView(naplet.id, revalidate ? { content: null, loading: false } : { loading: false });
+        this.error = error?.status === 404 ? 'This artefact version is unavailable.' : (error?.message || 'Version could not be opened.');
+      }
+      this.retainHtmlAssets();
+    },
+    htmlStepTarget(naplet, delta) {
+      const versions = this.htmlVersions(naplet), current = this.htmlContent(naplet).version_id;
+      const index = versions.findIndex(row => row.id === current);
+      // Versions are newest first: "previous" (-1) moves to an older version.
+      return index < 0 ? null : versions[index - delta] || null;
+    },
+    async stepHtmlVersion(naplet, delta) {
+      await this.loadHtmlVersions(naplet);
+      const target = this.htmlStepTarget(naplet, delta);
+      if (target) await this.showHtmlVersion(naplet, target.id);
+    },
+    async pinHtmlVersion(naplet) {
+      const versionId = this.htmlContent(naplet).version_id;
+      if (!versionId || !this.canvas?.can_manage) return;
+      if (await this.mutate(() => syncRuntime.setNapletVersionPolicy(naplet.id, versionId))) this.htmlViews = { ...this.htmlViews, [naplet.id]: { ...this.htmlView(naplet), content: null } };
+    },
+    async followLatestHtml(naplet) {
+      if (!this.canvas?.can_manage) return;
+      if (await this.mutate(() => syncRuntime.setNapletVersionPolicy(naplet.id, null))) this.htmlViews = { ...this.htmlViews, [naplet.id]: { ...this.htmlView(naplet), content: null } };
+    },
   };
 }
 
 registerCanvasCommentPopover(Alpine);
 registerCanvasWindow(Alpine);
 registerCanvasDocument(Alpine);
+registerCanvasHtml(Alpine, { assetStore: () => Alpine.store('canvas').assetStore() });
 Alpine.store('canvas', canvasPageStore());
 window.Alpine = Alpine;
 Alpine.start();

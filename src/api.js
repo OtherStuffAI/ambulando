@@ -2852,6 +2852,20 @@ export async function setTowerPgFileBlossom(workspaceId, fileId, versionId, publ
   return json(resp, { requestUrl: resolveTowerPgUrl(path, baseUrl), method, prefix: 'Tower PG API' });
 }
 
+// Raw bytes of one immutable File version (channel file.read). Used for private
+// HTML artifact assets; the caller verifies size and sha256 before use.
+export async function getTowerPgFileVersionObjectBytes(workspaceId, fileId, versionId, { baseUrl = _baseUrl, appNpub = FLIGHT_DECK_PG_APP_NPUB, signal } = {}) {
+  const path = `/api/v4/flightdeck-pg/workspaces/${encodeURIComponent(workspaceId)}/files/${encodeURIComponent(fileId)}/versions/${encodeURIComponent(versionId)}/object`;
+  const response = await signedTowerPgFetch(path, { baseUrl, appNpub, signal, useWorkspaceKey: false });
+  if (!response.ok) {
+    await response.body?.cancel?.().catch?.(() => undefined);
+    const error = new Error(`File version object unavailable (${response.status})`);
+    error.status = response.status;
+    throw error;
+  }
+  return { bytes: await response.arrayBuffer(), contentType: String(response.headers.get('content-type') || '').split(';')[0].trim().toLowerCase() };
+}
+
 export async function getTowerPgAttachmentBlossom(workspaceId, messageId, storageObjectId, { baseUrl = _baseUrl, appNpub = FLIGHT_DECK_PG_APP_NPUB } = {}) {
   const path = `/api/v4/flightdeck-pg/workspaces/${encodeURIComponent(workspaceId)}/messages/${encodeURIComponent(messageId)}/attachments/${encodeURIComponent(storageObjectId)}/blossom`;
   return json(await signedTowerPgFetch(path, { baseUrl, appNpub }), { requestUrl: resolveTowerPgUrl(path, baseUrl), method: 'GET', prefix: 'Tower PG API' });
@@ -2906,6 +2920,10 @@ export const reorderTowerPgCanvases = (workspaceId, body, options = {}) => canva
 export const getTowerPgCanvasSnapshot = (workspaceId, canvasId, options = {}) => canvasRequest(workspaceId, `${encodeURIComponent(String(canvasId || '').trim())}/snapshot`, options);
 export const createTowerPgCanvasNaplet = (workspaceId, canvasId, body, options = {}) => canvasRequest(workspaceId, `${encodeURIComponent(String(canvasId || '').trim())}/naplets`, { ...options, method: 'POST', body });
 export const updateTowerPgCanvasNaplet = (workspaceId, canvasId, napletId, body, options = {}) => canvasRequest(workspaceId, `${encodeURIComponent(String(canvasId || '').trim())}/naplets/${encodeURIComponent(String(napletId || '').trim())}`, { ...options, method: 'PATCH', body });
+export const getTowerPgCanvasNapletHtml = (workspaceId, canvasId, napletId, { versionId = '', ...options } = {}) => {
+  const query = String(versionId || '').trim() ? `?version_id=${encodeURIComponent(String(versionId).trim())}` : '';
+  return canvasRequest(workspaceId, `${encodeURIComponent(String(canvasId || '').trim())}/naplets/${encodeURIComponent(String(napletId || '').trim())}/html${query}`, options);
+};
 export const deleteTowerPgCanvasNaplet = (workspaceId, canvasId, napletId, body, options = {}) => canvasRequest(workspaceId, `${encodeURIComponent(String(canvasId || '').trim())}/naplets/${encodeURIComponent(String(napletId || '').trim())}`, { ...options, method: 'DELETE', body });
 export const createTowerPgCanvasElement = (workspaceId, canvasId, body, options = {}) => canvasRequest(workspaceId, `${encodeURIComponent(String(canvasId || '').trim())}/elements`, { ...options, method: 'POST', body });
 export const updateTowerPgCanvasElement = (workspaceId, canvasId, elementId, body, options = {}) => canvasRequest(workspaceId, `${encodeURIComponent(String(canvasId || '').trim())}/elements/${encodeURIComponent(String(elementId || '').trim())}`, { ...options, method: 'PATCH', body });

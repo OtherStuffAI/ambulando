@@ -4765,10 +4765,26 @@
       ]
     },
     {
+      "buildNumber": 2539,
+      "label": "Private HTML artefacts on canvases",
+      "notes": [
+        "HTML artefact naplets follow the latest version of their File by default. Step through earlier versions, pin one for everyone, or return to following latest.",
+        "Images in HTML artefacts are delivered privately with the same channel permissions as their Files, checked on every view and removed when access changes.",
+        "Agents can publish a local HTML folder, with its CSS, scripts and images, as a private versioned artefact using the publish helper."
+      ]
+    },
+    {
       "buildNumber": 2540,
       "label": "Pin ordering mobile containment",
       "notes": [
         "Keep the pinned-items pane within the phone viewport while announcing keyboard and drag moves."
+      ]
+    },
+    {
+      "buildNumber": 2543,
+      "label": "HTML artefact version controls",
+      "notes": [
+        "Previous and next version buttons on HTML artefact naplets are enabled whenever an earlier or later version exists."
       ]
     }
   ]

@@ -84,7 +84,22 @@
           </section></template>
           <div class="canvas-naplet-body" x-show="naplet.access === 'ready' && naplet.source?.type === 'task_list'"><ol><template x-for="task in naplet.content?.tasks || []" :key="task.id"><li><strong x-text="task.title"></strong><span x-text="task.state ? ' · ' + task.state : ''"></span></li></template></ol></div>
           <div class="canvas-naplet-body" x-show="naplet.access === 'ready' && naplet.source?.type === 'chat_thread'"><ol><template x-for="message in naplet.content?.messages || []" :key="message.id"><li><strong x-text="message.author || 'Workspace member'"></strong><pre x-text="message.body || ''"></pre></li></template></ol></div>
-          <iframe x-show="naplet.access === 'ready' && naplet.source?.type === 'html'" :title="naplet.title" sandbox="allow-scripts" credentialless referrerpolicy="no-referrer" :srcdoc="$store.canvas.htmlDocument(naplet)"></iframe>
+          <template x-if="naplet.access === 'ready' && naplet.source?.type === 'html'"><section class="canvas-html">
+            <div class="canvas-html-versions" role="toolbar" aria-label="Artefact versions" @pointerdown.stop @dblclick.stop @keydown.stop>
+              <button type="button" class="canvas-html-step" aria-label="Previous version" title="Previous version" :disabled="!($store.canvas.htmlContent(naplet).version_number > 1) || Boolean($store.canvas.htmlView(naplet)?.loading)" @click="$store.canvas.stepHtmlVersion(naplet, -1)">‹</button>
+              <span class="canvas-html-version" x-text="$store.canvas.htmlVersionLabel(naplet)"></span>
+              <button type="button" class="canvas-html-step" aria-label="Next version" title="Next version" :disabled="!($store.canvas.htmlContent(naplet).version_number < naplet.content.current_version_number) || Boolean($store.canvas.htmlView(naplet)?.loading)" @click="$store.canvas.stepHtmlVersion(naplet, 1)">›</button>
+              <select class="canvas-html-select" aria-label="Choose version" @focus="$store.canvas.loadHtmlVersions(naplet)" @pointerdown="$store.canvas.loadHtmlVersions(naplet)" @change="$store.canvas.showHtmlVersion(naplet, $event.target.value)">
+                <option value="" x-show="!$store.canvas.htmlVersions(naplet).length" x-text="'Versions'"></option>
+                <template x-for="version in $store.canvas.htmlVersions(naplet)" :key="version.id"><option :value="version.id" :selected="version.id === $store.canvas.htmlContent(naplet).version_id" x-text="'v' + version.version_number + (version.id === naplet.content.current_version_id ? ' · latest' : '') + (version.id === naplet.source.version_id ? ' · pinned' : '')"></option></template>
+              </select>
+              <button type="button" x-show="$store.canvas.htmlIsBrowsing(naplet)" @click="$store.canvas.showHtmlVersion(naplet, naplet.content.version_id)" x-text="'Back to v' + (naplet.content.version_number || '')"></button>
+              <button type="button" x-show="$store.canvas.canvas?.can_manage &amp;&amp; ($store.canvas.htmlIsBrowsing(naplet) || naplet.content.follows_latest)" :disabled="$store.canvas.saving" @click="$store.canvas.pinHtmlVersion(naplet)">Pin this version</button>
+              <button type="button" x-show="$store.canvas.canvas?.can_manage &amp;&amp; !naplet.content.follows_latest" :disabled="$store.canvas.saving" @click="$store.canvas.followLatestHtml(naplet)">Follow latest</button>
+              <span class="canvas-html-note" x-show="$store.canvas.htmlAssetSummary(naplet)" x-text="$store.canvas.htmlAssetSummary(naplet)"></span>
+            </div>
+            <iframe :title="naplet.title" sandbox="allow-scripts" credentialless referrerpolicy="no-referrer" x-canvas-html="$store.canvas.htmlContent(naplet)"></iframe>
+          </section></template>
           </div>
           <button class="canvas-resize" x-show="!minimised &amp;&amp; !expanded &amp;&amp; $store.canvas.selected?.type === 'naplet' && $store.canvas.selected.id === naplet.id" aria-label="Resize naplet" @pointerdown.stop="$store.canvas.startItemInteraction('naplet', naplet, $event, 'resize')"></button>
         </dialog></template>

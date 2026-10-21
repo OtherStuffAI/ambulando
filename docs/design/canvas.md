@@ -113,26 +113,86 @@ protected naplet identifier or metadata through the comment projection.
 
 ## Trusted HTML naplets
 
-HTML naplets accept only versioned, immutable packages admitted by Tower's
-trusted artefact policy. The current browser boundary is defense in depth, not a
-safe renderer for arbitrary untrusted code:
+An HTML naplet names an ordinary Flight Deck File in a channel. With
+`source.version_id = null` it follows the File's current version; with a version
+id it is pinned to that immutable version. Naplets created before this contract
+stored a version id in `source.id`; Tower resolves those to their File and treats
+them as pinned. Tower checks channel `file.read` on the File before reading any
+version metadata or bytes, rejects versions of another File or workspace and
+verifies the stored sha256 before serving HTML. Publishing uses the normal File
+version route, so racing publishers are resolved by `base_version_id`.
 
-- an iframe with `sandbox="allow-scripts"` creates an opaque origin and grants
-  no same-origin, forms, popups, top-navigation, downloads, or presentation;
-- `credentialless` and `referrerpolicy="no-referrer"` prevent ambient host
-  credentials and referrer disclosure;
-- the generated document applies a deny-by-default CSP with no network,
-  frames, forms, objects, or base URL, while allowing inline scripts/styles and
-  data/blob assets needed by self-contained interactive artefacts;
-- a leading guard cancels links and form submissions and disables
-  `window.open`; and
-- the host exposes no postMessage or application API in this first slice.
+Viewers can browse versions locally (previous/next, a version list and "Back")
+through `GET /canvases/:id/naplets/:id/html?version_id=`, a command read that
+never changes the shared naplet or the Dexie projection. Canvas managers can
+"Pin this version" or "Follow latest" (`PATCH ... { source_version_id }` with
+the naplet `row_version`).
 
-Because arbitrary script can still attempt browser navigation and resource
-exhaustion, packages that are not trusted, immutable, source-reviewed, and
-digest-verified at ingestion must be rejected by Tower rather than relying on
-the iframe alone. A future bridge must use explicit message schemas, origin/source
-checks, capability tokens, and narrowly scoped operations.
+### Private images
+
+The HTML may embed `<script type="application/json" id="wingman-artifact-assets">`
+listing `{ name, file_id, version_id, sha256 }`. On every read Tower re-resolves
+each entry for the viewer: the image File must be readable through its own
+channel's `file.read`, the version must belong to it, the object must be in the
+workspace owner's storage partition, the digest must match and the type, per
+image (8 MiB), count (64) and total (32 MiB) limits must hold. Anything else is
+reported as `unavailable` without further detail. These checks use the
+platform's normal authority, so workspace owners and others with File authority
+keep it; an artefact cannot deny them access, and there is no per-artefact ACL.
+
+The host fetches permitted bytes through
+`GET /files/:fileId/versions/:versionId/object` (same `file.read` check,
+`private, no-store`, sha256 ETag, `default-src 'none'; sandbox` CSP), verifies
+size and sha256 against the authorized manifest and keeps them only in an
+in-memory, viewer-scoped cache. They are never written to Dexie or embedded in
+snapshots as base64. The frame receives `Blob`s through one postMessage and
+creates its own `blob:` URLs, so no credential, signed URL or Tower URL ever
+enters the frame.
+
+Authority changes are applied conservatively:
+
+- the iframe document identity includes every asset's authorization, so losing
+  (or gaining) access to one image replaces the document and discards blob URLs
+  the frame already created;
+- a browsed historical version keeps only images the fresh snapshot also vouches
+  for and is re-read under the new authority; if that fails the view closes;
+- browse reads apply only if they are the newest for the naplet, the naplet
+  policy is unchanged and no fresh snapshot arrived while they were in flight
+  (otherwise they are repeated); and
+- the byte cache refuses loads outside the latest authorized set and discards
+  in-flight fetches for images dropped meanwhile, so revoked bytes cannot
+  reappear.
+
+### Sandbox boundary
+
+HTML artefacts are **trusted-author executable JavaScript**. The browser
+boundary limits what that script can reach; it is not a safe renderer for
+hostile code:
+
+- `sandbox="allow-scripts"` only: opaque origin, no same-origin, forms, popups,
+  top navigation, downloads or modals. `credentialless` and
+  `referrerpolicy="no-referrer"` keep ambient host credentials and referrers out;
+- a deny-by-default CSP (`connect-src 'none'`, images/media only from
+  `data:`/`blob:`, no frames, objects, forms or `<base>`) blocks `fetch`, XHR,
+  WebSocket and remote subresources;
+- a leading guard cancels links and form submissions, scrolls in-page `#`
+  links locally and disables `window.open`; meta refresh, `<base>` and inline
+  event handlers on `<html>`/`<body>` are stripped; and
+- the asset bridge accepts exactly one batch, only from the parent window at the
+  host origin carrying this document's random nonce. Other naplets, and the
+  artefact itself, cannot forge or redirect deliveries.
+
+What it does **not** guarantee: script can still navigate its own frame (for
+example `location.replace(...)`), and a navigation request can carry data in its
+URL before CSP no longer applies to the new document. The host detects the
+document's unload notice, replaces the frame with an inert notice and delivers
+nothing further, but this is detection, not network confinement. Script can
+also exhaust CPU or memory inside its frame. Only publish artefacts whose
+authors you trust with the data they display; do not treat the sandbox as a
+review substitute.
+
+The agent publishing helper and its packaging rules are documented in
+[`docs/html-artifact-publishing.md`](../html-artifact-publishing.md).
 
 ## Verification and activation
 

@@ -8,6 +8,7 @@ import {
   deleteTowerPgCanvasElement,
   deleteTowerPgCanvasNaplet,
   getTowerPgCanvases,
+  getTowerPgCanvasNapletHtml,
   getTowerPgCanvasSnapshot,
   reorderTowerPgCanvases,
   updateTowerPgCanvas,
@@ -17,10 +18,12 @@ import {
 } from '../api.js';
 import { getWorkspaceDb } from '../db.js';
 import {
+  assertIdentity,
   canvasDefinitionKey,
   canvasPartition,
   normalizeCanvasList,
   normalizeCanvasSnapshot,
+  normalizeHtmlContent,
 } from './projection.js';
 
 const uuid = () => globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -165,6 +168,37 @@ export class CanvasSyncRuntime {
       }, apiOptions(this.context));
       return this.refresh();
     });
+  }
+
+  // Pin an HTML naplet to one File version, or pass null to follow latest.
+  setNapletVersionPolicy(napletId, versionId) {
+    return this.enqueueMutation(async () => {
+      const snapshot = await this.db.canvas_snapshots.get(this.key);
+      const naplet = snapshot?.naplets?.find(row => row.id === napletId);
+      if (!this.authorized || naplet?.access !== 'ready' || naplet.source?.type !== 'html') throw new Error('Canvas naplet authorization must be refreshed.');
+      await updateTowerPgCanvasNaplet(this.context.workspaceId, this.canvasId, napletId, {
+        source_version_id: versionId || null,
+        expected_row_version: naplet.row_version,
+      }, apiOptions(this.context));
+      return this.refresh();
+    });
+  }
+
+  /**
+   * Viewer-local version browsing: a command read that never changes the
+   * naplet or the Dexie projection. Tower re-authorizes the File first.
+   */
+  async readNapletHtml(napletId, versionId = '', { signal } = {}) {
+    if (!this.authorized) throw new Error('Canvas authorization must be refreshed.');
+    const payload = await getTowerPgCanvasNapletHtml(this.context.workspaceId, this.canvasId, napletId, { versionId, ...apiOptions(this.context, signal) });
+    assertIdentity(payload, this.context);
+    if (String(payload?.naplet_id || '') !== String(napletId)) throw new Error('Invalid Canvas HTML response');
+    const content = normalizeHtmlContent(payload.content);
+    const versions = (Array.isArray(payload.versions) ? payload.versions : [])
+      .map(row => ({ id: String(row?.id || '').trim(), version_number: Number(row?.version_number), created_at: String(row?.created_at || ''), content_type: String(row?.content_type || '') }))
+      .filter(row => row.id && Number.isSafeInteger(row.version_number) && row.version_number > 0)
+      .sort((a, b) => b.version_number - a.version_number);
+    return { content, versions };
   }
 
   addNaplet(body) {

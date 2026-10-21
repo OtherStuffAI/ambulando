@@ -7,6 +7,13 @@ export const CANVAS_ACCESS_MESSAGE = 'Ask your workspace owner for access.';
 
 const text = value => String(value ?? '').trim();
 const finite = (value, fallback) => Number.isFinite(Number(value)) ? Number(value) : fallback;
+const uuidText = value => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(text(value)) ? text(value).toLowerCase() : '';
+const positiveInteger = value => Number.isSafeInteger(Number(value)) && Number(value) > 0 ? Number(value) : null;
+
+// Mirrors Tower's HTML artifact asset policy; both sides enforce it.
+export const CANVAS_HTML_ASSET_LIMITS = Object.freeze({ count: 64, assetBytes: 8 * 1024 * 1024, totalBytes: 32 * 1024 * 1024 });
+export const CANVAS_HTML_ASSET_TYPES = Object.freeze(['image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/avif', 'image/svg+xml']);
+export const CANVAS_HTML_ASSET_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
 
 export function canvasContext(store) {
   const context = resolveTowerPgWorkspaceContext(store);
@@ -31,7 +38,7 @@ export function canvasDefinitionKey(context, canvasId) {
   return JSON.stringify([canvasPartition(context), text(canvasId)]);
 }
 
-function assertIdentity(payload, context) {
+export function assertIdentity(payload, context) {
   if (text(payload?.workspace_id) !== text(context.workspaceId)) throw new Error('Invalid Canvas workspace response');
   const expected = {
     workspace_id: context.workspaceId,
@@ -120,7 +127,44 @@ function normalizeContent(type, value) {
   if (type === 'document') return { title: text(content.title), body: String(content.body ?? ''), updated_at: text(content.updated_at) };
   if (type === 'task_list') return { tasks: (Array.isArray(content.tasks) ? content.tasks : []).slice(0, 200).map(task => ({ id: text(task?.id), title: text(task?.title), state: text(task?.state) })).filter(task => task.id && task.title) };
   if (type === 'chat_thread') return { messages: (Array.isArray(content.messages) ? content.messages : []).slice(0, 200).map(message => ({ id: text(message?.id), author: text(message?.author), body: String(message?.body ?? ''), created_at: text(message?.created_at) })).filter(message => message.id) };
-  return { html: String(content.html ?? ''), version: text(content.version), digest: text(content.digest) };
+  return normalizeHtmlContent(content);
+}
+
+export function normalizeHtmlContent(content) {
+  return {
+    html: String(content?.html ?? ''),
+    version: text(content?.version),
+    digest: text(content?.digest),
+    file_id: uuidText(content?.file_id),
+    version_id: uuidText(content?.version_id),
+    version_number: positiveInteger(content?.version_number),
+    current_version_id: uuidText(content?.current_version_id),
+    current_version_number: positiveInteger(content?.current_version_number),
+    follows_latest: content?.follows_latest !== false,
+    assets: normalizeHtmlAssets(content?.assets),
+    manifest_error: text(content?.manifest_error) || null,
+  };
+}
+
+// Only exact, bounded image references survive; Tower already re-authorized them.
+export function normalizeHtmlAssets(value) {
+  const rows = Array.isArray(value) ? value.slice(0, CANVAS_HTML_ASSET_LIMITS.count) : [];
+  const names = new Set();
+  let total = 0;
+  return rows.map(row => {
+    const name = text(row?.name);
+    if (!CANVAS_HTML_ASSET_NAME.test(name) || names.has(name)) return null;
+    names.add(name);
+    const size = Number(row?.size_bytes);
+    const contentType = text(row?.content_type).toLowerCase();
+    const ready = row?.status === 'ready' && uuidText(row?.file_id) && uuidText(row?.version_id)
+      && /^[0-9a-f]{64}$/.test(text(row?.sha256)) && CANVAS_HTML_ASSET_TYPES.includes(contentType)
+      && Number.isSafeInteger(size) && size > 0 && size <= CANVAS_HTML_ASSET_LIMITS.assetBytes
+      && total + size <= CANVAS_HTML_ASSET_LIMITS.totalBytes;
+    if (!ready) return { name, status: 'unavailable' };
+    total += size;
+    return { name, status: 'ready', file_id: uuidText(row.file_id), version_id: uuidText(row.version_id), sha256: text(row.sha256), size_bytes: size, content_type: contentType };
+  }).filter(Boolean);
 }
 
 function normalizeReadyNaplet(row) {
@@ -128,11 +172,14 @@ function normalizeReadyNaplet(row) {
   const sourceId = text(row?.source?.id);
   if (!CANVAS_SOURCE_TYPES.includes(sourceType) || !sourceId) throw new Error('Invalid Canvas source');
   const content = normalizeContent(sourceType, row?.content);
+  const source = sourceType === 'html'
+    ? { type: sourceType, id: sourceId, version_id: uuidText(row?.source?.version_id) || null }
+    : { type: sourceType, id: sourceId };
   return {
     id: text(row.id),
     access: 'ready',
     layout: normalizeLayout(row.layout),
-    source: { type: sourceType, id: sourceId },
+    source,
     title: text(row.title || content.title) || 'Untitled naplet',
     content,
     row_version: Number(row.row_version),

@@ -126,6 +126,16 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .canvas-window-control.window-popout { background: #8bd5a2; border-color: #69a37b; }
 .canvas-window-content { display: grid; grid-template-rows: minmax(0, 1fr); min-height: 0; overflow: hidden; border-radius: 0 0 9px 9px; }
 .canvas-window-content > iframe { min-height: 0; }
+.canvas-html { display: grid; grid-template-rows: auto minmax(0, 1fr); min-height: 0; }
+.canvas-html > iframe { min-height: 0; }
+.canvas-html-versions { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 4px 6px; border-bottom: 1px solid var(--border); background: var(--surface); color: var(--foreground); font-size: 12px; }
+.canvas-html-versions button, .canvas-html-select { min-height: 26px; padding: 2px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface-muted); color: inherit; font: inherit; }
+.canvas-html-versions button:disabled { opacity: .45; }
+.canvas-html-step { min-width: 26px; }
+.canvas-html-version { font-weight: 600; white-space: nowrap; }
+.canvas-html-select { max-width: 9rem; }
+.canvas-html-note { color: var(--muted-foreground); }
+@media (pointer: coarse) { .canvas-html-versions button, .canvas-html-select { min-height: 36px; } }
 .canvas-naplet.window-minimised { height: 50px !important; grid-template-rows: 50px; }
 .canvas-naplet.window-minimised .canvas-naplet-header { border-radius: 9px; border-bottom: 0; }
 .canvas-naplet.window-expanded {
