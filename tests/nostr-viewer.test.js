@@ -17,6 +17,17 @@ describe('Nostr viewer', () => {
     for (const id of [npub, nevent]) expect(nostrViewerUrl(`https://njump.me/${id}`, 'https://viewer.example/event/')).toBe(`https://viewer.example/event/${id}`);
     for (const url of ['https://example.com/article', `https://njump.me.evil/${nevent}`, 'https://njump.me/about', `https://njump.me/${nevent}?x=1`]) expect(nostrViewerUrl(url, 'https://viewer.example/')).toBe(url);
   });
+  it('opens the supplied exact Canopy event route from a cached njump link', () => {
+    // Source message: 021da359-cf13-4bb6-a5ba-08c57aa9f4d2.
+    const identifier = 'nevent1qvzqqqqqqypzqwau4dlr62c854gzwgrdtcvnsylszsrgstd26p2pywy62zm8h2fwqqs9t9ngv4ll5urt44z6x3d7x9uxjfpyp0x42qxssqqqvl5fdt6yufq027s6g';
+    const expected = 'https://canopy.winn.cloud/event/nevent1qvzqqqqqqypzqwau4dlr62c854gzwgrdtcvnsylszsrgstd26p2pywy62zm8h2fwqqs9t9ngv4ll5urt44z6x3d7x9uxjfpyp0x42qxssqqqvl5fdt6yufq027s6g';
+    const open = vi.fn(); vi.stubGlobal('window', { open });
+    const store = { ...subscribedReaderMixin, nostrViewerBaseUrl: 'https://canopy.winn.cloud/event/' };
+    store.openFeedItem({ url: `https://njump.me/${identifier}` });
+    expect(open).toHaveBeenCalledExactlyOnceWith(expected, '_blank', 'noopener,noreferrer');
+    expect(normalizeNostrViewer('')).toBe('https://njump.me/');
+    vi.unstubAllGlobals();
+  });
   it('saves, reloads, resets and leaves prior preference on invalid input', async () => {
     const storage = new Map();
     vi.stubGlobal('localStorage', { getItem: key => storage.get(key), setItem: (key, value) => storage.set(key, value) });

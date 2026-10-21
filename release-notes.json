@@ -4633,6 +4633,13 @@
       "label": "Nostr viewer validation checkpoint",
       "notes": [],
       "noUserVisibleChanges": true
+    },
+    {
+      "buildNumber": 2515,
+      "label": "Canopy viewer setup example",
+      "notes": [
+        "Setup includes the Canopy event viewer base URL as an example; njump remains the default."
+      ]
     }
   ]
 }

@@ -8265,7 +8265,7 @@
               <form @submit.prevent="$store.chat.saveNostrViewer()">
                 <label class="settings-field-label" for="nostr-viewer-base-url">Nostr viewer base URL</label>
                 <input id="nostr-viewer-base-url" type="text" inputmode="url" x-model="$store.chat.nostrViewerDraft" placeholder="https://njump.me/" aria-describedby="nostr-viewer-help nostr-viewer-error" :aria-invalid="Boolean($store.chat.nostrViewerError)" />
-                <p id="nostr-viewer-help" class="settings-field-help">Open Nostr feed links with your chosen viewer. Include any route prefix before the Nostr identifier. Saved on this device; leave blank to use njump.</p>
+                <p id="nostr-viewer-help" class="settings-field-help">Open Nostr feed links with your chosen viewer. For Canopy, enter https://canopy.winn.cloud/event/ — the original nevent is appended unchanged. Include any route prefix your viewer needs. Saved on this device; leave blank to use njump.</p>
                 <button type="submit" class="btn-secondary">Save Nostr viewer</button>
                 <button type="button" class="btn-secondary" @click="$store.chat.saveNostrViewer('')">Reset to njump</button>
                 <p id="nostr-viewer-error" role="alert" x-show="$store.chat.nostrViewerError" x-text="$store.chat.nostrViewerError"></p>
