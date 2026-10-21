@@ -9,6 +9,7 @@ test.use({ serviceWorkers: 'block', reducedMotion: 'reduce', viewport: { width: 
 const workspaceId = '20000000-0000-4000-8000-000000000071';
 const canvasId = '30000000-0000-4000-8000-000000000072';
 const channelId = '50000000-0000-4000-8000-000000000073';
+const scopeId = '50000000-0000-4000-8000-000000000074';
 const identity = { workspace_id: workspaceId, app_npub: 'npub1canvasapp', tower_service_npub: 'npub1canvastower', workspace_service_npub: 'npub1canvasworkspace' };
 const CONTENT_TYPE = 'application/vnd.excalidraw+json';
 const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
@@ -64,6 +65,12 @@ function fakeTower() {
       const root = `/api/v4/flightdeck-pg/workspaces/${workspaceId}`;
       const suffix = url.pathname.slice(root.length);
       if (suffix === '/storage/prepare') { expect(body.content_type).toBe(CONTENT_TYPE); expect(body.is_public).toBeUndefined(); return json({ object_id: uid(), is_public: false }); }
+      // Scope-first discovery used by "Link existing board".
+      if (suffix === '/scopes' && method === 'GET') return json({ identity, scopes: [{ id: scopeId, name: 'Delivery' }], next_cursor: null });
+      if (suffix === `/scopes/${scopeId}/channels` && method === 'GET') return json({ identity, scope_id: scopeId, channels: [{ id: channelId, scope_id: scopeId, name: 'Boards' }], next_cursor: null });
+      if (suffix === `/channels/${channelId}/files` && method === 'GET') {
+        return json({ identity, channel_id: channelId, files: [...files.values()].map(file => ({ id: file.id, channel_id: channelId, display_name: file.display_name, metadata: {}, current_version_id: file.current_version_id })), next_cursor: null });
+      }
       if (suffix === `/channels/${channelId}/files` && method === 'POST') {
         const file = { id: uid(), channel_id: channelId, display_name: body.display_name, versions: [] };
         files.set(file.id, file);
@@ -233,7 +240,8 @@ test('create, edit inline and full screen, save explicitly, reuse and browse ver
   await page.getByRole('button', { name: 'Add naplet' }).click();
   await dialog.getByLabel('Type').selectOption('excalidraw');
   await dialog.getByRole('radio', { name: 'Link existing board' }).check();
-  await dialog.locator('.canvas-source-list button', { hasText: 'Release plan' }).click();
+  await dialog.locator('.canvas-artifact-picker').getByLabel('Scope').selectOption({ label: 'Delivery' });
+  await dialog.locator('.canvas-artifact-list button', { hasText: 'Release plan' }).click();
   await dialog.getByRole('button', { name: 'Add', exact: true }).click();
   await expect(page.locator('.canvas-board')).toHaveCount(2);
   expect(tower.files.size).toBe(1);
@@ -275,12 +283,13 @@ test('stale saves keep the draft, merge brings agent work, refresh loads latest 
   const { errors } = await openCanvas(page, context, tower, { existingBoard: { id: board.id, title: 'Shared.excalidraw' } });
   await expect.poll(() => count(page)).toBe(1);
 
-  // Link existing board is offered from cached board Files.
+  // Link existing board lists board Files Tower returns for the chosen scope.
   await page.getByRole('button', { name: 'Add naplet' }).click();
   const dialog = page.locator('.canvas-add-dialog');
   await dialog.getByLabel('Type').selectOption('excalidraw');
   await dialog.getByRole('radio', { name: 'Link existing board' }).check();
-  await expect(dialog.locator('.canvas-source-list button')).toHaveText(['Shared.excalidraw']);
+  await dialog.locator('.canvas-artifact-picker').getByLabel('Scope').selectOption({ label: 'Delivery' });
+  await expect(dialog.locator('.canvas-artifact-list .canvas-artifact-title')).toHaveText(['Shared']);
   await dialog.getByRole('button', { name: 'Cancel' }).click();
 
   // An agent saves v2 while I draw: my Save is rejected and the draft is kept.

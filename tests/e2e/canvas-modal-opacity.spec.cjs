@@ -45,7 +45,7 @@ for (const width of [1440, 390]) {
       const add = page.locator('.canvas-add-dialog');
       await assertPanel(add, expected, width);
       for (const type of ['document', 'task_list', 'chat_thread', 'html']) {
-        await add.locator('select').selectOption(type);
+        await add.getByLabel('Type').selectOption(type);
         await assertPanel(add, expected, width);
       }
       await add.getByRole('button', { name: 'Cancel' }).click();

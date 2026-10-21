@@ -243,3 +243,31 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .canvas-link-kind { color: var(--muted-foreground); font-size: 12px; }
 .canvas-link-card h2 { margin: 0; overflow-wrap: anywhere; font-size: 20px; }
 .canvas-link-card a { display: inline-flex; align-items: center; min-height: 44px; padding: 8px 14px; border: 1px solid var(--border); border-radius: 8px; color: var(--primary); }
+
+/* Scope-first picker for existing HTML artefacts and boards. */
+.canvas-add-dialog:has(.canvas-artifact-picker .has-preview) { width: min(60rem, calc(100vw - 2rem)); max-height: min(56rem, calc(100vh - 2rem)); }
+.canvas-artifact-picker { display: grid; gap: 8px; }
+.canvas-artifact-filters { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.canvas-artifact-status { margin: 0; color: var(--muted-foreground); font-size: 13px; }
+.canvas-artifact-limit { margin: 0; padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; }
+.canvas-artifact-more { padding: 8px 10px; color: var(--primary); }
+/* Add/Cancel stay reachable however tall the picker grows. */
+.canvas-add-dialog .canvas-dialog-actions { position: sticky; bottom: 0; z-index: 1; margin: 0 -18px -18px; padding: 12px 18px; border-top: 1px solid var(--border); background: var(--card); }
+.canvas-artifact-preview { scroll-margin-bottom: 80px; }
+.canvas-artifact-body { display: grid; gap: 8px; }
+.canvas-artifact-body.has-preview { grid-template-columns: minmax(12rem, 1fr) minmax(0, 1.6fr); }
+.canvas-artifact-list { display: grid; align-content: start; gap: 4px; max-height: 280px; overflow-y: auto; }
+.canvas-artifact-list button { display: grid; gap: 2px; padding: 8px 10px; text-align: left; }
+.canvas-artifact-list button small { color: var(--muted-foreground); font-size: 12px; }
+.canvas-artifact-list button.selected { border-color: var(--primary); background: color-mix(in srgb, var(--primary) 12%, var(--surface)); }
+.canvas-artifact-title { overflow-wrap: anywhere; }
+.canvas-artifact-preview { display: grid; grid-template-rows: 1fr auto; gap: 4px; min-height: 280px; margin: 0; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: var(--surface); }
+.canvas-artifact-preview iframe { width: 100%; height: 100%; min-height: 248px; border: 0; background: #fff; }
+.canvas-artifact-preview figcaption { align-self: end; padding: 6px 10px; color: var(--muted-foreground); font-size: 12px; }
+@media (max-width: 700px) {
+  .canvas-artifact-filters, .canvas-artifact-body.has-preview { grid-template-columns: 1fr; }
+  .canvas-artifact-list { max-height: 200px; }
+  .canvas-artifact-preview { min-height: 240px; }
+  .canvas-artifact-preview iframe { min-height: 200px; }
+  .canvas-artifact-filters select, .canvas-artifact-list button { min-height: 44px; }
+}

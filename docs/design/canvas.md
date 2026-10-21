@@ -104,8 +104,9 @@ forward/back ordering, resize, undo/redo, reset, and fit. Ordinary wheel input
 pans. Ctrl/Cmd-wheel and two-touch pinch zoom around the pointer or gesture
 centre, while one-touch dragging pans without allowing the page to take over.
 
-The naplet picker lists cached, visible typed sources rather than accepting raw
-record IDs. Tower still re-authorizes the chosen source at creation and every
+The naplet picker lists visible typed sources rather than accepting raw record
+IDs. Documents, task lists and threads come from the local cache; existing HTML
+artefacts and boards use the scope-first picker below. Tower still re-authorizes the chosen source at creation and every
 snapshot read. Comments may be anchored to canvas coordinates or a naplet and
 support one reply level plus resolve/reopen state. If the viewer loses access
 to an anchored naplet, Tower emits a coordinate anchor and never exposes the
@@ -162,6 +163,46 @@ Authority changes are applied conservatively:
 - the byte cache refuses loads outside the latest authorized set and discards
   in-flight fetches for images dropped meanwhile, so revoked bytes cannot
   reappear.
+
+### Choosing an existing artefact
+
+HTML artefacts and "Link existing board" use a scope-first picker
+(`src/canvas/artifact-picker.js`). The viewer picks a scope from
+`GET /scopes`, then "All channels" or one channel from
+`GET /scopes/:scopeId/channels`; there is no workspace-wide channel list.
+Files come from `GET /channels/:channelId/files` for the chosen channel, or
+for every channel in the scope with at most four channel reads at a time.
+All three routes are visibility- or permission-checked by Tower, and nothing
+is written to Dexie. The channel file list omits content types, so HTML
+artefacts are recognised by `metadata.html_artifact` or an `.html`/`.htm` name,
+and boards by `metadata.kind = excalidraw_board`, the board content type or the
+`.excalidraw` extension. A channel whose Files are denied is counted as
+unavailable instead of failing the list. Changing scope or channel clears the
+selection and preview, and stale responses are dropped.
+
+Only the selected HTML File is previewed. Its current version metadata is read
+from `GET /files/:fileId/versions`, the bytes from the signed File-version
+object route, and the SHA-256 must match before the HTML is used. The manifest
+is parsed with the same rules as Tower. Each image is accepted only if its
+version is readable to the viewer, matches the manifest digest, has an allowed
+image type and fits the size limits; otherwise it is `unavailable`. The preview
+renders through the `x-canvas-html-preview` registration of the same sandbox
+directive. It uses its own memory-only `CanvasHtmlAssetStore`, which is cleared
+when the selection changes, the dialog closes or the page is hidden. Adding
+creates the normal follow-latest HTML naplet, and Tower re-authorizes it as
+usual.
+
+Tower clamps these list routes to 200 rows and returns no cursor. The picker
+requests the maximum and says so when a page comes back full: at most 200
+scopes or channels in a scope are listed, and a full channel shows only its
+200 most recently updated Files. The merged list is rendered 200 rows at a
+time with "Show more", never cut off silently. Version metadata is the newest
+200 versions. A manifest image that names an older version of a File with a
+full version page is described from its exact version object instead: the same
+`file.read` check applies, and its type, size and digest are verified before it
+is marked ready. This means the image bytes are fetched twice in that rare case.
+No route lists older Files beyond these limits, so the picker does not claim to
+show a channel's full history.
 
 ### Sandbox boundary
 

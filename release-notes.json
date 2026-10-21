@@ -4858,6 +4858,15 @@
       "notes": [
         "Add a Canvas Link naplet with an optional label to open another accessible canvas in the same tab. Use browser Back and Forward or add an ordinary link to your Overview. Requires the matching Tower update."
       ]
+    },
+    {
+      "buildNumber": 2556,
+      "label": "Find existing artefacts for canvases",
+      "notes": [
+        "Add an existing HTML artefact or board by choosing a scope, then all of its channels or one channel. Artefacts are listed by name, including ones you have not opened in Ambulando yet.",
+        "Preview a selected HTML artefact, with its private images, before adding it. The preview stays sandboxed and is cleared when you change the selection or close the picker.",
+        "Long lists show more on request, and the picker says when a channel has more Files than Tower can list at once."
+      ]
     }
   ]
 }

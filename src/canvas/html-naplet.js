@@ -15,8 +15,8 @@ function nonce() {
  * window only. An unload before the next generated document means the artefact
  * navigated itself: the frame is replaced and receives nothing further.
  */
-export function registerCanvasHtml(Alpine, { assetStore }) {
-  Alpine.directive('canvas-html', (iframe, { expression }, { evaluateLater, effect, cleanup }) => {
+export function registerCanvasHtml(Alpine, { assetStore, name = 'canvas-html' }) {
+  Alpine.directive(name, (iframe, { expression }, { evaluateLater, effect, cleanup }) => {
     const evaluate = evaluateLater(expression);
     let signature = '', token = 0, state = 'idle', assets = [], documentNonce = '';
     const deliver = async generation => {

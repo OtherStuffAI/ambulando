@@ -6,6 +6,7 @@ import { registerCanvasHtml } from './html-naplet.js';
 import { CanvasHtmlAssetStore } from './html-assets.js';
 import { registerCanvasBoard } from './board-naplet.js';
 import { canvasBoardStore } from './board-page.js';
+import { canvasArtifactPickerStore } from './artifact-picker.js';
 import { HtmlViewSequencer, htmlDisplayedAssets, htmlPolicyKey, reconcileHtmlViews } from './html-views.js';
 import { buildSectionUrl } from '../route-helpers.js';
 import '../docs/editor/document-typography.css';
@@ -74,6 +75,7 @@ export function canvasPageStore() {
     commentDelete: null, linkDrag: null, subjectPicker: false, suppressLinkClick: false,
     accessMessage: CANVAS_ACCESS_MESSAGE, historyTick: 0, htmlViews: {},
     ...canvasBoardStore(),
+    ...canvasArtifactPickerStore(),
 
     get canvasId() { return text(new URLSearchParams(location.search).get('canvasid')); },
     get transformStyle() { return `translate(${this.viewport.x}px, ${this.viewport.y}px) scale(${this.viewport.scale})`; },
@@ -112,7 +114,7 @@ export function canvasPageStore() {
         this.startBoards(this.context());
         keydown = event => this.handleKeydown(event); addEventListener('keydown', keydown);
         addEventListener('pagehide', () => {
-          syncRuntime?.stop(); assetStore?.clear(); this.stopBoards(); removeEventListener('keydown', keydown);
+          syncRuntime?.stop(); assetStore?.clear(); this.stopBoards(); this.resetArtifactPicker(); removeEventListener('keydown', keydown);
           // A browser-history cache is not fresh authorization.
           this.status = 'loading'; this.canvas = null; this.naplets = []; this.elements = []; this.comments = [];
           this.clearHtmlViews(); document.title = 'Canvas · Ambulando';
@@ -379,6 +381,7 @@ export function canvasPageStore() {
         return;
       }
       const sourceId = text(this.addDialog.sourceId); if (!sourceId || this.saving) return;
+      if (!this.artifactSelectionValid()) { this.error = 'Choose an artefact from the list.'; return; }
       if (this.addDialog.type === 'canvas' && !this.sourceOptions.some(row => row.type === 'canvas' && row.id === sourceId && row.id !== this.canvasId)) { this.error = 'Choose another accessible canvas.'; return; }
       await this.mutate(() => syncRuntime.addNaplet({ source: { type: this.addDialog.type, id: sourceId }, title: text(this.addDialog.title) || undefined, layout }));
       if (!this.error) canvasElement('addDialog').close();
@@ -611,6 +614,7 @@ registerCanvasCommentPopover(Alpine);
 registerCanvasWindow(Alpine);
 registerCanvasDocument(Alpine);
 registerCanvasHtml(Alpine, { assetStore: () => Alpine.store('canvas').assetStore() });
+registerCanvasHtml(Alpine, { name: 'canvas-html-preview', assetStore: () => Alpine.store('canvas').previewAssetStore() });
 registerCanvasBoard(Alpine, { controllerFor: fileId => Alpine.store('canvas').boardController(fileId) });
 Alpine.store('canvas', canvasPageStore());
 window.Alpine = Alpine;
