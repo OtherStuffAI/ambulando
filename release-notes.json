@@ -4703,6 +4703,12 @@
       "notes": [
         "Subject linking waits for server support that preserves comment marker coordinates. Comment popovers remain movable and the board stays usable."
       ]
+    },
+    {
+      "buildNumber": 2529,
+      "label": "Canvas managed-runtime verification",
+      "notes": [],
+      "noUserVisibleChanges": true
     }
   ]
 }

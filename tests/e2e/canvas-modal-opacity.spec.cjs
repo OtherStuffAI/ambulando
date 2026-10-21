@@ -63,7 +63,7 @@ for (const width of [1440, 390]) {
       expect(backdrop).toBe('rgba(0, 0, 0, 0)');
       expect(await thread.evaluate(node => node.matches(':modal'))).toBe(false);
       if (process.env.SOL_EVIDENCE_DIR) await page.screenshot({ path: `${process.env.SOL_EVIDENCE_DIR}/canvas-thread-${mode}-${width}.png` });
-      expect(await thread.evaluate(node => node.scrollHeight > node.clientHeight)).toBe(true);
+      await expect.poll(() => thread.evaluate(node => node.scrollHeight > node.clientHeight)).toBe(true);
       await thread.getByRole('button', { name: 'Reply', exact: true }).click();
       await assertPanel(editor, expected, width);
       await expect(editor.getByRole('heading')).toHaveText('Reply');
