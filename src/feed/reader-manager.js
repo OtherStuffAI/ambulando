@@ -1,3 +1,4 @@
+import { nostrViewerMixin, nostrViewerUrl } from './nostr-viewer.js';
 import { createFeedSubscription, patchFeedSubscription, patchFeedItemState } from '../tower-command-intents.js';
 import { getWorkspaceDb } from '../db.js';
 import { readerContext, ensureFeedReaderIdentity } from './tower.js';
@@ -8,6 +9,7 @@ import { resolveSubscriptionSource, resolveFeedUrlSource } from './transport.js'
 import { publicFeedUrl, safeFeedUrl } from './normalize.js';
 const RUNTIMES = new WeakMap();
 export const subscribedReaderMixin = {
+  ...nostrViewerMixin,
   subscribedFeedItems: [], subscribedFeedSources: [], subscribedFeedStatus: [], subscribedFeedError: '',
   feedManualGeneration: 0, feedAddOpen: false, feedManualBusy: false, feedManualStatus: '', publicFeedDraft: '', showDismissedFeeds: false,
   get visibleSubscribedFeedItems() { return [...(this.feedSourceFilter === 'nostr' ? [] : this.subscribedFeedItems), ...(this.feedSourceFilter === 'feeds' ? [] : this.visibleNostrNotifications || [])].filter(i => this.showDismissedFeeds || !i.dismissed).sort((a, b) => String(b.published).localeCompare(String(a.published))).slice(0, 500); },
@@ -120,7 +122,7 @@ export const subscribedReaderMixin = {
     });
   },
   openFeedItem(item) {
-    if (!item.url) return; let url; try { url = safeFeedUrl(item.url); } catch { return; }
+    if (!item.url) return; let url; try { url = safeFeedUrl(nostrViewerUrl(item.url, this.nostrViewerBaseUrl)); } catch { return; }
     // Exactly one window open, synchronously within the intentional click.
     window.open(url, '_blank', 'noopener,noreferrer');
   },
