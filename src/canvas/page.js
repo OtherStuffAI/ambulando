@@ -4,6 +4,8 @@ import { registerCanvasWindow } from './window.js';
 import { registerCanvasDocument } from './document.js';
 import { registerCanvasHtml } from './html-naplet.js';
 import { CanvasHtmlAssetStore } from './html-assets.js';
+import { registerCanvasBoard } from './board-naplet.js';
+import { canvasBoardStore } from './board-page.js';
 import { HtmlViewSequencer, htmlDisplayedAssets, htmlPolicyKey, reconcileHtmlViews } from './html-views.js';
 import { buildSectionUrl } from '../route-helpers.js';
 import '../docs/editor/document-typography.css';
@@ -71,6 +73,7 @@ export function canvasPageStore() {
     commentDialog: { anchor: null, parentCommentId: null, body: '' }, activeCommentId: '',
     commentDelete: null, linkDrag: null, subjectPicker: false, suppressLinkClick: false,
     accessMessage: CANVAS_ACCESS_MESSAGE, historyTick: 0, htmlViews: {},
+    ...canvasBoardStore(),
 
     get canvasId() { return text(new URLSearchParams(location.search).get('canvasid')); },
     get transformStyle() { return `translate(${this.viewport.x}px, ${this.viewport.y}px) scale(${this.viewport.scale})`; },
@@ -106,8 +109,9 @@ export function canvasPageStore() {
         const db = openWorkspaceDb(workspace.workspaceKey); await db.open();
         assetStore = new CanvasHtmlAssetStore(this.context());
         syncRuntime = new CanvasSyncRuntime(this.context(), this.canvasId, { onSnapshot: snapshot => this.applySnapshot(snapshot), onError: error => this.applySyncError(error) });
+        this.startBoards(this.context());
         keydown = event => this.handleKeydown(event); addEventListener('keydown', keydown);
-        addEventListener('pagehide', () => { syncRuntime?.stop(); assetStore?.clear(); removeEventListener('keydown', keydown); }, { once: true });
+        addEventListener('pagehide', () => { syncRuntime?.stop(); assetStore?.clear(); this.stopBoards(); removeEventListener('keydown', keydown); }, { once: true });
         syncRuntime.start();
       } catch (error) { this.status = 'error'; this.error = error?.message || 'Canvas could not be opened.'; }
     },
@@ -115,6 +119,7 @@ export function canvasPageStore() {
     applySnapshot(snapshot) {
       this.canvas = snapshot.canvas; this.naplets = snapshot.naplets; this.elements = snapshot.elements || []; this.comments = snapshot.comments || [];
       this.reconcileHtmlViews(snapshot.request_id);
+      this.syncBoards(this.naplets);
       this.viewport = { ...snapshot.canvas.viewport };
       const available = new Set(this.allCanvasItems().map(row => row.key));
       this.selectedKeys = this.selectedKeys.filter(key => available.has(key));
@@ -123,10 +128,12 @@ export function canvasPageStore() {
       document.title = `${snapshot.canvas.title} · Canvas · Ambulando`; this.status = 'ready';
     },
     applySyncError(error) {
+      this.syncBoards([]);
       this.canvas = null; this.naplets = []; this.elements = []; this.comments = []; this.status = 'error';
       this.clearHtmlViews();
       this.error = error?.status === 403 || error?.status === 404 ? 'Canvas unavailable.' : (error?.message || 'Canvas could not be refreshed.');
     },
+    refreshBoardsSnapshot() { return syncRuntime?.refresh().catch(() => undefined); },
     async refresh() { this.status = 'loading'; this.error = ''; await syncRuntime?.refresh().catch(() => undefined); },
     stageRect() { return canvasElement('stage').getBoundingClientRect(); },
     toWorld(event) { return worldPoint(this.viewport, event, this.stageRect()); },
@@ -330,7 +337,8 @@ export function canvasPageStore() {
     },
     async openAddDialog(point = null) {
       const rect = this.stageRect(); this.addDialog = { type: 'document', sourceId: '', title: '', point: point || this.toWorld({ clientX: rect.left + 80, clientY: rect.top + 80 }) };
-      this.sourceSearch = ''; await this.loadSourceOptions(); openCanvasDialog('addDialog');
+      this.sourceSearch = ''; this.boardCreate = { ...this.boardCreate, title: '', mode: 'create' };
+      await this.loadSourceOptions(); openCanvasDialog('addDialog');
     },
     async loadSourceOptions() {
       const db = openWorkspaceDb(this.currentWorkspaceKey);
@@ -341,13 +349,23 @@ export function canvasPageStore() {
         ...channels.filter(active).map(row => ({ type: 'task_list', id: row.record_id, title: `${sourceTitle(row, 'Channel')} tasks` })),
         ...messages.filter(row => active(row) && (row.pg_record_type === 'thread' || row.record_type === 'thread')).map(row => ({ type: 'chat_thread', id: row.record_id, title: sourceTitle(row, 'Chat thread') })),
         ...documents.filter(row => active(row) && isHtmlFile(row)).map(row => ({ type: 'html', id: row.record_id, title: sourceTitle(row, 'HTML artefact') })),
+        ...(await this.loadBoardChoices(db)),
         ...documents.filter(row => active(row) && row.pg_storage_version_id && !isHtmlFile(row) && /html/i.test(row.content_type || row.mime_type || '')).map(row => ({ type: 'html', id: row.pg_storage_version_id, title: sourceTitle(row, 'HTML artefact') })),
       ].filter(row => row.id && row.title).sort((a, b) => a.title.localeCompare(b.title));
     },
     chooseSource(option) { this.addDialog.sourceId = option.id; this.addDialog.title = option.title; },
     async addNaplet() {
-      const sourceId = text(this.addDialog.sourceId); if (!sourceId || this.saving) return; const point = this.addDialog.point || { x: 80, y: 80 };
-      await this.mutate(() => syncRuntime.addNaplet({ source: { type: this.addDialog.type, id: sourceId }, title: text(this.addDialog.title) || undefined, layout: { x: Math.round(point.x), y: Math.round(point.y), width: 380, height: 280, z: this.highestZ() + 1 } }));
+      const point = this.addDialog.point || { x: 80, y: 80 }, board = this.addDialog.type === 'excalidraw';
+      const layout = { x: Math.round(point.x), y: Math.round(point.y), width: board ? 640 : 380, height: board ? 460 : 280, z: this.highestZ() + 1 };
+      if (board && this.boardCreate.mode === 'create') {
+        if (this.saving || this.boardCreating) return;
+        this.boardCreating = true; this.error = '';
+        try { if (await this.createBoardNaplet(layout, body => this.mutate(() => syncRuntime.addNaplet(body)))) canvasElement('addDialog').close(); }
+        finally { this.boardCreating = false; }
+        return;
+      }
+      const sourceId = text(this.addDialog.sourceId); if (!sourceId || this.saving) return;
+      await this.mutate(() => syncRuntime.addNaplet({ source: { type: this.addDialog.type, id: sourceId }, title: text(this.addDialog.title) || undefined, layout }));
       if (!this.error) canvasElement('addDialog').close();
     },
     openCommentDialog(anchor, parentCommentId = null) { if (anchor.type === 'naplet' && !anchor.naplet_id) return; if (anchor.type === 'naplet' && !parentCommentId && !Number.isFinite(anchor.x)) { const point = this.commentPoint({ anchor }); if (point) anchor = { ...anchor, ...point }; } this.commentDialog = { anchor, parentCommentId, body: '' }; openCanvasDialog('commentDialog'); },
@@ -553,6 +571,7 @@ registerCanvasCommentPopover(Alpine);
 registerCanvasWindow(Alpine);
 registerCanvasDocument(Alpine);
 registerCanvasHtml(Alpine, { assetStore: () => Alpine.store('canvas').assetStore() });
+registerCanvasBoard(Alpine, { controllerFor: fileId => Alpine.store('canvas').boardController(fileId) });
 Alpine.store('canvas', canvasPageStore());
 window.Alpine = Alpine;
 Alpine.start();

@@ -2970,3 +2970,16 @@ export async function towerPgPrivatePreference(workspaceId, key, { baseUrl = _ba
   const method = body === undefined ? 'GET' : 'PUT';
   return json(await signedTowerPgFetch(path, { baseUrl, appNpub, signal, method, ...(body === undefined ? {} : { body }), useWorkspaceKey: false }), { requestUrl: resolveTowerPgUrl(path, baseUrl), method, prefix: 'Private preference' });
 }
+
+// File version history and compare-and-swap publication (channel file.read /
+// file.write). Excalidraw boards are Files; a stale `base_version_id` is
+// rejected atomically by Tower with 409 `stale_base_version`.
+export async function getTowerPgFileVersions(workspaceId, fileId, { baseUrl = _baseUrl, appNpub = FLIGHT_DECK_PG_APP_NPUB, signal, limit = 100 } = {}) {
+  const path = `/api/v4/flightdeck-pg/workspaces/${encodeURIComponent(workspaceId)}/files/${encodeURIComponent(fileId)}/versions?limit=${encodeURIComponent(limit)}`;
+  return json(await signedTowerPgFetch(path, { baseUrl, appNpub, signal, useWorkspaceKey: false }), { requestUrl: resolveTowerPgUrl(path, baseUrl), method: 'GET', prefix: 'Tower PG API' });
+}
+
+export async function createTowerPgFileVersion(workspaceId, fileId, body, { baseUrl = _baseUrl, appNpub = FLIGHT_DECK_PG_APP_NPUB, signal } = {}) {
+  const path = `/api/v4/flightdeck-pg/workspaces/${encodeURIComponent(workspaceId)}/files/${encodeURIComponent(fileId)}/versions`;
+  return json(await signedTowerPgFetch(path, { method: 'POST', body, baseUrl, appNpub, signal, useWorkspaceKey: false }), { requestUrl: resolveTowerPgUrl(path, baseUrl), method: 'POST', prefix: 'Tower PG API' });
+}

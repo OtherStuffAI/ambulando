@@ -4788,10 +4788,26 @@
       ]
     },
     {
+      "buildNumber": 2544,
+      "label": "Excalidraw board naplets",
+      "notes": [
+        "Add an Excalidraw board to a canvas: create a new private board in a channel or link an existing one. One board can appear in several naplets and canvases.",
+        "Draw inside the naplet or full screen in the same editor. Changes stay an unsaved draft until you choose Save, which records a new version with an optional note.",
+        "If someone saved first, your draft is kept and you can merge the latest or discard. Browse earlier versions, restore one as a draft, and get a warning before leaving with unsaved changes."
+      ]
+    },
+    {
       "buildNumber": 2545,
       "label": "HTML artifact activation verification",
       "notes": [],
       "noUserVisibleChanges": true
+    },
+    {
+      "buildNumber": 2546,
+      "label": "Safer board saves",
+      "notes": [
+        "Saving a board now waits for every open editor to confirm its latest strokes. If an editor does not respond, nothing is saved, your draft is kept and you can try Save again."
+      ]
     }
   ]
 }

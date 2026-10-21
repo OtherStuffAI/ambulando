@@ -197,3 +197,28 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .canvas-comment-targets button { text-align: left; overflow-wrap: anywhere; }
 .canvas-comment-targets button[aria-pressed="true"] { border-color: var(--primary); }
 @media (max-width: 700px) { .canvas-comment-controls button { width: 36px; min-height: 44px; } }
+
+/* Excalidraw board naplets: one same-origin editor iframe per naplet. */
+/* Flex, not grid: x-show rows (message, history) leave the flow when hidden. */
+.canvas-board { display: flex; flex-direction: column; min-height: 0; background: var(--surface); }
+.canvas-board-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 4px 6px; border-bottom: 1px solid var(--border); color: var(--foreground); font-size: 12px; }
+.canvas-board-bar button { min-height: 26px; padding: 0 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: inherit; font: inherit; cursor: pointer; }
+.canvas-board-bar button:disabled { opacity: .45; cursor: default; }
+.canvas-board-status { padding: 2px 8px; border-radius: 999px; font-weight: 600; background: #e7f4ea; color: #1d5b2c; }
+.canvas-board-status[data-state="unsaved"] { background: #fff3cd; color: #6b4e00; }
+.canvas-board-status[data-state="saving"] { background: #e3edff; color: #1f3f86; }
+.canvas-board-status[data-state="error"], .canvas-board-status[data-state="stale"] { background: #fde2e1; color: #8a1c17; }
+.canvas-board-status[data-state="viewing"] { background: #ececf2; color: #3a3a4a; }
+.canvas-board-version { color: var(--muted-foreground, #5b6474); }
+.canvas-board-save { border-color: #2f6fde !important; background: #2f6fde !important; color: #fff !important; font-weight: 600; }
+.canvas-board-message { margin: 0; padding: 4px 8px; font-size: 12px; background: #f3f6fb; color: #29364a; border-bottom: 1px solid var(--border); }
+.canvas-board-message.error { background: #fde2e1; color: #8a1c17; }
+.canvas-board-history { flex: 0 0 auto; margin: 0; padding: 4px; max-height: 40%; overflow: auto; list-style: none; border-bottom: 1px solid var(--border); font-size: 12px; }
+.canvas-board-history button { display: flex; gap: 8px; width: 100%; padding: 4px 6px; border: 0; border-radius: 4px; background: none; color: var(--foreground); text-align: left; font: inherit; cursor: pointer; }
+.canvas-board-history button[aria-current="true"] { background: #e3edff; }
+.canvas-board-history em { color: var(--muted-foreground, #5b6474); }
+.canvas-board-stage { position: relative; flex: 1 1 0; min-height: 0; }
+/* Absolutely sized: an iframe's auto height would otherwise fall back to 150px. */
+.canvas-board-frame { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: #fff; }
+.canvas-board-mode { display: flex; gap: 16px; border: 0; padding: 0; margin: 0; }
+.canvas-board-mode legend { padding: 0; font-weight: 600; }

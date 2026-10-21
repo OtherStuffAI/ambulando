@@ -1,7 +1,7 @@
 import { resolveTowerPgWorkspaceContext } from '../pg-workspace-context.js';
 import { cloneCanvasValue } from './interactions.js';
 
-export const CANVAS_SOURCE_TYPES = Object.freeze(['document', 'task_list', 'chat_thread', 'html']);
+export const CANVAS_SOURCE_TYPES = Object.freeze(['document', 'task_list', 'chat_thread', 'html', 'excalidraw']);
 export const CANVAS_ELEMENT_KINDS = Object.freeze(['text', 'rectangle', 'diamond', 'ellipse', 'arrow', 'line', 'draw', 'frame']);
 export const CANVAS_ACCESS_MESSAGE = 'Ask your workspace owner for access.';
 
@@ -126,8 +126,23 @@ function normalizeContent(type, value) {
   const content = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
   if (type === 'document') return { title: text(content.title), body: String(content.body ?? ''), updated_at: text(content.updated_at) };
   if (type === 'task_list') return { tasks: (Array.isArray(content.tasks) ? content.tasks : []).slice(0, 200).map(task => ({ id: text(task?.id), title: text(task?.title), state: text(task?.state) })).filter(task => task.id && task.title) };
+  if (type === 'excalidraw') return normalizeBoardContent(content);
   if (type === 'chat_thread') return { messages: (Array.isArray(content.messages) ? content.messages : []).slice(0, 200).map(message => ({ id: text(message?.id), author: text(message?.author), body: String(message?.body ?? ''), created_at: text(message?.created_at) })).filter(message => message.id) };
   return normalizeHtmlContent(content);
+}
+
+// Board naplets carry Tower-authorized File metadata only, never scene bytes.
+export function normalizeBoardContent(content) {
+  const sha256 = text(content?.sha256).toLowerCase();
+  return {
+    file_id: uuidText(content?.file_id),
+    current_version_id: uuidText(content?.current_version_id),
+    current_version_number: positiveInteger(content?.current_version_number),
+    sha256: /^[0-9a-f]{64}$/.test(sha256) ? sha256 : '',
+    size_bytes: positiveInteger(content?.size_bytes),
+    updated_at: text(content?.updated_at),
+    can_write: content?.can_write === true,
+  };
 }
 
 export function normalizeHtmlContent(content) {
