@@ -1,7 +1,7 @@
 import { resolveTowerPgWorkspaceContext } from '../pg-workspace-context.js';
 import { cloneCanvasValue } from './interactions.js';
 
-export const CANVAS_SOURCE_TYPES = Object.freeze(['document', 'task_list', 'chat_thread', 'html', 'excalidraw']);
+export const CANVAS_SOURCE_TYPES = Object.freeze(['document', 'task_list', 'chat_thread', 'html', 'excalidraw', 'canvas']);
 export const CANVAS_ELEMENT_KINDS = Object.freeze(['text', 'rectangle', 'diamond', 'ellipse', 'arrow', 'line', 'draw', 'frame']);
 export const CANVAS_ACCESS_MESSAGE = 'Ask your workspace owner for access.';
 
@@ -124,6 +124,7 @@ function normalizeElementLayout(value) {
 
 function normalizeContent(type, value) {
   const content = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+  if (type === 'canvas') return { title: text(content.title) };
   if (type === 'document') return { title: text(content.title), body: String(content.body ?? ''), updated_at: text(content.updated_at) };
   if (type === 'task_list') return { tasks: (Array.isArray(content.tasks) ? content.tasks : []).slice(0, 200).map(task => ({ id: text(task?.id), title: text(task?.title), state: text(task?.state) })).filter(task => task.id && task.title) };
   if (type === 'excalidraw') return normalizeBoardContent(content);

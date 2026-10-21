@@ -355,3 +355,30 @@ actual served assets with `SOL_RUNTIME_ASSETS=1`. They cover mouse and emulated
 touch handle/stroke movement, live creation preview, styles, text sizing/editing,
 undo/redo, persisted reload and zoom/pan. Physical touch/Safari and authenticated
 live workspace writes remain separate integration checks.
+
+## Canvas Link naplets
+
+`source: { type: "canvas", id: <canvas UUID> }` names another existing canvas in
+this workspace. Tower rechecks the destination's normal canvas visibility at
+creation and every source snapshot, returning only `content: { title }`. The
+optional naplet `title` is a display label; the destination title stays visible
+in the card. Denied/deleted targets use the existing four-field denied projection.
+Self-links are rejected; cycles are allowed and never traversed. Matching Tower
+source enum, SQL constraint migration, and resolver support must be active before
+creating links. No shared generic record-family schema change is involved.
+
+The add picker performs a fresh signed canvas-list read through the Canvas sync
+boundary and Dexie materialization; failed reads offer no cached destinations.
+Open canvas is an ordinary same-tab `/canvas.html?workspacekey=…&canvasid=…` link.
+Browser Back/Forward owns navigation history. A manually added Canvas Link can
+point to an Overview for a permanent return route; there is no hierarchy, custom
+Back control, navigation stack, or additional viewport restoration. Returning
+from browser back/forward cache requires fresh authorization before rendering.
+
+Cards contain no destination DOM, scene bytes, iframe, preview subscription,
+or screenshot. Static thumbnails are deferred because there is no existing
+canvas capture/storage contract that safely handles destination revocation.
+Title-only cards work without a thumbnail. Pointer actions on the card are
+isolated from header dragging and the resize handle. Tests cover signed synthetic
+picker/persistence/navigation/denial at desktop and phone widths; physical phone
+and authenticated deployed Tower behavior need their own activation check.

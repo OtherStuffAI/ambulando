@@ -197,3 +197,12 @@ it('keeps horizontal, vertical, and reversed arrow geometry finite', () => {
     expect(arrowPoints(row.layout, row.data).end.map((v, i) => v + (i ? row.layout.y : row.layout.x))).toEqual([end.x, end.y]);
   }
 });
+
+it('keeps Canvas Link projections title-only and strips denied destination metadata', async () => {
+  const { normalizeCanvasNaplet } = await import('../src/canvas/projection.js');
+  const row = { id: 'link', access: 'ready', source: { type: 'canvas', id: 'destination' }, title: 'Optional label', content: { title: 'Destination title', html: 'secret', thumbnail: 'secret.png', naplets: [{ content: 'nested' }] }, layout: {}, row_version: 1 };
+  expect(normalizeCanvasNaplet(row)).toMatchObject({ title: 'Optional label', source: { type: 'canvas', id: 'destination' }, content: { title: 'Destination title' } });
+  expect(Object.keys(normalizeCanvasNaplet(row).content)).toEqual(['title']);
+  const denied = normalizeCanvasNaplet({ ...row, access: 'denied' });
+  expect(Object.keys(denied).sort()).toEqual(['access', 'id', 'layout', 'row_version']);
+});

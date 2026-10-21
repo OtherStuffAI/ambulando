@@ -15,7 +15,7 @@ import { getSettings, openWorkspaceDb } from '../db.js';
 import { initializeTowerTransports } from '../tower-transport.js';
 import { normalizeWorkspaceEntry } from '../workspaces.js';
 import { canvasContext, CANVAS_ACCESS_MESSAGE } from './projection.js';
-import { CanvasSyncRuntime } from './sync-service.js';
+import { CanvasSyncRuntime, hydrateCanvasList } from './sync-service.js';
 import {
   arrowGeometry, arrowPoints, arrowPath, canvasItemKey, canvasWheelIntent, cloneCanvasValue, enclosedItemKeys,
   groupBounds, groupDelta, moveArrowEndpoint, movementItems, selectionRect, worldPoint, zoomViewport,
@@ -68,7 +68,7 @@ export function canvasPageStore() {
     currentWorkspaceKey: '', currentViewerNpub: '', currentPgActorId: '', canvas: null,
     naplets: [], elements: [], comments: [], viewport: { x: 0, y: 0, scale: 1 },
     interaction: null, tool: 'select', selectedKeys: [], selectionBox: null, saving: false, viewportSaving: false,
-    editingTextId: '', editingText: '', sourceOptions: [], sourceSearch: '',
+    editingTextId: '', editingText: '', sourceOptions: [], sourceSearch: '', canvasChoicesError: '',
     addDialog: { type: 'document', sourceId: '', title: '' },
     commentDialog: { anchor: null, parentCommentId: null, body: '' }, activeCommentId: '',
     commentDelete: null, linkDrag: null, subjectPicker: false, suppressLinkClick: false,
@@ -111,7 +111,16 @@ export function canvasPageStore() {
         syncRuntime = new CanvasSyncRuntime(this.context(), this.canvasId, { onSnapshot: snapshot => this.applySnapshot(snapshot), onError: error => this.applySyncError(error) });
         this.startBoards(this.context());
         keydown = event => this.handleKeydown(event); addEventListener('keydown', keydown);
-        addEventListener('pagehide', () => { syncRuntime?.stop(); assetStore?.clear(); this.stopBoards(); removeEventListener('keydown', keydown); }, { once: true });
+        addEventListener('pagehide', () => {
+          syncRuntime?.stop(); assetStore?.clear(); this.stopBoards(); removeEventListener('keydown', keydown);
+          // A browser-history cache is not fresh authorization.
+          this.status = 'loading'; this.canvas = null; this.naplets = []; this.elements = []; this.comments = [];
+          this.clearHtmlViews(); document.title = 'Canvas · Ambulando';
+        });
+        addEventListener('pageshow', event => {
+          if (!event.persisted) return;
+          this.startBoards(this.context()); addEventListener('keydown', keydown); syncRuntime?.start();
+        });
         syncRuntime.start();
       } catch (error) { this.status = 'error'; this.error = error?.message || 'Canvas could not be opened.'; }
     },
@@ -343,8 +352,13 @@ export function canvasPageStore() {
     async loadSourceOptions() {
       const db = openWorkspaceDb(this.currentWorkspaceKey);
       const [documents, channels, messages] = await Promise.all([db.documents.toArray(), db.channels.toArray(), db.chat_messages.toArray()]);
+      this.canvasChoicesError = '';
+      let canvases = [];
+      try { canvases = await hydrateCanvasList(this.context()); }
+      catch { this.canvasChoicesError = 'Canvas choices unavailable. Close this picker and try again.'; }
       const active = row => !['deleted', 'archived'].includes(row.record_state);
       this.sourceOptions = [
+        ...canvases.filter(row => row.canvas_id !== this.canvasId).map(row => ({ type: 'canvas', id: row.canvas_id, title: row.title })),
         ...documents.filter(row => active(row) && !row.pg_storage_version_id && row.pg_record_type !== 'file').map(row => ({ type: 'document', id: row.record_id, title: sourceTitle(row, 'Untitled document') })),
         ...channels.filter(active).map(row => ({ type: 'task_list', id: row.record_id, title: `${sourceTitle(row, 'Channel')} tasks` })),
         ...messages.filter(row => active(row) && (row.pg_record_type === 'thread' || row.record_type === 'thread')).map(row => ({ type: 'chat_thread', id: row.record_id, title: sourceTitle(row, 'Chat thread') })),
@@ -353,7 +367,7 @@ export function canvasPageStore() {
         ...documents.filter(row => active(row) && row.pg_storage_version_id && !isHtmlFile(row) && /html/i.test(row.content_type || row.mime_type || '')).map(row => ({ type: 'html', id: row.pg_storage_version_id, title: sourceTitle(row, 'HTML artefact') })),
       ].filter(row => row.id && row.title).sort((a, b) => a.title.localeCompare(b.title));
     },
-    chooseSource(option) { this.addDialog.sourceId = option.id; this.addDialog.title = option.title; },
+    chooseSource(option) { if (option.type === 'canvas' && option.id === this.canvasId) return; this.addDialog.sourceId = option.id; this.addDialog.title = option.type === 'canvas' ? '' : option.title; },
     async addNaplet() {
       const point = this.addDialog.point || { x: 80, y: 80 }, board = this.addDialog.type === 'excalidraw';
       const layout = { x: Math.round(point.x), y: Math.round(point.y), width: board ? 640 : 380, height: board ? 460 : 280, z: this.highestZ() + 1 };
@@ -365,6 +379,7 @@ export function canvasPageStore() {
         return;
       }
       const sourceId = text(this.addDialog.sourceId); if (!sourceId || this.saving) return;
+      if (this.addDialog.type === 'canvas' && !this.sourceOptions.some(row => row.type === 'canvas' && row.id === sourceId && row.id !== this.canvasId)) { this.error = 'Choose another accessible canvas.'; return; }
       await this.mutate(() => syncRuntime.addNaplet({ source: { type: this.addDialog.type, id: sourceId }, title: text(this.addDialog.title) || undefined, layout }));
       if (!this.error) canvasElement('addDialog').close();
     },
@@ -471,6 +486,10 @@ export function canvasPageStore() {
       await this.mutate(() => syncRuntime.updateElement(item.id, { data: after }), { type: 'data', id: item.id, before, after });
     },
     drawPoints(element) { return (element.data.points || []).map(point => point.join(',')).join(' '); },
+    canvasLinkUrl(naplet) {
+      if (naplet.access !== 'ready' || naplet.source?.type !== 'canvas' || !naplet.source.id || naplet.source.id === this.canvasId) return null;
+      return '/canvas.html?' + new URLSearchParams({ workspacekey: this.currentWorkspaceKey, canvasid: naplet.source.id });
+    },
     documentUrl(naplet) {
       if (naplet.access !== 'ready' || naplet.source?.type !== 'document') return null;
       return buildSectionUrl({ section: 'docs', params: { workspacekey: this.currentWorkspaceKey, docid: naplet.source.id } });

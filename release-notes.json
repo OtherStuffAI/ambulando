@@ -4851,6 +4851,13 @@
       "notes": [
         "Arrow bend and endpoint handles keep their contrasting fill while hovered."
       ]
+    },
+    {
+      "buildNumber": 2554,
+      "label": "Canvas links",
+      "notes": [
+        "Add a Canvas Link naplet with an optional label to open another accessible canvas in the same tab. Use browser Back and Forward or add an ordinary link to your Overview. Requires the matching Tower update."
+      ]
     }
   ]
 }

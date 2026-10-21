@@ -194,3 +194,22 @@ it.each([403, 404, 503])('isolates a failed board title lookup (%s) without reta
   expect((await runtime.refresh()).naplets[0]).toMatchObject({ title: 'Recovered', access: 'ready' });
   runtime.stop();
 });
+
+it('persists canvas references without destination snapshot reads and removes revoked metadata', async () => {
+  const db = openWorkspaceDb(`canvas-link-${crypto.randomUUID()}`); await db.open();
+  let naplets = [];
+  api.getTowerPgCanvasSnapshot.mockImplementation(async () => ({ ...payload(1), naplets }));
+  const runtime = new CanvasSyncRuntime(context, 'canvas');
+  await runtime.refresh();
+  api.createTowerPgCanvasNaplet.mockImplementation(async (_workspace, _canvas, body) => {
+    naplets = [{ id: 'link', access: 'ready', source: body.source, title: body.title, content: { title: 'Destination', thumbnail: 'discard.png' }, layout: body.layout, row_version: 1 }];
+  });
+  const body = { source: { type: 'canvas', id: 'destination' }, title: 'Overview', layout: { x: 10, y: 10, width: 380, height: 280, z: 1 } };
+  await runtime.addNaplet(body);
+  expect(api.createTowerPgCanvasNaplet).toHaveBeenCalledWith('workspace', 'canvas', body, expect.any(Object));
+  expect((await db.canvas_snapshots.get(runtime.key)).naplets[0]).toMatchObject({ title: 'Overview', content: { title: 'Destination' } });
+  expect(api.getTowerPgCanvasSnapshot.mock.calls.every(args => args[1] === 'canvas')).toBe(true);
+  naplets = [{ ...naplets[0], access: 'denied' }]; await runtime.refresh();
+  expect((await db.canvas_snapshots.get(runtime.key)).naplets[0]).not.toHaveProperty('source');
+  runtime.stop();
+});

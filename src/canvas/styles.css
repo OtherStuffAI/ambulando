@@ -238,3 +238,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   .canvas-arrow-handle { width: 24px; min-width: 24px; height: 24px; min-height: 24px; }
   .canvas-element-options select, .canvas-element-options input { min-height: 44px; }
 }
+
+.canvas-link-card { display: flex; flex-direction: column; align-items: flex-start; gap: 16px; padding: 24px; overflow: auto; height: 100%; }
+.canvas-link-kind { color: var(--muted-foreground); font-size: 12px; }
+.canvas-link-card h2 { margin: 0; overflow-wrap: anywhere; font-size: 20px; }
+.canvas-link-card a { display: inline-flex; align-items: center; min-height: 44px; padding: 8px 14px; border: 1px solid var(--border); border-radius: 8px; color: var(--primary); }
