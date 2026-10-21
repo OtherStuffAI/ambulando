@@ -58,7 +58,7 @@ for (const width of [1440, 390]) test(`Canvas Link picker, persistence, browser 
     const request = route.request(), url = new URL(request.url());
     if (url.pathname === '/__canvas-seed.js') return route.fulfill({ contentType: 'text/javascript', body: seedBundle });
     if (url.pathname === '/__canvas-seed.html') return route.fulfill({ contentType: 'text/html', body: '<title>Seed</title>' });
-    if (!url.pathname.startsWith(sourcePath)) return serveBuiltFlightDeck(route);
+    if (!url.pathname.startsWith(sourcePath)) return process.env.SOL_RUNTIME_ASSETS === '1' ? route.continue() : serveBuiltFlightDeck(route);
     expect(request.headers().authorization).toMatch(/^Nostr /);
     requests.push(url.pathname);
     const parts = url.pathname.slice(sourcePath.length).split('/').filter(Boolean), id = parts[0];
