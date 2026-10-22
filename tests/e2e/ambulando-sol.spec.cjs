@@ -992,6 +992,13 @@ for (const width of [1440, 390]) {
       await page.evaluate(theme => {
         const s = window.Alpine.store('chat');
         s.closeThread({ syncRoute: false });
+        const apps = [{ placementId: 'palette-app', title: 'Research app', appType: 'Napplet', description: 'Workspace research' }];
+        const agents = [{ title: 'Implementation agent', launch_url: 'https://agent.example', description: 'Autopilot' }];
+        for (const [key, value] of Object.entries({ visibleApps: apps, visiblePersonalAgents: agents, previewPersonalAgents: agents })) {
+          Object.defineProperty(s, key, { configurable: true, get: () => value });
+        }
+        s.personalWappsOverlayOpen = true;
+        s.personalAgentsOverlayOpen = true;
         s.navSection = 'status';
         const items = [
           { inboxKind: 'chat', id: 'heading-thread', title: 'Canvas Chat naplet', channelLabel: 'Ambulando', messageCount: 2, latestMessage: 'Review the canvas', inboxActivityAt: new Date().toISOString(), isUnread: false },
@@ -1032,7 +1039,14 @@ for (const width of [1440, 390]) {
           expect(measurement.contrast).toBeGreaterThanOrEqual(4.5);
         }
       }
-      expect(await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--primary').trim())).toBe(theme === 'dark' ? '#CBB8FF' : '#6436C7');
+      for (const selector of ['.wapps-stack-panel .launcher-pill-copy strong', '.agents-stack-panel .autopilot-agent-launcher-copy strong']) {
+        const name = page.locator(selector).first();
+        await name.scrollIntoViewIfNeeded();
+        await expect(name).toBeVisible();
+        expect(await name.evaluate(n => getComputedStyle(n).color)).toBe(expected);
+        await capture(page, `core-purple-${theme}-${width}-${selector.includes('wapps') ? 'apps' : 'agents'}`);
+      }
+      expect(await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--primary').trim())).toBe(theme === 'dark' ? '#CBB8FF' : '#492395');
     });
   }
 }

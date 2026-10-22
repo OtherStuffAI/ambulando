@@ -4934,6 +4934,13 @@
       "notes": [
         "Inbox and Pinned item headings use a deeper purple in light mode. Dark-mode text and action button colours are unchanged."
       ]
+    },
+    {
+      "buildNumber": 2585,
+      "label": "Core deep purple",
+      "notes": [
+        "App and agent names and primary actions now share the deeper core purple in light mode. Dark-mode contrast and status colours are preserved."
+      ]
     }
   ]
 }

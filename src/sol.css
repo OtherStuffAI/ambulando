@@ -763,3 +763,16 @@ code, pre { font-family:var(--font-code); }
 
 /* Contain the absolute live region inside the horizontally paged column. */
 .flightdeck-summary-panel-pinned .deck-card-scroll { position: relative; }
+
+/* App and agent identity text uses heading ink, independent of state badges. */
+.agent-space-card > strong,
+.agent-space-header h1,
+.autopilot-agent-settings-profile .new-channel-profile-name,
+.agent-connect-selection strong,
+.wapp-management-row > div > strong,
+.wapp-publishing-installation-row > div > strong,
+.wapp-publishing-identity > strong {
+  color:var(--item-heading);
+}
+.agent-space-card.active { border-color:var(--primary); }
+.agent-space-tabs button.active { border-bottom-color:var(--primary); }

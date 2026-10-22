@@ -1,7 +1,7 @@
 /* Ambulando perspective passage. Framework-neutral semantic tokens. Import before app styles. */
 :root {
   --brand-navy: #10162B;
-  --brand-purple: #6436C7;
+  --brand-purple: #492395;
   --brand-orange: #BF4D0D;
   --brand-white: #FFFFFF;
   --font-ui: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -46,17 +46,17 @@
   --muted-foreground: #596174;
   --border: #D7D9E2;
   --input: #777D8E;
-  --primary: #6436C7;
-  /* Linked item headings use quieter ink than action backgrounds. */
-  --item-heading: #492395;
+  --primary: var(--brand-purple);
+  /* Names and linked headings share the core action hue. */
+  --item-heading: var(--primary);
   --primary-foreground: #FFFFFF;
   --secondary: #EEEFF5;
   --secondary-foreground: #10162B;
   --accent: #EEE8FA;
-  --accent-foreground: #492395;
+  --accent-foreground: var(--brand-purple);
   --destructive: #B42318;
   --destructive-foreground: #FFFFFF;
-  --ring: #6436C7;
+  --ring: var(--brand-purple);
   --destructive-background: #FEECEB;
   --success: #25613E;
   --success-background: #E6F2E9;
@@ -66,13 +66,13 @@
   --info-background: #E8F1F9;
   --sidebar: #FFFFFF;
   --sidebar-foreground: #10162B;
-  --sidebar-primary: #6436C7;
+  --sidebar-primary: var(--brand-purple);
   --sidebar-primary-foreground: #FFFFFF;
   --sidebar-accent: #EEE8FA;
-  --sidebar-accent-foreground: #492395;
+  --sidebar-accent-foreground: var(--brand-purple);
   --sidebar-border: #D7D9E2;
-  --sidebar-ring: #6436C7;
-  --chart-1: #6436C7;
+  --sidebar-ring: var(--brand-purple);
+  --chart-1: var(--brand-purple);
   --chart-2: #BF4D0D;
   --chart-3: #215C85;
   --chart-4: #25613E;

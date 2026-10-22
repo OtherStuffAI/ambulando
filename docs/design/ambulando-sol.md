@@ -43,7 +43,7 @@ text is system sans 14px, reading text 16px. Panels have 10px radii, controls 6p
 status badges and actual avatars may stay rounded. Keyboard focus uses `--ring`.
 Linked item titles (`.attention-card-title`, including Inbox and Pinned items)
 use `--item-heading`: deep purple #492395 in light mode and light purple
-#CBB8FF in dark mode. Action backgrounds continue to use `--primary`.
+#CBB8FF in dark mode. Core `--brand-purple` is #492395. Light `--primary`, focus rings, sidebar primary/ring, chart-1 and accent ink reference that token; dark primary remains #CBB8FF with #20123C action ink. App/agent launcher names, Toolbox names, Agent Space names, agent settings/discovery names and managed WApp names use `--item-heading`. Active Agent Space cards/tabs retain explicit primary borders. State labels, user task colours, code, white document paper and raster artwork are independent.
 `x-sol-dialog` adds focus containment and restoration only to `aria-modal=true`
 surfaces. Existing close/Escape handlers and busy guards remain authoritative.
 Nonmodal calendars/popovers retain their existing keyboard primitives.
