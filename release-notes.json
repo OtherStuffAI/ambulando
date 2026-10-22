@@ -4927,6 +4927,13 @@
       "notes": [
         "Brand preview artwork is included with the app; image metadata awaits a public canonical product host. The app keeps its title and description metadata."
       ]
+    },
+    {
+      "buildNumber": 2584,
+      "label": "Calmer item headings",
+      "notes": [
+        "Inbox and Pinned item headings use a deeper purple in light mode. Dark-mode text and action button colours are unchanged."
+      ]
     }
   ]
 }

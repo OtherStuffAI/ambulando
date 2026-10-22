@@ -47,6 +47,8 @@
   --border: #D7D9E2;
   --input: #777D8E;
   --primary: #6436C7;
+  /* Linked item headings use quieter ink than action backgrounds. */
+  --item-heading: #492395;
   --primary-foreground: #FFFFFF;
   --secondary: #EEEFF5;
   --secondary-foreground: #10162B;
@@ -97,6 +99,7 @@
   --border: #48546D;
   --input: #8993AC;
   --primary: #CBB8FF;
+  --item-heading: #CBB8FF;
   --primary-foreground: #20123C;
   --secondary: #26314A;
   --secondary-foreground: #F5F3FC;

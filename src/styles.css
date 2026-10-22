@@ -6749,7 +6749,7 @@ button:disabled {
   font-size: 0.92rem;
   font-weight: 600;
   line-height: 1.28;
-  color: var(--primary);
+  color: var(--item-heading);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

@@ -41,6 +41,9 @@ Dark mode uses explicit token pairs, including native control color schemes.
 Desktop controls use 36px minimum height; touch/phone controls use 44px. Product
 text is system sans 14px, reading text 16px. Panels have 10px radii, controls 6px;
 status badges and actual avatars may stay rounded. Keyboard focus uses `--ring`.
+Linked item titles (`.attention-card-title`, including Inbox and Pinned items)
+use `--item-heading`: deep purple #492395 in light mode and light purple
+#CBB8FF in dark mode. Action backgrounds continue to use `--primary`.
 `x-sol-dialog` adds focus containment and restoration only to `aria-modal=true`
 surfaces. Existing close/Escape handlers and busy guards remain authoritative.
 Nonmodal calendars/popovers retain their existing keyboard primitives.

@@ -982,3 +982,57 @@ for (const width of [320, 1440]) {
     });
   }
 }
+
+// Reproduce Inbox/Pinned typography feedback on the real connected template.
+for (const width of [1440, 390]) {
+  for (const theme of ['light', 'dark']) {
+    test(`item heading ink: ${theme} ${width}px`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 900 });
+      await openFixture(page);
+      await page.evaluate(theme => {
+        const s = window.Alpine.store('chat');
+        s.closeThread({ syncRoute: false });
+        s.navSection = 'status';
+        const items = [
+          { inboxKind: 'chat', id: 'heading-thread', title: 'Canvas Chat naplet', channelLabel: 'Ambulando', messageCount: 2, latestMessage: 'Review the canvas', inboxActivityAt: new Date().toISOString(), isUnread: false },
+          { inboxKind: 'task', id: 'heading-task', recordId: 'heading-task', title: 'Apply Ambulando perspective-passage logo and colour system', subtitle: 'Review', reason: '7 recent comments', isUnread: true, taskState: 'review' },
+          { inboxKind: 'document', id: 'heading-doc', recordId: 'heading-doc', title: 'Ambulando brand', reason: 'Edited file', isUnread: false },
+        ];
+        // Synthetic view projections only; no authenticated records or remote writes.
+        Object.defineProperty(s, 'visibleAutopilotOverviewInbox', { configurable: true, get: () => items });
+        Object.defineProperty(s, 'pinnedThreads', { configurable: true, get: () => [
+          { type: 'channel', id: 'heading-channel', unavailable: false, title: 'Implementation', isUnread: true },
+          { type: 'thread', id: 'heading-pin', unavailable: false, title: 'Ambulando — image-generated logo review', isUnread: false },
+        ] });
+        window.Alpine.store('appearance').setTheme(theme);
+      }, theme);
+      const inbox = page.locator('.flightdeck-summary-panel-inbox .attention-card-title');
+      const pins = page.locator('.pinned-thread-open .attention-card-title');
+      await expect(inbox).toHaveCount(3);
+      await expect(pins).toHaveCount(2);
+      const expected = theme === 'dark' ? 'rgb(203, 184, 255)' : 'rgb(73, 35, 149)';
+      for (const [label, titles] of [['inbox', inbox], ['pinned', pins]]) {
+        await titles.first().scrollIntoViewIfNeeded();
+        await expect(titles.first()).toBeVisible();
+        await capture(page, `item-heading-${theme}-${width}-${label}`);
+        const measurements = await titles.evaluateAll(nodes => nodes.map(node => {
+          const rgb = value => value.match(/[\d.]+/g).map(Number);
+          const composite = (top, bottom) => top.slice(0, 3).map((v, i) => v * (top[3] ?? 1) + bottom[i] * (1 - (top[3] ?? 1)));
+          const luminance = channels => channels.map(v => { const c = v / 255; return c <= .04045 ? c / 12.92 : ((c + .055) / 1.055) ** 2.4; }).reduce((sum, v, i) => sum + v * [.2126, .7152, .0722][i], 0);
+          let background = [255, 255, 255];
+          const parents = []; for (let el = node; el; el = el.parentElement) parents.unshift(el);
+          for (const el of parents) background = composite(rgb(getComputedStyle(el).backgroundColor), background);
+          const style = getComputedStyle(node), opacity = parents.reduce((value, el) => value * Number(getComputedStyle(el).opacity), 1), ink = luminance(composite([...rgb(style.color).slice(0, 3), opacity], background)), surface = luminance(background);
+          return { title: node.textContent, color: style.color, background, opacity, contrast: (Math.max(ink, surface) + .05) / (Math.min(ink, surface) + .05) };
+        }));
+        console.log('ITEM_HEADING_INK', JSON.stringify({ theme, width, label, measurements }));
+        for (const measurement of measurements) {
+          expect(measurement.color).toBe(expected);
+          expect(measurement.opacity).toBe(1);
+          expect(measurement.contrast).toBeGreaterThanOrEqual(4.5);
+        }
+      }
+      expect(await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--primary').trim())).toBe(theme === 'dark' ? '#CBB8FF' : '#6436C7');
+    });
+  }
+}
