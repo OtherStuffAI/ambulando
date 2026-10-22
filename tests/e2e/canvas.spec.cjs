@@ -33,6 +33,7 @@ test.beforeAll(async () => {
       resolveDir: path.resolve(__dirname, '../..'),
       contents: `
         export { saveSettings, createWorkspaceDb, openWorkspaceDb, upsertMessage } from './src/db.js';
+        export { finalizeEvent, getPublicKey } from 'nostr-tools';
         export { signLoginEvent, pubkeyToNpub } from './src/auth/nostr.js';
         export { normalizeWorkspaceEntry } from './src/workspaces.js';
       `,
@@ -77,11 +78,11 @@ function baseNaplets() {
   ];
 }
 
-async function seedSessionAndWorkspace(page) {
+async function seedSessionAndWorkspace(page, authMethod = 'ephemeral') {
   await page.goto('/__canvas-seed.html');
-  return page.evaluate(async ({ workspaceId, identity }) => {
+  return page.evaluate(async ({ workspaceId, identity, authMethod }) => {
     const module = await import('/__canvas-seed.js');
-    const event = await module.signLoginEvent('ephemeral');
+    const event = await module.signLoginEvent(authMethod);
     const npub = await module.pubkeyToNpub(event.pubkey);
     const workspace = module.normalizeWorkspaceEntry({
       workspaceId,
@@ -106,7 +107,7 @@ async function seedSessionAndWorkspace(page) {
     ]);
     db.close();
     return workspace.workspaceKey;
-  }, { workspaceId, identity });
+  }, { workspaceId, identity, authMethod });
 }
 
 test('dedicated Canvas route renders authorized sources and isolates trusted HTML', async ({ page, context, baseURL }) => {
@@ -725,7 +726,8 @@ for (const touch of [false, true]) test(`native arrow and text controls persist 
 test.describe('Canvas Chat', () => {
   test.use({ serviceWorkers: 'block' });
 
-test('Canvas Chat places locally and selects scope then channel into the normal composer', async ({ page, context }) => {
+for (const parentOnly of [false, true]) {
+test(`Canvas Chat places locally and selects scope then channel into the normal composer${parentOnly ? ' with parent-only NIP07 signer' : ''}`, async ({ page, context }) => {
   test.setTimeout(60000); page.setDefaultTimeout(5000); page.setDefaultNavigationTimeout(10000);
   console.log('CANVAS_CHAT_STAGE', 'start');
   const scopeId = '40000000-0000-4000-8000-000000000004';
@@ -735,6 +737,31 @@ test('Canvas Chat places locally and selects scope then channel into the normal 
   const agentNpub = require('nostr-tools').nip19.npubEncode('11'.repeat(32));
   const now = '2026-10-22T04:00:00.000Z';
   let bindingPosts = 0;
+  let signedReads = 0;
+  if (parentOnly) {
+    const secret = Array.from(require('nostr-tools').generateSecretKey());
+    await context.addInitScript(({ secret }) => {
+      if (window !== window.parent) return;
+      const key = new Uint8Array(secret);
+      window.__parentSignerEvents = [];
+      window.nostr = {
+        __wingman: true,
+        getPublicKey: async () => (await import('/__canvas-seed.js')).getPublicKey(key),
+        signEvent: async event => {
+          if (window.__rejectNextCanvasSign && event.kind === 33358) { window.__rejectNextCanvasSign = false; throw new Error('Synthetic user rejected signing'); }
+          window.__parentSignerEvents.push(event);
+          return (await import('/__canvas-seed.js')).finalizeEvent(event, key);
+        },
+      };
+    }, { secret });
+  }
+  const checkAuth = request => {
+    const auth = JSON.parse(Buffer.from(request.headers().authorization.slice(6), 'base64').toString());
+    expect(require('nostr-tools').verifyEvent(auth)).toBe(true);
+    expect(auth.kind).toBe(27235);
+    expect(auth.tags).toEqual(expect.arrayContaining([['u', request.url()], ['method', request.method()]]));
+    if (request.postData()) expect(auth.tags).toContainEqual(['payload', require('node:crypto').createHash('sha256').update(request.postData()).digest('hex')]);
+  };
 
   await context.route('**/*', async route => {
     const request = route.request(), url = new URL(request.url());
@@ -742,6 +769,7 @@ test('Canvas Chat places locally and selects scope then channel into the normal 
     if (url.pathname === '/__canvas-seed.html') return route.fulfill({ contentType: 'text/html', body: '<!doctype html><title>seed</title>' });
     if (url.pathname.endsWith(`/channels/${channelId}/messages`) && request.method() === 'POST') {
       expect(request.headers().authorization).toMatch(/^Nostr /);
+      if (parentOnly) checkAuth(request);
       const body = request.postDataJSON(); sends.push(body);
       const threadId = body.thread_id || '60000000-0000-4000-8000-' + String(threads.size + 1).padStart(12, '0');
       const messageId = '70000000-0000-4000-8000-' + String(sends.length).padStart(12, '0');
@@ -763,10 +791,11 @@ test('Canvas Chat places locally and selects scope then channel into the normal 
     if (url.pathname.endsWith(`/canvases/${canvasId}/snapshot`)) return route.fulfill({ json: { workspace_id: workspaceId, identity, complete: true, canvas: definition(1, { x: 0, y: 0, scale: 1 }), naplets, elements: [], comments: [] } });
     if (url.pathname.endsWith(`/workspaces/${workspaceId}/scopes`)) return route.fulfill({ json: { scopes: [{ id: scopeId, workspace_id: workspaceId, name: 'Canvas scope', row_version: 1 }] } });
     if (url.pathname.endsWith(`/scopes/${scopeId}/channels`)) return route.fulfill({ json: { channels: [{ id: channelId, workspace_id: workspaceId, scope_id: scopeId, name: 'Canvas channel', row_version: 1 }] } });
+    if (parentOnly && url.pathname.endsWith(`/channels/${channelId}`)) { checkAuth(request); signedReads++; }
     if (url.pathname.endsWith(`/channels/${channelId}`)) return route.fulfill({ json: { channel: { id: channelId, workspace_id: workspaceId, scope_id: scopeId, name: 'Canvas channel', row_version: 1 } } });
     return serveBuiltFlightDeck(route);
   });
-  const workspaceKey = await seedSessionAndWorkspace(page);
+  const workspaceKey = await seedSessionAndWorkspace(page, parentOnly ? 'extension' : 'ephemeral');
   console.log('CANVAS_CHAT_STAGE', 'seeded');
   await page.evaluate(async ({ workspaceKey, workspaceId, scopeId, channelId }) => {
     const m = await import('/__canvas-seed.js'), db = m.createWorkspaceDb(workspaceKey);
@@ -790,6 +819,10 @@ test('Canvas Chat places locally and selects scope then channel into the normal 
   await frame.locator('[data-chat-composer="thread"]').first().fill('Canvas draft stays independent');
   await expect(frame.locator('[data-chat-composer="thread"]').first()).toHaveText('Canvas draft stays independent');
   await expect(frame.locator('.page-header')).not.toBeVisible();
+  if (parentOnly) {
+    expect(await frame.locator('body').evaluate(() => window.nostr === undefined)).toBe(true);
+    expect(signedReads).toBeGreaterThan(0);
+  }
   console.log('CANVAS_CHAT_STAGE', 'normal composer ready');
   await frame.locator('body').evaluate((_element, agentNpub) => {
     const s = Alpine.store('chat');
@@ -801,10 +834,25 @@ test('Canvas Chat places locally and selects scope then channel into the normal 
   await frame.locator('.mention-result-item').filter({ hasText: 'Canvas Agent' }).first().click();
   await editor.press('End');
   await editor.pressSequentially(' Please review this Canvas');
+  if (parentOnly) {
+    const draft = await editor.innerText();
+    await page.evaluate(() => { window.__rejectNextCanvasSign = true; });
+    await frame.getByRole('button', { name: 'Start thread', exact: true }).click();
+    await expect(frame.locator('.error-bar-message')).toContainText('Synthetic user rejected signing');
+    expect(sends).toHaveLength(0);
+    await expect(editor).toHaveText(draft);
+  }
   await frame.getByRole('button', { name: 'Start thread', exact: true }).click();
   await expect.poll(() => sends.length).toBe(1);
   expect(sends[0].metadata.mentions).toEqual(expect.arrayContaining([expect.objectContaining({ type: 'agent', npub: agentNpub })]));
   expect(sends[0].message_signature).toBeTruthy();
+  if (parentOnly) {
+    const signature = sends[0].message_signature;
+    expect(signature.nostr_event.kind).toBe(33358);
+    expect(require('nostr-tools').verifyEvent(signature.nostr_event)).toBe(true);
+    expect(signature.nostr_event.content).toBe(sends[0].body);
+    expect(await page.evaluate(() => window.__parentSignerEvents.some(e => e.kind === 33358))).toBe(true);
+  }
   await expect.poll(() => naplets.length).toBe(1);
   await expect(editor).toHaveAttribute('aria-label', 'Reply to thread');
   console.log('CANVAS_CHAT_STAGE', 'first ordinary signed thread bound');
@@ -842,12 +890,38 @@ test('Canvas Chat places locally and selects scope then channel into the normal 
   await editor.press('ArrowLeft');
   await expect(editor).toBeFocused();
   expect(await page.evaluate(() => ({ ...Alpine.store('canvas').viewport }))).toEqual(viewportBefore);
+  if (parentOnly) {
+    const signedBefore = await page.evaluate(() => window.__parentSignerEvents.filter(event => event.kind === 33358).length);
+    await page.evaluate(async () => {
+      const trusted = document.querySelector('.canvas-chat-frame');
+      const url = new URL(trusted.src), s = Alpine.store('canvas');
+      const data = { type: 'ambulando-canvas-chat-sign', id: 'spoof', method: 'getPublicKey', workspaceKey: s.currentWorkspaceKey, pubkey: s.session.pubkey, key: url.searchParams.get('canvaskey') };
+      window.dispatchEvent(new MessageEvent('message', { origin: 'https://evil.invalid', source: trusted.contentWindow, data }));
+      const arbitrary = document.createElement('iframe'); arbitrary.id = 'unregistered-signer-test';
+      arbitrary.srcdoc = '<p>Unregistered same-origin frame</p>'; document.body.append(arbitrary);
+      await new Promise(resolve => { arbitrary.onload = resolve; });
+    });
+    // Post from that browsing context so event.source is the unregistered frame.
+    await page.frameLocator('#unregistered-signer-test').locator('body').evaluate(() => {
+      const s = parent.Alpine.store('canvas'), trusted = parent.document.querySelector('.canvas-chat-frame');
+      parent.postMessage({ type: 'ambulando-canvas-chat-sign', id: 'unregistered', method: 'signEvent', workspaceKey: s.currentWorkspaceKey, pubkey: s.session.pubkey, key: trusted.dataset.canvasChatFrame, event: { kind: 33358, pubkey: s.session.pubkey, content: 'Spoof', created_at: Math.floor(Date.now() / 1000), tags: [['protocol', 'flightdeck_pg_message_instruction'], ['workspace_id', s.currentWorkspace.workspaceId]] } }, parent.location.origin);
+    });
+    await page.waitForTimeout(100);
+    expect(await page.evaluate(() => window.__parentSignerEvents.filter(event => event.kind === 33358).length)).toBe(signedBefore);
+    await page.evaluate(() => { document.querySelector('#unregistered-signer-test').remove(); Alpine.store('canvas').session = { ...Alpine.store('canvas').session, pubkey: '22'.repeat(32) }; });
+    await frame.getByRole('button', { name: 'Reply', exact: true }).click();
+    await expect(frame.locator('.error-bar-message')).toContainText(/Chat signer (identity changed|connection closed)/);
+    // Ordinary replies retain their body in the existing failed-message row.
+    await expect.poll(() => frame.locator('body').evaluate(() => Alpine.store('chat').threadMessages.some(row => row.body === 'First chat draft' && row.sync_status === 'failed'))).toBe(true);
+    expect(sends).toHaveLength(2);
+  }
   await page.reload();
   await expect(page.locator('.canvas-chat-frame')).toHaveCount(2);
   await expect(page.frameLocator('.canvas-chat-frame').first().locator('.thread-replies')).toContainText('Reactive reply 11');
   expect(sends).toHaveLength(2);
   expect(bindingPosts).toBe(2);
-  console.log('CANVAS_CHAT_EVIDENCE', JSON.stringify({ placement: true, twoTaps: true, normalComposer: true, structuredMention: true, signedMessage: true, liveAutopilotDispatch: false, independentChats: true, reactiveDexieReplies: true, reload: true, sends: sends.length, bindings: bindingPosts }));
+  console.log('CANVAS_CHAT_EVIDENCE', JSON.stringify({ parentOnly, signedReads, placement: true, twoTaps: true, normalComposer: true, structuredMention: true, signedMessage: true, liveAutopilotDispatch: false, independentChats: true, reactiveDexieReplies: true, reload: true, sends: sends.length, bindings: bindingPosts }));
 });
+}
 
 });

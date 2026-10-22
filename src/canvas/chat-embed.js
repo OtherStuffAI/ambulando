@@ -1,13 +1,15 @@
+import { createCanvasChatSignerClient } from './chat-signer.js';
 import { getTowerPgThread, setBaseUrl } from '../api.js';
 import { canvasContext } from './projection.js';
 import { openWorkspaceDb } from '../db.js';
-import { tryAutoLoginFromStorage, pubkeyToNpub } from '../auth/nostr.js';
+import { tryAutoLoginFromStorage, pubkeyToNpub, setExtensionSignerBridge, clearExtensionSignerBridge } from '../auth/nostr.js';
 import { setActiveSessionNpub } from '../crypto/group-keys.js';
 import { hydrateTowerPgChannel } from '../pg-read-hydrator.js';
 
 // This is the ordinary app and thread composer in its own browsing context.
-// Each naplet has independent input/mentions/attachments and Canvas never signs
-// or sends chat messages. The parent receives only an accepted thread identity.
+// Each naplet has independent input/mentions/attachments. Canvas bridges the
+// browser signer but never composes or sends messages; binding uses only the
+// accepted thread identity.
 const params = typeof location === 'undefined' ? new URLSearchParams() : new URLSearchParams(location.search);
 export const canvasChatEmbedded = params.get('canvaschat') === '1' && typeof window !== 'undefined' && window.parent !== window;
 
@@ -35,6 +37,11 @@ export const canvasChatEmbedMixin = {
       const workspace = this.knownWorkspaces.find(row => row.workspaceKey === params.get('workspacekey'));
       const auth = await tryAutoLoginFromStorage();
       if (!workspace?.pgBackendMode || !auth?.pubkey) throw new Error('Open Ambulando and sign in to this workspace, then reopen the chat.');
+      if (auth.method === 'extension' && !window.nostr?.signEvent) {
+        const client = createCanvasChatSignerClient({ workspaceKey: workspace.workspaceKey, pubkey: auth.pubkey, key: params.get('canvaskey') });
+        setExtensionSignerBridge(client.bridge);
+        window.addEventListener('pagehide', event => { if (!event.persisted) { client.dispose(); clearExtensionSignerBridge(); } });
+      }
       const npub = await pubkeyToNpub(auth.pubkey);
       if (workspace.pgSessionNpub && workspace.pgSessionNpub !== npub) throw new Error('This workspace belongs to another signed-in identity.');
       this.session = { pubkey: auth.pubkey, npub, method: auth.method };

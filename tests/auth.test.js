@@ -405,6 +405,42 @@ describe('auth/nostr helpers', () => {
     expect(signerCalls).toEqual(['read-active', 'mutation', 'read-queued']);
   });
 
+  it('checks a bridge lifetime inside the native signing queue before opening another prompt', async () => {
+    let finish;
+    window.nostr = { signEvent: vi.fn(event => new Promise(resolve => { finish = () => resolve(event); })) };
+    const active = signEventWithExtension({ kind: 27235 });
+    await vi.waitFor(() => expect(finish).toBeTruthy());
+    const queued = signEventWithExtension({ kind: 27235 }, { assertCurrent: () => { throw new Error('Frame closed'); } });
+    const rejected = expect(queued).rejects.toThrow('Frame closed');
+    finish(); await active; await rejected;
+    expect(window.nostr.signEvent).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects late and queued work after the installed extension bridge changes', async () => {
+    let finish;
+    const old = { getPublicKey: async () => 'c'.repeat(64), signEvent: vi.fn(event => new Promise(resolve => { finish = () => resolve(event); })) };
+    setExtensionSignerBridge(old);
+    const active = signEventWithExtension({ kind: 27235 });
+    await vi.waitFor(() => expect(finish).toBeTruthy());
+    const queued = signEventWithExtension({ kind: 27235 });
+    const rejected = Promise.all([expect(active).rejects.toThrow('bridge changed'), expect(queued).rejects.toThrow('bridge changed')]);
+    const replacement = { getPublicKey: old.getPublicKey, signEvent: vi.fn(async event => event) };
+    setExtensionSignerBridge(replacement); finish(); await rejected;
+    expect(old.signEvent).toHaveBeenCalledTimes(1); expect(replacement.signEvent).not.toHaveBeenCalled();
+    await signEventWithExtension({ kind: 27235 }); expect(replacement.signEvent).toHaveBeenCalledTimes(1);
+  });
+
+  it('releases the native signing queue when a bridge continuity check hangs', async () => {
+    vi.useFakeTimers();
+    window.nostr = { signEvent: vi.fn(async event => event) };
+    const hung = signEventWithExtension({ kind: 27235 }, { timeoutMs: 20, assertCurrent: () => new Promise(() => {}) });
+    const rejected = expect(hung).rejects.toThrow('continuity check timed out');
+    await vi.advanceTimersByTimeAsync(21); await rejected;
+    await signEventWithExtension({ kind: 27235 });
+    expect(window.nostr.signEvent).toHaveBeenCalledTimes(1);
+    vi.useRealTimers();
+  });
+
   it('pubkeyToNpub returns an npub string', async () => {
     setMemoryPubkey('a'.repeat(64));
     expect(getMemoryPubkey()).toBe('a'.repeat(64));

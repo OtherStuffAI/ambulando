@@ -202,23 +202,33 @@ function signerTimeout(promise, timeoutMs, message) {
 
 function serialNip07SignEvent(event, options = {}) {
   const provider = window.nostr;
-  const run = () => withNip07Provider(provider, () => signerTimeout(
+  const run = () => withNip07Provider(provider, async () => {
+    if (options.assertCurrent) await signerTimeout(options.assertCurrent(), options.timeoutMs, 'Signer continuity check timed out.');
+    return signerTimeout(
       provider.signEvent({ ...event, created_at: Math.floor(Date.now() / 1000) }),
       options.timeoutMs,
       options.timeoutMessage || 'NIP-07 signing timed out.',
-    ));
+    );
+  });
   return scheduleNip07Sign(run, options.priority);
 }
 
 function serialBridgeSignEvent(event, options = {}) {
-  const run = () => signerTimeout(
-    extensionSignerBridge.signEvent({
-      ...event,
-      created_at: Math.floor(Date.now() / 1000),
-    }),
-    options.timeoutMs,
-    options.timeoutMessage || 'Extension bridge signing timed out.',
-  );
+  const bridge = extensionSignerBridge;
+  const assertBridge = () => {
+    if (extensionSignerBridge !== bridge) throw new Error('Extension signer bridge changed. Retry with the current signer.');
+  };
+  const run = async () => {
+    assertBridge();
+    if (options.assertCurrent) await signerTimeout(options.assertCurrent(), options.timeoutMs, 'Signer continuity check timed out.');
+    const result = await signerTimeout(
+      bridge.signEvent({ ...event, created_at: Math.floor(Date.now() / 1000) }),
+      options.timeoutMs || bridge.timeoutMs,
+      options.timeoutMessage || 'Extension bridge signing timed out.',
+    );
+    assertBridge();
+    return result;
+  };
   return scheduleExtensionBridgeSign(run, options.priority);
 }
 

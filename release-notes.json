@@ -4898,6 +4898,13 @@
       "notes": [
         "Canvas boards now open at 100% zoom centred on their content instead of zooming sparse or empty boards to the maximum, and keep your own zoom when switching to fullscreen or saving."
       ]
+    },
+    {
+      "buildNumber": 2580,
+      "label": "Canvas Chat uses the parent browser signer",
+      "notes": [
+        "Canvas Chat can load and send through the Canvas browser signer when the embedded chat has no signer. Signing requests are checked against the trusted chat frame, workspace and active identity; rejected signing preserves your draft."
+      ]
     }
   ]
 }
