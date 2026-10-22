@@ -7,8 +7,17 @@ it does not delete or duplicate tasks.
 
 Choose Task Tree from the canvas toolbar or Add naplet, then explicitly select a
 scope and channel. This destination belongs to that naplet and is independent of
-other conversations and naplets on the canvas. New Task creates a title-only
-base task. Existing Task lists the selected channel's readable tasks with paging
+other conversations and naplets on the canvas. Creation and search remain disabled
+until the displayed scope/channel match the acknowledged shared binding. A remote
+rebind refreshes the controls; an in-flight create cannot attach its old-destination
+task to a newly rebound tree. Existing tasks never move when the view changes.
+A saved-task receipt and **Open Tasks board** link identify the shared destination.
+The link opens the ordinary channel board, reveals New and Summary for that
+navigation, and clears transient filters without writing saved collapse preferences.
+Cold navigation metadata is loaded through the sole sync owner before validating
+the destination; repeated startup retains that explicit navigation intent.
+
+New Task creates a title-only base task. Existing Task lists the selected channel's readable tasks with paging
 and a name filter. Changing the destination resets root selection without moving
 the prior tasks. Changing insertion point or destination asks before discarding
 an unsaved title.
@@ -35,7 +44,9 @@ The shared task creation route accepts an optional `client_request_id`. Exact
 actor/workspace/destination retries return the original task; conflicting reuse
 returns 409. Task and relationship metadata are written together. The browser
 captures and retries the same request after an uncertain result. It retains the
-failed title and never treats an unconfirmed relationship as success.
+failed title and never treats an unconfirmed relationship as success. If creation
+succeeds but saving the root view conflicts, retry retains the same creation
+identity and reconnects the existing task.
 
 Tower's canonical create/update routes validate related task access, duplicate
 predecessors, self-links, parent cycles and dependency cycles. Relationship
@@ -91,3 +102,18 @@ These simulations are distinct from authenticated deployed Tower acceptance.
 Run the required general Playwright performance baseline in addition to the
 feature-specific browser checks. Tower must be activated before reporting the
 feature as operational end to end.
+
+The real backend/browser roundtrip also runs against a disposable local Tower
+checkout and PostgreSQL container (Docker and Bun required):
+
+```bash
+TOWER_TEST_CHECKOUT=/path/to/tower PLAYWRIGHT_BASE_URL=http://127.0.0.1:<managed-port> PLAYWRIGHT_DISABLE_VIDEO=1 bunx playwright test tests/e2e/task-tree-roundtrip.spec.cjs
+```
+
+This test hosts the actual Tower API on loopback, uses real signed task creates,
+paged channel and scope lists, normal translators/Dexie subscriptions and ordinary
+Tasks UI. Only initial disposable workspace/permission setup uses SQL. Fault
+injection drops an already-persisted create response and rejects a root-view save;
+it never fabricates a task response. The test checks different scopes, unchanged
+prior records, retries without duplication, reload and visible Summary/New cards.
+It stops its own API process and disposable container. It never targets production.

@@ -106,10 +106,11 @@ export class TaskTreeRuntime {
     if(!Array.isArray(page.tasks) || page.has_more && !page.next_cursor) throw new Error('Incomplete task search response');
     this.verify(page);await this.materialize(page.tasks);return page;
   }
-  async create(channelId,request) {
+  async create(channelId,request,{scopeId}={}) {
     const result=await this.api.createTowerPgChannelTask(this.context.workspaceId,channelId,request,this.options());
     this.verify(result);
     if(!result.task?.id) throw new Error('Task creation was not confirmed. Retry the same entry.');
+    if(result.task.channel_id!==channelId || scopeId && result.task.scope_id!==scopeId) throw new Error('Task destination was not confirmed. Retry the same entry.');
     await this.materialize([result.task]);return result.task;
   }
   close() {this.closed=true;clearInterval(this.timer);for(const key of this.views.keys())this.remove(key);this.worker.terminate();}

@@ -4989,6 +4989,20 @@
       "notes": [
         "Task Tree keeps child successors to the right of their predecessors, fits at a readable size with internal scrolling, and contains the graph on phones."
       ]
+    },
+    {
+      "buildNumber": 2597,
+      "label": "Shared Task Tree destinations and board visibility",
+      "notes": [
+        "Task Tree confirms saved shared tasks, opens their ordinary Tasks board with New visible, and prevents creation through an incomplete destination change. Retrying a failed tree-view save reconnects the same task."
+      ]
+    },
+    {
+      "buildNumber": 2598,
+      "label": "Recover Task Tree destination saves safely",
+      "notes": [
+        "A failed channel selection stays unbound until Retry saving destination succeeds, so Task Tree cannot create tasks through its previous channel."
+      ]
     }
   ]
 }

@@ -66,3 +66,12 @@ it('fences late reads after rebind and preserves an existing pending task edit',
   await db.tasks.update('current',{title:'Unsaved user edit',sync_status:'pending'});await runtime.refresh('view');
   expect((await db.tasks.get('current')).title).toBe('Unsaved user edit');
 });
+
+it('rejects a confirmed task from a different channel or selected scope before materializing',async()=>{
+  const create=vi.fn(async()=>({identity,task:{...row('misdirected'),channel_id:'other',scope_id:'scope'}}));
+  const {db}=await setup({createTowerPgChannelTask:create});
+  await expect(runtime.create('channel',{title:'Draft'},{scopeId:'scope'})).rejects.toThrow(/destination/);
+  create.mockResolvedValue({identity,task:{...row('misdirected'),scope_id:'other'}});
+  await expect(runtime.create('channel',{title:'Draft'},{scopeId:'scope'})).rejects.toThrow(/destination/);
+  expect(await db.tasks.count()).toBe(0);
+});

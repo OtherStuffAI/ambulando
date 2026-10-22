@@ -95,6 +95,7 @@ export function parseRouteLocation(href) {
       commentid: url.searchParams.get('commentid') || null,
       scopeid: url.searchParams.get('scopeid') || null,
       descendants: url.searchParams.get('descendants') || null,
+      revealnew: url.searchParams.get('revealnew') || null,
       groupid: url.searchParams.get('groups') || url.searchParams.get('groupid') || null,
       reportid: url.searchParams.get('reportid') || null,
       opportunityid: url.searchParams.get('opportunityid') || null,

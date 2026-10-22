@@ -1,6 +1,8 @@
 import { ArtifactCatalog } from './artifact-picker.js';
 import { TaskTreeRuntime } from './task-tree-runtime.js';
 import { normalizeTaskTreeView } from './projection.js';
+import { buildSectionUrl } from '../route-helpers.js';
+import { buildPgChannelTaskBoardId } from '../pg-record-context.js';
 import { formatStateLabel } from '../translators/tasks.js';
 
 const keyOf=naplet=>naplet.layout?.task_tree?.instance_id||naplet.id;
@@ -20,6 +22,21 @@ export function canvasTaskTreeStore() {
     treeKey: keyOf,
     treeState(naplet){return this.trees[keyOf(naplet)]||{graph:emptyGraph(),scopes:[],channels:[],tasks:[]};},
     treeStatus:formatStateLabel,
+    treeDestinationReady(naplet) {
+      const state=this.treeState(naplet);
+      return !naplet._treeDraft && Boolean(state.scopeId && state.channelId)
+        && state.scopeId===naplet.content?.scope_id && state.channelId===naplet.source?.id
+        && state.channelId===naplet.content?.channel_id;
+    },
+    treeBoardUrl(naplet) {
+      if(!this.treeDestinationReady(naplet))return null;
+      return buildSectionUrl({section:'tasks',scopeid:buildPgChannelTaskBoardId(naplet.source.id),params:{workspacekey:this.currentWorkspaceKey,revealnew:'1'}});
+    },
+    treeDestinationLabel(naplet) {
+      const state=this.treeState(naplet);
+      const scope=state.scopes.find(row=>row.id===naplet.content?.scope_id)?.title||'Scope';
+      return `${scope} → ${naplet.content?.channel_title||'Channel'}`;
+    },
     mergeTreeNaplets(rows) {
       const instances=new Set(rows.map(keyOf));
       this.treeDrafts=this.treeDrafts.filter(row=>!instances.has(keyOf(row)));
@@ -31,8 +48,15 @@ export function canvasTaskTreeStore() {
       for(const naplet of naplets) {
         if(naplet.access!=='ready'||naplet.source?.type!=='task_tree')continue;
         const key=keyOf(naplet);seen.add(key);
+        const binding=`${naplet.content?.scope_id||''}:${naplet.source.id||''}`;
+        const prior=this.trees[key];
+        if(prior && prior.binding!==binding) {
+          Object.assign(prior,{binding,scopeId:naplet.content?.scope_id||'',channelId:naplet.source.id||'',channels:[],tasks:[],mode:'',anchor:null,lastCreated:null,request:null,entry:'',error:'Destination changed. Using the saved scope and channel.'});
+          try{const result=await catalog.channels(prior.scopeId);if(prior.binding===binding)prior.channels=result.channels;}
+          catch{prior.error='Destination choices unavailable. Retry by reopening this naplet.';}
+        }
         if(!this.trees[key]) {
-          this.trees={...this.trees,[key]:{graph:emptyGraph(),scopes:[],channels:[],scopeId:naplet.content?.scope_id||'',channelId:naplet.source.id||'',tasks:[],query:'',entry:'',mode:'',anchor:null,lastCreated:null,busy:false,error:'',searchCursor:null,searchMore:false}};
+          this.trees={...this.trees,[key]:{binding,graph:emptyGraph(),scopes:[],channels:[],scopeId:naplet.content?.scope_id||'',channelId:naplet.source.id||'',tasks:[],query:'',entry:'',mode:'',anchor:null,lastCreated:null,busy:false,error:'',searchCursor:null,searchMore:false}};
           try {const scopes=await catalog.scopes();this.trees[key].scopes=scopes.scopes;this.trees[key].catalogPartial=scopes.truncated; if(naplet.content?.scope_id) {const channels=await catalog.channels(naplet.content.scope_id);this.trees[key].channels=channels.channels;this.trees[key].catalogPartial ||= channels.truncated;}}
           catch {this.trees[key].error='Destination choices unavailable. Retry by reopening this naplet.';}
         }
@@ -51,7 +75,7 @@ export function canvasTaskTreeStore() {
       const state=this.treeState(naplet);
       if(state.busy)return;
       if(state.entry && !window.confirm('Discard this unsaved title and change destination?'))return;
-      state.entry='';state.mode='';state.scopeId=scopeId;state.channelId='';state.channels=[];state.tasks=[];state.busy=true;state.error='';
+      state.entry='';state.mode='';state.request=null;state.lastCreated=null;state.scopeId=scopeId;state.channelId='';state.channels=[];state.tasks=[];state.busy=true;state.error='';
       try {const result=await catalog.channels(scopeId);if(state.scopeId===scopeId){state.channels=result.channels;state.catalogPartial=result.truncated;}}
       catch {state.error='Channels unavailable. Select the scope to retry.';}
       finally{state.busy=false;}
@@ -59,7 +83,7 @@ export function canvasTaskTreeStore() {
     async chooseTreeChannel(naplet,channelId) {
       const state=this.treeState(naplet);if(state.busy||!state.channels.some(row=>row.id===channelId))return;
       if(state.entry && !window.confirm('Discard this unsaved title and change destination?'))return;
-      state.busy=true;state.error='';
+      state.busy=true;state.error='';state.channelId=channelId;
       const layout={...naplet.layout,task_tree:normalizeTaskTreeView({instance_id:keyOf(naplet)})};
       try {
         if(naplet._treeDraft) {
@@ -71,9 +95,9 @@ export function canvasTaskTreeStore() {
       }catch(error){state.error=error.message||'Destination was not saved. Retry the same channel.';}
       finally{state.busy=false;}
     },
-    openTreeSearch(naplet){const state=this.treeState(naplet);if(state.busy)return;if(state.entry&&!window.confirm('Discard this unsaved title and choose another task?'))return;state.entry='';state.request=null;state.mode='search';return this.searchTreeTasks(naplet);},
+    openTreeSearch(naplet){const state=this.treeState(naplet);if(state.busy||!this.treeDestinationReady(naplet))return;if(state.entry&&!window.confirm('Discard this unsaved title and choose another task?'))return;state.entry='';state.request=null;state.mode='search';return this.searchTreeTasks(naplet);},
     async searchTreeTasks(naplet,{more=false}={}) {
-      const state=this.treeState(naplet);if(state.busy||naplet._treeDraft||!state.channelId)return;
+      const state=this.treeState(naplet);if(state.busy||!this.treeDestinationReady(naplet))return;
       state.busy=true;state.error='';
       try{const page=await runtime.search(naplet.source.id,{cursor:more?state.searchCursor:null});state.tasks=[...new Map([...(more?state.tasks:[]),...page.tasks].map(row=>[row.id,row])).values()];state.searchCursor=page.next_cursor;state.searchMore=page.has_more;}
       catch{state.error='Tasks unavailable. Search again to retry.';state.tasks=[];}
@@ -93,7 +117,7 @@ export function canvasTaskTreeStore() {
       finally{state.busy=false;}
     },
     beginTreeEntry(naplet,mode,task=null) {
-      const state=this.treeState(naplet);if(state.busy||!naplet.content?.can_create)return;
+      const state=this.treeState(naplet);if(state.busy||!this.treeDestinationReady(naplet)||!naplet.content?.can_create)return;
       if(state.entry && !window.confirm('Discard this unsaved title and change insertion point?'))return;
       Object.assign(state,{mode,anchor:task,entry:'',request:null,lastCreated:null,error:''});
       queueMicrotask(()=>document.querySelector(`[data-tree-entry="${keyOf(naplet)}"]`)?.focus());
@@ -102,20 +126,29 @@ export function canvasTaskTreeStore() {
     cancelTreeEntry(naplet) {const s=this.treeState(naplet);if(!s.busy){s.mode='';s.entry='';s.request=null;}},
     async submitTreeEntry(naplet) {
       const state=this.treeState(naplet),title=String(state.entry||'').trim();
-      if(state.busy||!title||!state.mode||naplet._treeDraft||!naplet.content?.can_create)return;
+      if(state.busy||!title||!state.mode||!this.treeDestinationReady(naplet)||!naplet.content?.can_create)return;
       state.busy=true;state.error='';
       const metadata={parent_task_id:state.mode==='child'?state.anchor.record_id:state.mode==='successor'?state.anchor.parent_task_id||null:null,predecessor_task_ids:state.mode==='successor'?[state.anchor.record_id]:[]};
       // On an uncertain response retry the exact captured request. The draft
       // remains editable; changing it requires explicit resolution of that retry.
       if(state.request && state.request.title!==title){state.error='Retry the previous title first to resolve its creation, then add this title.';state.busy=false;return;}
       state.request ||= {title,state:'new',metadata,client_request_id:crypto.randomUUID()};
+      const destination={channelId:naplet.source.id,scopeId:state.scopeId};
+      let confirmed=false;
       try {
-        const task=await runtime.create(naplet.source.id,state.request);
+        const task=await runtime.create(destination.channelId,state.request,{scopeId:destination.scopeId});
+        confirmed=true;
         state.lastCreated={...task,record_id:task.id,parent_task_id:task.metadata?.parent_task_id};
+        const current=this.naplets?.find(row=>keyOf(row)===keyOf(naplet))||naplet;
+        if(current.source?.id!==destination.channelId || current.content?.scope_id!==destination.scopeId) {
+          state.request=null;state.entry='';state.mode='';
+          state.error='Task saved in the original destination. The tree destination changed while saving.';
+          return;
+        }
         if(state.mode==='root') {await this.saveTreeView(naplet,{root_task_id:task.id,collapsed:[],upstream:[],viewport:{x:0,y:0,scale:1}});state.mode='';}
         else await runtime.refresh(keyOf(naplet));
         state.entry='';state.request=null;
-      }catch(error){state.error=error.message||'Task was not confirmed. Retry this title.';if([400,403,409].includes(Number(error.status)))state.request=null;}
+      }catch(error){state.error=confirmed?'Task saved, but the tree view was not saved. Retry this title to reconnect the same task.':error.message||'Task was not confirmed. Retry this title.';if(!confirmed && [400,403,409].includes(Number(error.status)))state.request=null;}
       finally{state.busy=false;queueMicrotask(()=>document.querySelector(`[data-tree-entry="${keyOf(naplet)}"]`)?.focus());}
     },
     continueTreeChain(naplet){const s=this.treeState(naplet);if(!s.lastCreated||s.busy)return;const task=s.lastCreated;this.beginTreeEntry(naplet,'successor',task);},

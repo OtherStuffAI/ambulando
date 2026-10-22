@@ -875,6 +875,9 @@ export function createShellState(options = {}) {
       url.search = '';
       if (this.currentWorkspaceKey) url.searchParams.set('workspacekey', this.currentWorkspaceKey);
       if (this.selectedBoardId) url.searchParams.set('scopeid', this.selectedBoardId);
+      const previousRoute=parseRouteLocation();
+      if(this.navSection==='tasks' && previousRoute.params.revealnew==='1'
+        && previousRoute.params.scopeid===this.selectedBoardId)url.searchParams.set('revealnew','1');
 
       const enabledSection = normalizeEnabledFlightDeckSection(this.navSection, this);
       if (enabledSection !== this.navSection) this.navSection = enabledSection;
@@ -977,6 +980,19 @@ export function createShellState(options = {}) {
         this.mobileNavOpen = false;
         if (this.navSection !== 'tasks' && this.showTaskDetail) {
           await this.closeTaskDetail({ syncRoute: false });
+        }
+
+        if (route.params.revealnew === '1' && this.navSection === 'tasks') {
+          const target=parsePgTaskBoardId(route.params.scopeid);
+          if(target.type==='channel' && this.currentWorkspace?.pgBackendMode
+            && !(this.channels||[]).some(row=>row.record_id===target.channelId)) {
+            // Canvas can have task rows before navigation metadata is cached.
+            // Join the sole sync owner, then render its persisted channel row.
+            const workspaceKey=this.currentWorkspaceKey;
+            await this.requestTowerSyncFamily?.('channel',target.channelId,{force:true});
+            if(this.currentWorkspaceKey!==workspaceKey)return;
+            await this.loadLocalChannels?.({preserveNavigation:true});
+          }
         }
 
         if (route.params.scopeid || route.params.groupid) {
@@ -1085,6 +1101,13 @@ export function createShellState(options = {}) {
             this.persistSelectedBoardId(this.selectedBoardId);
           }
           this.showBoardDescendantTasks = route.params.descendants === '1';
+          // Task Tree's explicit board link reveals its title-only tasks without
+          // changing the viewer's saved collapse/filter preferences.
+          if (route.params.revealnew === '1') {
+            this.collapsedSections = { ...this.collapsedSections, new: false, summary: false };
+            this.taskFilter = ''; this.taskFilterState = ''; this.taskFilterTags = []; this.taskFilterAssignee = '';
+          }
+
           if (route.params.view === 'list') this.taskViewMode = 'list';
           else if (route.params.view === 'kanban') this.taskViewMode = 'kanban';
           else this.taskViewMode = this.mobileViewport ? 'list' : 'kanban';
