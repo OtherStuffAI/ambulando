@@ -71,6 +71,13 @@ export function canvasPageStore() {
   const htmlSequencer = new HtmlViewSequencer(), versionLoads = new Map();
   const pointers = new Map(), undo = [], redo = [];
   let keydown = null, noticeTimer = 0, highlightTimer = 0;
+  let lastSnapshot = null, mutationTail = Promise.resolve(), pendingMutations = 0;
+  let viewportRevision = 0, savedViewportRevision = 0, viewportWrites = 0;
+  const pendingLayouts = new Map();
+  const changed = (before, after) => Object.fromEntries(Object.entries(after || {}).filter(([key, value]) => JSON.stringify(value) !== JSON.stringify(before?.[key])));
+  const geometry = (layout, action) => Object.fromEntries((action === 'move' ? ['x', 'y'] : action === 'resize' ? ['width', 'height'] : ['x', 'y', 'width', 'height']).map(key => [key, layout[key]]));
+  const layoutChanges = history => history?.type === 'layouts' ? history.changes : history?.type === 'layout' ? [history] : [];
+
   return {
     status: 'loading', error: '', workspace: null, session: null, currentWorkspace: null,
     currentWorkspaceKey: '', currentViewerNpub: '', currentPgActorId: '', canvas: null,
@@ -92,8 +99,8 @@ export function canvasPageStore() {
 
     get canvasId() { return text(new URLSearchParams(location.search).get('canvasid')); },
     get transformStyle() { return `translate(${this.viewport.x}px, ${this.viewport.y}px) scale(${this.viewport.scale})`; },
-    get canUndo() { return this.historyTick >= 0 && undo.length > 0; },
-    get canRedo() { return this.historyTick >= 0 && redo.length > 0; },
+    get canUndo() { return !this.saving && this.historyTick >= 0 && undo.length > 0; },
+    get canRedo() { return !this.saving && this.historyTick >= 0 && redo.length > 0; },
     get selected() {
       const [key] = this.selectedKeys;
       if (!key) return null;
@@ -150,11 +157,40 @@ export function canvasPageStore() {
     },
     context() { return canvasContext(this); },
     applySnapshot(snapshot) {
-      this.canvas = snapshot.canvas; this.naplets = this.mergeTreeNaplets(this.mergeChatNaplets(snapshot.naplets)); this.elements = snapshot.elements || []; this.comments = snapshot.comments || [];
+      lastSnapshot = cloneCanvasValue(snapshot);
+      // Protect only local geometry/data intent. Titles, source content, removals
+      // and access restrictions still come from every authoritative snapshot.
+      const overlays = new Map();
+      const overlay = (key, patch) => {
+        const prior = overlays.get(key);
+        overlays.set(key, {
+          ...prior, ...patch, layout: { ...prior?.layout, ...patch.layout },
+          ...(patch.data ? { data: { ...prior?.data, ...patch.data } } : {}),
+        });
+      };
+      for (const changes of pendingLayouts.values()) for (const change of changes) overlay(canvasItemKey(change.itemType, change.id), change.patch);
+      const state = this.interaction;
+      const active = state?.type === 'move' ? state.moving : state?.itemType ? [{ type: state.itemType, item: this.findInteractionItem(state), before: state.before }] : [];
+      for (const original of active) if (original.item) {
+        const key = canvasItemKey(original.type, original.item.id), prior = overlays.get(key);
+        overlay(key, { layout: { ...prior?.layout, ...changed(geometry(original.before, state.type), geometry(original.item.layout, state.type)) }, ...(state.type.startsWith('arrow-') && state.beforeData ? { data: changed(state.beforeData, original.item.data) } : {}) });
+      }
+      const merge = (rows, type) => rows.map(row => {
+        const patch = overlays.get(canvasItemKey(type, row.id));
+        if (!patch || (type === 'naplet' && row.access !== 'ready')) return row;
+        return { ...row, ...(patch.layout ? { layout: { ...row.layout, ...patch.layout } } : {}), ...(patch.data ? { data: { ...row.data, ...patch.data } } : {}) };
+      });
+      this.canvas = snapshot.canvas; this.naplets = this.mergeTreeNaplets(this.mergeChatNaplets(merge(snapshot.naplets, 'naplet'))); this.elements = merge(snapshot.elements || [], 'element'); this.comments = snapshot.comments || [];
+      // Group moves hold row references across pointer events; rebind after a
+      // projection replaces rows, otherwise later movement edits detached rows.
+      if (state?.type === 'move') state.moving = state.moving.flatMap(original => {
+        const item = (original.type === 'naplet' ? this.naplets : this.elements).find(row => row.id === original.item.id);
+        return item && (original.type !== 'naplet' || item.access === 'ready') ? [{ ...original, item }] : [];
+      });
       this.reconcileHtmlViews(snapshot.request_id);
       this.syncBoards(this.naplets);
       void this.syncTaskTrees(this.naplets);
-      if (!this.viewportLocal) this.viewport = { ...snapshot.canvas.viewport };
+      if (!this.viewportLocal && viewportRevision === savedViewportRevision && !['pan', 'pinch'].includes(state?.type)) this.viewport = { ...snapshot.canvas.viewport };
       const available = new Set(this.allCanvasItems().map(row => row.key));
       this.selectedKeys = this.selectedKeys.filter(key => available.has(key));
       if (this.activeCommentId && !this.activeComment) { canvasElement('commentPanel').close(); this.activeCommentId = ''; }
@@ -279,7 +315,7 @@ export function canvasPageStore() {
         } else state.element.layout = { ...state.element.layout, x: Math.round(Math.min(point.x, state.start.x)), y: Math.round(Math.min(point.y, state.start.y)), width: Math.max(8, Math.round(Math.abs(dx))), height: Math.max(8, Math.round(Math.abs(dy))) };
         if (state.element.kind === 'draw') state.element.data.points.push([Math.round(point.x - state.start.x), Math.round(point.y - state.start.y)]); return;
       }
-      const item = state.itemType === 'naplet' ? this.naplets.find(row => row.id === state.id) : this.elements.find(row => row.id === state.id); if (!item) return;
+      const item = state.itemType === 'naplet' ? this.naplets.find(row => row.id === state.id) : this.elements.find(row => row.id === state.id); if (!item || (state.itemType === 'naplet' && item.access !== 'ready')) return;
       const dx = (event.clientX - state.startX) / this.viewport.scale, dy = (event.clientY - state.startY) / this.viewport.scale;
       if (state.type === 'move') {
         const delta = groupDelta(state.moving, dx, dy);
@@ -304,28 +340,44 @@ export function canvasPageStore() {
       }
       if (state.type === 'move') {
         this.saveChatRecovery();
-        const changes = state.moving.filter(original => !original.item._chatDraft && JSON.stringify(original.before) !== JSON.stringify(original.item.layout)).map(original => ({ itemType: original.type, id: original.item.id, before: original.before, after: cloneCanvasValue(original.item.layout) }));
+        const changes = state.moving.filter(original => !original.item._chatDraft && !original.item._treeDraft && JSON.stringify(geometry(original.before, 'move')) !== JSON.stringify(geometry(original.item.layout, 'move'))).map(original => ({ itemType: original.type, id: original.item.id, before: geometry(original.before, 'move'), after: geometry(original.item.layout, 'move') }));
         if (!changes.length) return;
         return this.mutate(async () => {
           for (const change of changes) {
-            if (change.itemType === 'naplet') await syncRuntime.updateNapletLayout(change.id, change.after);
-            else await syncRuntime.updateElement(change.id, { layout: change.after });
+            if (change.itemType === 'naplet') await syncRuntime.updateNapletLayout(change.id, changed(change.before, change.after));
+            else await syncRuntime.updateElement(change.id, { layout: changed(change.before, change.after) });
           }
         }, { type: 'layouts', changes });
       }
       const item = state.itemType === 'naplet' ? this.naplets.find(row => row.id === state.id) : this.elements.find(row => row.id === state.id);
-      if (!item || (JSON.stringify(state.before) === JSON.stringify(item.layout) && JSON.stringify(state.beforeData) === JSON.stringify(item.data || {}))) return;
+      if (!item || (state.itemType === 'naplet' && item.access !== 'ready')) return;
+      const before = geometry(state.before, state.type), after = geometry(item.layout, state.type);
+      const beforeData = state.type.startsWith('arrow-') ? state.beforeData : undefined;
+      const afterData = beforeData ? cloneCanvasValue(item.data || {}) : undefined;
+      const dataChanged = JSON.stringify(beforeData) !== JSON.stringify(afterData);
+      if (JSON.stringify(before) === JSON.stringify(after) && !dataChanged) return;
       if (item._chatDraft || item._treeDraft) { this.saveChatRecovery(); return; }
-      const after = cloneCanvasValue(item.layout);
-      const afterData = cloneCanvasValue(item.data || {});
-      await this.mutate(() => state.itemType === 'naplet' ? syncRuntime.updateNapletLayout(item.id, after) : syncRuntime.updateElement(item.id, { layout: after, ...(JSON.stringify(state.beforeData) !== JSON.stringify(afterData) ? { data: afterData } : {}) }), { type: 'layout', itemType: state.itemType, id: item.id, before: state.before, after, beforeData: state.beforeData, afterData });
+      await this.mutate(() => state.itemType === 'naplet' ? syncRuntime.updateNapletLayout(item.id, changed(before, after)) : syncRuntime.updateElement(item.id, { layout: changed(before, after), ...(dataChanged ? { data: afterData } : {}) }), { type: 'layout', itemType: state.itemType, id: item.id, before, after, beforeData, afterData });
     },
     cancelPointer(event) { pointers.delete(event.pointerId); this.interaction = null; this.selectionBox = null; void this.refresh(); },
-    queueViewportSave() { clearTimeout(this._viewportTimer); this._viewportTimer = setTimeout(() => this.saveViewport(), 350); },
+    queueViewportSave() { viewportRevision += 1; clearTimeout(this._viewportTimer); this._viewportTimer = setTimeout(() => this.saveViewport(), 350); },
     async saveViewport() {
-      if (!this.canvas || this.viewportSaving) return; this.viewportSaving = true; this.viewportLocal = false;
-      try { await syncRuntime.updateViewport({ ...this.viewport }); } catch (error) { this.error = error?.message || 'Could not save canvas view.'; await this.refresh(); } finally { this.viewportSaving = false; }
+      clearTimeout(this._viewportTimer);
+      if (!this.canvas) return;
+      const revision = ++viewportRevision, viewport = { ...this.viewport };
+      viewportWrites += 1; this.viewportSaving = true; this.viewportLocal = false;
+      try { await syncRuntime.updateViewport(viewport); }
+      catch (error) {
+        const message = error?.message || 'Could not save canvas view.';
+        await syncRuntime?.refresh().catch(() => undefined); this.error = message;
+      } finally {
+        // A completed older save cannot release the newer gesture's overlay.
+        savedViewportRevision = Math.max(savedViewportRevision, revision);
+        viewportWrites -= 1; this.viewportSaving = viewportWrites > 0;
+        if (lastSnapshot && this.canvas) this.applySnapshot(lastSnapshot);
+      }
     },
+    findInteractionItem(state) { return (state.itemType === 'naplet' ? this.naplets : this.elements).find(row => row.id === state.id); },
     highestZ() { return Math.max(0, ...this.naplets.map(row => row.layout.z), ...this.elements.map(row => row.layout.z)); },
     async createTextAt(point) {
       await this.mutate(() => syncRuntime.createElement({ kind: 'text', layout: { x: Math.round(point.x), y: Math.round(point.y), width: 240, height: 120, z: this.highestZ() + 1 }, data: { text: 'Text' } }));
@@ -339,11 +391,19 @@ export function canvasPageStore() {
       await this.mutate(() => syncRuntime.updateElement(element.id, { data: afterData }), { type: 'data', id: element.id, before: beforeData, after: afterData });
     },
     async mutate(operation, history = null) {
-      if (this.saving) return; this.saving = true; this.error = '';
-      try { await operation(); if (history) { undo.push(history); redo.length = 0; this.historyTick += 1; } }
-      catch (error) { const message = error?.message || 'Canvas change could not be saved.'; await syncRuntime?.refresh().catch(() => undefined); this.error = message; return false; }
-      finally { this.saving = false; }
-      return true;
+      const token = {}, changes = layoutChanges(history).map(change => ({ ...change, patch: { layout: changed(change.before, change.after), ...(change.afterData ? { data: changed(change.beforeData, change.afterData) } : {}) } }));
+      pendingLayouts.set(token, changes);
+      pendingMutations += 1; this.saving = true; this.error = '';
+      const run = mutationTail.catch(() => undefined).then(async () => {
+        try { await operation(); if (history) { undo.push(history); redo.length = 0; this.historyTick += 1; } return true; }
+        catch (error) { const message = error?.message || 'Canvas change could not be saved.'; await syncRuntime?.refresh().catch(() => undefined); this.error = message; return false; }
+        finally {
+          pendingLayouts.delete(token); pendingMutations -= 1; this.saving = pendingMutations > 0;
+          if (lastSnapshot && this.canvas) this.applySnapshot(lastSnapshot);
+        }
+      });
+      mutationTail = run;
+      return run;
     },
     async deleteItem(type = this.selected?.type, item = this.findSelected()) { if (!item) return; if (item._treeDraft) { this.removeTreeDraft(item); return; } if (item._chatDraft) { this.removeChatDraft(item); return; } await this.mutate(() => type === 'naplet' ? syncRuntime.deleteNaplet(item.id) : syncRuntime.deleteElement(item.id)); this.selectedKeys = this.selectedKeys.filter(key => key !== canvasItemKey(type, item.id)); },
     async createGroup() {
@@ -367,8 +427,21 @@ export function canvasPageStore() {
     },
     async orderSelected(delta) { const item = this.findSelected(); if (!item) return; const layout = { ...item.layout, z: clamp(item.layout.z + delta, 1, 100000) }; if (item._chatDraft || item._treeDraft) { item.layout = layout; this.saveChatRecovery(); return; } await this.mutate(() => this.selected.type === 'naplet' ? syncRuntime.updateNapletLayout(item.id, layout) : syncRuntime.updateElement(item.id, { layout })); },
     async applyLayoutHistory(changes, side) { for (const change of changes) { if (change.itemType === 'naplet') await syncRuntime.updateNapletLayout(change.id, change[side]); else await syncRuntime.updateElement(change.id, { layout: change[side] }); } },
-    async undoChange() { const action = undo.pop(); if (!action) return; if (action.type === 'layout') await this.mutate(() => action.itemType === 'naplet' ? syncRuntime.updateNapletLayout(action.id, action.before) : syncRuntime.updateElement(action.id, { layout: action.before, ...(action.beforeData ? { data: action.beforeData } : {}) })); if (action.type === 'layouts') await this.mutate(() => this.applyLayoutHistory(action.changes, 'before')); if (action.type === 'data') await this.mutate(() => syncRuntime.updateElement(action.id, { data: action.before })); redo.push(action); this.historyTick -= 1; },
-    async redoChange() { const action = redo.pop(); if (!action) return; if (action.type === 'layout') await this.mutate(() => action.itemType === 'naplet' ? syncRuntime.updateNapletLayout(action.id, action.after) : syncRuntime.updateElement(action.id, { layout: action.after, ...(action.afterData ? { data: action.afterData } : {}) })); if (action.type === 'layouts') await this.mutate(() => this.applyLayoutHistory(action.changes, 'after')); if (action.type === 'data') await this.mutate(() => syncRuntime.updateElement(action.id, { data: action.after })); undo.push(action); this.historyTick += 1; },
+    async replayHistory(action, side) {
+      if (action.type === 'layouts') return this.applyLayoutHistory(action.changes, side);
+      if (action.type === 'data') return syncRuntime.updateElement(action.id, { data: action[side] });
+      return action.itemType === 'naplet' ? syncRuntime.updateNapletLayout(action.id, action[side]) : syncRuntime.updateElement(action.id, { layout: action[side], ...(action[`${side}Data`] ? { data: action[`${side}Data`] } : {}) });
+    },
+    async undoChange() {
+      if (!this.canUndo) return;
+      const action = undo.at(-1);
+      if (await this.mutate(() => this.replayHistory(action, 'before'))) { undo.pop(); redo.push(action); this.historyTick -= 1; }
+    },
+    async redoChange() {
+      if (!this.canRedo) return;
+      const action = redo.at(-1);
+      if (await this.mutate(() => this.replayHistory(action, 'after'))) { redo.pop(); undo.push(action); this.historyTick += 1; }
+    },
     handleKeydown(event) {
       if (event.key === 'Escape' && this.linkDrag) { event.preventDefault(); this.linkDrag = null; return; }
       if (event.defaultPrevented || document.querySelector('dialog:modal, :popover-open') || event.target.closest?.('.canvas-comment-panel,.canvas-comment-dialog')) return;

@@ -213,3 +213,55 @@ it('persists canvas references without destination snapshot reads and removes re
   expect((await db.canvas_snapshots.get(runtime.key)).naplets[0]).not.toHaveProperty('source');
   runtime.stop();
 });
+
+it('orders a delayed pre-save refresh, overlapping saves and refreshes without stale CAS versions', async () => {
+  const db = openWorkspaceDb(`canvas-sync-overlap-${crypto.randomUUID()}`); await db.open();
+  let serverVersion = 1, viewport = { x: 0, y: 0, scale: 1 }, release;
+  api.getTowerPgCanvasSnapshot.mockImplementation(async () => ({ ...payload(serverVersion), canvas: { ...payload(serverVersion).canvas, viewport } }));
+  const runtime = new CanvasSyncRuntime(context, 'canvas');
+  await runtime.refresh();
+  api.getTowerPgCanvasSnapshot.mockImplementationOnce(() => new Promise(resolve => { release = () => resolve(payload(1)); }));
+  const oldRead = runtime.refresh();
+  await vi.waitFor(() => expect(release).toBeTypeOf('function'));
+  api.updateTowerPgCanvas.mockImplementation(async (_w, _c, body) => {
+    expect(body.expected_row_version).toBe(serverVersion);
+    serverVersion++; viewport = body.viewport;
+  });
+  const first = runtime.updateViewport({ x: 100, y: 10, scale: 1 });
+  const refresh = runtime.refresh();
+  const second = runtime.updateViewport({ x: 250, y: 40, scale: 1.5 });
+  expect(api.updateTowerPgCanvas).not.toHaveBeenCalled();
+  release();
+  await Promise.all([oldRead, first, refresh, second]);
+  expect(api.updateTowerPgCanvas.mock.calls.map(call => call[2].expected_row_version)).toEqual([1, 2]);
+  expect((await db.canvas_snapshots.get(runtime.key)).canvas.viewport).toEqual(viewport);
+  expect(viewport.x).toBe(250);
+  runtime.stop();
+});
+
+it('rebases layout field changes on refreshed task-tree metadata and refuses revoked naplets', async () => {
+  const db = openWorkspaceDb(`canvas-sync-layout-${crypto.randomUUID()}`); await db.open();
+  const source = { ...payload(1), naplets: [{ id: 'tree', access: 'ready', row_version: 3, title: 'Tree', source: { type: 'task_tree', id: 'scope' }, layout: { x: 1, y: 2, width: 300, height: 200, z: 4, task_tree: { instance_id: '60000000-0000-4000-8000-000000000001' } }, content: {} }] };
+  api.getTowerPgCanvasSnapshot.mockResolvedValue(source);
+  const runtime = new CanvasSyncRuntime(context, 'canvas'); await runtime.refresh();
+  await runtime.updateNapletLayout('tree', { width: 500 });
+  expect(api.updateTowerPgCanvasNaplet.mock.calls.at(-1)[3]).toMatchObject({ layout: { x: 1, width: 500, z: 4, task_tree: { instance_id: '60000000-0000-4000-8000-000000000001' } }, expected_row_version: 3 });
+  source.naplets[0].access = 'denied'; await runtime.refresh();
+  await expect(runtime.updateNapletLayout('tree', { width: 600 })).rejects.toThrow('authorization');
+  runtime.stop();
+});
+
+it('does not let a queued refresh reauthorize a stopped canvas', async () => {
+  const db = openWorkspaceDb(`canvas-sync-stop-${crypto.randomUUID()}`); await db.open();
+  let release;
+  api.getTowerPgCanvasSnapshot.mockImplementationOnce(() => new Promise(resolve => { release = resolve; }));
+  const runtime = new CanvasSyncRuntime(context, 'canvas');
+  const active = runtime.refresh();
+  await vi.waitFor(() => expect(release).toBeTypeOf('function'));
+  const queued = runtime.refresh();
+  const rejected = expect(queued).rejects.toMatchObject({ name: 'AbortError' });
+  runtime.stop(); release(payload(1));
+  await expect(active).resolves.toBeNull(); await rejected;
+  expect(api.getTowerPgCanvasSnapshot).toHaveBeenCalledTimes(1);
+  expect(runtime.authorized).toBe(false);
+});

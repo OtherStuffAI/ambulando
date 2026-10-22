@@ -86,6 +86,8 @@ export class CanvasSyncRuntime {
     this.onError = onError;
     this.authorized = false;
     this.generation = 0;
+    this.lifecycle = 0;
+    this.stopped = false;
     this.controller = null;
     this.subscription = null;
     this.mutationTail = Promise.resolve();
@@ -93,6 +95,7 @@ export class CanvasSyncRuntime {
 
   start() {
     if (this.subscription) return;
+    this.stopped = false;
     this.subscription = liveQuery(() => this.db.canvas_snapshots.get(this.key)).subscribe({
       next: snapshot => {
         if (this.authorized && snapshot) this.onSnapshot?.(snapshot);
@@ -103,6 +106,8 @@ export class CanvasSyncRuntime {
   }
 
   stop() {
+    this.stopped = true;
+    this.lifecycle += 1;
     this.generation += 1;
     this.authorized = false;
     this.controller?.abort();
@@ -111,7 +116,14 @@ export class CanvasSyncRuntime {
     this.subscription = null;
   }
 
-  async refresh() {
+  // Reads share the write queue so a pre-save full snapshot cannot overtake
+  // an accepted write or invalidate the revision needed by the next save.
+  refresh() {
+    return this.enqueueMutation(() => this.refreshProjection());
+  }
+
+  async refreshProjection() {
+    if (this.stopped) throw canvasRefreshAbort();
     const generation = ++this.generation;
     this.controller?.abort();
     const controller = new AbortController();
@@ -157,7 +169,11 @@ export class CanvasSyncRuntime {
   }
 
   enqueueMutation(operation) {
-    const run = this.mutationTail.catch(() => undefined).then(operation);
+    const lifecycle = this.lifecycle;
+    const run = this.mutationTail.catch(() => undefined).then(() => {
+      if (this.stopped || lifecycle !== this.lifecycle) throw canvasRefreshAbort();
+      return operation();
+    });
     this.mutationTail = run;
     return run;
   }
@@ -170,7 +186,7 @@ export class CanvasSyncRuntime {
         viewport,
         expected_row_version: snapshot.canvas.row_version,
       }, apiOptions(this.context));
-      return this.refresh();
+      return this.refreshProjection();
     });
   }
 
@@ -180,7 +196,7 @@ export class CanvasSyncRuntime {
       const naplet=snapshot?.naplets?.find(row=>row.id===napletId);
       if(!this.authorized || naplet?.access!=='ready' || naplet.source?.type!=='task_tree') throw new Error('Task Tree authorization must be refreshed.');
       await updateTowerPgCanvasNaplet(this.context.workspaceId,this.canvasId,napletId,{...body,expected_row_version:naplet.row_version},apiOptions(this.context));
-      return this.refresh();
+      return this.refreshProjection();
     });
   }
 
@@ -188,12 +204,12 @@ export class CanvasSyncRuntime {
     return this.enqueueMutation(async () => {
       const snapshot = await this.db.canvas_snapshots.get(this.key);
       const naplet = snapshot?.naplets?.find(row => row.id === napletId);
-      if (!this.authorized || !naplet) throw new Error('Canvas naplet authorization must be refreshed.');
+      if (!this.authorized || naplet?.access !== 'ready') throw new Error('Canvas naplet authorization must be refreshed.');
       await updateTowerPgCanvasNaplet(this.context.workspaceId, this.canvasId, napletId, {
-        layout,
+        layout: { ...naplet.layout, ...layout },
         expected_row_version: naplet.row_version,
       }, apiOptions(this.context));
-      return this.refresh();
+      return this.refreshProjection();
     });
   }
 
@@ -207,7 +223,7 @@ export class CanvasSyncRuntime {
         source_version_id: versionId || null,
         expected_row_version: naplet.row_version,
       }, apiOptions(this.context));
-      return this.refresh();
+      return this.refreshProjection();
     });
   }
 
@@ -232,7 +248,7 @@ export class CanvasSyncRuntime {
     return this.enqueueMutation(async () => {
       if (!this.authorized) throw new Error('Canvas authorization must be refreshed.');
       await createTowerPgCanvasNaplet(this.context.workspaceId, this.canvasId, body, apiOptions(this.context));
-      return this.refresh();
+      return this.refreshProjection();
     });
   }
 
@@ -240,7 +256,7 @@ export class CanvasSyncRuntime {
     return this.enqueueMutation(async () => {
       if (!this.authorized) throw new Error('Canvas authorization must be refreshed.');
       await createTowerPgCanvasElement(this.context.workspaceId, this.canvasId, body, apiOptions(this.context));
-      return this.refresh();
+      return this.refreshProjection();
     });
   }
 
@@ -251,9 +267,10 @@ export class CanvasSyncRuntime {
       if (!this.authorized || !element) throw new Error('Canvas element authorization must be refreshed.');
       await updateTowerPgCanvasElement(this.context.workspaceId, this.canvasId, elementId, {
         ...patch,
+        ...(patch.layout ? { layout: { ...element.layout, ...patch.layout } } : {}),
         expected_row_version: element.row_version,
       }, apiOptions(this.context));
-      return this.refresh();
+      return this.refreshProjection();
     });
   }
 
@@ -263,7 +280,7 @@ export class CanvasSyncRuntime {
       const element = snapshot?.elements?.find(row => row.id === elementId);
       if (!this.authorized || !element) throw new Error('Canvas element authorization must be refreshed.');
       await deleteTowerPgCanvasElement(this.context.workspaceId, this.canvasId, elementId, { expected_row_version: element.row_version }, apiOptions(this.context));
-      return this.refresh();
+      return this.refreshProjection();
     });
   }
 
@@ -273,7 +290,7 @@ export class CanvasSyncRuntime {
       const naplet = snapshot?.naplets?.find(row => row.id === napletId);
       if (!this.authorized || !naplet) throw new Error('Canvas naplet authorization must be refreshed.');
       await deleteTowerPgCanvasNaplet(this.context.workspaceId, this.canvasId, napletId, { expected_row_version: naplet.row_version }, apiOptions(this.context));
-      return this.refresh();
+      return this.refreshProjection();
     });
   }
 
@@ -281,7 +298,7 @@ export class CanvasSyncRuntime {
     return this.enqueueMutation(async () => {
       if (!this.authorized) throw new Error('Canvas authorization must be refreshed.');
       await createTowerPgCanvasComment(this.context.workspaceId, this.canvasId, body, apiOptions(this.context));
-      return this.refresh();
+      return this.refreshProjection();
     });
   }
 
@@ -294,7 +311,7 @@ export class CanvasSyncRuntime {
         expected_row_version: confirmation.expected_row_version,
         ...(comment.parent_comment_id ? {} : { expected_reply_versions: confirmation.expected_reply_versions }),
       }, apiOptions(this.context));
-      return this.refresh();
+      return this.refreshProjection();
     });
   }
 
@@ -304,7 +321,7 @@ export class CanvasSyncRuntime {
       const comment = snapshot?.comments?.find(row => row.id === commentId);
       if (!this.authorized || !comment?.can_retarget || comment.parent_comment_id) throw new Error('You cannot change this comment subject.');
       await updateTowerPgCanvasComment(this.context.workspaceId, this.canvasId, commentId, { anchor, expected_row_version: comment.row_version }, apiOptions(this.context));
-      return this.refresh();
+      return this.refreshProjection();
     });
   }
 
@@ -317,7 +334,7 @@ export class CanvasSyncRuntime {
         resolved,
         expected_row_version: comment.row_version,
       }, apiOptions(this.context));
-      return this.refresh();
+      return this.refreshProjection();
     });
   }
 }

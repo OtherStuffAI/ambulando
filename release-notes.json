@@ -5061,6 +5061,21 @@
       "notes": [
         "Comment drawers keep an opaque surface in light and dark themes. Discussion scroll positions survive fullscreen and window restoration."
       ]
+    },
+    {
+      "buildNumber": 2607,
+      "label": "Stable canvas adjustments",
+      "notes": [
+        "Canvas pans, zooms, moves and resizes keep the latest adjustment while earlier saves finish.",
+        "Changes made during a save are queued and persisted without overwriting unrelated canvas updates."
+      ]
+    },
+    {
+      "buildNumber": 2608,
+      "label": "Canvas gesture history",
+      "notes": [
+        "Undoing a canvas move or resize preserves unrelated stacking and task-tree layout changes received while you were adjusting it."
+      ]
     }
   ]
 }
