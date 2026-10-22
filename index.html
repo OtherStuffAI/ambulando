@@ -4468,7 +4468,7 @@
                 <div class="thread-header-copy">
                   <label class="thread-create-title" x-show="$store.chat.deckThreadComposerOpen" x-cloak>
                     <span class="sr-only">Thread title</span>
-                    <input type="text" maxlength="120" placeholder="Thread title" :value="$store.chat.threadTitleDraft" @input="$store.chat.editDeckThreadCreateTitle($event.target.value)" />
+                    <input type="text" maxlength="120" placeholder="Thread title" :disabled="$store.chat.deckThreadComposerBusy" :value="$store.chat.threadTitleDraft" @input="$store.chat.editDeckThreadCreateTitle($event.target.value)" />
                   </label>
                   <button
                     type="button"
@@ -4835,9 +4835,9 @@
                     class="chat-input"
                   data-chat-composer="thread"
                   data-channel-visible-mentions="true"
-                  :contenteditable="$store.chat.canComposeInThreadDestination.toString()"
+                  :contenteditable="($store.chat.canComposeInThreadDestination && !$store.chat.deckThreadComposerBusy).toString()"
                   role="textbox"
-                  :aria-disabled="(!$store.chat.canComposeInThreadDestination).toString()"
+                  :aria-disabled="(!$store.chat.canComposeInThreadDestination || $store.chat.deckThreadComposerBusy).toString()"
                   :aria-label="$store.chat.deckThreadComposerOpen ? 'First thread message' : 'Reply to thread'"
                   aria-multiline="true"
                   :data-placeholder="$store.chat.deckThreadComposerOpen ? 'Start a new thread…' : 'Reply to thread...'"
@@ -4870,6 +4870,7 @@
                   </div>
                 </div>
               </div>
+              <p class="thread-create-status" role="status" aria-live="polite" x-show="$store.chat.deckThreadComposerOpen && $store.chat.deckThreadComposerBusy" x-cloak>Starting thread… Your draft is kept until your message is sent.</p>
               <p class="error-text thread-create-error" role="alert" x-show="$store.chat.deckThreadComposerOpen && $store.chat.error" x-text="$store.chat.error"></p>
               <div class="chat-hang-call-error" x-show="$store.chat.threadHangCallError" x-cloak role="alert">
                 <span x-text="$store.chat.threadHangCallError"></span>

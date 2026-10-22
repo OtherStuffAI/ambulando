@@ -69,3 +69,49 @@ for (const width of [390, 1120]) {
     expect(await page.evaluate(() => Alpine.store('chat').threadFileDrafts)).toEqual([]);
   });
 }
+
+
+test('submission visibly waits, rejects duplicate clicks and retains the draft for retry', async ({ page }) => {
+  await openFixture(page);
+  await page.evaluate(async () => {
+    const s = Alpine.store('chat');
+    s.closeThread({ syncRoute: false });
+    s.channels[0].scope_id = 'scope-a';
+    s.resolvePgWriteContext = () => ({ scopeId: 'scope-a', channelId: s.selectedChannelId });
+    s.prepareDeckComposerChannel = async id => { s.selectedChannelId = id; return true; };
+    s.openDeckThread = async () => {};
+    window.submissionCalls = 0;
+    s.sendMessage = async () => {
+      window.submissionCalls++;
+      window.submissionRequest = s.deckThreadCreateRequestId;
+      return new Promise(resolve => { window.finishSubmission = resolve; });
+    };
+    await s.openDeckThreadComposer();
+  });
+  const dialog = page.getByRole('dialog', { name: 'Create thread', exact: true });
+  const editor = dialog.locator('[data-chat-composer="thread"]');
+  await editor.fill('Keep this first message');
+  const send = dialog.getByRole('button', { name: 'Start thread', exact: true });
+  await page.evaluate(() => { window.submissionStart = performance.now(); });
+  await send.click();
+  await expect(dialog.getByRole('status')).toContainText('Starting thread');
+  const feedbackMs = await page.evaluate(() => performance.now() - window.submissionStart);
+  await expect(dialog.getByRole('button', { name: 'Starting…', exact: true })).toBeDisabled();
+  await expect(editor).toHaveAttribute('contenteditable', 'false');
+  await page.evaluate(() => Alpine.store('chat').sendDeckThread());
+  expect(await page.evaluate(() => window.submissionCalls)).toBe(1);
+  await page.waitForTimeout(1000);
+  await expect(editor).toContainText('Keep this first message');
+  await page.evaluate(() => {
+    Alpine.store('chat').error = 'Delivery failed. Retry your message.';
+    window.firstRequest = window.submissionRequest;
+    window.finishSubmission(false);
+  });
+  await expect(dialog.getByRole('alert')).toContainText('Delivery failed');
+  await expect(editor).toHaveAttribute('contenteditable', 'true');
+  await send.click();
+  expect(await page.evaluate(() => window.submissionRequest === window.firstRequest)).toBe(true);
+  await page.evaluate(() => window.finishSubmission({ record_id: 'accepted', pg_thread_id: 'accepted-thread' }));
+  await expect(dialog).toBeHidden();
+  console.log(JSON.stringify({ scenario: 'new-thread-delayed-delivery', sampleSize: 1, feedbackMs, injectedDeliveryWaitMs: 1000 }));
+});

@@ -1074,17 +1074,27 @@ export const syncManagerMixin = {
   commandTowerWorkspace(name, input = {}, options = {}) {
     const service = this.getTowerSyncService();
     if (!service) throw new Error('TowerSyncService is unavailable for the active workspace');
+    const reconciliationContext = this._recordDeltaAttentionActive ? {
+      workspaceDbKey: this.workspaceDbKey, store: this.buildTowerPgMaterializationStoreSnapshot(),
+    } : null;
     // A command owns its transport, acknowledgement writes, and forced
     // materialisation lifecycle. Detach it from any ambient Dexie zone so the
     // foreign Tower/worker promises cannot outlive and prematurely commit the
     // caller's transaction.
     return Dexie.ignoreTransaction(() => service.command(name, input, options).then(async (result) => {
-      if (this._recordDeltaAttentionActive && !result?.stale && name !== 'record-conflict.accept-remote') {
-        try {
-          await service.materialize('workspace-bundle', { protocol_version: 1, reconcile_commands: true }, {
-            workspaceDbKey: this.workspaceDbKey, store: this.buildTowerPgMaterializationStoreSnapshot(),
-          });
-        } catch (error) { flightDeckLog('warn', 'sync', 'Acknowledgement reconciliation remains pending', { error: error.message }); }
+      if (reconciliationContext && !result?.stale && name !== 'record-conflict.accept-remote') {
+        const reconcile = async () => {
+          try {
+            await service.materialize('workspace-bundle', { protocol_version: 1, reconcile_commands: true }, {
+              ...reconciliationContext,
+            });
+          } catch (error) { flightDeckLog('warn', 'sync', 'Acknowledgement reconciliation remains pending', { error: error.message }); }
+        };
+        // message.create already durably reconciles the accepted row in its
+        // command descriptor. Unrelated conflicts can sit behind background
+        // sync in the serial materializer; they must not delay the composer.
+        const reconciliation = reconcile();
+        if (name !== 'message.create') await reconciliation;
       }
       return result;
     }));
