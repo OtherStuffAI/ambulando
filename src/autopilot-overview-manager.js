@@ -1096,6 +1096,7 @@ export const autopilotOverviewManagerMixin = {
         returnMessage: true,
       });
       if (!created?.record_id || !created?.pg_thread_id) return false;
+      this.notifyCanvasChatBound?.(created);
       const returnContext = this.deckThreadReturnContext;
       const createdChannelId = channelId;
       this.clearCurrentChatComposerDraft?.('thread');

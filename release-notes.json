@@ -4876,6 +4876,21 @@
         "Board Save floats over the top-right of the drawing area, inline and expanded, and shows unsaved, saving and read-only states.",
         "Copy reference from a naplet's options menu to get a Markdown link that opens the canvas and highlights that naplet for anyone with access. If copying is blocked, the link is shown for manual copying."
       ]
+    },
+    {
+      "buildNumber": 2565,
+      "label": "Chat on Canvas",
+      "notes": [
+        "Place a Chat naplet on a Canvas, choose a scope and channel, and use the normal chat composer with attachments and agent mentions. Conversations stay available in Chat and on the Canvas after reload.",
+        "Unsent Chat naplets are local drafts until the first message is sent. Removing a Chat naplet keeps the conversation."
+      ]
+    },
+    {
+      "buildNumber": 2574,
+      "label": "Independent Canvas conversations",
+      "notes": [
+        "Canvas Chat naplets keep independent conversations and drafts, show replies from shared chat data, recover failed Canvas bindings without resending, and pause background work while hidden."
+      ]
     }
   ]
 }

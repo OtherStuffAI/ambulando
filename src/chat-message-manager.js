@@ -528,7 +528,7 @@ export const chatMessageManagerMixin = {
       ? String(destination.threadId ?? (this.deckThreadComposerOpen ? '__new_thread__' : this.activeThreadId) ?? '').trim()
       : '';
     if (context === 'thread' && !threadId) return '';
-    return [workspaceId, scopeId, channelId, threadId || '__channel__'].join(':');
+    return [workspaceId, scopeId, channelId, threadId || '__channel__', ...(this.canvasChatEmbedded ? [new URLSearchParams(location.search).get('canvaskey')] : [])].join(':');
   },
 
   saveChatComposerDraft(context = 'message', destination = {}) {
@@ -1202,6 +1202,7 @@ export const chatMessageManagerMixin = {
     this.agentSessionHealth = Array.isArray(sessions) ? sessions : [];
   },
   updateResponseActivityTimer() {
+    if (this.canvasChatEmbedded && !this.canvasChatVisible) return;
     const hasActiveActivities = this.activeThreadResponseActivities.length > 0
       || this.getVisibleChannelResponseActivities().length > 0
       || this.getVisibleAgentActivities().some((activity) => !isTerminalAgentActivity(activity));

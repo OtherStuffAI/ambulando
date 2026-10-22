@@ -588,6 +588,7 @@ export function createShellState(options = {}) {
         this.knownWorkspaces = mergeWorkspaceEntries([], settings.knownWorkspaces ?? []);
         this.knownHosts = Array.isArray(settings.knownHosts) ? settings.knownHosts : [];
       }
+      if (this.canvasChatEmbedded) return this.initCanvasChatApp();
       if (typeof window !== 'undefined') {
         const invite = extractInviteToken(window.location.href);
         if (invite) {
@@ -867,6 +868,7 @@ export function createShellState(options = {}) {
     },
 
     buildRouteUrl() {
+      if (this.canvasChatEmbedded) return window.location.href;
       if (typeof window === 'undefined') return '';
       const url = new URL(window.location.href);
       url.pathname = this.getRoutePath();

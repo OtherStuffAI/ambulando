@@ -32,7 +32,7 @@ test.beforeAll(async () => {
     stdin: {
       resolveDir: path.resolve(__dirname, '../..'),
       contents: `
-        export { saveSettings, createWorkspaceDb } from './src/db.js';
+        export { saveSettings, createWorkspaceDb, openWorkspaceDb, upsertMessage } from './src/db.js';
         export { signLoginEvent, pubkeyToNpub } from './src/auth/nostr.js';
         export { normalizeWorkspaceEntry } from './src/workspaces.js';
       `,
@@ -121,6 +121,7 @@ test('dedicated Canvas route renders authorized sources and isolates trusted HTM
   await context.route('**/*', async route => {
     const request = route.request();
     const url = new URL(request.url());
+    if (url.searchParams.get('canvasthread') === 'thread-1') return route.fulfill({ contentType: 'text/html', body: '<!doctype html><p>Existing chat fixture</p>' });
     if (url.pathname === '/__canvas-seed.js') return route.fulfill({ contentType: 'text/javascript', body: seedBundle });
     if (url.pathname === '/__canvas-seed.html') return route.fulfill({ contentType: 'text/html', body: '<!doctype html><title>seed</title>' });
     if (url.pathname.startsWith(`/api/v4/flightdeck-pg/workspaces/${workspaceId}/canvases/${canvasId}`)) {
@@ -267,7 +268,7 @@ test('dedicated Canvas route renders authorized sources and isolates trusted HTM
   await expect(canvas.getByTitle('Select (V)')).toHaveClass(/active/);
 
   await expect(canvas.getByText('Verify access')).toBeVisible();
-  await expect(canvas.getByText('Use the existing record.')).toBeVisible();
+  await expect(canvas.locator('[data-canvas-key="naplet:chat"] .canvas-chat-frame')).toHaveAttribute('src', /canvasthread=thread-1/);
   console.log('CANVAS_DOCUMENT_EVIDENCE', JSON.stringify({ markdown: ['headings', 'lists', 'links', 'code', 'tables', 'quotes'], readOnly: true, exactDocLink: href.toString(), themes: ['light', 'dark'], widths: [1440, 390], wheelContained: true, updateRetainsEditor: true }));
   const denied = canvas.locator('.canvas-naplet').filter({ hasText: 'Restricted item' });
   await expect(denied.getByText('Ask your workspace owner for access.', { exact: true })).toBeVisible();
@@ -719,4 +720,134 @@ for (const touch of [false, true]) test(`native arrow and text controls persist 
   expect(elements[2].layout).toEqual({ x: 1050, y: 400, width: 100, height: 100, z: 3 });
   expect(bent.data.curve).toBeDefined();
   expect(errors).toEqual([]);
+});
+
+test.describe('Canvas Chat', () => {
+  test.use({ serviceWorkers: 'block' });
+
+test('Canvas Chat places locally and selects scope then channel into the normal composer', async ({ page, context }) => {
+  test.setTimeout(60000); page.setDefaultTimeout(5000); page.setDefaultNavigationTimeout(10000);
+  console.log('CANVAS_CHAT_STAGE', 'start');
+  const scopeId = '40000000-0000-4000-8000-000000000004';
+  const channelId = '50000000-0000-4000-8000-000000000005';
+  let naplets = [];
+  const sends = [], threads = new Map();
+  const agentNpub = require('nostr-tools').nip19.npubEncode('11'.repeat(32));
+  const now = '2026-10-22T04:00:00.000Z';
+  let bindingPosts = 0;
+
+  await context.route('**/*', async route => {
+    const request = route.request(), url = new URL(request.url());
+    if (url.pathname === '/__canvas-seed.js') return route.fulfill({ contentType: 'text/javascript', body: seedBundle });
+    if (url.pathname === '/__canvas-seed.html') return route.fulfill({ contentType: 'text/html', body: '<!doctype html><title>seed</title>' });
+    if (url.pathname.endsWith(`/channels/${channelId}/messages`) && request.method() === 'POST') {
+      expect(request.headers().authorization).toMatch(/^Nostr /);
+      const body = request.postDataJSON(); sends.push(body);
+      const threadId = body.thread_id || '60000000-0000-4000-8000-' + String(threads.size + 1).padStart(12, '0');
+      const messageId = '70000000-0000-4000-8000-' + String(sends.length).padStart(12, '0');
+      const message = { id: messageId, workspace_id: workspaceId, scope_id: scopeId, channel_id: channelId, thread_id: threadId, body: body.body, metadata: body.metadata || {}, row_version: 1, created_at: now, updated_at: now };
+      if (!threads.has(threadId)) threads.set(threadId, { id: threadId, workspace_id: workspaceId, scope_id: scopeId, channel_id: channelId, source_message_id: messageId, title: body.thread_title || 'Canvas conversation', row_version: 1, created_at: now, updated_at: now });
+      return route.fulfill({ json: { message, thread: threads.get(threadId) } });
+    }
+    if (/\/threads\/[^/]+$/.test(url.pathname) && request.method() === 'GET') return route.fulfill({ json: { thread: threads.get(url.pathname.split('/').pop()) } });
+    if (url.pathname.endsWith(`/canvases/${canvasId}/naplets`) && request.method() === 'POST') {
+      bindingPosts++;
+      const body = request.postDataJSON();
+      naplets.push({ ...body, id: '80000000-0000-4000-8000-' + String(bindingPosts).padStart(12, '0'), row_version: 1, access: 'ready', content: { messages: [] } });
+      return route.fulfill({ json: { naplet: naplets.at(-1) } });
+    }
+    if (url.pathname.includes(`/canvases/${canvasId}/naplets/`) && request.method() === 'DELETE') {
+      const id = url.pathname.split('/').pop(); naplets = naplets.filter(row => row.id !== id);
+      return route.fulfill({ json: { deleted: true } });
+    }
+    if (url.pathname.endsWith(`/canvases/${canvasId}/snapshot`)) return route.fulfill({ json: { workspace_id: workspaceId, identity, complete: true, canvas: definition(1, { x: 0, y: 0, scale: 1 }), naplets, elements: [], comments: [] } });
+    if (url.pathname.endsWith(`/workspaces/${workspaceId}/scopes`)) return route.fulfill({ json: { scopes: [{ id: scopeId, workspace_id: workspaceId, name: 'Canvas scope', row_version: 1 }] } });
+    if (url.pathname.endsWith(`/scopes/${scopeId}/channels`)) return route.fulfill({ json: { channels: [{ id: channelId, workspace_id: workspaceId, scope_id: scopeId, name: 'Canvas channel', row_version: 1 }] } });
+    if (url.pathname.endsWith(`/channels/${channelId}`)) return route.fulfill({ json: { channel: { id: channelId, workspace_id: workspaceId, scope_id: scopeId, name: 'Canvas channel', row_version: 1 } } });
+    return serveBuiltFlightDeck(route);
+  });
+  const workspaceKey = await seedSessionAndWorkspace(page);
+  console.log('CANVAS_CHAT_STAGE', 'seeded');
+  await page.evaluate(async ({ workspaceKey, workspaceId, scopeId, channelId }) => {
+    const m = await import('/__canvas-seed.js'), db = m.createWorkspaceDb(workspaceKey);
+    await db.open();
+    await db.scopes.put({ record_id: scopeId, owner_npub: workspaceKey.split(':')[1], pg_workspace_id: workspaceId, pg_backend: true, title: 'Canvas scope', record_state: 'active' });
+    await db.channels.put({ record_id: channelId, owner_npub: workspaceKey.split(':')[1], pg_workspace_id: workspaceId, scope_id: scopeId, name: 'Canvas channel', title: 'Canvas channel', record_state: 'active', can_write: true, pg_backend: true });
+    db.close();
+  }, { workspaceKey, workspaceId, scopeId, channelId });
+  await page.setViewportSize({ width: 1400, height: 1000 });
+  await page.goto(`/canvas.html?workspacekey=${encodeURIComponent(workspaceKey)}&canvasid=${canvasId}`);
+  console.log('CANVAS_CHAT_STAGE', 'placing', await page.evaluate(() => ({status:Alpine.store('canvas').status,error:Alpine.store('canvas').error})));
+  await page.getByRole('button', { name: 'Chat', exact: true }).click();
+  console.log('CANVAS_CHAT_STAGE', 'tool selected');
+  await page.locator('.canvas-stage').click({ position: { x: 50, y: 50 } });
+  console.log('CANVAS_CHAT_STAGE', 'placed');
+  await expect(page.locator('.canvas-naplet')).toHaveCount(1);
+  await page.getByRole('button', { name: 'Canvas scope', exact: true }).click();
+  await page.getByRole('button', { name: 'Canvas channel', exact: true }).click({noWaitAfter:true});
+  const frame = page.frameLocator('.canvas-chat-frame').first();
+  await expect(frame.locator('[data-chat-composer="thread"]').first()).toBeVisible({ timeout: 15000 });
+  await frame.locator('[data-chat-composer="thread"]').first().fill('Canvas draft stays independent');
+  await expect(frame.locator('[data-chat-composer="thread"]').first()).toHaveText('Canvas draft stays independent');
+  await expect(frame.locator('.page-header')).not.toBeVisible();
+  console.log('CANVAS_CHAT_STAGE', 'normal composer ready');
+  await frame.locator('body').evaluate((_element, agentNpub) => {
+    const s = Alpine.store('chat');
+    s.pgWorkspaceMembers = [{ actor_id: 'agent-canvas', npub: agentNpub, kind: 'agent', display_name: 'Canvas Agent' }];
+  }, agentNpub);
+  const editor = frame.locator('[data-chat-composer="thread"]').first();
+  await editor.fill('@Canvas');
+  await expect(frame.locator('.mention-result-item').filter({ hasText: 'Canvas Agent' }).first()).toBeVisible();
+  await frame.locator('.mention-result-item').filter({ hasText: 'Canvas Agent' }).first().click();
+  await editor.press('End');
+  await editor.pressSequentially(' Please review this Canvas');
+  await frame.getByRole('button', { name: 'Start thread', exact: true }).click();
+  await expect.poll(() => sends.length).toBe(1);
+  expect(sends[0].metadata.mentions).toEqual(expect.arrayContaining([expect.objectContaining({ type: 'agent', npub: agentNpub })]));
+  expect(sends[0].message_signature).toBeTruthy();
+  await expect.poll(() => naplets.length).toBe(1);
+  await expect(editor).toHaveAttribute('aria-label', 'Reply to thread');
+  console.log('CANVAS_CHAT_STAGE', 'first ordinary signed thread bound');
+  const firstThread = naplets[0].source.id;
+  const firstKey = await page.locator('.canvas-chat-frame').getAttribute('data-canvas-chat-frame');
+  await editor.fill('First chat draft');
+  console.log('CANVAS_CHAT_STAGE', 'placing');
+  await page.getByRole('button', { name: 'Chat', exact: true }).click();
+  await page.locator('.canvas-stage').click({ position: { x: 740, y: 50 } });
+  await page.getByRole('button', { name: 'Canvas scope', exact: true }).click();
+  await page.getByRole('button', { name: 'Canvas channel', exact: true }).click({noWaitAfter:true});
+  const second = page.frameLocator('.canvas-chat-frame').nth(1);
+  const secondEditor = second.locator('[data-chat-composer="thread"]').first();
+  await expect(secondEditor).toBeVisible({timeout:5000}).catch(async error => { console.log('SECOND_EMBED_STATE', await page.evaluate(() => [...document.querySelectorAll('.canvas-chat-frame')].map(f => { try { const s = f.contentWindow.Alpine?.store('chat'); return {src:f.src,ready:s?.canvasChatEmbedReady,error:s?.canvasChatEmbedError,session:!!s?.session,open:s?.deckThreadComposerOpen,channel:s?.deckThreadComposerChannelId,body:f.contentDocument?.body?.innerText.slice(0,250)}; } catch(e) {return {error:e.message};} }))); throw error; });
+  await expect(secondEditor).toHaveText('');
+  console.log('CANVAS_CHAT_STAGE', 'second independent composer ready');
+  await secondEditor.fill('Second independent conversation');
+  await second.getByRole('button', { name: 'Start thread', exact: true }).click();
+  await expect.poll(() => sends.length).toBe(2);
+  await expect.poll(() => naplets.length).toBe(2);
+  console.log('CANVAS_CHAT_STAGE', 'two independent threads bound');
+  expect(naplets[1].source.id).not.toBe(firstThread);
+  await expect(editor).toHaveText('First chat draft');
+  await expect(page.locator('.canvas-chat-frame').first()).toHaveAttribute('data-canvas-chat-frame', firstKey);
+  // A different browsing context materializes replies into the shared Dexie.
+  await page.evaluate(async ({ workspaceKey, firstThread, channelId, agentNpub, now }) => {
+    const m = await import('/__canvas-seed.js'); m.openWorkspaceDb(workspaceKey);
+    for (let i = 0; i < 12; i++) await m.upsertMessage({ record_id: `reactive-reply-${i}`, channel_id: channelId, parent_message_id: '70000000-0000-4000-8000-000000000001', pg_thread_id: firstThread, pg_record_type: 'message', body: `Reactive reply ${i} ` + 'Visible thread update. '.repeat(25), sender_npub: agentNpub, record_state: 'active', sync_status: 'synced', created_at: new Date(Date.parse(now) + i * 1000).toISOString(), updated_at: new Date(Date.parse(now) + i * 1000).toISOString(), pg_backend: true });
+  }, { workspaceKey, firstThread, channelId, agentNpub, now });
+  await expect(frame.locator('.thread-replies')).toContainText('Reactive reply 11');
+  console.log('CANVAS_CHAT_STAGE', 'shared Dexie replies visible');
+  await expect(second.locator('.thread-replies')).not.toContainText('Reactive reply 11');
+  await editor.focus();
+  const viewportBefore = await page.evaluate(() => ({ ...Alpine.store('canvas').viewport }));
+  await editor.press('ArrowLeft');
+  await expect(editor).toBeFocused();
+  expect(await page.evaluate(() => ({ ...Alpine.store('canvas').viewport }))).toEqual(viewportBefore);
+  await page.reload();
+  await expect(page.locator('.canvas-chat-frame')).toHaveCount(2);
+  await expect(page.frameLocator('.canvas-chat-frame').first().locator('.thread-replies')).toContainText('Reactive reply 11');
+  expect(sends).toHaveLength(2);
+  expect(bindingPosts).toBe(2);
+  console.log('CANVAS_CHAT_EVIDENCE', JSON.stringify({ placement: true, twoTaps: true, normalComposer: true, structuredMention: true, signedMessage: true, liveAutopilotDispatch: false, independentChats: true, reactiveDexieReplies: true, reload: true, sends: sends.length, bindings: bindingPosts }));
+});
+
 });

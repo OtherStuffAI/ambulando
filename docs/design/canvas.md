@@ -8,10 +8,14 @@ returns the user to the already-open Ambulando tab without rebuilding its state.
 
 Canvas provides an infinite pan-and-zoom surface, persistent native text and
 shape elements, threaded comments, workspace/restricted visibility, ordering in
-Deck, and read-only document, task-list, chat-thread, and trusted HTML naplets.
+Deck, document, task-list, interactive chat-thread, and trusted HTML naplets.
 Canonical source editing remains in Ambulando's existing editors. A naplet
 stores a source reference and layout only; it does not create a second document,
 task, or chat store.
+
+The first-class **Chat** tool places a new conversation naplet with two-tap
+scope/channel selection and the normal chat composer. See [Canvas Chat](canvas-chat.md)
+for its draft, binding, signing and reactive lifecycle.
 
 ## Authority and storage contract
 

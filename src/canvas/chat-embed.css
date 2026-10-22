@@ -1,0 +1,16 @@
+/* Keep the normal thread DOM, menus, uploads and mention popovers. Only the
+   surrounding shell is hidden; the iframe isolates shortcuts and Canvas zoom. */
+html[data-canvas-chat] .app-shell { visibility:hidden; }
+html[data-canvas-chat] .error-bar { visibility:visible; position:fixed; top:0; left:0; right:0; z-index:250; }
+html[data-canvas-chat] .chat-doc-page-backdrop,
+html[data-canvas-chat] .chat-doc-inline-section,
+html[data-canvas-chat] .chat-task-inline-section,
+html[data-canvas-chat] .identity-card { visibility:visible; }
+html[data-canvas-chat] .chat-thread-modal-backdrop { visibility:visible; padding:0; background:var(--background); }
+html[data-canvas-chat] .chat-thread-panel,
+html[data-canvas-chat] .chat-thread-panel.thread-full { width:100%; max-width:100%; height:100dvh; max-height:100dvh; border:0; border-radius:0; box-shadow:none; }
+html[data-canvas-chat] .thread-close-btn,
+html[data-canvas-chat] .thread-resize-btn,
+html[data-canvas-chat] .thread-create-back,
+html[data-canvas-chat] .thread-sequence-controls { display:none !important; }
+html[data-canvas-chat] .canvas-chat-embed-status { position:fixed; inset:0; padding:20px; background:var(--background); z-index:240; }

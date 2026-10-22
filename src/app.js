@@ -74,6 +74,7 @@ import { filesManagerMixin } from './files-manager.js';
 import { writeContextManagerMixin } from './write-context-manager.js';
 import { pinnedThreadsMixin } from './pinned-threads.js';
 import { canvasManagerMixin } from './canvas/manager.js';
+import { canvasChatEmbedMixin } from './canvas/chat-embed.js';
 import { autopilotOverviewManagerMixin } from './autopilot-overview-manager.js';
 import { pipelineViewerManagerMixin } from './pipeline-viewer-manager.js';
 import { agentSpaceManagerMixin } from './agent-space-manager.js';
@@ -10479,6 +10480,7 @@ export function initApp() {
     autopilotOverviewManagerMixin,
     pinnedThreadsMixin,
     canvasManagerMixin,
+    canvasChatEmbedMixin,
     agentSpaceManagerMixin,
     pipelineViewerManagerMixin,
     threadLiveActivityManagerMixin,
@@ -10507,6 +10509,7 @@ export function initApp() {
     window.Alpine = Alpine;
   }
   Alpine.store('chat', storeObj);
+  Alpine.store('chat')?.installCanvasChatLifecycle?.();
   if (typeof window !== 'undefined') {
     const storeAccessor = Alpine.store.bind(Alpine);
     window.$store = new Proxy(storeAccessor, {

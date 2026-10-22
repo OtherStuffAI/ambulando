@@ -3528,6 +3528,7 @@ export const syncManagerMixin = {
   },
 
   ensureBackgroundSync(runSoon = false) {
+    if (this.canvasChatEmbedded && (!this.canvasChatVisible || !this.canvasChatBootstrapped)) return;
     this.ensureTowerPgForegroundActivityGovernor?.();
     if (!this.visibilityHandler && typeof document !== 'undefined') {
       this.visibilityHandler = (event) => {

@@ -279,3 +279,11 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   .canvas-artifact-preview iframe { min-height: 200px; }
   .canvas-artifact-filters select, .canvas-artifact-list button { min-height: 44px; }
 }
+.canvas-chat { display:flex; flex:1; flex-direction:column; min-height:0; overflow:hidden; background:var(--card); }
+.canvas-chat-frame { flex:1; width:100%; min-height:0; border:0; background:var(--card); }
+.canvas-chat-picker { padding:20px; overflow:auto; }
+.canvas-chat-picker h2 { margin:0 0 16px; font-size:18px; }
+.canvas-chat-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin:12px 0; }
+.canvas-chat-grid button { min-height:64px; padding:12px; white-space:normal; text-align:left; }
+.canvas-chat-picker p, .canvas-chat-binding { font-size:13px; }
+.canvas-chat-binding { padding:8px 12px; }
