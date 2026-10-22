@@ -174,6 +174,16 @@ export class CanvasSyncRuntime {
     });
   }
 
+  updateTaskTreeView(napletId, body) {
+    return this.enqueueMutation(async () => {
+      const snapshot=await this.db.canvas_snapshots.get(this.key);
+      const naplet=snapshot?.naplets?.find(row=>row.id===napletId);
+      if(!this.authorized || naplet?.access!=='ready' || naplet.source?.type!=='task_tree') throw new Error('Task Tree authorization must be refreshed.');
+      await updateTowerPgCanvasNaplet(this.context.workspaceId,this.canvasId,napletId,{...body,expected_row_version:naplet.row_version},apiOptions(this.context));
+      return this.refresh();
+    });
+  }
+
   updateNapletLayout(napletId, layout) {
     return this.enqueueMutation(async () => {
       const snapshot = await this.db.canvas_snapshots.get(this.key);

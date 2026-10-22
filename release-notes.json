@@ -4968,6 +4968,27 @@
       "notes": [
         "Core purple now uses the selected Nostr Browser main-tab colour, #2B1B3C. Light app and agent names, primary actions and focus states inherit it; readable dark-mode colours are preserved."
       ]
+    },
+    {
+      "buildNumber": 2590,
+      "label": "Task Tree canvas naplet",
+      "notes": [
+        "Build a tree of shared tasks on a canvas: choose a scope and channel, start from a new or existing task, add children and next tasks, and open normal task details.",
+        "Task Tree keeps its root and view settings, loads real task relationships progressively, and reflects shared task updates."
+      ]
+    },
+    {
+      "buildNumber": 2592,
+      "label": "Verified Task Tree activation",
+      "notes": [],
+      "noUserVisibleChanges": true
+    },
+    {
+      "buildNumber": 2593,
+      "label": "Readable Task Tree layout and touch controls",
+      "notes": [
+        "Task Tree keeps child successors to the right of their predecessors, fits at a readable size with internal scrolling, and contains the graph on phones."
+      ]
     }
   ]
 }

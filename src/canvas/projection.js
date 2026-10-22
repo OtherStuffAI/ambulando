@@ -1,7 +1,7 @@
 import { resolveTowerPgWorkspaceContext } from '../pg-workspace-context.js';
 import { cloneCanvasValue } from './interactions.js';
 
-export const CANVAS_SOURCE_TYPES = Object.freeze(['document', 'task_list', 'chat_thread', 'html', 'excalidraw', 'canvas']);
+export const CANVAS_SOURCE_TYPES = Object.freeze(['document', 'task_list', 'task_tree', 'chat_thread', 'html', 'excalidraw', 'canvas']);
 export const CANVAS_ELEMENT_KINDS = Object.freeze(['text', 'rectangle', 'diamond', 'ellipse', 'arrow', 'line', 'draw', 'frame']);
 export const CANVAS_ACCESS_MESSAGE = 'Ask your workspace owner for access.';
 
@@ -104,6 +104,7 @@ export function normalizeCanvasList(payload, context) {
 
 function normalizeLayout(value) {
   return {
+    ...(value?.task_tree ? {task_tree:normalizeTaskTreeView(value.task_tree)} : {}),
     x: Math.round(finite(value?.x, 0)),
     y: Math.round(finite(value?.y, 0)),
     width: Math.max(220, Math.min(1200, Math.round(finite(value?.width, 360)))),
@@ -126,6 +127,7 @@ function normalizeContent(type, value) {
   const content = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
   if (type === 'canvas') return { title: text(content.title) };
   if (type === 'document') return { title: text(content.title), body: String(content.body ?? ''), updated_at: text(content.updated_at) };
+  if (type === 'task_tree') return {channel_id:uuidText(content.channel_id),scope_id:uuidText(content.scope_id),channel_title:text(content.channel_title),can_create:content.can_create===true};
   if (type === 'task_list') return { tasks: (Array.isArray(content.tasks) ? content.tasks : []).slice(0, 200).map(task => ({ id: text(task?.id), title: text(task?.title), state: text(task?.state) })).filter(task => task.id && task.title) };
   if (type === 'excalidraw') return normalizeBoardContent(content);
   if (type === 'chat_thread') return { messages: (Array.isArray(content.messages) ? content.messages : []).slice(0, 200).map(message => ({ id: text(message?.id), author: text(message?.author), body: String(message?.body ?? ''), created_at: text(message?.created_at) })).filter(message => message.id) };
@@ -207,7 +209,7 @@ export function normalizeCanvasNaplet(row) {
   if (!id || !Number.isSafeInteger(Number(row?.row_version)) || Number(row.row_version) < 1) throw new Error('Invalid Canvas naplet');
   if (row?.access === 'denied') {
     // Deliberately drop every server-supplied source/content/title field.
-    return { id, access: 'denied', layout: normalizeLayout(row.layout), row_version: Number(row.row_version) };
+    return { id, access: 'denied', layout: normalizeLayout({...row.layout,task_tree:undefined}), row_version: Number(row.row_version) };
   }
   if (row?.access !== 'ready') throw new Error('Invalid Canvas naplet access state');
   return normalizeReadyNaplet({ ...row, id });
@@ -285,4 +287,9 @@ export function normalizeCanvasSnapshot(payload, context, canvasId, requestId) {
     elements,
     comments,
   };
+}
+
+export function normalizeTaskTreeView(value={}) {
+  const list=value=>[...new Set((Array.isArray(value)?value:[]).map(uuidText).filter(Boolean))].slice(0,2000);
+  return {root_task_id:uuidText(value.root_task_id)||null,instance_id:uuidText(value.instance_id)||null,collapsed:list(value.collapsed),upstream:list(value.upstream),viewport:{x:finite(value.viewport?.x,0),y:finite(value.viewport?.y,0),scale:Math.max(0.001,Math.min(2,finite(value.viewport?.scale,1)))}};
 }

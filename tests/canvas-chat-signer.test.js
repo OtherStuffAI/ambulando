@@ -136,3 +136,10 @@ it('cleans up when removal destroys the browsing context during a native prompt'
   expect(() => f.dispose()).not.toThrow(); finish(); await job;
   expect(f.source.postMessage).not.toHaveBeenCalled();
 });
+
+it('permits normal task commands only for a registered task surface and retains administration boundaries',()=>{
+  const request=(suffix,method='PATCH')=>({...event(),tags:[['u',`http://tower/api/v4/flightdeck-pg/workspaces/ws${suffix}`],['method',method]]});
+  expect(()=>validateChatSigningEvent(request('/tasks/task-id'),state)).toThrow('Unsupported');
+  for(const [suffix,method] of [['/tasks/task-id','PATCH'],['/tasks/task-id/comments','POST'],['/edit-leases/acquire','POST']])expect(()=>validateChatSigningEvent(request(suffix,method),{...state,taskSurface:true})).not.toThrow();
+  for(const suffix of ['/members','/permissions','/scopes'])expect(()=>validateChatSigningEvent(request(suffix,'POST'),{...state,taskSurface:true})).toThrow('Unsupported');
+});

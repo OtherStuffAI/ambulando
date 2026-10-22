@@ -12,6 +12,7 @@ export function registerCanvasChatFrame(Alpine) {
       return { workspaceKey: store.currentWorkspaceKey, workspaceId: context.workspaceId, baseUrl: context.baseUrl, appNpub: context.appNpub,
         workspaceOwnerNpub: context.workspaceOwnerNpub, towerServiceNpub: workspace?.towerServiceNpub, workspaceServiceNpub: workspace?.workspaceServiceNpub,
         workspaceSessionNpub: workspace?.pgSessionNpub,
+        taskSurface: !!new URL(element.src,location.origin).searchParams.get('canvastask'),
         pubkey: store.session?.pubkey, npub: store.session?.npub, method: store.session?.method };
     } });
     let intersecting = false;

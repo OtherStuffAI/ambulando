@@ -120,7 +120,8 @@ export function validateChatSigningEvent(event, state) {
     const read = ['GET', 'HEAD'].includes(method) && suffix !== null;
     // Preserve normal chat, attachment and sync/view-state writes; exclude
     // workspace administration, grants, keys and unrelated application APIs.
-    const write = suffix !== null && (
+    const taskWrite=state.taskSurface && suffix!==null && ((['PATCH','DELETE'].includes(method) && /^\/tasks\/[^/]+$/.test(suffix)) || (method==='POST' && /^\/tasks\/[^/]+\/(comments|state|assignments|move)$/.test(suffix)) || (['POST','DELETE'].includes(method) && /^\/tasks\/[^/]+\/assignments\/[^/]+$/.test(suffix)) || (method==='POST' && /^\/edit-leases\/(acquire|[^/]+\/(renew|release))$/.test(suffix)));
+    const write = suffix !== null && (taskWrite ||
       (method === 'POST' && /^\/channels\/[^/]+\/(messages|files|threads\/[^/]+\/branches)$/.test(suffix))
       || (['PATCH', 'DELETE'].includes(method) && /^\/(messages|threads)\/[^/]+$/.test(suffix))
       || (method === 'POST' && /^\/threads\/[^/]+\/archive$/.test(suffix))

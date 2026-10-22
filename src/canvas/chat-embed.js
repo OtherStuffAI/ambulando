@@ -1,6 +1,6 @@
 import { canvasChatReference } from './chat-references.js';
 import { createCanvasChatSignerClient } from './chat-signer.js';
-import { getTowerPgThread, setBaseUrl } from '../api.js';
+import { getTowerPgThread, getTowerPgTask, setBaseUrl } from '../api.js';
 import { canvasContext } from './projection.js';
 import { openWorkspaceDb } from '../db.js';
 import { tryAutoLoginFromStorage, pubkeyToNpub, setExtensionSignerBridge, clearExtensionSignerBridge } from '../auth/nostr.js';
@@ -26,6 +26,7 @@ export async function hydrateCanvasChatChannel(store, channelId, hydrate = hydra
 
 export const canvasChatEmbedMixin = {
   canvasChatEmbedded,
+  canvasTaskEmbedded:canvasChatEmbedded && !!params.get('canvastask'),
   canvasChatVisible: false,
   canvasChatOrigin: null,
   canvasChatBootstrapped: false,
@@ -105,7 +106,16 @@ export const canvasChatEmbedMixin = {
       if (this.currentWorkspaceKey !== params.get('workspacekey') || !this.session?.npub) throw new Error('Open Ambulando and sign in to this workspace, then reopen the chat.');
       this.navSection = 'status';
       const threadId = params.get('canvasthread');
-      if (threadId) {
+      const taskId=params.get('canvastask');
+      if(taskId) {
+        const context=canvasContext(this);
+        const result=await getTowerPgTask(context.workspaceId,taskId,{baseUrl:context.baseUrl,appNpub:context.appNpub});
+        if(result.task?.id!==taskId)throw new Error('Task unavailable.');
+        await hydrateCanvasChatChannel(this,result.task.channel_id);
+        await this.loadLocalChannels({syncRoute:false});
+        if(!await this.openChatTaskModal(taskId))throw new Error('Task unavailable.');
+        this.chatTaskModalOpen=true;this.chatTaskModalFullScreen=true;
+      } else if (threadId) {
         const context = canvasContext(this);
         const result = await getTowerPgThread(context.workspaceId, threadId, { baseUrl: context.baseUrl, appNpub: context.appNpub });
         const thread = result.thread || result;

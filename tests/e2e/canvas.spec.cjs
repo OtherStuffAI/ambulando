@@ -125,6 +125,7 @@ test('dedicated Canvas route renders authorized sources and isolates trusted HTM
     if (url.searchParams.get('canvasthread') === 'thread-1') return route.fulfill({ contentType: 'text/html', body: '<!doctype html><p>Existing chat fixture</p>' });
     if (url.pathname === '/__canvas-seed.js') return route.fulfill({ contentType: 'text/javascript', body: seedBundle });
     if (url.pathname === '/__canvas-seed.html') return route.fulfill({ contentType: 'text/html', body: '<!doctype html><title>seed</title>' });
+    if(url.pathname===`/api/v4/flightdeck-pg/workspaces/${workspaceId}/canvases`)return route.fulfill({contentType:'application/json',body:JSON.stringify({workspace_id:workspaceId,identity,complete:true,canvases:[definition(canvasVersion,canvasViewport)]})});
     if (url.pathname.startsWith(`/api/v4/flightdeck-pg/workspaces/${workspaceId}/canvases/${canvasId}`)) {
       expect(request.headers().authorization).toMatch(/^Nostr /);
       const suffix = url.pathname.slice(url.pathname.indexOf(`/canvases/${canvasId}`) + `/canvases/${canvasId}`.length);
@@ -181,6 +182,7 @@ test('dedicated Canvas route renders authorized sources and isolates trusted HTM
   const canvasPageErrors = [];
   const canvasConsoleErrors = [];
   canvas.on('pageerror', error => canvasPageErrors.push(error.stack || error.message));
+  canvas.on('response', response=>{if(response.status()>=400)console.log('CANVAS_FAILED_RESOURCE',response.status(),response.url());});
   canvas.on('console', message => { if (message.type() === 'error') canvasConsoleErrors.push(message.text()); });
   await expect(canvas.getByRole('heading', { name: 'Delivery map' })).toBeVisible();
   await canvas.waitForTimeout(100);

@@ -1276,13 +1276,14 @@ export async function createTowerPgThreadBranch(workspaceId, channelId, parentTh
   return json(resp, { requestUrl, method: 'POST', prefix: 'Tower PG API' });
 }
 
-export async function getTowerPgChannelTasks(workspaceId, channelId, { baseUrl = _baseUrl, appNpub = FLIGHT_DECK_PG_APP_NPUB, limit = 200 } = {}) {
+export async function getTowerPgChannelTasks(workspaceId, channelId, { baseUrl = _baseUrl, appNpub = FLIGHT_DECK_PG_APP_NPUB, limit = 200, cursor = null } = {}) {
   const encodedWorkspaceId = encodeURIComponent(String(workspaceId || '').trim());
   const encodedChannelId = encodeURIComponent(String(channelId || '').trim());
   if (!encodedWorkspaceId) throw new Error('Tower PG workspace id is required');
   if (!encodedChannelId) throw new Error('Tower PG channel id is required');
   const params = new URLSearchParams();
   if (limit) params.set('limit', String(limit));
+  if (cursor) params.set('cursor', cursor);
   const requestPath = `/api/v4/flightdeck-pg/workspaces/${encodedWorkspaceId}/channels/${encodedChannelId}/tasks${params.size > 0 ? `?${params.toString()}` : ''}`;
   const requestUrl = resolveTowerPgUrl(requestPath, baseUrl);
   const resp = await signedTowerPgFetch(requestPath, { baseUrl, appNpub });
@@ -1320,6 +1321,14 @@ export async function getTowerPgChannel(workspaceId, channelId, { baseUrl = _bas
   const requestUrl = resolveTowerPgUrl(requestPath, baseUrl);
   const resp = await signedTowerPgFetch(requestPath, { baseUrl, appNpub });
   return json(resp, { requestUrl, method: 'GET', prefix: 'Tower PG API' });
+}
+
+export async function getTowerPgTaskRelationships(workspaceId, taskId, {baseUrl=_baseUrl,appNpub=FLIGHT_DECK_PG_APP_NPUB,cursor=null,limit=100}={}) {
+  const params=new URLSearchParams({limit:String(limit)});
+  if(cursor) params.set('cursor',cursor);
+  const requestPath=`/api/v4/flightdeck-pg/workspaces/${encodeURIComponent(workspaceId)}/tasks/${encodeURIComponent(taskId)}/relationships?${params}`;
+  const requestUrl=resolveTowerPgUrl(requestPath,baseUrl);
+  return json(await signedTowerPgFetch(requestPath,{baseUrl,appNpub}),{requestUrl,method:'GET',prefix:'Tower PG API'});
 }
 
 export async function getTowerPgTask(workspaceId, taskId, { baseUrl = _baseUrl, appNpub = FLIGHT_DECK_PG_APP_NPUB } = {}) {

@@ -267,7 +267,7 @@
       <p class="sync-error-text" x-show="$store.chat.scopeRepairSession.error" x-text="$store.chat.scopeRepairSession.error"></p>
     </div>
   </div>
-  <section class="canvas-chat-embed-status" x-data x-show="$store.chat.canvasChatEmbedded &amp;&amp; (!$store.chat.canvasChatEmbedReady || $store.chat.canvasChatEmbedError)" x-cloak role="status"><p x-text="$store.chat.canvasChatEmbedError || 'Opening conversation…'"></p><button type="button" x-show="$store.chat.canvasChatEmbedError" @click="$store.chat.canvasChatEmbedReady = false; $store.chat.initCanvasChatApp()">Retry</button></section>
+  <section class="canvas-chat-embed-status" x-data x-show="$store.chat.canvasChatEmbedded &amp;&amp; (!$store.chat.canvasChatEmbedReady || $store.chat.canvasChatEmbedError)" x-cloak role="status"><p x-text="$store.chat.canvasChatEmbedError || ($store.chat.canvasTaskEmbedded ? 'Opening task…' : 'Opening conversation…')"></p><button type="button" x-show="$store.chat.canvasChatEmbedError" @click="$store.chat.canvasChatEmbedReady = false; $store.chat.initCanvasChatApp()">Retry</button></section>
   <main class="app-shell" x-sol-viewport>
     <template x-if="$store.chat.identityCard.open && $store.chat.identityCardProfile">
       <div

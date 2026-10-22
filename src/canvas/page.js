@@ -1,3 +1,5 @@
+import './task-tree.css';
+import { canvasTaskTreeStore } from './task-tree-page.js';
 import Alpine from 'alpinejs';
 import { canvasChatStore } from './chat-page.js';
 import { registerCanvasChatFrame } from './chat-frame.js';
@@ -82,6 +84,7 @@ export function canvasPageStore() {
     // view is viewer-local until the viewer pans or zooms.
     reference: { napletId: '', requested: false, handled: false }, referenceHighlightId: '', viewportLocal: false,
     notice: '', referenceDialog: { napletId: '', markdown: '', url: '', message: '' }, versionsDialog: { napletId: '', returnFocus: null },
+    ...canvasTaskTreeStore(),
     ...canvasBoardStore(),
     ...canvasChatStore(),
     ...canvasArtifactPickerStore(),
@@ -126,17 +129,19 @@ export function canvasPageStore() {
         const db = openWorkspaceDb(workspace.workspaceKey); await db.open();
         assetStore = new CanvasHtmlAssetStore(this.context());
         syncRuntime = new CanvasSyncRuntime(this.context(), this.canvasId, { onSnapshot: snapshot => this.applySnapshot(snapshot), onError: error => this.applySyncError(error) });
+        this.startTaskTrees(this.context(),{add:body=>syncRuntime.addNaplet(body),save:(id,body)=>syncRuntime.updateTaskTreeView(id,body),refresh:()=>syncRuntime.refresh()});
         this.startBoards(this.context());
         this.startChats(this.context(), { persist: body => syncRuntime.addNaplet(body), refresh: () => syncRuntime.refresh() });
         keydown = event => this.handleKeydown(event); addEventListener('keydown', keydown);
         addEventListener('pagehide', () => {
-          syncRuntime?.stop(); assetStore?.clear(); this.stopBoards(); this.stopChats(); this.resetArtifactPicker(); removeEventListener('keydown', keydown);
+          syncRuntime?.stop(); assetStore?.clear(); this.stopTaskTrees(); this.stopBoards(); this.stopChats(); this.resetArtifactPicker(); removeEventListener('keydown', keydown);
           // A browser-history cache is not fresh authorization.
           this.status = 'loading'; this.canvas = null; this.naplets = []; this.elements = []; this.comments = [];
           this.clearHtmlViews(); this.closeNapletDialogs(); this.clearReferenceFeedback(); document.title = 'Canvas · Ambulando';
         });
         addEventListener('pageshow', event => {
           if (!event.persisted) return;
+          this.startTaskTrees(this.context(),{add:body=>syncRuntime.addNaplet(body),save:(id,body)=>syncRuntime.updateTaskTreeView(id,body),refresh:()=>syncRuntime.refresh()});
           this.startBoards(this.context()); this.resumeChats(); addEventListener('keydown', keydown); syncRuntime?.start();
         });
         syncRuntime.start();
@@ -144,9 +149,10 @@ export function canvasPageStore() {
     },
     context() { return canvasContext(this); },
     applySnapshot(snapshot) {
-      this.canvas = snapshot.canvas; this.naplets = this.mergeChatNaplets(snapshot.naplets); this.elements = snapshot.elements || []; this.comments = snapshot.comments || [];
+      this.canvas = snapshot.canvas; this.naplets = this.mergeTreeNaplets(this.mergeChatNaplets(snapshot.naplets)); this.elements = snapshot.elements || []; this.comments = snapshot.comments || [];
       this.reconcileHtmlViews(snapshot.request_id);
       this.syncBoards(this.naplets);
+      void this.syncTaskTrees(this.naplets);
       if (!this.viewportLocal) this.viewport = { ...snapshot.canvas.viewport };
       const available = new Set(this.allCanvasItems().map(row => row.key));
       this.selectedKeys = this.selectedKeys.filter(key => available.has(key));
@@ -223,13 +229,14 @@ export function canvasPageStore() {
       if (this.tool === 'text') return this.createTextAt(point);
       if (this.tool === 'embed') return this.openAddDialog(point);
       if (this.tool === 'chat') return this.placeChat(point);
+      if (this.tool === 'task_tree') return this.placeTaskTree(point);
       const kind = this.tool;
       const element = { kind, layout: { x: Math.round(point.x), y: Math.round(point.y), width: 8, height: 8, z: this.highestZ() + 1 }, data: kind === 'draw' ? { points: [[0, 0]] } : {} };
       this.interaction = { type: 'create', pointerId: event.pointerId, start: point, element };
     },
     startItemInteraction(type, item, event, action = 'move') {
       if (this.tool === 'comment') {
-        if (item._chatDraft) return;
+        if (item._chatDraft || item._treeDraft) return;
         event.stopPropagation();
         return type === 'naplet' && item.access === 'ready'
           ? this.openCommentDialog({ type: 'naplet', naplet_id: item.id })
@@ -307,7 +314,7 @@ export function canvasPageStore() {
       }
       const item = state.itemType === 'naplet' ? this.naplets.find(row => row.id === state.id) : this.elements.find(row => row.id === state.id);
       if (!item || (JSON.stringify(state.before) === JSON.stringify(item.layout) && JSON.stringify(state.beforeData) === JSON.stringify(item.data || {}))) return;
-      if (item._chatDraft) { this.saveChatRecovery(); return; }
+      if (item._chatDraft || item._treeDraft) { this.saveChatRecovery(); return; }
       const after = cloneCanvasValue(item.layout);
       const afterData = cloneCanvasValue(item.data || {});
       await this.mutate(() => state.itemType === 'naplet' ? syncRuntime.updateNapletLayout(item.id, after) : syncRuntime.updateElement(item.id, { layout: after, ...(JSON.stringify(state.beforeData) !== JSON.stringify(afterData) ? { data: afterData } : {}) }), { type: 'layout', itemType: state.itemType, id: item.id, before: state.before, after, beforeData: state.beforeData, afterData });
@@ -337,7 +344,7 @@ export function canvasPageStore() {
       finally { this.saving = false; }
       return true;
     },
-    async deleteItem(type = this.selected?.type, item = this.findSelected()) { if (!item) return; if (item._chatDraft) { this.removeChatDraft(item); return; } await this.mutate(() => type === 'naplet' ? syncRuntime.deleteNaplet(item.id) : syncRuntime.deleteElement(item.id)); this.selectedKeys = this.selectedKeys.filter(key => key !== canvasItemKey(type, item.id)); },
+    async deleteItem(type = this.selected?.type, item = this.findSelected()) { if (!item) return; if (item._treeDraft) { this.removeTreeDraft(item); return; } if (item._chatDraft) { this.removeChatDraft(item); return; } await this.mutate(() => type === 'naplet' ? syncRuntime.deleteNaplet(item.id) : syncRuntime.deleteElement(item.id)); this.selectedKeys = this.selectedKeys.filter(key => key !== canvasItemKey(type, item.id)); },
     async createGroup() {
       const selected = this.allCanvasItems().filter(row => this.selectedKeys.includes(row.key)); if (selected.length < 2) return;
       if (selected.some(row => row.item._chatDraft)) { this.error = 'Send the first chat message before grouping its naplet.'; return; }
@@ -350,13 +357,14 @@ export function canvasPageStore() {
       const created = this.elements.find(row => !previous.has(row.id)); if (created) this.selectedKeys = [canvasItemKey('element', created.id)];
     },
     async duplicateSelected() {
-      const item = this.findSelected(); if (!item || item._chatDraft) return;
+      const item = this.findSelected(); if (!item || item._chatDraft || item._treeDraft) return;
       if (this.selected.type === 'naplet' && item.access !== 'ready') { this.error = 'Restricted items cannot be duplicated.'; return; }
       const layout = cloneCanvasValue({ ...item.layout, x: item.layout.x + 24, y: item.layout.y + 24, z: this.highestZ() + 1 });
+      if(item.source?.type==='task_tree')layout.task_tree={...layout.task_tree,instance_id:crypto.randomUUID()};
       if (this.selected.type === 'naplet') return this.mutate(() => syncRuntime.addNaplet({ source: cloneCanvasValue(item.source), title: item.access === 'ready' ? item.title : undefined, layout }));
       await this.mutate(() => syncRuntime.createElement({ kind: item.kind, data: cloneCanvasValue(item.data), layout }));
     },
-    async orderSelected(delta) { const item = this.findSelected(); if (!item) return; const layout = { ...item.layout, z: clamp(item.layout.z + delta, 1, 100000) }; if (item._chatDraft) { item.layout = layout; this.saveChatRecovery(); return; } await this.mutate(() => this.selected.type === 'naplet' ? syncRuntime.updateNapletLayout(item.id, layout) : syncRuntime.updateElement(item.id, { layout })); },
+    async orderSelected(delta) { const item = this.findSelected(); if (!item) return; const layout = { ...item.layout, z: clamp(item.layout.z + delta, 1, 100000) }; if (item._chatDraft || item._treeDraft) { item.layout = layout; this.saveChatRecovery(); return; } await this.mutate(() => this.selected.type === 'naplet' ? syncRuntime.updateNapletLayout(item.id, layout) : syncRuntime.updateElement(item.id, { layout })); },
     async applyLayoutHistory(changes, side) { for (const change of changes) { if (change.itemType === 'naplet') await syncRuntime.updateNapletLayout(change.id, change[side]); else await syncRuntime.updateElement(change.id, { layout: change[side] }); } },
     async undoChange() { const action = undo.pop(); if (!action) return; if (action.type === 'layout') await this.mutate(() => action.itemType === 'naplet' ? syncRuntime.updateNapletLayout(action.id, action.before) : syncRuntime.updateElement(action.id, { layout: action.before, ...(action.beforeData ? { data: action.beforeData } : {}) })); if (action.type === 'layouts') await this.mutate(() => this.applyLayoutHistory(action.changes, 'before')); if (action.type === 'data') await this.mutate(() => syncRuntime.updateElement(action.id, { data: action.before })); redo.push(action); this.historyTick -= 1; },
     async redoChange() { const action = redo.pop(); if (!action) return; if (action.type === 'layout') await this.mutate(() => action.itemType === 'naplet' ? syncRuntime.updateNapletLayout(action.id, action.after) : syncRuntime.updateElement(action.id, { layout: action.after, ...(action.afterData ? { data: action.afterData } : {}) })); if (action.type === 'layouts') await this.mutate(() => this.applyLayoutHistory(action.changes, 'after')); if (action.type === 'data') await this.mutate(() => syncRuntime.updateElement(action.id, { data: action.after })); undo.push(action); this.historyTick += 1; },
@@ -397,6 +405,7 @@ export function canvasPageStore() {
     chooseSource(option) { if (option.type === 'canvas' && option.id === this.canvasId) return; this.addDialog.sourceId = option.id; this.addDialog.title = option.type === 'canvas' ? '' : option.title; },
     async addNaplet() {
       const point = this.addDialog.point || { x: 80, y: 80 }, board = this.addDialog.type === 'excalidraw';
+      if(this.addDialog.type==='task_tree'){canvasElement('addDialog').close();return this.placeTaskTree(point);}
       const layout = { x: Math.round(point.x), y: Math.round(point.y), width: board ? 640 : 380, height: board ? 460 : 280, z: this.highestZ() + 1 };
       if (board && this.boardCreate.mode === 'create') {
         if (this.saving || this.boardCreating) return;

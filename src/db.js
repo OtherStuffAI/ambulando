@@ -2239,6 +2239,7 @@ export async function replaceTasksForOwner(ownerNpub, tasks = [], options = {}) 
       && !sameLogicalValue(byId.get(row.record_id),{...row,...taskIndexFields(row)}));
     const incoming = new Set(rows.map(row=>row.record_id));
     const omitted = options.authoritative === true ? existing.filter(row=>!incoming.has(row.record_id) && !protectedRow(row)).map(row=>row.record_id) : [];
+    if (options.isCurrent && !options.isCurrent()) return 0;
     if (omitted.length) await db.tasks.bulkDelete(omitted);
     if (changed.length) await db.tasks.bulkPut(changed);
     return changed.length + omitted.length;
