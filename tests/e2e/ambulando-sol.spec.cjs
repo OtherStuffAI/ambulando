@@ -953,3 +953,32 @@ for (const [width, height] of [[320, 700], [390, 844], [390, 600], [720, 900]]) 
     });
   }
 }
+
+for (const width of [320, 1440]) {
+  for (const theme of ['light', 'dark']) {
+    test(`passage identity, browser theme and desktop 200% reflow: ${theme} ${width}px`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 900 });
+      await openFixture(page);
+      await page.evaluate(() => window.Alpine.store('chat').closeThread({ syncRoute: false }));
+      await page.evaluate(theme => window.Alpine.store('appearance').setTheme(theme), theme);
+      const logo = page.locator('.brand-logo:visible');
+      await expect(logo).toHaveAttribute('src', '/ambulando/passage-app.png');
+      await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute('content', theme === 'dark' ? '#10162B' : '#F6F6FA');
+      expect(await logo.evaluate(img => img.complete && img.naturalWidth === 256)).toBe(true);
+      expect(await logo.evaluate(img => getComputedStyle(img).backgroundColor)).toBe('rgb(255, 255, 255)');
+      expect(await logo.evaluate(img => img.getBoundingClientRect().width)).toBe(width === 320 ? 32 : 40);
+      await page.locator('.sol-theme-button:visible').focus();
+      const focus = await page.locator('.sol-theme-button:visible').evaluate(el => ({ active: document.activeElement === el, width: getComputedStyle(el).outlineWidth, color: getComputedStyle(el).outlineColor }));
+      expect(focus.active).toBe(true);
+      expect(focus.width).toBe('2px');
+      expect(focus.color).toBe(theme === 'dark' ? 'rgb(203, 184, 255)' : 'rgb(100, 54, 199)');
+      await capture(page, `passage-${theme}-${width}`);
+      // Desktop 200% browser zoom halves the CSS viewport. Keep phone at the
+      // supported 320 CSS-pixel minimum; physical pinch zoom remains browser-owned.
+      await page.setViewportSize({ width: Math.max(320, width / 2), height: 450 });
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+      await expect(page.locator('.sol-theme-button:visible')).toBeVisible();
+      await capture(page, `passage-${theme}-${width}-200percent`);
+    });
+  }
+}

@@ -4905,6 +4905,28 @@
       "notes": [
         "Canvas Chat can load and send through the Canvas browser signer when the embedded chat has no signer. Signing requests are checked against the trusted chat frame, workspace and active identity; rejected signing preserves your draft."
       ]
+    },
+    {
+      "buildNumber": 2581,
+      "label": "Ambulando perspective-passage identity",
+      "notes": [
+        "Ambulando now uses the approved passage mark with purple actions, navy dark surfaces and coordinated app icons in both themes.",
+        "The header and sign-in retain the Ambulando name and Solvitur Ambulando tagline. Small icons are raster derivatives; legacy artwork is retained for rollback."
+      ]
+    },
+    {
+      "buildNumber": 2582,
+      "label": "Brand recovery screen alignment",
+      "notes": [
+        "The asset recovery screen uses the same readable navy and light ink as the updated Ambulando themes."
+      ]
+    },
+    {
+      "buildNumber": 2583,
+      "label": "Public-source brand metadata",
+      "notes": [
+        "Brand preview artwork is included with the app; image metadata awaits a public canonical product host. The app keeps its title and description metadata."
+      ]
     }
   ]
 }

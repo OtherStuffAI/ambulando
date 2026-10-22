@@ -4,7 +4,11 @@
   <script>if(new URLSearchParams(location.search).get('canvaschat')==='1' && parent!==window)document.documentElement.dataset.canvasChat='true';</script>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0" />
-  <meta name="theme-color" content="#F7F8F6" />
+  <meta name="theme-color" content="#F6F6FA" />
+  <meta name="description" content="Ambulando — Solvitur Ambulando. A shared workspace for people and AI agents." />
+  <meta property="og:title" content="Ambulando — Solvitur Ambulando" />
+  <meta property="og:description" content="Conversations, work and knowledge for people and AI agents." />
+  <meta name="twitter:card" content="summary" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="Ambulando" />
@@ -15,6 +19,7 @@
       const resolved = theme === 'dark' || (theme !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
       document.documentElement.dataset.theme = resolved;
       document.documentElement.style.colorScheme = resolved;
+      document.querySelector('meta[name="theme-color"]')?.setAttribute('content', resolved === 'dark' ? '#10162B' : '#F6F6FA');
     })();
   </script>
   <script data-flightdeck-asset-recovery>
@@ -58,8 +63,8 @@
             placeContent: 'center',
             gap: '16px',
             padding: '32px',
-            color: resolvedTheme === 'dark' ? '#E8EEF2' : '#16354B',
-            background: resolvedTheme === 'dark' ? '#111D29' : '#F7F8F6',
+            color: resolvedTheme === 'dark' ? '#F5F3FC' : '#10162B',
+            background: resolvedTheme === 'dark' ? '#10162B' : '#F6F6FA',
             fontFamily: 'system-ui, sans-serif',
             textAlign: 'center',
           });
@@ -125,9 +130,9 @@
     })();
   </script>
   <link rel="manifest" href="/manifest.json" />
-  <link rel="apple-touch-icon" href="/ambulando/favicon-180.png" />
-  <link rel="icon" type="image/png" sizes="32x32" href="/ambulando/favicon-32.png" />
-  <link rel="icon" type="image/png" sizes="16x16" href="/ambulando/favicon-16.png" />
+  <link rel="apple-touch-icon" href="/ambulando/passage-180.png" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/ambulando/passage-32.png" />
+  <link rel="icon" type="image/png" sizes="16x16" href="/ambulando/passage-16.png" />
   <title>Ambulando</title>
 </head>
 <body x-data x-init="$store.chat.init()" x-cloak>
@@ -330,7 +335,7 @@
           @click="if ($store.chat.isLoggedIn) $store.chat.openCommandPalette()"
           :aria-label="$store.chat.isLoggedIn ? 'Open command palette' : 'Ambulando'"
         >
-          <img class="brand-logo" src="/ambulando/confluence-symbol-provisional.png" alt="" />
+          <img class="brand-logo" src="/ambulando/passage-app.png" alt="" />
           <div class="brand-copy">
             <h1>Ambulando</h1>
             <p class="sol-brand-tagline">Solvitur Ambulando</p>
@@ -555,7 +560,7 @@
 
     <section class="auth-panel" x-show="!$store.chat.isLoggedIn">
       <div class="auth-brand">
-        <img class="auth-brand-logo" src="/ambulando/confluence-symbol-provisional.png" alt="" />
+        <img class="auth-brand-logo" src="/ambulando/passage-app.png" alt="" />
         <div>
           <p class="sol-auth-wordmark">Ambulando<small class="sol-brand-tagline">Solvitur Ambulando</small></p>
           <h2>Sign in with Nostr to get started</h2>

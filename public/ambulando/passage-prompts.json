@@ -1,0 +1,51 @@
+{
+  "tool": "image_gen__imagegen (built-in)",
+  "intent": "precise-object-edit",
+  "source": "assets/source16D.png",
+  "source_sha256": "83662b00b86760320e5d27cd7421b103538f660fd6a73bf02a17f7f32a3eb518",
+  "source_mapping": "v5 prompts.json concept16D, Split passage, derived from v4 16A. Exact v5 original PNG is the sole edit target for both calls.",
+  "reference_roles": [
+    "Image1: exact v5 original16D edit target; preserve identity and regions."
+  ],
+  "calls": [
+    {
+      "prompt": "Use case: precise-object-edit. Asset: Ambulando refined16D flat identity logo. Input image1 is the EXACT v5 original16D edit target, not merely inspiration. Preserve its three layered navy terrace planes, overall silhouette and placement, orange LEFT and purple RIGHT bottom split, white layer gaps, and route open through bottom edge. Change ONLY the white central route geometry: it is a path receding into distance, with a conspicuously BROAD nearfield opening at BOTTOM, continuously and SMOOTHLY NARROWING along its entire gentle winding length toward one true sharp vanishing POINT on the RIGHT side of the upper navy plane. Both route edges converge continuously, with no intermediate neck followed by widening. Replace current top fish-tail/hook with the narrow pointed rightward terminal. No hook, curl, flare, fork, arrowhead or widened upper mouth. Path width broadest at bottom and progressively smaller going upward into distance; terminal at right is a SINGLE pointed apex where edges meet. Perspective taper means geometry ONLY, not opacity fade or glow. Keep bottom route open, no coloured bridge. Preserve bottom orange-left #BF4D0D and purple-right #6436C7, upper layers navy #10162B. One centred complete mark on plain WHITE background with original generous margin. Clean crisp flat solid colour artwork. No text, letters, 3D, shadow, glow, gradient, texture, mockup or added elements.",
+      "prompt_sha256": "78ba9f882817897cb789671fd711ef99db7262fb57bb928bda1ff8c86122fb08",
+      "reference_paths": [
+        "assets/source16D.png"
+      ],
+      "reference_roles": [
+        "Image1: exact v5 original16D edit target; preserve identity and regions."
+      ],
+      "transparent_background": false,
+      "output": "assets/refinement-A.png",
+      "sha256": "d741bee8749862b31d7f6e254d1a1e35f43bb169a3301e6e4e876fe2ea2c0edc",
+      "status": "rejected: terminal improves but foreground opening remains narrow",
+      "dimensions": [
+        1254,
+        1254
+      ]
+    },
+    {
+      "prompt": "Use case: precise-object-edit. Image1 is exact original v5 Ambulando16D EDIT TARGET. Preserve three layered terrace silhouette, navy upper planes, orange LEFT and purple RIGHT base, white interlayer gaps. Replace central white route completely with a perspective road: VERY WIDE OPEN BOTTOM (at least 35% of logo width at bottom foreground), smooth broad sweeping curves, progressively narrower with distance from bottom through middle to single needle-point vanishing endpoint at UPPER RIGHT. Critical: original lower path is a narrow pinched opening, MUST substantially WIDEN that bottom opening by separating orange left and purple right inner edges. Lower opening must be clearly WIDER than EVERY middle section. No narrow bottom stem, no bottleneck, no hourglass, no middle bulge. Both edges flow smoothly all the way; width steadily decreases toward right-hand point. Terminal is a sharp point with absolutely no fish-tail, hook, curl, flare, fork or arrowhead. Keep path OPEN through bottom. Preserve colours navy #10162B orange #BF4D0D purple #6436C7 and overall recognisable layered16D identity. Flat solid colours on white, no gradients/tonal shading, transparency fades, opacity fades, glow, shadows, 3D, text or mockup. Broad foreground widening is essential, not optional.",
+      "prompt_sha256": "28b319572919a1e614692ddb9d9506a2200b2fec863279c1b8240bf500ed4612",
+      "reference_paths": [
+        "assets/source16D.png"
+      ],
+      "reference_roles": [
+        "Image1: exact v5 original16D edit target; preserve identity and regions."
+      ],
+      "transparent_background": false,
+      "output": "assets/refinement-B.png",
+      "sha256": "8f3988cf0fe7c14e28776955ffd07ad459f49eaf23532c16db0ca93b8158244b",
+      "status": "selected after manager visual review; exact master for brand treatment",
+      "dimensions": [
+        1254,
+        1254
+      ]
+    }
+  ],
+  "selection": "refinement-B selected after manager visual review of exact source/A/B; A rejected",
+  "rationale": "A broad foreground opening and a pointed right-hand vanishing terminal make the passage read as forward movement into distance. Geometry tapers; no opacity or glow fade. Navy terraces and orange-left/purple-right regions preserve16D recognition.",
+  "limits": "AI-generated raster concepts with residual tonal variation and geometric drift. White background is opaque. No transparent, vector, one-ink or print-ready master exists. No trademark clearance or live rebrand is implied."
+}

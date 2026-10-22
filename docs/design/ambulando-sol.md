@@ -1,23 +1,23 @@
 # Ambulando Sol frontend
 
-Sol is the Flight Deck browser client presented with Ambulando design system v5.
+Sol is the Flight Deck browser client presented with the approved Ambulando perspective-passage identity over the v5 component system.
 The fork retains Alpine, Dexie materialization, Nostr signers, Tower adapters,
 worker synchronization, checkout/edit leases and permissions. Its namespace and
-record contracts are unchanged. Source commits remain local until a dedicated
-Sol remote is configured; never publish to the original Flight Deck remote.
+record contracts are unchanged. Publish source only to the dedicated Ambulando origin; never publish to the
+original Flight Deck upstream remote.
 
 ## Surface audit and presentation ownership
 
 The audit identified root `index.html` as the connected product template, with
 shared styling in `src/styles.css`, pipeline styling in `src/pipeline-viewer.css`
 and shell state assembled from `app.js` and `shell-state.js`. These continue to
-own their existing behavior. The presentation layer comprises exact v5 tokens in
+own their existing behavior. The presentation layer comprises semantic brand tokens in
 `src/ambulando-tokens.css`, migrated shared semantic declarations, and component
 conventions in `src/sol.css`. Avoid new fixed light colors in any product surface.
 
 | Surface | Existing behavior retained | v5 presentation |
 | --- | --- | --- |
-| Shell/navigation | Section routing, view locks, scope/channel selection, workspace discovery/switching, profile/sync feedback | Header-only Confluence/name branding, compact rail, local Lucide navigation, responsive drawer, native keyboard buttons |
+| Shell/navigation | Section routing, view locks, scope/channel selection, workspace discovery/switching, profile/sync feedback | Header-only passage/name branding, compact rail, local Lucide navigation, responsive drawer, native keyboard buttons |
 | Login/onboarding | Ephemeral, NIP-07, bunker/nsec, workspace access/bootstrap and connection flows | Quiet bordered panels, labeled credentials, explicit disabled/loading/error feedback |
 | Home/Inbox/scopes | Dexie unread/working projections, filters, actions, scope cards and channel creation permissions | Semantic cards, status text, compact controls, selected accent |
 | Conversations/thread/composer | Thread routing, attachments, reactions, scroll ownership, drafts and send failure | Readable messages (16px desktop, compact phone proportions), calm sender metadata, bounded modal, focus ring and local control colors |
@@ -109,12 +109,21 @@ Existing content/attachment avatars are not replaced with decorative brand marks
 Task-board state/column colors remain data-driven accents, including user-configured
 colors, on semantic paired surfaces; their persisted palette contract is retained.
 
-The Confluence symbol is the supplied provisional raster, unchanged. Ivory
-backing separates its navy from dark surfaces. The live-type Ambulando name is
-an interface treatment, not a claim to the master logo font. Favicon derivatives
-preserve proportions with clear space; 16px loses trail definition and 32px is
-soft. Final approved vector and optically tuned small artwork remain outstanding.
-See `public/ambulando/README.md`, source manifest and asset hashes for provenance.
+The selected refined16D perspective-passage raster is preserved byte-for-byte as
+`passage-master.png`. White opaque backing separates navy geometry from dark
+surfaces. The live-type name and Solvitur Ambulando tagline remain interface
+type, not a custom wordmark master. Desktop header tiles remain 40px; phones use
+32px to retain more detail without changing navigation touch targets. Small
+icons are raster derivatives: 16px loses fine gaps and the terminal; 32px is
+recognisable but soft. No optical, vector, transparent or production-print
+master is claimed. The Confluence assets remain for rollback. See
+`public/ambulando/README.md` and asset hashes for provenance and limitations.
+
+Palette roles include popover, secondary, sidebar and chart aliases, with purple
+primary actions on light and lighter purple on navy dark surfaces. Status and
+code pairs, user task colours, document paper, theme persistence and layout
+owners remain independent. Browser theme colour follows the same resolved theme
+both during head bootstrap and after user/system preference changes.
 
 ## Verification
 

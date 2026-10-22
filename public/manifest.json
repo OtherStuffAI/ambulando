@@ -4,17 +4,17 @@
   "description": "Ambulando shared workspace",
   "start_url": "/",
   "display": "standalone",
-  "theme_color": "#F7F8F6",
-  "background_color": "#F7F8F6",
+  "theme_color": "#F6F6FA",
+  "background_color": "#F6F6FA",
   "icons": [
     {
-      "src": "/ambulando/favicon-192.png",
+      "src": "/ambulando/passage-192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/ambulando/favicon-512.png",
+      "src": "/ambulando/passage-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
