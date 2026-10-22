@@ -211,6 +211,8 @@ test('create, edit inline and full screen, save explicitly, reuse and browse ver
   await expect(floatingSave(page)).toBeDisabled();
   await expect(editorRoot(page)).toHaveAttribute('data-board-readonly', 'false');
   await expectEditorSized(page);
+  // An empty board opens at 100%, not at Excalidraw's fit-to-empty maximum.
+  await expect(editorRoot(page)).toHaveAttribute('data-board-zoom', '1');
 
   // Inline drawing makes an unsaved local draft; nothing is published.
   await drawRectangle(page);
@@ -284,6 +286,70 @@ test('create, edit inline and full screen, save explicitly, reuse and browse ver
   await expectEditorSized(page, 1, 300);
   expect(errors).toEqual([]);
   await page.screenshot({ path: test.info().outputPath('canvas-excalidraw-boards.png') });
+});
+
+test('boards open at 100% inline and full screen; the viewer\'s zoom survives full screen and Save', async ({ page, context }) => {
+  test.setTimeout(120_000);
+  const tower = fakeTower();
+  // A small drawing that fit-to-viewport would magnify to Excalidraw's 3000% maximum.
+  const board = tower.createBoard('Sketch', [element('dot', 'rectangle', { x: 300, y: 200, width: 8, height: 8 })]);
+  tower.state.naplets.push({ id: uid(), source: { type: 'excalidraw', id: board.id }, title: 'Sketch', layout: { x: 40, y: 40, width: 640, height: 460, z: 1 } });
+  const { errors } = await openCanvas(page, context, tower, { existingBoard: { id: board.id, title: 'Sketch.excalidraw' } });
+  await expect.poll(() => count(page)).toBe(1);
+  await expectEditorSized(page);
+  const zoom = () => editorRoot(page).getAttribute('data-board-zoom');
+  // Excalidraw's own zoom readout, as the viewer sees it (full screen only;
+  // the compact inline layout has no zoom footer).
+  const zoomLabel = boardWindow(page).frameLocator('.canvas-board-frame').locator('.reset-zoom-button');
+  await expect.poll(zoom).toBe('1');
+  await expect(status(page)).toHaveText('v1');
+
+  // The viewer zooms in; inline ↔ full screen keeps that zoom (one editor instance).
+  const frame = boardWindow(page).locator('.canvas-board-frame');
+  const box = await frame.boundingBox();
+  await page.mouse.click(box.x + 20, box.y + box.height - 20);
+  await page.keyboard.press('ControlOrMeta+Equal');
+  await page.keyboard.press('ControlOrMeta+Equal');
+  await expect.poll(zoom).not.toBe('1');
+  const zoomed = await zoom();
+  expect(Number(zoomed)).toBeGreaterThan(1);
+  expect(Number(zoomed)).toBeLessThan(2);
+  await boardWindow(page).locator('.window-popout').click();
+  await expect(boardWindow(page)).toHaveClass(/window-expanded/);
+  await expectEditorSized(page, 0, 600);
+  expect(await zoom()).toBe(zoomed);
+  await expect(zoomLabel).toHaveText(`${Math.round(Number(zoomed) * 100)}%`);
+  await boardWindow(page).locator('.window-popout').click();
+  await expect(boardWindow(page)).not.toHaveClass(/window-expanded/);
+  expect(await zoom()).toBe(zoomed);
+  // Opening at 100% is not a clamp: the viewer can zoom out below it too.
+  await page.mouse.click(box.x + 20, box.y + box.height - 20);
+  for (let i = 0; i < 4; i += 1) await page.keyboard.press('ControlOrMeta+Minus');
+  await expect.poll(async () => Number(await zoom())).toBeLessThan(1);
+  for (let i = 0; i < 4; i += 1) await page.keyboard.press('ControlOrMeta+Equal');
+  await expect.poll(zoom).toBe(zoomed);
+
+  // Editing and Save keep the viewer's zoom; the viewport is not saved.
+  await drawRectangle(page);
+  await expect.poll(() => count(page)).toBe(2);
+  await expect(status(page)).toHaveText('Unsaved · v1');
+  await floatingSave(page).click();
+  await expect(status(page)).toHaveText('v2');
+  expect(await zoom()).toBe(zoomed);
+  const saved = tower.versionScene(board.id, 2);
+  expect(saved.elements).toHaveLength(2);
+  expect(saved.appState).not.toHaveProperty('zoom');
+  expect(saved.appState).not.toHaveProperty('scrollX');
+
+  // A fresh open taken straight to full screen starts at 100% too.
+  await page.reload();
+  await boardWindow(page).locator('.window-popout').click();
+  await expect(boardWindow(page)).toHaveClass(/window-expanded/);
+  await expect.poll(() => count(page)).toBe(2);
+  await expectEditorSized(page, 0, 600);
+  await expect(zoomLabel).toHaveText('100%');
+  await expect.poll(zoom).toBe('1');
+  expect(errors).toEqual([]);
 });
 
 test('stale saves keep the draft, merge brings agent work, refresh loads latest images, unsaved navigation warns, revocation purges', async ({ page, context }) => {

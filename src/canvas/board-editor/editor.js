@@ -14,6 +14,10 @@ function reportCounts(elements, files) {
   node.dataset.boardElementCount = String((elements || []).filter(element => !element.isDeleted).length);
   node.dataset.boardFileCount = String(Object.keys(files || {}).length);
 }
+function reportZoom(appState) {
+  const node = root();
+  if (node && Number.isFinite(appState?.zoom?.value)) node.dataset.boardZoom = String(appState.zoom.value);
+}
 const SAFE_LINK = /^https?:\/\//i;
 
 function sceneElements(scene) {
@@ -42,7 +46,11 @@ function BoardEditor({ port, theme }) {
       ...(reset ? { appState: { ...BOARD_APP_STATE_DEFAULTS, ...(scene.appState || {}) } } : {}),
       captureUpdate: CaptureUpdateAction.NEVER,
     });
-    if (reset) { api.history.clear(); api.scrollToContent?.(undefined, { fitToViewport: true, viewportZoomFactor: 0.9, animate: false }); }
+    // A newly opened board starts at 100%, centred on its content. Fitting to
+    // the viewport zooms sparse boards up to Excalidraw's 3000% maximum (an
+    // empty board has zero-size bounds). Later loads of the same key keep the
+    // viewer's own zoom.
+    if (reset) { api.history.clear(); api.scrollToContent?.(undefined, { fitToContent: true, minZoom: 1, maxZoom: 1, animate: false }); }
     state.current.fingerprint = boardSceneFingerprint(scene);
     state.current.interacted = false;
     reportCounts(api.getSceneElementsIncludingDeleted(), api.getFiles());
@@ -119,6 +127,7 @@ function BoardEditor({ port, theme }) {
   const onChange = useCallback((elements, appState, files) => {
     const current = state.current;
     reportCounts(elements, files);
+    reportZoom(appState);
     if (current.readOnly) return;
     current.pending = {
       elements: elements.map(element => ({ ...element })),

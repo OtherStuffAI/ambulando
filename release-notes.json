@@ -4891,6 +4891,13 @@
       "notes": [
         "Canvas Chat naplets keep independent conversations and drafts, show replies from shared chat data, recover failed Canvas bindings without resending, and pause background work while hidden."
       ]
+    },
+    {
+      "buildNumber": 2575,
+      "label": "Canvas boards open at 100%",
+      "notes": [
+        "Canvas boards now open at 100% zoom centred on their content instead of zooming sparse or empty boards to the maximum, and keep your own zoom when switching to fullscreen or saving."
+      ]
     }
   ]
 }
