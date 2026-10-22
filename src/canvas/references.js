@@ -49,6 +49,8 @@ export function parseCanvasReference(search) {
     canvasId: validId(canvasId) ? canvasId : '',
     napletId: napletParam && validId(napletParam) ? napletParam : '',
     napletRequested: napletParam !== null,
+    ...(validId(params.get('versionid')) ? { versionId: text(params.get('versionid')) } : {}),
+    ...(validId(params.get('sourceid')) ? { sourceId: text(params.get('sourceid')) } : {}),
   };
 }
 

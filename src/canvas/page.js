@@ -111,7 +111,7 @@ export function canvasPageStore() {
         const link = parseCanvasReference(location.search), settings = await getSettings();
         const known = (settings?.knownWorkspaces || []).map(normalizeWorkspaceEntry).filter(Boolean);
         const incomplete = new Error('This Canvas link is incomplete. Return to Ambulando and open it again.');
-        this.reference = { napletId: link.napletId, requested: link.napletRequested, handled: false };
+        this.reference = { napletId: link.napletId, versionId: link.versionId, sourceId: link.sourceId, requested: link.napletRequested, handled: false };
         // References name the Tower workspace id; ordinary links keep the local key.
         let workspace = link.workspaceId ? null : findReferenceWorkspace(known, { workspaceKey: link.workspaceKey || text(settings?.currentWorkspaceKey) });
         if (link.workspaceIdMalformed || !this.canvasId || (!link.workspaceId && (!workspace?.pgBackendMode || !workspace.workspaceId))) throw incomplete;
@@ -758,7 +758,19 @@ export function canvasPageStore() {
       if (!reference.requested || reference.handled) return;
       reference.handled = true;
       const target = canvasReferenceTarget(this.naplets, reference.napletId);
-      if (!target) { this.error = CANVAS_REFERENCE_UNAVAILABLE; return; }
+      if (!target || (reference.sourceId && reference.sourceId !== target.source?.id)) { this.error = CANVAS_REFERENCE_UNAVAILABLE; return; }
+      if (reference.versionId) {
+        if (target.source.type === 'html') void this.showHtmlVersion(target, reference.versionId);
+        else if (target.source.type === 'excalidraw') {
+          const deadline = performance.now() + 5000;
+          const openVersion = () => {
+            if (this.boardState(target).status === 'ready') void this.viewBoardVersion(target, reference.versionId).catch(() => { this.error = CANVAS_REFERENCE_UNAVAILABLE; });
+            else if (performance.now() < deadline && canvasReferenceTarget(this.naplets, target.id)) requestAnimationFrame(openVersion);
+            else this.error = CANVAS_REFERENCE_UNAVAILABLE;
+          };
+          openVersion();
+        }
+      }
       this.tool = 'select'; this.selectedKeys = [canvasItemKey('naplet', target.id)];
       const deadline = performance.now() + 5000;
       const reveal = () => {

@@ -4827,6 +4827,9 @@
                     </div>
                   </template>
                 </div>
+                <div class="canvas-chat-origin" x-show="$store.chat.canvasChatEmbedded && $store.chat.canvasChatOrigin" x-cloak>
+                  <a class="mention-pill canvas-reference-pill" :href="$store.chat.canvasChatOriginReference()?.url" target="_blank" rel="noopener noreferrer" x-text="$store.chat.canvasChatOriginReference()?.label" aria-label="Message Canvas origin"></a>
+                </div>
                 <div class="thread-composer-body">
                   <div
                     class="chat-input"
@@ -11636,7 +11639,7 @@
             @click="$store.chat.selectMention(result)"
             @mouseenter="$store.chat.mentionSelectedIndex = idx"
           >
-            <span class="mention-result-type" x-text="result.type === 'person' || result.type === 'agent' ? '@' : result.type === 'doc' ? 'DOC' : result.type === 'scope' ? 'SCOPE' : result.type === 'flow' ? 'FLOW' : result.type === 'opportunity' ? 'OPP' : result.type === 'channel' ? 'CHAN' : 'TASK'"></span>
+            <span class="mention-result-type" x-text="result.type === 'canvas' ? 'CANVAS' : result.type === 'canvas-item' ? 'ITEM' : result.type === 'person' || result.type === 'agent' ? '@' : result.type === 'doc' ? 'DOC' : result.type === 'scope' ? 'SCOPE' : result.type === 'flow' ? 'FLOW' : result.type === 'opportunity' ? 'OPP' : result.type === 'channel' ? 'CHAN' : 'TASK'"></span>
             <span class="mention-result-label" x-text="result.label"></span>
             <span class="mention-result-sublabel" x-show="result.sublabel" x-text="result.sublabel"></span>
           </li>

@@ -1,3 +1,4 @@
+import { canvasChatReference } from './chat-references.js';
 import { createCanvasChatSignerClient } from './chat-signer.js';
 import { getTowerPgThread, setBaseUrl } from '../api.js';
 import { canvasContext } from './projection.js';
@@ -26,9 +27,14 @@ export async function hydrateCanvasChatChannel(store, channelId, hydrate = hydra
 export const canvasChatEmbedMixin = {
   canvasChatEmbedded,
   canvasChatVisible: false,
+  canvasChatOrigin: null,
   canvasChatBootstrapped: false,
   canvasChatEmbedReady: false,
   canvasChatEmbedError: '',
+  canvasChatOriginReference() {
+    const current = this.canvasChatOrigin;
+    return this.canvasChatEmbedded && current ? canvasChatReference({ origin: location.origin, workspaceId: current.workspaceId, canvasId: current.canvasId, title: current.title, from: true }) : null;
+  },
   async initCanvasChatApp() {
     // Same saved workspace/auth boundary as the Canvas page. Do not run shell
     // discovery, address-book/profile hydration or persist a global navigation
@@ -61,6 +67,7 @@ export const canvasChatEmbedMixin = {
       if (this.canvasChatEmbedError) return;
       this.startWorkspaceLiveQueries();
       this.canvasChatBootstrapped = true;
+      window.parent.postMessage({ type: 'ambulando-canvas-chat-ready' }, location.origin);
       this.ensureBackgroundSync();
       void this.refreshTowerPgWorkspaceMembers({ force: true, limit: 200 }).catch(() => {});
     } catch (error) { this.canvasChatEmbedReady = true; this.canvasChatEmbedError = error.message || 'Conversation unavailable.'; }
@@ -69,6 +76,8 @@ export const canvasChatEmbedMixin = {
     if (!this.canvasChatEmbedded) return;
     const change = event => {
       if (event.origin !== location.origin || event.source !== window.parent || event.data?.type !== 'ambulando-canvas-chat-visibility') return;
+      const context = event.data.context;
+      this.canvasChatOrigin = context?.workspaceId === this.currentWorkspace?.workspaceId && context?.canvasId === params.get('canvasid') ? context : null;
       const visible = event.data.visible === true;
       if (visible === this.canvasChatVisible) return;
       this.canvasChatVisible = visible;

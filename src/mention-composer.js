@@ -1,3 +1,5 @@
+import { createCanvasReferencePill, parseCanvasChatReference } from './canvas/chat-references.js';
+const CANVAS_LINK_RE = /\[((?:\\.|[^\]\\])+)\]\((https?:\/\/[^\s)]+)\)/g;
 const CANONICAL_MENTION_RE = /@\[([^\]]+)\]\(mention:(agent|person):([^)]+)\)/g;
 
 function tokenFor(node) {
@@ -69,9 +71,16 @@ export function hydrateMentionComposer(root, value = '') {
   const doc = root.ownerDocument;
   const fragment = doc.createDocumentFragment();
   let cursor = 0;
-  for (const match of String(value).matchAll(CANONICAL_MENTION_RE)) {
+  const matches = [
+    ...[...String(value).matchAll(CANONICAL_MENTION_RE)].map(match => ({ match, actor: true })),
+    ...[...String(value).matchAll(CANVAS_LINK_RE)].filter(match => parseCanvasChatReference(match[2])).map(match => ({ match, actor: false })),
+  ].sort((a, b) => a.match.index - b.match.index);
+  for (const { match, actor } of matches) {
+    if (match.index < cursor) continue;
     if (match.index > cursor) fragment.append(doc.createTextNode(String(value).slice(cursor, match.index)));
-    fragment.append(createMentionPill(doc, { label: match[1], type: match[2], npub: match[3] }));
+    fragment.append(actor
+      ? createMentionPill(doc, { label: match[1], type: match[2], npub: match[3] })
+      : createCanvasReferencePill(doc, { label: match[1].replace(/\\(.)/g, '$1'), url: match[2], token: match[0] }));
     cursor = match.index + match[0].length;
   }
   if (cursor < String(value).length) fragment.append(doc.createTextNode(String(value).slice(cursor)));

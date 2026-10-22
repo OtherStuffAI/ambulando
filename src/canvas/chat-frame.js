@@ -1,10 +1,11 @@
 import { resolveTowerPgWorkspaceContext } from '../pg-workspace-context.js';
+import { canvasChatProjection } from './chat-references.js';
 import { attachCanvasChatSigner } from './chat-signer.js';
 
 // Visibility changes suspend transport without rebuilding the editor, losing
 // its selection or interfering with a send already in flight.
 export function registerCanvasChatFrame(Alpine) {
-  Alpine.directive('canvas-chat-frame', (element, _directive, { cleanup }) => {
+  Alpine.directive('canvas-chat-frame', (element, _directive, { cleanup, effect }) => {
     const disconnectSigner = attachCanvasChatSigner({ element, context: () => {
       const store = Alpine.store('canvas'), workspace = store.currentWorkspace;
       const context = resolveTowerPgWorkspaceContext(store);
@@ -14,9 +15,10 @@ export function registerCanvasChatFrame(Alpine) {
         pubkey: store.session?.pubkey, npub: store.session?.npub, method: store.session?.method };
     } });
     let intersecting = false;
-    const send = () => element.contentWindow?.postMessage({ type: 'ambulando-canvas-chat-visibility', visible: intersecting && !document.hidden }, location.origin);
+    const send = () => element.contentWindow?.postMessage({ type: 'ambulando-canvas-chat-visibility', visible: intersecting && !document.hidden, context: canvasChatProjection(Alpine.store('canvas'), location.origin) }, location.origin);
     const observer = new IntersectionObserver(entries => { intersecting = entries[0]?.isIntersecting === true; send(); });
     const ready = event => { if (event.origin === location.origin && event.source === element.contentWindow && event.data?.type === 'ambulando-canvas-chat-ready') send(); };
+    effect(send);
     observer.observe(element);
     element.addEventListener('load', send);
     addEventListener('message', ready);

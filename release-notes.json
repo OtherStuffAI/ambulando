@@ -4943,10 +4943,24 @@
       ]
     },
     {
+      "buildNumber": 2586,
+      "label": "Canvas context in chat",
+      "notes": [
+        "Messages sent on a Canvas show their origin. Use @canvas: to link a Canvas or a versioned item; references stay visible in Chat and reach agents with the signed message."
+      ]
+    },
+    {
       "buildNumber": 2587,
       "label": "Verified core-purple publication",
       "notes": [],
       "noUserVisibleChanges": true
+    },
+    {
+      "buildNumber": 2588,
+      "label": "Canvas chat references verified",
+      "notes": [
+        "Canvas chat shows a visible origin on each message. Select @canvas: links to canvases or versioned items; normal Chat and agent prompts preserve the signed references."
+      ]
     }
   ]
 }

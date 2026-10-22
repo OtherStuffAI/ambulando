@@ -1,3 +1,4 @@
+import { withCanvasChatOrigin } from './canvas/chat-references.js';
 import { cleanSharedText, isNoteToSelf } from './note-to-self.js';
 import { readLiveChatDraft, rebindChatComposer } from './chat-composer-draft.js';
 /**
@@ -2543,7 +2544,14 @@ export const chatMessageManagerMixin = {
     const msgId = String(options?.clientRequestId || '').trim() || crypto.randomUUID();
     const now = new Date().toISOString();
     const rawBody = hasBodyOverride ? bodyOverride : input.trim();
-    const body = isNoteToSelf(channel, this.session?.npub) ? cleanSharedText(rawBody) : rawBody;
+    const plainBody = isNoteToSelf(channel, this.session?.npub) ? cleanSharedText(rawBody) : rawBody;
+    if (pgMode && this.canvasChatEmbedded && !retrySourceMessage && (!this.canvasChatOrigin || this.canvasChatOrigin.workspaceId !== this.currentWorkspace?.workspaceId)) {
+      this.error = 'Canvas context is unavailable. Reopen this chat before sending.';
+      return false;
+    }
+    const body = pgMode && this.canvasChatEmbedded && !retrySourceMessage
+      ? withCanvasChatOrigin(plainBody, this.canvasChatOrigin, location.origin, this.currentWorkspace?.workspaceId)
+      : plainBody;
     const retryMentions = retrySourceMessage?.pg_metadata?.mentions || retrySourceMessage?.metadata?.mentions;
     const candidateMentions = retrySourceMessage
       ? (Array.isArray(retryMentions) ? retryMentions : [])
@@ -2767,7 +2775,14 @@ export const chatMessageManagerMixin = {
     const msgId = String(options?.clientRequestId || '').trim() || crypto.randomUUID();
     const now = new Date().toISOString();
     const rawBody = hasBodyOverride ? bodyOverride : this.threadInput.trim();
-    const body = isNoteToSelf(channel, this.session?.npub) ? cleanSharedText(rawBody) : rawBody;
+    const plainBody = isNoteToSelf(channel, this.session?.npub) ? cleanSharedText(rawBody) : rawBody;
+    if (pgMode && this.canvasChatEmbedded && !retrySourceMessage && (!this.canvasChatOrigin || this.canvasChatOrigin.workspaceId !== this.currentWorkspace?.workspaceId)) {
+      this.error = 'Canvas context is unavailable. Reopen this chat before sending.';
+      return false;
+    }
+    const body = pgMode && this.canvasChatEmbedded && !retrySourceMessage
+      ? withCanvasChatOrigin(plainBody, this.canvasChatOrigin, location.origin, this.currentWorkspace?.workspaceId)
+      : plainBody;
     const retryMentions = retrySourceMessage?.pg_metadata?.mentions || retrySourceMessage?.metadata?.mentions;
     const candidateMentions = retrySourceMessage
       ? (Array.isArray(retryMentions) ? retryMentions : [])

@@ -1,3 +1,4 @@
+import { parseCanvasChatReference } from './canvas/chat-references.js';
 import { Lexer, Marked } from 'marked';
 import hljs from 'highlight.js/lib/common';
 import { buildSectionUrl, parseRouteLocation } from './route-helpers.js';
@@ -362,8 +363,10 @@ renderer.link = function ({ href, title, tokens }) {
   const safeHref = resolveMarkdownHref(href);
   const label = this.parser.parseInline(tokens);
   if (!safeHref) return label;
+  const canvasReference = parseCanvasChatReference(safeHref);
+  const canvasClass = canvasReference ? ' class="mention-pill canvas-reference-pill" data-canvas-reference="true"' : '';
   const titleAttr = title ? ` title="${escapeHtml(title)}"` : '';
-  return `<a href="${escapeHtml(safeHref)}" target="_blank" rel="noopener noreferrer"${titleAttr}>${label}</a>`;
+  return `<a href="${escapeHtml(safeHref)}" target="_blank" rel="noopener noreferrer"${canvasClass}${titleAttr}>${label}</a>`;
 };
 
 renderer.image = function ({ href, title, text }) {

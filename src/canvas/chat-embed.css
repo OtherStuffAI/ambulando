@@ -14,3 +14,5 @@ html[data-canvas-chat] .thread-resize-btn,
 html[data-canvas-chat] .thread-create-back,
 html[data-canvas-chat] .thread-sequence-controls { display:none !important; }
 html[data-canvas-chat] .canvas-chat-embed-status { position:fixed; inset:0; padding:20px; background:var(--background); z-index:240; }
+
+html[data-canvas-chat] .canvas-chat-origin { padding: 6px 12px 0; }

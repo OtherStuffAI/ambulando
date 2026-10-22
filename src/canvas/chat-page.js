@@ -61,7 +61,7 @@ export function canvasChatStore() {
       this.chatFrameUrls[naplet.id] = this.makeChatUrl(naplet.id, { canvaschannel: channelId });
     },
     makeChatUrl(key, params) {
-      return `/flight-deck?${new URLSearchParams({ workspacekey: this.currentWorkspaceKey, canvaschat: '1', canvaskey: key, ...params })}`;
+      return `/flight-deck?${new URLSearchParams({ workspacekey: this.currentWorkspaceKey, canvaschat: '1', canvasid: this.canvasId, canvaskey: key, ...params })}`;
     },
     chatFrameUrl(naplet) {
       const key = naplet._chatKey || naplet.id;

@@ -116,3 +116,49 @@ reads, exact signed NIP-98 URL/method/payload proofs, kind-33358 signatures,
 structured mentions, rejection with preserved input, independent chats and reload.
 These fixtures use ephemeral test keys and synthetic Tower responses; they do
 not establish physical Nostr Browser behavior or real Autopilot dispatch.
+
+## Message origin and explicit references
+
+Each embedded composer shows a clickable **From: Canvas name** chip before
+sending. The ordinary send path serializes that visible chip as a canonical
+Markdown link at the start of the message body. Every first message and reply
+captures its own origin; the thread does not acquire an origin. Ordinary Chat
+renders the saved link and composes new messages without inheriting it. Failed
+send retries keep the original serialized body and signature path.
+
+`@canvas` and `@canvas:` in chat composers offer This Canvas first when embedded,
+then accessible named canvases and ready items on the current Canvas. The
+`this` and `thiscanvas` aliases select the actual Canvas identity. Filtering
+supports spaces. Selection creates an atomic clickable link chip whose canonical
+Markdown survives ordinary draft storage, paste, message hydration and reload.
+Unsent drafts retain the ordinary in-memory save/restore lifetime; this does not
+add hard-reload draft recovery. Normal person/agent completion and structured
+agent routing remain independent.
+
+The parent frame sends only a small projection of its already-authorized Canvas:
+workspace/Canvas IDs and title, ready item labels and source/version IDs. It
+never sends HTML, document, scene or chat content through this bridge. Named
+Canvas discovery uses the existing Tower-authorized list and Dexie projection;
+async results are fenced by composer, query, request and workspace identity.
+No artefact bulk read is added to sending. Losing the parent context blocks a
+new embedded send; ordinary failed-message retry preserves the captured origin.
+
+Links reuse `/canvas.html?workspaceid=…&canvasid=…&napletid=…`. Item links add
+`sourceid` and, when available, `versionid`; opening verifies the naplet still
+names that source and uses existing viewer-local HTML/board version browsing.
+This neither pins the shared naplet nor changes access. Missing or denied
+sources retain neutral unavailable handling.
+
+Origin and explicit references are visible canonical links inside the exact
+body signed by the existing kind-33358 instruction proof. They are client
+assertions, not new authority. Tower still authorizes each record read. Existing
+Autopilot body projection includes their readable labels and resolvable URLs in
+agent prompts; unsigned metadata is not trusted as instruction provenance.
+Canvas references never create structured agent mentions or dispatch work.
+
+The browser suite retains an opt-in regression case for signer revocation while
+this fixture also injects live history: the failed reply was observed as pending
+in that combined UI path. Run with `CANVAS_REVOKED_HISTORY_REGRESSION=1` to
+reproduce. The isolated revocation case verifies a false send result and the
+same failed row in both Dexie and the UI. The combined observation remains
+unclassified; it is not evidence of a completed general sync repair.
