@@ -184,6 +184,9 @@ async function menu(page, index, label) {
   await window.locator('.window-options').click();
   await window.locator('.canvas-window-options').getByRole('menuitem', { name: label }).click();
 }
+// Version and save state live in the title bar; Save floats in Excalidraw's top-right slot.
+const status = (page, index = 0) => boardWindow(page, index).locator('.canvas-naplet-status');
+const floatingSave = (page, index = 0) => boardWindow(page, index).frameLocator('.canvas-board-frame').locator('.wingman-board-action');
 
 test('create, edit inline and full screen, save explicitly, reuse and browse versions', async ({ page, context }) => {
   test.setTimeout(150_000);
@@ -202,14 +205,17 @@ test('create, edit inline and full screen, save explicitly, reuse and browse ver
   expect(tower.files.size).toBe(1);
   const [board] = tower.files.values();
   expect(tower.state.naplets[0].source).toEqual({ type: 'excalidraw', id: board.id });
-  await expect(boardWindow(page).locator('.canvas-board-status')).toHaveText('Saved');
-  await expect(boardWindow(page).locator('.canvas-board-version')).toHaveText('Latest · v1');
+  await expect(status(page)).toHaveText('v1');
+  await expect(boardWindow(page).locator('[role="toolbar"], .canvas-board-history')).toHaveCount(0);
+  await expect(floatingSave(page)).toHaveText('Saved');
+  await expect(floatingSave(page)).toBeDisabled();
   await expect(editorRoot(page)).toHaveAttribute('data-board-readonly', 'false');
   await expectEditorSized(page);
 
   // Inline drawing makes an unsaved local draft; nothing is published.
   await drawRectangle(page);
-  await expect(boardWindow(page).locator('.canvas-board-status')).toHaveText('Unsaved changes');
+  await expect(status(page)).toHaveText('Unsaved · v1');
+  await expect(floatingSave(page)).toBeEnabled();
   await expect.poll(() => count(page)).toBe(1);
   expect(board.versions).toHaveLength(1);
 
@@ -231,8 +237,8 @@ test('create, edit inline and full screen, save explicitly, reuse and browse ver
   await menu(page, 0, 'Save with note…');
   await page.locator('.canvas-board-save-dialog').getByLabel('Change summary (optional)').fill('Two lanes');
   await page.locator('.canvas-board-save-dialog').getByRole('button', { name: 'Save version' }).click();
-  await expect(boardWindow(page).locator('.canvas-board-status')).toHaveText('Saved');
-  await expect(boardWindow(page).locator('.canvas-board-version')).toHaveText('Latest · v2');
+  await expect(status(page)).toHaveText('v2');
+  await expect(floatingSave(page)).toHaveText('Saved');
   expect(board.versions.map(row => row.version_number)).toEqual([1, 2]);
   expect(board.versions[1].summary).toBe('Two lanes');
 
@@ -247,30 +253,35 @@ test('create, edit inline and full screen, save explicitly, reuse and browse ver
   expect(tower.files.size).toBe(1);
   expect(tower.state.naplets.map(row => row.source.id)).toEqual([board.id, board.id]);
   await expect.poll(() => count(page, 1)).toBe(2);
-  await expect(boardWindow(page, 1).locator('.canvas-board-version')).toHaveText('Latest · v2');
+  await expect(status(page, 1)).toHaveText('v2');
 
   // Both naplets share one draft: drawing in one marks both unsaved.
   await drawRectangle(page, 1, 40);
   await expect.poll(() => count(page, 0)).toBe(3);
-  await expect(boardWindow(page, 0).locator('.canvas-board-status')).toHaveText('Unsaved changes');
+  await expect(status(page, 0)).toHaveText('Unsaved · v2');
   page.once('dialog', prompt => prompt.accept());
   await menu(page, 1, 'Discard unsaved changes');
-  await expect(boardWindow(page, 0).locator('.canvas-board-status')).toHaveText('Saved');
+  await expect(status(page, 0)).toHaveText('v2');
   await expect.poll(() => count(page, 0)).toBe(2);
 
-  // History (on the top naplet, which overlaps the first): the version list and notices take space but the editor keeps its height.
-  await boardWindow(page, 1).getByRole('button', { name: 'Version history' }).click();
-  await expect(boardWindow(page, 1).locator('.canvas-board-history li button')).toHaveCount(2);
-  await expect(boardWindow(page, 1).locator('.canvas-board-history')).toContainText('Two lanes');
-  await expectEditorSized(page, 1, 120);
-  await boardWindow(page, 1).getByRole('button', { name: 'Version history' }).click();
-  await boardWindow(page, 1).getByRole('button', { name: 'Older version' }).click();
-  await expect(boardWindow(page, 1).locator('.canvas-board-version')).toHaveText('Viewing v1');
+  // History lives in the cog's Versions dialog (on the top naplet, which overlaps the first).
+  const versions = page.getByRole('dialog', { name: 'Versions' });
+  await menu(page, 1, 'Versions…');
+  await expect(versions.getByRole('list', { name: 'Saved versions' }).getByRole('button')).toHaveCount(2);
+  await expect(versions).toContainText('Two lanes');
+  await expect(versions.locator('[aria-current="true"]')).toContainText('v2');
+  await versions.getByRole('button', { name: '‹ Older' }).click();
+  await expect(status(page, 1)).toHaveText('Viewing v1 · read-only');
+  await expect(versions.locator('[aria-current="true"]')).toContainText('v1');
+  await versions.getByRole('button', { name: 'Close' }).click();
   await expect(editorRoot(page, 1)).toHaveAttribute('data-board-readonly', 'true');
+  await expect(floatingSave(page, 1)).toHaveCount(0);
   await expect.poll(() => count(page, 1)).toBe(0);
-  await boardWindow(page, 1).getByRole('button', { name: 'Return to latest' }).click();
+  await menu(page, 1, 'Return to latest');
   await expect.poll(() => count(page, 1)).toBe(2);
+  await expect(status(page, 1)).toHaveText('v2');
   await expect(editorRoot(page, 1)).toHaveAttribute('data-board-readonly', 'false');
+  await expectEditorSized(page, 1, 300);
   expect(errors).toEqual([]);
   await page.screenshot({ path: test.info().outputPath('canvas-excalidraw-boards.png') });
 });
@@ -294,22 +305,22 @@ test('stale saves keep the draft, merge brings agent work, refresh loads latest 
 
   // An agent saves v2 while I draw: my Save is rejected and the draft is kept.
   await drawRectangle(page);
-  await expect(boardWindow(page).locator('.canvas-board-status')).toHaveText('Unsaved changes');
+  await expect(status(page)).toHaveText('Unsaved · v1');
   tower.agentPublish(board.id, elements => [...elements, element('agent-box', 'ellipse', { x: 400 })]);
   await menu(page, 0, 'Save board version');
-  await expect(boardWindow(page).locator('.canvas-board-status')).toHaveText('Newer version saved');
+  await expect(status(page)).toHaveText('Unsaved · newer v2 saved');
   await expect(boardWindow(page).locator('.canvas-board-message')).toContainText('kept as an unsaved draft');
   expect(board.versions).toHaveLength(2);
   await expect.poll(() => count(page)).toBe(2);
 
-  // Merge rebases my draft onto v2 by element id; then save v3.
-  await boardWindow(page).getByRole('button', { name: 'Merge latest' }).click();
+  // Merge (cog menu) rebases my draft onto v2 by element id; then save v3.
+  await menu(page, 0, 'Merge latest');
   await expect.poll(() => count(page)).toBe(3);
-  await expect(boardWindow(page).locator('.canvas-board-version')).toHaveText('Latest · v2');
-  // A stroke followed immediately by Save is included (Save flushes the editor first).
+  await expect(status(page)).toHaveText('Unsaved · v2');
+  // A real stroke followed immediately by the floating Save is included (Save flushes the editor first).
   await drawRectangle(page, 0, -60);
-  await boardWindow(page).getByRole('button', { name: 'Save', exact: true }).click();
-  await expect(boardWindow(page).locator('.canvas-board-version')).toHaveText('Latest · v3');
+  await floatingSave(page).click();
+  await expect(status(page)).toHaveText('v3');
   await expectEditorSized(page);
   expect(tower.versionScene(board.id, 3).elements.filter(row => !row.isDeleted)).toHaveLength(4);
   expect(board.versions[2].created_by_actor_npub).toBe('npub1me');
@@ -317,20 +328,20 @@ test('stale saves keep the draft, merge brings agent work, refresh loads latest 
   // Refresh loads a newer saved version (with an image) when there is no draft.
   tower.agentPublish(board.id, elements => [...elements, element('photo', 'image', { fileId: 'img-1', status: 'saved', x: 600, scale: [1, 1] })], { 'img-1': { id: 'img-1', mimeType: 'image/png', dataURL: PNG, created: 1 } });
   await page.reload();
-  await expect(boardWindow(page).locator('.canvas-board-version')).toHaveText('Latest · v4');
+  await expect(status(page)).toHaveText('v4');
   await expect.poll(() => count(page)).toBe(5);
   await expect(editorRoot(page)).toHaveAttribute('data-board-file-count', '1');
 
   // Unsaved navigation: the browser warns, and the draft survives a reload.
   await drawRectangle(page, 0, 120);
-  await expect(boardWindow(page).locator('.canvas-board-status')).toHaveText('Unsaved changes');
+  await expect(status(page)).toHaveText('Unsaved · v4');
   const dialogs = [];
   page.once('dialog', async prompt => { dialogs.push(prompt.type()); await prompt.dismiss(); });
   await page.close({ runBeforeUnload: true });
   await expect.poll(() => dialogs).toEqual(['beforeunload']);
   const reopened = await context.newPage();
   await reopened.goto(page.url());
-  await expect(boardWindow(reopened).locator('.canvas-board-status')).toHaveText('Unsaved changes');
+  await expect(status(reopened)).toHaveText('Unsaved · v4');
   await expect(boardWindow(reopened).locator('.canvas-board-message')).toContainText('restored');
   await expect.poll(() => count(reopened)).toBe(6);
   expect(board.versions).toHaveLength(4);
@@ -400,4 +411,60 @@ test('board Rename validates, cancels, reports failure and persists canonical ti
   tower.state.readOnly = true; await page.reload();
   await boardWindow(page).getByRole('button', { name: 'Window options', exact: true }).click();
   await expect(boardWindow(page).getByRole('menuitem', { name: 'Rename…', exact: true })).not.toBeVisible();
+});
+
+test('phone: floating Save sits in Excalidraw top-right without covering tools and saves an immediate stroke inline and full screen', async ({ page, context }) => {
+  test.setTimeout(150_000);
+  await page.setViewportSize({ width: 390, height: 844 });
+  const tower = fakeTower();
+  const board = tower.createBoard('Phone', [element('seed')]);
+  tower.state.naplets.push({ id: uid(), source: { type: 'excalidraw', id: board.id }, title: 'Phone', layout: { x: 10, y: 10, width: 360, height: 520, z: 1 } });
+  const { errors } = await openCanvas(page, context, tower, { existingBoard: { id: board.id, title: 'Phone.excalidraw' } });
+  await expect.poll(() => count(page)).toBe(1);
+  const frame = boardWindow(page).frameLocator('.canvas-board-frame');
+  const layout = () => frame.locator('body').evaluate(() => {
+    const save = document.querySelector('.wingman-board-action')?.getBoundingClientRect();
+    const tools = [...document.querySelectorAll('.App-toolbar button, .App-toolbar label, .App-toolbar .ToolIcon, .mobile-misc-tools-container button, .dropdown-menu-button, .main-menu-trigger')]
+      .map(node => node.getBoundingClientRect()).filter(rect => rect.width && rect.height);
+    const overlaps = tools.filter(rect => save && rect.left < save.right && save.left < rect.right && rect.top < save.bottom && save.top < rect.bottom).length;
+    return { save: save && { left: save.left, right: save.right, top: save.top, bottom: save.bottom }, width: innerWidth, tools: tools.length, overlaps };
+  });
+  // Real pointer stroke, then Save at once: the pending stroke is flushed into v2.
+  const stroke = async offset => {
+    const box = await boardWindow(page).locator('.canvas-board-frame').boundingBox();
+    const x = box.x + box.width / 2 - 60 + offset, y = box.y + box.height / 2 - 30 + offset;
+    await page.mouse.click(x - 20, y + 120);
+    await page.keyboard.press('r');
+    await page.mouse.move(x, y); await page.mouse.down(); await page.mouse.move(x + 70, y + 50, { steps: 5 }); await page.mouse.up();
+  };
+  for (const [mode, expectedVersion] of [['inline', 2], ['expanded', 3]]) {
+    if (mode === 'expanded') {
+      await boardWindow(page).locator('.window-popout').click();
+      await expect(boardWindow(page)).toHaveClass(/window-expanded/);
+      await expectEditorSized(page, 0, 600);
+    }
+    await expect(floatingSave(page)).toHaveText('Saved');
+    const geometry = await layout();
+    expect(geometry.tools).toBeGreaterThan(3);
+    expect(geometry.overlaps).toBe(0);
+    expect(geometry.save.right).toBeLessThanOrEqual(geometry.width);
+    expect(geometry.save.top).toBeGreaterThanOrEqual(0);
+    await page.screenshot({ path: test.info().outputPath(`phone-${mode}.png`) });
+    const before = await count(page);
+    await stroke(mode === 'inline' ? 0 : 40);
+    await floatingSave(page).click();
+    await expect(status(page)).toHaveText(`v${expectedVersion}`);
+    expect(tower.versionScene(board.id, expectedVersion).elements.filter(row => !row.isDeleted)).toHaveLength(before + 1);
+    console.log('CANVAS_BOARD_PHONE_SAVE', JSON.stringify({ mode, ...geometry, version: expectedVersion }));
+  }
+  // One editor instance: full screen reused the inline iframe.
+  await expect(page.locator('.canvas-board-frame')).toHaveCount(1);
+  // CAS: someone saves meanwhile; my immediate Save is refused and the draft is kept.
+  tower.agentPublish(board.id, elements => [...elements, element('agent-phone', 'ellipse', { x: 300 })]);
+  await stroke(-40);
+  await floatingSave(page).click();
+  await expect(status(page)).toHaveText('Unsaved · newer v4 saved');
+  expect(board.versions).toHaveLength(4);
+  await expect(boardWindow(page).locator('.canvas-board-message')).toContainText('kept as an unsaved draft');
+  expect(errors).toEqual([]);
 });

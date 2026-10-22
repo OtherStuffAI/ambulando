@@ -69,11 +69,18 @@ receive the draft through Dexie `liveQuery`.
 
 ## States and actions
 
-The naplet bar shows `Saved`, `Unsaved changes`, `Saving…`, `Save failed`, `Newer version saved`,
-`Read-only` or `No access`, plus `Latest · vN` or `Draft on vN · latest vM`.
+There is no version strip. The naplet title bar carries a compact status: `vN`, `Unsaved · vN`,
+`Saving…`, `Save failed`, `Unsaved · newer vM saved`, `Viewing vN · read-only`, `Read-only · vN` or
+`No access` (its tooltip adds the longer save and version labels). All version controls live in the
+cog menu.
 
-- **Save** / **Save with note…** (naplet menu) publish one immutable version against the draft's
-  base. There is no autosave.
+- **Save** floats over the drawing area. The page posts its state (`Save`, disabled `Saved`,
+  disabled `Saving…`) to the editor iframe, which renders it in Excalidraw's own top-right slot on
+  desktop and, on Excalidraw's phone layout, just below the tool row and left of the side tool
+  column, so it never covers a tool. It is hidden while viewing an older version and for viewers
+  without `file.write`. A click only asks; the page re-checks the current state before saving.
+- **Save board version** and **Save with note…** remain in the cog menu and publish one immutable
+  version against the draft's base. There is no autosave.
 - Save first asks every editor to flush its 250 ms change debounce and waits for the change to reach
   the draft, so a stroke immediately followed by Save is included. Editors also deliver a change
   right after each pointer-up or key-up. Publication needs every attached editor's acknowledgement
@@ -88,8 +95,10 @@ The naplet bar shows `Saved`, `Unsaved changes`, `Saving…`, `Save failed`, `Ne
   also survives locally).
 - A stale Save keeps the draft (`Newer version saved`). **Merge latest** rebases it by element id and
   leaves the result unsaved for review.
-- **History** follows the HTML naplet pattern: ‹ / › and a version list (number, author, time,
-  summary) browse versions read-only; **Return to latest** resumes the draft; **Restore as draft**
+- **Versions…** (cog menu) opens a versions dialog, as for HTML naplets: Older / Newer and a version
+  list (number, author, time, summary) browse versions read-only. **Return to latest** resumes the
+  draft, and **Merge latest** appears when a newer version exists; both are also direct cog items
+  when they apply. **Restore as draft**
   turns an older version into an unsaved draft on top of the latest, re-stamping element versions
   so the restore wins later merges.
 - Viewers without `file.write` get a read-only editor.

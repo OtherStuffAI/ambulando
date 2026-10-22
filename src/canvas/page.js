@@ -16,6 +16,10 @@ import { getSettings, openWorkspaceDb } from '../db.js';
 import { initializeTowerTransports } from '../tower-transport.js';
 import { normalizeWorkspaceEntry } from '../workspaces.js';
 import { canvasContext, CANVAS_ACCESS_MESSAGE } from './projection.js';
+import {
+  CANVAS_REFERENCE_UNAVAILABLE, CANVAS_REFERENCE_WORKSPACE_MISSING, canvasNapletReference, canvasReferenceTarget,
+  centredViewport, copyCanvasReference, findReferenceWorkspace, parseCanvasReference,
+} from './references.js';
 import { CanvasSyncRuntime, hydrateCanvasList } from './sync-service.js';
 import {
   arrowGeometry, arrowPoints, arrowPath, canvasItemKey, canvasWheelIntent, cloneCanvasValue, enclosedItemKeys,
@@ -33,6 +37,8 @@ const canvasDom = Object.freeze({
   addDialog: '.canvas-add-dialog',
   commentDialog: '.canvas-comment-dialog',
   commentPanel: '.canvas-comment-panel',
+  versionsDialog: '.canvas-versions-dialog',
+  referenceDialog: '.canvas-reference-dialog',
 });
 
 function canvasElement(name) {
@@ -49,10 +55,6 @@ function openCanvasDialog(name) {
   });
 }
 
-function findWorkspace(settings, requestedKey) {
-  return (settings?.knownWorkspaces || []).map(normalizeWorkspaceEntry).filter(Boolean)
-    .find(workspace => workspace.workspaceKey === requestedKey || workspace.workspaceId === requestedKey) || null;
-}
 function sourceTitle(row, fallback) { return text(row?.title || row?.name || row?.subject || row?.file_name || fallback); }
 // HTML artefacts are Files; older cached rows may only carry a version id.
 function isHtmlFile(row) {
@@ -63,7 +65,7 @@ export function canvasPageStore() {
   let syncRuntime = null, assetStore = null, htmlAuthority = '';
   const htmlSequencer = new HtmlViewSequencer(), versionLoads = new Map();
   const pointers = new Map(), undo = [], redo = [];
-  let keydown = null;
+  let keydown = null, noticeTimer = 0, highlightTimer = 0;
   return {
     status: 'loading', error: '', workspace: null, session: null, currentWorkspace: null,
     currentWorkspaceKey: '', currentViewerNpub: '', currentPgActorId: '', canvas: null,
@@ -74,6 +76,10 @@ export function canvasPageStore() {
     commentDialog: { anchor: null, parentCommentId: null, body: '' }, activeCommentId: '',
     commentDelete: null, linkDrag: null, subjectPicker: false, suppressLinkClick: false,
     accessMessage: CANVAS_ACCESS_MESSAGE, historyTick: 0, htmlViews: {},
+    // A naplet reference (`napletid`) is focused once per page load. Its centred
+    // view is viewer-local until the viewer pans or zooms.
+    reference: { napletId: '', requested: false, handled: false }, referenceHighlightId: '', viewportLocal: false,
+    notice: '', referenceDialog: { napletId: '', markdown: '', url: '', message: '' }, versionsDialog: { napletId: '', returnFocus: null },
     ...canvasBoardStore(),
     ...canvasArtifactPickerStore(),
 
@@ -99,12 +105,18 @@ export function canvasPageStore() {
     async init() {
       try {
         await initializeTowerTransports();
-        const params = new URLSearchParams(location.search), settings = await getSettings();
-        const workspace = findWorkspace(settings, text(params.get('workspacekey')) || text(settings?.currentWorkspaceKey));
-        if (!workspace?.pgBackendMode || !workspace.workspaceId || !this.canvasId) throw new Error('This Canvas link is incomplete. Return to Ambulando and open it again.');
+        const link = parseCanvasReference(location.search), settings = await getSettings();
+        const known = (settings?.knownWorkspaces || []).map(normalizeWorkspaceEntry).filter(Boolean);
+        const incomplete = new Error('This Canvas link is incomplete. Return to Ambulando and open it again.');
+        this.reference = { napletId: link.napletId, requested: link.napletRequested, handled: false };
+        // References name the Tower workspace id; ordinary links keep the local key.
+        let workspace = link.workspaceId ? null : findReferenceWorkspace(known, { workspaceKey: link.workspaceKey || text(settings?.currentWorkspaceKey) });
+        if (link.workspaceIdMalformed || !this.canvasId || (!link.workspaceId && (!workspace?.pgBackendMode || !workspace.workspaceId))) throw incomplete;
         const storedAuth = await tryAutoLoginFromStorage();
         if (!storedAuth?.pubkey) throw new Error('Open Ambulando and sign in, then reopen this canvas.');
         const npub = await pubkeyToNpub(storedAuth.pubkey);
+        if (link.workspaceId) workspace = findReferenceWorkspace(known, { workspaceId: link.workspaceId, sessionNpub: npub });
+        if (!workspace) throw new Error(CANVAS_REFERENCE_WORKSPACE_MISSING);
         if (workspace.pgSessionNpub && workspace.pgSessionNpub !== npub) throw new Error('This canvas belongs to a different signed-in workspace identity.');
         Object.assign(this, { workspace, currentWorkspace: workspace, currentWorkspaceKey: workspace.workspaceKey, currentViewerNpub: npub, currentPgActorId: text(workspace.pgMe?.actor?.actor_id), session: { pubkey: storedAuth.pubkey, npub, method: storedAuth.method } });
         setActiveSessionNpub(npub);
@@ -117,7 +129,7 @@ export function canvasPageStore() {
           syncRuntime?.stop(); assetStore?.clear(); this.stopBoards(); this.resetArtifactPicker(); removeEventListener('keydown', keydown);
           // A browser-history cache is not fresh authorization.
           this.status = 'loading'; this.canvas = null; this.naplets = []; this.elements = []; this.comments = [];
-          this.clearHtmlViews(); document.title = 'Canvas · Ambulando';
+          this.clearHtmlViews(); this.closeNapletDialogs(); this.clearReferenceFeedback(); document.title = 'Canvas · Ambulando';
         });
         addEventListener('pageshow', event => {
           if (!event.persisted) return;
@@ -131,17 +143,21 @@ export function canvasPageStore() {
       this.canvas = snapshot.canvas; this.naplets = snapshot.naplets; this.elements = snapshot.elements || []; this.comments = snapshot.comments || [];
       this.reconcileHtmlViews(snapshot.request_id);
       this.syncBoards(this.naplets);
-      this.viewport = { ...snapshot.canvas.viewport };
+      if (!this.viewportLocal) this.viewport = { ...snapshot.canvas.viewport };
       const available = new Set(this.allCanvasItems().map(row => row.key));
       this.selectedKeys = this.selectedKeys.filter(key => available.has(key));
       if (this.activeCommentId && !this.activeComment) { canvasElement('commentPanel').close(); this.activeCommentId = ''; }
       if (this.commentDialog.parentCommentId && !this.comments.some(row => row.id === this.commentDialog.parentCommentId)) canvasElement('commentDialog').close();
+      if (this.versionsDialog.napletId && !this.versionsNaplet) document.querySelector(canvasDom.versionsDialog)?.close();
+      // A copy fallback never outlives read access to the naplet it describes.
+      if (this.referenceDialog.napletId && !canvasReferenceTarget(this.naplets, this.referenceDialog.napletId)) this.closeReferenceDialog();
       document.title = `${snapshot.canvas.title} · Canvas · Ambulando`; this.status = 'ready';
+      this.focusReferenceTarget();
     },
     applySyncError(error) {
       this.syncBoards([]);
       this.canvas = null; this.naplets = []; this.elements = []; this.comments = []; this.status = 'error';
-      this.clearHtmlViews();
+      this.clearHtmlViews(); this.closeNapletDialogs(); this.clearReferenceFeedback();
       this.error = error?.status === 403 || error?.status === 404 ? 'Canvas unavailable.' : (error?.message || 'Canvas could not be refreshed.');
     },
     refreshBoardsSnapshot() { return syncRuntime?.refresh().catch(() => undefined); },
@@ -291,7 +307,7 @@ export function canvasPageStore() {
     cancelPointer(event) { pointers.delete(event.pointerId); this.interaction = null; this.selectionBox = null; void this.refresh(); },
     queueViewportSave() { clearTimeout(this._viewportTimer); this._viewportTimer = setTimeout(() => this.saveViewport(), 350); },
     async saveViewport() {
-      if (!this.canvas || this.viewportSaving) return; this.viewportSaving = true;
+      if (!this.canvas || this.viewportSaving) return; this.viewportSaving = true; this.viewportLocal = false;
       try { await syncRuntime.updateViewport({ ...this.viewport }); } catch (error) { this.error = error?.message || 'Could not save canvas view.'; await this.refresh(); } finally { this.viewportSaving = false; }
     },
     highestZ() { return Math.max(0, ...this.naplets.map(row => row.layout.z), ...this.elements.map(row => row.layout.z)); },
@@ -523,6 +539,9 @@ export function canvasPageStore() {
       this.htmlViews = views;
       assetStore?.retain(keep);
       for (const row of revalidate) void this.showHtmlVersion(this.readyHtmlNaplet(row.napletId), row.versionId, { revalidate: true });
+      // A new policy resets the version list; refill it while the Versions dialog shows it.
+      const open = this.versionsNaplet;
+      if (open?.source.type === 'html' && !this.htmlVersions(open).length) void this.loadHtmlVersions(open);
     },
     clearHtmlViews() { htmlAuthority = ''; htmlSequencer.advance(); versionLoads.clear(); this.htmlViews = {}; assetStore?.clear(); },
     retainHtmlAssets() { assetStore?.retain(htmlDisplayedAssets(this.naplets, this.htmlViews)); },
@@ -558,10 +577,11 @@ export function canvasPageStore() {
       const view = this.htmlView(naplet);
       if (!naplet?.id || view?.versions?.length) return Promise.resolve(view?.versions || []);
       if (!versionLoads.has(naplet.id)) {
+        this.patchHtmlView(naplet.id, { versionsLoading: true });
         const load = this.readHtmlGuarded(`${naplet.id}:versions`, naplet.id, '')
           .then(({ result }) => { if (result) this.patchHtmlView(naplet.id, { versions: result.versions }); return this.htmlVersions(naplet); })
           .catch(error => { this.error = error?.status === 404 ? 'This artefact version is unavailable.' : (error?.message || 'Versions could not be loaded.'); return []; })
-          .finally(() => { if (versionLoads.get(naplet.id) === load) versionLoads.delete(naplet.id); });
+          .finally(() => { if (versionLoads.get(naplet.id) === load) { versionLoads.delete(naplet.id); this.patchHtmlView(naplet.id, { versionsLoading: false }); } });
         versionLoads.set(naplet.id, load);
       }
       return versionLoads.get(naplet.id);
@@ -607,6 +627,151 @@ export function canvasPageStore() {
       if (!this.canvas?.can_manage) return;
       if (await this.mutate(() => syncRuntime.setNapletVersionPolicy(naplet.id, null))) this.htmlViews = { ...this.htmlViews, [naplet.id]: { ...this.htmlView(naplet), content: null } };
     },
+    // Versions: the cog menu opens one dialog for HTML and board naplets; the
+    // title bar keeps the current version and unsaved/read-only state visible.
+    hasVersions(naplet) { return naplet?.access === 'ready' && ['html', 'excalidraw'].includes(naplet.source?.type); },
+    napletStatus(naplet) {
+      if (!this.hasVersions(naplet)) return '';
+      return naplet.source.type === 'html' ? this.htmlVersionLabel(naplet) : this.boardHeaderStatus(naplet);
+    },
+    napletStatusState(naplet) {
+      if (naplet?.source?.type === 'html') return this.htmlIsBrowsing(naplet) ? 'viewing' : 'saved';
+      const state = this.boardState(naplet);
+      if (state.viewing_version_id) return 'viewing';
+      if (state.save_state === 'stale' || state.newer_available) return 'stale';
+      if (state.status === 'ready' && !state.can_write) return 'viewing';
+      return state.dirty && state.save_state === 'saved' ? 'unsaved' : state.save_state;
+    },
+    napletStatusTitle(naplet) {
+      if (naplet?.source?.type === 'html') return [this.htmlVersionLabel(naplet), this.htmlAssetSummary(naplet)].filter(Boolean).join(' · ');
+      return [this.boardStatusLabel(naplet), this.boardVersionLabel(naplet)].filter(Boolean).join(' · ');
+    },
+    get versionsNaplet() { return this.naplets.find(row => row.id === this.versionsDialog.napletId && this.hasVersions(row)) || null; },
+    openVersions(naplet, returnFocus = null) {
+      if (!this.hasVersions(naplet)) return;
+      this.versionsDialog = { napletId: naplet.id, returnFocus };
+      if (naplet.source.type === 'html') void this.loadHtmlVersions(naplet); else void this.loadBoardVersions(naplet);
+      Alpine.nextTick(() => {
+        const dialog = canvasElement('versionsDialog');
+        if (!dialog.open) dialog.showModal();
+        dialog.querySelector('[aria-current="true"], .canvas-versions-step button:not(:disabled), .canvas-dialog-actions button')?.focus();
+      });
+    },
+    versionsClosed() {
+      const target = this.versionsDialog.returnFocus;
+      this.versionsDialog = { napletId: '', returnFocus: null };
+      if (target?.isConnected) target.focus({ preventScroll: true });
+    },
+    versionsLoading(naplet) {
+      if (naplet?.source?.type === 'html') return Boolean(this.htmlView(naplet)?.versionsLoading);
+      return Boolean(this.boardState(naplet).versions_loading);
+    },
+    versionRows(naplet) {
+      if (naplet?.source?.type === 'html') {
+        const current = this.htmlContent(naplet).version_id;
+        return this.htmlVersions(naplet).map(version => ({
+          id: version.id, current: version.id === current, label: `v${version.version_number}`,
+          detail: [version.id === naplet.content.current_version_id ? 'latest' : '', version.id === naplet.source.version_id ? 'pinned' : ''].filter(Boolean).join(' · '), summary: '',
+        }));
+      }
+      const state = this.boardState(naplet), current = state.viewing_version_id || state.base_version_id;
+      return (state.versions || []).map(version => ({
+        id: version.id, current: version.id === current, label: `v${version.version_number}`,
+        detail: [this.boardVersionTime(version), this.boardVersionAuthor(version)].filter(Boolean).join(' · '), summary: text(version.summary),
+      }));
+    },
+    canStepVersion(naplet, delta) {
+      if (naplet?.source?.type === 'html') {
+        const number = this.htmlContent(naplet).version_number, loading = Boolean(this.htmlView(naplet)?.loading);
+        return !loading && (delta < 0 ? number > 1 : number < naplet.content.current_version_number);
+      }
+      const state = this.boardState(naplet), number = state.viewing_version_number || state.base_version_number;
+      return state.status === 'ready' && (delta < 0 ? number > 1 : Boolean(state.viewing_version_id));
+    },
+    stepVersion(naplet, delta) {
+      if (!this.canStepVersion(naplet, delta)) return undefined;
+      return naplet.source.type === 'html' ? this.stepHtmlVersion(naplet, delta) : this.stepBoardVersion(naplet, delta);
+    },
+    openVersion(naplet, versionId) {
+      return naplet?.source?.type === 'html' ? this.showHtmlVersion(naplet, versionId) : this.viewBoardVersion(naplet, versionId);
+    },
+    // References: copy a link that opens this canvas and focuses one naplet.
+    napletReference(naplet) {
+      return canvasNapletReference({ origin: location.origin, workspaceId: this.workspace?.workspaceId, canvas: this.canvas, naplet });
+    },
+    // A manual popover, so the notice also shows above a full-screen naplet.
+    showNotice(message) {
+      clearTimeout(noticeTimer); this.notice = message;
+      const node = document.querySelector('.canvas-notice');
+      if (node && !node.matches(':popover-open')) node.showPopover();
+      noticeTimer = setTimeout(() => this.clearNotice(), 4000);
+    },
+    clearNotice() {
+      this.notice = '';
+      const node = document.querySelector('.canvas-notice');
+      if (node?.matches(':popover-open')) node.hidePopover();
+    },
+    async copyNapletReference(naplet) {
+      const reference = this.napletReference(naplet);
+      if (!reference) { this.error = 'This item has no reference to copy.'; return false; }
+      const result = await copyCanvasReference(reference.markdown);
+      if (result.ok) { this.closeReferenceDialog(); this.showNotice('Reference copied. Paste it into chat or a document.'); return true; }
+      this.referenceDialog = { napletId: naplet.id, markdown: reference.markdown, url: reference.url, message: result.reason === 'unsupported' ? 'This browser cannot copy automatically. Select the link below and copy it.' : 'The browser blocked copying. Select the link below and copy it.' };
+      Alpine.nextTick(() => {
+        const dialog = canvasElement('referenceDialog');
+        if (!dialog.open) dialog.showModal();
+        const field = dialog.querySelector('textarea'); field?.focus(); field?.select();
+      });
+      return false;
+    },
+    async retryReferenceCopy() {
+      const result = await copyCanvasReference(this.referenceDialog.markdown);
+      if (result.ok) { this.closeReferenceDialog(); this.showNotice('Reference copied. Paste it into chat or a document.'); return true; }
+      this.referenceDialog = { ...this.referenceDialog, message: 'Copying is still blocked. Select the link and copy it with your keyboard or the context menu.' };
+      return false;
+    },
+    closeReferenceDialog() {
+      document.querySelector(canvasDom.referenceDialog)?.close();
+      this.referenceDialog = { napletId: '', markdown: '', url: '', message: '' };
+    },
+    /** Lost authority: no versions panel or copy fallback keeps naplet metadata on screen. */
+    closeNapletDialogs() {
+      document.querySelector(canvasDom.versionsDialog)?.close();
+      this.closeReferenceDialog();
+    },
+    clearReferenceFeedback() {
+      clearTimeout(noticeTimer); clearTimeout(highlightTimer);
+      this.clearNotice(); this.referenceHighlightId = '';
+    },
+    /** Once per page load, after an authorized snapshot: select, centre and highlight the target. */
+    focusReferenceTarget() {
+      const reference = this.reference;
+      if (!reference.requested || reference.handled) return;
+      reference.handled = true;
+      const target = canvasReferenceTarget(this.naplets, reference.napletId);
+      if (!target) { this.error = CANVAS_REFERENCE_UNAVAILABLE; return; }
+      this.tool = 'select'; this.selectedKeys = [canvasItemKey('naplet', target.id)];
+      const deadline = performance.now() + 5000;
+      const reveal = () => {
+        const current = canvasReferenceTarget(this.naplets, target.id);
+        if (!current) return;
+        const node = document.querySelector(`[data-canvas-key="naplet:${CSS.escape(target.id)}"]`), stage = this.stageRect();
+        // A fresh load can apply the snapshot before the canvas stylesheet: an
+        // unstyled naplet dialog is not rendered, cannot take focus, and the
+        // stage has no size to centre in. Wait (bounded) for real layout.
+        if ((!node?.getClientRects().length || !stage.width || !stage.height) && performance.now() < deadline) { requestAnimationFrame(reveal); return; }
+        // Viewer-local: opening a link never writes the shared viewport.
+        this.viewport = centredViewport(current.layout, stage, this.viewport); this.viewportLocal = true;
+        this.referenceHighlightId = target.id;
+        clearTimeout(highlightTimer); highlightTimer = setTimeout(() => { this.referenceHighlightId = ''; }, 2600);
+        if (!node) return;
+        node.dispatchEvent(new CustomEvent('canvas-reference-focus'));
+        // Never take focus from something the viewer has already chosen.
+        if (document.activeElement && document.activeElement !== document.body) return;
+        node.tabIndex = -1; node.focus({ preventScroll: true });
+      };
+      Alpine.nextTick(reveal);
+    },
   };
 }
 
@@ -615,7 +780,11 @@ registerCanvasWindow(Alpine);
 registerCanvasDocument(Alpine);
 registerCanvasHtml(Alpine, { assetStore: () => Alpine.store('canvas').assetStore() });
 registerCanvasHtml(Alpine, { name: 'canvas-html-preview', assetStore: () => Alpine.store('canvas').previewAssetStore() });
-registerCanvasBoard(Alpine, { controllerFor: fileId => Alpine.store('canvas').boardController(fileId) });
+registerCanvasBoard(Alpine, {
+  controllerFor: fileId => Alpine.store('canvas').boardController(fileId),
+  actionFor: naplet => Alpine.store('canvas').boardSaveAction(naplet),
+  runAction: (naplet, action) => Alpine.store('canvas').runBoardAction(naplet, action),
+});
 Alpine.store('canvas', canvasPageStore());
 window.Alpine = Alpine;
 Alpine.start();

@@ -41,6 +41,8 @@ function getWindowOrigin() {
 }
 
 function normalizeFlightDeckRoute(url) {
+  // Standalone pages such as /canvas.html own their query; they are not shell routes.
+  if (/\.html$/i.test(url.pathname) && !/(^|\/)index\.html$/i.test(url.pathname)) return url.href;
   const route = parseRouteLocation(url.href);
   const currentRoute = parseRouteLocation(getWindowHref());
   const params = route.params || {};

@@ -20,7 +20,6 @@ export function canvasBoardStore() {
     boardChannels: [],
     boardSave: { fileId: '', summary: '' },
     boardRename: { fileId: '', title: '', saving: false, error: '' },
-    boardHistoryOpen: {},
     boardCreating: false,
 
     startBoards(context, { confirm = message => window.confirm(message) } = {}) {
@@ -146,11 +145,37 @@ export function canvasBoardStore() {
     },
     loadLatestBoard(naplet) { return this.boardController(naplet?.source?.id)?.loadLatest(); },
     mergeLatestBoard(naplet) { return this.boardController(naplet?.source?.id)?.mergeLatest(); },
-    async toggleBoardHistory(naplet) {
-      const fileId = naplet?.source?.id;
-      const open = !this.boardHistoryOpen[naplet.id];
-      this.boardHistoryOpen = { ...this.boardHistoryOpen, [naplet.id]: open };
-      if (open) await this.boardController(fileId)?.loadVersions();
+    loadBoardVersions(naplet) { return this.boardController(naplet?.source?.id)?.loadVersions(); },
+    /** Compact title-bar status that replaces the board version strip. */
+    boardHeaderStatus(naplet) {
+      const state = this.boardState(naplet);
+      if (state.status !== 'ready') return state.status === 'loading' ? '' : this.boardStatusLabel(naplet);
+      const base = state.base_version_number ? `v${state.base_version_number}` : '';
+      if (state.viewing_version_id) return `Viewing v${state.viewing_version_number || '?'} · read-only`;
+      if (state.save_state === 'saving') return 'Saving…';
+      if (state.save_state === 'error') return 'Save failed';
+      if (state.save_state === 'stale' || state.newer_available) return `Unsaved · newer v${state.latest_version_number || '?'} saved`;
+      if (state.dirty) return base ? `Unsaved · ${base}` : 'Unsaved changes';
+      if (!state.can_write) return base ? `Read-only · ${base}` : 'Read-only';
+      return base;
+    },
+    /**
+     * Save, floated over the drawing area. Plain data: it is posted to the
+     * editor iframe, which renders it in Excalidraw's top-right slot. History,
+     * merge and restore stay in the cog menu; read-only views get no Save.
+     */
+    boardSaveAction(naplet) {
+      const state = this.boardState(naplet);
+      if (state.status !== 'ready' || state.viewing_version_id || !state.can_write) return { action: '', label: '', title: '', disabled: true };
+      if (state.save_state === 'saving') return { action: 'save', label: 'Saving…', title: 'Saving a new board version', disabled: true };
+      if (state.dirty) return { action: 'save', label: 'Save', title: 'Save a new board version', disabled: false };
+      return { action: 'save', label: 'Saved', title: 'No unsaved changes', disabled: true };
+    },
+    /** Runs the floated Save only if the current state still offers it. */
+    runBoardAction(naplet, action) {
+      const current = this.boardSaveAction(naplet);
+      if (action !== 'save' || current.action !== 'save' || current.disabled) return false;
+      return this.saveBoard(naplet);
     },
     viewBoardVersion(naplet, versionId) { return this.boardController(naplet?.source?.id)?.viewVersion(versionId); },
     stepBoardVersion(naplet, delta) { return this.boardController(naplet?.source?.id)?.stepVersion(delta); },

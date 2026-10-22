@@ -73,12 +73,13 @@ test.beforeAll(async () => {
   })).outputFiles[0].text;
 });
 
-test('private HTML artefacts render permitted images, isolate naplets and browse/pin versions', async ({ page, context }) => {
+for (const width of [1440, 390]) test(`private HTML artefacts render permitted images, isolate naplets and browse/pin versions from the cog menu ${width}px`, async ({ page, context }) => {
   test.setTimeout(90_000);
+  await page.setViewportSize({ width, height: 900 });
   const v1Html = fullDocument('Daily catch-up v1', 'hero-v1.png');
   const v2Html = fullDocument('Daily catch-up v2', 'hero-v2.png');
   const deniedAsset = { name: 'private.png', status: 'unavailable' };
-  let artefact = htmlNaplet({ napletId: 'artefact', fileId: id(15), title: 'Daily catch-up', html: v2Html, versionId: id(16), versionNumber: 2, assets: [asset('hero-v2.png', id(11), id(13), heroV2), deniedAsset], layout: { x: 20, y: 20, width: 520, height: 420, z: 1 } });
+  let artefact = htmlNaplet({ napletId: 'artefact', fileId: id(15), title: 'Daily catch-up', html: v2Html, versionId: id(16), versionNumber: 2, assets: [asset('hero-v2.png', id(11), id(13), heroV2), deniedAsset], layout: { x: 20, y: 20, width: Math.min(520, width - 40), height: 420, z: 1 } });
   const naplets = () => [
     artefact,
     htmlNaplet({ napletId: 'attacker', fileId: id(25), title: 'Other artefact', html: attacker, versionId: id(26), versionNumber: 1, assets: [asset('badge.png', id(21), id(22), badge)], layout: { x: 560, y: 20, width: 360, height: 260, z: 2 } }),
@@ -139,8 +140,16 @@ test('private HTML artefacts render permitted images, isolate naplets and browse
   page.on('pageerror', error => pageErrors.push(String(error)));
   await page.goto(`/canvas.html?workspacekey=${encodeURIComponent(workspaceKey)}&canvasid=${canvasId}`);
   const artefactWindow = page.locator('[data-canvas-key="naplet:artefact"]');
-  await expect(artefactWindow.locator('.canvas-html-version')).toHaveText('Latest · v2');
-  await expect(artefactWindow.locator('.canvas-html-note')).toHaveText('1 image unavailable');
+  const status = artefactWindow.locator('.canvas-naplet-status');
+  // No version strip: version state lives in the title bar, controls in the cog.
+  await expect(status).toHaveText('Latest · v2');
+  await expect(status).toHaveAttribute('title', 'Latest · v2 · 1 image unavailable');
+  await expect(artefactWindow.locator('[role="toolbar"], select')).toHaveCount(0);
+  // boundingBox() is null until the frame is laid out; wait rather than race it.
+  await expect(artefactWindow.locator('iframe')).toBeVisible();
+  await expect(artefactWindow.locator('.canvas-naplet-header')).toBeVisible();
+  const frameBox = await artefactWindow.locator('iframe').boundingBox(), headerBox = await artefactWindow.locator('.canvas-naplet-header').boundingBox();
+  expect(Math.abs(frameBox.y - (headerBox.y + headerBox.height))).toBeLessThanOrEqual(2);
   const sandbox = await artefactWindow.locator('iframe').evaluate(frame => ({ sandbox: frame.getAttribute('sandbox'), srcdoc: frame.getAttribute('srcdoc') || '' }));
   expect(sandbox.sandbox).toBe('allow-scripts');
   expect(sandbox.srcdoc).not.toMatch(/Nostr |Authorization|nsec/);
@@ -166,27 +175,54 @@ test('private HTML artefacts render permitted images, isolate naplets and browse
   await expect(page.locator('[data-canvas-key="naplet:navigator"] iframe')).toHaveAttribute('data-navigation-blocked', 'true');
   await expect(frameFor('navigator').locator('body')).toContainText('tried to navigate away');
 
+  // The cog menu opens a Versions dialog by keyboard; focus returns to the cog on close.
+  const cog = artefactWindow.getByRole('button', { name: 'Window options', exact: true });
+  const menu = artefactWindow.getByRole('menu');
+  const versionsDialog = page.getByRole('dialog', { name: 'Versions' });
+  await cog.click();
+  await expect(menu.getByRole('menuitem', { name: 'Minimise window' })).toBeFocused();
+  for (let i = 0; i < 4; i += 1) await page.keyboard.press('ArrowDown');
+  await expect(menu.getByRole('menuitem', { name: 'Versions…' })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(versionsDialog).toBeVisible();
+  await expect(versionsDialog.getByRole('list', { name: 'Saved versions' }).getByRole('button')).toHaveText(['v2latest', 'v1']);
+  await expect(versionsDialog.locator('[aria-current="true"]')).toHaveText('v2latest');
+  await page.keyboard.press('Escape');
+  await expect(versionsDialog).not.toBeVisible();
+  await expect(cog).toBeFocused();
+
+  const openVersions = async () => { await cog.click(); await menu.getByRole('menuitem', { name: 'Versions…' }).click(); await expect(versionsDialog).toBeVisible(); };
   // Viewer-local browsing loads v1 and its own private image.
-  await artefactWindow.locator('button[aria-label="Previous version"]').click();
-  await expect(artefactWindow.locator('.canvas-html-version')).toHaveText('Viewing v1');
+  await openVersions();
+  await versionsDialog.getByRole('button', { name: '‹ Older' }).click();
+  await expect(status).toHaveText('Viewing v1');
+  await expect(versionsDialog.locator('.canvas-versions-status')).toHaveText('Viewing v1 · 1 image unavailable');
+  await expect(versionsDialog.getByRole('button', { name: '‹ Older' })).toBeDisabled();
   await expect(frameFor('artefact').locator('h1')).toHaveText('Daily catch-up v1');
   await expect.poll(() => imageState('artefact', 'hero')).toMatchObject({ state: 'ready', width: 6 });
   expect(browses).toContain(id(14));
   expect(patches).toEqual([]);
-  await artefactWindow.getByRole('button', { name: 'Back to v2' }).click();
+  await versionsDialog.getByRole('button', { name: 'Close' }).click();
+  // Back to the shared version is also a direct cog action while browsing.
+  await cog.click();
+  await menu.getByRole('menuitem', { name: 'Back to v2' }).click();
   await expect(frameFor('artefact').locator('h1')).toHaveText('Daily catch-up v2');
+  await expect(status).toHaveText('Latest · v2');
 
-  // Pin v1 for everyone, then return to latest.
-  await artefactWindow.locator('button[aria-label="Previous version"]').click();
-  await expect(artefactWindow.locator('.canvas-html-version')).toHaveText('Viewing v1');
-  await artefactWindow.getByRole('button', { name: 'Pin this version' }).click();
-  await expect(artefactWindow.locator('.canvas-html-version')).toHaveText('Pinned · v1 (latest v2)');
+  // Pin v1 for everyone from the version list, then return to latest.
+  await openVersions();
+  await versionsDialog.getByRole('button', { name: /^v1/ }).click();
+  await expect(status).toHaveText('Viewing v1');
+  await versionsDialog.getByRole('button', { name: 'Pin this version' }).click();
+  await expect(status).toHaveText('Pinned · v1 (latest v2)');
+  await expect(versionsDialog.getByRole('list', { name: 'Saved versions' }).getByRole('button')).toHaveText(['v2latest', 'v1pinned']);
   await expect(frameFor('artefact').locator('h1')).toHaveText('Daily catch-up v1');
-  await artefactWindow.getByRole('button', { name: 'Follow latest' }).click();
-  await expect(artefactWindow.locator('.canvas-html-version')).toHaveText('Latest · v2');
+  await versionsDialog.getByRole('button', { name: 'Follow latest' }).click();
+  await expect(status).toHaveText('Latest · v2');
+  await versionsDialog.getByRole('button', { name: 'Close' }).click();
   await expect.poll(() => imageState('artefact', 'hero')).toMatchObject({ state: 'ready', width: 12 });
   expect(patches).toEqual([id(14), null]);
   expect(pageErrors).toEqual([]);
   await page.screenshot({ path: test.info().outputPath('canvas-html-artifacts.png') });
-  console.log('CANVAS_HTML_ARTIFACT_EVIDENCE', JSON.stringify({ privateImagesRendered: true, deniedImageMissing: true, crossNapletForgeryIgnored: true, selfNavigationBlocked: true, versionBrowse: true, pinAndFollowLatest: true, assetRequests: assetRequests.length }));
+  console.log('CANVAS_HTML_ARTIFACT_EVIDENCE', JSON.stringify({ width, cogVersions: true, privateImagesRendered: true, deniedImageMissing: true, crossNapletForgeryIgnored: true, selfNavigationBlocked: true, versionBrowse: true, pinAndFollowLatest: true, assetRequests: assetRequests.length }));
 });

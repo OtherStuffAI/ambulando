@@ -123,11 +123,19 @@ version metadata or bytes, rejects versions of another File or workspace and
 verifies the stored sha256 before serving HTML. Publishing uses the normal File
 version route, so racing publishers are resolved by `base_version_id`.
 
-Viewers can browse versions locally (previous/next, a version list and "Back")
+Viewers can browse versions locally (Older/Newer, a version list and "Back")
 through `GET /canvases/:id/naplets/:id/html?version_id=`, a command read that
 never changes the shared naplet or the Dexie projection. Canvas managers can
 "Pin this version" or "Follow latest" (`PATCH ... { source_version_id }` with
 the naplet `row_version`).
+
+These controls are not a strip above the artefact. The naplet title bar shows
+the version state (`Latest · v2`, `Pinned · v1 (latest v2)`, `Viewing v1`, with
+unavailable-image counts in its tooltip). The cog menu has **Versions…**, which
+opens a modal versions dialog with the stepping buttons, the version list and the
+pin/follow actions, plus a direct **Back to vN** item while browsing. The dialog
+is an ordinary dialog of buttons, so menu semantics stay valid; arrow keys in the
+menu skip disabled items, and closing the dialog returns focus to the cog.
 
 ### Private images
 
@@ -423,3 +431,23 @@ Title-only cards work without a thumbnail. Pointer actions on the card are
 isolated from header dragging and the resize handle. Tests cover signed synthetic
 picker/persistence/navigation/denial at desktop and phone widths; physical phone
 and authenticated deployed Tower behavior need their own activation check.
+
+## Naplet references
+
+Every readable naplet's cog menu has **Copy reference**. It copies a Markdown
+link `[<naplet title> · <canvas title>](<origin>/canvas.html?workspaceid=…&canvasid=…&napletid=…)`.
+The URL names Tower ids only: no local workspace key, session, token or source
+identity, so it works in another browser profile whose local workspace key
+differs. The page resolves `workspaceid` to the local workspace entry for the
+signed-in identity. Restricted placeholders offer no reference. If the clipboard
+is denied or unavailable, a dialog shows the Markdown link and URL for manual
+copying instead of reporting success. Losing access closes that dialog and clears it.
+
+Opening a reference is an ordinary authorized canvas load. After the first
+authorized snapshot, the target is selected, centred in a viewer-local viewport,
+restored if minimised, focused and briefly highlighted, exactly once per page
+load. The centred view is not written to the canvas viewport; it lasts until the
+viewer pans or zooms. Missing, restricted and malformed targets show one neutral
+message and the canvas still opens. Chat Markdown leaves same-origin `.html` page
+links such as `/canvas.html` untouched instead of normalizing them as shell
+routes. See `docs/canvas-references.md` for agent resolution.

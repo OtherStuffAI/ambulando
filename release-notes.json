@@ -4867,6 +4867,15 @@
         "Preview a selected HTML artefact, with its private images, before adding it. The preview stays sandboxed and is cleared when you change the selection or close the picker.",
         "Long lists show more on request, and the picker says when a channel has more Files than Tower can list at once."
       ]
+    },
+    {
+      "buildNumber": 2564,
+      "label": "Naplet controls and references",
+      "notes": [
+        "Version, history and pin controls for HTML artefacts and boards now live in each naplet's options menu, leaving more room for the content.",
+        "Board Save floats over the top-right of the drawing area, inline and expanded, and shows unsaved, saving and read-only states.",
+        "Copy reference from a naplet's options menu to get a Markdown link that opens the canvas and highlights that naplet for anyone with access. If copying is blocked, the link is shown for manual copying."
+      ]
     }
   ]
 }

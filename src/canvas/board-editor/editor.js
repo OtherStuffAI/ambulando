@@ -25,6 +25,11 @@ function BoardEditor({ port, theme }) {
   const state = useRef({ key: '', readOnly: true, fingerprint: '', sentFiles: new Set(), interacted: false, timer: 0, pending: null });
   const [readOnly, setReadOnly] = useState(true);
   const [ready, setReady] = useState(false);
+  // Page-owned Save state (label, disabled); hidden for read-only views.
+  const [action, setAction] = useState(null);
+  // On Excalidraw's phone layout the top-right slot shares the tool row, so Save
+  // floats just below the tools instead, left of the side tool column.
+  const [phoneAt, setPhoneAt] = useState(null);
 
   const applyScene = useCallback((scene, { reset }) => {
     const api = apiRef.current;
@@ -78,6 +83,8 @@ function BoardEditor({ port, theme }) {
         clearTimeout(state.current.timer);
         flush();
         port.postMessage({ type: 'flushed', token: message.token });
+      } else if (message.type === 'action-ui') {
+        setAction(message.action && typeof message.action === 'object' ? message.action : null);
       } else if (message.type === 'patch') {
         applyScene(message.scene, { reset: false });
       } else if (message.type === 'clear') {
@@ -121,7 +128,38 @@ function BoardEditor({ port, theme }) {
     if (!current.timer) current.timer = setTimeout(flush, CHANGE_DELAY_MS);
   }, [flush]);
 
-  return createElement('div', { style: { width: '100%', height: '100%' }, 'data-board-ready': ready ? 'true' : 'false', 'data-board-readonly': readOnly ? 'true' : 'false' },
+  useEffect(() => {
+    if (!ready) return undefined;
+    let frame = 0, tries = 0;
+    const measure = () => {
+      frame = 0;
+      const mobile = document.querySelector('.excalidraw')?.classList.contains('excalidraw--mobile');
+      const tools = document.querySelector('.App-toolbar--mobile')?.getBoundingClientRect();
+      if (mobile && !tools && tries++ < 120) { frame = requestAnimationFrame(measure); return; }
+      const side = document.querySelector('.mobile-misc-tools-container')?.getBoundingClientRect();
+      const next = mobile ? { top: Math.round((tools?.bottom || 0) + 8), right: Math.round(side?.width ? innerWidth - side.left + 8 : 12) } : null;
+      setPhoneAt(current => (current?.top === next?.top && current?.right === next?.right ? current : next));
+    };
+    const schedule = () => { tries = 0; if (!frame) frame = requestAnimationFrame(measure); };
+    schedule();
+    addEventListener('resize', schedule);
+    return () => { cancelAnimationFrame(frame); removeEventListener('resize', schedule); };
+  }, [ready, readOnly]);
+
+  // Save floats over the drawing area: in Excalidraw's own top-right slot on
+  // desktop, below the tools on phones, never over a tool. The page re-checks it.
+  const saveButton = useCallback(() => (action?.action ? createElement('button', {
+    type: 'button',
+    className: `wingman-board-action${action.action === 'save' && !action.disabled ? ' primary' : ''}`,
+    'data-board-action': action.action,
+    title: action.title || action.label,
+    disabled: action.disabled,
+    onClick: () => port.postMessage({ type: 'action', action: action.action }),
+  }, action.label) : null), [action, port]);
+  const renderTopRightUI = useCallback(isMobile => (isMobile ? null : saveButton()), [saveButton]);
+
+  return createElement('div', { style: { position: 'relative', width: '100%', height: '100%' }, 'data-board-ready': ready ? 'true' : 'false', 'data-board-readonly': readOnly ? 'true' : 'false' },
+    phoneAt && action?.action ? createElement('div', { className: 'wingman-board-action-phone', style: { top: `${phoneAt.top}px`, right: `${phoneAt.right}px` } }, saveButton()) : null,
     createElement(Excalidraw, {
       excalidrawAPI: api => { apiRef.current = api; setReady(Boolean(api)); },
       onChange,
@@ -134,6 +172,7 @@ function BoardEditor({ port, theme }) {
         const link = String(element?.link || '');
         if (SAFE_LINK.test(link)) window.open(link, '_blank', 'noopener,noreferrer');
       },
+      renderTopRightUI,
       UIOptions: { canvasActions: { loadScene: false, saveToActiveFile: false, clearCanvas: true, export: { saveFileToDisk: true }, toggleTheme: false } },
     }));
 }

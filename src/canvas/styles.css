@@ -126,16 +126,38 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .canvas-window-control.window-popout { background: #8bd5a2; border-color: #69a37b; }
 .canvas-window-content { display: grid; grid-template-rows: minmax(0, 1fr); min-height: 0; overflow: hidden; border-radius: 0 0 9px 9px; }
 .canvas-window-content > iframe { min-height: 0; }
-.canvas-html { display: grid; grid-template-rows: auto minmax(0, 1fr); min-height: 0; }
+.canvas-html { display: grid; grid-template-rows: minmax(0, 1fr); min-height: 0; }
 .canvas-html > iframe { min-height: 0; }
-.canvas-html-versions { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 4px 6px; border-bottom: 1px solid var(--border); background: var(--surface); color: var(--foreground); font-size: 12px; }
-.canvas-html-versions button, .canvas-html-select { min-height: 26px; padding: 2px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface-muted); color: inherit; font: inherit; }
-.canvas-html-versions button:disabled { opacity: .45; }
-.canvas-html-step { min-width: 26px; }
-.canvas-html-version { font-weight: 600; white-space: nowrap; }
-.canvas-html-select { max-width: 9rem; }
-.canvas-html-note { color: var(--muted-foreground); }
-@media (pointer: coarse) { .canvas-html-versions button, .canvas-html-select { min-height: 36px; } }
+/* Version and save state live in the title bar; controls live in the cog menu. */
+.canvas-naplet-status { flex: 0 1 auto; min-width: 0; max-width: 45%; overflow: hidden; padding: 2px 8px; border-radius: 999px; background: #e7ece4; color: #2f4733; font-size: 11px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.canvas-naplet-status[data-state="unsaved"] { background: #fff3cd; color: #6b4e00; }
+.canvas-naplet-status[data-state="saving"] { background: #e3edff; color: #1f3f86; }
+.canvas-naplet-status[data-state="error"], .canvas-naplet-status[data-state="stale"] { background: #fde2e1; color: #8a1c17; }
+.canvas-naplet-status[data-state="viewing"] { background: #ececf2; color: #3a3a4a; }
+.canvas-naplet.reference-target { outline: 3px solid var(--primary); outline-offset: 4px; box-shadow: 0 0 0 8px color-mix(in srgb, var(--primary) 22%, transparent), 0 4px 16px #00000024; }
+@media (prefers-reduced-motion: no-preference) { .canvas-naplet.reference-target { transition: box-shadow .4s ease, outline-offset .4s ease; } }
+.canvas-notice { position: fixed; inset: auto 16px 16px auto; z-index: 101; max-width: min(32rem, calc(100vw - 32px)); margin: 0; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--card); color: var(--card-foreground); box-shadow: 0 6px 24px #00000026; }
+.canvas-versions { display: grid; gap: 12px; padding: 18px; }
+.canvas-versions header h2 { margin: 0; }
+.canvas-versions-subject, .canvas-versions-status, .canvas-versions-note { margin: 0; overflow-wrap: anywhere; }
+.canvas-versions-subject, .canvas-versions-note { color: var(--muted-foreground); font-size: 13px; }
+.canvas-versions-status { font-weight: 600; }
+.canvas-versions-step { display: flex; gap: 8px; }
+.canvas-versions-step button { flex: 1; }
+.canvas-versions-list { display: grid; gap: 4px; max-height: min(18rem, 40dvh); margin: 0; padding: 0; overflow-y: auto; list-style: none; }
+.canvas-versions-list li { color: var(--muted-foreground); }
+.canvas-versions-list button { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; width: 100%; padding: 8px 10px; text-align: left; color: var(--foreground); background: var(--background); }
+.canvas-versions-list button[aria-current="true"] { border-color: var(--primary); background: color-mix(in srgb, var(--primary) 12%, var(--background)); }
+.canvas-versions-list span, .canvas-versions-list em { color: var(--muted-foreground); font-size: 12px; overflow-wrap: anywhere; }
+.canvas-versions-actions { flex-wrap: wrap; }
+.canvas-versions-commands { display: flex; flex-wrap: wrap; gap: 8px; margin-right: auto; }
+.canvas-versions-commands:empty { display: none; }
+.canvas-versions-dialog .canvas-dialog-actions button, .canvas-versions-step button, .canvas-reference-dialog button { padding: 6px 12px; }
+.canvas-reference-dialog textarea, .canvas-reference-dialog input { width: 100%; font-family: ui-monospace, monospace; font-size: 12px; }
+.canvas-reference-dialog textarea { min-height: 72px; }
+.canvas-reference-dialog p { margin: 0; }
+.canvas-reference-hint { color: var(--muted-foreground); font-size: 13px; }
+@media (max-width: 700px) { .canvas-versions-dialog button, .canvas-reference-dialog button { min-height: 44px; } .canvas-naplet-status { max-width: 38%; } }
 .canvas-naplet.window-minimised { height: 50px !important; grid-template-rows: 50px; }
 .canvas-naplet.window-minimised .canvas-naplet-header { border-radius: 9px; border-bottom: 0; }
 .canvas-naplet.window-expanded {
@@ -199,24 +221,10 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 @media (max-width: 700px) { .canvas-comment-controls button { width: 36px; min-height: 44px; } }
 
 /* Excalidraw board naplets: one same-origin editor iframe per naplet. */
-/* Flex, not grid: x-show rows (message, history) leave the flow when hidden. */
+/* Flex, not grid: the x-show message row leaves the flow when hidden. */
 .canvas-board { display: flex; flex-direction: column; min-height: 0; background: var(--surface); }
-.canvas-board-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 4px 6px; border-bottom: 1px solid var(--border); color: var(--foreground); font-size: 12px; }
-.canvas-board-bar button { min-height: 26px; padding: 0 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: inherit; font: inherit; cursor: pointer; }
-.canvas-board-bar button:disabled { opacity: .45; cursor: default; }
-.canvas-board-status { padding: 2px 8px; border-radius: 999px; font-weight: 600; background: #e7f4ea; color: #1d5b2c; }
-.canvas-board-status[data-state="unsaved"] { background: #fff3cd; color: #6b4e00; }
-.canvas-board-status[data-state="saving"] { background: #e3edff; color: #1f3f86; }
-.canvas-board-status[data-state="error"], .canvas-board-status[data-state="stale"] { background: #fde2e1; color: #8a1c17; }
-.canvas-board-status[data-state="viewing"] { background: #ececf2; color: #3a3a4a; }
-.canvas-board-version { color: var(--muted-foreground, #5b6474); }
-.canvas-board-save { border-color: #2f6fde !important; background: #2f6fde !important; color: #fff !important; font-weight: 600; }
 .canvas-board-message { margin: 0; padding: 4px 8px; font-size: 12px; background: #f3f6fb; color: #29364a; border-bottom: 1px solid var(--border); }
 .canvas-board-message.error { background: #fde2e1; color: #8a1c17; }
-.canvas-board-history { flex: 0 0 auto; margin: 0; padding: 4px; max-height: 40%; overflow: auto; list-style: none; border-bottom: 1px solid var(--border); font-size: 12px; }
-.canvas-board-history button { display: flex; gap: 8px; width: 100%; padding: 4px 6px; border: 0; border-radius: 4px; background: none; color: var(--foreground); text-align: left; font: inherit; cursor: pointer; }
-.canvas-board-history button[aria-current="true"] { background: #e3edff; }
-.canvas-board-history em { color: var(--muted-foreground, #5b6474); }
 .canvas-board-stage { position: relative; flex: 1 1 0; min-height: 0; }
 /* Absolutely sized: an iframe's auto height would otherwise fall back to 150px. */
 .canvas-board-frame { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: #fff; }

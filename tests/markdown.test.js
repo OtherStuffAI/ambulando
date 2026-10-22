@@ -338,4 +338,13 @@ describe('renderMarkdownToHtml', () => {
     const html = renderMarkdownToHtml('[task](/tasks?scopeid=scope-1&taskid=task-42)');
     expect(html).toContain('href="http://localhost/demo/tasks?scopeid=scope-1&amp;taskid=task-42&amp;workspacekey=wk-1"');
   });
+
+  it('keeps pasted canvas naplet references intact instead of rewriting them as shell routes', () => {
+    setWindowHref('http://localhost/demo/chat?channelid=chan-1&workspacekey=wk-1');
+    const reference = 'http://localhost/canvas.html?workspaceid=ws-1&canvasid=canvas-1&napletid=naplet-1';
+
+    expect(resolveMarkdownHref(reference)).toBe(reference);
+    expect(resolveMarkdownHref('/canvas.html?workspaceid=ws-1&canvasid=canvas-1')).toBe('http://localhost/canvas.html?workspaceid=ws-1&canvasid=canvas-1');
+    expect(renderMarkdownToHtml(`[Plan · Board](${reference})`)).toContain('href="http://localhost/canvas.html?workspaceid=ws-1&amp;canvasid=canvas-1&amp;napletid=naplet-1"');
+  });
 });

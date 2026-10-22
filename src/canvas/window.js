@@ -69,7 +69,8 @@ export function registerCanvasWindow(Alpine) {
       this.$refs.options.querySelector('[role="menuitem"]')?.focus();
     },
     menuKeydown(event) {
-      const items = [...this.$refs.options.querySelectorAll('[role="menuitem"]')].filter(item => item.getClientRects().length);
+      // Disabled items cannot take focus; skipping them keeps arrow keys moving.
+      const items = [...this.$refs.options.querySelectorAll('[role="menuitem"]')].filter(item => item.getClientRects().length && !item.disabled);
       const index = items.indexOf(document.activeElement);
       let target;
       if (event.key === 'ArrowDown') target = items[(index + 1) % items.length];
@@ -90,6 +91,17 @@ export function registerCanvasWindow(Alpine) {
       if (method === 'deleteItem' && this.expanded) this.$root.close();
       await store[method](argument);
     },
+    versions() {
+      this.closeOptions();
+      this.$store.canvas.openVersions(this.naplet, this.$refs.optionsButton);
+    },
+    copyReference() {
+      this.closeOptions();
+      this.$refs.optionsButton.focus({ preventScroll: true });
+      return this.$store.canvas.copyNapletReference(this.naplet);
+    },
+    // A reference link reveals its target even if this window was minimised.
+    revealForReference() { if (this.minimised) this.toggleMinimise(); },
     comment() {
       this.closeOptions();
       if (this.expanded) this.closeExpanded();

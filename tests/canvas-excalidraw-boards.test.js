@@ -491,6 +491,66 @@ describe('canvas page board store', () => {
     store.stopBoards();
   });
 
+  it('drives the title-bar status and floated Save from board state, re-checking before saving', async () => {
+    const tower = fakeTower();
+    const store = Object.assign({ naplets: [], error: '' }, canvasBoardStore());
+    store.startBoards(context, { confirm: () => true });
+    store.refreshBoardsSnapshot = vi.fn(async () => undefined);
+    store.boardCreate = { title: 'Status', channelId: uuid(50), mode: 'create' };
+    await store.createBoardNaplet({ x: 0, y: 0, width: 600, height: 420, z: 1 }, async body => { store.naplets = [{ id: 'n1', access: 'ready', source: body.source, title: body.title, content: tower.meta(body.source.id), layout: body.layout }]; return true; });
+    const naplet = store.naplets[0], fileId = naplet.source.id;
+    expect(store.boardHeaderStatus(naplet)).toBe('');
+    expect(store.boardSaveAction(naplet)).toMatchObject({ action: '', disabled: true });
+    store.syncBoards(store.naplets);
+    await settle();
+    expect(store.boardHeaderStatus(naplet)).toBe('v1');
+    expect(store.boardSaveAction(naplet)).toEqual({ action: 'save', label: 'Saved', title: 'No unsaved changes', disabled: true });
+    expect(store.runBoardAction(naplet, 'save')).toBe(false);
+
+    const controller = store.boardController(fileId);
+    controller.attach('n1', () => {});
+    await controller.editorChanged('n1', scene([rect('a', 2)]));
+    expect(store.boardHeaderStatus(naplet)).toBe('Unsaved · v1');
+    expect(store.boardSaveAction(naplet)).toMatchObject({ action: 'save', label: 'Save', disabled: false });
+    // Only Save floats; any other requested action is refused.
+    expect(store.runBoardAction(naplet, 'merge')).toBe(false);
+    expect(store.runBoardAction(naplet, 'return')).toBe(false);
+
+    // Floated Save flushes the attached editor first (it acknowledges here).
+    controller.sessions.get('n1').send = message => { if (message.type === 'flush') controller.editorFlushed('n1', message.token); };
+    expect(await store.runBoardAction(naplet, 'save')).toBe(true);
+    expect(tower.files.get(fileId).versions).toHaveLength(2);
+    expect(store.boardHeaderStatus(naplet)).toBe('v2');
+    expect(store.refreshBoardsSnapshot).toHaveBeenCalled();
+
+    // Someone else saves v3 while I draw: CAS rejects my Save and keeps the draft;
+    // the title bar says so and Merge latest stays in the cog menu.
+    await tower.publishAs('npub1agent', fileId, scene([rect('a', 2), rect('agent', 1)]), tower.files.get(fileId).current_version_id);
+    await controller.editorChanged('n1', scene([rect('a', 3)]));
+    expect(await store.runBoardAction(naplet, 'save')).toBe(false);
+    expect(tower.files.get(fileId).versions).toHaveLength(3);
+    expect(store.boardHeaderStatus(naplet)).toBe('Unsaved · newer v3 saved');
+    expect(store.boardSaveAction(naplet)).toMatchObject({ action: 'save', label: 'Save', disabled: false });
+    await store.mergeLatestBoard(naplet);
+    expect(store.boardHeaderStatus(naplet)).toBe('Unsaved · v3');
+
+    // Older versions are read-only: no floated Save; Return to latest is a menu action.
+    await store.loadBoardVersions(naplet);
+    await store.viewBoardVersion(naplet, tower.files.get(fileId).versions[0].id);
+    expect(store.boardHeaderStatus(naplet)).toBe('Viewing v1 · read-only');
+    expect(store.boardSaveAction(naplet).action).toBe('');
+    expect(store.runBoardAction(naplet, 'save')).toBe(false);
+    await store.returnBoardToLatest(naplet);
+    expect(store.boardState(naplet).viewing_version_id).toBe('');
+
+    // Viewers without write access get status only, no Save.
+    await controller.sync({ ...tower.meta(fileId), can_write: false, title: 'Status' });
+    expect(store.boardSaveAction(naplet).action).toBe('');
+    store.boards = { ...store.boards, [fileId]: { ...store.boardState(naplet), dirty: false, save_state: 'saved', newer_available: false } };
+    expect(store.boardHeaderStatus(naplet)).toBe('Read-only · v3');
+    store.stopBoards();
+  });
+
   it('reports a saved-but-unlinked board when Tower rejects the naplet source', async () => {
     fakeTower();
     const store = Object.assign({ naplets: [], error: '' }, canvasBoardStore());
