@@ -4941,6 +4941,12 @@
       "notes": [
         "App and agent names and primary actions now share the deeper core purple in light mode. Dark-mode contrast and status colours are preserved."
       ]
+    },
+    {
+      "buildNumber": 2587,
+      "label": "Verified core-purple publication",
+      "notes": [],
+      "noUserVisibleChanges": true
     }
   ]
 }
