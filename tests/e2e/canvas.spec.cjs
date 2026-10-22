@@ -1062,3 +1062,78 @@ test(`Canvas Chat places locally and selects scope then channel into the normal 
 }
 
 });
+
+for (const width of [1440, 390]) test(`document napplet comments share records and retain denied drafts at ${width}px`, async ({ page, context, baseURL }) => {
+  await page.setViewportSize({ width, height: 950 });
+  const first = baseNaplets()[0];
+  first.layout = { x: 10, y: 10, width: width === 390 ? 355 : 580, height: 790, z: 1 };
+  const naplets = [first, { ...first, id: 'doc-copy', layout: { ...first.layout, x: 650 } }];
+  const comments = [{ id: 'root', doc_id: 'doc-1', workspace_id: workspaceId, body: 'Existing document discussion', row_version: 1, created_at: '2026-10-22T01:00:00Z', metadata: {} }];
+  const writes = []; let denied = false;
+  await context.route('**/*', async route => {
+    const request = route.request(), url = new URL(request.url());
+    if (url.pathname === '/__canvas-seed.js') return route.fulfill({ contentType: 'text/javascript', body: seedBundle });
+    if (url.pathname === '/__canvas-seed.html') return route.fulfill({ contentType: 'text/html', body: '<!doctype html><title>seed</title>' });
+    if (url.pathname.endsWith('/docs/doc-1/comments')) {
+      expect(request.headers().authorization).toMatch(/^Nostr /);
+      if (request.method() === 'GET') return route.fulfill({ json: { identity, comments } });
+      const body = request.postDataJSON(); writes.push(body);
+      if (denied) return route.fulfill({ status: 403, json: { error: 'document comment permission denied' } });
+      const comment = { ...comments[0], ...body, id: `comment-${writes.length}` }; comments.push(comment);
+      return route.fulfill({ json: { identity, comment } });
+    }
+    if (url.pathname.endsWith('/snapshot')) return route.fulfill({ json: { workspace_id: workspaceId, identity, complete: true, canvas: definition(), naplets, elements: [], comments: [] } });
+    if (process.env.SOL_RUNTIME_ASSETS === '1' && url.origin === new URL(baseURL).origin && !url.pathname.startsWith('/api/')) return route.continue();
+    if (url.pathname.startsWith('/api/')) return route.fulfill({ json: {} });
+    return serveBuiltFlightDeck(route);
+  });
+  const workspaceKey = await seedSessionAndWorkspace(page);
+  await page.goto(`/canvas.html?workspacekey=${encodeURIComponent(workspaceKey)}&canvasid=${canvasId}`);
+  // Naplet windows use data attributes for the persistent identity.
+  const reader = page.locator('.canvas-naplet').filter({ has: page.locator('.canvas-document') }).first();
+  await expect(reader.locator('.ProseMirror')).toBeVisible();
+  const copy = page.locator('.canvas-naplet').filter({ has: page.locator('.canvas-document') }).nth(1);
+  if (width === 1440) {
+    await copy.getByRole('button', { name: 'Document comments', exact: true }).click();
+    await expect(copy.getByText('Existing document discussion')).toBeVisible();
+  }
+  const viewport = await page.evaluate(() => ({ ...Alpine.store('canvas').viewport }));
+  const scroll = reader.locator('.canvas-document-scroll');
+  await scroll.evaluate(node => { node.scrollTop = 90; });
+  await reader.getByRole('button', { name: 'Document comments', exact: true }).click();
+  await expect(reader.getByText('Existing document discussion')).toBeVisible();
+  await reader.getByRole('button', { name: 'Reply', exact: true }).click();
+  await reader.getByRole('textbox', { name: 'Document comment', exact: true }).fill('Reply from the canvas');
+  await reader.getByRole('button', { name: 'Send comment', exact: true }).click();
+  await expect(reader.getByText('Reply from the canvas', { exact: true })).toBeVisible();
+  expect(writes[0].parent_comment_id).toBe('root');
+  if (width === 1440) await expect(copy.getByText('Reply from the canvas', { exact: true })).toBeVisible();
+  expect(await page.evaluate(() => ({ ...Alpine.store('canvas').viewport }))).toEqual(viewport);
+  await reader.getByRole('textbox', { name: 'Document comment', exact: true }).fill('Whole document comment');
+  await reader.getByRole('button', { name: 'Send comment', exact: true }).click();
+  await expect(reader.getByText('Whole document comment', { exact: true })).toBeVisible();
+  expect(writes[1]).not.toHaveProperty('parent_comment_id');
+  await reader.locator('.ProseMirror p').first().evaluate(node => {
+    const range = document.createRange(); range.selectNodeContents(node);
+    const selection = window.getSelection(); selection.removeAllRanges(); selection.addRange(range);
+    document.dispatchEvent(new Event('selectionchange'));
+  });
+  await reader.getByRole('button', { name: 'Comment on selection', exact: true }).click();
+  await expect(reader.locator('form blockquote')).toHaveText('A canonical document projection.');
+  await reader.getByRole('textbox', { name: 'Document comment', exact: true }).fill('Anchored document comment');
+  await reader.getByRole('button', { name: 'Send comment', exact: true }).click();
+  await expect(reader.getByText('Anchored document comment', { exact: true })).toBeVisible();
+  expect(writes[2].metadata.anchor_quote).toBe('A canonical document projection.');
+  await reader.getByRole('button', { name: 'Show selected text' }).click();
+  denied = true;
+  await reader.getByRole('textbox', { name: 'Document comment', exact: true }).fill('Keep denied draft');
+  await reader.getByRole('button', { name: 'Send comment', exact: true }).click();
+  await expect(reader.getByRole('alert')).toContainText('draft is kept');
+  await expect(reader.getByRole('textbox', { name: 'Document comment', exact: true })).toHaveValue('Keep denied draft');
+  denied = false;
+  await page.reload();
+  await reader.getByRole('button', { name: 'Document comments', exact: true }).click();
+  await expect(reader.getByText('Reply from the canvas', { exact: true })).toBeVisible();
+  await expect(reader.getByText('Whole document comment', { exact: true })).toBeVisible();
+  await expect(reader.locator('.ProseMirror')).toHaveAttribute('contenteditable', 'false');
+});

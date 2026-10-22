@@ -5003,6 +5003,34 @@
       "notes": [
         "A failed channel selection stays unbound until Retry saving destination succeeds, so Task Tree cannot create tasks through its previous channel."
       ]
+    },
+    {
+      "buildNumber": 2599,
+      "label": "Document comments on Canvas",
+      "notes": [
+        "Read document discussions and add comments or replies inside document napplets. Selected text uses the existing document anchors; comments are shared with Documents, and failed sends keep the draft for retry."
+      ]
+    },
+    {
+      "buildNumber": 2600,
+      "label": "Document discussion identity and live updates",
+      "notes": [
+        "Document discussions show author identities and readable times. Replies appear across open napplets, including comments accepted while a reader is loading."
+      ]
+    },
+    {
+      "buildNumber": 2601,
+      "label": "Read-only document selection comments",
+      "notes": [
+        "Select text in a read-only document napplet to attach a comment to that exact passage, even when the reader does not hold editor focus."
+      ]
+    },
+    {
+      "buildNumber": 2602,
+      "label": "Document comment reader ownership",
+      "notes": [
+        "Document selection comments consistently use their own napplet reader when opened from its controls."
+      ]
     }
   ]
 }

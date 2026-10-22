@@ -1,3 +1,4 @@
+import { canvasDocumentComments } from './document-comments.js';
 import './task-tree.css';
 import { canvasTaskTreeStore } from './task-tree-page.js';
 import Alpine from 'alpinejs';
@@ -809,6 +810,7 @@ registerCanvasCommentPopover(Alpine);
 registerCanvasChatFrame(Alpine);
 registerCanvasWindow(Alpine);
 registerCanvasDocument(Alpine);
+Alpine.data('canvasDocumentComments', canvasDocumentComments);
 registerCanvasHtml(Alpine, { assetStore: () => Alpine.store('canvas').assetStore() });
 registerCanvasHtml(Alpine, { name: 'canvas-html-preview', assetStore: () => Alpine.store('canvas').previewAssetStore() });
 registerCanvasBoard(Alpine, {

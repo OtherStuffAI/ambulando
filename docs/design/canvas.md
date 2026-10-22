@@ -455,3 +455,40 @@ viewer pans or zooms. Missing, restricted and malformed targets show one neutral
 message and the canvas still opens. Chat Markdown leaves same-origin `.html` page
 links such as `/canvas.html` untouched instead of normalizing them as shell
 routes. See `docs/canvas-references.md` for agent resolution.
+
+## Document discussion in naplets
+
+Document readers expose **Document comments**, separate from the canvas-item
+Comment command. The panel reads and creates roots and replies through the
+existing typed `/docs/:docId/comments` routes. Accepted rows use the existing
+PG document-comment mapper and Dexie `comments` table, so open readers and the
+Documents surface share records. Each naplet retains its own draft, selected
+anchor and reply target; comments never alter the document body or take checkout.
+
+**Comment on selection** captures the read-only TipTap selection with the Docs
+anchor helper. An empty selection creates a whole-document comment. Replies
+inherit their root's anchor metadata, and **Show selected text** uses the same
+quote/offset relocation and stale-anchor feedback as Docs. Author identities and
+local date/time labels accompany roots and replies. Text is rendered as text.
+
+A fresh signed comment read gates the local projection. Refresh and window focus
+reconcile current threads; there is no additional broad shell subscription or
+background polling. Existing cache entries absent from that read remain hidden,
+while accepted rows arriving during or after hydration appear through liveQuery.
+The existing endpoint returns at most 200 comments without pagination; a full
+page explicitly reports this limit. This is not a complete-history guarantee.
+
+Failed writes retain the draft and expose server feedback. Retry first checks
+the same client record identity against fresh comments to avoid duplicating a
+write whose response was lost. A full page that cannot confirm an earlier send
+blocks blind retry. Drafts are local to the mounted reader, survive closing the
+panel, and are cleared when the source changes, access is revoked or the reader
+is removed; they are not durable across page reloads. Removing a reader disposes
+its subscription and focus listener and invalidates late asynchronous results.
+
+Focused unit tests cover authority gating, stale cache, reply metadata, uncertain
+send reconciliation, permission errors, initial-query races and source disposal.
+The signed synthetic browser scenarios cover desktop/phone reading, replies,
+whole-document and anchored comments, reload, two-reader updates and denied draft
+retention. They do not establish authenticated multi-actor Tower permissions or
+physical Safari/touch behavior.

@@ -103,11 +103,39 @@
             <a x-show="$store.canvas.canvasLinkUrl(naplet)" :href="$store.canvas.canvasLinkUrl(naplet)" @click="if ($store.canvas.interaction) $event.preventDefault()">Open canvas</a>
             <p x-show="!$store.canvas.canvasLinkUrl(naplet)">Canvas unavailable.</p>
           </section></template>
-          <template x-if="naplet.access === 'ready' && naplet.source?.type === 'document'"><section class="canvas-document" @pointerdown.stop @keydown.stop @wheel.stop>
+          <template x-if="naplet.access === 'ready' && naplet.source?.type === 'document'"><section class="canvas-document" x-data="canvasDocumentComments" @pointerdown.stop @keydown.stop @wheel.stop @dblclick.stop>
             <a class="canvas-document-open" :href="$store.canvas.documentUrl(naplet)" target="_blank" rel="noopener">Open in Ambulando to edit ↗</a>
+            <div class="canvas-document-actions">
+              <button type="button" @click="commentsOpen ? commentsOpen = false : openDocumentComments()" :aria-expanded="commentsOpen">Document comments</button>
+              <button type="button" @pointerdown.prevent @click="startDocumentComment()" :disabled="commentBusy">Comment on selection</button>
+            </div>
             <div class="canvas-document-scroll" tabindex="0" role="region" :aria-label="(naplet.content.title || naplet.title) + ' document'">
               <div class="canvas-document-paper"><h2 x-text="naplet.content.title || naplet.title"></h2><div class="doc-rich-editor" x-canvas-document="naplet.content.body || ''"></div></div>
             </div>
+            <section class="canvas-document-comments" x-show="commentsOpen" aria-label="Document comments" @touchstart.stop @touchmove.stop>
+              <header><strong>Document comments</strong><button type="button" @click="refreshDocumentComments()" :disabled="commentsLoading || commentBusy">Refresh</button><button type="button" @click="commentsOpen = false">Close</button></header>
+              <p x-show="commentsLoading" role="status">Loading comments…</p>
+              <p x-show="commentError" x-text="commentError" role="alert"></p>
+              <p x-show="commentsLimited">Showing the latest 200 comments. Open Documents for more context.</p>
+              <div class="canvas-document-threads" x-show="commentsReady">
+                <p x-show="!documentRoots.length">No document comments yet.</p>
+                <template x-for="root in documentRoots" :key="root.record_id"><article>
+                  <span x-text="root.comment_status === 'resolved' ? 'Resolved' : 'Open'"></span>
+                  <strong :title="root.sender_npub" x-text="commentAuthor(root)"></strong> <time :datetime="root.created_at" x-text="commentTime(root.created_at)"></time>
+                  <button type="button" x-show="root.anchor_quote" @click="revealDocumentComment(root)" :title="root.anchor_quote">Show selected text</button>
+                  <blockquote x-show="root.anchor_quote" x-text="root.anchor_quote"></blockquote>
+                  <p x-text="root.body"></p>
+                  <template x-for="reply in documentReplies(root.record_id)" :key="reply.record_id"><div class="canvas-document-reply"><strong :title="reply.sender_npub" x-text="commentAuthor(reply)"></strong> <time :datetime="reply.created_at" x-text="commentTime(reply.created_at)"></time><p x-text="reply.body"></p></div></template>
+                  <button type="button" @click="startDocumentReply(root)" :disabled="commentBusy">Reply</button>
+                </article></template>
+              </div>
+              <form @submit.prevent="sendDocumentComment()" x-show="commentsReady">
+                <label><span x-text="replyTo ? 'Reply to document comment' : (commentAnchor?.anchor_quote ? 'Comment on selected text' : 'Comment on whole document')"></span><textarea x-ref="documentCommentBody" x-model="commentBody" :disabled="commentBusy" aria-label="Document comment" rows="2"></textarea></label>
+                <blockquote x-show="!replyTo && commentAnchor?.anchor_quote" x-text="commentAnchor?.anchor_quote"></blockquote>
+                <button type="button" @click="wholeDocumentComment()" :disabled="commentBusy" x-show="replyTo || commentAnchor">Use whole document</button>
+                <button type="submit" :disabled="commentBusy || commentsLoading || !commentBody.trim()" x-text="commentBusy ? 'Sending…' : 'Send comment'"></button>
+              </form>
+            </section>
           </section></template>
           <template x-if="naplet.access === 'ready' &amp;&amp; naplet.source?.type === 'task_tree'"><section class="canvas-task-tree" :data-task-tree="$store.canvas.treeKey(naplet)" @pointerdown.stop @keydown.stop @wheel.stop @dblclick.stop>
             <div class="tree-destination"><strong>Task Tree</strong><span x-text="naplet.content?.channel_title || 'Choose a destination'"></span>

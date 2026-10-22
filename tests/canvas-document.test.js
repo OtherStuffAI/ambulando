@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { it, expect, vi } from 'vitest';
-import { registerCanvasDocument } from '../src/canvas/document.js';
+import { registerCanvasDocument, captureCanvasDocumentAnchor } from '../src/canvas/document.js';
 
 const loader = vi.hoisted(() => vi.fn());
 vi.mock('../src/docs/editor/lazy-tiptap-editor.js', () => ({ loadTiptapEditorAdapter: loader }));
@@ -98,5 +98,25 @@ it('retains native rich state and metadata rather than rebuilding from fallback 
   const reader = mount(JSON.stringify({ format: 'document_content_v1', content_model: { content: 'Fallback', content_format: 'prosemirror', content_blocks: [], editor_state: native } }));
   await vi.waitFor(() => expect(create).toHaveBeenCalledOnce());
   expect(create.mock.calls[0][0].editorState).toEqual(native);
+  reader.dispose();
+});
+
+
+it('captures the native read-only selection rather than stale editor focus', async () => {
+  const doc = { textBetween: () => 'Selected passage' };
+  let editor;
+  loader.mockResolvedValue({ createTiptapEditorAdapter: ({ element }) => {
+    element.textContent = 'Selected passage';
+    editor = { view: { dom: element, posAtDOM: (_node, offset) => offset + 1 }, state: { doc, selection: { from: 1, to: 1 } } };
+    return { editor, destroy() {} };
+  } });
+  const reader = mount('Selected passage');
+  reader.element.setAttribute('x-canvas-document', 'body');
+  await vi.waitFor(() => expect(editor).toBeDefined());
+  const selection = window.getSelection(), range = document.createRange();
+  range.setStart(reader.element.firstChild, 0); range.setEnd(reader.element.firstChild, 16); selection.removeAllRanges(); selection.addRange(range);
+  expect(captureCanvasDocumentAnchor(reader.element.parentElement)).toMatchObject({ anchor_quote: 'Selected passage', anchor_start_offset: 1, anchor_end_offset: 17 });
+  selection.removeAllRanges();
+  expect(captureCanvasDocumentAnchor(reader.element.parentElement)).toBeNull();
   reader.dispose();
 });

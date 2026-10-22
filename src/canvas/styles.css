@@ -287,3 +287,14 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .canvas-chat-grid button { min-height:64px; padding:12px; white-space:normal; text-align:left; }
 .canvas-chat-picker p, .canvas-chat-binding { font-size:13px; }
 .canvas-chat-binding { padding:8px 12px; }
+
+.canvas-document-actions { display: flex; flex-wrap: wrap; gap: 6px; padding: 6px 12px; }
+.canvas-document-scroll { flex: 1 1 auto; }
+.canvas-document-comments { flex: 0 1 55%; min-height: 110px; overflow: auto; overscroll-behavior: contain; touch-action: pan-y; padding: 10px; border-top: 1px solid var(--border); background: var(--card); color: var(--card-foreground); user-select: text; cursor: auto; }
+.canvas-document-comments header { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.canvas-document-comments article { border-bottom: 1px solid var(--border); padding: 8px 0; overflow-wrap: anywhere; }
+.canvas-document-comments p, .canvas-document-comments blockquote { white-space: pre-wrap; margin: 8px 0; }
+.canvas-document-comments time { font-size: 11px; color: var(--muted-foreground); }
+.canvas-document-comments blockquote, .canvas-document-reply { border-left: 2px solid var(--border); padding-left: 10px; }
+.canvas-document-comments textarea { display: block; width: 100%; resize: vertical; min-height: 56px; background: var(--background); color: var(--foreground); user-select: text; touch-action: auto; }
+.canvas-document-comments form { padding-top: 8px; }
