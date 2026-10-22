@@ -1017,7 +1017,7 @@ for (const width of [1440, 390]) {
       const pins = page.locator('.pinned-thread-open .attention-card-title');
       await expect(inbox).toHaveCount(3);
       await expect(pins).toHaveCount(2);
-      const expected = theme === 'dark' ? 'rgb(203, 184, 255)' : 'rgb(73, 35, 149)';
+      const expected = theme === 'dark' ? 'rgb(203, 184, 255)' : 'rgb(43, 27, 60)';
       for (const [label, titles] of [['inbox', inbox], ['pinned', pins]]) {
         await titles.first().scrollIntoViewIfNeeded();
         await expect(titles.first()).toBeVisible();
@@ -1046,7 +1046,7 @@ for (const width of [1440, 390]) {
         expect(await name.evaluate(n => getComputedStyle(n).color)).toBe(expected);
         await capture(page, `core-purple-${theme}-${width}-${selector.includes('wapps') ? 'apps' : 'agents'}`);
       }
-      expect(await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--primary').trim())).toBe(theme === 'dark' ? '#CBB8FF' : '#492395');
+      expect(await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--primary').trim())).toBe(theme === 'dark' ? '#CBB8FF' : '#2B1B3C');
     });
   }
 }

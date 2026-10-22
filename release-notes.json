@@ -4961,6 +4961,13 @@
       "notes": [
         "Canvas chat shows a visible origin on each message. Select @canvas: links to canvases or versioned items; normal Chat and agent prompts preserve the signed references."
       ]
+    },
+    {
+      "buildNumber": 2589,
+      "label": "Nostr Browser core purple",
+      "notes": [
+        "Core purple now uses the selected Nostr Browser main-tab colour, #2B1B3C. Light app and agent names, primary actions and focus states inherit it; readable dark-mode colours are preserved."
+      ]
     }
   ]
 }

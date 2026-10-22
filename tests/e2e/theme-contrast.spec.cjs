@@ -81,7 +81,7 @@ for (const theme of ['light', 'dark']) for (const width of [1440, 390]) {
     await page.addScriptTag({ content: constructors });
     await page.evaluate(() => ContrastUI.showUpdateBanner({ buildId: 'caprover-9999', buildNumber: 9999, releases: [{ buildNumber: 9999, label: 'Readable colours', notes: ['Notification and control text remain readable.'] }] }, { runningBuildNumber: 9998, refresh: () => new Promise((resolve, reject) => { window.rejectContrastRefresh = reject; }) }));
     const measurements = [];
-    const expectedNameInk = theme === 'dark' ? 'rgb(203, 184, 255)' : 'rgb(73, 35, 149)';
+    const expectedNameInk = theme === 'dark' ? 'rgb(203, 184, 255)' : 'rgb(43, 27, 60)';
     for (const name of await page.locator('[data-contrast$="name"], [data-contrast="agent title"]').all()) {
       expect(await name.evaluate(n => getComputedStyle(n).color)).toBe(expectedNameInk);
     }

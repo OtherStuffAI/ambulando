@@ -1,7 +1,7 @@
 /* Ambulando perspective passage. Framework-neutral semantic tokens. Import before app styles. */
 :root {
   --brand-navy: #10162B;
-  --brand-purple: #492395;
+  --brand-purple: #2B1B3C;
   --brand-orange: #BF4D0D;
   --brand-white: #FFFFFF;
   --font-ui: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
