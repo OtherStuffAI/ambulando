@@ -465,6 +465,14 @@ PG document-comment mapper and Dexie `comments` table, so open readers and the
 Documents surface share records. Each naplet retains its own draft, selected
 anchor and reply target; comments never alter the document body or take checkout.
 
+The discussion is a right-hand Docs-style sidebar with a thread count,
+add/collapse controls, thread cards, replies and a composer. Document and
+sidebar content have independent scrolling. Below 720px of reader width,
+the sidebar becomes an opaque right-side overlay with a dismissible backdrop;
+it never becomes a bottom stack. Collapse, Escape and backdrop dismissal retain
+mounted drafts, and the collapsed rail reopens the discussion. Fullscreen and
+window restoration retain both reading and discussion scroll positions.
+
 **Comment on selection** captures the read-only TipTap selection with the Docs
 anchor helper. An empty selection creates a whole-document comment. Replies
 inherit their root's anchor metadata, and **Show selected text** uses the same

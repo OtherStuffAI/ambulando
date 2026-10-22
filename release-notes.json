@@ -5031,6 +5031,36 @@
       "notes": [
         "Document selection comments consistently use their own napplet reader when opened from its controls."
       ]
+    },
+    {
+      "buildNumber": 2603,
+      "label": "Immediate thread submission feedback",
+      "notes": [
+        "Starting a thread now shows visible submission progress and keeps your draft safe while signing and delivery finish.",
+        "Accepted messages open without waiting for unrelated background conflict reconciliation."
+      ]
+    },
+    {
+      "buildNumber": 2604,
+      "label": "Submission workspace safety",
+      "notes": [
+        "Thread submission keeps background reconciliation tied to the original workspace when you switch workspaces while sending."
+      ]
+    },
+    {
+      "buildNumber": 2605,
+      "label": "Document comments beside the page",
+      "notes": [
+        "Document napplets show a Docs-style comment sidebar with thread cards, replies and a composer. Collapse and reopen without losing your draft.",
+        "Document and discussion scroll independently. Narrow napplets use a right-side drawer, preserving reading space."
+      ]
+    },
+    {
+      "buildNumber": 2606,
+      "label": "Opaque comment drawers and retained scroll",
+      "notes": [
+        "Comment drawers keep an opaque surface in light and dark themes. Discussion scroll positions survive fullscreen and window restoration."
+      ]
     }
   ]
 }

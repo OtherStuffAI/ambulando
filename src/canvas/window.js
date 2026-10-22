@@ -4,7 +4,7 @@ export function registerCanvasWindow(Alpine) {
   Alpine.data('canvasWindow', () => {
     const inlineScroll = new Map(), modalScroll = new Map();
     const rememberScroll = (root, positions) => {
-      for (const node of root.querySelectorAll('.canvas-document-scroll, .canvas-naplet-body')) positions.set(node, { top: node.scrollTop, left: node.scrollLeft });
+      for (const node of root.querySelectorAll('.canvas-document-scroll, .canvas-document-comment-content, .canvas-naplet-body')) positions.set(node, { top: node.scrollTop, left: node.scrollLeft });
     };
     const restoreScroll = positions => {
       for (const [node, position] of positions) if (node.isConnected) { node.scrollTop = position.top; node.scrollLeft = position.left; }

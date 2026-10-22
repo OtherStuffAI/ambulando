@@ -1097,11 +1097,67 @@ for (const width of [1440, 390]) test(`document napplet comments share records a
     await copy.getByRole('button', { name: 'Document comments', exact: true }).click();
     await expect(copy.getByText('Existing document discussion')).toBeVisible();
   }
+  if (width === 1440) await page.evaluate(() => { Alpine.store('canvas').naplets[0].layout.width = 980; Alpine.store('canvas').naplets[1].layout.x = 1050; });
+  await page.evaluate(() => { Alpine.store('canvas').naplets[0].content.body += '\n\n' + 'Document reading paragraph.\n\n'.repeat(60); });
   const viewport = await page.evaluate(() => ({ ...Alpine.store('canvas').viewport }));
   const scroll = reader.locator('.canvas-document-scroll');
   await scroll.evaluate(node => { node.scrollTop = 90; });
   await reader.getByRole('button', { name: 'Document comments', exact: true }).click();
   await expect(reader.getByText('Existing document discussion')).toBeVisible();
+  const panel = reader.locator('.canvas-document-comments');
+  const discussion = reader.locator('.canvas-document-comment-content');
+  const geometry = async () => reader.evaluate(el => {
+    const doc = el.querySelector('.canvas-document-scroll').getBoundingClientRect();
+    const panel = el.querySelector('.canvas-document-comments').getBoundingClientRect();
+    return { doc: { x: doc.x, right: doc.right, y: doc.y, height: doc.height }, panel: { x: panel.x, right: panel.right, y: panel.y, height: panel.height } };
+  });
+  const assertSide = async overlay => {
+    const g = await geometry();
+    expect(Math.abs(g.doc.y - g.panel.y)).toBeLessThan(2);
+    expect(Math.abs(g.doc.height - g.panel.height)).toBeLessThan(2);
+    if (overlay) { expect(g.panel.x).toBeGreaterThan(g.doc.x); expect(g.panel.x).toBeLessThan(g.doc.right); }
+    else expect(g.panel.x).toBeGreaterThanOrEqual(g.doc.right - 1);
+    return g;
+  };
+  await assertSide(width === 390);
+  expect(await panel.evaluate(el => getComputedStyle(el).backgroundColor)).not.toBe('rgba(0, 0, 0, 0)');
+  await reader.getByRole('textbox', { name: 'Document comment', exact: true }).fill('Mounted sidebar draft');
+  await reader.getByRole('button', { name: 'Collapse comments', exact: true }).click();
+  await expect(panel).toBeHidden();
+  const position = await scroll.evaluate(el => el.scrollTop);
+  await reader.getByRole('button', { name: 'Open comments', exact: true }).click();
+  await expect(reader.getByRole('textbox', { name: 'Document comment', exact: true })).toHaveValue('Mounted sidebar draft');
+  expect(await scroll.evaluate(el => el.scrollTop)).toBe(position);
+  await reader.getByRole('textbox', { name: 'Document comment', exact: true }).fill('');
+  if (width === 1440) {
+    await scroll.evaluate(el => { el.scrollTop = 160; });
+    const docPosition = await scroll.evaluate(el => el.scrollTop);
+    await discussion.evaluate(el => { const spacer = document.createElement('div'); spacer.style.height = '900px'; spacer.dataset.scrollProbe = ''; el.append(spacer); el.scrollTop = 200; });
+    expect(await discussion.evaluate(el => el.scrollTop)).toBeGreaterThan(0);
+    expect(await scroll.evaluate(el => el.scrollTop)).toBe(docPosition);
+    const discussionPosition = await discussion.evaluate(el => el.scrollTop);
+    await scroll.evaluate(el => { el.scrollTop += 100; });
+    expect(await discussion.evaluate(el => el.scrollTop)).toBe(discussionPosition);
+    await discussion.evaluate(el => { el.querySelector('[data-scroll-probe]').remove(); el.scrollTop = 0; });
+  }
+  await reader.screenshot({ path: `tmp/docs/handoffs/comment-sidebar/${width}-sidebar.png` });
+  await page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
+  await reader.screenshot({ path: `tmp/docs/handoffs/comment-sidebar/${width}-dark-sidebar.png` });
+  await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
+  await reader.getByRole('button', { name: 'Open full screen', exact: true }).click();
+  await assertSide(width === 390);
+  await reader.screenshot({ path: `tmp/docs/handoffs/comment-sidebar/${width}-fullscreen.png` });
+  await reader.getByRole('button', { name: 'Restore from full screen', exact: true }).click();
+  await expect(reader).not.toHaveClass(/window-expanded/);
+  if (width === 1440) {
+    await page.evaluate(() => { Alpine.store('canvas').naplets[0].layout.width = 580; });
+    await expect.poll(() => reader.locator('.canvas-document').evaluate(el => el.clientWidth)).toBeLessThan(721);
+    await assertSide(true);
+    await reader.screenshot({ path: 'tmp/docs/handoffs/comment-sidebar/desktop-narrow-drawer.png' });
+    await page.evaluate(() => { Alpine.store('canvas').naplets[0].layout.width = 980; });
+    await expect.poll(() => reader.locator('.canvas-document').evaluate(el => el.clientWidth)).toBeGreaterThan(720);
+    await assertSide(false);
+  }
   await reader.getByRole('button', { name: 'Reply', exact: true }).click();
   await reader.getByRole('textbox', { name: 'Document comment', exact: true }).fill('Reply from the canvas');
   await reader.getByRole('button', { name: 'Send comment', exact: true }).click();
@@ -1113,18 +1169,23 @@ for (const width of [1440, 390]) test(`document napplet comments share records a
   await reader.getByRole('button', { name: 'Send comment', exact: true }).click();
   await expect(reader.getByText('Whole document comment', { exact: true })).toBeVisible();
   expect(writes[1]).not.toHaveProperty('parent_comment_id');
+  await reader.getByRole('button', { name: 'Collapse comments', exact: true }).click();
   await reader.locator('.ProseMirror p').first().evaluate(node => {
     const range = document.createRange(); range.selectNodeContents(node);
     const selection = window.getSelection(); selection.removeAllRanges(); selection.addRange(range);
     document.dispatchEvent(new Event('selectionchange'));
   });
   await reader.getByRole('button', { name: 'Comment on selection', exact: true }).click();
+  await expect(panel).toBeVisible();
   await expect(reader.locator('form blockquote')).toHaveText('A canonical document projection.');
   await reader.getByRole('textbox', { name: 'Document comment', exact: true }).fill('Anchored document comment');
   await reader.getByRole('button', { name: 'Send comment', exact: true }).click();
   await expect(reader.getByText('Anchored document comment', { exact: true })).toBeVisible();
   expect(writes[2].metadata.anchor_quote).toBe('A canonical document projection.');
   await reader.getByRole('button', { name: 'Show selected text' }).click();
+  console.log('SIDEBAR_SCROLL', await reader.evaluate(el => [...el.querySelectorAll('.canvas-document, .canvas-document-layout, .canvas-document-scroll, .canvas-document-comment-content')].map(n => ({class:n.className,top:n.scrollTop,left:n.scrollLeft,height:n.clientHeight,scrollHeight:n.scrollHeight}))));
+  await discussion.evaluate(el => { el.scrollTop = 0; });
+  await reader.screenshot({ path: `tmp/docs/handoffs/comment-sidebar/${width}-replies-anchors.png` });
   denied = true;
   await reader.getByRole('textbox', { name: 'Document comment', exact: true }).fill('Keep denied draft');
   await reader.getByRole('button', { name: 'Send comment', exact: true }).click();

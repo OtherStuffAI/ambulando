@@ -52,6 +52,10 @@ export function canvasDocumentComments(deps = {}) {
     },
     get documentRoots() { return this.documentComments.filter(row => !row.parent_comment_id); },
     documentReplies(id) { return this.documentComments.filter(row => row.parent_comment_id === id); },
+    closeDocumentComments() {
+      this.commentsOpen = false;
+      this.$nextTick(() => this.$refs.documentCommentsToggle.focus({ preventScroll: true }));
+    },
     async openDocumentComments() {
       this.commentsOpen = true;
       await this.refreshDocumentComments();
@@ -93,9 +97,9 @@ export function canvasDocumentComments(deps = {}) {
       } finally { if (current(ticket)) this.commentsLoading = false; }
     },
     startDocumentComment() {
-      if (this.commentBusy || this.commentBody.trim()) return;
+      if (this.commentBusy || this.commentBody.trim()) { void this.openDocumentComments(); return; }
       this.replyTo = ''; this.commentAnchor = captureCanvasDocumentAnchor(rootElement);
-      void this.openDocumentComments();
+      void this.openDocumentComments().then(() => this.$nextTick(() => this.$refs.documentCommentBody?.focus({ preventScroll: true })));
     },
     startDocumentReply(root) {
       if (this.commentBusy || this.commentBody.trim()) { this.commentError = 'Send or clear your current draft before replying.'; return; }
