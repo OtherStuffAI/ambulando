@@ -68,3 +68,12 @@ Local People edits, membership additions and group writes use an explicit
 `mutation` read reason; an explicit `manual` reason is also supported. Ordinary
 settings initialization is not an explicit refresh. Server permissions and
 structured person/agent mention routing are unchanged.
+
+Whole-group omission retirement retains its existing behavior: group refresh
+replaces the visible array and upserts persisted groups, but does not delete
+omitted group rows from Dexie. A previously downloaded whole group can therefore
+reappear as a stale suggestion through local subscriptions or after reload.
+This policy change deliberately adds no destructive group cleanup. Removal of
+a member within a returned group updates that group's membership; complete
+workspace-member reads still remove retired roster identities. A mention never
+grants server access.
