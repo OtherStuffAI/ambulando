@@ -5091,6 +5091,21 @@
       "notes": [
         "Scope conversations finish loading when workspace navigation becomes available, while keeping earlier access generations from publishing stale results."
       ]
+    },
+    {
+      "buildNumber": 2612,
+      "label": "Reliable cached chat mentions",
+      "notes": [
+        "Chat mentions use downloaded workspace members promptly and update as local membership, channel access and profiles arrive.",
+        "Failed directory requests preserve cached members instead of replacing them with only your own identity."
+      ]
+    },
+    {
+      "buildNumber": 2613,
+      "label": "Mention picker hydration updates",
+      "notes": [
+        "An open mention picker refreshes when cached membership and profile updates arrive after workspace startup."
+      ]
     }
   ]
 }

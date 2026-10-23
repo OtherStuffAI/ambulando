@@ -1239,8 +1239,17 @@ export const channelsManagerMixin = {
         appNpub,
         limit: options.limit || 200,
       });
+      if (!Array.isArray(result?.members) || result.next_cursor || result.has_more === true) {
+        throw new Error('Workspace member directory is incomplete');
+      }
     } catch (error) {
       if (selfMember.length === 0) throw error;
+      // A failed read is not an authoritative empty directory. In particular,
+      // the self fallback must never replace an already downloaded roster.
+      if (!isCurrent()) return [];
+      const cached = hasWorkspaceDb() ? await getWorkspaceMembers(workspaceId) : [];
+      if (!isCurrent()) return [];
+      return cached.length > 0 ? cached : selfMember;
     }
     const byNpub = new Map();
     for (const member of selfMember) byNpub.set(member.npub, member);
@@ -1258,6 +1267,7 @@ export const channelsManagerMixin = {
     if (!isCurrent()) return [];
     if (hasWorkspaceDb()) {
       const existingMembers = await getWorkspaceMembers(workspaceId);
+      if (!isCurrent()) return [];
       const existingByActor = new Map(existingMembers.flatMap((member) => [
         [String(member?.actor_id || member?.id || '').trim(), member],
         [String(member?.npub || '').trim(), member],

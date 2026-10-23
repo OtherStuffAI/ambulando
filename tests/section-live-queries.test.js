@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { liveQuery } from 'dexie';
 
 import {
   clearRuntimeData,
@@ -14,6 +15,45 @@ import { rankMainFeedMessages } from '../src/chat-order.js';
 import { getSectionLiveQueryPlan, sectionLiveQueryMixin } from '../src/section-live-queries.js';
 
 describe('section live query plan', () => {
+  it('delivers warm and late Dexie members without a remote refresh and fences old workspace delivery', async () => {
+    const key = 'mention-members-live-hydration';
+    openWorkspaceDb(key);
+    await clearRuntimeData();
+    const members = [{ actor_id: 'agent', workspace_id: 'workspace', npub: 'npub1agent', kind: 'agent' }];
+    await replaceWorkspaceMembers('workspace', members);
+    const callbacks = [];
+    const store = {
+      currentWorkspaceKey: key, workspaceOwnerNpub: 'owner', _workspaceSelectionGeneration: 1,
+      currentWorkspace: { workspaceId: 'workspace' }, navSection: 'none',
+      startSharedLiveQueries() {}, applyScopes() {}, applyChannels() {},
+      refreshActiveMentionResults: vi.fn(),
+      createLiveSubscription(query, onNext) {
+        callbacks.push(onNext);
+        return liveQuery(query).subscribe({ next: onNext, error: error => { throw error; } });
+      },
+      stopLiveSubscription(subscription) { subscription.unsubscribe(); },
+    };
+    try {
+      sectionLiveQueryMixin.startWorkspaceLiveQueries.call(store);
+      await vi.waitFor(() => expect(store.pgWorkspaceMembers).toEqual(members));
+      await replaceWorkspaceMembers('workspace', [{ ...members[0], display_name: 'Late Profile' }]);
+      await vi.waitFor(() => expect(store.pgWorkspaceMembers[0].display_name).toBe('Late Profile'));
+      await replaceWorkspaceMembers('workspace', []);
+      await vi.waitFor(() => expect(store.pgWorkspaceMembers).toEqual([]));
+      expect(store.refreshActiveMentionResults).toHaveBeenCalledTimes(3);
+      store.currentWorkspaceKey = 'different-workspace';
+      store._workspaceSelectionGeneration++;
+      const count = store.refreshActiveMentionResults.mock.calls.length;
+      // Replaying an old subscription after the switch cannot publish members.
+      for (const callback of callbacks) await callback(members);
+      expect(store.pgWorkspaceMembers).toEqual([]);
+      expect(store.refreshActiveMentionResults).toHaveBeenCalledTimes(count);
+    } finally {
+      sectionLiveQueryMixin.stopWorkspaceLiveQueries.call(store);
+      await deleteWorkspaceDb(key);
+    }
+  });
+
   it('commits workspace-member reconciliation inside the workspace sync transaction', async () => {
     const workspaceDbKey = 'section-live-query-members-parent-transaction';
     openWorkspaceDb(workspaceDbKey);

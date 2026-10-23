@@ -1,4 +1,5 @@
 import { waitForNavigationPaint } from './navigation-paint.js';
+import { recordDeltaCursorKey } from './pg-record-delta.js';
 import { projectPgDownloadedAccess } from './pg-access-state.js';
 import { rememberPgRecoveryDestination } from './pg-authority-presentation.js';
 import { filterProjectionForArchivedTargets } from './pg-archive-state.js';
@@ -180,8 +181,9 @@ function syncBucket(store, bucket, specs) {
     if (bucket.has(spec.key)) continue;
     const workspaceKey = store.currentWorkspaceKey;
     const generation = store._workspaceSelectionGeneration;
+    // Keep foreign promises (including import()) outside the Dexie querier:
+    // awaiting one before the reads loses observation of later local writes.
     const query = currentPgWorkspaceId(store) && !['address-book', 'app-placements'].includes(spec.key) ? async () => {
-      const { recordDeltaCursorKey } = await import('./pg-record-delta.js');
       const [value, targets, authority] = await Promise.all([spec.query(), getWorkspaceDb().pg_archived_targets.toArray(), getWorkspaceDb().sync_state.get(`${recordDeltaCursorKey(store)}:record-access`)]);
       return projectPgDownloadedAccess(filterProjectionForArchivedTargets(value, targets), authority?.value);
     } : spec.query;
@@ -419,7 +421,6 @@ function buildSharedSpecs() {
 // Navigation rows and their replacement phase must come from the same Dexie
 // transaction. An empty prefix is not a completed authoritative omission.
 export async function readPgNavigationProjection(store, ownerNpub = store.workspaceOwnerNpub) {
-  const { recordDeltaCursorKey } = await import('./pg-record-delta.js');
   const db = getWorkspaceDb();
   return db.transaction('r', db.scopes, db.channels, db.sync_state, db.pg_archived_targets, async () => {
     const state = (await db.sync_state.get(recordDeltaCursorKey(store)))?.value;

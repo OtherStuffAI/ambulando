@@ -6,6 +6,7 @@ vi.mock('../src/backend-mode.js', () => ({
 
 vi.mock('../src/db.js', () => ({
   getSettings: vi.fn(),
+  getWorkspaceMembers: vi.fn().mockResolvedValue([]),
   saveSettings: vi.fn(),
   getWorkspaceSettings: vi.fn(),
   upsertWorkspaceSettings: vi.fn(),

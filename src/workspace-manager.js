@@ -11,6 +11,7 @@ import { legacyWorkspaceRecoveryMixin } from './legacy-workspace-recovery-manage
 
 import {
   getSettings,
+  getWorkspaceMembers,
   saveSettings,
   getWorkspaceSettings,
   upsertWorkspaceSettings,
@@ -878,6 +879,17 @@ export const workspaceManagerMixin = {
   },
 
   async loadLocalWorkspaceCoreData(options = {}) {
+    const workspaceKey = this.currentWorkspaceKey;
+    const generation = this._workspaceSelectionGeneration;
+    const workspaceId = this.currentWorkspace?.workspaceId;
+    // Channel selection may open a composer immediately. Seed its authority
+    // from Dexie before selecting channels; network refresh is independent.
+    if (workspaceId && isWorkspaceDbOpenForKey(workspaceKey)) {
+      const members = await getWorkspaceMembers(workspaceId);
+      if (this.currentWorkspaceKey !== workspaceKey || this._workspaceSelectionGeneration !== generation) return;
+      this.pgWorkspaceMembers = members;
+      this.refreshActiveMentionResults?.();
+    }
     // Daily notes render from Dexie via liveQuery. Their Tower refresh is
     // additive and must never gate cached live queries on a network round-trip.
     const dailyNotes = typeof this.refreshDailyNotes === 'function'

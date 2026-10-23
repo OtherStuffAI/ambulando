@@ -2330,6 +2330,7 @@ export function initApp() {
     // --- lifecycle ---
 
     async init() {
+      this.initMentionPeopleReactivity();
       this.initDiagnosticsLifecycle();
       this.initOrgDataInstallations();
       this.initDocEditLeaseLifecycle?.();
@@ -8521,10 +8522,11 @@ export function initApp() {
         });
     },
 
-    getMentionPeople({ visibleOnly = false, channelId = this.selectedChannelId } = {}) {
-      const cacheKey = `${visibleOnly ? 'visible' : 'all'}:${String(channelId || '').trim()}`;
-      const sourceReferences = [
+    getMentionPeopleSourceReferences() {
+      return [
         this.currentWorkspaceKey,
+        this.currentWorkspace,
+        this.pgBackendMode,
         this.workspaceOwnerNpub,
         this.activeWorkroomId,
         this.currentPgActorNpub,
@@ -8532,6 +8534,7 @@ export function initApp() {
         this.messages,
         this.threadReplies,
         this.channels,
+        this.scopes,
         this.groups,
         this.pgWorkspaceMembers,
         this.addressBookPeople,
@@ -8541,6 +8544,30 @@ export function initApp() {
         this.chatProfiles,
         this._wsKeyDisplayMap,
       ];
+    },
+
+    initMentionPeopleReactivity(effect = Alpine.effect) {
+      // Track local source replacements only while the picker is open. No
+      // network reads or history scans run in the effect or while it is idle.
+      let scheduled = false;
+      if (typeof effect !== 'function') return;
+      return effect(() => {
+        if (!this.mentionActive) return;
+        this.selectedChannelId;
+        this.getMentionPeopleSourceReferences();
+        if (scheduled) return;
+        scheduled = true;
+        queueMicrotask(() => {
+          scheduled = false;
+          MENTION_PEOPLE_CACHE.delete(this);
+          if (!canvasQuery(this.mentionQuery)) this.refreshActiveMentionResults();
+        });
+      });
+    },
+
+    getMentionPeople({ visibleOnly = false, channelId = this.selectedChannelId } = {}) {
+      const cacheKey = `${visibleOnly ? 'visible' : 'all'}:${String(channelId || '').trim()}`;
+      const sourceReferences = this.getMentionPeopleSourceReferences();
       const cached = MENTION_PEOPLE_CACHE.get(this);
       if (
         cached?.key === cacheKey

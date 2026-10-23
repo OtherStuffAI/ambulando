@@ -2,6 +2,29 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { guessDefaultBackendUrl, workspaceManagerMixin } from '../src/workspace-manager.js';
 import * as api from '../src/api.js';
 
+it('hydrates cached member authority before opening local channels without waiting for the network', async () => {
+  const { openWorkspaceDb, replaceWorkspaceMembers, deleteWorkspaceDb } = await import('../src/db.js');
+  const key = 'membership-mentions-warm-bootstrap';
+  openWorkspaceDb(key);
+  const members = [{ actor_id: 'agent', npub: 'npub1cached-agent', kind: 'agent' }];
+  await replaceWorkspaceMembers('workspace', members);
+  const store = {
+    currentWorkspaceKey: key, _workspaceSelectionGeneration: 1,
+    currentWorkspace: { workspaceId: 'workspace' }, pgWorkspaceMembers: [],
+    refreshDailyNotes: () => new Promise(() => {}),
+    loadLocalChannels: vi.fn(function () {
+      expect(this.pgWorkspaceMembers).toEqual(members.map(member => ({ ...member, workspace_id: 'workspace' })));
+      return [];
+    }),
+  };
+  try {
+    await workspaceManagerMixin.loadLocalWorkspaceCoreData.call(store);
+    expect(store.loadLocalChannels).toHaveBeenCalled();
+  } finally {
+    await deleteWorkspaceDb(key);
+  }
+});
+
 afterEach(() => {
   vi.restoreAllMocks();
   globalThis.localStorage?.clear();

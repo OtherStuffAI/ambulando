@@ -3084,6 +3084,42 @@ it('preserves cached agent metadata when a Tower roster response is sparse', asy
   })]));
 });
 
+it.each(['offline', 'partial', 'malformed'])('preserves downloaded members on an %s directory read', async (mode) => {
+  const { openWorkspaceDb, getWorkspaceDb, getWorkspaceMembers, replaceWorkspaceMembers, deleteWorkspaceDb } = await import('../src/db.js');
+  const key = `mention-roster-failed-${mode}`;
+  openWorkspaceDb(key);
+  await getWorkspaceDb().open();
+  const cached = [{ actor_id: 'cached-agent', npub: 'npub1cached', kind: 'agent', display_name: 'Cached Agent', workspace_id: 'workspace-1' }];
+  await replaceWorkspaceMembers('workspace-1', cached);
+  if (mode === 'offline') getTowerPgWorkspaceMembers.mockRejectedValueOnce(new Error('offline'));
+  if (mode === 'partial') getTowerPgWorkspaceMembers.mockResolvedValueOnce({ members: [], next_cursor: 'another-page' });
+  if (mode === 'malformed') getTowerPgWorkspaceMembers.mockResolvedValueOnce({});
+  const store = createPgGrantStore({ rememberPeople: vi.fn(), chatProfiles: {} });
+  try {
+    expect(await store.refreshTowerPgWorkspaceMembers()).toEqual(cached);
+    expect(await getWorkspaceMembers('workspace-1')).toEqual(cached);
+    expect(store.rememberPeople).not.toHaveBeenCalled();
+  } finally {
+    await deleteWorkspaceDb(key);
+  }
+});
+
+it('still replaces cached eligibility after a successful complete directory read', async () => {
+  const { openWorkspaceDb, getWorkspaceDb, getWorkspaceMembers, replaceWorkspaceMembers, deleteWorkspaceDb } = await import('../src/db.js');
+  const key = 'mention-roster-authoritative-removal';
+  openWorkspaceDb(key);
+  await getWorkspaceDb().open();
+  await replaceWorkspaceMembers('workspace-1', [{ actor_id: 'retired', npub: 'npub1retired' }]);
+  getTowerPgWorkspaceMembers.mockResolvedValueOnce({ members: [], next_cursor: null });
+  const store = createPgGrantStore({ rememberPeople: vi.fn(async () => {}), chatProfiles: {} });
+  try {
+    await store.refreshTowerPgWorkspaceMembers();
+    expect((await getWorkspaceMembers('workspace-1')).map(member => member.npub)).not.toContain('npub1retired');
+  } finally {
+    await deleteWorkspaceDb(key);
+  }
+});
+
 
 describe('PG channel lifecycle controls', () => {
   const channel = { record_id: 'channel-1', title: 'Original', scope_id: 'scope-a', pg_workspace_id: 'workspace-1', channel_type: 'channel', channel_grants: [] };

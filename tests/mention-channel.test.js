@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { reactive, effect, stop } from '@vue/reactivity';
 
 const {
   alpineStartMock,
@@ -30,6 +31,48 @@ async function createStore() {
 }
 
 describe('channel mention lookup', () => {
+  it('updates an already open picker on late local membership, labels, grants and channel switches', async () => {
+    const store = reactive(await createStore());
+    store.pgBackendMode = true;
+    store.selectedChannelId = 'channel-a';
+    store.channels = [{ record_id: 'channel-a' }, { record_id: 'channel-b' }];
+    store.getSenderName = npub => store.chatProfiles[npub]?.name || npub;
+    store.getChannelParticipants = channel => channel.record_id === 'channel-a' ? ['npub1alice'] : ['npub1bob'];
+    store.mentionQuery = 'person:';
+    store._mentionTargetEl = { dataset: { channelVisibleMentions: 'true' } };
+    store.mentionActive = true;
+    const runner = store.initMentionPeopleReactivity(effect);
+    try {
+      await Promise.resolve();
+      expect(store.mentionResults).toEqual([]);
+      store.pgWorkspaceMembers = [{ npub: 'npub1alice', display_name: 'Alice' }, { npub: 'npub1bob', display_name: 'Bob' }];
+      await Promise.resolve();
+      expect(store.mentionResults.map(row => row.id)).toEqual(['npub1alice']);
+      store.pgWorkspaceMembers = [];
+      await Promise.resolve();
+      expect(store.mentionResults).toEqual([]);
+      store.pgWorkspaceMembers = [{ npub: 'npub1alice' }, { npub: 'npub1bob' }];
+      store.chatProfiles = { npub1alice: { name: 'Alice Updated' } };
+      await Promise.resolve();
+      expect(store.mentionResults[0].label).toBe('Alice Updated');
+      store.selectedChannelId = 'channel-b';
+      store.selectedChannelId = 'channel-a';
+      store.selectedChannelId = 'channel-b';
+      await Promise.resolve();
+      expect(store.mentionResults.map(row => row.id)).toEqual(['npub1bob']);
+      store.channelGrantsChannelId = 'channel-b';
+      store.channelGrants = [{ principal_type: 'actor', principal_id: 'npub1alice', principal_npub: 'npub1alice', permissions: ['channel.read'] }];
+      await Promise.resolve();
+      expect(store.mentionResults.map(row => row.id)).toContain('npub1alice');
+      store.selectedWorkspaceKey = 'other-workspace';
+      store.pgWorkspaceMembers = [];
+      await Promise.resolve();
+      expect(store.mentionResults).toEqual([]);
+    } finally {
+      stop(runner);
+    }
+  });
+
   it('reuses the local document mention index while a user types a query', async () => {
     const store = await createStore();
     const { clearRuntimeData, deleteWorkspaceDb, openWorkspaceDb, upsertDocument } = await import('../src/db.js');
