@@ -1,6 +1,11 @@
 const { test, expect } = require('playwright/test');
 const path = require('node:path');
-const { openFixture } = require('./fixtures/mobile-chat.cjs');
+const { build } = require('esbuild');
+const { serveBuiltFlightDeck } = require('./fixtures/serve-built-flightdeck.cjs');
+let authSeed;
+test.beforeAll(async () => {
+  authSeed = (await build({ bundle: true, write: false, format: 'esm', logLevel: 'silent', define: { __FLIGHT_DECK_PG_APP_NPUB__: JSON.stringify('npub1canvasapp') }, stdin: { resolveDir: path.resolve(__dirname, '../..'), contents: `export { signLoginEvent, pubkeyToNpub } from './src/auth/nostr.js';` } })).outputFiles[0].text;
+});
 
 test.use({ serviceWorkers: 'block', reducedMotion: 'reduce' });
 
@@ -24,6 +29,7 @@ test('Deck Create canvas opens and submits through Tower, then settings opens an
     visibility: { mode: 'workspace', actor_ids: [], group_ids: [] },
   }];
 
+  await page.route('**/*', route => new URL(route.request().url()).pathname === '/__canvas-deck-auth.js' ? route.fulfill({ contentType: 'text/javascript', body: authSeed }) : serveBuiltFlightDeck(route));
   await page.route('**/__canvas-deck-seed.html', route => route.fulfill({ contentType: 'text/html', body: '<!doctype html><title>seed</title>' }));
   const handleCanvasRoute = async route => {
     const request = route.request();
@@ -58,7 +64,7 @@ test('Deck Create canvas opens and submits through Tower, then settings opens an
 
   await page.goto('/__canvas-deck-seed.html');
   await page.evaluate(async ({ workspaceId, identity }) => {
-    const { signLoginEvent, pubkeyToNpub } = await import('/src/auth/nostr.js');
+    const { signLoginEvent, pubkeyToNpub } = await import('/__canvas-deck-auth.js');
     const event = await signLoginEvent('ephemeral');
     const npub = await pubkeyToNpub(event.pubkey);
     const workspaceKey = `pg:${npub}::tower:${identity.tower_service_npub}::workspace:${identity.workspace_service_npub}::app:${identity.app_npub}::id:${workspaceId}`;
@@ -106,6 +112,9 @@ test('Deck Create canvas opens and submits through Tower, then settings opens an
     const store = window.Alpine.store('chat');
     store.closeThread({ syncRoute: false });
     store.navSection = 'status';
+    store.openConnectModal = () => {};
+    store.showConnectModal = false;
+    store.showWorkspaceBootstrapModal = false;
     store.refreshTowerPgWorkspaceMembers = async () => {};
     store.refreshGroups = async () => {};
     store.getSenderAvatar = () => '';
@@ -180,7 +189,9 @@ test('Deck Create canvas opens and submits through Tower, then settings opens an
 
 test('Canvas access modal stays usable in a narrow, short viewport without full identity overflow', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 520 });
-  await openFixture(page, true);
+  await page.route('**/*', route => serveBuiltFlightDeck(route));
+  await page.goto('/');
+  await page.waitForFunction(() => Boolean(window.Alpine?.store?.('chat')));
   const fullNpub = `npub1${'z'.repeat(58)}`;
   await page.evaluate(({ fullNpub }) => {
     const store = window.Alpine.store('chat');
@@ -190,6 +201,9 @@ test('Canvas access modal stays usable in a narrow, short viewport without full 
     store.refreshGroups = async () => {};
     store.getSenderAvatar = () => '';
     store.navSection = 'status';
+    store.openConnectModal = () => {};
+    store.showConnectModal = false;
+    store.showWorkspaceBootstrapModal = false;
     store.canvasContextKey = store.canvasPartition;
     store.pgWorkspaceMembers = Array.from({ length: 12 }, (_, index) => ({
       actor_id: `actor-${index}`,

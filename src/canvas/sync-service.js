@@ -1,10 +1,8 @@
 import Dexie, { liveQuery } from 'dexie';
 import {
   createTowerPgCanvas,
-  createTowerPgCanvasComment,
   createTowerPgCanvasElement,
   createTowerPgCanvasNaplet,
-  deleteTowerPgCanvasComment,
   deleteTowerPgCanvasElement,
   deleteTowerPgCanvasNaplet,
   getTowerPgCanvases,
@@ -13,7 +11,6 @@ import {
   getTowerPgFile,
   reorderTowerPgCanvases,
   updateTowerPgCanvas,
-  updateTowerPgCanvasComment,
   updateTowerPgCanvasElement,
   updateTowerPgCanvasNaplet,
 } from '../api.js';
@@ -62,7 +59,9 @@ function commitCanvasProjection(db, snapshot, isCurrent) {
 }
 
 export async function createCanvasRecord(context, body, options = {}) {
-  await createTowerPgCanvas(context.workspaceId, body, apiOptions(context, options.signal));
+  const payload = await createTowerPgCanvas(context.workspaceId, body, apiOptions(context, options.signal));
+  // Record acceptance before hydration: retrying a failed list must never POST again.
+  options.onCreated?.(payload);
   return hydrateCanvasList(context, options);
 }
 
@@ -294,47 +293,4 @@ export class CanvasSyncRuntime {
     });
   }
 
-  createComment(body) {
-    return this.enqueueMutation(async () => {
-      if (!this.authorized) throw new Error('Canvas authorization must be refreshed.');
-      await createTowerPgCanvasComment(this.context.workspaceId, this.canvasId, body, apiOptions(this.context));
-      return this.refreshProjection();
-    });
-  }
-
-  deleteComment(commentId, confirmation) {
-    return this.enqueueMutation(async () => {
-      const snapshot = await this.db.canvas_snapshots.get(this.key);
-      const comment = snapshot?.comments?.find(row => row.id === commentId);
-      if (!this.authorized || !comment?.can_delete) throw new Error('You cannot delete this comment. Refresh Canvas permissions.');
-      await deleteTowerPgCanvasComment(this.context.workspaceId, this.canvasId, commentId, {
-        expected_row_version: confirmation.expected_row_version,
-        ...(comment.parent_comment_id ? {} : { expected_reply_versions: confirmation.expected_reply_versions }),
-      }, apiOptions(this.context));
-      return this.refreshProjection();
-    });
-  }
-
-  retargetComment(commentId, anchor) {
-    return this.enqueueMutation(async () => {
-      const snapshot = await this.db.canvas_snapshots.get(this.key);
-      const comment = snapshot?.comments?.find(row => row.id === commentId);
-      if (!this.authorized || !comment?.can_retarget || comment.parent_comment_id) throw new Error('You cannot change this comment subject.');
-      await updateTowerPgCanvasComment(this.context.workspaceId, this.canvasId, commentId, { anchor, expected_row_version: comment.row_version }, apiOptions(this.context));
-      return this.refreshProjection();
-    });
-  }
-
-  setCommentResolved(commentId, resolved) {
-    return this.enqueueMutation(async () => {
-      const snapshot = await this.db.canvas_snapshots.get(this.key);
-      const comment = snapshot?.comments?.find(row => row.id === commentId);
-      if (!this.authorized || !comment) throw new Error('Canvas comment authorization must be refreshed.');
-      await updateTowerPgCanvasComment(this.context.workspaceId, this.canvasId, commentId, {
-        resolved,
-        expected_row_version: comment.row_version,
-      }, apiOptions(this.context));
-      return this.refreshProjection();
-    });
-  }
 }

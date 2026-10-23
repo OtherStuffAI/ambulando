@@ -231,32 +231,6 @@ export function normalizeCanvasElement(row) {
   };
 }
 
-export function normalizeCanvasComment(row, napletIds) {
-  const id = text(row?.id);
-  const parentCommentId = text(row?.parent_comment_id) || null;
-  const author = row?.author && typeof row.author === 'object' && !Array.isArray(row.author) ? row.author : {};
-  const anchor = row?.anchor && typeof row.anchor === 'object' && !Array.isArray(row.anchor) ? row.anchor : {};
-  if (!id || !text(row?.body) || !text(author.actor_id || author.npub) || !Number.isSafeInteger(Number(row?.row_version)) || Number(row.row_version) < 1) throw new Error('Invalid Canvas comment');
-  const napletId = text(anchor.naplet_id);
-  const safeAnchor = anchor.type === 'naplet' && napletId && napletIds.has(napletId)
-    ? { type: 'naplet', naplet_id: napletId, ...(Number.isFinite(anchor.x) && Number.isFinite(anchor.y) ? { x: Math.round(anchor.x), y: Math.round(anchor.y) } : {}) }
-    : { type: 'canvas', x: Math.round(finite(anchor.x, 0)), y: Math.round(finite(anchor.y, 0)) };
-  return {
-    id,
-    can_delete: row.can_delete === true,
-    can_retarget: row.can_retarget === true && row.retarget_preserves_position === true,
-    can_resolve: row.can_resolve !== false,
-    anchor: safeAnchor,
-    parent_comment_id: parentCommentId,
-    body: String(row.body),
-    resolved_at: text(row.resolved_at) || null,
-    author: { actor_id: text(author.actor_id), npub: text(author.npub), label: text(author.label || author.npub) || 'Workspace member' },
-    row_version: Number(row.row_version),
-    created_at: text(row.created_at),
-    updated_at: text(row.updated_at),
-  };
-}
-
 export function normalizeCanvasSnapshot(payload, context, canvasId, requestId) {
   assertIdentity(payload, context);
   if (payload?.complete !== true || text(payload?.canvas?.id || payload?.canvas?.canvas_id) !== text(canvasId)
@@ -271,11 +245,6 @@ export function normalizeCanvasSnapshot(payload, context, canvasId, requestId) {
   });
   const elements = (Array.isArray(payload.elements) ? payload.elements : []).map(normalizeCanvasElement);
   if (new Set(elements.map(row => row.id)).size !== elements.length) throw new Error('Duplicate Canvas element');
-  const napletIds = new Set(naplets.filter(row => row.access === 'ready').map(row => row.id));
-  const comments = (Array.isArray(payload.comments) ? payload.comments : []).map(row => normalizeCanvasComment(row, napletIds));
-  if (new Set(comments.map(row => row.id)).size !== comments.length) throw new Error('Duplicate Canvas comment');
-  const commentIds = new Set(comments.map(row => row.id));
-  if (comments.some(row => row.parent_comment_id && !commentIds.has(row.parent_comment_id))) throw new Error('Orphan Canvas comment reply');
   return {
     key: canvasDefinitionKey(context, canvasId),
     context: canvasPartition(context),
@@ -285,7 +254,6 @@ export function normalizeCanvasSnapshot(payload, context, canvasId, requestId) {
     canvas: definition,
     naplets,
     elements,
-    comments,
   };
 }
 

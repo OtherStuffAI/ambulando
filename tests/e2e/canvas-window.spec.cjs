@@ -61,14 +61,8 @@ for (const width of [1440, 390, 320]) {
     await menu.getByRole('menuitem', { name: 'Bring forward' }).click();
     expect(await page.evaluate(() => window.windowActions)).toEqual([{ action: 'order', delta: 1, selected: { type: 'naplet', id: 'html' } }]);
     await naplet.getByRole('button', { name: 'Window options', exact: true }).click();
-    await menu.getByRole('menuitem', { name: 'Comment…' }).click();
-    await expect(page.locator('.canvas-comment-dialog')).toBeVisible();
-    await page.locator('.canvas-comment-dialog').getByRole('textbox', { name: 'Comment', exact: true }).fill('Nested modal draft');
+    await expect(menu.getByRole('menuitem', { name: 'Comment…' })).toHaveCount(0);
     await page.keyboard.press('Escape');
-    await expect(page.locator('.canvas-comment-dialog')).not.toBeVisible();
-    // Commenting returns to Canvas so the target remains available to the panel.
-    await expect(naplet).toHaveJSProperty('open', false);
-    await naplet.getByRole('button', { name: 'Open full screen', exact: true }).click();
     // Native modal traps tab navigation; wheel over its header cannot pan Canvas.
     await naplet.getByRole('button', { name: 'Restore from full screen', exact: true }).focus();
     for (let i = 0; i < 6; i++) {
@@ -94,7 +88,7 @@ for (const width of [1440, 390, 320]) {
     await naplet.getByRole('button', { name: 'Restore window', exact: true }).click();
     await expect(frame.getByRole('button')).toHaveText('Count 2');
     expect(errors).toEqual([]);
-    console.log('CANVAS_WINDOW_EVIDENCE', JSON.stringify({ width, iframeStateRetained: true, modalFit: box, sameOptionsDispatch: true, nestedCommentModal: true, focusRestore: true, layoutAndViewportUnchanged: true }));
+    console.log('CANVAS_WINDOW_EVIDENCE', JSON.stringify({ width, iframeStateRetained: true, modalFit: box, sameOptionsDispatch: true, nativeCommentAbsent: true, focusRestore: true, layoutAndViewportUnchanged: true }));
     if (process.env.CANVAS_WINDOW_SCREENSHOT_DIR) await page.screenshot({ path: `${process.env.CANVAS_WINDOW_SCREENSHOT_DIR}/window-${width}.png` });
   });
 }

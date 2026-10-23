@@ -7,7 +7,7 @@ load the normal scope, channel, Inbox, or Deck shell. Closing the tab therefore
 returns the user to the already-open Ambulando tab without rebuilding its state.
 
 Canvas provides an infinite pan-and-zoom surface, persistent native text and
-shape elements, threaded comments, workspace/restricted visibility, ordering in
+shape elements, workspace/restricted visibility, ordering in
 Deck, document, task-list, interactive chat-thread, and trusted HTML naplets.
 Canonical source editing remains in Ambulando's existing editors. A naplet
 stores a source reference and layout only; it does not create a second document,
@@ -36,11 +36,6 @@ contract is:
   `expected_row_version`.
 - `POST /canvases/:canvasId/elements` creates text, shape, connector, drawing,
   or frame rows; element PATCH/DELETE routes use `expected_row_version`.
-- `GET/POST /canvases/:canvasId/comments` reads and creates canvas or naplet
-  threads; comment PATCH resolves, reopens or retargets a root using CAS.
-- Comment DELETE tombstones one reply or an entire confirmed root/reply set.
-  Root requests include `expected_reply_versions` and `expected_row_version`;
-  concurrent reply changes require a fresh confirmation.
 
 Every response is bound to `workspace_id` and an `identity` object containing
 `workspace_id`, `app_npub`, `tower_service_npub`, and
@@ -49,8 +44,7 @@ client rejects incomplete, duplicate, foreign-workspace, or foreign-authority
 payloads instead of merging them into local state.
 
 The Tower schema has a workspace-scoped canvas definition table, a canvas
-visibility principal table (actor or group), naplet and native-element tables,
-and a threaded-comment table. Naplets retain
+visibility principal table (actor or group), and naplet and native-element tables. Naplets retain
 source type, source UUID, layout JSON, immutable HTML package version/digest
 where applicable, position, and monotonic row version. Deletes should use the
 same tombstone and cursor conventions as other Tower record families. Tower
@@ -100,10 +94,9 @@ Signed network work completes outside Dexie transactions; projection commits
 use Dexie-owned promises only, preventing transactions from auto-committing
 while external/native promise work is pending.
 
-## Whiteboard interaction and comments
+## Whiteboard interaction
 
-The dedicated page exposes selection and hand tools; text, rectangle, diamond,
-ellipse, arrow, line, free-draw, and frame elements; erasing, duplicate,
+The dedicated page exposes selection and hand tools; Words (text), Arrows, Frames and Groups creation; duplicate,
 forward/back ordering, resize, undo/redo, reset, and fit. Ordinary wheel input
 pans. Ctrl/Cmd-wheel and two-touch pinch zoom around the pointer or gesture
 centre, while one-touch dragging pans without allowing the page to take over.
@@ -111,10 +104,7 @@ centre, while one-touch dragging pans without allowing the page to take over.
 The naplet picker lists visible typed sources rather than accepting raw record
 IDs. Documents, task lists and threads come from the local cache; existing HTML
 artefacts and boards use the scope-first picker below. Tower still re-authorizes the chosen source at creation and every
-snapshot read. Comments may be anchored to canvas coordinates or a naplet and
-support one reply level plus resolve/reopen state. If the viewer loses access
-to an anchored naplet, Tower emits a coordinate anchor and never exposes the
-protected naplet identifier or metadata through the comment projection.
+snapshot read. Discussion uses chat-thread naplets or document comments.
 
 ## Trusted HTML naplets
 
@@ -284,67 +274,6 @@ and tables, read-only input, source refresh without remount, white paper in both
 themes at desktop and narrow widths, bounded wheel scrolling and exact link
 parameters. This is synthetic client evidence, not authenticated Tower editing.
 
-## Comment popovers and explicit subjects
-
-Comment reading and composition use nonmodal native dialogs (`show()`), opaque
-card colors and no dimming backdrop. The board stays interactive. Drag a heading
-to move a panel, or focus its heading and use arrow keys (Shift for larger steps).
-Panels clamp to the viewport on drag, resize and content changes. Escape closes
-the focused panel and returns focus to its opener; Tab can leave the panel.
-Reply opens a separate movable editor. An expanded naplet restores before opening
-a comment editor, so it cannot make the nonmodal editor inert. Failed writes
-leave drafts open and display an error after refreshing canonical state.
-
-Actions follow Tower's `can_delete`, `can_resolve` and `can_retarget` projections.
-Authors may delete their own replies, or roots containing only their own replies;
-canvas managers may delete any thread. Deleting a root asks for confirmation with
-the reply count; deleting a reply preserves its root and siblings. The confirmed
-reply id/version set is sent unchanged. Tower serializes reply creation/deletion
-on the root and emits individual tombstones atomically. Concurrent replies require
-fresh confirmation. Older Tower versions lack delete/retarget capabilities, so
-those controls remain hidden until backend activation. Retargeting additionally
-requires `retarget_preserves_position: true`; an older active server cannot
-silently snap a board-positioned marker to the subject corner.
-
-Comment panels are 320px wide and content-sized, with compact reply/resolve,
-delete and close controls. Deletion confirmation appears only on request.
-While a thread is open, drag the small chain handle beside its controls onto a
-readable naplet. The dotted line starts at the actual marker and tracks the pointer
-during the drag. Clicking, tapping or keyboard-activating the chain reveals a
-compact direct-choice target list with an Unlink action for existing links.
-The target list stays hidden in the normal comment view. Dropping elsewhere leaves the subject
-unchanged. The persisted anchor names the naplet id; a dotted line appears only
-for the open thread and follows the target layout. Optional naplet-anchor x/y
-preserve the independently positioned marker in existing JSONB storage; no new
-record family or database migration is needed. Legacy anchors without marker
-coordinates retain their corner fallback until explicitly relinked. Clearing the
-subject returns to a coordinate anchor. Linking never uses proximity or alters
-source records.
-The shared contract supports canvas and naplet anchors only: native text, shapes,
-frames and other elements cannot be explicit subjects in this release.
-
-## Agent spatial reading
-
-Agents use the same signed Tower snapshot as humans. It already includes naplet
-layout (x/y/width/height/z), native-element layout/data and comment anchors. The
-additive `spatial_context` on that existing route provides canvas-world bounds,
-comment positions, root ids, explicit naplet targets and up to five nearest
-geometric candidates. It is built after source authorization and excludes
-restricted naplet identities. Replies use their root's effective subject. Explicit
-targets carry `authority: explicit`; candidates carry `basis: geometric_inference`
-and never assign intent. This is a Tower response, not browser-only metadata or
-a new Autopilot endpoint. Older backends retain the original raw geometry until
-activation of the summary.
-
-`tests/e2e/canvas.spec.cjs` exercises signed synthetic deletion/reload, replies,
-changed reply sets, subject persistence, connector movement/visibility, popover
-drag, board interaction and permissions at 1440px and 390px. The opacity suite
-checks panel colors, transparent comment backdrops, nested reply dismissal,
-focus, scrolling and bounds across themes. Tower signed-route tests exercise
-author/manager permissions, CAS, atomic deletion and source ACLs against a
-disposable local Postgres database. Production mutations and physical phone
-behavior remain separate integration checks.
-
 Add naplet and expanded naplet windows retain native modal semantics. The Deck's
 Create canvas/Canvas settings dialog retains its opaque popover surface and
 principal picker.
@@ -359,7 +288,7 @@ Native modal focus containment and Escape restore the window; the opener regains
 focus. These presentation states are local to the open page, leaving stored
 layout and viewport unchanged.
 
-The options popover shares existing source-opening, comment, duplicate, ordering
+The options popover shares existing source-opening, duplicate, ordering
 and removal actions. It enters the native top layer after the modal so controls
 remain usable above full-screen content, with arrow/Home/End navigation, Escape,
 light dismiss, bounded mobile positioning and larger touch targets. Restricted
@@ -428,6 +357,26 @@ point to an Overview for a permanent return route; there is no hierarchy, custom
 Back control, navigation stack, or additional viewport restoration. Returning
 from browser back/forward cache requires fresh authorization before rendering.
 
+The Canvas Link picker also offers **Create new canvas**. It opens the shared
+Deck name/access dialog above the still-mounted link picker. Creation uses the
+same workspace-wide canvas API and visibility principals; canvas definitions do
+not belong to a scope or channel. Successful creation refreshes the authorized
+list and selects the returned id, preserving the search, optional label and
+insertion point. The selected title is announced even when the retained search
+filters that row out. Add remains a separate confirmation. Cancel/Escape return
+focus to the creation action without modifying the pending link.
+
+The creation response is recorded before list hydration. An accepted create
+whose refresh fails retries only the list. A network or server failure with no
+confirmed response is uncertain: a sessionStorage marker scoped to the authority,
+viewer, workspace and source canvas survives reload. **Check canvas list** reads
+fresh choices for explicit selection; it never guesses ownership from a title or
+resends the POST. A definitive client rejection leaves the form editable for
+retry. Cancellation keeps an uncertain marker; selecting an existing canvas
+explicitly resolves it. This protects against blind retries within the current
+tab, not independently initiated creations in other tabs or devices. Tower
+remains authoritative for creation, visibility and the eventual link mutation.
+
 Cards contain no destination DOM, scene bytes, iframe, preview subscription,
 or screenshot. Static thumbnails are deferred because there is no existing
 canvas capture/storage contract that safely handles destination revocation.
@@ -458,8 +407,7 @@ routes. See `docs/canvas-references.md` for agent resolution.
 
 ## Document discussion in naplets
 
-Document readers expose **Document comments**, separate from the canvas-item
-Comment command. The panel reads and creates roots and replies through the
+Document readers expose **Document comments**, within the document reader. The panel reads and creates roots and replies through the
 existing typed `/docs/:docId/comments` routes. Accepted rows use the existing
 PG document-comment mapper and Dexie `comments` table, so open readers and the
 Documents surface share records. Each naplet retains its own draft, selected
@@ -503,15 +451,18 @@ physical Safari/touch behavior.
 
 ## Responsive toolbar
 
-The canvas title has its own bounded row. Controls and their groups wrap to the
-available canvas width, including inside a narrower pane; the toolbar does not
-require horizontal scrolling. The stage uses a shrinkable grid track. In short
-windows the toolbar is capped at half the viewport height and scrolls vertically,
-so keyboard focus can reveal every action while the canvas remains usable.
-Existing action handlers, ordering, focus rings and phone touch targets remain.
+The canvas toolbar is one non-wrapping horizontal row bounded to its viewport,
+including embedded panes. Naplet adds (Chat, Task Tree and Add naplet) lead the
+scrolling controls. The title is capped at 180px (80px on phones); its hover
+tooltip exposes the full title without displacing controls. Keyboard focus
+scrolls later controls into view. Words, Arrows, Frames and Groups remain,
+alongside selection, hand, zoom and editing controls. Legacy shapes and strokes
+still render and can be selected and edited, but have no creation tools or keys.
 
-`tests/e2e/canvas-toolbar.spec.cjs` checks 320–2048px widths with a long title,
-arrow/text selection options, keyboard tool and zoom actions, pointer panning,
-short-pane focus visibility, and an embedded desktop canvas resized by side
-panels using the production template and synthetic Tower records. These checks establish layout and browser interactions, not live
-Tower authorization or physical-device behavior.
+Native canvas comments have been removed. Snapshot normalization ignores older
+server comment payloads and Dexie version 44 removes cached snapshot comments.
+Document comments and chat-thread naplets retain their independent paths.
+
+`tests/e2e/canvas-toolbar.spec.cjs` checks 320–2048px widths, long-title tooltip,
+non-wrapping groups, leftmost adds, keyboard focus scrolling, zoom, panning and
+embedded pane resizing using synthetic Tower records.

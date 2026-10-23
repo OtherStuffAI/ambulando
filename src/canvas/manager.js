@@ -143,6 +143,7 @@ export const canvasManagerMixin = {
   get canvasDialogSelectionCount() {
     return (this.canvasDialog.actorIds || []).length + (this.canvasDialog.groupIds || []).length;
   },
+  get canvasDialogSubmitLabel() { return this.canvasSaving ? 'Saving…' : (this.canvasDialog.mode === 'create' ? 'Create canvas' : 'Save changes'); },
   get canvasDialogCanSave() {
     return Boolean(text(this.canvasDialog.title))
       && !this.canvasSaving

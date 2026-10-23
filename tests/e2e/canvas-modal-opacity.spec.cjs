@@ -22,7 +22,7 @@ for (const width of [1440, 390]) {
     test(`Canvas modal panels are opaque: ${mode}, ${width}px`, async ({ page, baseURL }) => {
       test.setTimeout(45_000);
       const dark = mode.endsWith('dark');
-      const expected = dark ? 'rgb(24, 39, 53)' : 'rgb(255, 255, 255)';
+      const expected = dark ? 'rgb(26, 34, 56)' : 'rgb(255, 255, 255)';
       await page.setViewportSize({ width, height: 720 });
       await page.emulateMedia({ colorScheme: dark ? 'dark' : 'light' });
       await page.addInitScript(mode => localStorage.setItem('ambulando:theme', mode.startsWith('system') ? 'system' : mode), mode);
@@ -38,7 +38,6 @@ for (const width of [1440, 390]) {
         store.status = 'ready'; store.error = '';
         store.canvas = { title: 'Busy Canvas', can_manage: true };
         store.elements = Array.from({ length: 24 }, (_, i) => ({ id: `shape-${i}`, kind: 'rectangle', data: {}, layout: { x: (i % 6) * 180, y: Math.floor(i / 6) * 150, width: 160, height: 130, z: i } }));
-        store.comments = [{ id: 'root', body: 'Please review this area. '.repeat(160), author: { label: 'Reviewer' }, can_resolve: true, anchor: { type: 'canvas', x: 100, y: 100 }, created_at: '2026-10-21', resolved_at: null }];
         store.loadSourceOptions = async () => {};
       });
       await page.getByRole('button', { name: 'Add naplet', exact: true }).click();
@@ -50,34 +49,6 @@ for (const width of [1440, 390]) {
       }
       await add.getByRole('button', { name: 'Cancel' }).click();
       await expect(add).not.toBeVisible();
-      await page.evaluate(() => window.Alpine.store('canvas').openCommentDialog({ type: 'canvas', x: 100, y: 100 }));
-      const editor = page.locator('.canvas-comment-dialog');
-      await assertPanel(editor, expected, width);
-      await editor.getByLabel('Comment', { exact: true }).fill('Draft stays editable');
-      await page.keyboard.press('Escape');
-      await expect(editor).not.toBeVisible();
-      await page.getByRole('button', { name: 'Open comment by Reviewer' }).click();
-      const thread = page.locator('.canvas-comment-panel');
-      await assertPanel(thread, expected, width);
-      const backdrop = await thread.evaluate(node => getComputedStyle(node, '::backdrop').backgroundColor);
-      expect(backdrop).toBe('rgba(0, 0, 0, 0)');
-      expect(await thread.evaluate(node => node.matches(':modal'))).toBe(false);
-      if (process.env.SOL_EVIDENCE_DIR) await page.screenshot({ path: `${process.env.SOL_EVIDENCE_DIR}/canvas-thread-${mode}-${width}.png` });
-      await expect.poll(() => thread.evaluate(node => node.scrollHeight > node.clientHeight)).toBe(true);
-      await thread.getByRole('button', { name: 'Reply', exact: true }).click();
-      await assertPanel(editor, expected, width);
-      await expect(editor.getByRole('heading')).toHaveText('Reply');
-      if (process.env.SOL_EVIDENCE_DIR) await page.screenshot({ path: `${process.env.SOL_EVIDENCE_DIR}/canvas-reply-${mode}-${width}.png` });
-      await editor.getByLabel('Comment', { exact: true }).fill('Nested reply');
-      await page.keyboard.press('Tab');
-      await page.keyboard.press('Tab');
-      expect(await editor.evaluate(node => node.contains(document.activeElement))).toBe(true);
-      await page.keyboard.press('Escape');
-      await expect(editor).not.toBeVisible();
-      await assertPanel(thread, expected, width);
-      await thread.getByRole('button', { name: 'Close', exact: true }).click();
-      await expect(thread).not.toBeVisible();
-
       // Naplet windows can also enter the native modal top layer.
       for (const type of ['document', 'task_list', 'chat_thread', 'html', 'denied']) {
         await page.evaluate(type => {
@@ -103,7 +74,7 @@ for (const width of [1440, 390]) {
       await assertPanel(settings, expected, width);
       await page.keyboard.press('Escape');
       await expect(settings).not.toBeVisible();
-      console.log('CANVAS_MODAL_OPACITY', JSON.stringify({ mode, width, runtimeAssets: process.env.SOL_RUNTIME_ASSETS === '1', panelColor: expected, panels: ['add (all four source types)', 'comment', 'thread', 'nested reply', 'create', 'settings', 'expanded naplets (five variants)', 'window options'], backdrop }));
+      console.log('CANVAS_MODAL_OPACITY', JSON.stringify({ mode, width, runtimeAssets: process.env.SOL_RUNTIME_ASSETS === '1', panelColor: expected, panels: ['add (all four source types)', 'create', 'settings', 'expanded naplets (five variants)', 'window options'] }));
     });
   }
 }

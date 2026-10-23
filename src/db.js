@@ -341,6 +341,7 @@ export function createWorkspaceDb(workspaceDbKey) {
   // Viewer-partitioned unsaved Excalidraw board drafts. Saved versions remain
   // Tower File versions; a draft is local work that only Save publishes.
   db.version(43).stores({ canvas_board_drafts: '&key, context, file_id' });
+  db.version(44).stores({}).upgrade(tx => tx.table('canvas_snapshots').toCollection().modify(row => { delete row.comments; }));
   db.version(37).stores({ hosting_billing: '&key' });
   db.version(36).stores({ scope_orders: '&record_id, workspace_id', pg_archived_targets: '&key, family, id' });
   const commentFields = activityIndexFields;

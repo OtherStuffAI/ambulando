@@ -74,20 +74,38 @@ for (const width of [320, 390, 700, 768, 1024, 1440, 2048]) test(`Toolbar stays 
   const key = await seed(page);
   await page.goto(`/canvas.html?workspacekey=${encodeURIComponent(key)}&canvasid=${canvasId}`, { waitUntil: 'domcontentloaded', timeout: 15000 });
   await expect(page.locator('.canvas-toolbar h1')).toContainText('Ambulando, NStack');
+  await expect(page.locator('.canvas-stage')).toBeVisible();
   const checkBounds = async () => {
     const geometry = await page.evaluate(() => {
       const toolbar = document.querySelector('.canvas-toolbar');
       const stage = document.querySelector('.canvas-stage').getBoundingClientRect();
+      const scroll = toolbar.querySelector('.canvas-toolbar-scroll');
+      const groups = [...scroll.children].filter(el => el.getClientRects().length);
       return { overflow: toolbar.scrollWidth - toolbar.clientWidth, stageHeight: stage.height,
-        outside: [...toolbar.querySelectorAll('button, input, select')].filter(el => el.getClientRects().length).filter(el => {
-          const r = el.getBoundingClientRect(); return r.left < 0 || r.right > innerWidth + 1;
-        }).map(el => el.title || el.textContent) };
+        wrap: getComputedStyle(scroll).flexWrap,
+        tops: groups.map(el => Math.round(el.getBoundingClientRect().top)),
+        first: scroll.querySelector('button').textContent,
+        title: toolbar.querySelector('h1').title,
+        titleWidth: toolbar.querySelector('.canvas-brand').getBoundingClientRect().width,
+        scrollable: scroll.scrollWidth > scroll.clientWidth };
     });
-    expect(geometry.outside).toEqual([]);
+    expect(geometry.wrap).toBe('nowrap');
+    expect(new Set(geometry.tops).size).toBe(1);
+    expect(geometry.first).toBe('Chat');
+    expect(geometry.title).toContain('long canvas title');
+    expect(geometry.titleWidth).toBeLessThanOrEqual(180);
     expect(geometry.overflow).toBeLessThanOrEqual(1);
     expect(geometry.stageHeight).toBeGreaterThanOrEqual(440);
   };
   await checkBounds();
+  for (const title of ['Rectangle (R)', 'Diamond (D)', 'Ellipse (O)', 'Line (L)', 'Free draw (P)', 'Eraser (E)', 'Comment (C)']) await expect(page.getByTitle(title, { exact: true })).toHaveCount(0);
+  await page.evaluate(() => {
+    const store = Alpine.store('canvas'); store.setTool('select');
+    for (const key of ['r', 'd', 'o', 'l', 'p', 'e', 'c']) store.handleKeydown({ key, target: document.body });
+    if (store.tool !== 'select') throw new Error('Removed shortcut remains active');
+    for (const tool of ['rectangle', 'diamond', 'ellipse', 'line', 'draw', 'eraser', 'comment', 'embed']) store.setTool(tool);
+    if (store.tool !== 'select') throw new Error('Removed tool can still be selected');
+  });
   await page.evaluate(() => {
     const store = Alpine.store('canvas');
     store.elements = [{ id: 'arrow-test', kind: 'arrow', data: {}, layout: { x: 0, y: 0, width: 100, height: 100 } }];
@@ -134,8 +152,8 @@ test('Toolbar follows its embedded pane when side panels change width', async ({
     await page.locator('#details').evaluate((el, width) => { el.style.width = `${width}px`; }, panelWidth);
     await expect.poll(() => canvas.locator('.canvas-toolbar').evaluate(el => ({
       overflow: el.scrollWidth - el.clientWidth,
-      outside: [...el.querySelectorAll('button')].filter(button => button.getClientRects().length).filter(button => button.getBoundingClientRect().right > innerWidth + 1).length,
-    }))).toEqual({ overflow: 0, outside: 0 });
+      wrap: getComputedStyle(el.querySelector('.canvas-toolbar-scroll')).flexWrap,
+    }))).toEqual({ overflow: 0, wrap: 'nowrap' });
     await canvas.getByRole('button', { name: 'Zoom in', exact: true }).click();
   }
 });

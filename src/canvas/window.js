@@ -105,11 +105,6 @@ export function registerCanvasWindow(Alpine) {
     },
     // A reference link reveals its target even if this window was minimised.
     revealForReference() { if (this.minimised) this.toggleMinimise(); },
-    comment() {
-      this.closeOptions();
-      if (this.expanded) this.closeExpanded();
-      this.$store.canvas.openCommentDialog({ type: 'naplet', naplet_id: this.naplet.id });
-    },
     };
   });
 }

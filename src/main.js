@@ -1,3 +1,4 @@
+import { mountCanvasSettingsDialog } from './canvas/settings-dialog.js';
 import Alpine from 'alpinejs';
 import { solIcon } from './sol-icons.js';
 import { installAppearance } from './appearance.js';
@@ -33,6 +34,7 @@ async function boot() {
   installStableHtml(Alpine);
   Alpine.data('pipelineViewerView', () => createPipelineViewerView());
   Alpine.data('contextTreeView', () => createContextTreeView());
+  mountCanvasSettingsDialog();
   initApp();
   if (!Alpine.store('chat').canvasChatEmbedded) installNotificationClickRouteHandler();
   initChatThreadFlowDispatchDomBridge();

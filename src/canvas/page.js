@@ -1,10 +1,11 @@
+import { attachCanvasLinkCreation } from './link-create.js';
+import { mountCanvasSettingsDialog } from './settings-dialog.js';
 import { canvasDocumentComments } from './document-comments.js';
 import './task-tree.css';
 import { canvasTaskTreeStore } from './task-tree-page.js';
 import Alpine from 'alpinejs';
 import { canvasChatStore } from './chat-page.js';
 import { registerCanvasChatFrame } from './chat-frame.js';
-import { registerCanvasCommentPopover } from './comment-popover.js';
 import { registerCanvasWindow } from './window.js';
 import { registerCanvasDocument } from './document.js';
 import { registerCanvasHtml } from './html-naplet.js';
@@ -40,8 +41,6 @@ const pointCenter = (a, b) => ({ clientX: (a.clientX + b.clientX) / 2, clientY: 
 const canvasDom = Object.freeze({
   stage: '.canvas-stage',
   addDialog: '.canvas-add-dialog',
-  commentDialog: '.canvas-comment-dialog',
-  commentPanel: '.canvas-comment-panel',
   versionsDialog: '.canvas-versions-dialog',
   referenceDialog: '.canvas-reference-dialog',
 });
@@ -55,8 +54,7 @@ function canvasElement(name) {
 function openCanvasDialog(name) {
   Alpine.nextTick(() => {
     const dialog = canvasElement(name);
-    if (name === 'addDialog') { if (!dialog.open) dialog.showModal(); }
-    else dispatchEvent(new CustomEvent('canvas-comment-open', { detail: name }));
+    if (!dialog.open) dialog.showModal();
   });
 }
 
@@ -78,15 +76,13 @@ export function canvasPageStore() {
   const geometry = (layout, action) => Object.fromEntries((action === 'move' ? ['x', 'y'] : action === 'resize' ? ['width', 'height'] : ['x', 'y', 'width', 'height']).map(key => [key, layout[key]]));
   const layoutChanges = history => history?.type === 'layouts' ? history.changes : history?.type === 'layout' ? [history] : [];
 
-  return {
+  const store = {
     status: 'loading', error: '', workspace: null, session: null, currentWorkspace: null,
     currentWorkspaceKey: '', currentViewerNpub: '', currentPgActorId: '', canvas: null,
-    naplets: [], elements: [], comments: [], viewport: { x: 0, y: 0, scale: 1 },
+    naplets: [], elements: [], viewport: { x: 0, y: 0, scale: 1 },
     interaction: null, tool: 'select', selectedKeys: [], selectionBox: null, saving: false, viewportSaving: false,
     editingTextId: '', editingText: '', sourceOptions: [], sourceSearch: '', canvasChoicesError: '',
     addDialog: { type: 'document', sourceId: '', title: '' },
-    commentDialog: { anchor: null, parentCommentId: null, body: '' }, activeCommentId: '',
-    commentDelete: null, linkDrag: null, subjectPicker: false, suppressLinkClick: false,
     accessMessage: CANVAS_ACCESS_MESSAGE, historyTick: 0, htmlViews: {},
     // A naplet reference (`napletid`) is focused once per page load. Its centred
     // view is viewer-local until the viewer pans or zooms.
@@ -108,9 +104,6 @@ export function canvasPageStore() {
       return { type: key.slice(0, separator), id: key.slice(separator + 1) };
     },
     get canGroup() { return this.selectedKeys.length >= 2; },
-    get unresolvedComments() { return this.comments.filter(row => !row.parent_comment_id && !row.resolved_at); },
-    get activeComment() { return this.comments.find(row => row.id === this.activeCommentId) || null; },
-    get activeReplies() { return this.comments.filter(row => row.parent_comment_id === this.activeCommentId); },
     get filteredSourceOptions() {
       const query = text(this.sourceSearch).toLowerCase();
       return this.sourceOptions.filter(row => row.type === this.addDialog.type && (!query || row.title.toLowerCase().includes(query))).slice(0, 100);
@@ -144,7 +137,7 @@ export function canvasPageStore() {
         addEventListener('pagehide', () => {
           syncRuntime?.stop(); assetStore?.clear(); this.stopTaskTrees(); this.stopBoards(); this.stopChats(); this.resetArtifactPicker(); removeEventListener('keydown', keydown);
           // A browser-history cache is not fresh authorization.
-          this.status = 'loading'; this.canvas = null; this.naplets = []; this.elements = []; this.comments = [];
+          this.status = 'loading'; this.canvas = null; this.naplets = []; this.elements = [];
           this.clearHtmlViews(); this.closeNapletDialogs(); this.clearReferenceFeedback(); document.title = 'Canvas · Ambulando';
         });
         addEventListener('pageshow', event => {
@@ -180,7 +173,7 @@ export function canvasPageStore() {
         if (!patch || (type === 'naplet' && row.access !== 'ready')) return row;
         return { ...row, ...(patch.layout ? { layout: { ...row.layout, ...patch.layout } } : {}), ...(patch.data ? { data: { ...row.data, ...patch.data } } : {}) };
       });
-      this.canvas = snapshot.canvas; this.naplets = this.mergeTreeNaplets(this.mergeChatNaplets(merge(snapshot.naplets, 'naplet'))); this.elements = merge(snapshot.elements || [], 'element'); this.comments = snapshot.comments || [];
+      this.canvas = snapshot.canvas; this.naplets = this.mergeTreeNaplets(this.mergeChatNaplets(merge(snapshot.naplets, 'naplet'))); this.elements = merge(snapshot.elements || [], 'element');
       // Group moves hold row references across pointer events; rebind after a
       // projection replaces rows, otherwise later movement edits detached rows.
       if (state?.type === 'move') state.moving = state.moving.flatMap(original => {
@@ -193,8 +186,6 @@ export function canvasPageStore() {
       if (!this.viewportLocal && viewportRevision === savedViewportRevision && !['pan', 'pinch'].includes(state?.type)) this.viewport = { ...snapshot.canvas.viewport };
       const available = new Set(this.allCanvasItems().map(row => row.key));
       this.selectedKeys = this.selectedKeys.filter(key => available.has(key));
-      if (this.activeCommentId && !this.activeComment) { canvasElement('commentPanel').close(); this.activeCommentId = ''; }
-      if (this.commentDialog.parentCommentId && !this.comments.some(row => row.id === this.commentDialog.parentCommentId)) canvasElement('commentDialog').close();
       if (this.versionsDialog.napletId && !this.versionsNaplet) document.querySelector(canvasDom.versionsDialog)?.close();
       // A copy fallback never outlives read access to the naplet it describes.
       if (this.referenceDialog.napletId && !canvasReferenceTarget(this.naplets, this.referenceDialog.napletId)) this.closeReferenceDialog();
@@ -203,7 +194,7 @@ export function canvasPageStore() {
     },
     applySyncError(error) {
       this.syncBoards([]);
-      this.canvas = null; this.naplets = []; this.elements = []; this.comments = []; this.status = 'error';
+      this.canvas = null; this.naplets = []; this.elements = []; this.status = 'error';
       this.clearHtmlViews(); this.closeNapletDialogs(); this.clearReferenceFeedback();
       this.error = error?.status === 403 || error?.status === 404 ? 'Canvas unavailable.' : (error?.message || 'Canvas could not be refreshed.');
     },
@@ -230,9 +221,8 @@ export function canvasPageStore() {
       else { this.viewport.x -= event.deltaX; this.viewport.y -= event.deltaY; }
       this.queueViewportSave();
     },
-    setTool(tool) { this.tool = tool; if (tool !== 'select') this.selectedKeys = []; },
+    setTool(tool) { if (!['select', 'hand', 'arrow', 'text', 'frame', 'chat', 'task_tree'].includes(tool)) return; this.tool = tool; if (tool !== 'select') this.selectedKeys = []; },
     select(type, id, { additive = false, toggle = false } = {}) {
-      if (this.tool === 'comment') return;
       const key = canvasItemKey(type, id), selected = new Set(additive ? this.selectedKeys : []);
       if (toggle && selected.has(key)) selected.delete(key); else selected.add(key);
       this.tool = 'select'; this.selectedKeys = [...selected];
@@ -256,7 +246,6 @@ export function canvasPageStore() {
       }
       if (event.button !== 0) return;
       const point = this.toWorld(event);
-      if (this.tool === 'comment') return this.openCommentDialog({ type: 'canvas', x: point.x, y: point.y });
       if (this.tool === 'hand' || (event.pointerType === 'touch' && this.tool === 'select')) { this.interaction = { type: 'pan', pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, x: this.viewport.x, y: this.viewport.y }; return; }
       if (this.tool === 'select') {
         this.selectedKeys = []; this.selectionBox = null;
@@ -264,22 +253,14 @@ export function canvasPageStore() {
         return;
       }
       if (this.tool === 'text') return this.createTextAt(point);
-      if (this.tool === 'embed') return this.openAddDialog(point);
       if (this.tool === 'chat') return this.placeChat(point);
       if (this.tool === 'task_tree') return this.placeTaskTree(point);
+      if (!['arrow', 'frame'].includes(this.tool)) return;
       const kind = this.tool;
-      const element = { kind, layout: { x: Math.round(point.x), y: Math.round(point.y), width: 8, height: 8, z: this.highestZ() + 1 }, data: kind === 'draw' ? { points: [[0, 0]] } : {} };
+      const element = { kind, layout: { x: Math.round(point.x), y: Math.round(point.y), width: 8, height: 8, z: this.highestZ() + 1 }, data: {} };
       this.interaction = { type: 'create', pointerId: event.pointerId, start: point, element };
     },
     startItemInteraction(type, item, event, action = 'move') {
-      if (this.tool === 'comment') {
-        if (item._chatDraft || item._treeDraft) return;
-        event.stopPropagation();
-        return type === 'naplet' && item.access === 'ready'
-          ? this.openCommentDialog({ type: 'naplet', naplet_id: item.id })
-          : this.openCommentDialog({ type: 'canvas', x: item.layout.x, y: item.layout.y });
-      }
-      if (this.tool === 'eraser') { event.stopPropagation(); return this.deleteItem(type, item); }
       if (this.tool !== 'select' || event.button !== 0 || this.editingTextId) return;
       event.stopPropagation();
       const key = canvasItemKey(type, item.id), additive = event.shiftKey || event.metaKey || event.ctrlKey;
@@ -312,11 +293,11 @@ export function canvasPageStore() {
       }
       if (state.type === 'create') {
         const point = this.toWorld(event), dx = point.x - state.start.x, dy = point.y - state.start.y;
-        if (state.element.kind === 'arrow' || state.element.kind === 'line') {
+        if (state.element.kind === 'arrow') {
           const geometry = arrowGeometry(state.start, point);
           state.element.layout = { ...state.element.layout, ...geometry.layout }; state.element.data = geometry.data;
         } else state.element.layout = { ...state.element.layout, x: Math.round(Math.min(point.x, state.start.x)), y: Math.round(Math.min(point.y, state.start.y)), width: Math.max(8, Math.round(Math.abs(dx))), height: Math.max(8, Math.round(Math.abs(dy))) };
-        if (state.element.kind === 'draw') state.element.data.points.push([Math.round(point.x - state.start.x), Math.round(point.y - state.start.y)]); return;
+        return;
       }
       const item = state.itemType === 'naplet' ? this.naplets.find(row => row.id === state.id) : this.elements.find(row => row.id === state.id); if (!item || (state.itemType === 'naplet' && item.access !== 'ready')) return;
       const dx = (event.clientX - state.startX) / this.viewport.scale, dy = (event.clientY - state.startY) / this.viewport.scale;
@@ -337,7 +318,7 @@ export function canvasPageStore() {
       if (state.type === 'pan') return this.saveViewport();
       if (state.type === 'select') { this.selectionBox = null; return; }
       if (state.type === 'create') {
-        const element = state.element; if (element.kind === 'arrow' || element.kind === 'line') element.data = { ...element.data, direction: 'forward' };
+        const element = state.element; if (element.kind === 'arrow') element.data = { ...element.data, direction: 'forward' };
         const previous = new Set(this.elements.map(row => row.id));
         await this.mutate(() => syncRuntime.createElement(element)); this.tool = 'select'; const created = this.elements.find(row => !previous.has(row.id)); if (created) this.selectedKeys = [canvasItemKey('element', created.id)]; return;
       }
@@ -453,19 +434,18 @@ export function canvasPageStore() {
       if (await this.mutate(() => this.replayHistory(action, 'after'))) { redo.pop(); undo.push(action); this.historyTick += 1; }
     },
     handleKeydown(event) {
-      if (event.key === 'Escape' && this.linkDrag) { event.preventDefault(); this.linkDrag = null; return; }
-      if (event.defaultPrevented || document.querySelector('dialog:modal, :popover-open') || event.target.closest?.('.canvas-comment-panel,.canvas-comment-dialog')) return;
+      if (event.defaultPrevented || document.querySelector('dialog:modal, :popover-open')) return;
       if (event.target?.matches('input,textarea,select,button,[contenteditable="true"]')) return;
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'z') { event.preventDefault(); return event.shiftKey ? this.redoChange() : this.undoChange(); }
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'd') { event.preventDefault(); return this.duplicateSelected(); }
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'g') { event.preventDefault(); return this.createGroup(); }
       if (event.key === 'Delete' || event.key === 'Backspace') { event.preventDefault(); return this.deleteItem(); }
-      const keys = { v: 'select', h: 'hand', r: 'rectangle', d: 'diamond', o: 'ellipse', a: 'arrow', l: 'line', p: 'draw', t: 'text', e: 'eraser', f: 'frame', c: 'comment' };
+      const keys = { v: 'select', h: 'hand', a: 'arrow', t: 'text', f: 'frame' };
       if (keys[event.key.toLowerCase()]) this.setTool(keys[event.key.toLowerCase()]);
     },
     async openAddDialog(point = null) {
       const rect = this.stageRect(); this.addDialog = { type: 'document', sourceId: '', title: '', point: point || this.toWorld({ clientX: rect.left + 80, clientY: rect.top + 80 }) };
-      this.sourceSearch = ''; this.boardCreate = { ...this.boardCreate, title: '', mode: 'create' };
+      this.sourceSearch = ''; this.canvasLinkNotice = ''; this.boardCreate = { ...this.boardCreate, title: '', mode: 'create' };
       await this.loadSourceOptions(); openCanvasDialog('addDialog');
     },
     async loadSourceOptions() {
@@ -486,7 +466,7 @@ export function canvasPageStore() {
         ...documents.filter(row => active(row) && row.pg_storage_version_id && !isHtmlFile(row) && /html/i.test(row.content_type || row.mime_type || '')).map(row => ({ type: 'html', id: row.pg_storage_version_id, title: sourceTitle(row, 'HTML artefact') })),
       ].filter(row => row.id && row.title).sort((a, b) => a.title.localeCompare(b.title));
     },
-    chooseSource(option) { if (option.type === 'canvas' && option.id === this.canvasId) return; this.addDialog.sourceId = option.id; this.addDialog.title = option.type === 'canvas' ? '' : option.title; },
+    chooseSource(option) { if (option.type === 'canvas' && option.id === this.canvasId) return; this.canvasLinkNotice = ''; if (option.type === 'canvas' && this.canvasCreateAttempt) this.rememberCanvasAttempt(null); this.addDialog.sourceId = option.id; if (option.type !== 'canvas') this.addDialog.title = option.title; },
     async addNaplet() {
       const point = this.addDialog.point || { x: 80, y: 80 }, board = this.addDialog.type === 'excalidraw';
       if(this.addDialog.type==='task_tree'){canvasElement('addDialog').close();return this.placeTaskTree(point);}
@@ -504,80 +484,6 @@ export function canvasPageStore() {
       await this.mutate(() => syncRuntime.addNaplet({ source: { type: this.addDialog.type, id: sourceId }, title: text(this.addDialog.title) || undefined, layout }));
       if (!this.error) canvasElement('addDialog').close();
     },
-    openCommentDialog(anchor, parentCommentId = null) { if (anchor.type === 'naplet' && !anchor.naplet_id) return; if (anchor.type === 'naplet' && !parentCommentId && !Number.isFinite(anchor.x)) { const point = this.commentPoint({ anchor }); if (point) anchor = { ...anchor, ...point }; } this.commentDialog = { anchor, parentCommentId, body: '' }; openCanvasDialog('commentDialog'); },
-    async submitComment() { const body = text(this.commentDialog.body); if (!body) return; await this.mutate(() => syncRuntime.createComment({ anchor: this.commentDialog.anchor, parent_comment_id: this.commentDialog.parentCommentId || undefined, body })); if (!this.error) canvasElement('commentDialog').close(); },
-    openCommentThread(comment) { this.activeCommentId = comment.id; this.commentDelete = null; this.subjectPicker = false; this.suppressLinkClick = false; openCanvasDialog('commentPanel'); },
-    async setCommentResolved(comment, resolved) { if (comment?.can_resolve !== false) await this.mutate(() => syncRuntime.setCommentResolved(comment.id, resolved)); },
-    requestCommentDelete(comment) {
-      if (!comment?.can_delete || this.saving) return;
-      const replies = this.comments.filter(row => row.parent_comment_id === comment.id);
-      this.commentDelete = { id: comment.id, expected_row_version: comment.row_version, expected_reply_versions: Object.fromEntries(replies.map(row => [row.id, row.row_version])), replyCount: replies.length, isRoot: !comment.parent_comment_id };
-    },
-    async confirmCommentDelete() {
-      const request = this.commentDelete;
-      if (!request || this.saving) return;
-      const success = await this.mutate(() => syncRuntime.deleteComment(request.id, request));
-      this.commentDelete = null;
-      if (success && request.id === this.activeCommentId) canvasElement('commentPanel').close();
-    },
-    commentPoint(comment) {
-      if (Number.isFinite(comment?.anchor.x) && Number.isFinite(comment?.anchor.y)) return { x: comment.anchor.x, y: comment.anchor.y };
-      if (comment?.anchor.type === 'naplet') {
-        const naplet = this.naplets.find(row => row.id === comment.anchor.naplet_id && row.access === 'ready');
-        return naplet ? { x: naplet.layout.x + naplet.layout.width, y: naplet.layout.y } : null;
-      }
-      return comment ? { x: comment.anchor.x, y: comment.anchor.y } : null;
-    },
-    get commentConnector() {
-      const comment = this.activeComment, start = this.commentPoint(comment);
-      if (!start) return null;
-      const target = this.naplets.find(row => row.id === comment.anchor.naplet_id && row.access === 'ready');
-      const end = this.linkDrag?.point || (target ? { x: target.layout.x + target.layout.width / 2, y: target.layout.y + target.layout.height / 2 } : null);
-      return end ? { x1: start.x, y1: start.y, x2: end.x, y2: end.y } : null;
-    },
-    commentTime(comment) {
-      const date = new Date(comment?.created_at);
-      return Number.isNaN(date.getTime()) ? '' : date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    },
-    toggleCommentTargets(event) {
-      if (event?.detail === 0) this.suppressLinkClick = false;
-      if (this.suppressLinkClick) { this.suppressLinkClick = false; return; }
-      this.subjectPicker = !this.subjectPicker;
-    },
-    startCommentLink(event) {
-      if (!this.activeComment?.can_retarget || this.saving || event.button !== 0) return;
-      event.preventDefault(); event.currentTarget.setPointerCapture?.(event.pointerId);
-      this.suppressLinkClick = false;
-      this.linkDrag = { pointerId: event.pointerId, origin: { x: event.clientX, y: event.clientY }, point: this.toWorld(event), moved: false };
-    },
-    moveCommentLink(event) {
-      if (this.linkDrag?.pointerId !== event.pointerId) return;
-      this.linkDrag.point = this.toWorld(event);
-      if (Math.hypot(event.clientX - this.linkDrag.origin.x, event.clientY - this.linkDrag.origin.y) > 5) this.linkDrag.moved = true;
-    },
-    async finishCommentLink(event) {
-      if (this.linkDrag?.pointerId !== event.pointerId) return;
-      const moved = this.linkDrag.moved;
-      this.linkDrag = null;
-      if (!moved) return;
-      this.suppressLinkClick = true;
-      const node = document.elementsFromPoint(event.clientX, event.clientY).map(node => node.closest?.('[data-canvas-key]')).find(Boolean);
-      const id = node?.dataset.canvasKey?.replace(/^naplet:/, '');
-      const target = this.naplets.find(row => row.id === id && row.access === 'ready');
-      if (target) await this.setCommentSubject(target.id);
-      else this.error = 'Drop the link on a readable naplet. The subject was not changed.';
-    },
-    async setCommentSubject(napletId) {
-      const comment = this.activeComment;
-      if (!comment?.can_retarget || this.saving) return;
-      const target = this.naplets.find(row => row.id === napletId && row.access === 'ready');
-      if (napletId && !target) return;
-      const point = this.commentPoint(comment);
-      const anchor = target ? { type: 'naplet', naplet_id: target.id, ...point } : { type: 'canvas', ...point };
-      if (await this.mutate(() => syncRuntime.retargetComment(comment.id, anchor))) { this.subjectPicker = false; }
-    },
-    commentCountForNaplet(id) { return this.unresolvedComments.filter(row => row.anchor.type === 'naplet' && row.anchor.naplet_id === id).length; },
-    commentStyle(comment) { const point = this.commentPoint(comment); return point ? `left:${point.x - 14}px;top:${point.y - 14}px` : 'display:none'; },
     napletStyle(naplet) { const layout = naplet.layout; return `left:${layout.x}px;top:${layout.y}px;width:${layout.width}px;height:${layout.height}px;z-index:${layout.z}`; },
     elementStyle(element) { const layout = element.layout; return `left:${layout.x}px;top:${layout.y}px;width:${layout.width}px;height:${layout.height}px;z-index:${layout.z}`; },
     isGroup(element) { return element.kind === 'frame' && element.data?.role === 'group'; },
@@ -887,9 +793,10 @@ export function canvasPageStore() {
       Alpine.nextTick(reveal);
     },
   };
+  return attachCanvasLinkCreation(store);
 }
 
-registerCanvasCommentPopover(Alpine);
+mountCanvasSettingsDialog('canvas');
 registerCanvasChatFrame(Alpine);
 registerCanvasWindow(Alpine);
 registerCanvasDocument(Alpine);

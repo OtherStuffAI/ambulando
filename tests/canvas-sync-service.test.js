@@ -4,10 +4,8 @@ import { afterEach, expect, it, vi } from 'vitest';
 
 const api = vi.hoisted(() => ({
   createTowerPgCanvas: vi.fn(),
-  createTowerPgCanvasComment: vi.fn(),
   createTowerPgCanvasElement: vi.fn(),
   createTowerPgCanvasNaplet: vi.fn(),
-  deleteTowerPgCanvasComment: vi.fn(),
   deleteTowerPgCanvasElement: vi.fn(),
   deleteTowerPgCanvasNaplet: vi.fn(),
   getTowerPgCanvases: vi.fn(),
@@ -15,7 +13,6 @@ const api = vi.hoisted(() => ({
   getTowerPgFile: vi.fn(),
   reorderTowerPgCanvases: vi.fn(),
   updateTowerPgCanvas: vi.fn(),
-  updateTowerPgCanvasComment: vi.fn(),
   updateTowerPgCanvasElement: vi.fn(),
   updateTowerPgCanvasNaplet: vi.fn(),
 }));
@@ -139,23 +136,15 @@ it('aborts the atomic projection when the refresh generation changes during comm
 });
 
 
-it('deletes using the confirmed revision and reply set, rehydrates Dexie, and refuses unauthorized actions', async () => {
-  const db = openWorkspaceDb(`canvas-comments-${crypto.randomUUID()}`); await db.open();
-  const source = { ...payload(1), comments: [{ id: 'root', anchor: { type: 'canvas', x: 30, y: 40 }, body: 'Root', author: { actor_id: 'actor' }, row_version: 3, can_delete: true, can_retarget: true, retarget_preserves_position: true }] };
-  api.getTowerPgCanvasSnapshot.mockResolvedValue(source);
+it('discards legacy native comments before storing a fresh snapshot', async () => {
+  const db = openWorkspaceDb(`canvas-legacy-${crypto.randomUUID()}`); await db.open();
+  api.getTowerPgCanvasSnapshot.mockResolvedValue({ ...payload(1), comments: [{ invalid: true }] });
   const runtime = new CanvasSyncRuntime(context, 'canvas');
   await runtime.refresh();
-  await runtime.retargetComment('root', { type: 'canvas', x: 50, y: 60 });
-  expect(api.updateTowerPgCanvasComment).toHaveBeenCalledWith('workspace', 'canvas', 'root', { anchor: { type: 'canvas', x: 50, y: 60 }, expected_row_version: 3 }, expect.any(Object));
-  api.getTowerPgCanvasSnapshot.mockResolvedValue(payload(1));
-  await runtime.deleteComment('root', { expected_row_version: 2, expected_reply_versions: { reply: 4 } });
-  expect(api.deleteTowerPgCanvasComment).toHaveBeenCalledWith('workspace', 'canvas', 'root', { expected_row_version: 2, expected_reply_versions: { reply: 4 } }, expect.any(Object));
-  expect((await db.canvas_snapshots.get(runtime.key)).comments).toEqual([]);
-  await expect(runtime.deleteComment('root', {})).rejects.toThrow('cannot delete');
-  await expect(runtime.retargetComment('root', {})).rejects.toThrow('cannot change');
+  expect(await db.canvas_snapshots.get(runtime.key)).not.toHaveProperty('comments');
+  expect(runtime.createComment).toBeUndefined();
   runtime.stop();
 });
-
 
 it('hydrates one canonical File title for repeated board naplets and persists it in the snapshot', async () => {
   const db = openWorkspaceDb(`canvas-board-title-${crypto.randomUUID()}`); await db.open();

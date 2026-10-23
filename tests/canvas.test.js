@@ -1,4 +1,5 @@
 import 'fake-indexeddb/auto';
+import Dexie from 'dexie';
 import { afterEach, expect, it } from 'vitest';
 import { getWorkspaceDb, openWorkspaceDb } from '../src/db.js';
 import {
@@ -85,7 +86,7 @@ it('persists Canvas in dedicated viewer projections', async () => {
   expect(db.canvas_definitions).toBeTruthy();
 });
 
-it('normalizes native elements and redacts denied naplet comment anchors', () => {
+it('normalizes legacy elements and discards obsolete native comments', () => {
   const context = canvasContext(store());
   const snapshot = normalizeCanvasSnapshot({
     workspace_id: 'workspace', identity, complete: true, canvas: definition(),
@@ -94,8 +95,7 @@ it('normalizes native elements and redacts denied naplet comment anchors', () =>
     comments: [{ id: 'comment-1', row_version: 1, body: 'Discuss', parent_comment_id: null, anchor: { type: 'naplet', naplet_id: 'denied' }, author: { actor_id: 'actor', label: 'Person' }, created_at: '2026-10-20T00:00:00Z' }],
   }, context, 'canvas', 'request');
   expect(snapshot.elements[0]).toMatchObject({ kind: 'text', data: { text: 'Hello' } });
-  expect(snapshot.comments[0].anchor).toEqual({ type: 'canvas', x: 0, y: 0 });
-  expect(JSON.stringify(snapshot.comments[0].anchor)).not.toContain('denied');
+  expect(snapshot).not.toHaveProperty('comments');
 });
 
 it('pans ordinary wheel input and keeps modifier zoom centred under the pointer', () => {
@@ -162,15 +162,6 @@ it('builds an opaque-origin HTML boundary with no host, network, form, frame or 
 });
 
 
-it('retains board marker coordinates independently of an explicit readable naplet subject', () => {
-  const context = canvasContext(store());
-  const snapshot = normalizeCanvasSnapshot({ workspace_id: 'workspace', identity, complete: true, canvas: definition(),
-    naplets: [{ id: 'naplet', access: 'ready', row_version: 1, layout: {}, source: { type: 'task_list', id: 'channel' }, content: {} }],
-    comments: [{ id: 'comment', row_version: 1, body: 'Discuss', anchor: { type: 'naplet', naplet_id: 'naplet', x: 80, y: 400 }, author: { actor_id: 'actor' } }],
-  }, context, 'canvas', 'request');
-  expect(snapshot.comments[0].anchor).toEqual({ type: 'naplet', naplet_id: 'naplet', x: 80, y: 400 });
-});
-
 it('bends legacy and directional arrows with a handle on the curve and fixed opposite endpoints', () => {
   const layout = { x: 100, y: 200, width: 200, height: 80, z: 3 };
   const data = { direction: 'forward', custom: 'preserved' };
@@ -205,4 +196,18 @@ it('keeps Canvas Link projections title-only and strips denied destination metad
   expect(Object.keys(normalizeCanvasNaplet(row).content)).toEqual(['title']);
   const denied = normalizeCanvasNaplet({ ...row, access: 'denied' });
   expect(Object.keys(denied).sort()).toEqual(['access', 'id', 'layout', 'row_version']);
+});
+
+it('upgrades cached snapshots without deleting naplets, legacy drawing or document comments', async () => {
+  const key = `canvas-upgrade-${crypto.randomUUID()}`;
+  const current = openWorkspaceDb(key); const name = current.name; current.close();
+  const old = new Dexie(name);
+  old.version(43).stores({ canvas_snapshots: '&key, context, canvas_id, authorized_at', comments: 'record_id' });
+  await old.open();
+  await old.table('canvas_snapshots').put({ key: 'saved', comments: [{ body: 'obsolete' }], naplets: [{ id: 'chat' }], elements: [{ kind: 'rectangle' }] });
+  await old.table('comments').put({ record_id: 'document-comment', body: 'Keep' }); old.close();
+  const upgraded = openWorkspaceDb(key); await upgraded.open();
+  expect(await upgraded.canvas_snapshots.get('saved')).toEqual({ key: 'saved', naplets: [{ id: 'chat' }], elements: [{ kind: 'rectangle' }] });
+  expect(await upgraded.comments.get('document-comment')).toMatchObject({ body: 'Keep' });
+  await upgraded.delete();
 });
