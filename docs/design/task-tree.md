@@ -117,3 +117,12 @@ injection drops an already-persisted create response and rejects a root-view sav
 it never fabricates a task response. The test checks different scopes, unchanged
 prior records, retries without duplication, reload and visible Summary/New cards.
 It stops its own API process and disposable container. It never targets production.
+
+Mobile graph scrolling may cause the browser to emit `pointercancel` when it
+switches from pointer events to native scrolling. The outer canvas handles only
+pointers it acquired itself (including window movement and resize); an inner
+scroll cancellation must not refresh or hide the stage. Likewise, bubbled inner
+pointer moves must not enter the outer pinch pointer set. The phone touch
+regression uses actual Chromium touch input to exercise this browser takeover,
+checks the mounted graph and outer viewport survive, and retains cancellation
+reconciliation for actual outer gestures.

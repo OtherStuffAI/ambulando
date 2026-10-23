@@ -291,7 +291,10 @@ export function canvasPageStore() {
       this.interaction = { type: action, pointerId: event.pointerId, itemType: type, id: item.id, startX: event.clientX, startY: event.clientY, before: cloneCanvasValue(item.layout), beforeData: cloneCanvasValue(item.data || {}), moving };
     },
     movePointer(event) {
-      pointers.set(event.pointerId, event); const state = this.interaction; if (!state) return;
+      // Inner native scrolling can bubble moves without a stage pointerdown.
+      // Only stage-owned touches participate in outer pinch recognition.
+      if (pointers.has(event.pointerId)) pointers.set(event.pointerId, event);
+      const state = this.interaction; if (!state) return;
       if (state.type === 'pinch' && pointers.size >= 2) {
         const [a, b] = [...pointers.values()], center = pointCenter(a, b), factor = pointDistance(a, b) / Math.max(1, state.distance);
         this.viewport = zoomViewport(state.viewport, factor, center, this.stageRect()); this.viewport.x += center.clientX - state.center.clientX; this.viewport.y += center.clientY - state.center.clientY; return;
@@ -359,7 +362,14 @@ export function canvasPageStore() {
       if (item._chatDraft || item._treeDraft) { this.saveChatRecovery(); return; }
       await this.mutate(() => state.itemType === 'naplet' ? syncRuntime.updateNapletLayout(item.id, changed(before, after)) : syncRuntime.updateElement(item.id, { layout: changed(before, after), ...(dataChanged ? { data: afterData } : {}) }), { type: 'layout', itemType: state.itemType, id: item.id, before, after, beforeData, afterData });
     },
-    cancelPointer(event) { pointers.delete(event.pointerId); this.interaction = null; this.selectionBox = null; void this.refresh(); },
+    cancelPointer(event) {
+      // Native naplet scrolling cancels its pointer when the browser takes over.
+      // That cancellation must not hide/refresh the whole canvas or discard an
+      // unrelated outer gesture. Outer edits still reconcile on cancellation.
+      const owned = pointers.delete(event.pointerId);
+      if (!owned && this.interaction?.pointerId !== event.pointerId) return;
+      this.interaction = null; this.selectionBox = null; void this.refresh();
+    },
     queueViewportSave() { viewportRevision += 1; clearTimeout(this._viewportTimer); this._viewportTimer = setTimeout(() => this.saveViewport(), 350); },
     async saveViewport() {
       clearTimeout(this._viewportTimer);

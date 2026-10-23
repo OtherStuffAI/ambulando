@@ -5148,6 +5148,13 @@
       "notes": [
         "Fullscreen Canvas menus leave room for the phone home indicator while keeping restore controls exposed."
       ]
+    },
+    {
+      "buildNumber": 2620,
+      "label": "Keep task tree pans local",
+      "notes": [
+        "Moving around a task tree on a phone no longer refreshes the outer canvas when native scrolling takes over the touch gesture."
+      ]
     }
   ]
 }

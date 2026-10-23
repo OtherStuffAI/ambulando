@@ -64,7 +64,10 @@ async function fixture(page,context,{large=0}={}) {
     if(url.pathname==='/__canvas-seed.js')return route.fulfill({contentType:'text/javascript',body:seedBundle});
     if(url.pathname==='/__canvas-seed.html')return route.fulfill({contentType:'text/html',body:'<title>Seed</title>'});
     const prefix=`/api/v4/flightdeck-pg/workspaces/${workspaceId}`;
-    if(!url.pathname.startsWith(prefix))return serveBuiltFlightDeck(route);
+    if(!url.pathname.startsWith(prefix)) {
+      if(process.env.SOL_RUNTIME_ASSETS==='1' && url.origin===new URL(process.env.PLAYWRIGHT_BASE_URL).origin)return route.continue();
+      return serveBuiltFlightDeck(route);
+    }
     if(request.method()==='OPTIONS')return route.fulfill({status:204,headers:{'access-control-allow-origin':'*','access-control-allow-methods':'GET,POST,PATCH,DELETE','access-control-allow-headers':'*'}});
     if(!request.headers().authorization){console.log('UNSIGNED_FIXTURE_REQUEST',url.pathname);return route.fulfill({status:503,body:'{}'});}
     expect(request.headers().authorization).toMatch(/^Nostr /);
@@ -72,6 +75,12 @@ async function fixture(page,context,{large=0}={}) {
     if(path==='/scopes')return json({scopes:[{id:scopeId,name:'Delivery'}]});
     if(path===`/scopes/${scopeId}/channels`)return json({channels:channels.map((id,i)=>({id,scope_id:scopeId,name:`Channel ${i+1}`}))});
     if(path==='/canvases')return json({workspace_id:workspaceId,complete:true,canvases:[definition]});
+    if(path===`/canvases/${ids[0]}`&&method==='PATCH') {
+      const body=request.postDataJSON();
+      if(body.expected_row_version!==definition.row_version)return json({code:'stale_row_version'},409);
+      if(body.viewport)definition.viewport=body.viewport;
+      definition.row_version++;return json({canvas:definition});
+    }
     if(path===`/canvases/${ids[0]}/snapshot`)return json({workspace_id:workspaceId,complete:true,canvas:definition,naplets:naplets.map(row=>revoked?{id:row.id,access:'denied',layout:row.layout,row_version:row.row_version}:row),elements:[],comments:[]});
     if(path===`/canvases/${ids[0]}/naplets`&&method==='POST'){
       const body=request.postDataJSON();writes.push(body);const row={id:`70000000-0000-4000-8000-${String(naplets.length+1).padStart(12,'0')}`,access:'ready',source:body.source,title:'Task Tree',layout:body.layout,row_version:1,content:{scope_id:scopeId,channel_id:body.source.id,channel_title:`Channel ${channels.indexOf(body.source.id)+1}`,can_create:true}};naplets.push(row);return json({naplet:row},201);
@@ -179,4 +188,57 @@ test('phone full-screen tree supports touch creation and local graph scrolling',
   const tree=window.locator('.canvas-task-tree');await tree.getByLabel('Task Tree scope',{exact:true}).selectOption(scopeId);await tree.getByLabel('Task Tree channel',{exact:true}).selectOption(channels[0]);await tree.getByRole('button',{name:'New Task',exact:true}).tap();await tree.locator('input[aria-label="New task title"]').fill('Touch base');await tree.getByRole('button',{name:'Add task',exact:true}).tap();await expect(tree.locator('.tree-task')).toHaveCount(1);
   await tree.getByRole('button',{name:'Add child to Touch base',exact:true}).tap();await tree.locator('input[aria-label="New task title"]').fill('Touch child');await tree.getByRole('button',{name:'Add task',exact:true}).tap();await expect(tree.locator('.tree-task')).toHaveCount(2);
   const dimensions=await tree.locator('.tree-scroll').evaluate(node=>({width:node.clientWidth,height:node.clientHeight,scrollHeight:node.scrollHeight}));expect(dimensions.width).toBeLessThan(390);expect(dimensions.height).toBeGreaterThan(100);
+});
+
+test('phone graph touch pan keeps the canvas mounted without refreshing the outer snapshot',async({page,context})=>{
+  await fixture(page,context,{large:12});await page.setViewportSize({width:390,height:850});
+  const tree=await addTree(page);const win=tree.locator('xpath=ancestor::dialog');await win.getByRole('button',{name:'Open full screen',exact:true}).tap();
+  await tree.getByRole('button',{name:'Existing Task',exact:true}).tap();await tree.getByRole('button',{name:'Existing root',exact:true}).tap();
+  await expect(tree.locator('.tree-task')).toHaveCount(13);
+  await page.evaluate(()=>{const s=Alpine.store('canvas');window.__panProbe={refreshes:0,cancels:0};const refresh=s.refresh.bind(s);s.refresh=(...args)=>{window.__panProbe.refreshes++;return refresh(...args)};document.addEventListener('pointercancel',()=>window.__panProbe.cancels++);document.querySelector('.tree-scroll').__originalTree=true;window.__panViewport={...s.viewport};});
+  const scroll=tree.locator('.tree-scroll');const box=await scroll.boundingBox();
+  const cdp=await context.newCDPSession(page);
+  const x=box.x+box.width-12,y=box.y+Math.min(180,box.height-10);
+  await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x,y}]});
+  for(let d=10;d<=110;d+=10){await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x,y:y-d}]});await page.waitForTimeout(20);}
+  await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});await page.waitForTimeout(600);
+  console.log('TOUCH_PAN_PROBE',await page.evaluate(()=>window.__panProbe));
+  expect(await page.evaluate(()=>window.__panProbe)).toEqual({refreshes:0,cancels:1});
+  expect(await scroll.evaluate(el=>el.__originalTree)).toBe(true);
+  expect(await page.evaluate(()=>({...Alpine.store('canvas').viewport}))).toEqual(await page.evaluate(()=>window.__panViewport));
+  expect(await scroll.evaluate(el=>el.scrollTop)).toBeGreaterThan(0);
+  await expect(tree.locator('.tree-task')).toHaveCount(13);
+  // Native cancellation and debounced viewport persistence retain the same view.
+  const scale=await page.evaluate(()=>Alpine.store('canvas').naplets[0].layout.task_tree.viewport.scale);
+  await tree.getByRole('button',{name:'Zoom tree in',exact:true}).tap();
+  await expect.poll(()=>page.evaluate(()=>Alpine.store('canvas').naplets[0].layout.task_tree.viewport.scale)).toBeGreaterThan(scale);
+  await scroll.evaluate(el=>{el.scrollTop=0;el.scrollLeft=0;});
+  await tree.locator('.tree-task-open').first().tap();await expect(page.locator('.canvas-task-detail-dialog')).toBeVisible();
+  await expect(page.frameLocator('.canvas-task-detail-dialog iframe').locator('.task-detail-panel')).toBeVisible();
+  await page.getByRole('button',{name:'Close task details',exact:true}).tap();
+  await win.getByRole('button',{name:'Restore from full screen',exact:true}).tap();
+  await win.getByRole('button',{name:'Minimise window',exact:true}).tap();await expect(tree).not.toBeVisible();
+  await win.getByRole('button',{name:'Restore window',exact:true}).tap();await expect(tree).toBeVisible();
+  expect(await scroll.evaluate(el=>el.__originalTree)).toBe(true);
+  const stage=page.locator('.canvas-stage'),stageBox=await stage.boundingBox();
+  // A move that began in a naplet must never become an extra outer pinch finger.
+  await tree.dispatchEvent('pointermove',{pointerId:999,pointerType:'touch',clientX:200,clientY:400});
+  const before=await page.evaluate(()=>({...Alpine.store('canvas').viewport}));
+  const outer={x:stageBox.x+5,y:stageBox.y+10};
+  await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[outer]});
+  await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:outer.x+20,y:outer.y+30}]});
+  await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+  await expect.poll(()=>page.evaluate(()=>Alpine.store('canvas').viewport.y)).toBeGreaterThan(before.y);
+  expect(await page.evaluate(()=>Alpine.store('canvas').viewport.scale)).toBe(before.scale);
+  await expect.poll(()=>page.evaluate(()=>Alpine.store('canvas').viewportSaving)).toBe(false);
+  const pinchBefore=await page.evaluate(()=>Alpine.store('canvas').viewport.scale);
+  await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[outer,{x:outer.x+40,y:outer.y}]});
+  await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[outer,{x:outer.x+80,y:outer.y}]});
+  await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+  await expect.poll(()=>page.evaluate(()=>Alpine.store('canvas').viewport.scale)).toBeGreaterThan(pinchBefore);
+  await expect.poll(()=>page.evaluate(()=>Alpine.store('canvas').viewportSaving)).toBe(false);
+  // Cancellation of an actual outer gesture still reconciles its optimistic edit.
+  await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[outer]});
+  await cdp.send('Input.dispatchTouchEvent',{type:'touchCancel',touchPoints:[]});
+  await expect.poll(()=>page.evaluate(()=>window.__panProbe.refreshes)).toBe(1);
 });
