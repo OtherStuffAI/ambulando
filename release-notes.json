@@ -5155,6 +5155,11 @@
       "notes": [
         "Moving around a task tree on a phone no longer refreshes the outer canvas when native scrolling takes over the touch gesture."
       ]
+    },
+    {
+      "buildNumber": 2622,
+      "label": "Keep canvas controls in view",
+      "notes": ["Canvas toolbar controls wrap to fit the available width, keeping drawing, zoom and naplet actions reachable in narrow windows and panes."]
     }
   ]
 }

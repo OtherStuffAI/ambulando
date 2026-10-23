@@ -7,13 +7,13 @@ button { min-height: 36px; border: 1px solid var(--border); border-radius: 6px; 
 button:hover { background: var(--surface-muted); }
 button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
 [x-cloak] { display: none !important; }
-.canvas-app { display: grid; grid-template-rows: auto 1fr; height: 100%; }
-.canvas-toolbar { display: flex; align-items: center; gap: 8px; min-height: 56px; padding: 8px 12px; border-bottom: 1px solid var(--border); background: var(--surface); }
-.canvas-brand { display: flex; align-items: center; gap: 10px; min-width: 0; margin-right: auto; }
-.canvas-brand img { width: 30px; height: 30px; object-fit: contain; }
+.canvas-app { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); height: 100%; }
+.canvas-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; max-height: 50dvh; overflow-y: auto; min-height: 56px; padding: 8px 12px; border-bottom: 1px solid var(--border); background: var(--surface); }
+.canvas-brand { flex: 1 1 100%; width: 100%; overflow: hidden; display: flex; align-items: center; gap: 10px; min-width: 0; margin-right: auto; }
+.canvas-brand img { flex: none; width: 30px; height: 30px; object-fit: contain; }
 .canvas-brand h1 { margin: 0; overflow: hidden; font-size: 16px; text-overflow: ellipsis; white-space: nowrap; }
-.canvas-toolbar-scroll { display: flex; gap: 8px; min-width: 0; overflow-x: auto; scrollbar-width: thin; }
-.canvas-toolbar-group { display: flex; flex: none; gap: 6px; }
+.canvas-toolbar-scroll { display: flex; flex: 1 1 100%; flex-wrap: wrap; gap: 8px; min-width: 0; max-width: 100%; padding: 2px; }
+.canvas-toolbar-group { display: flex; flex: 0 1 auto; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; max-width: 100%; }
 .canvas-toolbar button { min-width: 40px; padding: 6px 10px; }
 .canvas-toolbar button.active { border-color: var(--primary); background: color-mix(in srgb, var(--primary) 18%, var(--surface)); color: var(--primary); }
 .canvas-toolbar button:disabled { cursor: default; opacity: .45; }
@@ -77,7 +77,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .canvas-comment-panel article time { margin-left: 8px; color: var(--muted-foreground); font-size: 11px; }
 .canvas-comment-panel article p { margin: 8px 0 0; white-space: pre-wrap; }
 .canvas-dialog-actions { display: flex; justify-content: flex-end; gap: 8px; }
-@media (max-width: 700px) { .canvas-toolbar { display: grid; grid-template-columns: 1fr; gap: 4px; padding: 6px 8px; } .canvas-brand img { width: 24px; height: 24px; } .canvas-toolbar-scroll { width: 100%; padding-bottom: 3px; } .canvas-toolbar button { min-height: 44px; } }
+@media (max-width: 700px) { .canvas-toolbar { display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; padding: 6px 8px; } .canvas-brand img { width: 24px; height: 24px; } .canvas-toolbar-scroll { width: 100%; padding-bottom: 3px; } .canvas-toolbar button { min-height: 44px; } }
 
 /* Documents keep the Docs paper ink in either shell theme. The naplet, rather
    than the infinite canvas or browser page, owns reading overflow. */

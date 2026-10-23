@@ -500,3 +500,18 @@ The signed synthetic browser scenarios cover desktop/phone reading, replies,
 whole-document and anchored comments, reload, two-reader updates and denied draft
 retention. They do not establish authenticated multi-actor Tower permissions or
 physical Safari/touch behavior.
+
+## Responsive toolbar
+
+The canvas title has its own bounded row. Controls and their groups wrap to the
+available canvas width, including inside a narrower pane; the toolbar does not
+require horizontal scrolling. The stage uses a shrinkable grid track. In short
+windows the toolbar is capped at half the viewport height and scrolls vertically,
+so keyboard focus can reveal every action while the canvas remains usable.
+Existing action handlers, ordering, focus rings and phone touch targets remain.
+
+`tests/e2e/canvas-toolbar.spec.cjs` checks 320–2048px widths with a long title,
+arrow/text selection options, keyboard tool and zoom actions, pointer panning,
+short-pane focus visibility, and an embedded desktop canvas resized by side
+panels using the production template and synthetic Tower records. These checks establish layout and browser interactions, not live
+Tower authorization or physical-device behavior.
