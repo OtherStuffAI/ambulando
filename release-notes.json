@@ -583,7 +583,7 @@
       "buildNumber": 1771,
       "label": "Delegated WApp management",
       "notes": [
-        "Grant a person or agent narrow, expiring WApp management authority from Setup \u2192 Permissions, preview its limits before signing, and revoke it immediately.",
+        "Grant a person or agent narrow, expiring WApp management authority from Setup → Permissions, preview its limits before signing, and revoke it immediately.",
         "Assign existing WApps through installation intents and inspect pending, active, failed, repairable, or revoked lifecycle state with reconcile and revoke controls."
       ]
     },
@@ -1227,7 +1227,7 @@
       "label": "Dismissible recovery controls",
       "notes": [
         "Review legacy local-edit recovery from the avatar menu and dismiss it on this device.",
-        "Choose Tower\u2019s version to refresh the workspace and stop prompting about older drafts, while retaining the old cache as a fallback."
+        "Choose Tower’s version to refresh the workspace and stop prompting about older drafts, while retaining the old cache as a fallback."
       ]
     },
     {
@@ -1353,7 +1353,7 @@
       "buildNumber": 1910,
       "label": "Working history in the menu",
       "notes": [
-        "Chat and Inbox show only current working commentary. Open Menu \u2192 Working history & diagnostics for retained runs, earlier updates and connection details, even after work finishes."
+        "Chat and Inbox show only current working commentary. Open Menu → Working history & diagnostics for retained runs, earlier updates and connection details, even after work finishes."
       ]
     },
     {
@@ -2157,7 +2157,7 @@
       "buildNumber": 2098,
       "label": "Numbered scope selection",
       "notes": [
-        "Select any of the first ten visible scopes with 1\u20139 or 0; numbered scope shortcuts follow the current filtered order."
+        "Select any of the first ten visible scopes with 1–9 or 0; numbered scope shortcuts follow the current filtered order."
       ]
     },
     {
@@ -2494,7 +2494,7 @@
       "label": "Authenticated manual feed links",
       "notes": [
         "Add a registered Book of Sand link even when Autopilot app discovery is unavailable. Your reader validates Editions and saves its subscription through Tower.",
-        "Book of Sand graph reads use the workspace\u2019s trusted source binding. Manual links preserve your configured transport and offer validation and retry."
+        "Book of Sand graph reads use the workspace’s trusted source binding. Manual links preserve your configured transport and offer validation and retry."
       ]
     },
     {
@@ -2587,7 +2587,7 @@
       "buildNumber": 2165,
       "label": "Scope Context editor access",
       "notes": [
-        "Assign Context editor or Scope manager to people, agents and groups in Setup \u2192 Scopes \u2192 Access. See direct and group-derived access, and revoke role grants while preserving custom permissions."
+        "Assign Context editor or Scope manager to people, agents and groups in Setup → Scopes → Access. See direct and group-derived access, and revoke role grants while preserving custom permissions."
       ]
     },
     {
@@ -2820,7 +2820,7 @@
       "label": "One assignee per task",
       "notes": [
         "Reassign or clear a task with one atomic update. Former assignees lose assignment attention while unread comment mentions and read positions remain intact.",
-        "Repair cached assignment summaries to follow Tower\u2019s canonical primary assignee."
+        "Repair cached assignment summaries to follow Tower’s canonical primary assignee."
       ]
     },
     {
@@ -3155,7 +3155,7 @@
       "buildNumber": 2263,
       "label": "Publish chat attachments directly to Blossom",
       "notes": [
-        "Publish existing chat images and files from chat or Files without copying bytes. Public consent uses the actual message source; status and unpublish keep each actor\u2019s publication independent."
+        "Publish existing chat images and files from chat or Files without copying bytes. Public consent uses the actual message source; status and unpublish keep each actor’s publication independent."
       ]
     },
     {
@@ -3904,7 +3904,7 @@
       "buildNumber": 2392,
       "label": "Collapsible channel scopes",
       "notes": [
-        "Collapse or reopen each scope\u2019s channels with the arrow beside its heading. Your browser remembers each workspace and scope independently, while the selected channel stays open."
+        "Collapse or reopen each scope’s channels with the arrow beside its heading. Your browser remembers each workspace and scope independently, while the selected channel stays open."
       ]
     },
     {
@@ -4024,7 +4024,7 @@
       "buildNumber": 2409,
       "label": "Cleaner Feeds widget",
       "notes": [
-        "Focus on feed content, with refresh, dismissed items and source management in the widget menu. Use each item\u2019s menu to mark read, save or dismiss."
+        "Focus on feed content, with refresh, dismissed items and source management in the widget menu. Use each item’s menu to mark read, save or dismiss."
       ]
     },
     {
@@ -4112,7 +4112,7 @@
       "buildNumber": 2422,
       "label": "Nostr receipt sender validation",
       "notes": [
-        "Incoming zaps use the payer\u2019s identity to distinguish external payments from self activity, including self-hosted receipt providers."
+        "Incoming zaps use the payer’s identity to distinguish external payments from self activity, including self-hosted receipt providers."
       ]
     },
     {
@@ -4539,6 +4539,542 @@
       "label": "Preserve drafts when switching workspaces",
       "notes": [
         "Unfinished new threads keep their title, mentions and prepared attachments when you leave their channel or workspace. A send in progress finishes before you switch workspaces."
+      ]
+    },
+    {
+      "buildNumber": 2498,
+      "label": "Keep your scope order across navigation",
+      "notes": [
+        "Your saved personal scope order now applies to the sidebar, Deck and task scope selectors, and scope pickers. Scope parents and shared channel order stay intact."
+      ]
+    },
+    {
+      "buildNumber": 2499,
+      "label": "Compact composer controls",
+      "notes": [
+        "Composer Menu and paper-airplane send controls now stay vertically stacked as icons on desktop and mobile, leaving more room for your draft."
+      ]
+    },
+    {
+      "buildNumber": 2500,
+      "label": "Stacked controls with the keyboard open",
+      "notes": [
+        "Keep both composer icon buttons reachable when the phone keyboard reduces the visible conversation height."
+      ]
+    },
+    {
+      "buildNumber": 2501,
+      "label": "Composer validation checkpoint",
+      "notes": [],
+      "noUserVisibleChanges": true
+    },
+    {
+      "buildNumber": 2502,
+      "label": "Readable canvas documents",
+      "notes": [
+        "Canvas document naplets render Markdown on white paper with contained scrolling and a link to open the exact document in Ambulando for editing."
+      ]
+    },
+    {
+      "buildNumber": 2503,
+      "label": "Opaque Canvas dialogs",
+      "notes": [
+        "Canvas panels for adding naplets, comments and nested replies now have opaque backgrounds in light and dark themes."
+      ]
+    },
+    {
+      "buildNumber": 2504,
+      "label": "Canvas window controls",
+      "notes": [
+        "Canvas windows now have circular minimise, full-screen and options controls. Expand and restore without losing reading position or interactive content, with the same options available in full screen."
+      ]
+    },
+    {
+      "buildNumber": 2506,
+      "label": "Opaque expanded Canvas windows",
+      "notes": [
+        "Expanded naplet windows keep opaque theme-aware backing behind documents, task lists, conversations, HTML and restricted content."
+      ]
+    },
+    {
+      "buildNumber": 2508,
+      "label": "Canvas validation checkpoint",
+      "notes": [],
+      "noUserVisibleChanges": true
+    },
+    {
+      "buildNumber": 2509,
+      "label": "Canvas window preservation checks",
+      "notes": [],
+      "noUserVisibleChanges": true
+    },
+    {
+      "buildNumber": 2510,
+      "label": "Choose a Nostr viewer",
+      "notes": [
+        "Setup now lets you save a Nostr viewer base URL on this device. Existing Nostr feed links use it immediately; reset returns to njump."
+      ]
+    },
+    {
+      "buildNumber": 2512,
+      "label": "Preserve Canvas reading positions",
+      "notes": [
+        "Canvas windows restore separate reading positions in inline and full-screen views, and restricted items render safely without source content."
+      ]
+    },
+    {
+      "buildNumber": 2513,
+      "label": "Canvas opacity review checkpoint",
+      "notes": [],
+      "noUserVisibleChanges": true
+    },
+    {
+      "buildNumber": 2514,
+      "label": "Nostr viewer validation checkpoint",
+      "notes": [],
+      "noUserVisibleChanges": true
+    },
+    {
+      "buildNumber": 2515,
+      "label": "Canopy viewer setup example",
+      "notes": [
+        "Setup includes the Canopy event viewer base URL as an example; njump remains the default."
+      ]
+    },
+    {
+      "buildNumber": 2516,
+      "label": "Compact Canvas window options",
+      "notes": [
+        "Canvas window options keep compact, content-sized rows in normal and full-screen windows, with scrolling only when needed."
+      ]
+    },
+    {
+      "buildNumber": 2517,
+      "label": "Read stored Canvas documents",
+      "notes": [
+        "Canvas documents decode saved content envelopes and retain native rich formatting instead of displaying storage JSON."
+      ]
+    },
+    {
+      "buildNumber": 2518,
+      "label": "Reliable personal scope ordering",
+      "notes": [
+        "Dragging scopes and Move Up / Move Down save using the current revision, recover from conflicts, and preserve the saved order across reloads."
+      ]
+    },
+    {
+      "buildNumber": 2519,
+      "label": "Scope reorder menu recovery",
+      "notes": [
+        "Scope move menus close when a move starts, keeping repeated drag and menu changes accessible."
+      ]
+    },
+    {
+      "buildNumber": 2520,
+      "label": "Canvas comment popovers and subjects",
+      "notes": [
+        "Read and write canvas comments in movable popovers while using the board. Supported Tower versions allow safe thread/reply deletion and explicit naplet subject links."
+      ]
+    },
+    {
+      "buildNumber": 2522,
+      "label": "Private Nostr viewer sync",
+      "notes": [
+        "Your Nostr viewer choice now syncs privately across devices for your signed-in workspace identity, including resets and existing cached links."
+      ]
+    },
+    {
+      "buildNumber": 2525,
+      "label": "Nostr viewer synchronization recovery",
+      "notes": [
+        "Private viewer settings recover after offline changes and keep the latest saved choice when devices disagree."
+      ]
+    },
+    {
+      "buildNumber": 2526,
+      "label": "Keep canvas comments in place when linked",
+      "notes": [
+        "Linking a comment to a naplet preserves its board position. Its dotted subject line follows the naplet while the thread is open."
+      ]
+    },
+    {
+      "buildNumber": 2528,
+      "label": "Position-safe canvas comment links",
+      "notes": [
+        "Subject linking waits for server support that preserves comment marker coordinates. Comment popovers remain movable and the board stays usable."
+      ]
+    },
+    {
+      "buildNumber": 2529,
+      "label": "Canvas managed-runtime verification",
+      "notes": [],
+      "noUserVisibleChanges": true
+    },
+    {
+      "buildNumber": 2530,
+      "label": "Compact canvas comments",
+      "notes": [
+        "Canvas comments use a small movable popover. Drag the chain handle to a naplet to link it, with a dotted line following your pointer; tap or use the keyboard for a compact target list."
+      ]
+    },
+    {
+      "buildNumber": 2531,
+      "label": "Canvas link keyboard verification",
+      "notes": [],
+      "noUserVisibleChanges": true
+    },
+    {
+      "buildNumber": 2532,
+      "label": "Channel pins",
+      "notes": [
+        "Pin a channel from its named Deck Inbox, jump back to it across scopes, and see blue highlighting when it has unread messages."
+      ]
+    },
+    {
+      "buildNumber": 2533,
+      "label": "Channel pin touch controls",
+      "notes": [
+        "Channel Inbox pin controls keep a full touch target on phones."
+      ]
+    },
+    {
+      "buildNumber": 2534,
+      "label": "Readable channel Inbox on phones",
+      "notes": [
+        "Channel names and pin controls have their own phone header row, keeping search and filters reachable."
+      ]
+    },
+    {
+      "buildNumber": 2535,
+      "label": "Channel pin layout verification",
+      "notes": [],
+      "noUserVisibleChanges": true
+    },
+    {
+      "buildNumber": 2536,
+      "label": "Channel pin release validation",
+      "notes": [],
+      "noUserVisibleChanges": true
+    },
+    {
+      "buildNumber": 2538,
+      "label": "Personal pin ordering",
+      "notes": [
+        "Pinned channels show a hashtag icon. Drag handles or use keyboard controls to arrange channels, conversations, tasks and documents in one personal list.",
+        "Your order synchronizes across devices on updated Tower connections. Conflicting moves keep the latest saved state and let you retry."
+      ]
+    },
+    {
+      "buildNumber": 2539,
+      "label": "Private HTML artefacts on canvases",
+      "notes": [
+        "HTML artefact naplets follow the latest version of their File by default. Step through earlier versions, pin one for everyone, or return to following latest.",
+        "Images in HTML artefacts are delivered privately with the same channel permissions as their Files, checked on every view and removed when access changes.",
+        "Agents can publish a local HTML folder, with its CSS, scripts and images, as a private versioned artefact using the publish helper."
+      ]
+    },
+    {
+      "buildNumber": 2540,
+      "label": "Pin ordering mobile containment",
+      "notes": [
+        "Keep the pinned-items pane within the phone viewport while announcing keyboard and drag moves."
+      ]
+    },
+    {
+      "buildNumber": 2543,
+      "label": "HTML artefact version controls",
+      "notes": [
+        "Previous and next version buttons on HTML artefact naplets are enabled whenever an earlier or later version exists."
+      ]
+    },
+    {
+      "buildNumber": 2544,
+      "label": "Excalidraw board naplets",
+      "notes": [
+        "Add an Excalidraw board to a canvas: create a new private board in a channel or link an existing one. One board can appear in several naplets and canvases.",
+        "Draw inside the naplet or full screen in the same editor. Changes stay an unsaved draft until you choose Save, which records a new version with an optional note.",
+        "If someone saved first, your draft is kept and you can merge the latest or discard. Browse earlier versions, restore one as a draft, and get a warning before leaving with unsaved changes."
+      ]
+    },
+    {
+      "buildNumber": 2545,
+      "label": "HTML artifact activation verification",
+      "notes": [],
+      "noUserVisibleChanges": true
+    },
+    {
+      "buildNumber": 2546,
+      "label": "Safer board saves",
+      "notes": [
+        "Saving a board now waits for every open editor to confirm its latest strokes. If an editor does not respond, nothing is saved, your draft is kept and you can try Save again."
+      ]
+    },
+    {
+      "buildNumber": 2547,
+      "label": "Canvas arrows and text controls",
+      "notes": [
+        "Draw arrows directly between points, drag endpoints or a middle handle to bend them, and choose solid, dotted or dashed lines and arrowheads.",
+        "Select canvas text to set its font size. Existing arrows and text keep their appearance until edited."
+      ]
+    },
+    {
+      "buildNumber": 2548,
+      "label": "Rename Excalidraw boards",
+      "notes": [
+        "Rename an Excalidraw board from its naplet options. The accessible dialog keeps the drawing intact, validates the name and reports save errors. Board names persist when you reopen the canvas."
+      ]
+    },
+    {
+      "buildNumber": 2550,
+      "label": "Board rename validation and focus",
+      "notes": [
+        "Board rename dialogs return keyboard focus to window options. Repeated board links use the saved File title when reopened."
+      ]
+    },
+    {
+      "buildNumber": 2551,
+      "label": "Canvas board refresh resilience",
+      "notes": [
+        "Keep the rest of a canvas available when one linked board cannot be checked. Refresh retries the restricted board without losing other content."
+      ]
+    },
+    {
+      "buildNumber": 2552,
+      "label": "Visible arrow bend handle",
+      "notes": [
+        "Selected arrows show a visible centre bend handle in light and dark themes, with contrasting endpoint handles."
+      ]
+    },
+    {
+      "buildNumber": 2553,
+      "label": "Arrow handle hover visibility",
+      "notes": [
+        "Arrow bend and endpoint handles keep their contrasting fill while hovered."
+      ]
+    },
+    {
+      "buildNumber": 2554,
+      "label": "Canvas links",
+      "notes": [
+        "Add a Canvas Link naplet with an optional label to open another accessible canvas in the same tab. Use browser Back and Forward or add an ordinary link to your Overview. Requires the matching Tower update."
+      ]
+    },
+    {
+      "buildNumber": 2556,
+      "label": "Find existing artefacts for canvases",
+      "notes": [
+        "Add an existing HTML artefact or board by choosing a scope, then all of its channels or one channel. Artefacts are listed by name, including ones you have not opened in Ambulando yet.",
+        "Preview a selected HTML artefact, with its private images, before adding it. The preview stays sandboxed and is cleared when you change the selection or close the picker.",
+        "Long lists show more on request, and the picker says when a channel has more Files than Tower can list at once."
+      ]
+    },
+    {
+      "buildNumber": 2564,
+      "label": "Naplet controls and references",
+      "notes": [
+        "Version, history and pin controls for HTML artefacts and boards now live in each naplet's options menu, leaving more room for the content.",
+        "Board Save floats over the top-right of the drawing area, inline and expanded, and shows unsaved, saving and read-only states.",
+        "Copy reference from a naplet's options menu to get a Markdown link that opens the canvas and highlights that naplet for anyone with access. If copying is blocked, the link is shown for manual copying."
+      ]
+    },
+    {
+      "buildNumber": 2565,
+      "label": "Chat on Canvas",
+      "notes": [
+        "Place a Chat naplet on a Canvas, choose a scope and channel, and use the normal chat composer with attachments and agent mentions. Conversations stay available in Chat and on the Canvas after reload.",
+        "Unsent Chat naplets are local drafts until the first message is sent. Removing a Chat naplet keeps the conversation."
+      ]
+    },
+    {
+      "buildNumber": 2574,
+      "label": "Independent Canvas conversations",
+      "notes": [
+        "Canvas Chat naplets keep independent conversations and drafts, show replies from shared chat data, recover failed Canvas bindings without resending, and pause background work while hidden."
+      ]
+    },
+    {
+      "buildNumber": 2575,
+      "label": "Canvas boards open at 100%",
+      "notes": [
+        "Canvas boards now open at 100% zoom centred on their content instead of zooming sparse or empty boards to the maximum, and keep your own zoom when switching to fullscreen or saving."
+      ]
+    },
+    {
+      "buildNumber": 2580,
+      "label": "Canvas Chat uses the parent browser signer",
+      "notes": [
+        "Canvas Chat can load and send through the Canvas browser signer when the embedded chat has no signer. Signing requests are checked against the trusted chat frame, workspace and active identity; rejected signing preserves your draft."
+      ]
+    },
+    {
+      "buildNumber": 2581,
+      "label": "Ambulando perspective-passage identity",
+      "notes": [
+        "Ambulando now uses the approved passage mark with purple actions, navy dark surfaces and coordinated app icons in both themes.",
+        "The header and sign-in retain the Ambulando name and Solvitur Ambulando tagline. Small icons are raster derivatives; legacy artwork is retained for rollback."
+      ]
+    },
+    {
+      "buildNumber": 2582,
+      "label": "Brand recovery screen alignment",
+      "notes": [
+        "The asset recovery screen uses the same readable navy and light ink as the updated Ambulando themes."
+      ]
+    },
+    {
+      "buildNumber": 2583,
+      "label": "Public-source brand metadata",
+      "notes": [
+        "Brand preview artwork is included with the app; image metadata awaits a public canonical product host. The app keeps its title and description metadata."
+      ]
+    },
+    {
+      "buildNumber": 2584,
+      "label": "Calmer item headings",
+      "notes": [
+        "Inbox and Pinned item headings use a deeper purple in light mode. Dark-mode text and action button colours are unchanged."
+      ]
+    },
+    {
+      "buildNumber": 2585,
+      "label": "Core deep purple",
+      "notes": [
+        "App and agent names and primary actions now share the deeper core purple in light mode. Dark-mode contrast and status colours are preserved."
+      ]
+    },
+    {
+      "buildNumber": 2586,
+      "label": "Canvas context in chat",
+      "notes": [
+        "Messages sent on a Canvas show their origin. Use @canvas: to link a Canvas or a versioned item; references stay visible in Chat and reach agents with the signed message."
+      ]
+    },
+    {
+      "buildNumber": 2587,
+      "label": "Verified core-purple publication",
+      "notes": [],
+      "noUserVisibleChanges": true
+    },
+    {
+      "buildNumber": 2588,
+      "label": "Canvas chat references verified",
+      "notes": [
+        "Canvas chat shows a visible origin on each message. Select @canvas: links to canvases or versioned items; normal Chat and agent prompts preserve the signed references."
+      ]
+    },
+    {
+      "buildNumber": 2589,
+      "label": "Nostr Browser core purple",
+      "notes": [
+        "Core purple now uses the selected Nostr Browser main-tab colour, #2B1B3C. Light app and agent names, primary actions and focus states inherit it; readable dark-mode colours are preserved."
+      ]
+    },
+    {
+      "buildNumber": 2590,
+      "label": "Task Tree canvas naplet",
+      "notes": [
+        "Build a tree of shared tasks on a canvas: choose a scope and channel, start from a new or existing task, add children and next tasks, and open normal task details.",
+        "Task Tree keeps its root and view settings, loads real task relationships progressively, and reflects shared task updates."
+      ]
+    },
+    {
+      "buildNumber": 2592,
+      "label": "Verified Task Tree activation",
+      "notes": [],
+      "noUserVisibleChanges": true
+    },
+    {
+      "buildNumber": 2593,
+      "label": "Readable Task Tree layout and touch controls",
+      "notes": [
+        "Task Tree keeps child successors to the right of their predecessors, fits at a readable size with internal scrolling, and contains the graph on phones."
+      ]
+    },
+    {
+      "buildNumber": 2597,
+      "label": "Shared Task Tree destinations and board visibility",
+      "notes": [
+        "Task Tree confirms saved shared tasks, opens their ordinary Tasks board with New visible, and prevents creation through an incomplete destination change. Retrying a failed tree-view save reconnects the same task."
+      ]
+    },
+    {
+      "buildNumber": 2598,
+      "label": "Recover Task Tree destination saves safely",
+      "notes": [
+        "A failed channel selection stays unbound until Retry saving destination succeeds, so Task Tree cannot create tasks through its previous channel."
+      ]
+    },
+    {
+      "buildNumber": 2599,
+      "label": "Document comments on Canvas",
+      "notes": [
+        "Read document discussions and add comments or replies inside document napplets. Selected text uses the existing document anchors; comments are shared with Documents, and failed sends keep the draft for retry."
+      ]
+    },
+    {
+      "buildNumber": 2600,
+      "label": "Document discussion identity and live updates",
+      "notes": [
+        "Document discussions show author identities and readable times. Replies appear across open napplets, including comments accepted while a reader is loading."
+      ]
+    },
+    {
+      "buildNumber": 2601,
+      "label": "Read-only document selection comments",
+      "notes": [
+        "Select text in a read-only document napplet to attach a comment to that exact passage, even when the reader does not hold editor focus."
+      ]
+    },
+    {
+      "buildNumber": 2602,
+      "label": "Document comment reader ownership",
+      "notes": [
+        "Document selection comments consistently use their own napplet reader when opened from its controls."
+      ]
+    },
+    {
+      "buildNumber": 2603,
+      "label": "Immediate thread submission feedback",
+      "notes": [
+        "Starting a thread now shows visible submission progress and keeps your draft safe while signing and delivery finish.",
+        "Accepted messages open without waiting for unrelated background conflict reconciliation."
+      ]
+    },
+    {
+      "buildNumber": 2604,
+      "label": "Submission workspace safety",
+      "notes": [
+        "Thread submission keeps background reconciliation tied to the original workspace when you switch workspaces while sending."
+      ]
+    },
+    {
+      "buildNumber": 2605,
+      "label": "Document comments beside the page",
+      "notes": [
+        "Document napplets show a Docs-style comment sidebar with thread cards, replies and a composer. Collapse and reopen without losing your draft.",
+        "Document and discussion scroll independently. Narrow napplets use a right-side drawer, preserving reading space."
+      ]
+    },
+    {
+      "buildNumber": 2606,
+      "label": "Opaque comment drawers and retained scroll",
+      "notes": [
+        "Comment drawers keep an opaque surface in light and dark themes. Discussion scroll positions survive fullscreen and window restoration."
+      ]
+    },
+    {
+      "buildNumber": 2607,
+      "label": "Stable canvas adjustments",
+      "notes": [
+        "Canvas pans, zooms, moves and resizes keep the latest adjustment while earlier saves finish.",
+        "Changes made during a save are queued and persisted without overwriting unrelated canvas updates."
+      ]
+    },
+    {
+      "buildNumber": 2608,
+      "label": "Canvas gesture history",
+      "notes": [
+        "Undoing a canvas move or resize preserves unrelated stacking and task-tree layout changes received while you were adjusting it."
       ]
     }
   ]

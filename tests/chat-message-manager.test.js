@@ -2408,6 +2408,39 @@ describe('sendMessage', () => {
     }
   });
 
+  it('durably inserts a pending first message before slow transport and reconciles before returning', async () => {
+    const workspaceDbKey = 'chat-submission-stage-timings';
+    openWorkspaceDb(workspaceDbKey);
+    await clearRuntimeData();
+    isTowerPgBackendMode.mockReturnValue(true);
+    let accept;
+    createTowerPgMessageFromLocal.mockImplementation((_store, row) => new Promise(resolve => {
+      accept = () => resolve({ ...row, record_id: 'accepted-root', pg_thread_id: 'accepted-thread', sync_status: 'synced' });
+    }));
+    try {
+      const { fn, store } = bindMethod('sendMessage', {
+        session: { npub: 'npub1viewer' }, currentWorkspace: { workspaceId: 'workspace-1', pgBackendMode: true },
+        selectedChannelId: 'channel-1', pgContextSelectedChannelId: 'channel-1',
+        channels: [{ record_id: 'channel-1', scope_id: 'scope-1', owner_npub: 'npub1owner' }],
+        threadInput: 'Keep my pending first message', threadFileDrafts: [],
+      });
+      const start = performance.now();
+      const send = fn({ composerContext: 'thread-create', clientRequestId: 'stable-request', returnMessage: true });
+      await vi.waitFor(() => expect(accept).toBeTypeOf('function'));
+      const localMs = performance.now() - start;
+      expect(await getMessageById('stable-request')).toMatchObject({ sync_status: 'pending', body: 'Keep my pending first message' });
+      expect(store.threadInput).toBe('Keep my pending first message');
+      await expect(fn({ composerContext: 'thread-create' })).resolves.toBe(false);
+      const acceptedAt = performance.now();
+      accept();
+      await expect(send).resolves.toMatchObject({ record_id: 'accepted-root' });
+      expect(await getMessageById('accepted-root')).toMatchObject({ sync_status: 'synced', pg_thread_id: 'accepted-thread' });
+      expect(store.messages).toEqual(expect.arrayContaining([expect.objectContaining({ record_id: 'accepted-root' })]));
+      expect(store.threadInput).toBe('');
+      console.log(JSON.stringify({ scenario: 'local-first-message', sampleSize: 1, localDurableObservedMs: Math.round(localMs), acceptedToLocalVisibleMs: Math.round(performance.now() - acceptedAt), transport: 'deferred mock; real Dexie' }));
+    } finally { await deleteWorkspaceDb(workspaceDbKey); }
+  });
+
   it('retains the create-mode draft and removes its optimistic root when Tower rejects creation', async () => {
     const workspaceDbKey = 'chat-message-manager-create-thread-rejected';
     openWorkspaceDb(workspaceDbKey);

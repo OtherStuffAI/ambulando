@@ -124,7 +124,7 @@ describe('personal order and targeted archive materialisation',()=>{
   const save=vi.fn(),ui=orderUi([{record_id:'a'},{record_id:'b'},{record_id:'c'}],save);ui.draggedScopeId='c';
   await scopesManagerMixin.dropScopeBefore.call(ui,'a',{preventDefault:vi.fn()});expect(save).toHaveBeenCalledWith(['c','a','b']);
   const getter=Object.getOwnPropertyDescriptor(scopesManagerMixin,'personallyOrderedScopes').get;
-  const own={scopes:ui.scopeTree,session:{npub:'viewer'},currentWorkspace:{workspaceId:'w',pgMe:{actor:{id:'me',npub:'viewer'}}},personalScopeOrder:{actor_id:'other',workspace_id:'w',scope_ids:['c','b','a']}};
+  const own=Object.assign(Object.create(scopesManagerMixin),{scopes:ui.scopeTree,session:{npub:'viewer'},currentWorkspace:{workspaceId:'w',pgMe:{actor:{id:'me',npub:'viewer'}}},personalScopeOrder:{actor_id:'other',workspace_id:'w',scope_ids:['c','b','a']}});
   expect(getter.call(own).map(r=>r.record_id)).toEqual(['a','b','c']);own.personalScopeOrder.actor_id='me';expect(getter.call(own).map(r=>r.record_id)).toEqual(['c','b','a']);
  });
 

@@ -14,7 +14,7 @@ export function installAppearance(Alpine) {
       this.resolved = this.preference === 'system' ? (media.matches ? 'dark' : 'light') : this.preference;
       document.documentElement.dataset.theme = this.resolved;
       document.documentElement.style.colorScheme = this.resolved;
-      document.querySelector('meta[name="theme-color"]')?.setAttribute('content', this.resolved === 'dark' ? '#111D29' : '#F7F8F6');
+      document.querySelector('meta[name="theme-color"]')?.setAttribute('content', this.resolved === 'dark' ? '#10162B' : '#F6F6FA');
     },
     setTheme(value) {
       if (!THEMES.includes(value)) return;

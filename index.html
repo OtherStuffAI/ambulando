@@ -1,9 +1,14 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+  <script>if(new URLSearchParams(location.search).get('canvaschat')==='1' && parent!==window)document.documentElement.dataset.canvasChat='true';</script>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0" />
-  <meta name="theme-color" content="#F7F8F6" />
+  <meta name="theme-color" content="#F6F6FA" />
+  <meta name="description" content="Ambulando — Solvitur Ambulando. A shared workspace for people and AI agents." />
+  <meta property="og:title" content="Ambulando — Solvitur Ambulando" />
+  <meta property="og:description" content="Conversations, work and knowledge for people and AI agents." />
+  <meta name="twitter:card" content="summary" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="Ambulando" />
@@ -14,6 +19,7 @@
       const resolved = theme === 'dark' || (theme !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
       document.documentElement.dataset.theme = resolved;
       document.documentElement.style.colorScheme = resolved;
+      document.querySelector('meta[name="theme-color"]')?.setAttribute('content', resolved === 'dark' ? '#10162B' : '#F6F6FA');
     })();
   </script>
   <script data-flightdeck-asset-recovery>
@@ -57,8 +63,8 @@
             placeContent: 'center',
             gap: '16px',
             padding: '32px',
-            color: resolvedTheme === 'dark' ? '#E8EEF2' : '#16354B',
-            background: resolvedTheme === 'dark' ? '#111D29' : '#F7F8F6',
+            color: resolvedTheme === 'dark' ? '#F5F3FC' : '#10162B',
+            background: resolvedTheme === 'dark' ? '#10162B' : '#F6F6FA',
             fontFamily: 'system-ui, sans-serif',
             textAlign: 'center',
           });
@@ -124,9 +130,9 @@
     })();
   </script>
   <link rel="manifest" href="/manifest.json" />
-  <link rel="apple-touch-icon" href="/ambulando/favicon-180.png" />
-  <link rel="icon" type="image/png" sizes="32x32" href="/ambulando/favicon-32.png" />
-  <link rel="icon" type="image/png" sizes="16x16" href="/ambulando/favicon-16.png" />
+  <link rel="apple-touch-icon" href="/ambulando/passage-180.png" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/ambulando/passage-32.png" />
+  <link rel="icon" type="image/png" sizes="16x16" href="/ambulando/passage-16.png" />
   <title>Ambulando</title>
 </head>
 <body x-data x-init="$store.chat.init()" x-cloak>
@@ -261,6 +267,7 @@
       <p class="sync-error-text" x-show="$store.chat.scopeRepairSession.error" x-text="$store.chat.scopeRepairSession.error"></p>
     </div>
   </div>
+  <section class="canvas-chat-embed-status" x-data x-show="$store.chat.canvasChatEmbedded &amp;&amp; (!$store.chat.canvasChatEmbedReady || $store.chat.canvasChatEmbedError)" x-cloak role="status"><p x-text="$store.chat.canvasChatEmbedError || ($store.chat.canvasTaskEmbedded ? 'Opening task…' : 'Opening conversation…')"></p><button type="button" x-show="$store.chat.canvasChatEmbedError" @click="$store.chat.canvasChatEmbedReady = false; $store.chat.initCanvasChatApp()">Retry</button></section>
   <main class="app-shell" x-sol-viewport>
     <template x-if="$store.chat.identityCard.open && $store.chat.identityCardProfile">
       <div
@@ -328,7 +335,7 @@
           @click="if ($store.chat.isLoggedIn) $store.chat.openCommandPalette()"
           :aria-label="$store.chat.isLoggedIn ? 'Open command palette' : 'Ambulando'"
         >
-          <img class="brand-logo" src="/ambulando/confluence-symbol-provisional.png" alt="" />
+          <img class="brand-logo" src="/ambulando/passage-app.png" alt="" />
           <div class="brand-copy">
             <h1>Ambulando</h1>
             <p class="sol-brand-tagline">Solvitur Ambulando</p>
@@ -553,7 +560,7 @@
 
     <section class="auth-panel" x-show="!$store.chat.isLoggedIn">
       <div class="auth-brand">
-        <img class="auth-brand-logo" src="/ambulando/confluence-symbol-provisional.png" alt="" />
+        <img class="auth-brand-logo" src="/ambulando/passage-app.png" alt="" />
         <div>
           <p class="sol-auth-wordmark">Ambulando<small class="sol-brand-tagline">Solvitur Ambulando</small></p>
           <h2>Sign in with Nostr to get started</h2>
@@ -1239,7 +1246,7 @@
               <span>Board</span>
               <select x-model="$store.chat.commandPaletteNewWorkScopeId">
                 <option value="">Current board</option>
-                <template x-for="scope in $store.chat.scopes.filter((item) => item.record_state !== 'deleted')" :key="`new-work-scope-${scope.record_id}`">
+                <template x-for="scope in $store.chat.personallyOrderedScopes.filter((item) => item.record_state !== 'deleted')" :key="`new-work-scope-${scope.record_id}`">
                   <option :value="scope.record_id" x-text="$store.chat.getScopeBreadcrumb(scope.record_id) || scope.title || scope.record_id"></option>
                 </template>
               </select>
@@ -2348,8 +2355,8 @@
 
             <div class="deck-columns-track" x-show="$store.chat.deckInboxEnabled" x-cloak data-deck-columns-track data-testid="deck-columns-track" x-init="$store.chat.initMobileDeck($el)" @scroll.passive="$store.chat.handleDeckColumnsScroll($event)">
             <section class="flightdeck-summary-panel flightdeck-summary-panel-inbox deck-column" data-deck-column="inbox" data-testid="flightdeck-summary-inbox" x-effect="$store.chat.syncDeckInboxContext($store.chat.deckInboxCurrentContextKey, $store.chat.autopilotOverviewContext.scopeId)">
-              <div class="autopilot-panel-heading inbox-panel-heading" data-deck-mobile-sticky-heading>
-                <h3>Inbox</h3>
+              <div class="autopilot-panel-heading inbox-panel-heading" :class="{ 'has-channel-inbox': Boolean($store.chat.deckInboxChannel) }" data-deck-mobile-sticky-heading>
+                <h3 class="deck-inbox-title" :title="$store.chat.deckInboxTitle"><span x-text="$store.chat.deckInboxTitle">Inbox</span><button type="button" class="thread-pin-button" data-testid="personal-pin-channel" x-show="$store.chat.isTowerPgMode &amp;&amp; $store.chat.deckInboxChannel" x-cloak :class="{ active: $store.chat.isPersonalPinned('channel', $store.chat.deckInboxChannel?.record_id) }" :aria-pressed="$store.chat.isPersonalPinned('channel', $store.chat.deckInboxChannel?.record_id).toString()" :aria-label="($store.chat.isPersonalPinned('channel', $store.chat.deckInboxChannel?.record_id) ? 'Unpin channel ' : 'Pin channel ') + ($store.chat.deckInboxChannel?.title || $store.chat.deckInboxChannel?.name || '')" @click="$store.chat.togglePersonalPin($store.chat.deckInboxChannel, 'channel')"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m16 3 5 5-4 1-3 5-4-4 5-3zM10 14l-7 7"/></svg></button></h3>
                   <div class="inbox-type-toggles" role="group" aria-label="Inbox record types">
                     <template x-for="type in $store.chat.deckInboxTypes" :key="type">
                       <button type="button" class="inbox-type-toggle" :aria-label="({ chat: 'Show chats', task: 'Show tasks', document: 'Show documents', file: 'Show files' })[type]" :title="({ chat: 'Chats', task: 'Tasks', document: 'Documents', file: 'Files' })[type]" :aria-pressed="$store.chat.isDeckInboxTypeVisible(type).toString()" @click="$store.chat.toggleDeckInboxType(type)">
@@ -2416,11 +2423,14 @@
             <section class="flightdeck-summary-panel flightdeck-summary-panel-pinned deck-column" data-deck-column="pinned" data-testid="deck-pinned-threads" x-show="$store.chat.pinnedThreads.length > 0" aria-label="Pinned items" x-effect="$store.chat.syncPinnedThreadsContext($store.chat.pinnedThreadsPartition)">
               <div class="autopilot-panel-heading" data-deck-mobile-sticky-heading><h3>Pinned items</h3></div>
               <div class="deck-card-scroll" tabindex="0" aria-label="Pinned item list">
-                <p class="settings-field-help" x-show="$store.chat.pinnedThreads.length === 0">Pin conversations, tasks and documents to keep them here across scopes.</p>
+                <p class="pin-reorder-help">Drag a handle to reorder. With a handle focused, press Space, use arrow keys, then Enter to save or Escape to cancel.</p>
+                <p class="sr-only" role="status" aria-live="polite" x-text="$store.chat.pinMoveAnnouncement"></p>
+                <p class="settings-field-help" x-show="$store.chat.pinnedThreads.length === 0">Pin channels, conversations, tasks and documents to keep them here across scopes.</p>
                 <p class="settings-field-help" role="status" x-show="$store.chat.pinnedThreadsError" x-text="$store.chat.pinnedThreadsError"></p>
                 <template x-for="pin in $store.chat.pinnedThreads" :key="pin.key || pin.id">
-                  <div class="pinned-thread-row" :class="{ 'flightdeck-summary-card-inbox-unread': pin.isUnread }">
-                    <button type="button" class="pinned-thread-open" :aria-label="(pin.type === 'task' ? 'Task' : pin.type === 'document' ? 'Document' : 'Thread') + ': ' + pin.title" :disabled="pin.unavailable" @click="$store.chat.openPinnedThread(pin)" :title="pin.title"><span class="pinned-item-type" :aria-label="pin.type || 'thread'" x-html="$store.chat.getAttentionIconSvg(pin.type === 'task' ? 'task' : pin.type === 'document' ? 'doc' : 'chat')"></span><span class="attention-card-title" x-text="pin.title"></span><time class="attention-card-time" :datetime="pin.activityAt" x-text="pin.unavailable ? '' : $store.chat.formatRelativeTime(pin.activityAt)"></time></button>
+                  <div class="pinned-thread-row" :data-pin-key="pin.key || ((pin.type || 'thread') + ':' + pin.id)" :class="{ ...$store.chat.pinInsertionClass(pin), 'flightdeck-summary-card-inbox-unread': pin.isUnread, 'pinned-channel-unread': pin.type === 'channel' &amp;&amp; pin.isUnread }">
+                    <button type="button" class="pin-reorder-handle" :aria-label="'Reorder ' + (pin.type || 'thread') + ': ' + pin.title" :aria-pressed="($store.chat.pinMove?.key === (pin.key || ((pin.type || 'thread') + ':' + pin.id))).toString()" title="Drag to reorder, or press Space and use arrow keys" @pointerdown="$store.chat.pinPointerDown($event, pin)" @keydown="$store.chat.pinMoveKeydown($event, pin)" @click.stop.prevent><svg width="16" height="20" viewBox="0 0 16 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="6" r="1.5"/><circle cx="11" cy="6" r="1.5"/><circle cx="5" cy="12" r="1.5"/><circle cx="11" cy="12" r="1.5"/><circle cx="5" cy="18" r="1.5"/><circle cx="11" cy="18" r="1.5"/></svg></button>
+                    <button type="button" class="pinned-thread-open" :aria-label="(pin.type === 'channel' ? 'Channel' : pin.type === 'task' ? 'Task' : pin.type === 'document' ? 'Document' : 'Thread') + ': ' + pin.title" :disabled="pin.unavailable" @click="$store.chat.openPinnedThread(pin)" :title="pin.title"><span class="pinned-item-type" :aria-label="pin.type || 'thread'" x-html="pin.type === 'channel' ? '<svg viewBox=&quot;0 0 24 24&quot; fill=&quot;none&quot; stroke=&quot;currentColor&quot; stroke-width=&quot;2&quot; aria-hidden=&quot;true&quot;><path d=&quot;M4 9h16M3 15h16M10 3 6 21M18 3l-4 18&quot;/></svg>' : $store.chat.getAttentionIconSvg(pin.type === 'task' ? 'task' : pin.type === 'document' ? 'doc' : 'chat')"></span><span class="attention-card-title" x-text="pin.title"></span><time class="attention-card-time" :datetime="pin.activityAt" x-text="pin.unavailable ? '' : $store.chat.formatRelativeTime(pin.activityAt)"></time></button>
                     <button type="button" class="thread-pin-button active" :aria-label="'Unpin ' + pin.title" :title="'Unpin ' + (pin.type || 'thread')" @click="$store.chat.togglePersonalPin(pin)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m16 3 5 5-4 1-3 5-4-4 5-3zM10 14l-7 7"/></svg></button>
                   </div>
                 </template>
@@ -4449,8 +4459,8 @@
               class="chat-thread-modal-backdrop"
               x-show="$store.chat.deckThreadComposerOpen || ($store.chat.activeThreadId && $store.chat.threadLocalDetailReady)"
               x-cloak
-              @click.self="$store.chat.deckThreadComposerOpen ? $store.chat.closeDeckThreadComposer() : $store.chat.closeVisibleThread()"
-              @keydown.escape.window="($store.chat.activeThreadId || $store.chat.deckThreadComposerOpen) && !$store.chat.chatTaskModalOpen && !$store.chat.chatDocModalOpen && ($store.chat.deckThreadComposerOpen ? $store.chat.closeDeckThreadComposer() : $store.chat.closeVisibleThread())"
+              @click.self="!$store.chat.canvasChatEmbedded &amp;&amp; ($store.chat.deckThreadComposerOpen ? $store.chat.closeDeckThreadComposer() : $store.chat.closeVisibleThread())"
+              @keydown.escape.window="!$store.chat.canvasChatEmbedded &amp;&amp; ($store.chat.activeThreadId || $store.chat.deckThreadComposerOpen) && !$store.chat.chatTaskModalOpen && !$store.chat.chatDocModalOpen && ($store.chat.deckThreadComposerOpen ? $store.chat.closeDeckThreadComposer() : $store.chat.closeVisibleThread())"
             >
             <div class="chat-thread-panel" :class="{ 'thread-full': $store.chat.threadSize === 'full', 'thread-create-mode': $store.chat.deckThreadComposerOpen }" role="dialog" aria-modal="true" x-sol-dialog :aria-label="$store.chat.deckThreadComposerOpen ? 'Create thread' : 'Thread'" @keydown.window="$store.chat.handleDeckThreadNavigationKeydown($event)" @touchstart.passive="$store.chat.beginDeckThreadSwipe($event)" @touchend.passive="$store.chat.endDeckThreadSwipe($event)" @touchcancel.passive="$store.chat.endDeckThreadSwipe($event)">
               <div class="thread-header" :class="{ 'thread-title-editing': !$store.chat.deckThreadComposerOpen && $store.chat.threadTitleEditing }">
@@ -4458,7 +4468,7 @@
                 <div class="thread-header-copy">
                   <label class="thread-create-title" x-show="$store.chat.deckThreadComposerOpen" x-cloak>
                     <span class="sr-only">Thread title</span>
-                    <input type="text" maxlength="120" placeholder="Thread title" :value="$store.chat.threadTitleDraft" @input="$store.chat.editDeckThreadCreateTitle($event.target.value)" />
+                    <input type="text" maxlength="120" placeholder="Thread title" :disabled="$store.chat.deckThreadComposerBusy" :value="$store.chat.threadTitleDraft" @input="$store.chat.editDeckThreadCreateTitle($event.target.value)" />
                   </label>
                   <button
                     type="button"
@@ -4817,14 +4827,17 @@
                     </div>
                   </template>
                 </div>
+                <div class="canvas-chat-origin" x-show="$store.chat.canvasChatEmbedded && $store.chat.canvasChatOrigin" x-cloak>
+                  <a class="mention-pill canvas-reference-pill" :href="$store.chat.canvasChatOriginReference()?.url" target="_blank" rel="noopener noreferrer" x-text="$store.chat.canvasChatOriginReference()?.label" aria-label="Message Canvas origin"></a>
+                </div>
                 <div class="thread-composer-body">
                   <div
                     class="chat-input"
                   data-chat-composer="thread"
                   data-channel-visible-mentions="true"
-                  :contenteditable="$store.chat.canComposeInThreadDestination.toString()"
+                  :contenteditable="($store.chat.canComposeInThreadDestination && !$store.chat.deckThreadComposerBusy).toString()"
                   role="textbox"
-                  :aria-disabled="(!$store.chat.canComposeInThreadDestination).toString()"
+                  :aria-disabled="(!$store.chat.canComposeInThreadDestination || $store.chat.deckThreadComposerBusy).toString()"
                   :aria-label="$store.chat.deckThreadComposerOpen ? 'First thread message' : 'Reply to thread'"
                   aria-multiline="true"
                   :data-placeholder="$store.chat.deckThreadComposerOpen ? 'Start a new thread…' : 'Reply to thread...'"
@@ -4841,7 +4854,7 @@
                   </div>
                   <div class="thread-input-actions">
                   <div class="chat-composer-menu" x-data="{ open: false }" @click.outside="open = false">
-                    <button class="chat-composer-menu-trigger" type="button" @click="open = !open" :aria-expanded="open" aria-haspopup="menu">Menu</button>
+                    <button class="chat-composer-menu-trigger" type="button" @click="open = !open" :aria-expanded="open" aria-haspopup="menu" aria-label="Menu" title="Menu"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" focusable="false"><path d="M4 6h16M4 12h16M4 18h16" /></svg></button>
                     <div class="chat-composer-menu-popover" x-show="open" x-cloak x-transition role="menu">
                       <button type="button" role="menuitem" @click="$store.chat.openAgentActivityDetails('thread'); open = false">Working history &amp; diagnostics</button>
                       <label class="chat-composer-file-action" role="menuitem">
@@ -4853,10 +4866,11 @@
                       <button type="button" role="menuitem" x-show="$store.chat.workroomsEnabled && !$store.chat.deckThreadComposerOpen" @click="$store.chat.openWorkroomCreation(); open = false" :disabled="!$store.chat.canComposeInThreadDestination || !$store.chat.isTowerPgMode || !$store.chat.selectedChannelId">Start Workroom</button>
                     </div>
                   </div>
-                  <button class="thread-reply-btn" @click="$store.chat.deckThreadComposerOpen ? $store.chat.sendDeckThread() : $store.chat.sendThreadReply()" :disabled="!$store.chat.canComposeInThreadDestination || $store.chat.deckThreadComposerBusy || $store.chat.composerSendPending.thread || ((!$store.chat.hasMentionComposerDraftText('thread') && $store.chat.threadAudioDrafts.length === 0 && $store.chat.threadFileDrafts.length === 0) || $store.chat.threadImageUploadCount > 0 || $store.chat.threadFileDrafts.some(d => d.status !== 'ready') || $store.chat.messageEdit.submitting)" :aria-busy="($store.chat.deckThreadComposerBusy || $store.chat.composerSendPending.thread).toString()" x-text="$store.chat.deckThreadComposerOpen ? (($store.chat.deckThreadComposerBusy || $store.chat.composerSendPending.thread) ? 'Starting…' : 'Start thread') : ($store.chat.isEditingMessage('thread') ? ($store.chat.messageEdit.submitting ? 'Saving…' : 'Save') : ($store.chat.composerSendPending.thread ? 'Sending…' : 'Reply'))"></button>
+                  <button type="button" class="thread-reply-btn" @click="$store.chat.deckThreadComposerOpen ? $store.chat.sendDeckThread() : $store.chat.sendThreadReply()" :disabled="!$store.chat.canComposeInThreadDestination || $store.chat.deckThreadComposerBusy || $store.chat.composerSendPending.thread || ((!$store.chat.hasMentionComposerDraftText('thread') && $store.chat.threadAudioDrafts.length === 0 && $store.chat.threadFileDrafts.length === 0) || $store.chat.threadImageUploadCount > 0 || $store.chat.threadFileDrafts.some(d => d.status !== 'ready') || $store.chat.messageEdit.submitting)" :aria-busy="($store.chat.deckThreadComposerBusy || $store.chat.composerSendPending.thread).toString()" :aria-label="$store.chat.deckThreadComposerOpen ? (($store.chat.deckThreadComposerBusy || $store.chat.composerSendPending.thread) ? 'Starting…' : 'Start thread') : ($store.chat.isEditingMessage('thread') ? ($store.chat.messageEdit.submitting ? 'Saving…' : 'Save') : ($store.chat.composerSendPending.thread ? 'Sending…' : 'Reply'))" :title="$store.chat.deckThreadComposerOpen ? (($store.chat.deckThreadComposerBusy || $store.chat.composerSendPending.thread) ? 'Starting…' : 'Start thread') : ($store.chat.isEditingMessage('thread') ? ($store.chat.messageEdit.submitting ? 'Saving…' : 'Save') : ($store.chat.composerSendPending.thread ? 'Sending…' : 'Reply'))"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m22 2-7 20-4-9-9-4Z M22 2 11 13" /></svg></button>
                   </div>
                 </div>
               </div>
+              <p class="thread-create-status" role="status" aria-live="polite" x-show="$store.chat.deckThreadComposerOpen && $store.chat.deckThreadComposerBusy" x-cloak>Starting thread… Your draft is kept until your message is sent.</p>
               <p class="error-text thread-create-error" role="alert" x-show="$store.chat.deckThreadComposerOpen && $store.chat.error" x-text="$store.chat.error"></p>
               <div class="chat-hang-call-error" x-show="$store.chat.threadHangCallError" x-cloak role="alert">
                 <span x-text="$store.chat.threadHangCallError"></span>
@@ -6394,7 +6408,7 @@
                   </div>
                   <div class="workroom-thread-composer thread-input-bar" x-show="$store.chat.selectedWorkroomAnnouncementMessageId">
                     <div class="chat-input" data-chat-composer="thread" data-workroom-composer="true" contenteditable="true" role="textbox" aria-label="Reply to workroom thread" aria-multiline="true" data-placeholder="Reply to thread..." x-init="$store.chat.initMentionComposer($el, 'thread'); $watch('$store.chat.threadInput', value => $store.chat.syncMentionComposerFromModel($el, 'thread', value))" @input="$store.chat.syncMentionComposerDraft($event.currentTarget); $store.chat.handleMentionInput($event.currentTarget, $event)" @keydown="$store.chat.handleComposerKeydown($event, () => $store.chat.sendSelectedWorkroomThreadReply())" @paste="$store.chat.handleMentionComposerPaste($event, 'thread')" @dragover.prevent @drop.prevent="$store.chat.handleChatFileDrop($event, 'thread')"></div>
-                    <div class="thread-input-actions"><div class="chat-composer-menu" x-data="{ open: false }" @click.outside="open = false"><button class="chat-composer-menu-trigger" type="button" @click="open = !open" :aria-expanded="open" aria-haspopup="menu">Menu</button><div class="chat-composer-menu-popover" x-show="open" x-cloak x-transition role="menu"><button type="button" role="menuitem" @click="$store.chat.openAudioRecorder('thread'); open = false">Record Audio</button><button type="button" role="menuitem" x-show="$store.chat.workroomsEnabled" @click="$store.chat.openWorkroomCreation(); open = false" :disabled="!$store.chat.isTowerPgMode || !$store.chat.selectedChannelId">Start Workroom</button></div></div><button type="button" class="thread-reply-btn" @click="$store.chat.sendSelectedWorkroomThreadReply()" :disabled="((!$store.chat.hasMentionComposerDraftText('thread') && $store.chat.threadAudioDrafts.length === 0) || $store.chat.threadImageUploadCount > 0)">Reply</button></div>
+                    <div class="thread-input-actions"><div class="chat-composer-menu" x-data="{ open: false }" @click.outside="open = false"><button class="chat-composer-menu-trigger" type="button" @click="open = !open" :aria-expanded="open" aria-haspopup="menu" aria-label="Menu" title="Menu"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" focusable="false"><path d="M4 6h16M4 12h16M4 18h16" /></svg></button><div class="chat-composer-menu-popover" x-show="open" x-cloak x-transition role="menu"><button type="button" role="menuitem" @click="$store.chat.openAudioRecorder('thread'); open = false">Record Audio</button><button type="button" role="menuitem" x-show="$store.chat.workroomsEnabled" @click="$store.chat.openWorkroomCreation(); open = false" :disabled="!$store.chat.isTowerPgMode || !$store.chat.selectedChannelId">Start Workroom</button></div></div><button type="button" class="thread-reply-btn" @click="$store.chat.sendSelectedWorkroomThreadReply()" :disabled="((!$store.chat.hasMentionComposerDraftText('thread') && $store.chat.threadAudioDrafts.length === 0) || $store.chat.threadImageUploadCount > 0)" aria-label="Reply" title="Reply"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m22 2-7 20-4-9-9-4Z M22 2 11 13" /></svg></button></div>
                   </div>
                   <div class="audio-draft-list" x-show="$store.chat.threadAudioDrafts.length > 0"><template x-for="draft in $store.chat.threadAudioDrafts" :key="draft.draft_id"><div class="audio-card audio-card-draft"><div class="audio-card-main"><div class="audio-card-title" x-text="draft.title || 'Voice note'"></div><div class="audio-card-meta"><span x-text="draft.duration_seconds ? $store.chat.formatAudioDuration(draft.duration_seconds) : 'Pending'"></span><span>Ready to reply</span></div></div><button type="button" class="audio-card-remove" @click="$store.chat.removeAudioDraft('thread', draft.draft_id)">&times;</button></div></template></div>
                 </aside>
@@ -7483,7 +7497,7 @@
                         data-testid="chat-thread-flow-dispatch-scope-select"
                       >
                         <option value="">Use automatic resolution</option>
-                        <template x-for="scope in $store.chat.scopes.filter(entry => entry.record_state !== 'deleted')" :key="scope.record_id">
+                        <template x-for="scope in $store.chat.personallyOrderedScopes.filter(entry => entry.record_state !== 'deleted')" :key="scope.record_id">
                           <option :value="scope.record_id" x-text="$store.chat.getTaskBoardOptionLabel(scope.record_id)"></option>
                         </template>
                       </select>
@@ -8221,7 +8235,7 @@
               @change="$store.chat.persistCommandPaletteNewWorkDefaultScopeId($event.target.value)"
             >
               <option value="">Current board</option>
-              <template x-for="scope in $store.chat.scopes.filter((item) => item.record_state !== 'deleted')" :key="`new-work-default-scope-${scope.record_id}`">
+              <template x-for="scope in $store.chat.personallyOrderedScopes.filter((item) => item.record_state !== 'deleted')" :key="`new-work-default-scope-${scope.record_id}`">
                 <option :value="scope.record_id" x-text="$store.chat.getScopeBreadcrumb(scope.record_id) || scope.title || scope.record_id"></option>
               </template>
             </select>
@@ -8232,7 +8246,7 @@
               @change="$store.chat.persistCommandPaletteQuickDocScopeId($event.target.value)"
             >
               <option value="">Current scope</option>
-              <template x-for="scope in $store.chat.scopes.filter((item) => item.record_state !== 'deleted')" :key="`quick-doc-scope-${scope.record_id}`">
+              <template x-for="scope in $store.chat.personallyOrderedScopes.filter((item) => item.record_state !== 'deleted')" :key="`quick-doc-scope-${scope.record_id}`">
                 <option :value="scope.record_id" x-text="$store.chat.getScopeBreadcrumb(scope.record_id) || scope.title || scope.record_id"></option>
               </template>
             </select>
@@ -8262,6 +8276,15 @@
                 <option value="light">Light</option>
                 <option value="dark">Dark</option>
               </select>
+              <form @submit.prevent="$store.chat.saveNostrViewer()">
+                <label class="settings-field-label" for="nostr-viewer-base-url">Nostr viewer base URL</label>
+                <input id="nostr-viewer-base-url" type="text" inputmode="url" x-model="$store.chat.nostrViewerDraft" placeholder="https://njump.me/" aria-describedby="nostr-viewer-help nostr-viewer-error" :aria-invalid="Boolean($store.chat.nostrViewerError)" />
+                <p id="nostr-viewer-help" class="settings-field-help">Open Nostr feed links with your chosen viewer. For Canopy, enter https://canopy.winn.cloud/event/ — the original nevent is appended unchanged. Include any route prefix your viewer needs. Synced privately across devices for your signed-in workspace identity; leave blank to use njump.</p>
+                <button type="submit" class="btn-secondary">Save Nostr viewer</button>
+                <button type="button" class="btn-secondary" @click="$store.chat.saveNostrViewer('')">Reset to njump</button>
+                <p id="nostr-viewer-error" role="alert" x-show="$store.chat.nostrViewerError" x-text="$store.chat.nostrViewerError"></p>
+                <p role="status" x-text="$store.chat.nostrViewerStatus"></p>
+              </form>
               <label class="settings-field-label settings-checkbox-row" for="deck-inbox-enabled-input">
                 <input
                   id="deck-inbox-enabled-input"
@@ -8519,8 +8542,8 @@
                         </button>
                         <div class="doc-actions-popover" x-show="actionsOpen" x-cloak x-transition>
 	                          <button x-show="!$store.chat.isTowerPgMode && $store.chat.canAdminWorkspace && parseInt(s1.level.slice(1)) < 5" type="button" @click.stop="$store.chat.startNewScope('l' + (parseInt(s1.level.slice(1)) + 1), s1.record_id); actionsOpen = false">Add child scope</button>
-                          <button type="button" x-show="$store.chat.canReorderScope(s1)" :disabled="!$store.chat.canMoveScope(s1.record_id, -1)" @click.stop="$store.chat.moveScope(s1.record_id, -1)" :aria-label="'Move scope ' + s1.title + ' up'">Move Up</button>
-                          <button type="button" x-show="$store.chat.canReorderScope(s1)" :disabled="!$store.chat.canMoveScope(s1.record_id, 1)" @click.stop="$store.chat.moveScope(s1.record_id, 1)" :aria-label="'Move scope ' + s1.title + ' down'">Move Down</button>
+                          <button type="button" x-show="$store.chat.canReorderScope(s1)" :disabled="!$store.chat.canMoveScope(s1.record_id, -1)" @click.stop="$store.chat.moveScope(s1.record_id, -1); actionsOpen = false" :aria-label="'Move scope ' + s1.title + ' up'">Move Up</button>
+                          <button type="button" x-show="$store.chat.canReorderScope(s1)" :disabled="!$store.chat.canMoveScope(s1.record_id, 1)" @click.stop="$store.chat.moveScope(s1.record_id, 1); actionsOpen = false" :aria-label="'Move scope ' + s1.title + ' down'">Move Down</button>
                           <button type="button" x-show="$store.chat.isTowerPgMode" @click.stop="$store.chat.openScopeAccess(s1); actionsOpen = false">Access</button>
 	                          <button type="button" x-show="$store.chat.canManageScope(s1)" @click.stop="$store.chat.startEditScope(s1.record_id); actionsOpen = false">Edit scope</button>
 	                          <button type="button" @click.stop="$store.chat.copyFlightDeckReference('scope', s1.record_id, s1.title || 'Untitled scope'); actionsOpen = false">FD Ref</button>
@@ -9507,7 +9530,7 @@
                 :disabled="$store.chat.legacyDocScopeRepairBusy"
               >
                 <option value="">Only inherit from scoped parent folders</option>
-                <template x-for="scope in $store.chat.scopes.filter(entry => entry.record_state !== 'deleted')" :key="scope.record_id">
+                <template x-for="scope in $store.chat.personallyOrderedScopes.filter(entry => entry.record_state !== 'deleted')" :key="scope.record_id">
                   <option :value="scope.record_id" x-text="$store.chat.getTaskBoardOptionLabel(scope.record_id)"></option>
                 </template>
               </select>
@@ -11617,7 +11640,7 @@
             @click="$store.chat.selectMention(result)"
             @mouseenter="$store.chat.mentionSelectedIndex = idx"
           >
-            <span class="mention-result-type" x-text="result.type === 'person' || result.type === 'agent' ? '@' : result.type === 'doc' ? 'DOC' : result.type === 'scope' ? 'SCOPE' : result.type === 'flow' ? 'FLOW' : result.type === 'opportunity' ? 'OPP' : result.type === 'channel' ? 'CHAN' : 'TASK'"></span>
+            <span class="mention-result-type" x-text="result.type === 'canvas' ? 'CANVAS' : result.type === 'canvas-item' ? 'ITEM' : result.type === 'person' || result.type === 'agent' ? '@' : result.type === 'doc' ? 'DOC' : result.type === 'scope' ? 'SCOPE' : result.type === 'flow' ? 'FLOW' : result.type === 'opportunity' ? 'OPP' : result.type === 'channel' ? 'CHAN' : 'TASK'"></span>
             <span class="mention-result-label" x-text="result.label"></span>
             <span class="mention-result-sublabel" x-show="result.sublabel" x-text="result.sublabel"></span>
           </li>

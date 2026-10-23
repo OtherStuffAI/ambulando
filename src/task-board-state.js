@@ -7,6 +7,7 @@
  */
 
 import { compareIndexedTasks } from './task-index-keys.js';
+import { sortScopesPersonally } from './scope-order.js';
 import {
   computeParentState,
   stateColor,
@@ -1220,10 +1221,10 @@ export const taskBoardStateMixin = {
     const boardScopes = findDmScope(this.scopes)
       ? this.scopes
       : [...(this.scopes || []), dmScope];
-    const scopeBoards = sortTaskBoardScopes(
+    const scopeBoards = sortScopesPersonally(sortTaskBoardScopes(
       boardScopes.filter((scope) => scope.record_state !== 'deleted'),
       this.scopesMap,
-    ).map((scope) => ({
+    ), this.personalScopeOrderIds).map((scope) => ({
       id: scope.record_id,
       level: scope.level,
       zoom: 'scope',
@@ -1361,7 +1362,7 @@ export const taskBoardStateMixin = {
         if (labelDelta !== 0) return labelDelta;
         return String(left.id || '').localeCompare(String(right.id || ''));
       });
-    return [allOption, dmOption, ...remainingOptions].filter(Boolean);
+    return [allOption, dmOption, ...sortScopesPersonally(remainingOptions, this.personalScopeOrderIds, board => board.id)].filter(Boolean);
   },
 
   get filteredFlightDeckScopeOptions() {

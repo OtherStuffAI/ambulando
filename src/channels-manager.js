@@ -1086,7 +1086,7 @@ export const channelsManagerMixin = {
   },
 
   get sidebarScopeChannelGroups() {
-    return buildSidebarScopeChannelGroups(this.scopes, this.channels);
+    return buildSidebarScopeChannelGroups(this.personallyOrderedScopes || this.scopes, this.channels);
   },
 
   get sidebarActiveChannelIds() {

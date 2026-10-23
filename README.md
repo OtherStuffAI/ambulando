@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="public/ambulando/confluence-approved.png" alt="Ambulando logo — Solvitur Ambulando" width="480">
+  <img src="public/ambulando/passage-master.png" alt="Ambulando logo — Solvitur Ambulando" width="480">
 </p>
 
 # Ambulando

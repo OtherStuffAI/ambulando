@@ -3770,3 +3770,65 @@ it('keeps a revoked native document paused without starting another pull and res
   await fn();
   expect(store.startupSyncProgress).toMatchObject({ active: false, visible: false, error: null });
 });
+
+
+describe('message acknowledgement latency', () => {
+  it.each([10_000, 30_000])('does not hold an accepted message behind a %i ms materializer queue', async (delayMs) => {
+    vi.useFakeTimers();
+    try {
+      const started = Date.now();
+      const accepted = { record_id: 'accepted', pg_thread_id: 'thread' };
+      const service = {
+        command: vi.fn(async () => accepted),
+        materialize: vi.fn(() => new Promise(resolve => setTimeout(resolve, delayMs))),
+      };
+      const store = { getTowerSyncService: () => service, _recordDeltaAttentionActive: true,
+        workspaceDbKey: 'workspace', buildTowerPgMaterializationStoreSnapshot: () => ({}) };
+      let settledAt;
+      const send = syncManagerMixin.commandTowerWorkspace.call(store, 'message.create', {}).then(result => {
+        settledAt = Date.now() - started;
+        return result;
+      });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(settledAt).toBe(0);
+      expect(service.materialize).toHaveBeenCalledTimes(1);
+      await vi.advanceTimersByTimeAsync(delayMs);
+      expect(await send).toBe(accepted);
+      expect(settledAt).toBe(0);
+    } finally { vi.useRealTimers(); }
+  });
+});
+
+
+it('keeps deferred message reconciliation scoped and retries on the next command after failure', async () => {
+  const service = { command: vi.fn(async () => ({ record_id: 'accepted' })),
+    materialize: vi.fn().mockRejectedValueOnce(new Error('worker unavailable')).mockResolvedValueOnce({ applied: 1 }) };
+  const store = { getTowerSyncService: () => service, _recordDeltaAttentionActive: true,
+    workspaceDbKey: 'original', buildTowerPgMaterializationStoreSnapshot: () => ({ workspaceId: 'original' }) };
+  await expect(syncManagerMixin.commandTowerWorkspace.call(store, 'message.create')).resolves.toEqual({ record_id: 'accepted' });
+  store.workspaceDbKey = 'other';
+  expect(service.materialize).toHaveBeenNthCalledWith(1, 'workspace-bundle', expect.any(Object), {
+    workspaceDbKey: 'original', store: { workspaceId: 'original' },
+  });
+  await syncManagerMixin.commandTowerWorkspace.call(store, 'message.create');
+  expect(service.materialize).toHaveBeenCalledTimes(2);
+});
+
+
+it('captures the originating context before transport and preserves non-message wait semantics', async () => {
+  let accept, reconcile;
+  const service = { command: vi.fn(() => new Promise(resolve => { accept = resolve; })),
+    materialize: vi.fn(() => new Promise(resolve => { reconcile = resolve; })) };
+  const store = { getTowerSyncService: () => service, _recordDeltaAttentionActive: true,
+    workspaceDbKey: 'original', buildTowerPgMaterializationStoreSnapshot() { return { workspaceId: this.workspaceDbKey }; } };
+  let settled = false;
+  const command = syncManagerMixin.commandTowerWorkspace.call(store, 'task.update').then(() => { settled = true; });
+  store.workspaceDbKey = 'other';
+  accept({ record_id: 'accepted' });
+  await vi.waitFor(() => expect(service.materialize).toHaveBeenCalledTimes(1));
+  expect(service.materialize.mock.calls[0][2]).toEqual({ workspaceDbKey: 'original', store: { workspaceId: 'original' } });
+  expect(settled).toBe(false);
+  reconcile({ applied: 1 });
+  await command;
+  expect(settled).toBe(true);
+});

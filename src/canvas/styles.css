@@ -53,7 +53,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .canvas-element svg polyline { fill: none; stroke-linecap: round; stroke-linejoin: round; }
 .canvas-preview { pointer-events: none; opacity: .65; }
 .canvas-resize { position: absolute; right: -7px; bottom: -7px; z-index: 4; min-width: 16px; width: 16px; min-height: 16px; height: 16px; padding: 0; border: 2px solid var(--surface); border-radius: 50%; background: var(--primary); cursor: nwse-resize; }
-.canvas-arrow-handle { position: absolute; z-index: 5; width: 16px; min-width: 16px; height: 16px; min-height: 16px; padding: 0; transform: translate(-50%, -50%); border: 2px solid var(--surface); border-radius: 50%; background: var(--primary); cursor: move; }
+.canvas-arrow-handle { position: absolute; z-index: 5; width: 16px; min-width: 16px; height: 16px; min-height: 16px; padding: 0; transform: translate(-50%, -50%); border: 2px solid var(--card); border-radius: 50%; background: var(--primary); cursor: move; }
 .canvas-comment-marker { position: absolute; z-index: 100001; display: grid; place-items: center; min-width: 30px; width: 30px; height: 30px; padding: 0; border-radius: 50%; box-shadow: 0 3px 12px rgb(0 0 0 / .22); }
 .canvas-denied { display: grid; place-items: center; height: 100%; padding: 20px; text-align: center; color: var(--muted-foreground); }
 .canvas-status { display: grid; place-items: center; height: 100%; padding: 24px; text-align: center; }
@@ -61,7 +61,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .canvas-status h1 { font-size: 20px; }
 .canvas-error { color: var(--destructive); }
 .canvas-toast { position: fixed; right: 16px; bottom: 16px; z-index: 100; max-width: min(32rem, calc(100vw - 32px)); padding: 10px 12px; border: 1px solid var(--destructive); border-radius: 8px; background: var(--surface); color: var(--destructive); }
-.canvas-dialog { width: min(34rem, calc(100vw - 2rem)); max-height: min(44rem, calc(100vh - 2rem)); padding: 0; border: 1px solid var(--border); border-radius: 10px; color: var(--foreground); background: var(--surface); }
+/* Canvas loads theme tokens without the shell's legacy surface aliases. */
+.canvas-dialog { width: min(34rem, calc(100vw - 2rem)); max-height: min(44rem, calc(100vh - 2rem)); padding: 0; border: 1px solid var(--border); border-radius: 10px; color: var(--card-foreground); background: var(--card); }
 .canvas-dialog::backdrop { background: rgb(0 0 0 / 0.45); }
 .canvas-dialog form, .canvas-comment-panel > div { display: grid; gap: 14px; padding: 18px; }
 .canvas-dialog h2 { margin: 0; }
@@ -77,3 +78,248 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .canvas-comment-panel article p { margin: 8px 0 0; white-space: pre-wrap; }
 .canvas-dialog-actions { display: flex; justify-content: flex-end; gap: 8px; }
 @media (max-width: 700px) { .canvas-toolbar { display: grid; grid-template-columns: 1fr; gap: 4px; padding: 6px 8px; } .canvas-brand img { width: 24px; height: 24px; } .canvas-toolbar-scroll { width: 100%; padding-bottom: 3px; } .canvas-toolbar button { min-height: 44px; } }
+
+/* Documents keep the Docs paper ink in either shell theme. The naplet, rather
+   than the infinite canvas or browser page, owns reading overflow. */
+.canvas-naplet { grid-template-rows: auto minmax(0, 1fr); }
+.canvas-document { display: flex; flex-direction: column; min-height: 0; min-width: 0; overflow: hidden; border-radius: 0 0 10px 10px; }
+.canvas-document-open { flex: none; padding: 8px 12px; color: var(--primary); background: var(--surface); text-underline-offset: 3px; }
+.canvas-document-open:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
+.canvas-document-scroll { min-height: 0; overflow: auto; overscroll-behavior: contain; padding: 12px; background: var(--background); touch-action: pan-x pan-y; cursor: auto; }
+.canvas-document-paper {
+  --foreground: #202733; --text: #202733; --muted-foreground: #526071;
+  --primary: #244f78; --card: #fff; --border: #c8cdd3; --muted: #f1f3f5;
+  --code-background: #f1f3f5; --code-foreground: #202733;
+  min-height: 100%; padding: clamp(16px, 4vw, 32px); background: #fff; color: var(--text);
+  color-scheme: light; border: 1px solid var(--border); box-shadow: 0 2px 8px #00000014;
+  font-size: 16px; line-height: 1.6; overflow-wrap: anywhere; user-select: text;
+}
+.canvas-document-paper > h2 { margin: 0 0 1rem; font-size: 1.3rem; }
+.canvas-document-paper .doc-rich-editor, .canvas-document-paper .ProseMirror { min-height: 0; }
+.canvas-document-paper .ProseMirror a { color: var(--primary); }
+.canvas-document-paper .ProseMirror pre { white-space: pre; font-family: monospace; }
+.canvas-document-paper .ProseMirror ul, .canvas-document-paper .ProseMirror ol { padding-left: 1.25rem; }
+.canvas-document-paper .tableWrapper { overflow-x: auto; }
+.canvas-document-paper input[type="checkbox"] { pointer-events: none; }
+
+/* Native dialog/popover top layers retain a single content tree in both modes. */
+.canvas-naplet {
+  display: grid; margin: 0; padding: 0; max-width: none; max-height: none;
+  color: var(--card-foreground); background: var(--card); border-color: #d7d4cd;
+  box-shadow: 0 4px 16px #00000024;
+}
+.canvas-naplet-header {
+  min-height: 50px; padding: 7px 12px; gap: 8px;
+  border-radius: 9px 9px 0 0; border-bottom-color: #d7d4cd;
+  background: linear-gradient(#f6f4ee, #e8e5dd); color: #303436;
+}
+.canvas-naplet-header strong { min-width: 0; font-size: 14px; }
+.canvas-window-controls { display: flex; align-items: center; flex: none; gap: 8px; }
+.canvas-window-control {
+  display: grid; place-items: center; width: 28px; min-width: 28px; height: 28px; min-height: 28px;
+  padding: 0; border: 1px solid #aaa79e; border-radius: 50%; color: #49504d; line-height: 1;
+  background: #deddd7; box-shadow: inset 0 0 0 1px #ffffff40;
+}
+.canvas-window-control:hover { filter: brightness(.94); }
+.canvas-window-control:focus-visible { outline-color: #244f78; }
+.canvas-window-control.window-minimise { background: #ffce62; border-color: #c4a44e; }
+.canvas-window-control.window-popout { background: #8bd5a2; border-color: #69a37b; }
+.canvas-window-content { display: grid; grid-template-rows: minmax(0, 1fr); min-height: 0; overflow: hidden; border-radius: 0 0 9px 9px; }
+.canvas-window-content > iframe { min-height: 0; }
+.canvas-html { display: grid; grid-template-rows: minmax(0, 1fr); min-height: 0; }
+.canvas-html > iframe { min-height: 0; }
+/* Version and save state live in the title bar; controls live in the cog menu. */
+.canvas-naplet-status { flex: 0 1 auto; min-width: 0; max-width: 45%; overflow: hidden; padding: 2px 8px; border-radius: 999px; background: #e7ece4; color: #2f4733; font-size: 11px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.canvas-naplet-status[data-state="unsaved"] { background: #fff3cd; color: #6b4e00; }
+.canvas-naplet-status[data-state="saving"] { background: #e3edff; color: #1f3f86; }
+.canvas-naplet-status[data-state="error"], .canvas-naplet-status[data-state="stale"] { background: #fde2e1; color: #8a1c17; }
+.canvas-naplet-status[data-state="viewing"] { background: #ececf2; color: #3a3a4a; }
+.canvas-naplet.reference-target { outline: 3px solid var(--primary); outline-offset: 4px; box-shadow: 0 0 0 8px color-mix(in srgb, var(--primary) 22%, transparent), 0 4px 16px #00000024; }
+@media (prefers-reduced-motion: no-preference) { .canvas-naplet.reference-target { transition: box-shadow .4s ease, outline-offset .4s ease; } }
+.canvas-notice { position: fixed; inset: auto 16px 16px auto; z-index: 101; max-width: min(32rem, calc(100vw - 32px)); margin: 0; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--card); color: var(--card-foreground); box-shadow: 0 6px 24px #00000026; }
+.canvas-versions { display: grid; gap: 12px; padding: 18px; }
+.canvas-versions header h2 { margin: 0; }
+.canvas-versions-subject, .canvas-versions-status, .canvas-versions-note { margin: 0; overflow-wrap: anywhere; }
+.canvas-versions-subject, .canvas-versions-note { color: var(--muted-foreground); font-size: 13px; }
+.canvas-versions-status { font-weight: 600; }
+.canvas-versions-step { display: flex; gap: 8px; }
+.canvas-versions-step button { flex: 1; }
+.canvas-versions-list { display: grid; gap: 4px; max-height: min(18rem, 40dvh); margin: 0; padding: 0; overflow-y: auto; list-style: none; }
+.canvas-versions-list li { color: var(--muted-foreground); }
+.canvas-versions-list button { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; width: 100%; padding: 8px 10px; text-align: left; color: var(--foreground); background: var(--background); }
+.canvas-versions-list button[aria-current="true"] { border-color: var(--primary); background: color-mix(in srgb, var(--primary) 12%, var(--background)); }
+.canvas-versions-list span, .canvas-versions-list em { color: var(--muted-foreground); font-size: 12px; overflow-wrap: anywhere; }
+.canvas-versions-actions { flex-wrap: wrap; }
+.canvas-versions-commands { display: flex; flex-wrap: wrap; gap: 8px; margin-right: auto; }
+.canvas-versions-commands:empty { display: none; }
+.canvas-versions-dialog .canvas-dialog-actions button, .canvas-versions-step button, .canvas-reference-dialog button { padding: 6px 12px; }
+.canvas-reference-dialog textarea, .canvas-reference-dialog input { width: 100%; font-family: ui-monospace, monospace; font-size: 12px; }
+.canvas-reference-dialog textarea { min-height: 72px; }
+.canvas-reference-dialog p { margin: 0; }
+.canvas-reference-hint { color: var(--muted-foreground); font-size: 13px; }
+@media (max-width: 700px) { .canvas-versions-dialog button, .canvas-reference-dialog button { min-height: 44px; } .canvas-naplet-status { max-width: 38%; } }
+.canvas-naplet.window-minimised { height: 50px !important; grid-template-rows: 50px; }
+.canvas-naplet.window-minimised .canvas-naplet-header { border-radius: 9px; border-bottom: 0; }
+.canvas-naplet.window-expanded {
+  position: fixed; inset: 0 !important; width: 100% !important; height: 100% !important;
+  max-width: 100%; max-height: 100%; border-radius: 0; outline: none;
+  grid-template-rows: auto minmax(0, 1fr);
+}
+.canvas-naplet.window-expanded .canvas-naplet-header { border-radius: 0; cursor: default; padding-top: max(7px, env(safe-area-inset-top)); }
+.canvas-naplet::backdrop { background: #00000073; }
+.canvas-window-options {
+  position: fixed; inset: auto; margin: 0; width: min(240px, calc(100vw - 16px));
+  height: max-content; max-height: calc(100dvh - 16px); overflow-y: auto; padding: 6px;
+  align-self: start; align-content: start; grid-auto-rows: max-content;
+  border: 1px solid var(--border); border-radius: 10px;
+  background: var(--card); color: var(--card-foreground); box-shadow: 0 6px 24px #00000035;
+}
+.canvas-window-options:popover-open { display: grid; gap: 2px; }
+.canvas-window-options button, .canvas-window-options a {
+  display: block; width: 100%; min-height: 36px; padding: 8px 10px; text-align: left;
+  border: 0; border-radius: 5px; color: inherit; background: transparent; text-decoration: none;
+}
+.canvas-window-options button:hover, .canvas-window-options a:hover { background: var(--muted); }
+@media (pointer: coarse), (max-width: 700px) {
+  .canvas-window-controls { gap: 2px; }
+  .canvas-window-control { width: 40px; min-width: 40px; height: 40px; min-height: 40px; background-clip: padding-box; }
+  .canvas-window-options button, .canvas-window-options a { min-height: 44px; }
+  .canvas-naplet.window-minimised { height: 56px !important; grid-template-rows: 56px; }
+  .canvas-naplet-header { padding-inline: 8px; }
+}
+
+/* Comments float over a usable board, without a native modal backdrop. */
+.canvas-comment-popover { position: fixed; inset: auto; left: max(8px, calc(100vw - 344px)); top: 88px; margin: 0; width: min(320px, calc(100vw - 16px)); max-height: calc(100dvh - 16px); overflow: auto; z-index: 2147483646; box-shadow: 0 8px 32px #00000040; overscroll-behavior: contain; }
+.canvas-comment-dialog { z-index: 2147483647; }
+.canvas-comment-popover::backdrop { background: transparent; }
+.canvas-comment-popover [data-popover-drag] { display: flex; align-items: center; justify-content: space-between; gap: 12px; cursor: move; touch-action: none; user-select: none; }
+.canvas-comment-popover textarea { max-height: 40dvh; }
+.canvas-comment-popover button { background: var(--card); color: var(--card-foreground); }
+.canvas-comment-popover .canvas-dialog-actions { flex-wrap: wrap; }
+.canvas-comment-panel article p { overflow-wrap: anywhere; }
+.canvas-comment-panel article > button { margin-top: 8px; }
+.canvas-comment-delete { border: 1px solid var(--destructive); border-radius: 8px; padding: 10px; }
+
+.canvas-comment-link-handle { cursor: crosshair; touch-action: none; }
+.canvas-comment-connector { position: absolute; left: 0; top: 0; width: 1px; height: 1px; overflow: visible; z-index: 100000; pointer-events: none; }
+.canvas-comment-connector line { stroke: var(--primary); stroke-width: 2; stroke-dasharray: 2 6; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+@media (max-width: 700px) { .canvas-comment-popover button { min-height: 44px; } }
+
+/* Comment-sized surfaces keep the board available; extra actions expand on demand. */
+.canvas-comment-popover form, .canvas-comment-panel > div { gap: 10px; padding: 12px; }
+.canvas-comment-popover h2 { font-size: 14px; }
+.canvas-comment-popover textarea { min-height: 72px; }
+.canvas-comment-popover button { padding: 5px 8px; font-size: 12px; }
+.canvas-comment-controls { display: flex; align-items: center; gap: 2px; }
+.canvas-comment-controls button { display: grid; place-items: center; width: 28px; height: 28px; padding: 4px; border-color: transparent; }
+.canvas-comment-panel article { position: relative; padding: 8px; font-size: 13px; }
+.canvas-comment-panel article > button { position: absolute; right: 4px; top: 0; margin: 0; }
+.canvas-comment-panel article:has(> button) { padding-right: 34px; }
+.canvas-comment-targets { display: grid; gap: 4px; max-height: 160px; overflow: auto; }
+.canvas-comment-targets button { text-align: left; overflow-wrap: anywhere; }
+.canvas-comment-targets button[aria-pressed="true"] { border-color: var(--primary); }
+@media (max-width: 700px) { .canvas-comment-controls button { width: 36px; min-height: 44px; } }
+
+/* Excalidraw board naplets: one same-origin editor iframe per naplet. */
+/* Flex, not grid: the x-show message row leaves the flow when hidden. */
+.canvas-board { display: flex; flex-direction: column; min-height: 0; background: var(--surface); }
+.canvas-board-message { margin: 0; padding: 4px 8px; font-size: 12px; background: #f3f6fb; color: #29364a; border-bottom: 1px solid var(--border); }
+.canvas-board-message.error { background: #fde2e1; color: #8a1c17; }
+.canvas-board-stage { position: relative; flex: 1 1 0; min-height: 0; }
+/* Absolutely sized: an iframe's auto height would otherwise fall back to 150px. */
+.canvas-board-frame { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: #fff; }
+.canvas-board-mode { display: flex; gap: 16px; border: 0; padding: 0; margin: 0; }
+.canvas-board-mode legend { padding: 0; font-weight: 600; }
+
+/* Lines are selected and moved along their strokes, never a rectangular box. */
+.canvas-element.kind-arrow, .canvas-element.kind-line { pointer-events: none; outline: none; }
+.canvas-vector-line { fill: none; stroke-linecap: round; stroke-linejoin: round; }
+.canvas-element .canvas-vector-hit { fill: none; stroke: transparent; stroke-width: 18; pointer-events: stroke; cursor: move; }
+.canvas-element.kind-arrow .canvas-arrow-handle, .canvas-element.kind-line .canvas-arrow-handle { pointer-events: auto; touch-action: none; }
+/* Standalone Canvas has card tokens, but no shell-only --surface alias. */
+.canvas-arrow-handle:hover { background: var(--primary); }
+.canvas-arrow-middle, .canvas-arrow-middle:hover { background: var(--card); border-color: var(--primary); box-shadow: 0 0 0 1px var(--card); }
+.canvas-element-options label { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+.canvas-element-options select, .canvas-element-options input { color: var(--foreground); background: var(--surface); border: 1px solid var(--border); border-radius: 6px; min-height: 36px; padding: 4px; }
+.canvas-element-options input { width: 72px; }
+@media (pointer: coarse), (max-width: 600px) {
+  .canvas-arrow-handle { width: 24px; min-width: 24px; height: 24px; min-height: 24px; }
+  .canvas-element-options select, .canvas-element-options input { min-height: 44px; }
+}
+
+.canvas-link-card { display: flex; flex-direction: column; align-items: flex-start; gap: 16px; padding: 24px; overflow: auto; height: 100%; }
+.canvas-link-kind { color: var(--muted-foreground); font-size: 12px; }
+.canvas-link-card h2 { margin: 0; overflow-wrap: anywhere; font-size: 20px; }
+.canvas-link-card a { display: inline-flex; align-items: center; min-height: 44px; padding: 8px 14px; border: 1px solid var(--border); border-radius: 8px; color: var(--primary); }
+
+/* Scope-first picker for existing HTML artefacts and boards. */
+.canvas-add-dialog:has(.canvas-artifact-picker .has-preview) { width: min(60rem, calc(100vw - 2rem)); max-height: min(56rem, calc(100vh - 2rem)); }
+.canvas-artifact-picker { display: grid; gap: 8px; }
+.canvas-artifact-filters { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.canvas-artifact-status { margin: 0; color: var(--muted-foreground); font-size: 13px; }
+.canvas-artifact-limit { margin: 0; padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; }
+.canvas-artifact-more { padding: 8px 10px; color: var(--primary); }
+/* Add/Cancel stay reachable however tall the picker grows. */
+.canvas-add-dialog .canvas-dialog-actions { position: sticky; bottom: 0; z-index: 1; margin: 0 -18px -18px; padding: 12px 18px; border-top: 1px solid var(--border); background: var(--card); }
+.canvas-artifact-preview { scroll-margin-bottom: 80px; }
+.canvas-artifact-body { display: grid; gap: 8px; }
+.canvas-artifact-body.has-preview { grid-template-columns: minmax(12rem, 1fr) minmax(0, 1.6fr); }
+.canvas-artifact-list { display: grid; align-content: start; gap: 4px; max-height: 280px; overflow-y: auto; }
+.canvas-artifact-list button { display: grid; gap: 2px; padding: 8px 10px; text-align: left; }
+.canvas-artifact-list button small { color: var(--muted-foreground); font-size: 12px; }
+.canvas-artifact-list button.selected { border-color: var(--primary); background: color-mix(in srgb, var(--primary) 12%, var(--surface)); }
+.canvas-artifact-title { overflow-wrap: anywhere; }
+.canvas-artifact-preview { display: grid; grid-template-rows: 1fr auto; gap: 4px; min-height: 280px; margin: 0; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: var(--surface); }
+.canvas-artifact-preview iframe { width: 100%; height: 100%; min-height: 248px; border: 0; background: #fff; }
+.canvas-artifact-preview figcaption { align-self: end; padding: 6px 10px; color: var(--muted-foreground); font-size: 12px; }
+@media (max-width: 700px) {
+  .canvas-artifact-filters, .canvas-artifact-body.has-preview { grid-template-columns: 1fr; }
+  .canvas-artifact-list { max-height: 200px; }
+  .canvas-artifact-preview { min-height: 240px; }
+  .canvas-artifact-preview iframe { min-height: 200px; }
+  .canvas-artifact-filters select, .canvas-artifact-list button { min-height: 44px; }
+}
+.canvas-chat { display:flex; flex:1; flex-direction:column; min-height:0; overflow:hidden; background:var(--card); }
+.canvas-chat-frame { flex:1; width:100%; min-height:0; border:0; background:var(--card); }
+.canvas-chat-picker { padding:20px; overflow:auto; }
+.canvas-chat-picker h2 { margin:0 0 16px; font-size:18px; }
+.canvas-chat-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin:12px 0; }
+.canvas-chat-grid button { min-height:64px; padding:12px; white-space:normal; text-align:left; }
+.canvas-chat-picker p, .canvas-chat-binding { font-size:13px; }
+.canvas-chat-binding { padding:8px 12px; }
+
+.canvas-document-actions { display: flex; flex-wrap: wrap; gap: 6px; padding: 6px 12px; }
+/* Docs-style discussion rail, sized to the reader rather than the viewport. */
+.canvas-document { container-type: inline-size; --surface: var(--card); --surface-muted: var(--muted); }
+.canvas-document-layout { position: relative; display: flex; flex: 1; min-height: 0; min-width: 0; overflow: hidden; }
+.canvas-document-scroll { flex: 1 1 0; min-width: 0; }
+.canvas-document-comments { flex: 0 0 320px; width: 320px; min-width: 0; min-height: 0; display: flex; flex-direction: column; border-left: 1px solid var(--border); background: var(--surface); color: var(--foreground); user-select: text; cursor: auto; }
+.canvas-document-comment-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 14px; border-bottom: 1px solid var(--border); flex: none; }
+.canvas-document-comment-header h3 { margin: 0 0 3px; font-size: 16px; }
+.canvas-document-comments small, .canvas-document-comments time { color: var(--muted-foreground); font-size: 11px; }
+.canvas-document-comment-tools { display: flex; gap: 6px; }
+.canvas-document-comment-tools button { width: 36px; height: 36px; font-size: 20px; padding: 0; }
+.canvas-document-comment-content { flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; touch-action: pan-y; padding: 12px; }
+.canvas-document-comment-refresh { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+.canvas-document-threads { display: flex; flex-direction: column; gap: 12px; }
+.canvas-document-thread { border: 1px solid var(--border); border-radius: 10px; padding: 12px; background: color-mix(in srgb, var(--primary) 6%, var(--surface)); overflow-wrap: anywhere; }
+.canvas-document-comment-meta { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; font-size: 12px; }
+.canvas-document-comment-meta > span { font-size: 10px; border-radius: 20px; background: var(--muted); padding: 3px 6px; }
+.canvas-document-comment-meta time { flex-basis: 100%; }
+.canvas-document-comments p, .canvas-document-comments blockquote { white-space: pre-wrap; margin: 8px 0; font-size: 13px; line-height: 1.5; }
+.canvas-document-comments blockquote { border-left: 3px solid var(--border); padding: 8px; background: color-mix(in srgb, var(--primary) 8%, transparent); max-height: 120px; overflow: auto; }
+.canvas-document-reply { border-top: 1px solid var(--border); margin-top: 10px; padding: 10px 0 0 10px; font-size: 12px; }
+.canvas-document-reply time { display: block; }
+.canvas-document-comment-composer { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px; margin-top: 14px; border: 1px dashed var(--border); border-radius: 10px; background: var(--background); }
+.canvas-document-comment-composer label { width: 100%; font-size: 12px; font-weight: 600; }
+.canvas-document-comments textarea { display: block; box-sizing: border-box; width: 100%; resize: vertical; min-height: 80px; margin-top: 8px; padding: 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--foreground); font: inherit; user-select: text; touch-action: auto; }
+.canvas-document-comment-composer button[type=submit] { margin-left: auto; background: var(--primary); color: var(--primary-foreground); }
+.canvas-document-comment-rail { flex: 0 0 38px; display: flex; flex-direction: column; align-items: center; gap: 10px; border: 0; border-left: 1px solid var(--border); border-radius: 0; padding: 12px 0; color: var(--muted-foreground); background: var(--surface); }
+.canvas-document-comment-rail span { font-size: 24px; }
+.canvas-document-comment-rail strong { font-size: 11px; background: var(--muted); border-radius: 20px; padding: 4px; }
+.canvas-document-comment-backdrop { display: none; }
+@container (max-width: 720px) {
+  .canvas-document-comments { position: absolute; right: 0; top: 0; bottom: 0; width: min(320px, calc(100% - 38px)); z-index: 3; box-shadow: -8px 0 24px #0003; }
+  .canvas-document-comment-backdrop { display: block; position: absolute; inset: 0; z-index: 2; border: 0; border-radius: 0; background: #0003; }
+  .canvas-document-comment-tools button { min-width: 44px; min-height: 44px; }
+}

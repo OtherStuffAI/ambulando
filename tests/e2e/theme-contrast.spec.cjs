@@ -30,6 +30,17 @@ const docRows = ['normal', 'selected'].map(state => `<li class="doc-item ${state
 const fixtures = `
 <div class="page-header"><h1 data-contrast="header">Ambulando</h1><span class="sol-brand-tagline" data-contrast="tagline">Solvitur Ambulando</span></div>
 <div class="settings-panel" style="padding:12px">
+<button class="launcher-pill"><span class="launcher-pill-copy"><strong data-contrast="app name">Research app</strong><small>Workspace app</small></span></button>
+<button class="launcher-pill autopilot-agent-launcher"><span class="autopilot-agent-launcher-copy"><strong data-contrast="agent name">Implementation agent</strong><small>Autopilot</small></span></button>
+<div class="personal-wapp-settings-row"><span class="personal-wapp-settings-copy"><strong data-contrast="toolbox name">Research app</strong></span></div>
+<div class="autopilot-agent-settings-profile"><span class="new-channel-profile-name" data-contrast="agent settings name">Implementation agent</span></div>
+<div class="agent-connect-selection"><strong data-contrast="agent discovery name">Implementation agent</strong></div>
+<div class="wapp-management-row"><div><strong data-contrast="managed app name">Research app</strong></div></div>
+<div class="wapp-publishing-installation-row"><div><strong data-contrast="installed app name">Research app</strong></div></div>
+<div class="wapp-publishing-identity"><strong data-contrast="publishing app name">Research app</strong></div>
+<div class="agent-space-list"><button class="agent-space-card"><strong data-contrast="agent card name">Implementation agent</strong><small>Read-only</small></button><button class="agent-space-card active"><strong data-contrast="active agent name">Review agent</strong><small data-contrast="active agent description">Can receive instructions</small></button></div>
+<header class="agent-space-header"><h1 data-contrast="agent title">Implementation agent</h1></header>
+<nav class="agent-space-tabs"><button class="active" data-contrast="active agent tab">Overview</button><button>Schedules</button></nav>
 <p class="auth-description" data-contrast="secondary">Workspace information</p>
 <input placeholder="Search workspaces" data-contrast="placeholder"><textarea placeholder="Write a comment" data-contrast="textarea placeholder"></textarea>
 <button class="btn-primary" data-contrast="primary">Save</button><button class="btn-secondary" data-contrast="secondary button">Cancel</button>
@@ -70,6 +81,15 @@ for (const theme of ['light', 'dark']) for (const width of [1440, 390]) {
     await page.addScriptTag({ content: constructors });
     await page.evaluate(() => ContrastUI.showUpdateBanner({ buildId: 'caprover-9999', buildNumber: 9999, releases: [{ buildNumber: 9999, label: 'Readable colours', notes: ['Notification and control text remain readable.'] }] }, { runningBuildNumber: 9998, refresh: () => new Promise((resolve, reject) => { window.rejectContrastRefresh = reject; }) }));
     const measurements = [];
+    const expectedNameInk = theme === 'dark' ? 'rgb(203, 184, 255)' : 'rgb(43, 27, 60)';
+    for (const name of await page.locator('[data-contrast$="name"], [data-contrast="agent title"]').all()) {
+      expect(await name.evaluate(n => getComputedStyle(n).color)).toBe(expectedNameInk);
+    }
+    const primary = page.locator('[data-contrast="primary"]');
+    expect(await primary.evaluate(n => getComputedStyle(n).backgroundColor)).toBe(expectedNameInk);
+    expect(await primary.evaluate(n => getComputedStyle(n).color)).toBe(theme === 'dark' ? 'rgb(32, 18, 60)' : 'rgb(255, 255, 255)');
+    expect(await page.locator('.agent-space-card.active').evaluate(n => getComputedStyle(n).borderTopColor)).toBe(expectedNameInk);
+    expect(await page.locator('.agent-space-tabs .active').evaluate(n => getComputedStyle(n).borderBottomColor)).toBe(expectedNameInk);
     expect(await page.locator('.doc-block-editor-surface').evaluate(n => getComputedStyle(n).backgroundColor)).toBe('rgb(255, 255, 255)');
     const check = async (locator, state, minimum = 4.5, property = 'color', pseudo = null) => {
       const m = await measure(locator, property, pseudo); measurements.push({ state, ...m });

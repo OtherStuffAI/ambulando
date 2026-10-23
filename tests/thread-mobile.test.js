@@ -315,7 +315,7 @@ describe('Thread mobile responsive behavior', () => {
       const htmlPath = path.resolve(import.meta.dirname, '..', 'index.html');
       const html = fs.readFileSync(htmlPath, 'utf-8');
       expect(html).toContain('class="chat-thread-modal-backdrop"');
-      expect(html).toContain('@click.self="$store.chat.deckThreadComposerOpen ? $store.chat.closeDeckThreadComposer() : $store.chat.closeVisibleThread()"');
+      expect(html).toContain('@click.self="!$store.chat.canvasChatEmbedded &amp;&amp; ($store.chat.deckThreadComposerOpen ? $store.chat.closeDeckThreadComposer() : $store.chat.closeVisibleThread())"');
       expect(html).toContain('role="dialog"');
       expect(html).toContain('aria-modal="true"');
       expect(html).not.toContain('thread-wide');

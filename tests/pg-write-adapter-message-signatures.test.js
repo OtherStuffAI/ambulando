@@ -60,6 +60,8 @@ vi.mock('../src/auth/nostr.js', () => ({
   })),
 }));
 
+import { signNostrEvent } from '../src/auth/nostr.js';
+
 import { createTowerPgMessageFromLocal, updateTowerPgMessageFromLocal } from '../src/pg-write-adapter.js';
 
 describe('createTowerPgMessageFromLocal', () => {
@@ -143,4 +145,25 @@ it('maps a successful create_thread response without a thread expansion as the s
     currentWorkspace: { workspaceId: 'workspace-1', workspaceOwnerNpub: 'npub1workspace', appNpub: 'npub1app' },
   }, { record_id: 'local-root', pg_client_request_id: 'local-root', channel_id: 'channel-1', body: 'Root body' });
   expect(row).toMatchObject({ record_id: 'message-1', parent_message_id: null, pg_thread_id: 'thread-created-1' });
+});
+
+
+it('waits for instruction signing before delivery and preserves agent mentions and retry identity', async () => {
+  let finishSigning;
+  signNostrEvent.mockImplementationOnce(template => new Promise(resolve => {
+    finishSigning = () => resolve({ ...template, id: '2'.repeat(64), pubkey: mockState.pubkey, sig: '3'.repeat(128) });
+  }));
+  const before = mockState.createTowerPgChannelMessage.mock.calls.length;
+  const mentions = [{ type: 'agent', npub: 'npub1agent', label: 'Agent' }];
+  const send = createTowerPgMessageFromLocal({ backendUrl: 'https://tower.example.com', session: { npub: 'npub1sender' },
+    currentWorkspace: { workspaceId: 'workspace-1', workspaceOwnerNpub: 'npub1workspace', appNpub: 'npub1app' } },
+    { record_id: 'local', pg_client_request_id: 'retry-key', channel_id: 'channel-1', body: '@[Agent](mention:agent:npub1agent) Go', pg_metadata: { mentions } });
+  await vi.waitFor(() => expect(finishSigning).toBeTypeOf('function'));
+  expect(mockState.createTowerPgChannelMessage.mock.calls).toHaveLength(before);
+  finishSigning();
+  await send;
+  expect(mockState.createTowerPgChannelMessage.mock.calls.at(-1)[2]).toMatchObject({
+    client_request_id: 'retry-key', create_thread: true, metadata: { mentions },
+    message_signature: { nostr_event: { content: '@[Agent](mention:agent:npub1agent) Go' } },
+  });
 });

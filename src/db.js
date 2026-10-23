@@ -333,10 +333,14 @@ export function createWorkspaceDb(workspaceDbKey) {
   });
   // Current-authority Canvas projections. Cached rows never render until the
   // active viewer has completed a fresh signed list/snapshot read.
+  db.version(42).stores({ private_preferences: '&key, context' });
   db.version(41).stores({
     canvas_definitions: '&key, context, canvas_id, [context+position]',
     canvas_snapshots: '&key, context, canvas_id, authorized_at',
   });
+  // Viewer-partitioned unsaved Excalidraw board drafts. Saved versions remain
+  // Tower File versions; a draft is local work that only Save publishes.
+  db.version(43).stores({ canvas_board_drafts: '&key, context, file_id' });
   db.version(37).stores({ hosting_billing: '&key' });
   db.version(36).stores({ scope_orders: '&record_id, workspace_id', pg_archived_targets: '&key, family, id' });
   const commentFields = activityIndexFields;
@@ -2235,6 +2239,7 @@ export async function replaceTasksForOwner(ownerNpub, tasks = [], options = {}) 
       && !sameLogicalValue(byId.get(row.record_id),{...row,...taskIndexFields(row)}));
     const incoming = new Set(rows.map(row=>row.record_id));
     const omitted = options.authoritative === true ? existing.filter(row=>!incoming.has(row.record_id) && !protectedRow(row)).map(row=>row.record_id) : [];
+    if (options.isCurrent && !options.isCurrent()) return 0;
     if (omitted.length) await db.tasks.bulkDelete(omitted);
     if (changed.length) await db.tasks.bulkPut(changed);
     return changed.length + omitted.length;

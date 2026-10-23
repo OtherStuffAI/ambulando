@@ -953,3 +953,100 @@ for (const [width, height] of [[320, 700], [390, 844], [390, 600], [720, 900]]) 
     });
   }
 }
+
+for (const width of [320, 1440]) {
+  for (const theme of ['light', 'dark']) {
+    test(`passage identity, browser theme and desktop 200% reflow: ${theme} ${width}px`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 900 });
+      await openFixture(page);
+      await page.evaluate(() => window.Alpine.store('chat').closeThread({ syncRoute: false }));
+      await page.evaluate(theme => window.Alpine.store('appearance').setTheme(theme), theme);
+      const logo = page.locator('.brand-logo:visible');
+      await expect(logo).toHaveAttribute('src', '/ambulando/passage-app.png');
+      await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute('content', theme === 'dark' ? '#10162B' : '#F6F6FA');
+      expect(await logo.evaluate(img => img.complete && img.naturalWidth === 256)).toBe(true);
+      expect(await logo.evaluate(img => getComputedStyle(img).backgroundColor)).toBe('rgb(255, 255, 255)');
+      expect(await logo.evaluate(img => img.getBoundingClientRect().width)).toBe(width === 320 ? 32 : 40);
+      await page.locator('.sol-theme-button:visible').focus();
+      const focus = await page.locator('.sol-theme-button:visible').evaluate(el => ({ active: document.activeElement === el, width: getComputedStyle(el).outlineWidth, color: getComputedStyle(el).outlineColor }));
+      expect(focus.active).toBe(true);
+      expect(focus.width).toBe('2px');
+      expect(focus.color).toBe(theme === 'dark' ? 'rgb(203, 184, 255)' : 'rgb(100, 54, 199)');
+      await capture(page, `passage-${theme}-${width}`);
+      // Desktop 200% browser zoom halves the CSS viewport. Keep phone at the
+      // supported 320 CSS-pixel minimum; physical pinch zoom remains browser-owned.
+      await page.setViewportSize({ width: Math.max(320, width / 2), height: 450 });
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+      await expect(page.locator('.sol-theme-button:visible')).toBeVisible();
+      await capture(page, `passage-${theme}-${width}-200percent`);
+    });
+  }
+}
+
+// Reproduce Inbox/Pinned typography feedback on the real connected template.
+for (const width of [1440, 390]) {
+  for (const theme of ['light', 'dark']) {
+    test(`item heading ink: ${theme} ${width}px`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 900 });
+      await openFixture(page);
+      await page.evaluate(theme => {
+        const s = window.Alpine.store('chat');
+        s.closeThread({ syncRoute: false });
+        const apps = [{ placementId: 'palette-app', title: 'Research app', appType: 'Napplet', description: 'Workspace research' }];
+        const agents = [{ title: 'Implementation agent', launch_url: 'https://agent.example', description: 'Autopilot' }];
+        for (const [key, value] of Object.entries({ visibleApps: apps, visiblePersonalAgents: agents, previewPersonalAgents: agents })) {
+          Object.defineProperty(s, key, { configurable: true, get: () => value });
+        }
+        s.personalWappsOverlayOpen = true;
+        s.personalAgentsOverlayOpen = true;
+        s.navSection = 'status';
+        const items = [
+          { inboxKind: 'chat', id: 'heading-thread', title: 'Canvas Chat naplet', channelLabel: 'Ambulando', messageCount: 2, latestMessage: 'Review the canvas', inboxActivityAt: new Date().toISOString(), isUnread: false },
+          { inboxKind: 'task', id: 'heading-task', recordId: 'heading-task', title: 'Apply Ambulando perspective-passage logo and colour system', subtitle: 'Review', reason: '7 recent comments', isUnread: true, taskState: 'review' },
+          { inboxKind: 'document', id: 'heading-doc', recordId: 'heading-doc', title: 'Ambulando brand', reason: 'Edited file', isUnread: false },
+        ];
+        // Synthetic view projections only; no authenticated records or remote writes.
+        Object.defineProperty(s, 'visibleAutopilotOverviewInbox', { configurable: true, get: () => items });
+        Object.defineProperty(s, 'pinnedThreads', { configurable: true, get: () => [
+          { type: 'channel', id: 'heading-channel', unavailable: false, title: 'Implementation', isUnread: true },
+          { type: 'thread', id: 'heading-pin', unavailable: false, title: 'Ambulando — image-generated logo review', isUnread: false },
+        ] });
+        window.Alpine.store('appearance').setTheme(theme);
+      }, theme);
+      const inbox = page.locator('.flightdeck-summary-panel-inbox .attention-card-title');
+      const pins = page.locator('.pinned-thread-open .attention-card-title');
+      await expect(inbox).toHaveCount(3);
+      await expect(pins).toHaveCount(2);
+      const expected = theme === 'dark' ? 'rgb(203, 184, 255)' : 'rgb(43, 27, 60)';
+      for (const [label, titles] of [['inbox', inbox], ['pinned', pins]]) {
+        await titles.first().scrollIntoViewIfNeeded();
+        await expect(titles.first()).toBeVisible();
+        await capture(page, `item-heading-${theme}-${width}-${label}`);
+        const measurements = await titles.evaluateAll(nodes => nodes.map(node => {
+          const rgb = value => value.match(/[\d.]+/g).map(Number);
+          const composite = (top, bottom) => top.slice(0, 3).map((v, i) => v * (top[3] ?? 1) + bottom[i] * (1 - (top[3] ?? 1)));
+          const luminance = channels => channels.map(v => { const c = v / 255; return c <= .04045 ? c / 12.92 : ((c + .055) / 1.055) ** 2.4; }).reduce((sum, v, i) => sum + v * [.2126, .7152, .0722][i], 0);
+          let background = [255, 255, 255];
+          const parents = []; for (let el = node; el; el = el.parentElement) parents.unshift(el);
+          for (const el of parents) background = composite(rgb(getComputedStyle(el).backgroundColor), background);
+          const style = getComputedStyle(node), opacity = parents.reduce((value, el) => value * Number(getComputedStyle(el).opacity), 1), ink = luminance(composite([...rgb(style.color).slice(0, 3), opacity], background)), surface = luminance(background);
+          return { title: node.textContent, color: style.color, background, opacity, contrast: (Math.max(ink, surface) + .05) / (Math.min(ink, surface) + .05) };
+        }));
+        console.log('ITEM_HEADING_INK', JSON.stringify({ theme, width, label, measurements }));
+        for (const measurement of measurements) {
+          expect(measurement.color).toBe(expected);
+          expect(measurement.opacity).toBe(1);
+          expect(measurement.contrast).toBeGreaterThanOrEqual(4.5);
+        }
+      }
+      for (const selector of ['.wapps-stack-panel .launcher-pill-copy strong', '.agents-stack-panel .autopilot-agent-launcher-copy strong']) {
+        const name = page.locator(selector).first();
+        await name.scrollIntoViewIfNeeded();
+        await expect(name).toBeVisible();
+        expect(await name.evaluate(n => getComputedStyle(n).color)).toBe(expected);
+        await capture(page, `core-purple-${theme}-${width}-${selector.includes('wapps') ? 'apps' : 'agents'}`);
+      }
+      expect(await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--primary').trim())).toBe(theme === 'dark' ? '#CBB8FF' : '#2B1B3C');
+    });
+  }
+}

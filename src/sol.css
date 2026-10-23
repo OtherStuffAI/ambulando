@@ -8,7 +8,7 @@ body { padding:0; font-size:14px; line-height:1.5; background:var(--background);
 .brand-copy p { display:block; font-size:11px; line-height:1.3; }
 .sol-brand-tagline { display:block; color:var(--muted-foreground); font-size:11px; line-height:1.4; font-weight:400; letter-spacing:.05em; text-transform:uppercase; white-space:nowrap; }
 .sol-product-name { color:var(--muted-foreground); font-size:14px; font-weight:400; }
-.brand-logo { width:40px; height:40px; object-fit:contain; background:var(--brand-ivory); border-radius:var(--radius-control); padding:4px; }
+.brand-logo { width:40px; height:40px; object-fit:contain; background:var(--brand-white); border-radius:var(--radius-control); padding:0; }
 .brand-lockup-button { min-height:44px; }
 .sol-theme-button { display:inline-flex; align-items:center; gap:8px; padding:8px 12px; margin-left:auto; background:transparent; color:var(--foreground); border:1px solid var(--border); }
 .sol-theme-button svg { width:18px; height:18px; }
@@ -85,7 +85,7 @@ code, pre { font-family:var(--font-code); }
 .chat-channel-header { background:var(--background); }
 .auth-panel { background:var(--card); border:1px solid var(--border); border-radius:var(--radius-panel); box-shadow:none; width:min(560px,calc(100% - 32px)); margin:48px auto 16px; padding:32px; }
 .auth-brand { align-items:center; }
-.auth-brand-logo { width:64px; height:64px; padding:8px; object-fit:contain; background:var(--brand-ivory); border-radius:var(--radius-panel); }
+.auth-brand-logo { width:64px; height:64px; padding:0; object-fit:contain; background:var(--brand-white); border-radius:var(--radius-panel); }
 .sol-auth-wordmark { margin:0 0 12px; font-size:22px; font-weight:650; color:var(--foreground); }
 .auth-description, .hero-hint { color:var(--muted-foreground); }
 .auth-panel h2 { font-size:22px; color:var(--foreground); }
@@ -283,11 +283,11 @@ code, pre { font-family:var(--font-code); }
 @media (max-width:360px) {
   .page-header { padding-inline:8px; gap:3px; }
   .header-leading { gap:3px; }
-  .brand-logo { width:28px; height:28px; padding:3px; }
+  .brand-logo { width:32px; height:32px; padding:0; }
 }
 
 /* Modal scrims dim even where backdrop filtering is unavailable. */
-:root { --sol-modal-scrim:rgb(22 53 75 / 35%); }
+:root { --sol-modal-scrim:rgb(16 22 43 / 35%); }
 [data-theme="dark"] { --sol-modal-scrim:rgb(5 12 18 / 68%); }
 .modal-overlay:not(.modal-overlay-opaque), .command-palette-overlay,
 .chat-thread-modal-backdrop, .doc-modal-backdrop, .new-channel-modal-overlay,
@@ -364,7 +364,7 @@ code, pre { font-family:var(--font-code); }
 @media (max-width:768px) {
   /* Inline tokens fit the text line; standalone actions keep their hit areas. */
   .mention-pill, .mention-composer-pill { padding-block:0; line-height:1.15; vertical-align:baseline; }
-  .chat-thread-panel { --sol-thread-footer-max:min(180px, calc(var(--sol-visual-height, 100dvh) * .30)); }
+  .chat-thread-panel { --sol-thread-footer-max:min(180px, max(105px, calc(var(--sol-visual-height, 100dvh) * .30))); }
   .chat-thread-panel > .thread-header {
     flex:0 0 auto;
     flex-wrap:nowrap;
@@ -426,8 +426,8 @@ code, pre { font-family:var(--font-code); }
     resize:none;
     overscroll-behavior:contain;
   }
-  .chat-thread-panel .thread-input-actions { flex-direction:row; gap:4px; }
-  .chat-thread-panel .thread-input-actions :is(.chat-composer-menu-trigger, .thread-reply-btn) { height:44px; min-width:48px; padding:4px 8px; font-size:12px; }
+  .chat-thread-panel .thread-input-actions { flex-direction:column; gap:4px; }
+  .chat-thread-panel .thread-input-actions :is(.chat-composer-menu-trigger, .thread-reply-btn) { height:44px; min-width:44px; width:44px; padding:4px; font-size:12px; }
   .chat-thread-panel .chat-editing-banner { padding:0 4px; gap:4px; font-size:12px; }
   .chat-thread-panel .recent-mention-chips { flex-wrap:nowrap; overflow-x:auto; }
   .chat-thread-panel :is(.chat-file-draft-list, .audio-draft-list) { margin:0; padding:4px 8px; }
@@ -714,3 +714,65 @@ code, pre { font-family:var(--font-code); }
 .feed-source-switcher button:focus-visible { outline:2px solid var(--ring); outline-offset:2px; }
 .feed-source-switcher svg { width:18px; height:18px; flex:none; }
 @media (max-width:767px), (pointer:coarse) { .feed-source-switcher button { width:44px; min-height:44px; padding-inline:12px; } }
+
+/* Composer actions keep one compact column in every viewport. */
+.thread-input-actions :is(.chat-composer-menu-trigger, .thread-reply-btn) {
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  width:36px;
+  min-width:36px;
+  height:36px;
+  padding:4px;
+}
+.thread-input-actions svg { flex-shrink:0; }
+@media (max-width:768px), (pointer:coarse) {
+  .thread-input-actions :is(.chat-composer-menu-trigger, .thread-reply-btn) {
+    width:44px;
+    min-width:44px;
+    height:44px;
+    min-height:44px;
+    padding:4px;
+  }
+}
+
+.pinned-thread-row.pinned-channel-unread { background: var(--inbox-working-blue); }
+
+@media (max-width: 768px) {
+  .inbox-panel-heading.has-channel-inbox[data-deck-mobile-sticky-heading] { grid-template-columns: minmax(0, 1fr) 44px 44px 44px; }
+  .inbox-panel-heading.has-channel-inbox h3 { grid-column: 1 / -1; grid-row: 1; }
+  .inbox-panel-heading.has-channel-inbox .deck-inbox-title > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .inbox-panel-heading.has-channel-inbox .inbox-type-toggles { grid-column: 1; grid-row: 2; }
+  .inbox-panel-heading.has-channel-inbox .inbox-search-form { grid-column: 2; grid-row: 2; }
+  .inbox-panel-heading.has-channel-inbox .deck-new-thread-button { grid-column: 3; grid-row: 2; }
+  .inbox-panel-heading.has-channel-inbox .inbox-read-menu { grid-column: 4; grid-row: 2; }
+  .inbox-panel-heading.has-channel-inbox .inbox-search-form:focus-within { grid-column: 1 / -1; grid-row: 3; }
+}
+
+/* Reordering uses handles so list scrolling and ordinary opening stay native. */
+.pin-reorder-handle { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 28px; width: 28px; min-height: 44px; padding: 0; border: 0; border-radius: 6px; color: var(--text-muted); background: transparent; cursor: grab; touch-action: none; user-select: none; }
+.pin-reorder-handle:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
+.pin-reorder-handle[aria-pressed="true"] { cursor: grabbing; color: var(--primary); }
+.pin-reorder-help { font-size: 12px; color: var(--text-muted); margin: 0 8px 6px; }
+.pinned-thread-row { position: relative; }
+.pinned-thread-row.pin-moving { outline: 2px dashed var(--primary); outline-offset: -2px; }
+.pin-insert-before::before, .pin-insert-after::after { content: ""; position: absolute; left: 0; right: 0; height: 3px; background: var(--primary); pointer-events: none; z-index: 1; }
+.pin-insert-before::before { top: 0; }
+.pin-insert-after::after { bottom: 0; }
+@media (max-width: 768px), (pointer: coarse) { .pin-reorder-handle { flex-basis: 44px; width: 44px; } }
+
+/* Contain the absolute live region inside the horizontally paged column. */
+.flightdeck-summary-panel-pinned .deck-card-scroll { position: relative; }
+
+/* App and agent identity text uses heading ink, independent of state badges. */
+.agent-space-card > strong,
+.agent-space-header h1,
+.autopilot-agent-settings-profile .new-channel-profile-name,
+.agent-connect-selection strong,
+.wapp-management-row > div > strong,
+.wapp-publishing-installation-row > div > strong,
+.wapp-publishing-identity > strong {
+  color:var(--item-heading);
+}
+.agent-space-card.active { border-color:var(--primary); }
+.agent-space-tabs button.active { border-bottom-color:var(--primary); }

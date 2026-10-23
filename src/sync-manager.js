@@ -1,3 +1,4 @@
+import { synchronizePrivatePreferences } from './private-preference-sync.js';
 import { synchronizeThreadPins } from './thread-pin-sync.js';
 import { hydrateHostingBilling } from './hosting-billing.js';
 import { canLoadPgTarget } from './pg-archive-state.js';
@@ -373,6 +374,7 @@ export const syncManagerMixin = {
       workspaceKey,
       families: {
         'hosting-billing': { freshMs: 60000, load: (_id, options) => hydrateHostingBilling(this, options), materialize: result => result },
+        'private-preferences': { trackFreshness: false, load: () => synchronizePrivatePreferences(this) },
         'thread-pins': { trackFreshness: false, load: () => synchronizeThreadPins(this) },
         'scope-order': { freshMs: 30000, load: (_id, options) => hydrateScopeOrder(this, options) },
         'org-data-permissions': { trackFreshness: false, load: (_key, options) => readOrgDataPermissions(this, options) },
@@ -1010,6 +1012,8 @@ export const syncManagerMixin = {
       });
       if (isCurrent()) {
         await synchronizeThreadPins(this);
+        await this.activateNostrViewer?.();
+        await synchronizePrivatePreferences(this).catch(() => {});
         this.finishStartupSyncProgress(null, { waitingForTab: result?.waitingForTab === true });
       }
       // Every committed workspace pull is connectivity evidence, including
@@ -1070,17 +1074,27 @@ export const syncManagerMixin = {
   commandTowerWorkspace(name, input = {}, options = {}) {
     const service = this.getTowerSyncService();
     if (!service) throw new Error('TowerSyncService is unavailable for the active workspace');
+    const reconciliationContext = this._recordDeltaAttentionActive ? {
+      workspaceDbKey: this.workspaceDbKey, store: this.buildTowerPgMaterializationStoreSnapshot(),
+    } : null;
     // A command owns its transport, acknowledgement writes, and forced
     // materialisation lifecycle. Detach it from any ambient Dexie zone so the
     // foreign Tower/worker promises cannot outlive and prematurely commit the
     // caller's transaction.
     return Dexie.ignoreTransaction(() => service.command(name, input, options).then(async (result) => {
-      if (this._recordDeltaAttentionActive && !result?.stale && name !== 'record-conflict.accept-remote') {
-        try {
-          await service.materialize('workspace-bundle', { protocol_version: 1, reconcile_commands: true }, {
-            workspaceDbKey: this.workspaceDbKey, store: this.buildTowerPgMaterializationStoreSnapshot(),
-          });
-        } catch (error) { flightDeckLog('warn', 'sync', 'Acknowledgement reconciliation remains pending', { error: error.message }); }
+      if (reconciliationContext && !result?.stale && name !== 'record-conflict.accept-remote') {
+        const reconcile = async () => {
+          try {
+            await service.materialize('workspace-bundle', { protocol_version: 1, reconcile_commands: true }, {
+              ...reconciliationContext,
+            });
+          } catch (error) { flightDeckLog('warn', 'sync', 'Acknowledgement reconciliation remains pending', { error: error.message }); }
+        };
+        // message.create already durably reconciles the accepted row in its
+        // command descriptor. Unrelated conflicts can sit behind background
+        // sync in the serial materializer; they must not delay the composer.
+        const reconciliation = reconcile();
+        if (name !== 'message.create') await reconciliation;
       }
       return result;
     }));
@@ -3360,6 +3374,7 @@ export const syncManagerMixin = {
           await this.requestTowerSyncFamily('channel-agent-activities', channelId, { channelId, force: true, recover: true });
         }
         if (fallbackRefreshRequested) await this.recoverVisibleAgentActivities();
+        if (events.some(event => event?.entity_type === 'private_preference')) await this.requestTowerSyncFamily('private-preferences');
         const refreshPersonalAgents = events.some((event) => (
           String(event?.entity_type || '').trim() === 'personal_agent_settings'
         ));
@@ -3523,6 +3538,7 @@ export const syncManagerMixin = {
   },
 
   ensureBackgroundSync(runSoon = false) {
+    if (this.canvasChatEmbedded && (!this.canvasChatVisible || !this.canvasChatBootstrapped)) return;
     this.ensureTowerPgForegroundActivityGovernor?.();
     if (!this.visibilityHandler && typeof document !== 'undefined') {
       this.visibilityHandler = (event) => {

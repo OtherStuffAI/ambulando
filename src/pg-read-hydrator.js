@@ -1,3 +1,4 @@
+import { decodeDocumentContent } from './docs/stored-content.js';
 import { createDiagnosticOperation, finishDiagnosticOperation, emitDiagnostic } from './diagnostics-events.js';
 import { resolveTowerPgWorkspaceContext } from './pg-workspace-context.js';
 export { resolveTowerPgWorkspaceContext } from './pg-workspace-context.js';
@@ -913,13 +914,10 @@ export function mapPgDocToLocal(doc, { workspaceOwnerNpub } = {}) {
 
 function resolveStoredDocumentContent(raw, fallback = {}) {
   try {
-    const parsed = JSON.parse(raw);
-    const model = parsed?.content_model && typeof parsed.content_model === 'object'
-      ? parsed.content_model
-      : parsed;
-    if (typeof model?.content === 'string') {
+    const model = decodeDocumentContent(raw, { allowLegacyModel: true });
+    if (model) {
       return {
-        content: model.content,
+        content: model.content ?? '',
         content_format: model.content_format ?? fallback.content_format ?? null,
         content_blocks: Array.isArray(model.content_blocks)
           ? model.content_blocks
@@ -3176,6 +3174,8 @@ export async function hydrateTowerPgEventUpdates(store, events = [], deps = {}) 
       attentionStateChanged = true;
     }
 
+    // Private preferences have their own actor-bound read family in TowerSyncService.
+    if (entityType === 'private_preference') continue;
     if (['scope_order','thread_pin','personal_pin'].includes(entityType) || (['scope', 'channel'].includes(entityType) && trimText(event?.operation) === 'archived')) {
       // These hints reconcile through the canonical journal only; no list or
       // content hydration is needed for a private preference or tombstone.

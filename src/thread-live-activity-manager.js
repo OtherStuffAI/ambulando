@@ -48,6 +48,7 @@ export const threadLiveActivityManagerMixin = {
   _liveThreadActivityRefreshes: null,
 
   startThreadLiveActivity() {
+    if (this.canvasChatEmbedded && (!this.canvasChatVisible || !this.canvasChatBootstrapped)) return;
     if (!this.activeThreadId || !this.isTowerPgMode) {
       this.stopThreadLiveActivity();
       return;

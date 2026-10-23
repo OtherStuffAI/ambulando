@@ -1,6 +1,6 @@
 import { prepareThreadPinCommand } from './thread-pin-sync.js';
 import { markPgTargetArchived } from './pg-archive-state.js';
-import { mapScopeOrder } from './scope-order.js';
+import { captureScopeOrderSession } from './scope-order.js';
 import { prepareOrgDataCommand } from './org-data/tower.js';
 import { prepareFeedCommand } from './feed/tower.js';
 import {
@@ -128,13 +128,6 @@ async function reconcileTypedCommand(name, result, { owner = '', args = [] } = {
   } else if (name === 'daily-note.upsert') {
     const row = mapPgDailyNoteToLocal(result?.daily_note || result?.note || result, { workspaceOwnerNpub: owner });
     if (row.record_id) await upsertDailyNote(row);
-  } else if (name === 'scope-order.put') {
-    const row = mapScopeOrder(result.scope_order);
-    const db = getWorkspaceDb();
-    await db.transaction('rw', db.scope_orders, async () => {
-      const prior = await db.scope_orders.get(row.record_id);
-      if (!prior || prior.row_version <= row.row_version) await db.scope_orders.put(row);
-    });
   } else if (name === 'resource-view-state.put') {
     const row = mapTowerResourceViewState(result?.view_state || result?.resource_view_state || result, { workspaceId: args[0] });
     if (row?.record_id) await upsertResourceViewState(row);
@@ -243,6 +236,7 @@ export function prepareTowerWorkspaceCommand(store, name, input = {}) {
   }[name];
   if (typedApiCommandName) {
     const args = Array.isArray(input.args) ? input.args : [];
+    const scopeOrderSession = name === 'scope-order.put' ? captureScopeOrderSession(store) : null;
     const owner = store.workspaceOwnerNpub || store.currentWorkspaceOwnerNpub || '';
     const previousScope = name === 'scope.update' || name === 'scope.delete'
       ? (store.scopes || []).find((row) => row?.record_id === args[1])
@@ -259,6 +253,7 @@ export function prepareTowerWorkspaceCommand(store, name, input = {}) {
       'channel.delete': () => previousChannel ? upsertChannel(cloneableRow(previousChannel, { record_state: 'deleted', sync_status: 'pending' })) : undefined,
     }[name];
     const reconcile = {
+      'scope-order.put': async (result) => { await scopeOrderSession.materialize(result.scope_order); return result; },
       'scope.create': async (result) => {
         const row = mapPgScopeToLocal(result?.scope || result, { workspaceOwnerNpub: owner });
         if (args[1]?.client_record_id && row.record_id !== args[1].client_record_id) {
@@ -297,7 +292,7 @@ export function prepareTowerWorkspaceCommand(store, name, input = {}) {
     return {
       entityKey: `${name}:${String(input.entityId || input.clientMutationId || '')}`,
       optimistic,
-      execute: () => api[typedApiCommandName](...args),
+      execute: () => { scopeOrderSession?.assertCurrent(); return api[typedApiCommandName](...args); },
       reconcile: reconcile || ((result) => reconcileTypedCommand(name, result, { owner, args })),
       fail,
     };

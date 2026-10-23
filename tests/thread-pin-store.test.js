@@ -71,3 +71,50 @@ it('projects typed resources with canonical titles and attention, and scopes ope
  expect((await db.thread_pin_outbox.toArray()).map(r=>r.resourceType)).toEqual(['document']);
  await db.documents.update('same',{record_state:'deleted'});projection=await readThreadPinProjection(db,context,'typed');expect(projection.rows[0]).toMatchObject({title:'Document unavailable',unavailable:true});
 });
+
+it('projects channel pins with canonical titles, safe unavailable states and immutable typed retries',async()=>{
+ await db.channels.put({record_id:'channel',title:'Across scopes',scope_id:'other',record_state:'active'});
+ await queueThreadPin(db,context,{id:'channel'},true,'channel');
+ const [op]=await db.thread_pin_outbox.toArray();
+ expect(op).toMatchObject({resourceType:'channel',targetKey:'channel:channel',body:{expected_row_version:0,pinned:true}});
+ expect((await readThreadPinProjection(db,context,'channels')).rows[0]).toMatchObject({type:'channel',title:'Across scopes',channelId:'channel',unavailable:false});
+ await applyThreadPinOperation(store,{action:'ack',seq:op.seq,mutationId:op.body.mutation_id,pin:{id:'channel-pin',workspace_id:workspace,actor_id:actor,resource_type:'channel',resource_id:'channel',channel_id:'channel',pinned:true,pinned_at:op.pinnedAt,row_version:1}},db);
+ expect(await db.thread_pin_outbox.count()).toBe(0);
+ expect((await readThreadPinProjection(db,context,'channels')).rows).toHaveLength(1);
+ await db.pg_archived_targets.put({key:'scope:other'});
+ expect((await readThreadPinProjection(db,context,'channels')).rows[0]).toMatchObject({title:'Channel unavailable',unavailable:true});
+ await queueThreadPin(db,context,{id:'channel'},false,'channel');
+ expect((await db.thread_pin_outbox.toArray())[0].body.expected_row_version).toBe(1);
+ expect((await readThreadPinProjection(db,context,'channels')).rows).toEqual([]);
+ expect(await db.resource_view_states.count()).toBe(0);expect(await db.pending_writes.count()).toBe(0);
+});
+
+it('projects immutable offline moves, preserves typed collisions and monotonic tombstones on lost-ack replay',async()=>{
+ const {queuePersonalPinMove,pinOrderSupportKey}=await import('../src/thread-pin-store.js');
+ const row=(type,id,position=null,version=1)=>({id:`${type}-${id}`,workspace_id:workspace,actor_id:actor,resource_type:type,resource_id:id,pinned:true,pinned_at:'2026-10-01',order_position:position,row_version:version});
+ const rows=[row('channel','same'),row('task','same'),row('document','same')];
+ await db.thread_pins.bulkPut(rows.map(r=>mapThreadPin(r,context)));
+ await db.sync_state.put({key:pinOrderSupportKey(context),value:true});
+ const keys=async()=>(await readThreadPinProjection(db,context,'no-legacy')).rows.map(r=>r.key);
+ expect(await keys()).toEqual(['channel:same','document:same','task:same']);
+ await queuePersonalPinMove(db,context,'task:same','channel:same');
+ const [op]=await db.thread_pin_outbox.toArray();expect(op.body.before).toEqual({resource_type:'channel',resource_id:'same',expected_row_version:1});
+ expect(await keys()).toEqual(['task:same','channel:same','document:same']);
+ await expect(queuePersonalPinMove(db,context,'channel:same',null)).rejects.toThrow('pending');
+ await applyThreadPinOperation(store,{action:'retry',seq:op.seq,mutationId:op.body.mutation_id},db);
+ expect((await db.thread_pin_outbox.get(op.seq)).body).toEqual(op.body);
+ await db.thread_pins.put(mapThreadPin({...row('task','same',0,3),pinned:false},context));
+ await applyThreadPinOperation(store,{action:'ack',seq:op.seq,mutationId:op.body.mutation_id,pins:[row('task','same',0,2),row('channel','same',1,2),row('document','same',2,2)]},db);
+ expect(await keys()).toEqual(['channel:same','document:same']);expect(await db.thread_pin_outbox.count()).toBe(0);
+ expect(await db.pending_writes.count()).toBe(0);expect(await db.resource_view_states.count()).toBe(0);
+});
+it('keeps new pins ahead of positioned rows and refuses moving unpinned or unsynchronized selections',async()=>{
+ const {queuePersonalPinMove,pinOrderSupportKey}=await import('../src/thread-pin-store.js');
+ await expect(queuePersonalPinMove(db,context,'channel:x',null)).rejects.toThrow('updated Tower');
+ await db.sync_state.put({key:pinOrderSupportKey(context),value:true});
+ for(const [id,position,time] of [['old',0,'2026-10-01'],['new',null,'2026-10-02'],['legacy',null,'2026-09-01']])await db.thread_pins.put(mapThreadPin({id,workspace_id:workspace,actor_id:actor,resource_type:'channel',resource_id:id,pinned:true,pinned_at:time,order_position:position,row_version:1},context));
+ expect((await readThreadPinProjection(db,context,'none')).rows.map(r=>r.id)).toEqual(['new','legacy','old']);
+ await expect(queuePersonalPinMove(db,context,'channel:missing',null)).rejects.toThrow('changed');
+ await queueThreadPin(db,context,{id:'new',type:'channel'},false);
+ await expect(queuePersonalPinMove(db,context,'channel:new',null)).rejects.toThrow('pending');
+});

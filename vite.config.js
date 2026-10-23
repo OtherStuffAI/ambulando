@@ -4,6 +4,7 @@ import path from 'node:path';
 
 import { createVersionMetadata, readReleaseNotesManifest } from './scripts/release-notes.mjs';
 import { documentEditorAssetPlugin } from './scripts/document-editor-asset.mjs';
+import { excalidrawAssetPlugin } from './scripts/excalidraw-assets.mjs';
 
 const DIST_DIR = path.resolve(__dirname, 'dist');
 const SUITE_ROOT = path.resolve(__dirname, '..');
@@ -402,7 +403,7 @@ export default defineConfig({
   // that entry again in WebKit, duplicating the DB singleton and listeners.
   worker: { format: 'es', rollupOptions: { output: { inlineDynamicImports: true } } },
   root: '.',
-  plugins: [flightDeckIdentityPlugin(), buildVersionPlugin(), missingDistAssetGuardPlugin(), documentEditorAssetPlugin()],
+  plugins: [flightDeckIdentityPlugin(), buildVersionPlugin(), missingDistAssetGuardPlugin(), documentEditorAssetPlugin(), excalidrawAssetPlugin()],
   server: {
     host: true,
     strictPort: true,
@@ -423,7 +424,7 @@ export default defineConfig({
   appType: 'spa',
   build: {
     outDir: 'dist',
-    rollupOptions: { input: { app: path.resolve(__dirname, 'index.html'), canvas: path.resolve(__dirname, 'canvas.html'), privacy: path.resolve(__dirname, 'legal/privacy.html'), terms: path.resolve(__dirname, 'legal/terms.html') } },
+    rollupOptions: { input: { app: path.resolve(__dirname, 'index.html'), canvas: path.resolve(__dirname, 'canvas.html'), canvasBoard: path.resolve(__dirname, 'canvas-board.html'), privacy: path.resolve(__dirname, 'legal/privacy.html'), terms: path.resolve(__dirname, 'legal/terms.html') } },
   },
   test: {
     environment: 'node',

@@ -1,4 +1,4 @@
-import { mapThreadPin, threadPinContext, threadPinSupportKey } from './thread-pin-store.js';
+import { pinOrderSupportKey, mapThreadPin, threadPinContext, threadPinSupportKey } from './thread-pin-store.js';
 import { mergePgAccessState } from './pg-access-state.js';
 import { markPgTargetArchived } from './pg-archive-state.js';
 import { mapScopeOrder } from './scope-order.js';
@@ -248,6 +248,7 @@ async function applyRecordPage(store, page, options = {}) {
     if (resolvePgReaderActorId(store)) {
       const reader = threadPinContext(store);
       await db.sync_state.put({ key: threadPinSupportKey(reader), value: page.families.includes('personal_pin') });
+      await db.sync_state.put({ key: pinOrderSupportKey(reader), value: page.personal_pin_order_version === 1 });
     }
     if (options.boundedExtension === 'bounded_snapshot_v1' && state.handover?.target_position !== null
       && state.handover?.target_position !== undefined && !state.handover.complete

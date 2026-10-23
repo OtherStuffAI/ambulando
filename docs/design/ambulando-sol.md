@@ -1,23 +1,23 @@
 # Ambulando Sol frontend
 
-Sol is the Flight Deck browser client presented with Ambulando design system v5.
+Sol is the Flight Deck browser client presented with the approved Ambulando perspective-passage identity over the v5 component system.
 The fork retains Alpine, Dexie materialization, Nostr signers, Tower adapters,
 worker synchronization, checkout/edit leases and permissions. Its namespace and
-record contracts are unchanged. Source commits remain local until a dedicated
-Sol remote is configured; never publish to the original Flight Deck remote.
+record contracts are unchanged. Publish source only to the dedicated Ambulando origin; never publish to the
+original Flight Deck upstream remote.
 
 ## Surface audit and presentation ownership
 
 The audit identified root `index.html` as the connected product template, with
 shared styling in `src/styles.css`, pipeline styling in `src/pipeline-viewer.css`
 and shell state assembled from `app.js` and `shell-state.js`. These continue to
-own their existing behavior. The presentation layer comprises exact v5 tokens in
+own their existing behavior. The presentation layer comprises semantic brand tokens in
 `src/ambulando-tokens.css`, migrated shared semantic declarations, and component
 conventions in `src/sol.css`. Avoid new fixed light colors in any product surface.
 
 | Surface | Existing behavior retained | v5 presentation |
 | --- | --- | --- |
-| Shell/navigation | Section routing, view locks, scope/channel selection, workspace discovery/switching, profile/sync feedback | Header-only Confluence/name branding, compact rail, local Lucide navigation, responsive drawer, native keyboard buttons |
+| Shell/navigation | Section routing, view locks, scope/channel selection, workspace discovery/switching, profile/sync feedback | Header-only passage/name branding, compact rail, local Lucide navigation, responsive drawer, native keyboard buttons |
 | Login/onboarding | Ephemeral, NIP-07, bunker/nsec, workspace access/bootstrap and connection flows | Quiet bordered panels, labeled credentials, explicit disabled/loading/error feedback |
 | Home/Inbox/scopes | Dexie unread/working projections, filters, actions, scope cards and channel creation permissions | Semantic cards, status text, compact controls, selected accent |
 | Conversations/thread/composer | Thread routing, attachments, reactions, scroll ownership, drafts and send failure | Readable messages (16px desktop, compact phone proportions), calm sender metadata, bounded modal, focus ring and local control colors |
@@ -41,6 +41,9 @@ Dark mode uses explicit token pairs, including native control color schemes.
 Desktop controls use 36px minimum height; touch/phone controls use 44px. Product
 text is system sans 14px, reading text 16px. Panels have 10px radii, controls 6px;
 status badges and actual avatars may stay rounded. Keyboard focus uses `--ring`.
+Linked item titles (`.attention-card-title`, including Inbox and Pinned items)
+use `--item-heading`: deep purple #2B1B3C in light mode and light purple
+#CBB8FF in dark mode. Core `--brand-purple` is #2B1B3C. Light `--primary`, focus rings, sidebar primary/ring, chart-1 and accent ink reference that token; dark primary remains #CBB8FF with #20123C action ink. App/agent launcher names, Toolbox names, Agent Space names, agent settings/discovery names and managed WApp names use `--item-heading`. Active Agent Space cards/tabs retain explicit primary borders. State labels, user task colours, code, white document paper and raster artwork are independent.
 `x-sol-dialog` adds focus containment and restoration only to `aria-modal=true`
 surfaces. Existing close/Escape handlers and busy guards remain authoritative.
 Nonmodal calendars/popovers retain their existing keyboard primitives.
@@ -109,12 +112,21 @@ Existing content/attachment avatars are not replaced with decorative brand marks
 Task-board state/column colors remain data-driven accents, including user-configured
 colors, on semantic paired surfaces; their persisted palette contract is retained.
 
-The Confluence symbol is the supplied provisional raster, unchanged. Ivory
-backing separates its navy from dark surfaces. The live-type Ambulando name is
-an interface treatment, not a claim to the master logo font. Favicon derivatives
-preserve proportions with clear space; 16px loses trail definition and 32px is
-soft. Final approved vector and optically tuned small artwork remain outstanding.
-See `public/ambulando/README.md`, source manifest and asset hashes for provenance.
+The selected refined16D perspective-passage raster is preserved byte-for-byte as
+`passage-master.png`. White opaque backing separates navy geometry from dark
+surfaces. The live-type name and Solvitur Ambulando tagline remain interface
+type, not a custom wordmark master. Desktop header tiles remain 40px; phones use
+32px to retain more detail without changing navigation touch targets. Small
+icons are raster derivatives: 16px loses fine gaps and the terminal; 32px is
+recognisable but soft. No optical, vector, transparent or production-print
+master is claimed. The Confluence assets remain for rollback. See
+`public/ambulando/README.md` and asset hashes for provenance and limitations.
+
+Palette roles include popover, secondary, sidebar and chart aliases, with purple
+primary actions on light and lighter purple on navy dark surfaces. Status and
+code pairs, user task colours, document paper, theme persistence and layout
+owners remain independent. Browser theme colour follows the same resolved theme
+both during head bootstrap and after user/system preference changes.
 
 ## Verification
 
@@ -265,3 +277,16 @@ It checks filtering, pressed state, Tab/Enter/Space, accessible names and same-r
 placement at 320/390/1440px in both themes. It does not establish authenticated
 feed or relay delivery. `SOL_EVIDENCE_DIR` optionally captures screenshots in
 verified ignored handoff storage.
+
+
+## Composer action column
+
+New-thread, reply/edit and workroom reply composers use a Menu icon above a
+paper-airplane action in one compact column at every width. Native buttons keep
+Menu and the current Start thread/Reply/Save/pending action as accessible names
+and title tooltips. Existing handlers, send guards, busy state, drafts and
+attachment previews are retained. Targets are 36px on desktop and 44px on phones
+or coarse pointers. `tests/e2e/composer-icons.spec.cjs` exercises responsive
+geometry, keyboard menu/send callbacks and pending/edit labels using synthetic
+records in the production template; authenticated Tower delivery and physical
+phone behavior remain separate smoke checks.

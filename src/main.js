@@ -9,6 +9,7 @@ import { installStableHtml } from './stable-html.js';
 import { initializeTowerTransports } from './tower-transport.js';
 import { installNativeTransportLifecycle } from './native-transport-lifecycle.js';
 import './styles.css';
+import './canvas/chat-embed.css';
 import './sol.css';
 import './hosting-onboarding.css';
 import { initApp } from './app.js';
@@ -33,10 +34,10 @@ async function boot() {
   Alpine.data('pipelineViewerView', () => createPipelineViewerView());
   Alpine.data('contextTreeView', () => createContextTreeView());
   initApp();
-  installNotificationClickRouteHandler();
+  if (!Alpine.store('chat').canvasChatEmbedded) installNotificationClickRouteHandler();
   initChatThreadFlowDispatchDomBridge();
-  registerBuildServiceWorker();
-  startVersionCheck();
+  if (!Alpine.store('chat').canvasChatEmbedded) registerBuildServiceWorker();
+  if (!Alpine.store('chat').canvasChatEmbedded) startVersionCheck();
   initImageModal();
   initMarkdownCodeBlocks();
 }

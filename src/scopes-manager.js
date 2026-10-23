@@ -1,5 +1,5 @@
 import { resolvePgReaderActorId } from './pg-reader-identity.js';
-import { sortScopesPersonally } from './scope-order.js';
+import { sortScopesPersonally, hydrateScopeOrder, captureScopeOrderSession } from './scope-order.js';
 import { putTowerPgScopeOrder } from './tower-command-intents.js';
 /**
  * Scope management methods extracted from app.js.
@@ -257,10 +257,14 @@ export const scopesManagerMixin = {
     return Boolean(this.canAdminWorkspace || (this.isTowerPgMode && (this.scopes || []).length) || (this.scopes || []).some((scope) => this.canManageScope(scope)));
   },
 
-  get personallyOrderedScopes() {
+  get personalScopeOrderIds() {
     const order = this.personalScopeOrder;
     const valid = order?.actor_id === resolvePgReaderActorId(this) && order?.workspace_id === this.currentWorkspace?.workspaceId;
-    return sortScopesPersonally(this.scopes || [], valid ? order.scope_ids : []);
+    return valid ? order.scope_ids : [];
+  },
+
+  get personallyOrderedScopes() {
+    return sortScopesPersonally(this.scopes || [], this.personalScopeOrderIds);
   },
 
   get personalOrderScopes() {
@@ -304,13 +308,28 @@ export const scopesManagerMixin = {
     if (!this.isTowerPgMode || this.scopeOrderSaving) return;
     const eligible = new Set(this.personalOrderScopes.map(row => row.record_id));
     ids = [...new Set(ids.filter(id => eligible.has(id)))];
-    this.scopeOrderSaving = true; this.scopeOrderError = '';
+    this.scopeOrderSaving = true; this.scopeOrderError = ''; this.scopeOrderNotice = '';
+    let session;
     try {
-      const context = resolveTowerPgWorkspaceContext(this);
-      await putTowerPgScopeOrder(this, context.workspaceId, { scope_ids: ids, expected_row_version: this.personalScopeOrder?.row_version || 0, mutation_id: crypto.randomUUID() }, context);
+      session = captureScopeOrderSession(this);
+      const { context } = session;
+      // Rendered liveQuery state can lag the last acknowledgement or be absent
+      // while the reader is loading. It is never the write revision authority.
+      const current = await hydrateScopeOrder(this);
+      session.assertCurrent();
+      const result = await putTowerPgScopeOrder(this, context.workspaceId, { scope_ids: ids, expected_row_version: current.row_version, mutation_id: crypto.randomUUID() }, context);
+      session.assertCurrent();
+      if (!result?.scope_order) throw new Error('Tower did not confirm the scope order.');
       this.scopeOrderNotice = 'Personal scope order saved.';
     } catch (error) {
-      this.scopeOrderError = /scope_order_conflict/.test(error?.message || '') ? 'Your order changed in another session. Refresh Scope Management and try again.' : error?.message || 'Could not save scope order.';
+      if (/scope_order_conflict/.test(error?.message || '')) {
+        // Do not replay a rejected reorder over another session's edit. Refresh
+        // the revision and visible order so the next explicit move can succeed.
+        try { session?.assertCurrent(); await hydrateScopeOrder(this); } catch { /* retain the original conflict */ }
+        this.scopeOrderError = 'Your order changed in another session. Try your move again.';
+      } else {
+        this.scopeOrderError = error?.message || 'Could not save scope order.';
+      }
     } finally { this.scopeOrderSaving = false; }
   },
 
@@ -998,7 +1017,7 @@ export const scopesManagerMixin = {
   // --- scope picker / navigation ---
 
   get scopePickerResults() {
-    return searchScopes(this.scopePickerQuery, this.scopes, this.scopesMap);
+    return searchScopes(this.scopePickerQuery, this.personallyOrderedScopes || this.scopes, this.scopesMap);
   },
 
   get scopePickerFlat() {
@@ -1007,7 +1026,7 @@ export const scopesManagerMixin = {
   },
 
   scopePickerFlatFor(query) {
-    const r = searchScopes(query, this.scopes, this.scopesMap);
+    const r = searchScopes(query, this.personallyOrderedScopes || this.scopes, this.scopesMap);
     return [...(r.l1 || []), ...(r.l2 || []), ...(r.l3 || []), ...(r.l4 || []), ...(r.l5 || [])];
   },
 

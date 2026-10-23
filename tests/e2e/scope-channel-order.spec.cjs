@@ -53,4 +53,14 @@ test('scope channel drag and keyboard moves persist, isolate and recover', async
   expect(await labels()).toEqual(['architecture', 'dialogue', 'gateway', 'Build']);
   expect(fixture.channels.find(c => c.record_id === 'ch-mini').position).toBe(5);
   expect(await page.evaluate(() => Alpine.store('chat').draggedScopeId)).toBeFalsy();
+  fail = false;
+  await page.getByRole('button', { name: 'Move dialogue up', exact: true }).click();
+  await expect.poll(() => page.evaluate(() => Alpine.store('chat').channelOrderBusy)).toBe(false);
+  await expect(rows.locator(':scope > span')).toHaveText(['dialogue', 'architecture', 'gateway', 'Build']);
+  expect(writes).toEqual([['ch-dialogue', 3], ['ch-dialogue', 2], ['ch-dialogue', 1], ['ch-dialogue', 1]]);
+  expect(await page.evaluate(() => Alpine.store('chat').channelOrderError)).toBe('');
+  await page.reload(); await seedGroupsAccess(page, fixture);
+  await page.evaluate(() => { Alpine.store('chat').settingsTab = 'scopes'; });
+  await page.getByRole('button', { name: 'Expand scope Beacon', exact: true }).click();
+  await expect(rows.locator(':scope > span')).toHaveText(['dialogue', 'architecture', 'gateway', 'Build']);
 });

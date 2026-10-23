@@ -71,12 +71,38 @@ export function arrowGeometry(start, end, minimum = 8) {
   };
 }
 
+// Legacy arrows did not store endpoints. Keep their bottom-left → top-right
+// projection, and preserve unknown data fields when any handle is edited.
+export function arrowPoints(layout, data = {}) {
+  const start = data.start || [0, layout.height], end = data.end || [layout.width, 0];
+  const curve = data.curve;
+  return { start, end, middle: curve
+    ? [start[0] / 4 + curve[0] / 2 + end[0] / 4, start[1] / 4 + curve[1] / 2 + end[1] / 4]
+    : [(start[0] + end[0]) / 2, (start[1] + end[1]) / 2] };
+}
+
+export function arrowPath(layout, data = {}) {
+  const { start, end } = arrowPoints(layout, data);
+  return `M ${start.join(' ')} ${data.curve ? `Q ${data.curve.join(' ')}` : 'L'} ${end.join(' ')}`;
+}
+
 export function moveArrowEndpoint(layout, data, endpoint, point) {
-  const otherName = endpoint === 'start' ? 'end' : 'start';
-  const own = { x: point.x, y: point.y };
-  const stored = Array.isArray(data?.[otherName]) ? data[otherName] : (otherName === 'start' ? [0, layout.height] : [layout.width, 0]);
-  const other = { x: layout.x + stored[0], y: layout.y + stored[1] };
-  const geometry = endpoint === 'start' ? arrowGeometry(own, other) : arrowGeometry(other, own);
+  const points = arrowPoints(layout, data);
+  const absolute = pair => ({ x: layout.x + pair[0], y: layout.y + pair[1] });
+  let start = absolute(points.start), end = absolute(points.end);
+  let curve = data?.curve ? absolute(data.curve) : null;
+  if (endpoint === 'middle') {
+    // The handle stays on the visible curve at t=.5, directly under the pointer.
+    curve = { x: 2 * point.x - (start.x + end.x) / 2, y: 2 * point.y - (start.y + end.y) / 2 };
+  } else if (endpoint === 'start') start = point;
+  else end = point;
+  const geometry = arrowGeometry(start, end);
+  if (curve) {
+    const left = Math.min(start.x, end.x, curve.x), top = Math.min(start.y, end.y, curve.y);
+    geometry.layout = { x: Math.round(left), y: Math.round(top), width: Math.max(8, Math.round(Math.max(start.x, end.x, curve.x) - left)), height: Math.max(8, Math.round(Math.max(start.y, end.y, curve.y) - top)) };
+    const relative = p => [Math.round(p.x - geometry.layout.x), Math.round(p.y - geometry.layout.y)];
+    geometry.data = { start: relative(start), end: relative(end), curve: relative(curve) };
+  }
   return { layout: { ...layout, ...geometry.layout }, data: { ...data, ...geometry.data } };
 }
 

@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
   "dockerfileLines": [
-    "FROM oven/bun:1.3.0-debian AS builder",
+    "FROM oven/bun:1.4.4-debian AS builder",
     "WORKDIR /app",
     "ARG FLIGHT_DECK_PG_APP_NPUB=${FLIGHT_DECK_PG_APP_NPUB}",
     "ENV FLIGHT_DECK_PG_APP_NPUB=${FLIGHT_DECK_PG_APP_NPUB}",
@@ -9,7 +9,7 @@
     "RUN bun install --frozen-lockfile",
     "COPY . .",
     "RUN bun scripts/build-caprover.mjs",
-    "FROM oven/bun:1.3.0-debian",
+    "FROM oven/bun:1.4.4-debian",
     "WORKDIR /app",
     "COPY package.json bun.lock ./",
     "RUN bun install --frozen-lockfile --production",

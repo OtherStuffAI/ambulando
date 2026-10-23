@@ -15,6 +15,18 @@ order. Before the service is initialized, the sync-manager fallback dispatch use
 the same canonical scope-order hydrator; requesting the preference alone does not
 initialize the service or bootstrap the workspace. Unknown scopes append in their
 existing order. Drag placement and Move Up/Down issue the same preference command.
+Each save first reads the current actor-bound preference revision. The rendered
+liveQuery value can be absent during reader initialization or lag a completed
+write, so it must not supply `expected_row_version`. The save stays busy during
+that read and command acknowledgement; each explicit move has a new mutation UUID.
+A concurrent-write conflict refreshes the preference and asks for another explicit
+move rather than automatically overwriting the other session's change. Failed
+saves clear old success notices. Reads and acknowledgement materialization capture
+the reader, workspace, selection generation, backend, app and Dexie handle; late
+responses cannot write into a newly selected partition. These checks supplement
+Tower's revision and permission checks; they do not delegate reader authority or
+replace the canonical sync device lease.
+
 Only active normal roots participate in reordering; system, DM and virtual roots retain navigation but have no reorder
 controls and never enter the preference payload. Move boundaries use eligible
 roots rather than the full navigation tree.
@@ -67,3 +79,13 @@ the channel row so they cannot reorder the containing scope. Saving disables
 further channel moves; a rejected save restores the previous positions and shows
 an explicit retry message. Reorder acknowledgements preserve embedded grants
 when Tower returns a sparse channel projection.
+
+The reader/workspace-validated preference also drives expanded sidebar scope
+navigation, Deck and task scope selectors, scope search and creation defaults.
+Each projection retains its existing fallback order for scopes absent from the
+preference; All and DM shortcuts retain their dedicated placement. Scope levels
+and parent links remain authoritative: personal order changes sibling placement,
+not shared hierarchy. In PG workspaces, scopes are top-level work areas, so a
+scope immediately below another in the saved order is still a sibling. Live
+preference materialization updates these projections without rewriting scopes or
+channel positions; Dexie retains the preference across reload.

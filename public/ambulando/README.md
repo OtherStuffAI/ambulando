@@ -1,5 +1,18 @@
 # Ambulando identity and local icons
 
+## Active perspective-passage identity
+
+The app uses the approved refined16D `refinement-B.png` from the perspective-passage treatment (version 1). `passage-master.png` is byte-identical (SHA-256 `8f3988cf0fe7c14e28776955ffd07ad459f49eaf23532c16db0ca93b8158244b`). `passage-prompts.json` preserves the exact source prompts, selection and source hashes. No geometry or colour was redrawn. The original has opaque white backing and residual AI raster tonal variation; it is not a transparent, vector, one-ink, print or manufacturing master. Brand artwork retains its private provenance.
+
+`passage-app.png` is a 256px proportional raster resample. Header tiles are 40px desktop and 32px phone, with white backing and the source canvas retained; sign-in uses 64px. This deliberately retains compact app dimensions instead of the proposal’s preferred 48px header. `passage-{16,32,180,192,512}.png` retain the complete source canvas at those sizes. `passage-social.png` centers a 500px resample on a 1200×630 opaque white canvas. Derivatives use ImageMagick default proportional resizing, without sharpening, recolouring, invented geometry or alpha removal.
+
+Small icons were visually inspected at native size and enlarged with nearest-neighbour pixels: 32px retains the layered silhouette, broad passage and orange/purple base, but the terminal is soft; 16px retains only the overall silhouette and two base colours, with indistinct gaps and terminal. These are **raster derivatives, not optically tuned masters**. A faithful optical/vector master remains a separate artwork deliverable and does not block this app release. The social image is delivered, but image metadata is deferred until a public canonical product origin is configured. Private managed hosts must not be embedded in public source; title/description metadata remains active.
+
+## Retained rollback artwork
+
+The older Confluence assets and favicon files below remain unchanged for rollback. They are not referenced by active app branding. The historical source manifest remains exact; asset-hashes.json includes both generations.
+
+
 Imported from Ambulando design system v5.0.0. `source-manifest.json` retains the supplied package provenance and original SHA-256 values; `asset-hashes.json` records imported and derived file hashes.
 
 `confluence-approved.png` is the byte-identical approved original v3 favourite-a artwork preserved through v4. `confluence-symbol-provisional.png` is the byte-identical v4 AI-extracted transparent mark. It is provisional raster artwork, with visible edge artifacts and gradients; it is not an approved vector master. No shapes have been redrawn, recolored, or simplified. Use the symbol with the live-type Ambulando name in expanded navigation and the symbol alone in collapsed navigation. Keep the navy separated from dark surfaces with ivory backing. Preserve aspect ratio and quarter-symbol-height clear space; never clip the trails. The live-type name is an interface treatment, not a claim about the original logo font.

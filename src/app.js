@@ -1,3 +1,6 @@
+import { canvasQuery, canvasChatSuggestions, createCanvasReferencePill, CanvasReferenceCatalog } from './canvas/chat-references.js';
+import { hydrateCanvasList } from './canvas/sync-service.js';
+import { canvasContext, canvasPartition } from './canvas/projection.js';
 import { isNoteToSelf, sanitizeNoteImage } from './note-to-self.js';
 import { nostrNotificationsMixin } from './feed/nostr-manager.js';
 import { hostingBillingMixin } from './hosting-billing.js';
@@ -74,6 +77,7 @@ import { filesManagerMixin } from './files-manager.js';
 import { writeContextManagerMixin } from './write-context-manager.js';
 import { pinnedThreadsMixin } from './pinned-threads.js';
 import { canvasManagerMixin } from './canvas/manager.js';
+import { canvasChatEmbedMixin } from './canvas/chat-embed.js';
 import { autopilotOverviewManagerMixin } from './autopilot-overview-manager.js';
 import { pipelineViewerManagerMixin } from './pipeline-viewer-manager.js';
 import { agentSpaceManagerMixin } from './agent-space-manager.js';
@@ -8465,6 +8469,7 @@ export function initApp() {
 
     refreshActiveMentionResults() {
       if (!this.mentionActive || !this._mentionTargetEl) return;
+      if (canvasQuery(this.mentionQuery) && this._mentionTargetEl.dataset?.chatComposer) { this.refreshCanvasMentionResults(this.mentionQuery, this._mentionTargetEl); return; }
       const options = {
         visibleOnly: this._mentionTargetEl.dataset?.workroomComposer === 'true'
           || this._mentionTargetEl.dataset?.channelVisibleMentions === 'true',
@@ -8475,7 +8480,28 @@ export function initApp() {
       this.mentionSelectedIndex = 0;
     },
 
+    async refreshCanvasMentionResults(query, targetEl) {
+      const context = canvasContext(this), partition = canvasPartition(context);
+      const request = (this._canvasMentionRequest || 0) + 1;
+      this._canvasMentionRequest = request;
+      this.mentionResults = canvasChatSuggestions(query, [], this.canvasChatOrigin, location.origin, context.workspaceId);
+      this.mentionSelectedIndex = 0;
+      try {
+        this._canvasReferenceCatalog ||= new CanvasReferenceCatalog();
+        const canvases = await this._canvasReferenceCatalog.read(partition, () => hydrateCanvasList(context));
+        if (request !== this._canvasMentionRequest || !this.mentionActive || this._mentionTargetEl !== targetEl
+          || this.mentionQuery !== query || canvasPartition(canvasContext(this)) !== partition) return;
+        this.mentionResults = canvasChatSuggestions(query, canvases, this.canvasChatOrigin, location.origin, context.workspaceId);
+      } catch {
+        if (request === this._canvasMentionRequest && this.mentionQuery === query
+          && canvasPartition(canvasContext(this)) === partition) {
+          this.mentionResults = canvasChatSuggestions(query, [], this.canvasChatOrigin, location.origin, context.workspaceId);
+        }
+      }
+    },
+
     refreshMentionResultsFromLocalIndex(query, targetEl) {
+      if (canvasQuery(query) && targetEl?.dataset?.chatComposer) { void this.refreshCanvasMentionResults(query, targetEl); return; }
       if (this.currentWorkspace?.pgBackendMode || this.pgBackendMode) void this.ensureChatMentionRoster();
       const normalizedQuery = String(query || '');
       const previousDocumentIndex = this.mentionDocumentIndex;
@@ -8946,7 +8972,7 @@ export function initApp() {
       this._mentionStartPos = atPos;
       this._mentionEndPos = cursorPos;
       this.mentionQuery = query;
-      this.mentionResults = this.searchMentions(query, mentionOptions);
+      this.mentionResults = canvasQuery(query) && el.dataset?.chatComposer ? [] : this.searchMentions(query, mentionOptions);
       this.mentionSelectedIndex = 0;
       this.refreshMentionResultsFromLocalIndex(query, el);
     },
@@ -9006,6 +9032,16 @@ export function initApp() {
       const el = this._mentionTargetEl;
       if (!el || this._mentionStartPos < 0 || this._mentionEndPos < this._mentionStartPos) return;
 
+      if (result.type === 'canvas' || result.type === 'canvas-item') {
+        if (el.isContentEditable || el.getAttribute?.('contenteditable') === 'true') {
+          replaceComposerTextRange(el, this._mentionStartPos, this._mentionEndPos, [createCanvasReferencePill(el.ownerDocument, result), ' ']);
+          this.syncMentionComposerModel(el);
+        } else {
+          el.setRangeText(`${result.token} `, this._mentionStartPos, this._mentionEndPos, 'end');
+          el.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+        el.focus(); this.closeMentionPopover(); return;
+      }
       const richEditor = this.taskRichDescriptionAdapter?.getEditor();
       if (richEditor?.view.dom === el) {
         const to = richEditor.state.selection.from;
@@ -10479,6 +10515,7 @@ export function initApp() {
     autopilotOverviewManagerMixin,
     pinnedThreadsMixin,
     canvasManagerMixin,
+    canvasChatEmbedMixin,
     agentSpaceManagerMixin,
     pipelineViewerManagerMixin,
     threadLiveActivityManagerMixin,
@@ -10507,6 +10544,7 @@ export function initApp() {
     window.Alpine = Alpine;
   }
   Alpine.store('chat', storeObj);
+  Alpine.store('chat')?.installCanvasChatLifecycle?.();
   if (typeof window !== 'undefined') {
     const storeAccessor = Alpine.store.bind(Alpine);
     window.$store = new Proxy(storeAccessor, {
