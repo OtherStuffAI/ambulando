@@ -59,8 +59,11 @@ export function registerCanvasWindow(Alpine) {
     positionOptions() {
       const rect = this.$refs.optionsButton.getBoundingClientRect();
       const menu = this.$refs.options;
+      const bottomInset = this.expanded ? parseFloat(getComputedStyle(this.$root).paddingBottom) || 0 : 0;
+      // In fullscreen, scroll options below the title bar so exit stays exposed.
+      menu.style.maxHeight = this.expanded ? `${Math.max(0, innerHeight - rect.bottom - bottomInset - 14)}px` : '';
       menu.style.left = `${Math.max(8, Math.min(rect.right - menu.offsetWidth, innerWidth - menu.offsetWidth - 8))}px`;
-      menu.style.top = `${Math.max(8, Math.min(rect.bottom + 6, innerHeight - menu.offsetHeight - 8))}px`;
+      menu.style.top = `${this.expanded ? rect.bottom + 6 : Math.max(8, Math.min(rect.bottom + 6, innerHeight - menu.offsetHeight - 8))}px`;
     },
     toggleOptions() {
       if (this.$refs.options.matches(':popover-open')) { this.closeOptions(); return; }

@@ -323,3 +323,18 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   .canvas-document-comment-backdrop { display: block; position: absolute; inset: 0; z-index: 2; border: 0; border-radius: 0; background: #0003; }
   .canvas-document-comment-tools button { min-width: 44px; min-height: 44px; }
 }
+
+/* A fullscreen window must not inherit its source's min-content width. */
+.canvas-naplet { min-width:0; grid-template-columns:minmax(0, 1fr); }
+.canvas-naplet-header, .canvas-window-content, .canvas-html,
+.canvas-window-content > iframe, .canvas-html > iframe { min-width:0; }
+.canvas-window-content, .canvas-html { grid-template-columns:minmax(0, 1fr); }
+.canvas-naplet.window-expanded {
+  height:100dvh !important;
+  max-height:100dvh;
+  overflow:hidden;
+  padding:0 env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+.canvas-naplet.window-expanded .canvas-naplet-header strong { flex:1 1 0; }
+.canvas-window-options { min-width:0; max-width:calc(100vw - 16px); overscroll-behavior:contain; }
+.canvas-window-options button, .canvas-window-options a { min-width:0; white-space:normal; overflow-wrap:anywhere; }

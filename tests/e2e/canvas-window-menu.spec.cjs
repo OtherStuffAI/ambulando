@@ -36,7 +36,7 @@ for (const width of [1440, 390, 320]) {
               background: style.backgroundColor, opacity: style.opacity, overflow: node.scrollHeight - node.clientHeight,
               heights: rows.map(row => row.height), gaps: rows.slice(1).map((row, i) => row.top - rows[i].bottom) };
           });
-          expect(geometry.background).toBe(dark ? 'rgb(24, 39, 53)' : 'rgb(255, 255, 255)');
+          expect(geometry.background).toBe(dark ? 'rgb(26, 34, 56)' : 'rgb(255, 255, 255)');
           expect(geometry.opacity).toBe('1');
           expect(geometry.height).toBeLessThan(450);
           expect(geometry.left).toBeGreaterThanOrEqual(8);

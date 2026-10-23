@@ -63,10 +63,12 @@ for (const width of [1440, 390, 320]) {
     await naplet.getByRole('button', { name: 'Window options', exact: true }).click();
     await menu.getByRole('menuitem', { name: 'Comment…' }).click();
     await expect(page.locator('.canvas-comment-dialog')).toBeVisible();
-    await page.getByLabel('Comment', { exact: true }).fill('Nested modal draft');
+    await page.locator('.canvas-comment-dialog').getByRole('textbox', { name: 'Comment', exact: true }).fill('Nested modal draft');
     await page.keyboard.press('Escape');
     await expect(page.locator('.canvas-comment-dialog')).not.toBeVisible();
-    await expect(naplet).toHaveJSProperty('open', true);
+    // Commenting returns to Canvas so the target remains available to the panel.
+    await expect(naplet).toHaveJSProperty('open', false);
+    await naplet.getByRole('button', { name: 'Open full screen', exact: true }).click();
     // Native modal traps tab navigation; wheel over its header cannot pan Canvas.
     await naplet.getByRole('button', { name: 'Restore from full screen', exact: true }).focus();
     for (let i = 0; i < 6; i++) {

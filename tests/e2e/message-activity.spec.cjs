@@ -39,6 +39,8 @@ async function setup(page) {
     store._towerSyncService = service; store.getTowerSyncService = () => service;
     // Explicit test control keeps retained runtime coverage independent of launcher defaults.
     const opener = document.createElement('button');
+    // Keep the fixture launcher above the phone's fixed navigation bar.
+    opener.style.cssText = 'position:fixed;top:0;left:0;z-index:9999';
     opener.dataset.testid = 'message-activity-runtime-open'; opener.textContent = 'Test Message activity runtime';
     opener.onclick = () => store.openMessageActivity({ opener }); document.body.append(opener);
   });

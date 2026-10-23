@@ -5127,6 +5127,27 @@
       "notes": [
         "Live membership changes received during a directory refresh are reconciled before that refresh finishes."
       ]
+    },
+    {
+      "buildNumber": 2617,
+      "label": "Phone napplet fullscreen",
+      "notes": [
+        "Napplet fullscreen fits phone viewports, keeps exit controls reachable, and wraps long menu actions in a scrollable menu."
+      ]
+    },
+    {
+      "buildNumber": 2618,
+      "label": "Canvas phone fullscreen",
+      "notes": [
+        "Canvas fullscreen napplets fit narrow phones, keep restore controls visible above scrollable menus, and contain wide document and embedded content."
+      ]
+    },
+    {
+      "buildNumber": 2619,
+      "label": "Fullscreen safe-area menus",
+      "notes": [
+        "Fullscreen Canvas menus leave room for the phone home indicator while keeping restore controls exposed."
+      ]
     }
   ]
 }

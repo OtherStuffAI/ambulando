@@ -46,6 +46,8 @@ async function seed(page, workspaceId = 'usage-workspace-a') {
     // The runtime is retained; a test-only opener replaces its removed default launcher.
     if (!document.querySelector('[data-testid="tower-usage-runtime-open"]')) {
       const opener = document.createElement('button');
+      // Keep the fixture launcher above the phone's fixed navigation bar.
+      opener.style.cssText = 'position:fixed;top:0;left:0;z-index:9999';
       opener.dataset.testid = 'tower-usage-runtime-open'; opener.textContent = 'Test Tower Usage runtime';
       opener.onclick = () => s.openTowerUsage({ opener }); document.body.append(opener);
     }
