@@ -902,6 +902,10 @@ describe('Tower PG API helpers', () => {
     const api = await import('../src/api.js');
     api.setBaseUrl('https://tower.example');
 
+    for (const family of ['members', 'groups']) {
+      globalThis.fetch.mockResolvedValueOnce({ ok: true, status: 200,
+        json: async () => ({ [family]: [] }), text: async () => JSON.stringify({ [family]: [] }) });
+    }
     await api.getTowerPgWorkspaceMembers('workspace-1', { appNpub: 'flightdeck_pg', limit: 25 });
     await api.getTowerPgWorkspaceGroups('workspace-1', { appNpub: 'flightdeck_pg', limit: 26 });
     await api.createTowerPgWorkspaceMember('workspace-1', { member_npub: 'npub1member' }, { appNpub: 'flightdeck_pg' });

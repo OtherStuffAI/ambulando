@@ -1578,7 +1578,7 @@ describe('channels-manager pure utilities', () => {
     expect(store.addressBookPeople).toEqual(expect.arrayContaining([
       expect.objectContaining({ npub: 'npub1target', label: 'Renamed User' }),
     ]));
-    expect(refreshTowerPgWorkspaceMembers).toHaveBeenCalledWith({ force: true, limit: 200 });
+    expect(refreshTowerPgWorkspaceMembers).toHaveBeenCalledWith({ reason: 'mutation', force: true, limit: 200 });
     expect(store.pgWorkspaceMemberProfileSaving).toBe(false);
     expect(store.pgWorkspaceMemberProfileEditingActorId).toBe('');
   });
@@ -2692,7 +2692,7 @@ describe('channels-manager pure utilities', () => {
         reason: 'added_to_workspace_or_group',
       });
       expect(store.pgWorkspaceMemberNpub).toBe('');
-      expect(store.refreshGroups).toHaveBeenCalledWith({ force: true, minIntervalMs: 0 });
+      expect(store.refreshGroups).toHaveBeenCalledWith({ reason: 'mutation', force: true, minIntervalMs: 0 });
     });
 
     it('unblocks saved membership and roster refresh while onboarding never resolves', async () => {
@@ -2708,7 +2708,7 @@ describe('channels-manager pure utilities', () => {
       expect(store.groupEditPending).toBe(false);
       expect(store.pgWorkspaceMemberNpub).toBe('');
       expect(store.pgWorkspaceMemberAddNotice).toContain('Member added');
-      expect(refresh).toHaveBeenCalledWith({ force: true, limit: 200 });
+      expect(refresh).toHaveBeenCalledWith({ reason: 'mutation', force: true, limit: 200 });
       expect(store.refreshGroups).toHaveBeenCalled();
     });
 
@@ -2783,7 +2783,7 @@ describe('channels-manager pure utilities', () => {
         reason: 'added_to_workspace_or_group',
       });
       expect(store.pgGroupMemberDrafts['group-1']).toBe('');
-      expect(store.refreshGroups).toHaveBeenCalledWith({ force: true, minIntervalMs: 0 });
+      expect(store.refreshGroups).toHaveBeenCalledWith({ reason: 'mutation', force: true, minIntervalMs: 0 });
     });
 
     it('keeps the current PG actor visible when workspace members have not loaded', async () => {
@@ -3336,4 +3336,19 @@ describe('channel grants request context ownership', () => {
       expect(store.channelGrantsError).toBe(error.message);
     } finally { vi.useRealTimers(); }
   });
+});
+
+it('never replays an API cache snapshot over a newer local rename or authoritative removal', async () => {
+  const { openWorkspaceDb, getWorkspaceDb, getWorkspaceMembers, replaceWorkspaceMembers } = await import('../src/db.js');
+  const db = openWorkspaceDb('mention-freshness-replay'); await db.open();
+  const member = { actor_id: 'live-agent', npub: 'npub1live-agent', kind: 'agent', display_name: 'Live name' };
+  const store = createPgGrantStore({ rememberPeople: vi.fn(async () => {}) });
+  try {
+    await replaceWorkspaceMembers('workspace-1', [member]);
+    getTowerPgWorkspaceMembers.mockResolvedValue({ directory_cache_hit: true, members: [{ actor: { ...member, display_name: 'Stale name' } }] });
+    expect(await store.refreshTowerPgWorkspaceMembers()).toEqual([expect.objectContaining({ display_name: 'Live name' })]);
+    await replaceWorkspaceMembers('workspace-1', []);
+    expect(await store.refreshTowerPgWorkspaceMembers()).toEqual([]);
+    expect(await getWorkspaceMembers('workspace-1')).toEqual([]);
+  } finally { await db.delete(); }
 });

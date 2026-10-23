@@ -5106,6 +5106,27 @@
       "notes": [
         "An open mention picker refreshes when cached membership and profile updates arrive after workspace startup."
       ]
+    },
+    {
+      "buildNumber": 2614,
+      "label": "Cached membership freshness",
+      "notes": [
+        "Chat mentions keep cached people and agents available while membership refreshes in the background every 24 hours. Live membership and name changes still update the picker."
+      ]
+    },
+    {
+      "buildNumber": 2615,
+      "label": "Membership reconciliation safeguards",
+      "notes": [
+        "Cached directory reads preserve newer local membership changes, and live updates remain active during catch-up."
+      ]
+    },
+    {
+      "buildNumber": 2616,
+      "label": "Live membership catch-up",
+      "notes": [
+        "Live membership changes received during a directory refresh are reconciled before that refresh finishes."
+      ]
     }
   ]
 }

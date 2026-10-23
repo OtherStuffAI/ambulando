@@ -1,3 +1,4 @@
+import { readMembershipDirectory } from './membership-freshness.js';
 /**
  * V4 API client — all network calls live here (or in the sync worker).
  * The UI never calls these directly; the worker or explicit user actions do.
@@ -689,15 +690,17 @@ export async function createTowerPgWorkspaceAgent(workspaceId, body, { baseUrl =
   return json(resp, { requestUrl, method: 'POST', prefix: 'Tower PG API' });
 }
 
-export async function getTowerPgWorkspaceMembers(workspaceId, { baseUrl = _baseUrl, appNpub = FLIGHT_DECK_PG_APP_NPUB, limit = 200 } = {}) {
+export async function getTowerPgWorkspaceMembers(workspaceId, { baseUrl = _baseUrl, appNpub = FLIGHT_DECK_PG_APP_NPUB, limit = 200, reason } = {}) {
   const encodedWorkspaceId = encodeURIComponent(String(workspaceId || '').trim());
   if (!encodedWorkspaceId) throw new Error('Tower PG workspace id is required');
   const params = new URLSearchParams();
   if (limit) params.set('limit', String(limit));
   const requestPath = `/api/v4/flightdeck-pg/workspaces/${encodedWorkspaceId}/members${params.size > 0 ? `?${params.toString()}` : ''}`;
   const requestUrl = resolveTowerPgUrl(requestPath, baseUrl);
-  const resp = await signedTowerPgFetch(requestPath, { baseUrl, appNpub });
-  return json(resp, { requestUrl, method: 'GET', prefix: 'Tower PG API' });
+  return readMembershipDirectory({ workspaceId, baseUrl, appNpub, family: 'members', reason, read: async () => {
+    const resp = await signedTowerPgFetch(requestPath, { baseUrl, appNpub });
+    return json(resp, { requestUrl, method: 'GET', prefix: 'Tower PG API' });
+  } });
 }
 
 export async function getTowerPgNotificationSettings(workspaceId, { baseUrl = _baseUrl, appNpub = FLIGHT_DECK_PG_APP_NPUB } = {}) {
@@ -774,15 +777,17 @@ export async function createTowerPgWorkspaceMember(workspaceId, body, { baseUrl 
   return json(resp, { requestUrl, method: 'POST', prefix: 'Tower PG API' });
 }
 
-export async function getTowerPgWorkspaceGroups(workspaceId, { baseUrl = _baseUrl, appNpub = FLIGHT_DECK_PG_APP_NPUB, limit = 200 } = {}) {
+export async function getTowerPgWorkspaceGroups(workspaceId, { baseUrl = _baseUrl, appNpub = FLIGHT_DECK_PG_APP_NPUB, limit = 200, reason } = {}) {
   const encodedWorkspaceId = encodeURIComponent(String(workspaceId || '').trim());
   if (!encodedWorkspaceId) throw new Error('Tower PG workspace id is required');
   const params = new URLSearchParams();
   if (limit) params.set('limit', String(limit));
   const requestPath = `/api/v4/flightdeck-pg/workspaces/${encodedWorkspaceId}/groups${params.size > 0 ? `?${params.toString()}` : ''}`;
   const requestUrl = resolveTowerPgUrl(requestPath, baseUrl);
-  const resp = await signedTowerPgFetch(requestPath, { baseUrl, appNpub });
-  return json(resp, { requestUrl, method: 'GET', prefix: 'Tower PG API' });
+  return readMembershipDirectory({ workspaceId, baseUrl, appNpub, family: 'groups', reason, read: async () => {
+    const resp = await signedTowerPgFetch(requestPath, { baseUrl, appNpub });
+    return json(resp, { requestUrl, method: 'GET', prefix: 'Tower PG API' });
+  } });
 }
 
 export async function createTowerPgWorkspaceGroup(workspaceId, body, { baseUrl = _baseUrl, appNpub = FLIGHT_DECK_PG_APP_NPUB } = {}) {

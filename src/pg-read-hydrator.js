@@ -434,7 +434,9 @@ async function resolveActorNpubByActorIdWithFallback(store = {}, deps = {}, cont
       baseUrl: context.baseUrl,
       appNpub: context.appNpub,
     });
-    const members = Array.isArray(membersResult?.members) ? membersResult.members : [];
+    const members = membersResult?.directory_cache_hit
+      ? await getWorkspaceDb().workspace_members.where('workspace_id').equals(context.workspaceId).toArray()
+      : (Array.isArray(membersResult?.members) ? membersResult.members : []);
     const refreshed = new Map(
       members
         .map((member) => normalizeActorEntry(member))
@@ -442,7 +444,7 @@ async function resolveActorNpubByActorIdWithFallback(store = {}, deps = {}, cont
     );
     const memberRows = members.map((member) => mapPgWorkspaceMemberToLocal(member, context)).filter(Boolean);
     assertTowerPgWorkspaceCurrent(store, context);
-    if (memberRows.length > 0) await (deps.replaceWorkspaceMembers || replaceWorkspaceMembers)(context.workspaceId, memberRows);
+    if (memberRows.length > 0 && !membersResult?.directory_cache_hit) await (deps.replaceWorkspaceMembers || replaceWorkspaceMembers)(context.workspaceId, memberRows);
     if (refreshed.size > 0) return new Map([...actorNpubByActorId, ...refreshed]);
   } catch {
     return actorNpubByActorId;
@@ -1854,7 +1856,10 @@ async function syncTowerPgRecordWorkspace(store, options, deps) {
       const canReadDirectory = store.currentWorkspace?.pgMe?.permissions?.includes('workspace.read') === true;
       if (Array.isArray(page.actors) && !canReadDirectory) return;
       const readDirectory = async (read, field) => {
-        try { return (await read(context.workspaceId, { baseUrl: context.baseUrl, appNpub: context.appNpub, limit: 200 }))[field] || []; }
+        try {
+          const result = await read(context.workspaceId, { baseUrl: context.baseUrl, appNpub: context.appNpub, limit: 200 });
+          return result.directory_cache_hit ? [] : result[field] || [];
+        }
         catch (error) { if (error.status === 403) return []; throw error; }
       };
       const members = await readDirectory(deps.getTowerPgWorkspaceMembers || getTowerPgWorkspaceMembers, 'members');
@@ -1991,7 +1996,8 @@ async function syncTowerPgRecordWorkspace(store, options, deps) {
       let groups = { groups: [] };
       try { groups = await (deps.getTowerPgWorkspaceGroups || getTowerPgWorkspaceGroups)(context.workspaceId, { baseUrl: context.baseUrl, appNpub: context.appNpub, limit: 200 }); }
       catch (error) { if (error.status !== 403) throw error; }
-      const memberRows = members.members || [], groupRows = groups.groups || [];
+      const memberRows = members.directory_cache_hit ? [] : members.members || [];
+      const groupRows = groups.directory_cache_hit ? [] : groups.groups || [];
       for (let offset = 0; offset < Math.max(memberRows.length, groupRows.length); offset += 200) {
         assertTowerPgWorkspaceCurrent(store, context);
         await materialize(store, { protocol_version: 1, reference_directory: true, members: memberRows.slice(offset, offset + 200), groups: groupRows.slice(offset, offset + 200) }, deps);
@@ -3319,10 +3325,10 @@ export async function hydrateTowerPgEventUpdates(store, events = [], deps = {}) 
       ? [store.refreshChannels()]
       : []),
     ...(workspaceMembersChanged && typeof store?.refreshTowerPgWorkspaceMembers === 'function'
-      ? [store.refreshTowerPgWorkspaceMembers({ force: true, limit: 200 })]
+      ? [store.refreshTowerPgWorkspaceMembers({ reason: 'live', force: true, limit: 200 })]
       : []),
     ...(groupsChanged && typeof store?.refreshGroups === 'function'
-      ? [store.refreshGroups({ force: true, minIntervalMs: 0 })]
+      ? [store.refreshGroups({ reason: 'live', force: true, minIntervalMs: 0 })]
       : []),
     ...(accessMaterializationChanged && typeof store?.refreshPgChannelAccessMaterialization === 'function'
       ? [store.refreshPgChannelAccessMaterialization({ channelIds: [...channelGrantChannels] })]

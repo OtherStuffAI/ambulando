@@ -1186,7 +1186,7 @@ export const channelsManagerMixin = {
 
   scheduleGroupsRefresh(options = {}, reason = 'background') {
     Promise.resolve()
-      .then(() => this.refreshGroups(options))
+      .then(() => this.refreshGroups(reason === 'PG group write' ? { ...options, reason: 'mutation' } : options))
       .catch((refreshError) => {
         flightDeckLog('warn', 'groups', `PG group refresh failed after ${reason}`, {
           error: refreshError?.message || String(refreshError),
@@ -1238,7 +1238,12 @@ export const channelsManagerMixin = {
         baseUrl,
         appNpub,
         limit: options.limit || 200,
+        reason: options.reason,
       });
+      if (result?.directory_cache_hit) {
+        if (!isCurrent()) return [];
+        return hasWorkspaceDb() ? getWorkspaceMembers(workspaceId) : [];
+      }
       if (!Array.isArray(result?.members) || result.next_cursor || result.has_more === true) {
         throw new Error('Workspace member directory is incomplete');
       }
@@ -1378,7 +1383,7 @@ export const channelsManagerMixin = {
         last_used_at: new Date().toISOString(),
       });
       this.addressBookPeople = await getAddressBookPeople();
-      await this.refreshTowerPgWorkspaceMembers({ force: true, limit: 200 });
+      await this.refreshTowerPgWorkspaceMembers({ reason: 'mutation', force: true, limit: 200 });
       this.pgWorkspaceMemberProfileEditingActorId = '';
       this.pgWorkspaceMemberProfileDraft = '';
     } catch (error) {
@@ -2848,6 +2853,9 @@ export const channelsManagerMixin = {
     const force = options.force === true;
     const minIntervalMs = Number(options.minIntervalMs);
     const maxAgeMs = Number(options.maxAgeMs);
+    const workspaceKey = this.currentWorkspaceKey;
+    const generation = this._workspaceSelectionGeneration;
+    const isCurrent = () => this.currentWorkspaceKey === workspaceKey && this._workspaceSelectionGeneration === generation;
     const now = Date.now();
     const ageMs = this.lastGroupsRefreshAt > 0 ? now - this.lastGroupsRefreshAt : Infinity;
     const expiredByMaxAge = Number.isFinite(maxAgeMs) && maxAgeMs > 0 && ageMs >= maxAgeMs;
@@ -2867,9 +2875,10 @@ export const channelsManagerMixin = {
         const { workspaceId, workspaceOwnerNpub, baseUrl, appNpub } = resolveTowerPgWorkspaceContext(this);
         if (!workspaceId || !baseUrl) return this.groups;
         const [result] = await Promise.all([
-          getTowerPgWorkspaceGroups(workspaceId, { baseUrl, appNpub, limit: 200 }),
+          getTowerPgWorkspaceGroups(workspaceId, { baseUrl, appNpub, limit: 200, reason: options.reason }),
           this.refreshTowerPgWorkspaceMembers({ limit: 200 }),
         ]);
+        if (!isCurrent() || result?.directory_cache_hit) return this.groups;
         const mappedGroups = (result.groups || [])
           .map((group) => mapTowerPgGroupEntry(group, { workspaceOwnerNpub }))
           .filter((group) => group.group_id);
@@ -2878,6 +2887,7 @@ export const channelsManagerMixin = {
           this.groups = mappedGroups;
           const memberNpubs = new Set();
           for (const group of mappedGroups) {
+            if (!isCurrent()) return this.groups;
             await upsertGroup({
               ...group,
               member_npubs: [...(group.member_npubs ?? [])],
@@ -2893,6 +2903,7 @@ export const channelsManagerMixin = {
             await this.rememberPeople([...memberNpubs], 'pg-group');
           }
         }
+        if (!isCurrent()) return this.groups;
         this.lastGroupsRefreshAt = Date.now();
         this.validateSelectedBoardId();
         this.normalizeTaskFilterTags();
@@ -4398,7 +4409,7 @@ export const channelsManagerMixin = {
       this.pgWorkspaceMemberAddNotice = 'Member added. Give them access with a group or channel access.';
       this.scheduleGroupsRefresh({ force: true, minIntervalMs: 0 }, 'PG group write');
       Promise.resolve()
-        .then(() => this.refreshTowerPgWorkspaceMembers?.({ force: true, limit: 200 }))
+        .then(() => this.refreshTowerPgWorkspaceMembers?.({ reason: 'mutation', force: true, limit: 200 }))
         .catch((error) => {
           flightDeckLog('warn', 'groups', 'Member saved but workspace member refresh failed', {
             error: error?.message || String(error),

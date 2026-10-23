@@ -1354,6 +1354,20 @@ describe('backgroundSyncTick', () => {
     expect(syncTowerPgWorkspace.mock.calls.at(-1)[0]).toBe(store);
   });
 
+  it('checks due membership on the existing active cadence without blocking sync on a slow directory', async () => {
+    isTowerPgBackendMode.mockReturnValue(true);
+    const refreshTowerPgWorkspaceMembers = vi.fn(() => new Promise(() => {}));
+    const refreshGroups = vi.fn(async () => []);
+    const { fn } = bindMethod('backgroundSyncTick', {
+      session: { npub: 'npub1me' }, backendUrl: 'http://localhost:3100',
+      getSyncCadenceMs: () => 1000, refreshTowerPgWorkspaceMembers, refreshGroups,
+    });
+    await fn();
+    expect(refreshTowerPgWorkspaceMembers).toHaveBeenCalledOnce();
+    expect(refreshGroups).toHaveBeenCalledOnce();
+    expect(syncTowerPgWorkspace).toHaveBeenCalled();
+  });
+
   it('refreshes shared folder metadata while Files is active', async () => {
     const requestTowerSyncFamily = vi.fn(async () => {});
     const { fn } = bindMethod('backgroundSyncTick', {
@@ -1565,6 +1579,17 @@ describe('sync family progress helpers', () => {
     expect(syncTowerPgWorkspace).toHaveBeenCalledTimes(1);
     expect(hydrateTowerPgEventUpdates).toHaveBeenCalledWith(expect.anything(), activities);
     expect(hydrateTowerPgChannelAgentActivities).toHaveBeenCalledWith(expect.anything(), 'channel-1', expect.objectContaining({ recover: true }));
+  });
+
+  it('preserves membership/profile/group and channel access hints during replay bursts', async () => {
+    isTowerPgBackendMode.mockReturnValue(true);
+    const hints = ['workspace_member', 'workspace_member_profile', 'actor_profile', 'group_member', 'channel_grant']
+      .map(entity_type => ({ entity_type, entity_id: 'a', channel_id: 'channel-1' }));
+    const { fn } = bindMethod('handleSSEStatus');
+    await fn({ status: 'pull-complete', families: ['flightdeck_pg'], pgEvents: [
+      ...Array.from({ length: 26 }, (_, i) => ({ entity_type: 'task', entity_id: String(i) })), ...hints,
+    ] });
+    expect(hydrateTowerPgEventUpdates).toHaveBeenCalledWith(expect.anything(), hints);
   });
 
   it('acknowledges a PG cursor only after successful materialisation and retries a failed batch', async () => {

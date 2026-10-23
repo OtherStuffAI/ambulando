@@ -1756,8 +1756,8 @@ describe('PG read hydrator', () => {
     ]);
 
     expect(result.fallbackEvents).toBe(3);
-    expect(refreshTowerPgWorkspaceMembers).toHaveBeenCalledWith({ force: true, limit: 200 });
-    expect(refreshGroups).toHaveBeenCalledWith({ force: true, minIntervalMs: 0 });
+    expect(refreshTowerPgWorkspaceMembers).toHaveBeenCalledWith({ reason: 'live', force: true, limit: 200 });
+    expect(refreshGroups).toHaveBeenCalledWith({ reason: 'live', force: true, minIntervalMs: 0 });
     expect(refreshDailyScopeAgentAccess).toHaveBeenCalledOnce();
     expect(refreshChannelGrants).toHaveBeenCalledOnce();
     expect(refreshPgChannelAccessMaterialization).toHaveBeenCalledWith({ channelIds: ['channel-1'] });
@@ -1839,7 +1839,7 @@ describe('PG read hydrator', () => {
       payload: { display_name: 'Test Agent' },
     }]);
 
-    expect(refreshTowerPgWorkspaceMembers).toHaveBeenCalledWith({ force: true, limit: 200 });
+    expect(refreshTowerPgWorkspaceMembers).toHaveBeenCalledWith({ reason: 'live', force: true, limit: 200 });
     expect(result).toEqual({ channels: 0, appliedTargets: 1, fallbackEvents: 0, events: 1 });
   });
 

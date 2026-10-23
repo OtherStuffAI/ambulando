@@ -139,6 +139,8 @@ const PG_FULL_SYNC_CHILD_CONCURRENCY = 4;
 const PG_SSE_TARGETED_EVENT_LIMIT = 25;
 const PG_SSE_MATERIALISATION_MAX_ATTEMPTS = 3;
 const PG_SSE_TARGETED_ONLY_ENTITY_TYPES = new Set([
+  'workspace_member', 'workspace_member_profile', 'actor_profile', 'actor',
+  'group', 'group_member', 'workspace_group_member', 'channel_grant',
   'agent_activity',
   'agent_session_health',
   'response_activity',
@@ -3581,6 +3583,13 @@ export const syncManagerMixin = {
     }
 
     this.backgroundSyncInFlight = true;
+    // Existing active/connected cadence also checks the durable directory due
+    // time. This adds no timer and never gates record sync or local rendering.
+    if (isTowerPgBackendMode() && !isBrowserOffline()) {
+      void Promise.all([this.refreshTowerPgWorkspaceMembers?.(), this.refreshGroups?.()]).catch(error => {
+        flightDeckLog('warn', 'sync', 'Membership reconciliation deferred', { error: error?.message || String(error) });
+      });
+    }
     const fallbackStartedAt = new Date().toISOString();
     if (this.sseStatus === 'fallback-polling') {
       flightDeckTrace('message-timing', 'fallback tick started', {
