@@ -153,7 +153,7 @@ function BoardEditor({ port, theme }) {
     schedule();
     addEventListener('resize', schedule);
     return () => { cancelAnimationFrame(frame); removeEventListener('resize', schedule); };
-  }, [ready, readOnly]);
+  }, [ready]);
 
   // Save floats over the drawing area: in Excalidraw's own top-right slot on
   // desktop, below the tools on phones, never over a tool. The page re-checks it.
