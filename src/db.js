@@ -1043,11 +1043,10 @@ export async function getMessagesByChannel(channelId, options = {}) {
   return takeWindow(activeRows, resolveWindowLimit('chatMessages', options), { fromStart: false });
 }
 
-export async function getMessagePresentationWindowByChannel(channelId, options = {}) {
+async function getMessagePresentationCandidates(db, channelId, options = {}) {
   const normalizedChannelId = String(channelId || '').trim();
   if (!normalizedChannelId) return [];
   const rootLimit = Math.max(1, Number(options.rootLimit) || 80);
-  const db = wsDb();
   let recentRows = await db.chat_messages
     .where('[channel_id+cache_active+cache_parent+cache_time+record_id]')
     .between([normalizedChannelId, 1, '', Dexie.minKey, Dexie.minKey],
@@ -1063,24 +1062,13 @@ export async function getMessagePresentationWindowByChannel(channelId, options =
       && row.channel_id === normalizedChannelId && row.record_state !== 'deleted');
     recentRows = [...new Map([...recentRows, ...sources].map(row => [row.record_id, row])).values()];
   }
-  const rootIds = recentRows.map((row) => row.record_id);
-  const replyRootIds = [...new Set([...recentRows.map(row => row.pg_thread_id || row.record_id), options.activeThreadId].filter(Boolean))];
-  const [replyPages, unsynced, focused] = await Promise.all([
-    Promise.all(replyRootIds.map((rootId) => db.chat_messages
-      .where('[cache_parent+cache_active+cache_time+record_id]')
-      .between([rootId, 1, Dexie.minKey, Dexie.minKey], [rootId, 1, '\uffff', Dexie.maxKey])
-      .reverse().limit(Math.max(1, Number(options.replyLimit) || 80) + 1).toArray())),
+  const rootIds = recentRows.map(row => row.record_id);
+  const [unsynced, focused] = await Promise.all([
     db.chat_messages.where('[channel_id+sync_status]')
       .anyOf([[normalizedChannelId, 'pending'], [normalizedChannelId, 'failed']]).limit(rootLimit).toArray(),
     db.chat_messages.bulkGet([...new Set([options.activeThreadId, options.focusMessageId].filter(Boolean))]),
   ]);
-  const replies = replyPages.flat();
-  const focusedRows = focused.filter(Boolean);
-  for (const parentKey of new Set(focusedRows.map(row => row.pg_thread_id).filter(id => id && !replyRootIds.includes(id)))) {
-    replies.push(...await db.chat_messages.where('[cache_parent+cache_active+cache_time+record_id]')
-      .between([parentKey, 1, Dexie.minKey, Dexie.minKey], [parentKey, 1, '\uffff', Dexie.maxKey])
-      .reverse().limit(Math.max(1, Number(options.replyLimit) || 80) + 1).toArray());
-  }
+  const focusedRows = focused.filter(row => row?.channel_id === normalizedChannelId);
   const effectiveMessageIds = [...new Set(focusedRows.flatMap((row) => (
     Array.isArray(row?.pg_effective_message_ids) ? row.pg_effective_message_ids.slice(-(Math.max(1, Number(options.replyLimit) || 80) + 1)).map(String) : []
   )).filter(Boolean))];
@@ -1093,16 +1081,43 @@ export async function getMessagePresentationWindowByChannel(channelId, options =
   const focusedRoots = focusedRootIds.length
     ? (await db.chat_messages.bulkGet(focusedRootIds)).filter(Boolean)
     : [];
+  return { channelId: normalizedChannelId, recentRows, unsynced, focusedRows, focusedRoots, effectiveRows };
+}
+
+async function hydrateMessagePresentation(db, candidates, options = {}, selectedIds = null) {
+  const { channelId: normalizedChannelId, unsynced, focusedRows, focusedRoots, effectiveRows } = candidates;
+  const recentRows = candidates.recentRows.filter(row => !selectedIds || selectedIds.has(row.record_id));
+  const replyRootIds = [...new Set([
+    ...recentRows.map(row => row.pg_thread_id || row.record_id),
+    options.activeThreadId,
+    ...focusedRows.map(row => row.pg_thread_id),
+  ].filter(Boolean))];
+  const replyPages = await Promise.all(replyRootIds.map(rootId => db.chat_messages
+    .where('[cache_parent+cache_active+cache_time+record_id]')
+    .between([rootId, 1, Dexie.minKey, Dexie.minKey], [rootId, 1, '\uffff', Dexie.maxKey])
+    .reverse().limit(Math.max(1, Number(options.replyLimit) || 80) + 1).toArray()));
+  const replies = replyPages.flat();
   const rowsById = new Map();
   for (const row of [...recentRows, ...replies, ...unsynced, ...focusedRows, ...focusedRoots, ...effectiveRows]) {
     if (row?.record_id && row.channel_id === normalizedChannelId) rowsById.set(row.record_id, row);
   }
-  const rootsByThread = new Map([...rowsById.values()].filter(row => !row.parent_message_id && row.pg_thread_id)
+  return buildThreadAwarePresentationWindow(normalizePresentationParents([...rowsById.values()]), {
+    ...options, rootLimit: Math.max(1, Number(options.rootLimit) || 80) + 1,
+  });
+}
+
+function normalizePresentationParents(rows) {
+  const rootsByThread = new Map(rows.filter(row => !row.parent_message_id && row.pg_thread_id)
     .sort((a, b) => Number(a.pg_record_type === 'message') - Number(b.pg_record_type === 'message'))
     .map(row => [row.pg_thread_id, row.record_id]));
-  const presentationRows = [...rowsById.values()].map(row => row.parent_message_id && rootsByThread.has(row.pg_thread_id)
+  return rows.map(row => row.parent_message_id && rootsByThread.has(row.pg_thread_id)
     ? { ...row, parent_message_id: rootsByThread.get(row.pg_thread_id) } : row);
-  return buildThreadAwarePresentationWindow(presentationRows, { ...options, rootLimit: rootLimit + 1 });
+}
+
+export async function getMessagePresentationWindowByChannel(channelId, options = {}) {
+  if (!String(channelId || '').trim()) return [];
+  const db = wsDb();
+  return hydrateMessagePresentation(db, await getMessagePresentationCandidates(db, channelId, options), options);
 }
 
 // A fresh history page may suppress a repeated automatic first-page read only
@@ -1189,7 +1204,17 @@ export async function getMessagesByChannels(channelIds = [], options = {}) {
 
 export async function getMessagePresentationWindowByChannels(channelIds = [], options = {}) {
   const ids = [...new Set(channelIds.map((id) => String(id || '').trim()).filter(Boolean))];
-  const pages = await Promise.all(ids.map((id) => getMessagePresentationWindowByChannel(id, options)));
+  if (!ids.length) return [];
+  const db = wsDb(); // Capture the partition across both asynchronous phases.
+  const candidates = await Promise.all(ids.map(id => getMessagePresentationCandidates(db, id, options)));
+  // Sources, summaries, optimistic sends and focused/branch membership participate
+  // in selection before any reply tail is read. Keep the existing reply bound.
+  const selected = buildThreadAwarePresentationWindow(candidates.flatMap(candidate => buildThreadAwarePresentationWindow(normalizePresentationParents([
+    ...candidate.recentRows, ...candidate.unsynced, ...candidate.focusedRows,
+    ...candidate.focusedRoots, ...candidate.effectiveRows,
+  ]), { ...options, rootLimit: Math.max(1, Number(options.rootLimit) || 80) + 1 })), options);
+  const selectedIds = new Set(selected.map(row => row.record_id));
+  const pages = await Promise.all(candidates.map(candidate => hydrateMessagePresentation(db, candidate, options, selectedIds)));
   return buildThreadAwarePresentationWindow(pages.flat(), options);
 }
 

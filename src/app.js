@@ -2591,6 +2591,7 @@ export function initApp() {
         },
         error: (error) => {
           console.error('Live query failed:', error?.message || error);
+          options.onError?.(error);
         },
       });
       return {

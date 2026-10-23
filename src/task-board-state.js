@@ -2052,6 +2052,8 @@ export const taskBoardStateMixin = {
     if (this.navSection === 'chat' && isPgWorkspaceStore(this) && nextBoard.type === 'scope') {
       const generation = Number(this.channelSelectionGeneration || 0) + 1;
       this.channelSelectionGeneration = generation;
+      this.chatScopeLoadError = '';
+      this.scopeChatLoadTiming = { generation, startedAt: scopeSelectionStartedAt, contentPaintMs: null };
       const presentationKey = `scope:${nextBoardId}`;
       const cachedPresentation = this.chatPresentationCache?.get?.(presentationKey) || null;
       scopeTiming.cacheHit = Boolean(cachedPresentation);
@@ -2073,12 +2075,16 @@ export const taskBoardStateMixin = {
       markNavigationTiming(scopeTiming, 'stateAssignedAt');
     }
 
+    const scopeSelectionGeneration = this.channelSelectionGeneration;
     const paintResult = await waitForNavigationPaint(this, {
       afterNextTick: () => markNavigationTiming(scopeTiming, 'alpineTickAt'),
     });
     scopeTiming.browserPaintBoundary = paintResult.browserPaintBoundary;
     markNavigationTiming(scopeTiming, 'paintAt');
-    if (this.selectedBoardId !== nextBoardId) return;
+    if (scopeTiming.cacheHit && this.scopeChatLoadTiming?.generation === scopeSelectionGeneration) {
+      this.scopeChatLoadTiming.contentPaintMs = (globalThis.performance?.now?.() ?? Date.now()) - scopeSelectionStartedAt;
+    }
+    if (this.selectedBoardId !== nextBoardId || this.channelSelectionGeneration !== scopeSelectionGeneration) return;
     markNavigationTiming(scopeTiming, 'postPaintStartAt');
 
     this.persistSelectedBoardId(nextBoardId);
@@ -2087,31 +2093,10 @@ export const taskBoardStateMixin = {
     this.normalizeTaskFilterTags();
     this.closeBoardPicker();
     if (this.navSection === 'chat' && isPgWorkspaceStore(this) && nextBoard.type === 'scope') {
-      const generation = Number(this.channelSelectionGeneration || 0);
-      const presentationKey = `scope:${nextBoardId}`;
-      const cachedPresentation = this.chatPresentationCache?.get?.(presentationKey) || null;
       this.restoreChatComposerDraft?.('message');
       this.restoreChatComposerDraft?.('thread');
-      if (cachedPresentation) this.startWorkspaceLiveQueries?.();
-      else {
-        const readStartedAt = globalThis.performance?.now?.() ?? Date.now();
-        void Promise.resolve(this.refreshMessages?.({
-          scrollToLatest: false,
-          selectionGeneration: generation,
-          deferEnrichment: true,
-        })).then(() => {
-          if (Number(this.channelSelectionGeneration || 0) !== generation || this.selectedChannelId) return;
-          this.pendingChannelSelectionId = '';
-          this.saveCurrentChatPresentation?.(presentationKey);
-          this.startWorkspaceLiveQueries?.();
-          flightDeckTrace('scope-selection', 'local read end', {
-            scopeId: nextBoard.scopeId,
-            generation,
-            queryDurationMs: (globalThis.performance?.now?.() ?? Date.now()) - readStartedAt,
-            messageCount: this.messages?.length || 0,
-          });
-        });
-      }
+      // The live query's initial emission owns the cold read and pending state.
+      this.startWorkspaceLiveQueries?.();
     } else if (this.navSection === 'chat') {
       this.ensureSelectedChatChannelInScope?.({ syncRoute: false });
       if (this.selectedChannelId && this.selectedChannelId !== previousChannelId) {

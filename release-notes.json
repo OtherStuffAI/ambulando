@@ -5076,6 +5076,21 @@
       "notes": [
         "Undoing a canvas move or resize preserves unrelated stacking and task-tree layout changes received while you were adjusting it."
       ]
+    },
+    {
+      "buildNumber": 2610,
+      "label": "Faster scope conversations",
+      "notes": [
+        "Scope chat selects its conversation window before loading reply previews and shares the result with reaction loading, reducing repeated local database work.",
+        "Scope loading recovers from local read errors and ignores results from earlier selections."
+      ]
+    },
+    {
+      "buildNumber": 2611,
+      "label": "Scope loading after workspace startup",
+      "notes": [
+        "Scope conversations finish loading when workspace navigation becomes available, while keeping earlier access generations from publishing stale results."
+      ]
     }
   ]
 }

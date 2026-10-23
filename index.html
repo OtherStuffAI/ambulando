@@ -4232,6 +4232,7 @@
                 <div class="chat-channel-switch-overlay" x-show="$store.chat.pendingChannelSelectionId" x-cloak aria-live="polite">
                   Loading channel…
                 </div>
+                <div class="chat-empty" role="alert" x-show="!$store.chat.selectedChannelId && $store.chat.chatScopeLoadError" x-cloak x-text="$store.chat.chatScopeLoadError"></div>
                 <template x-if="!$store.chat.selectedChannelId">
                   <div class="chat-empty channel-thread-index-empty"><strong>Choose a channel</strong><span>Select or create a channel to browse its conversations.</span></div>
                 </template>

@@ -1,3 +1,4 @@
+import { waitForNavigationPaint } from './navigation-paint.js';
 import { projectPgDownloadedAccess } from './pg-access-state.js';
 import { rememberPgRecoveryDestination } from './pg-authority-presentation.js';
 import { filterProjectionForArchivedTargets } from './pg-archive-state.js';
@@ -193,6 +194,11 @@ function syncBucket(store, bucket, specs) {
       return spec.onNext(...args);
     }, {
       equals: spec.equals,
+      onError: error => {
+        if (subscription && bucket.get(spec.key) !== subscription) return;
+        if (store.currentWorkspaceKey !== workspaceKey || store._workspaceSelectionGeneration !== generation) return;
+        spec.onError?.(error);
+      },
     });
     bucket.set(spec.key, subscription);
   }
@@ -477,7 +483,11 @@ export async function applyPgNavigationProjection(store, projection) {
   await store.applyScopes(projection.scopes, { preserveNavigation: true });
   if (!isCurrent()) return;
   await store.applyChannels(channels, { preserveNavigation: archivedNavigation || projection.pending || Boolean(store.pgNavigationRecoverySelection), isCurrent });
-  if (!isCurrent() || projection.pending || archivedNavigation) return;
+  if (!isCurrent()) return;
+  // Rebind scope reads to the newly published authority even when channel IDs
+  // did not change (including the first navigation projection after startup).
+  if (changed && store.navSection === 'chat' && !store.selectedChannelId) store.startWorkspaceLiveQueries?.();
+  if (projection.pending || archivedNavigation) return;
   const selection = store.pgNavigationRecoverySelection;
   store.pgNavigationRecoverySelection = null;
   store.validateSelectedBoardId?.();
@@ -918,41 +928,69 @@ function buildDetailSpecs(store) {
         const channelIds = (Array.isArray(store?.pgContextChannels) ? store.pgContextChannels : [])
           .map((channel) => String(channel?.record_id || '').trim())
           .filter(Boolean);
-        if (channelIds.length === 0) return [];
         const signature = channelIds.join(',');
-        return [
-          {
-            key: `chat:messages:scope-home:${signature}:${store.mainFeedVisibleCount}:${store.threadVisibleReplyCount}`,
-            equals: sameLogicalValue,
-            query: () => getMessagePresentationWindowByChannels(channelIds, {
-              rootLimit: store?.mainFeedVisibleCount || store?.MAIN_FEED_PAGE_SIZE,
-              activeThreadId: store?.activeThreadId,
-              focusMessageId: store?.focusMessageId,
-            }),
-            onNext: (messages) => {
-              if (!isSameWorkspace(store, workspaceKey, ownerNpub) || store.selectedChannelId) return;
-              return store.applyMessages(messages);
-            },
+        const boardId = store.selectedBoardId;
+        const activeThreadId = store.activeThreadId;
+        const focusMessageId = store.focusMessageId;
+        const rootLimit = store.mainFeedVisibleCount || store.MAIN_FEED_PAGE_SIZE;
+        const workspaceGeneration = store._workspaceSelectionGeneration;
+        const authorityGeneration = store.pgNavigationGeneration;
+        const isCurrent = () => isSameWorkspace(store, workspaceKey, ownerNpub)
+          && store._workspaceSelectionGeneration === workspaceGeneration
+          && store.pgNavigationGeneration === authorityGeneration
+          && store.activeThreadId === activeThreadId && store.focusMessageId === focusMessageId
+          && (store.pgContextChannels || []).map(channel => String(channel?.record_id || '').trim()).filter(Boolean).join(',') === signature
+          && store.navSection === 'chat' && !store.selectedChannelId
+          && store.selectedBoardId === boardId
+          && Number(store.channelSelectionGeneration || 0) === selectionGeneration;
+        const targetIds = (store.messages || []).filter(row => channelIds.includes(row.channel_id)).map(row => row.record_id).filter(Boolean);
+        return [{
+          key: `chat:messages:scope-home:${signature}:${rootLimit}:${store.threadVisibleReplyCount}:${activeThreadId || ''}:${focusMessageId || ''}:${selectionGeneration}:${authorityGeneration ?? ''}`,
+          equals: sameLogicalValue,
+          query: async () => {
+            const startedAt = globalThis.performance?.now?.() ?? Date.now();
+            const messages = await getMessagePresentationWindowByChannels(channelIds, {
+              rootLimit, activeThreadId, focusMessageId,
+            });
+            store.traceFlightDeckTiming?.('scope selection', {
+              message: 'live Dexie query end', channelCount: channelIds.length,
+              queryDurationMs: (globalThis.performance?.now?.() ?? Date.now()) - startedAt,
+              messageCount: messages.length,
+            });
+            return messages;
           },
-          {
-            key: `chat:reactions:scope-home:${signature}`,
-            query: async () => {
-              const messages = await getMessagePresentationWindowByChannels(channelIds, {
-                rootLimit: store?.mainFeedVisibleCount || store?.MAIN_FEED_PAGE_SIZE,
-                activeThreadId: store?.activeThreadId,
-                focusMessageId: store?.focusMessageId,
-              });
-              return getReactionsByTargets(
-                messages.map((message) => message.record_id).filter(Boolean),
-                recordFamilyHash('chat_message'),
-              );
-            },
-            onNext: (reactions) => {
-              if (!isSameWorkspace(store, workspaceKey, ownerNpub) || store.selectedChannelId) return;
-              return store.applyReactions(reactions);
-            },
+          onError: () => {
+            if (!isCurrent()) return;
+            store.pendingChannelSelectionId = '';
+            store.chatScopeLoadError = 'Could not load conversations. Select the scope again to retry.';
           },
-        ];
+          onNext: async (messages) => {
+            if (!isCurrent()) return;
+            await store.applyMessages(messages, { selectionGeneration, isCurrent, deferEnrichment: true });
+            if (!isCurrent()) return;
+            store.pendingChannelSelectionId = '';
+            store.chatScopeLoadError = '';
+            store.saveCurrentChatPresentation?.(`scope:${boardId}`);
+            // Targets come from this applied presentation. A keyed reaction-only
+            // subscription observes reactions without rereading message values.
+            store.startWorkspaceLiveQueries?.();
+            const timing = store.scopeChatLoadTiming;
+            if (!timing || timing.generation !== selectionGeneration || timing.contentPaintMs != null) return;
+            await waitForNavigationPaint(store);
+            if (!isCurrent()) return;
+            timing.contentPaintMs = (globalThis.performance?.now?.() ?? Date.now()) - timing.startedAt;
+            store.traceFlightDeckTiming?.('scope selection', {
+              message: 'content paint boundary', contentPaintMs: timing.contentPaintMs,
+              messageCount: messages.length, channelCount: channelIds.length,
+              // Scope home has no enabled composer until a channel is chosen.
+              composerReady: false,
+            });
+          },
+        }, {
+          key: `chat:reactions:scope-home:${signature}:${selectionGeneration}:${authorityGeneration ?? ''}:${targetIds.join(',')}`,
+          query: () => getReactionsByTargets(targetIds, recordFamilyHash('chat_message')),
+          onNext: reactions => { if (isCurrent()) return store.applyReactions(reactions); },
+        }];
       }
       const activeThreadId = String(store?.activeThreadId || '').trim();
       const specs = [
@@ -1219,6 +1257,8 @@ export const sectionLiveQueryMixin = {
   pgNavigationGeneration: null,
   pgNavigationWorkspaceKey: '',
   pgNavigationProjectionRevision: 0,
+  chatScopeLoadError: '',
+  scopeChatLoadTiming: null,
   sectionRefreshError: '',
   sectionRefreshFamily: '',
   applyPgNavigationProjection(projection) {

@@ -3,13 +3,14 @@
 export function instrumentIndexedDb() {
   let counts;
   const restores=[];
-  const reset=()=>{counts={valueRowsRead:0,keyRowsRead:0,writeRequests:0,byStore:{}}};reset();
-  const bump=(store,kind,count)=>{counts[kind]+=count;const row=counts.byStore[store] ||= {valueRowsRead:0,keyRowsRead:0,writeRequests:0};row[kind]+=count};
+  const reset=()=>{counts={valueRowsRead:0,keyRowsRead:0,readRequests:0,writeRequests:0,byStore:{}}};reset();
+  const bump=(store,kind,count)=>{counts[kind]+=count;const row=counts.byStore[store] ||= {valueRowsRead:0,keyRowsRead:0,readRequests:0,writeRequests:0};row[kind]+=count};
   for(const proto of [IDBObjectStore.prototype,IDBIndex.prototype]) {
     for(const name of ['get','getAll','openCursor','getKey','getAllKeys','openKeyCursor']) {
       const original=proto[name];if(!original)continue;
       proto[name]=function(...args){
         const store=this.objectStore?.name || this.name;
+        bump(store,'readRequests',1);
         const request=original.apply(this,args);
         request.addEventListener('success',()=>{
           const value=request.result;if(value==null)return;

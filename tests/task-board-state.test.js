@@ -1283,10 +1283,9 @@ describe('computeBoardScopedTasks', () => {
     expect(store.selectChannel).not.toHaveBeenCalled();
     expect(store.applyChatPresentation).toHaveBeenCalledWith(null, null, { pending: true, scrollToLatest: false });
     expect(store.stopSelectedChannelLiveQuery).not.toHaveBeenCalled();
-    expect(store.refreshMessages).toHaveBeenCalledWith(expect.objectContaining({
-      scrollToLatest: false,
-      deferEnrichment: true,
-    }));
+    expect(store.refreshMessages).not.toHaveBeenCalled();
+    expect(store.startWorkspaceLiveQueries).toHaveBeenCalledTimes(1);
+    expect(store.pendingChannelSelectionId).toBe('scope:scope-product');
   });
 
   it('acknowledges a cached PG scope synchronously without clearing or manually rereading the feed', async () => {

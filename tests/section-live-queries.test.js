@@ -241,8 +241,8 @@ describe('section live query plan', () => {
     });
 
     expect(plan.detail).toEqual([
-      'chat:messages:scope-home:channel-a,channel-b:undefined:undefined',
-      'chat:reactions:scope-home:channel-a,channel-b',
+      'chat:messages:scope-home:channel-a,channel-b:undefined:undefined:::0:',
+      'chat:reactions:scope-home:channel-a,channel-b:0::',
     ]);
   });
 
@@ -652,4 +652,110 @@ it('starts identity-scoped public notifications while workspace-owner metadata i
   } finally {
     await deleteWorkspaceDb(workspaceKey);
   }
+});
+
+describe('scope chat presentation lifecycle', () => {
+  async function setup() {
+    const key = 'scope-chat-live-lifecycle';
+    openWorkspaceDb(key);
+    await clearRuntimeData();
+    const subscriptions = [];
+    const store = {
+      currentWorkspaceKey: key, workspaceOwnerNpub: 'owner', navSection: 'chat',
+      selectedBoardId: 'A', selectedChannelId: null, channelSelectionGeneration: 1,
+      pgContextChannels: [{ record_id: 'a' }], messages: [],
+      startSharedLiveQueries() {}, initUnreadTracking() {},
+      createLiveSubscription(query, onNext, options) {
+        const subscription = { query, onNext, options, unsubscribe() {} };
+        subscriptions.push(subscription);
+        return subscription;
+      },
+      stopLiveSubscription: vi.fn(),
+      applyMessages: vi.fn(async function(rows) { this.messages = rows; }),
+      applyReactions: vi.fn(), saveCurrentChatPresentation: vi.fn(),
+      startWorkspaceLiveQueries() { sectionLiveQueryMixin.startWorkspaceLiveQueries.call(this); },
+    };
+    const start = () => {
+      store.startWorkspaceLiveQueries();
+      return subscriptions.filter(s => s.query.toString().includes('getMessagePresentationWindowByChannels')).at(-1);
+    };
+    return { key, store, subscriptions, start };
+  }
+  it('rejects A > B > A callbacks and late workspace/error callbacks', async () => {
+    const { key, store, start } = await setup();
+    try {
+      const a = start();
+      store.selectedBoardId = 'B'; store.channelSelectionGeneration++;
+      store.pgContextChannels = [{ record_id: 'b' }];
+      const b = start();
+      store.selectedBoardId = 'A'; store.channelSelectionGeneration++;
+      store.pgContextChannels = [{ record_id: 'a' }];
+      const current = start();
+      await a.onNext([{ record_id: 'stale-a' }]);
+      await b.onNext([{ record_id: 'stale-b' }]);
+      a.options.onError(new Error('stale error'));
+      expect(store.applyMessages).not.toHaveBeenCalled();
+      expect(store.chatScopeLoadError).toBeUndefined();
+      await current.onNext([{ record_id: 'current-a', channel_id: 'a' }]);
+      expect(store.messages.map(row => row.record_id)).toEqual(['current-a']);
+      expect(store.pendingChannelSelectionId).toBe('');
+      store.pgNavigationGeneration = 'revoked-generation';
+      await current.onNext([{ record_id: 'revoked' }]);
+      expect(store.applyMessages).toHaveBeenCalledTimes(1);
+      store.currentWorkspaceKey = 'other';
+      await current.onNext([{ record_id: 'wrong-workspace' }]);
+      expect(store.applyMessages).toHaveBeenCalledTimes(1);
+    } finally { await deleteWorkspaceDb(key); }
+  });
+  it('rebinds a scope query when first navigation authority arrives without changing channels', async () => {
+    const { key, store, subscriptions, start } = await setup();
+    try {
+      const initial = start();
+      store.applyScopes = async () => {};
+      store.applyChannels = async () => {};
+      store.pgNavigationGeneration = null;
+      await sectionLiveQueryMixin.applyPgNavigationProjection.call(store, {
+        scopes: [], channels: [{ record_id: 'a' }], generation: 'first-generation', pending: false,
+      });
+      const current = subscriptions.filter(s => s.query.toString().includes('getMessagePresentationWindowByChannels')).at(-1);
+      expect(current).not.toBe(initial);
+      await initial.onNext([{ record_id: 'stale', channel_id: 'a' }]);
+      expect(store.applyMessages).not.toHaveBeenCalled();
+      await current.onNext([{ record_id: 'current', channel_id: 'a' }]);
+      expect(store.messages.map(row => row.record_id)).toEqual(['current']);
+    } finally { await deleteWorkspaceDb(key); }
+  });
+
+  it('finishes empty scopes and terminates pending state on a current read error', async () => {
+    const { key, store, start } = await setup();
+    try {
+      store.pgContextChannels = [];
+      store.pendingChannelSelectionId = 'scope:A';
+      const empty = start();
+      await empty.onNext(await empty.query());
+      expect(store.messages).toEqual([]);
+      expect(store.pendingChannelSelectionId).toBe('');
+      store.pendingChannelSelectionId = 'scope:A';
+      empty.options.onError(new Error('IndexedDB failed'));
+      expect(store.pendingChannelSelectionId).toBe('');
+      expect(store.chatScopeLoadError).toContain('Select the scope again');
+    } finally { await deleteWorkspaceDb(key); }
+  });
+  it('uses applied IDs for reactions without another presentation read and observes added targets', async () => {
+    const { key, store, subscriptions, start } = await setup();
+    try {
+      await upsertMessage({ record_id: 'root', channel_id: 'a', updated_at: '2026-10-01T00:00:00Z' });
+      const current = start();
+      await current.onNext(await current.query());
+      const reads = vi.spyOn(getWorkspaceDb().chat_messages, 'where');
+      const reaction = subscriptions.filter(s => s.query.toString().includes('getReactionsByTargets')).at(-1);
+      await reaction.query();
+      expect(reads).not.toHaveBeenCalled();
+      reads.mockRestore();
+      const count = subscriptions.length;
+      await current.onNext([{ record_id: 'root', channel_id: 'a' }, { record_id: 'incoming', channel_id: 'a' }]);
+      expect(subscriptions.length).toBe(count + 1); // replace reaction targets only
+      expect(store.applyMessages).toHaveBeenCalledTimes(2);
+    } finally { await deleteWorkspaceDb(key); }
+  });
 });
