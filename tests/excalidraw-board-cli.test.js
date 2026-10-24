@@ -3,6 +3,7 @@ import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { applyCommentOperation } from '../src/canvas/board-comments.js';
 import { boardClient, EXIT_STALE, run } from '../scripts/excalidraw-board.mjs';
 
 const WS = '11111111-1111-4111-8111-111111111111';
@@ -51,7 +52,7 @@ function fakeTower() {
     if ((match = pathname.match(/\/canvases\/([^/]+)\/naplets$/))) { naplets.push(body); return json(201, { naplet: { id: id(), ...body } }); }
     return json(404, { error: `unhandled ${method} ${pathname}` });
   };
-  const sign = async (url, method) => ({ authorization: `Nostr signed:${method}:${new URL(url).pathname}` });
+  const sign = async (url, method) => ({ authorization: `Nostr signed:${method}:${new URL(url).pathname}`, signedBy: 'npub1agent' });
   return { files, requests, naplets, client: boardClient({ baseUrl: 'https://tower.example', workspaceId: WS, sign, fetchImpl }) };
 }
 
@@ -62,6 +63,21 @@ async function cli(tower, args) {
 }
 
 describe('excalidraw-board agent helper', () => {
+  it('reads drawing context and appends replies as broker identity against the read version', async () => {
+    const tower = fakeTower();
+    const scene = applyCommentOperation({ elements: [rect('box', 1)], files: {} }, { type: 'create', id: 'thread', anchor: { x: 0, y: 0 }, body: 'Question' }, 'npub1human');
+    const file = await tower.client.create(CHANNEL, 'Discuss', scene);
+    const read = JSON.parse((await cli(tower, ['comments', '--file', file.id])).out);
+    expect(read.threads[0].context.nearby[0].id).toBe('box');
+    const reply = await cli(tower, ['reply', '--file', file.id, '--thread', 'thread', '--body', 'Answer', '--base', file.current_version_id]);
+    expect(reply.code).toBe(0);
+    const current = await tower.client.read(file.id);
+    expect(current.scene.wingman.comments[0].messages[1]).toMatchObject({ body: 'Answer', author_npub: 'npub1agent' });
+    expect((await cli(tower, ['reply', '--file', file.id, '--thread', 'thread', '--body', 'Stale', '--base', file.current_version_id])).code).toBe(EXIT_STALE);
+    expect(tower.files.get(file.id).versions).toHaveLength(2);
+    await expect(cli(tower, ['reply', '--file', file.id, '--thread', 'thread', '--body', 'No base'])).rejects.toThrow(/base/);
+  });
+
   it('creates and links, reads an exact version, edits locally and publishes against its base', async () => {
     const tower = fakeTower();
     const dir = await mkdtemp(path.join(os.tmpdir(), 'board-cli-'));

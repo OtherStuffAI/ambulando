@@ -227,6 +227,37 @@ describe('board controller: shared draft, explicit save, refresh and history', (
     return { tower, runtime, board, controller, states, inline, fullscreen, confirm, state: () => controller.state };
   }
 
+  it('saves comment-only changes, retains comments during drawing flush and rejects read-only operations', async () => {
+    const { controller, runtime, board, state } = await setup();
+    await controller.commentOperation('naplet-1', { type: 'create', id: 'root', anchor: { x: 4, y: 4 }, body: 'Question', author_npub: 'npub1spoof' });
+    expect(state().dirty).toBe(true);
+    expect(controller.working.wingman.comments[0].messages[0].author_npub).toBe(runtime.context.viewer);
+    await controller.editorChanged('naplet-1', scene([rect('a', 2)]));
+    expect(controller.working.wingman.comments).toHaveLength(1);
+    expect(await controller.save()).toBe(true);
+    const latest = await runtime.readVersion(board.file_id, state().base_version_id);
+    expect(latest.scene.wingman.comments[0].messages[0].body).toBe('Question');
+    controller.state.can_write = false;
+    await controller.commentOperation('naplet-1', { type: 'reply', thread_id: 'root', body: 'Denied' });
+    expect(controller.working.wingman.comments[0].messages).toHaveLength(1);
+  });
+
+  it('freezes conflicting cross-tab comment content without republishing competing drafts', async () => {
+    const { controller, runtime } = await setup();
+    await controller.commentOperation('naplet-1', { type: 'create', id: 'root', anchor: { x: 4, y: 4 }, body: 'Mine' });
+    const other = structuredClone(controller.working);
+    other.wingman.comments[0].messages[0].body = 'Different same message';
+    const persist = vi.spyOn(runtime, 'putDraft');
+    controller.applyDraftRow({ scene: other, fingerprint: boardSceneFingerprint(other), base_version_id: controller.base.version_id, writer: 'other-page' });
+    expect(controller.state.conflicts).toBe(1);
+    expect(controller.working.wingman.comments[0].messages[0].body).toBe('Mine');
+    expect(controller.editorContent().readOnly).toBe(true);
+    expect(persist).not.toHaveBeenCalled();
+    expect(await controller.save()).toBe(false);
+    await controller.loadLatest({ force: true });
+    expect(controller.editorContent().readOnly).toBe(false);
+  });
+
   it('loads the latest version into every attached editor and starts clean', async () => {
     const { inline, fullscreen, state } = await setup();
     expect(state()).toMatchObject({ status: 'ready', dirty: false, save_state: 'saved', base_version_number: 1 });

@@ -1,3 +1,5 @@
+import { BoardComments } from './comments.js';
+import { boardComments, followCommentAnchors } from '../board-comments.js';
 import { createElement, useCallback, useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { CaptureUpdateAction, Excalidraw, restoreElements } from '@excalidraw/excalidraw';
@@ -26,8 +28,11 @@ function sceneElements(scene) {
 
 function BoardEditor({ port, theme }) {
   const apiRef = useRef(null);
-  const state = useRef({ key: '', readOnly: true, fingerprint: '', sentFiles: new Set(), interacted: false, timer: 0, pending: null });
+  const state = useRef({ key: '', readOnly: true, fingerprint: '', sentFiles: new Set(), interacted: false, timer: 0, pending: null, comments: [] });
   const [readOnly, setReadOnly] = useState(true);
+  const [discussion, setDiscussion] = useState([]);
+  const discussionView = useRef(null);
+  const [discussionKey, setDiscussionKey] = useState('');
   const [ready, setReady] = useState(false);
   // Page-owned Save state (label, disabled); hidden for read-only views.
   const [action, setAction] = useState(null);
@@ -38,19 +43,25 @@ function BoardEditor({ port, theme }) {
   const applyScene = useCallback((scene, { reset }) => {
     const api = apiRef.current;
     if (!api || !scene) return;
+    clearTimeout(state.current.timer); state.current.timer = 0; state.current.pending = null;
+    state.current.comments = boardComments(scene); setDiscussion(state.current.comments);
     const files = Object.values(scene.files || {});
     if (files.length) api.addFiles(files);
     for (const file of files) state.current.sentFiles.add(file.id);
     api.updateScene({
       elements: sceneElements(scene),
-      ...(reset ? { appState: { ...BOARD_APP_STATE_DEFAULTS, ...(scene.appState || {}) } } : {}),
+      ...(reset ? { appState: { ...BOARD_APP_STATE_DEFAULTS, ...(scene.appState || {}), zoom: { value: 1 }, scrollX: 0, scrollY: 0 } } : {}),
       captureUpdate: CaptureUpdateAction.NEVER,
     });
     // A newly opened board starts at 100%, centred on its content. Fitting to
     // the viewport zooms sparse boards up to Excalidraw's 3000% maximum (an
     // empty board has zero-size bounds). Later loads of the same key keep the
     // viewer's own zoom.
-    if (reset) { api.history.clear(); api.scrollToContent?.(undefined, { fitToContent: true, minZoom: 1, maxZoom: 1, animate: false }); }
+    if (reset) {
+      api.history.clear();
+      // Empty content has no finite fit bounds. Keep the explicit 100% viewport.
+      if (scene.elements?.some(element => !element.isDeleted)) api.scrollToContent?.(undefined, { fitToContent: true, minZoom: 1, maxZoom: 1, animate: false });
+    }
     state.current.fingerprint = boardSceneFingerprint(scene);
     state.current.interacted = false;
     reportCounts(api.getSceneElementsIncludingDeleted(), api.getFiles());
@@ -61,7 +72,7 @@ function BoardEditor({ port, theme }) {
     current.timer = 0;
     const pending = current.pending; current.pending = null;
     if (!pending || current.readOnly || !current.interacted) return;
-    const scene = { type: 'excalidraw', version: 2, elements: pending.elements, appState: pending.appState, files: {} };
+    const scene = { type: 'excalidraw', version: 2, elements: pending.elements, appState: pending.appState, files: {}, wingman: { comments: followCommentAnchors(current.comments, pending.elements) } };
     const fingerprint = boardSceneFingerprint({ ...scene, files: pending.files });
     if (fingerprint === current.fingerprint) return;
     current.fingerprint = fingerprint;
@@ -80,6 +91,7 @@ function BoardEditor({ port, theme }) {
       const message = event.data || {};
       if (message.type === 'load') {
         const reset = message.key !== state.current.key;
+        if (reset) setDiscussionKey(message.key);
         state.current.key = message.key;
         state.current.readOnly = message.readOnly === true;
         setReadOnly(state.current.readOnly);
@@ -95,8 +107,11 @@ function BoardEditor({ port, theme }) {
         setAction(message.action && typeof message.action === 'object' ? message.action : null);
       } else if (message.type === 'patch') {
         applyScene(message.scene, { reset: false });
+      } else if (message.type === 'comments') {
+        state.current.comments = message.comments; setDiscussion(message.comments);
       } else if (message.type === 'clear') {
         state.current.readOnly = true; setReadOnly(true);
+        state.current.comments = []; setDiscussion([]); setDiscussionKey(crypto.randomUUID());
         apiRef.current?.resetScene();
         reportCounts([], {});
       }
@@ -128,6 +143,7 @@ function BoardEditor({ port, theme }) {
     const current = state.current;
     reportCounts(elements, files);
     reportZoom(appState);
+    discussionView.current?.update(elements, appState);
     if (current.readOnly) return;
     current.pending = {
       elements: elements.map(element => ({ ...element })),
@@ -152,7 +168,12 @@ function BoardEditor({ port, theme }) {
     const schedule = () => { tries = 0; if (!frame) frame = requestAnimationFrame(measure); };
     schedule();
     addEventListener('resize', schedule);
-    return () => { cancelAnimationFrame(frame); removeEventListener('resize', schedule); };
+    // Excalidraw changes its compact layout after its own resize observer runs.
+    // Measure that transition too, so fullscreen never retains a second Save.
+    const layout = document.querySelector('.excalidraw');
+    const observer = new MutationObserver(schedule);
+    if (layout) observer.observe(layout, { attributes: true, attributeFilter: ['class'] });
+    return () => { observer.disconnect(); cancelAnimationFrame(frame); removeEventListener('resize', schedule); };
   }, [ready]);
 
   // Save floats over the drawing area: in Excalidraw's own top-right slot on
@@ -169,6 +190,7 @@ function BoardEditor({ port, theme }) {
 
   return createElement('div', { style: { position: 'relative', width: '100%', height: '100%' }, 'data-board-ready': ready ? 'true' : 'false', 'data-board-readonly': readOnly ? 'true' : 'false' },
     phoneAt && action?.action ? createElement('div', { className: 'wingman-board-action-phone', style: { top: `${phoneAt.top}px`, right: `${phoneAt.right}px` } }, saveButton()) : null,
+    createElement(BoardComments, { key: `${discussionKey}:${readOnly}`, api: apiRef.current, ref: discussionView, comments: discussion, readOnly, send: operation => { clearTimeout(state.current.timer); flush(); port.postMessage({ type: 'comment-op', operation }); } }),
     createElement(Excalidraw, {
       excalidrawAPI: api => { apiRef.current = api; setReady(Boolean(api)); },
       onChange,

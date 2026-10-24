@@ -1,3 +1,4 @@
+import { applyCommentOperation, boardComments, followCommentAnchors, mergeBoardComments, withBoardComments } from './board-comments.js';
 import { boardSceneFingerprint, rebaseBoardScene, restoreBoardScene } from './board-scene.js';
 import { BoardStaleError } from './board-sync.js';
 
@@ -60,6 +61,7 @@ export class BoardController {
     this.emit({ can_write: meta.can_write === true, latest_version_id: meta.current_version_id, latest_version_number: meta.current_version_number });
     if (!this.draftSubscription) this.observeDraft();
     if (!this.base) return this.initialLoad();
+    if (previous?.can_write !== meta.can_write) this.broadcastLoad();
     if (previous?.current_version_id !== meta.current_version_id && !this.state.dirty && meta.current_version_id !== this.base.version_id) {
       return this.loadLatest({ force: true, head: { id: meta.current_version_id, number: meta.current_version_number, sha256: meta.sha256 } });
     }
@@ -111,7 +113,7 @@ export class BoardController {
 
   editorContent() {
     if (this.viewing) return { scene: this.viewing.scene, readOnly: true, key: `history:${this.viewing.version_id}` };
-    return { scene: this.working, readOnly: !this.state.can_write, key: this.loadKey };
+    return { scene: this.working, readOnly: !this.state.can_write || Boolean(this.draftConflict), key: this.loadKey };
   }
 
   broadcastLoad() {
@@ -149,7 +151,8 @@ export class BoardController {
 
   async applyEditorChange(napletId, scene) {
     const session = this.sessions.get(napletId);
-    if (!session || this.viewing || !this.base || !this.state.can_write) return;
+    if (!session || this.draftConflict || this.viewing || !this.base || !this.state.can_write) return;
+    scene = withBoardComments(scene, followCommentAnchors(boardComments(this.working), scene.elements || []));
     const fingerprint = boardSceneFingerprint(scene);
     session.lastFingerprint = fingerprint;
     if (fingerprint === boardSceneFingerprint(this.working)) return;
@@ -162,6 +165,18 @@ export class BoardController {
     this.lastDraftFingerprint = dirty ? fingerprint : '';
     if (dirty) await this.persistDraft(session.id);
     else await this.runtime.deleteDraft(this.fileId);
+  }
+
+  commentOperation(napletId, operation) {
+    this.changeChain = (this.changeChain || Promise.resolve()).then(async () => {
+      if (this.draftConflict || !this.sessions.has(napletId) || this.viewing || !this.base || !this.state.can_write) return;
+      this.working = applyCommentOperation(this.working, operation, this.runtime.context.viewer);
+      this.lastDraftFingerprint = boardSceneFingerprint(this.working);
+      await this.persistDraft();
+      this.emit({ dirty: true, save_state: 'unsaved', error: '' });
+      for (const session of this.sessions.values()) session.send({ type: 'comments', comments: boardComments(this.working) });
+    }).catch(error => this.emit({ error: error.message }));
+    return this.changeChain;
   }
 
   persistDraft(writer = this.writerId) {
@@ -179,8 +194,20 @@ export class BoardController {
     // Rows this page wrote were already applied; only other tabs patch editors.
     if (String(row.writer).startsWith(this.writerId)) return;
     this.lastDraftFingerprint = row.fingerprint;
-    this.working = row.scene;
-    for (const session of this.sessions.values()) { session.lastFingerprint = row.fingerprint; session.send({ type: 'patch', scene: row.scene }); }
+    const discussion = mergeBoardComments(this.base.scene, this.working, row.scene);
+    if (discussion.conflicts.length) {
+      this.draftConflict = true;
+      this.emit({ conflicts: discussion.conflicts.length, dirty: true, save_state: 'error', error: 'Another tab has conflicting comment data. Your draft is kept read-only. Discard unsaved changes to load the saved board before editing again.' });
+      this.broadcastLoad();
+      return;
+    }
+    this.working = withBoardComments(row.scene, discussion.comments);
+    const mergedFingerprint = boardSceneFingerprint(this.working);
+    if (mergedFingerprint !== row.fingerprint) {
+      this.lastDraftFingerprint = mergedFingerprint;
+      void this.persistDraft().catch(error => this.emit({ error: error.message }));
+    }
+    for (const session of this.sessions.values()) { session.lastFingerprint = row.fingerprint; session.send({ type: 'patch', scene: this.working }); }
     this.emit({ dirty: true, save_state: 'unsaved' });
   }
 
@@ -217,7 +244,7 @@ export class BoardController {
   }
 
   async saveNow({ summary = '' } = {}) {
-    if (!this.base || this.state.save_state === 'saving') return false;
+    if (this.draftConflict || !this.base || this.state.save_state === 'saving') return false;
     try { await this.flushEditors(); } catch (error) {
       // Unconfirmed editor changes: publish nothing and keep the draft.
       this.emit({ save_state: 'error', error: error?.message || new BoardFlushError().message, notice: '' });
@@ -296,6 +323,7 @@ export class BoardController {
       const versionId = target.id, number = target.number;
       const latest = await this.runtime.readVersion(this.fileId, versionId, { sha256: target.sha256 || '' });
       this.base = { version_id: versionId, version_number: number, scene: latest.scene, fingerprint: latest.fingerprint };
+      this.draftConflict = false;
       this.working = latest.scene; this.viewing = null; this.lastDraftFingerprint = '';
       await this.runtime.deleteDraft(this.fileId);
       this.loadKey = `${versionId}:${sessionId()}`;

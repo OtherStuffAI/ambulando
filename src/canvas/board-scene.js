@@ -1,3 +1,5 @@
+import { boardComments, followCommentAnchors, mergeBoardComments, normalizeBoardComments } from './board-comments.js';
+
 // Canonical Excalidraw board scenes. A board is a Flight Deck File whose
 // immutable versions hold this JSON. The canonical working scene keeps every
 // element (including `isDeleted` tombstones), element `version`/`versionNonce`
@@ -78,7 +80,7 @@ function validateFile(id, file) {
  */
 export function normalizeBoardScene(input) {
   let value = input;
-  if (isObject(value) && isObject(value.scene) && Array.isArray(value.scene.elements)) value = { ...value.scene, wingman: value.wingman };
+  if (isObject(value) && isObject(value.scene) && Array.isArray(value.scene.elements)) value = { ...value.scene, wingman: value.wingman || value.scene.wingman };
   if (!isObject(value) || !Array.isArray(value.elements)) throw new BoardSceneError('Board scene must contain an elements array');
   if (value.type !== undefined && value.type !== 'excalidraw') throw new BoardSceneError('Board scene type must be "excalidraw"');
   if (value.elements.length > BOARD_LIMITS.elements) throw new BoardSceneError('Board has too many elements', 'board_too_large');
@@ -88,7 +90,10 @@ export function normalizeBoardScene(input) {
   if (fileEntries.length > BOARD_LIMITS.files) throw new BoardSceneError('Board has too many images', 'board_too_large');
   const files = Object.fromEntries(fileEntries.map(([id, file]) => [id, validateFile(id, file)]));
   const scene = { type: 'excalidraw', version: 2, source: text(value.source) || BOARD_SOURCE, elements, appState: pickAppState(value.appState), files };
-  if (isObject(value.wingman)) scene.wingman = pickWingmanMetadata(value.wingman);
+  if (isObject(value.wingman)) {
+    scene.wingman = pickWingmanMetadata(value.wingman);
+    if (scene.wingman.comments) scene.wingman.comments = followCommentAnchors(scene.wingman.comments, elements);
+  }
   return scene;
 }
 
@@ -97,6 +102,7 @@ function pickWingmanMetadata(value) {
   const summary = text(value.summary).slice(0, BOARD_LIMITS.summary);
   if (summary) metadata.summary = summary;
   if (text(value.base_version_id)) metadata.base_version_id = text(value.base_version_id);
+  if (value.comments !== undefined) metadata.comments = normalizeBoardComments(value.comments);
   return metadata;
 }
 
@@ -126,7 +132,7 @@ export function serializeBoardScene(scene, { summary = '', baseVersionId = '' } 
   const normalized = normalizeBoardScene(scene);
   const referenced = referencedFileIds(normalized.elements);
   const files = Object.fromEntries(Object.entries(normalized.files).filter(([id]) => referenced.has(id)).sort(([a], [b]) => a.localeCompare(b)));
-  const wingman = pickWingmanMetadata({ summary, base_version_id: baseVersionId });
+  const wingman = pickWingmanMetadata({ ...normalized.wingman, summary, base_version_id: baseVersionId, ...(normalized.wingman?.comments ? { comments: followCommentAnchors(boardComments(normalized), normalized.elements) } : {}) });
   const document = { type: 'excalidraw', version: 2, source: BOARD_SOURCE, elements: normalized.elements, appState: normalized.appState, files };
   if (Object.keys(wingman).length) document.wingman = wingman;
   const json = JSON.stringify(document);
@@ -143,7 +149,7 @@ export function serializeBoardScene(scene, { summary = '', baseVersionId = '' } 
 export function boardSceneFingerprint(scene) {
   const elements = (scene?.elements || []).map(element => `${element.id}:${element.version}:${element.versionNonce ?? 0}:${element.isDeleted ? 1 : 0}`).sort();
   const files = Object.keys(scene?.files || {}).filter(id => referencedFileIds(scene?.elements).has(id)).sort();
-  return JSON.stringify([elements, files, pickAppState(scene?.appState)]);
+  return JSON.stringify([elements, files, pickAppState(scene?.appState), boardComments(scene)]);
 }
 
 function elementStamp(element) {
@@ -175,7 +181,9 @@ export function rebaseBoardScene({ base, draft, latest }) {
   const draftAppStateChanged = JSON.stringify(pickAppState(draft?.appState)) !== JSON.stringify(pickAppState(base?.appState));
   const files = { ...(latest?.files || {}), ...(draft?.files || {}) };
   const appState = draftAppStateChanged ? pickAppState(draft?.appState) : pickAppState(latest?.appState);
-  return { scene: { type: 'excalidraw', version: 2, source: BOARD_SOURCE, elements, appState, files }, conflicts };
+  const discussion = mergeBoardComments(base, draft, latest);
+  conflicts.push(...discussion.conflicts);
+  return { scene: { wingman: { comments: followCommentAnchors(discussion.comments, elements) }, type: 'excalidraw', version: 2, source: BOARD_SOURCE, elements, appState, files }, conflicts };
 }
 
 /** Lossy public/export projection: live elements and their images only. */
@@ -217,5 +225,7 @@ export function restoreBoardScene({ target, latest }) {
     ...(target?.elements || []).map(element => restamp(element, latestById.get(element.id))),
     ...(latest?.elements || []).filter(element => !targetIds.has(element.id)).map(element => element.isDeleted ? element : { ...restamp(element, element), isDeleted: true }),
   ];
-  return { type: 'excalidraw', version: 2, source: BOARD_SOURCE, elements, appState: pickAppState(target?.appState), files: { ...(latest?.files || {}), ...(target?.files || {}) } };
+  // Restoring a drawing never erases discussion that arrived in later versions.
+  const discussion = mergeBoardComments({}, latest, target);
+  return { wingman: { comments: followCommentAnchors(discussion.comments, elements) }, type: 'excalidraw', version: 2, source: BOARD_SOURCE, elements, appState: pickAppState(target?.appState), files: { ...(latest?.files || {}), ...(target?.files || {}) } };
 }

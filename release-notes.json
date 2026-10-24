@@ -5236,6 +5236,14 @@
       "notes": [
         "Switching from Hand to Select reliably releases the transparent pan shield, including when window startup delayed a previous paint."
       ]
+    },
+    {
+      "buildNumber": 2645,
+      "label": "Spatial board comments",
+      "notes": [
+        "Add clickable comment pins and threaded replies to Canvas boards, with shape following, resolve/reopen and version-safe saves.",
+        "Agents can read board discussions with drawing context and reply through the broker-aware board CLI."
+      ]
     }
   ]
 }

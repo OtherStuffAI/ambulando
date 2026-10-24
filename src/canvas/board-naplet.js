@@ -29,6 +29,7 @@ export function registerCanvasBoard(Alpine, { controllerFor, actionFor = () => n
         if (message.type === 'ready') { iframe.dataset.boardConnected = 'true'; editorReady = true; owner.attach(napletId, payload => port?.postMessage(payload)); sendAction(); }
         else if (message.type === 'action' && naplet?.id === napletId) void runAction(naplet, String(message.action || ''));
         else if (message.type === 'change' && message.scene) void owner.editorChanged(napletId, message.scene);
+        else if (message.type === 'comment-op') void owner.commentOperation(napletId, message.operation);
         else if (message.type === 'flushed') owner.editorFlushed(napletId, message.token);
         else if (message.type === 'error') iframe.dataset.boardError = String(message.message || 'error');
       };
