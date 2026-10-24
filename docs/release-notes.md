@@ -15,3 +15,10 @@ The absolute build number is the comparison key. The human-readable timestamp bu
 An internal build with no user-visible change does not need a manifest entry. If recording that build explicitly is useful, add an entry with a meaningful `label`, an empty `notes` array, and `"noUserVisibleChanges": true`; the upgrade panel will say that the build has no user-visible changes. Never add placeholder or invented notes.
 
 Entries are immutable history after release. Do not reuse or reorder build numbers. The build and tests reject malformed entries, duplicate/out-of-order build numbers, empty visible releases, and ambiguous no-change entries.
+
+Native store packaging uses `bun run test:release`: all functional tests remain
+mandatory. The 20,000-row worker benchmark records host event-loop delay without
+using its 50 ms observation as a release gate. `bun run test` retains the strict
+benchmark threshold for dedicated performance investigation. Worker results and
+actual event-loop progress remain asserted in both modes. Never suppress a
+functional failure as benchmark noise.

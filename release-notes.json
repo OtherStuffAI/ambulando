@@ -5076,6 +5076,12 @@
       "notes": [
         "Undoing a canvas move or resize preserves unrelated stacking and task-tree layout changes received while you were adjusting it."
       ]
+    },
+    {
+      "buildNumber": 2610,
+      "label": "Release validation policy",
+      "notes": [],
+      "noUserVisibleChanges": true
     }
   ]
 }
