@@ -242,3 +242,26 @@ test('phone graph touch pan keeps the canvas mounted without refreshing the oute
   await cdp.send('Input.dispatchTouchEvent',{type:'touchCancel',touchPoints:[]});
   await expect.poll(()=>page.evaluate(()=>window.__panProbe.refreshes)).toBe(1);
 });
+
+test('Task Tree polling skips minimised and offscreen views, then reauthorizes on restore',async({page,context})=>{
+  const f=await fixture(page,context);let reads=0;
+  page.on('request',request=>{if(new URL(request.url()).pathname.endsWith('/relationships'))reads++;});
+  const tree=await addTree(page);
+  await tree.getByRole('button',{name:'Existing Task',exact:true}).click();
+  await tree.getByRole('button',{name:'Existing root',exact:true}).click();
+  await expect(tree.locator('.tree-task')).toHaveCount(1);
+  const original=f.naplets[0];
+  f.naplets.push({...original,id:'70000000-0000-4000-8000-000000000002',layout:{...original.layout,x:400,y:150,task_tree:{...original.layout.task_tree,instance_id:'80000000-0000-4000-8000-000000000002'}}});
+  f.naplets.push({...original,id:'70000000-0000-4000-8000-000000000003',layout:{...original.layout,x:10000,y:10000,task_tree:{...original.layout.task_tree,instance_id:'80000000-0000-4000-8000-000000000003'}}});
+  await page.evaluate(()=>Alpine.store('canvas').refresh());
+  await expect(page.locator('[data-task-tree="80000000-0000-4000-8000-000000000002"] .tree-task')).toHaveCount(1);
+  expect(await page.locator('[data-task-tree="80000000-0000-4000-8000-000000000003"] .tree-task').count()).toBe(0);
+  for(const button of await page.locator('.canvas-naplet').filter({has:page.locator('.tree-task')}).locator('.window-minimise').all())await button.evaluate(node=>node.click());
+  await page.waitForTimeout(250);const hiddenReads=reads;
+  await page.waitForTimeout(10500);expect(reads).toBe(hiddenReads);
+  f.revoke();
+  await page.locator('.canvas-naplet').first().locator('.window-minimise').evaluate(node=>node.click());
+  await expect(page.locator('.canvas-task-tree').first().getByText('Task relationship unavailable. Access may have changed.',{exact:true})).toBeVisible();
+  await expect(page.locator('.canvas-task-tree').first().locator('.tree-task')).toHaveCount(0);
+  expect(reads).toBeGreaterThan(hiddenReads);
+});

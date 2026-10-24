@@ -51,6 +51,7 @@ export const orgDataMixin = {
   },
 
   async loadOrgDataInstallations({ force = false } = {}) {
+    if (this.canvasChatEmbedded) return;
     if (this.orgDataOpen) return; // The open host owns reauthorization.
     const context = this.orgDataInstallationsContextKey, c = orgDataContext(this);
     let runtime = INSTALLATIONS.get(this);

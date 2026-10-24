@@ -13,16 +13,24 @@ const denied = error => [401,403,404].includes(Number(error?.status));
  * Dexie changes from other views are observed without waiting for that refresh.
  */
 export class TaskTreeRuntime {
-  constructor(context,{api=defaults,onState=()=>{},projector=null,interval=10000}={}) {
-    this.context=Object.freeze({...context});this.api=api;this.onState=onState;this.views=new Map();this.closed=false;
+  constructor(context,{api=defaults,onState=()=>{},projector=null,interval=10000,isVisible=()=>true}={}) {
+    this.context=Object.freeze({...context});this.api=api;this.onState=onState;this.views=new Map();this.closed=false;this.isVisible=isVisible;this.reads=new Map();this.projectionGeneration=0;
     this.db=getWorkspaceDb();
-    this.worker=projector || new Worker(new URL('./task-tree-worker.js',import.meta.url),{type:'module'});
-    this.worker.onmessage=({data})=>{
+    this.worker=projector;
+    this.onProjection=({data})=>{
       const view=this.views.get(data.key);
       if (!view || this.closed || data.generation!==view.generation) return;
       view.graph=data.graph;this.emit(view);
     };
-    this.timer=setInterval(()=>{ if(!document.hidden) for(const view of this.views.values()) void this.refresh(view.key); },interval);
+    this.refreshVisible=()=>{ if(!globalThis.document?.hidden) for(const view of this.views.values()) if(this.isVisible(view.key)) void this.refresh(view.key); };
+    this.timer=setInterval(this.refreshVisible,interval);
+    this.visibilityChanged=()=>{for(const view of this.views.values()) {if(globalThis.document?.hidden)this.suspend(view.key);else this.resume(view.key);}};
+    globalThis.document?.addEventListener('visibilitychange',this.visibilityChanged);
+  }
+  projector() {
+    this.worker ||= new Worker(new URL('./task-tree-worker.js',import.meta.url),{type:'module'});
+    this.worker.onmessage=this.onProjection;
+    return this.worker;
   }
   options(extra={}) {return {baseUrl:this.context.baseUrl,appNpub:this.context.appNpub,...extra};}
   emit(view) {if(!this.closed) this.onState(view.key,{graph:view.graph,loading:view.loading,error:view.error,partial:view.queue.length>0,unavailable:view.unavailable,loaded:view.ids.size,renderLimit:view.limit});}
@@ -36,22 +44,43 @@ export class TaskTreeRuntime {
   bind(key,root,options={}) {
     options={...options,collapsed:[...(options.collapsed||[])],upstream:[...(options.upstream||[])]};
     let view=this.views.get(key);
-    if(view && view.root===root) {view.options=options;for(const id of options.upstream||[])if(!view.ids.has(id)&&!view.queue.some(item=>item.id===id))view.queue.push({id,cursor:null,contextOnly:true});this.project(view);if(view.queue.some(item=>item.contextOnly))void this.advance(key);return;}
+    if(view && view.root===root) {const changed=JSON.stringify(view.options)!==JSON.stringify(options);view.options=options;for(const id of options.upstream||[])if(!view.ids.has(id)&&!view.queue.some(item=>item.id===id))view.queue.push({id,cursor:null,contextOnly:true});if(changed)this.project(view);if(view.queue.some(item=>item.contextOnly))void this.advance(key);return;}
     this.remove(key);
     view={key,root,options,ids:new Set(),queue:root?[{id:root,cursor:null},...(options.upstream||[]).map(id=>({id,cursor:null,contextOnly:true}))]:[],visited:new Set(),generation:0,graph:null,loading:false,error:'',unavailable:false,limit:100,subscription:null};
-    this.views.set(key,view);void this.advance(key);
+    this.views.set(key,view);if(this.isVisible(key)&&!globalThis.document?.hidden)void this.advance(key);
+  }
+  resume(key) {
+    const view=this.views.get(key);
+    if(!view || !this.isVisible(key) || globalThis.document?.hidden)return;
+    this.observe(view);
+    if(view.loading)view.resumePending=true;
+    else void this.refresh(key);
+  }
+  suspend(key) {const view=this.views.get(key);if(view){view.generation=++this.projectionGeneration;view.subscription?.unsubscribe();view.subscription=null;}}
+  readRelationships(id,options) {
+    // Only concurrent identical authorized reads share a promise. Never retain
+    // a completed response across polling/resume or an access change.
+    const key=JSON.stringify([id,options.cursor,options.limit]);
+    let pending=this.reads.get(key);
+    if(!pending){
+      pending=Promise.resolve().then(()=>this.api.getTowerPgTaskRelationships(this.context.workspaceId,id,this.options(options)))
+        .finally(()=>{if(this.reads.get(key)===pending)this.reads.delete(key);});
+      this.reads.set(key,pending);
+    }
+    return pending;
   }
   remove(key) {const view=this.views.get(key);if(view){view.subscription?.unsubscribe();view.generation++;this.views.delete(key);}}
   observe(view) {
     view.subscription?.unsubscribe();
     const ids=[...view.ids];
-    if(ids.length) view.subscription=liveQuery(()=>this.db.tasks.bulkGet(ids)).subscribe({next:rows=>this.project(view,rows.filter(Boolean)),error:()=>{view.error='Task updates unavailable. Refresh to retry.';this.emit(view);}});
+    if(ids.length && this.isVisible(view.key) && !globalThis.document?.hidden) view.subscription=liveQuery(()=>this.db.tasks.bulkGet(ids)).subscribe({next:rows=>this.project(view,rows.filter(Boolean)),error:()=>{view.error='Task updates unavailable. Refresh to retry.';this.emit(view);}});
   }
   async project(view,rows=null) {
-    const generation=++view.generation;
+    if(!this.isVisible(view.key) || globalThis.document?.hidden)return;
+    const generation=++this.projectionGeneration;view.generation=generation;
     rows ||= (await this.db.tasks.bulkGet([...view.ids])).filter(Boolean);
     if(this.closed || this.views.get(view.key)!==view || generation!==view.generation) return;
-    this.worker.postMessage({key:view.key,generation,rows,root:view.root,options:{...view.options,limit:view.limit,previous:view.graph?.positions||{}}});
+    this.projector().postMessage({key:view.key,generation,rows,root:view.root,options:{...view.options,limit:view.limit,previous:view.graph?.positions||{}}});
   }
   async advance(key,{more=false}={}) {
     const view=this.views.get(key);if(!view || view.loading || this.closed || !view.root) return;
@@ -60,10 +89,10 @@ export class TaskTreeRuntime {
     let requests=0;
     const scan=view.scan||view;
     try {
-      while(scan.queue.length && requests<Math.max(100,view.limit) && scan.ids.size<view.limit) {
+      while(!globalThis.document?.hidden && this.isVisible(key) && scan.queue.length && requests<Math.max(100,view.limit) && scan.ids.size<view.limit) {
         const item=scan.queue[0];requests++;
         let page;
-        try {page=await this.api.getTowerPgTaskRelationships(this.context.workspaceId,item.id,this.options({cursor:item.cursor,limit:Math.min(100,Math.max(1,view.limit-scan.ids.size-(scan.ids.has(item.id)?0:1)))}));}
+        try {page=await this.readRelationships(item.id,{cursor:item.cursor,limit:Math.min(100,Math.max(1,view.limit-scan.ids.size-(scan.ids.has(item.id)?0:1)))});}
         catch(error){if(!denied(error)||item.id===view.root)throw error;scan.ids.delete(item.id);scan.queue.shift();scan.visited.add(item.id);view.unavailable=true;this.observe(view);continue;}
         this.verify(page);
         if(page.has_more && page.next_cursor===item.cursor)throw new Error('Repeated relationship cursor');
@@ -91,6 +120,7 @@ export class TaskTreeRuntime {
         view.scan=null;this.observe(view);
       }
       view.loading=false;this.emit(view);
+      if(view.resumePending){view.resumePending=false;this.resume(key);}
     }
   }
   async refresh(key) {
@@ -113,5 +143,5 @@ export class TaskTreeRuntime {
     if(result.task.channel_id!==channelId || scopeId && result.task.scope_id!==scopeId) throw new Error('Task destination was not confirmed. Retry the same entry.');
     await this.materialize([result.task]);return result.task;
   }
-  close() {this.closed=true;clearInterval(this.timer);for(const key of this.views.keys())this.remove(key);this.worker.terminate();}
+  close() {this.closed=true;clearInterval(this.timer);globalThis.document?.removeEventListener('visibilitychange',this.visibilityChanged);for(const key of this.views.keys())this.remove(key);this.worker?.terminate();}
 }

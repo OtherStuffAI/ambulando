@@ -700,6 +700,24 @@ test(`Canvas Chat places locally and selects scope then channel into the normal 
     expect(signedReads).toBeGreaterThan(0);
   }
   console.log('CANVAS_CHAT_STAGE', 'normal composer ready');
+  const retainedEditor=frame.locator('[data-chat-composer="thread"]').first();
+  await retainedEditor.fill('Draft across hidden Canvas');
+  await retainedEditor.evaluate(node=>{window.__canvasRetainedEditor=node;});
+  const attachment=frame.getByLabel('Choose photos or files to attach to reply',{exact:true});
+  await expect(attachment).toHaveCount(1);
+  await attachment.setInputFiles({name:'resume-check.txt',mimeType:'text/plain',buffer:Buffer.from('attachment failure/resume fixture')});
+  await expect.poll(()=>frame.locator('body').evaluate(()=>Alpine.store('chat').threadFileDrafts.length)).toBe(1);
+  const chatWindow=page.locator('.canvas-naplet').first();
+  await chatWindow.locator('.window-minimise').evaluate(node=>node.click());
+  await expect.poll(()=>frame.locator('body').evaluate(()=>Alpine.store('chat').canvasChatVisible)).toBe(false);
+  await chatWindow.locator('.window-minimise').evaluate(node=>node.click());
+  await expect.poll(()=>frame.locator('body').evaluate(()=>Alpine.store('chat').canvasChatVisible)).toBe(true);
+  await expect(retainedEditor).toHaveText('Draft across hidden Canvas');
+  expect(await retainedEditor.evaluate(node=>node===window.__canvasRetainedEditor)).toBe(true);
+  await expect(frame.getByRole('button',{name:'Remove attachment',exact:true})).toBeVisible();
+  await frame.getByRole('button',{name:'Remove attachment',exact:true}).click();
+  await expect.poll(()=>frame.locator('body').evaluate(()=>Alpine.store('chat').threadFileDrafts.length)).toBe(0);
+
   await frame.locator('body').evaluate((_element, agentNpub) => {
     const s = Alpine.store('chat');
     s.pgWorkspaceMembers = [{ actor_id: 'agent-canvas', npub: agentNpub, kind: 'agent', display_name: 'Canvas Agent' }];

@@ -2,7 +2,7 @@ import { attachCanvasLinkCreation } from './link-create.js';
 import { mountCanvasSettingsDialog } from './settings-dialog.js';
 import { canvasDocumentComments } from './document-comments.js';
 import './task-tree.css';
-import { canvasTaskTreeStore } from './task-tree-page.js';
+import { canvasTaskTreeStore, registerTaskTreeVisibility } from './task-tree-page.js';
 import Alpine from 'alpinejs';
 import { canvasChatStore } from './chat-page.js';
 import { registerCanvasChatFrame } from './chat-frame.js';
@@ -798,6 +798,7 @@ export function canvasPageStore() {
 
 mountCanvasSettingsDialog('canvas');
 registerCanvasChatFrame(Alpine);
+registerTaskTreeVisibility(Alpine);
 registerCanvasWindow(Alpine);
 registerCanvasDocument(Alpine);
 Alpine.data('canvasDocumentComments', canvasDocumentComments);

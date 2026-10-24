@@ -5192,6 +5192,28 @@
       "notes": [
         "Canvas access choices close reliably with Escape during quick selection."
       ]
+    },
+    {
+      "buildNumber": 2628,
+      "label": "Quieter Canvas background work",
+      "notes": [
+        "Canvas chats avoid hidden Inbox and feed loading, and pause local observers while offscreen.",
+        "Task Trees refresh only when visible and share concurrent reads. Canvas refreshes avoid duplicate loading and rendering."
+      ]
+    },
+    {
+      "buildNumber": 2629,
+      "label": "Canvas visibility and resume",
+      "notes": [
+        "Offscreen Task Trees stay quiet and refresh access when restored, while embedded conversations retain drafts and the ordinary task editor."
+      ]
+    },
+    {
+      "buildNumber": 2630,
+      "label": "Keep embedded chat free of hidden dialogs",
+      "notes": [
+        "Embedded Canvas chats no longer initialize unrelated hidden WApp editors."
+      ]
     }
   ]
 }

@@ -799,3 +799,14 @@ describe('scope chat presentation lifecycle', () => {
     } finally { await deleteWorkspaceDb(key); }
   });
 });
+
+it('keeps embedded conversation/access/member queries and excludes shell work, with no hidden observers',()=>{
+  const store={canvasChatEmbedded:true,canvasChatVisible:true,workspaceOwnerNpub:'owner',currentWorkspaceKey:'key',currentWorkspace:{workspaceId:'workspace'},navSection:'status',deckThreadChannelId:'channel',activeThreadId:'root'};
+  const plan=getSectionLiveQueryPlan(store);
+  expect(plan.shared).toEqual(['address-book']);
+  expect(plan.workspace).toEqual(expect.arrayContaining(['ws:pg-navigation','ws:groups','ws:members']));
+  expect(plan.workspace.some(key=>/status:|wapps|daily|scope-order|attention/.test(key))).toBe(false);
+  expect(plan.detail.some(key=>key.startsWith('deck:messages:'))).toBe(true);
+  store.canvasChatVisible=false;
+  expect(getSectionLiveQueryPlan(store)).toEqual({shared:[],workspace:[],detail:[]});
+});

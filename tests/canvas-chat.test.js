@@ -94,6 +94,7 @@ it('pauses embedded transport for hidden naplets and resumes without recreating 
   const handlers = new Map(), parent = { postMessage: vi.fn() };
   vi.stubGlobal('window', { parent, addEventListener: (name, fn) => handlers.set(name, fn), removeEventListener: vi.fn() });
   const s = { ...canvasChatEmbedMixin, canvasChatEmbedded: true, canvasChatVisible: false,
+    startWorkspaceLiveQueries:vi.fn(), stopAllLiveQueries:vi.fn(),
     ensureBackgroundSync: vi.fn(), stopBackgroundSync: vi.fn(), startThreadLiveActivity: vi.fn(), stopThreadLiveActivity: vi.fn(), updateResponseActivityTimer: vi.fn() };
   s.installCanvasChatLifecycle();
   const visibility = visible => ({ origin: location.origin, source: parent, data: { type: 'ambulando-canvas-chat-visibility', visible } });
@@ -104,8 +105,10 @@ it('pauses embedded transport for hidden naplets and resumes without recreating 
   expect(s.ensureBackgroundSync).toHaveBeenCalledTimes(1);
   handlers.get('message')(visibility(false));
   expect(s.stopBackgroundSync).toHaveBeenCalledTimes(1);
+  expect(s.stopAllLiveQueries).toHaveBeenCalledTimes(1);
   handlers.get('message')(visibility(true));
   expect(s.ensureBackgroundSync).toHaveBeenCalledTimes(2);
+  expect(s.startWorkspaceLiveQueries).toHaveBeenCalledTimes(2);
   handlers.get('pagehide')({ persisted: true });
   expect(s.canvasChatVisible).toBe(false);
   handlers.get('pageshow')({ persisted: true });

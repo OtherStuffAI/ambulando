@@ -75,3 +75,62 @@ it('rejects a confirmed task from a different channel or selected scope before m
   await expect(runtime.create('channel',{title:'Draft'},{scopeId:'scope'})).rejects.toThrow(/destination/);
   expect(await db.tasks.count()).toBe(0);
 });
+
+it('shares concurrent relationship walks but reauthorizes every later refresh',async()=>{
+  const read=vi.fn(async()=>{await new Promise(resolve=>setTimeout(resolve,15));return page(row('root'));});
+  const {states}=await setup({getTowerPgTaskRelationships:read});
+  runtime.bind('one','root');runtime.bind('two','root');
+  await vi.waitFor(()=>expect(states.filter(state=>state.graph?.nodes.length===1).map(state=>state.key)).toEqual(expect.arrayContaining(['one','two'])));
+  expect(read).toHaveBeenCalledTimes(1);
+  await Promise.all([runtime.refresh('one'),runtime.refresh('two')]);
+  expect(read).toHaveBeenCalledTimes(2);
+  read.mockRejectedValue(Object.assign(new Error('access lost'),{status:403}));
+  await Promise.all([runtime.refresh('one'),runtime.refresh('two')]);
+  expect(read).toHaveBeenCalledTimes(3);
+  for(const key of ['one','two'])expect(runtime.views.get(key)).toMatchObject({graph:null,unavailable:true});
+});
+
+it('does no hidden tree reads, suspends local observers and refreshes on resume',async()=>{
+  const visible=new Set();
+  const read=vi.fn(async()=>page(row('root')));
+  const {db,states}=await setup({getTowerPgTaskRelationships:read});
+  runtime.isVisible=key=>visible.has(key);
+  runtime.bind('offscreen','root');runtime.bind('minimised','root');runtime.refreshVisible();
+  await new Promise(resolve=>setTimeout(resolve,25));expect(read).not.toHaveBeenCalled();
+  visible.add('offscreen');runtime.resume('offscreen');
+  await vi.waitFor(()=>expect(states.at(-1)?.graph?.nodes).toHaveLength(1));
+  expect(read).toHaveBeenCalledTimes(1);
+  visible.delete('offscreen');runtime.suspend('offscreen');
+  const count=states.length;
+  await db.tasks.update('root',{title:'Late local change'});
+  await new Promise(resolve=>setTimeout(resolve,30));expect(states).toHaveLength(count);
+  runtime.refreshVisible();expect(read).toHaveBeenCalledTimes(1);
+  visible.add('offscreen');runtime.resume('offscreen');
+  await vi.waitFor(()=>expect(read).toHaveBeenCalledTimes(2));
+  await vi.waitFor(()=>expect(runtime.views.get('offscreen').loading).toBe(false));
+});
+
+it('reauthorizes promptly after hide during a read and clears a newly denied graph',async()=>{
+  let release,slow=false,revoked=false;const visible=new Set(['view']);
+  const read=vi.fn(async()=>{if(revoked)throw Object.assign(new Error('denied'),{status:403});if(slow)await new Promise(resolve=>{release=resolve;});return page(row('secret'));});
+  const {states}=await setup({getTowerPgTaskRelationships:read});runtime.isVisible=key=>visible.has(key);
+  runtime.bind('view','secret');await vi.waitFor(()=>expect(states.at(-1)?.graph?.nodes).toHaveLength(1));
+  slow=true;const pending=runtime.refresh('view');await vi.waitFor(()=>expect(release).toBeTypeOf('function'));
+  visible.clear();runtime.suspend('view');revoked=true;
+  visible.add('view');runtime.resume('view');release();await pending;
+  await vi.waitFor(()=>expect(runtime.views.get('view')).toMatchObject({graph:null,unavailable:true,loading:false}));
+  expect(read).toHaveBeenCalledTimes(3);
+});
+
+it('rejects late layout-worker results after removing and rebinding the same view key',async()=>{
+  await setup({getTowerPgTaskRelationships:async(_w,id)=>page(row(id))});
+  const posts=[];runtime.worker={postMessage:data=>posts.push(data),terminate:vi.fn()};
+  runtime.bind('view','old');await vi.waitFor(()=>expect(posts.length).toBeGreaterThan(0));
+  const old=posts.at(-1);runtime.remove('view');runtime.bind('view','new');
+  await vi.waitFor(()=>expect(posts.at(-1).root).toBe('new'));const current=posts.at(-1);
+  expect(current.generation).not.toBe(old.generation);
+  runtime.worker.onmessage({data:{...old,graph:{nodes:[{record_id:'old'}]}}});
+  expect(runtime.views.get('view').graph).toBeNull();
+  runtime.worker.onmessage({data:{...current,graph:{nodes:[{record_id:'new'}]}}});
+  expect(runtime.views.get('view').graph.nodes[0].record_id).toBe('new');
+});

@@ -14,6 +14,25 @@ import { hydrateTowerPgChannel } from '../pg-read-hydrator.js';
 const params = typeof location === 'undefined' ? new URLSearchParams() : new URLSearchParams(location.search);
 export const canvasChatEmbedded = params.get('canvaschat') === '1' && typeof window !== 'undefined' && window.parent !== window;
 
+// Remove shell branches before Alpine observes them. Keep the same conversation,
+// task/document modals and shared upload/identity/error UI and their ownership.
+export function prepareCanvasChatDom(root = document) {
+  const shell = root.querySelector('.app-shell');
+  if (!shell) return;
+  for (const node of shell.querySelectorAll('.page-header, .mobile-scope-switcher, .sidebar, .mobile-sidebar-backdrop, .global-pg-channel-bar, .toolbox-page, .wapp-management-editor-backdrop, .personal-wapp-editor-backdrop, .wapp-publishing-editor-backdrop')) node.remove();
+  const content = shell.querySelector('.content-scroll-area');
+  for (const node of [...(content?.children || [])]) {
+    if (node.tagName !== 'TEMPLATE') continue;
+    const condition = node.getAttribute('x-if') || '';
+    if (!["navSection === 'chat'", "navSection === 'tasks'", "navSection === 'docs'"].some(value => condition.includes(value))) node.remove();
+    else if (condition.includes("navSection === 'chat'")) {
+      const thread = node.content.querySelector('.chat-thread-modal-backdrop');
+      const section = thread?.parentElement;
+      if (section) for (const child of [...section.children]) if (child !== thread) child.remove();
+    }
+  }
+}
+
 export async function hydrateCanvasChatChannel(store, channelId, hydrate = hydrateTowerPgChannel) {
   // A concurrent ordinary message command can invalidate an authorized read.
   // Re-read under the new fence; never commit the cancelled snapshot or retry
@@ -82,9 +101,9 @@ export const canvasChatEmbedMixin = {
       const visible = event.data.visible === true;
       if (visible === this.canvasChatVisible) return;
       this.canvasChatVisible = visible;
-      if (visible) { this.ensureBackgroundSync(true); this.startThreadLiveActivity?.(); this.updateResponseActivityTimer?.(); }
+      if (visible) { this.startWorkspaceLiveQueries(); this.ensureBackgroundSync(true); this.startThreadLiveActivity?.(); this.updateResponseActivityTimer?.(); }
       else {
-        this.stopBackgroundSync(); this.stopThreadLiveActivity?.();
+        this.stopAllLiveQueries(); this.stopBackgroundSync(); this.stopThreadLiveActivity?.();
         clearInterval(this.responseActivityTimer); this.responseActivityTimer = null;
       }
     };
@@ -92,7 +111,7 @@ export const canvasChatEmbedMixin = {
     window.addEventListener('pagehide', event => {
       if (!event.persisted) window.removeEventListener('message', change);
       this.canvasChatVisible = false;
-      this.stopBackgroundSync(); this.stopThreadLiveActivity?.();
+      this.stopAllLiveQueries(); this.stopBackgroundSync(); this.stopThreadLiveActivity?.();
       clearInterval(this.responseActivityTimer);
       this.responseActivityTimer = null;
     });

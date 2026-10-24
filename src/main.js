@@ -13,6 +13,7 @@ import './styles.css';
 import './canvas/chat-embed.css';
 import './sol.css';
 import './hosting-onboarding.css';
+import { canvasChatEmbedded, prepareCanvasChatDom } from './canvas/chat-embed.js';
 import { initApp } from './app.js';
 import { maybePerformHardReset } from './hard-reset.js';
 import { startVersionCheck } from './version-check.js';
@@ -35,6 +36,7 @@ async function boot() {
   Alpine.data('pipelineViewerView', () => createPipelineViewerView());
   Alpine.data('contextTreeView', () => createContextTreeView());
   mountCanvasSettingsDialog();
+  if (canvasChatEmbedded) prepareCanvasChatDom();
   initApp();
   if (!Alpine.store('chat').canvasChatEmbedded) installNotificationClickRouteHandler();
   initChatThreadFlowDispatchDomBridge();

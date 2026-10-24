@@ -403,6 +403,7 @@ function scheduleTowerPgDocumentsRefresh(store, state) {
 }
 
 function buildSharedSpecs() {
+  if (this.canvasChatEmbedded && !this.canvasChatVisible) return [];
   return [
     {
       key: 'app-placements',
@@ -415,7 +416,7 @@ function buildSharedSpecs() {
       query: () => getAddressBookPeople(),
       onNext: (people) => this.applyAddressBookPeople(people),
     },
-  ];
+  ].filter(spec => !this.canvasChatEmbedded || spec.key === 'address-book');
 }
 
 // Navigation rows and their replacement phase must come from the same Dexie
@@ -619,6 +620,15 @@ function buildWorkspaceSpecs(store) {
       },
     }] : []),
   ];
+
+  if (store.canvasChatEmbedded) {
+    if (!store.canvasChatVisible) return [];
+    // Navigation carries access/reset fences; groups and members are required
+    // by the ordinary composer, mentions and task detail. No shell collections.
+    const required = new Set(['ws:archived-targets', 'ws:pg-navigation', 'ws:groups',
+      'ws:members', 'ws:autopilot-connections', 'ws:workspace-agents']);
+    return alwaysOn.filter(spec => required.has(spec.key));
+  }
 
   const inboxKey = `${store.inboxActivityVisibleCount || 100}:${store.deckInboxType || 'all'}:${store.deckInboxSearchQuery || ''}:${store.deckInboxCurrentContextKey || ''}:${store.inboxActivityQueryRevision || 0}`;
   const inboxGuard = () => isSameWorkspace(store, workspaceKey, ownerNpub)
@@ -865,6 +875,7 @@ async function queryTaskBoard(store, ownerNpub) {
 }
 
 function buildDetailSpecs(store) {
+  if (store.canvasChatEmbedded && !store.canvasChatVisible) return [];
   // Recovery fences remote materialization, not downloaded reads. Cached task
   // and document detail subscriptions remain live while catch-up reconciles.
   const ownerNpub = String(store?.workspaceOwnerNpub || '').trim();
@@ -1293,9 +1304,11 @@ export const sectionLiveQueryMixin = {
   },
 
   startWorkspaceLiveQueries() {
-    this.syncPinnedThreadsContext?.(this.pinnedThreadsPartition);
-    void this.activateNostrViewer?.();
-    void this.activateFeeds?.();
+    if (!this.canvasChatEmbedded) {
+      this.syncPinnedThreadsContext?.(this.pinnedThreadsPartition);
+      void this.activateNostrViewer?.();
+      void this.activateFeeds?.();
+    }
     const state = getSectionState(this);
     if (typeof this.startSharedLiveQueries === 'function') {
       this.startSharedLiveQueries();
@@ -1321,7 +1334,7 @@ export const sectionLiveQueryMixin = {
 
     // Public notifications depend on the signed-in human and an open local DB,
     // not Tower's workspace-owner metadata (which can arrive later).
-    this.startNostrNotifications?.();
+    if (!this.canvasChatEmbedded) this.startNostrNotifications?.();
     if (!ownerNpub) {
       disposeContextTreeView(this);
       disposePipelineViewer(this);
@@ -1342,14 +1355,16 @@ export const sectionLiveQueryMixin = {
     syncLiveQuerySet(this, state.workspace, buildWorkspaceSpecs(this));
     syncLiveQuerySet(this, state.detail, buildDetailSpecs(this));
 
-    if (!this.hasBootstrappedUnreadTracking && typeof this.initUnreadTracking === 'function') {
+    if (!this.canvasChatEmbedded && !this.hasBootstrappedUnreadTracking && typeof this.initUnreadTracking === 'function') {
       this.hasBootstrappedUnreadTracking = true;
       this.initUnreadTracking();
     }
 
-    scheduleTowerPgWorkspaceHydration(this, state);
-    scheduleTowerPgTaskBoardRefresh(this, state);
-    scheduleTowerPgDocumentsRefresh(this, state);
+    if (!this.canvasChatEmbedded) {
+      scheduleTowerPgWorkspaceHydration(this, state);
+      scheduleTowerPgTaskBoardRefresh(this, state);
+      scheduleTowerPgDocumentsRefresh(this, state);
+    }
   },
 
   stopWorkspaceLiveQueries() {

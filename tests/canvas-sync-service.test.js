@@ -254,3 +254,47 @@ it('does not let a queued refresh reauthorize a stopped canvas', async () => {
   expect(api.getTowerPgCanvasSnapshot).toHaveBeenCalledTimes(1);
   expect(runtime.authorized).toBe(false);
 });
+
+it('coalesces simultaneous refreshes and publishes each committed snapshot once',async()=>{
+  const db=openWorkspaceDb(`canvas-coalesced-${crypto.randomUUID()}`);await db.open();
+  api.getTowerPgCanvasSnapshot.mockResolvedValue(payload(1));
+  const onSnapshot=vi.fn();const runtime=new CanvasSyncRuntime(context,'canvas',{onSnapshot});
+  runtime.start();
+  await Promise.all([runtime.refresh(),runtime.refresh(),runtime.refresh()]);
+  await new Promise(resolve=>setTimeout(resolve,30));
+  expect(api.getTowerPgCanvasSnapshot).toHaveBeenCalledTimes(1);
+  expect(onSnapshot).toHaveBeenCalledTimes(1);
+  await runtime.refresh();
+  expect(api.getTowerPgCanvasSnapshot).toHaveBeenCalledTimes(2);
+  runtime.stop();
+});
+
+it('never shares a pre-write snapshot with a refresh requested after a queued mutation',async()=>{
+  const db=openWorkspaceDb(`canvas-refresh-order-${crypto.randomUUID()}`);await db.open();
+  const runtime=new CanvasSyncRuntime(context,'canvas');
+  api.getTowerPgCanvasSnapshot.mockResolvedValue(payload(1));
+  await runtime.refresh();
+  let release;let version=1;
+  api.getTowerPgCanvasSnapshot.mockImplementationOnce(()=>new Promise(resolve=>{release=()=>resolve(payload(1));}))
+    .mockImplementation(async()=>payload(version));
+  api.updateTowerPgCanvas.mockImplementation(async()=>{version=2;return {};});
+  const first=runtime.refresh();await vi.waitFor(()=>expect(release).toBeTypeOf('function'));
+  const write=runtime.updateViewport({x:10,y:10,scale:1});
+  const afterWrite=runtime.refresh();release();
+  const [before,,after]=await Promise.all([first,write,afterWrite]);
+  expect(before.canvas.row_version).toBe(1);expect(after.canvas.row_version).toBe(2);
+  expect(api.updateTowerPgCanvas.mock.calls.at(-1)[2].expected_row_version).toBe(1);
+  expect((await db.canvas_snapshots.get(runtime.key)).canvas.row_version).toBe(2);
+  runtime.stop();
+});
+
+it('uses fresh publication identity after stop/start and does not suppress missing identity callbacks',async()=>{
+  const db=openWorkspaceDb(`canvas-publish-restart-${crypto.randomUUID()}`);await db.open();
+  api.getTowerPgCanvasSnapshot.mockResolvedValue(payload(1));
+  const onSnapshot=vi.fn();const runtime=new CanvasSyncRuntime(context,'canvas',{onSnapshot});
+  runtime.start();await runtime.refresh();const first=onSnapshot.mock.calls.at(-1)[0].request_id;
+  expect(first).toBeTruthy();runtime.stop();runtime.start();await runtime.refresh();
+  expect(onSnapshot.mock.calls.at(-1)[0].request_id).not.toBe(first);
+  const before=onSnapshot.mock.calls.length;runtime.publish({});runtime.publish({});
+  expect(onSnapshot).toHaveBeenCalledTimes(before+2);runtime.stop();
+});

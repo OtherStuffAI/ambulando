@@ -126,3 +126,19 @@ pointer moves must not enter the outer pinch pointer set. The phone touch
 regression uses actual Chromium touch input to exercise this browser takeover,
 checks the mounted graph and outer viewport survive, and retains cancellation
 reconciliation for actual outer gestures.
+
+## Visibility and shared reads
+
+The browser observes each Task Tree body for intersection, including Canvas
+transforms, fullscreen and minimisation. Hidden trees and hidden pages do not
+start relationship walks; local task observers suspend until resume. A page
+visibility change or a tree returning on screen requests a fresh authorized
+refresh. If a previous read is still finishing, resume is retained until that
+read finishes. Manual refresh, selection and progressive bounds keep the same
+runtime paths.
+
+Concurrent identical relationship requests within one Canvas runtime share only
+their in-flight promise. Completed responses are discarded from the request map,
+so later polling/resume reauthorizes through Tower. Different cursors and bounds
+remain independent. The layout worker starts on the first visible projection;
+Canvases without Task Trees do not create a tree runtime/worker.

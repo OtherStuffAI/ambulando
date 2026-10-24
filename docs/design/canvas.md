@@ -466,3 +466,13 @@ Document comments and chat-thread naplets retain their independent paths.
 `tests/e2e/canvas-toolbar.spec.cjs` checks 320–2048px widths, long-title tooltip,
 non-wrapping groups, leftmost adds, keyboard focus scrolling, zoom, panning and
 embedded pane resizing using synthetic Tower records.
+
+## Refresh work
+
+Simultaneous read-only refresh callers share one queued snapshot read. Enqueuing
+a mutation ends that sharing epoch, so a later refresh cannot reuse a snapshot
+from before the write. Writes and their authoritative refresh remain serialized.
+The direct refresh completion and Dexie observer publish a committed request ID
+once per runtime, avoiding duplicate full UI reconciliation. Stop invalidates
+pending work and resets publication identity; resume obtains fresh authority.
+Snapshot payloads and per-source authorization remain unchanged.

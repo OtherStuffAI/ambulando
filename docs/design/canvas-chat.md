@@ -162,3 +162,19 @@ in that combined UI path. Run with `CANVAS_REVOKED_HISTORY_REGRESSION=1` to
 reproduce. The isolated revocation case verifies a false send result and the
 same failed row in both Dexie and the UI. The combined observation remains
 unclassified; it is not evidence of a completed general sync repair.
+
+## Embedded work budget
+
+Embedded frames keep the ordinary conversation/composer and task/document detail
+code, but remove shell DOM branches before Alpine starts. They do not activate
+Inbox, feeds, public notifications, personal WApps, pinned navigation or org-data
+installation discovery. Their workspace subscriptions retain navigation/access
+fences, groups, members and agent activity inputs; active detail subscriptions
+still read canonical Dexie rows. This does not change the signer bridge,
+kind-33358 body signing, attachment handling or durable command queue ownership.
+
+A hidden frame unsubscribes its local queries and stops transport/activity ticks.
+Resume recreates the required subscriptions and resumes the existing sync path
+without replacing the editor or its draft/selection. An in-flight send retains
+its normal completion/retry behavior. Ordinary Ambulando uses its existing query
+plan; these gates require the embedded-frame flag.

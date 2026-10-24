@@ -90,6 +90,8 @@ export class CanvasSyncRuntime {
     this.controller = null;
     this.subscription = null;
     this.mutationTail = Promise.resolve();
+    this.refreshPending = null;
+    this.lastPublishedRequest = null;
   }
 
   start() {
@@ -97,7 +99,7 @@ export class CanvasSyncRuntime {
     this.stopped = false;
     this.subscription = liveQuery(() => this.db.canvas_snapshots.get(this.key)).subscribe({
       next: snapshot => {
-        if (this.authorized && snapshot) this.onSnapshot?.(snapshot);
+        if (this.authorized && snapshot) this.publish(snapshot);
       },
       error: error => this.onError?.(error),
     });
@@ -106,6 +108,8 @@ export class CanvasSyncRuntime {
 
   stop() {
     this.stopped = true;
+    this.refreshPending = null;
+    this.lastPublishedRequest = null;
     this.lifecycle += 1;
     this.generation += 1;
     this.authorized = false;
@@ -115,10 +119,26 @@ export class CanvasSyncRuntime {
     this.subscription = null;
   }
 
+  publish(snapshot) {
+    if (snapshot.request_id && this.lastPublishedRequest === snapshot.request_id) return;
+    this.lastPublishedRequest = snapshot.request_id;
+    this.onSnapshot?.(snapshot);
+  }
+
   // Reads share the write queue so a pre-save full snapshot cannot overtake
   // an accepted write or invalidate the revision needed by the next save.
   refresh() {
-    return this.enqueueMutation(() => this.refreshProjection());
+    if (this.refreshPending) {
+      const lifecycle = this.lifecycle;
+      return this.refreshPending.then(snapshot => {
+        if (this.stopped || lifecycle !== this.lifecycle) throw canvasRefreshAbort();
+        return snapshot;
+      });
+    }
+    const pending = this.enqueueMutation(() => this.refreshProjection());
+    this.refreshPending = pending;
+    pending.finally(() => { if (this.refreshPending === pending) this.refreshPending = null; }).catch(() => undefined);
+    return pending;
   }
 
   async refreshProjection() {
@@ -154,7 +174,7 @@ export class CanvasSyncRuntime {
       await commitCanvasProjection(this.db, snapshot, () => generation === this.generation);
       if (generation !== this.generation) return null;
       this.authorized = true;
-      this.onSnapshot?.(snapshot);
+      this.publish(snapshot);
       return snapshot;
     } catch (error) {
       if (error?.name === 'AbortError' || generation !== this.generation) return null;
@@ -168,6 +188,7 @@ export class CanvasSyncRuntime {
   }
 
   enqueueMutation(operation) {
+    this.refreshPending = null;
     const lifecycle = this.lifecycle;
     const run = this.mutationTail.catch(() => undefined).then(() => {
       if (this.stopped || lifecycle !== this.lifecycle) throw canvasRefreshAbort();

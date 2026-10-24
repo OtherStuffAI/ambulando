@@ -9,16 +9,21 @@ const keyOf=naplet=>naplet.layout?.task_tree?.instance_id||naplet.id;
 const emptyGraph=()=>({nodes:[],edges:[],references:[],positions:{},bounded:false});
 
 export function canvasTaskTreeStore() {
-  let runtime,catalog,operations;
+  let runtime,catalog,operations,startRuntime,syncGeneration=0;
+  const visible=new Set();
   return {
     treeDrafts:[],trees:{},taskDetailFrame:null,
     startTaskTrees(context,ports) {
       operations=ports;catalog=new ArtifactCatalog(context);
-      runtime=new TaskTreeRuntime(context,{onState:(key,state)=>{
+      startRuntime=()=>runtime ||= new TaskTreeRuntime(context,{isVisible:key=>visible.has(key),onState:(key,state)=>{
         const previous=this.trees[key];if(previous) {const first=!previous.graph?.nodes?.length && state.graph?.nodes?.length;const {error,...loaded}=state;Object.assign(previous,{...loaded,loadError:error,graph:state.graph||emptyGraph()});if(first)requestAnimationFrame(()=>{const naplet=this.naplets.find(row=>keyOf(row)===key),node=document.querySelector(`[data-task-tree="${key}"] .tree-scroll`),v=naplet?.layout.task_tree?.viewport;if(node&&v){node.scrollLeft=-v.x;node.scrollTop=-v.y;}});}
       }});
     },
-    stopTaskTrees(){runtime?.close();runtime=null;},
+    stopTaskTrees(){syncGeneration++;runtime?.close();runtime=null;visible.clear();},
+    setTaskTreeVisible(key,shown){
+      if(shown){if(!visible.has(key)){visible.add(key);runtime?.resume(key);}}
+      else {visible.delete(key);runtime?.suspend(key);}
+    },
     treeKey: keyOf,
     treeState(naplet){return this.trees[keyOf(naplet)]||{graph:emptyGraph(),scopes:[],channels:[],tasks:[]};},
     treeStatus:formatStateLabel,
@@ -43,7 +48,9 @@ export function canvasTaskTreeStore() {
       return [...rows,...(this.canvas?.can_manage?this.treeDrafts:[])];
     },
     async syncTaskTrees(naplets) {
-      if(!runtime)return;
+      if(!runtime && !naplets.some(row=>row.access==='ready'&&row.source?.type==='task_tree'))return;
+      const active=startRuntime(),generation=++syncGeneration;
+      const current=()=>runtime===active && syncGeneration===generation;
       const seen=new Set();
       for(const naplet of naplets) {
         if(naplet.access!=='ready'||naplet.source?.type!=='task_tree')continue;
@@ -52,15 +59,16 @@ export function canvasTaskTreeStore() {
         const prior=this.trees[key];
         if(prior && prior.binding!==binding) {
           Object.assign(prior,{binding,scopeId:naplet.content?.scope_id||'',channelId:naplet.source.id||'',channels:[],tasks:[],mode:'',anchor:null,lastCreated:null,request:null,entry:'',error:'Destination changed. Using the saved scope and channel.'});
-          try{const result=await catalog.channels(prior.scopeId);if(prior.binding===binding)prior.channels=result.channels;}
+          try{const result=await catalog.channels(prior.scopeId);if(!current())return;if(prior.binding===binding)prior.channels=result.channels;}
           catch{prior.error='Destination choices unavailable. Retry by reopening this naplet.';}
         }
         if(!this.trees[key]) {
           this.trees={...this.trees,[key]:{binding,graph:emptyGraph(),scopes:[],channels:[],scopeId:naplet.content?.scope_id||'',channelId:naplet.source.id||'',tasks:[],query:'',entry:'',mode:'',anchor:null,lastCreated:null,busy:false,error:'',searchCursor:null,searchMore:false}};
-          try {const scopes=await catalog.scopes();this.trees[key].scopes=scopes.scopes;this.trees[key].catalogPartial=scopes.truncated; if(naplet.content?.scope_id) {const channels=await catalog.channels(naplet.content.scope_id);this.trees[key].channels=channels.channels;this.trees[key].catalogPartial ||= channels.truncated;}}
+          try {const scopes=await catalog.scopes();if(!current())return;this.trees[key].scopes=scopes.scopes;this.trees[key].catalogPartial=scopes.truncated; if(naplet.content?.scope_id) {const channels=await catalog.channels(naplet.content.scope_id);if(!current())return;this.trees[key].channels=channels.channels;this.trees[key].catalogPartial ||= channels.truncated;}}
           catch {this.trees[key].error='Destination choices unavailable. Retry by reopening this naplet.';}
         }
-        if(!naplet._treeDraft) runtime.bind(key,naplet.layout.task_tree?.root_task_id,{collapsed:naplet.layout.task_tree?.collapsed||[],upstream:naplet.layout.task_tree?.upstream||[]});
+        if(!current())return;
+        if(!naplet._treeDraft) active.bind(key,naplet.layout.task_tree?.root_task_id,{collapsed:naplet.layout.task_tree?.collapsed||[],upstream:naplet.layout.task_tree?.upstream||[]});
       }
       for(const key of Object.keys(this.trees))if(!seen.has(key)){runtime.remove(key);delete this.trees[key];}
     },
@@ -99,14 +107,14 @@ export function canvasTaskTreeStore() {
     async searchTreeTasks(naplet,{more=false}={}) {
       const state=this.treeState(naplet);if(state.busy||!this.treeDestinationReady(naplet))return;
       state.busy=true;state.error='';
-      try{const page=await runtime.search(naplet.source.id,{cursor:more?state.searchCursor:null});state.tasks=[...new Map([...(more?state.tasks:[]),...page.tasks].map(row=>[row.id,row])).values()];state.searchCursor=page.next_cursor;state.searchMore=page.has_more;}
+      try{const page=await startRuntime().search(naplet.source.id,{cursor:more?state.searchCursor:null});state.tasks=[...new Map([...(more?state.tasks:[]),...page.tasks].map(row=>[row.id,row])).values()];state.searchCursor=page.next_cursor;state.searchMore=page.has_more;}
       catch{state.error='Tasks unavailable. Search again to retry.';state.tasks=[];}
       finally{state.busy=false;}
     },
     treeSearchResults(naplet){const state=this.treeState(naplet);const query=String(state.query||'').toLowerCase();return state.tasks.filter(row=>!query||row.title.toLowerCase().includes(query));},
     async saveTreeView(naplet,patch) {
       const tree=normalizeTaskTreeView({...naplet.layout.task_tree,...patch,instance_id:keyOf(naplet)});
-      if(!this.canvas?.can_manage){naplet.layout={...naplet.layout,task_tree:tree};runtime.bind(keyOf(naplet),tree.root_task_id,{collapsed:tree.collapsed,upstream:tree.upstream});return;}
+      if(!this.canvas?.can_manage){naplet.layout={...naplet.layout,task_tree:tree};startRuntime().bind(keyOf(naplet),tree.root_task_id,{collapsed:tree.collapsed,upstream:tree.upstream});return;}
       await operations.save(naplet.id,{layout:{...naplet.layout,task_tree:tree}});
     },
     async selectTreeRoot(naplet,task) {
@@ -136,7 +144,7 @@ export function canvasTaskTreeStore() {
       const destination={channelId:naplet.source.id,scopeId:state.scopeId};
       let confirmed=false;
       try {
-        const task=await runtime.create(destination.channelId,state.request,{scopeId:destination.scopeId});
+        const task=await startRuntime().create(destination.channelId,state.request,{scopeId:destination.scopeId});
         confirmed=true;
         state.lastCreated={...task,record_id:task.id,parent_task_id:task.metadata?.parent_task_id};
         const current=this.naplets?.find(row=>keyOf(row)===keyOf(naplet))||naplet;
@@ -146,7 +154,7 @@ export function canvasTaskTreeStore() {
           return;
         }
         if(state.mode==='root') {await this.saveTreeView(naplet,{root_task_id:task.id,collapsed:[],upstream:[],viewport:{x:0,y:0,scale:1}});state.mode='';}
-        else await runtime.refresh(keyOf(naplet));
+        else await startRuntime().refresh(keyOf(naplet));
         state.entry='';state.request=null;
       }catch(error){state.error=confirmed?'Task saved, but the tree view was not saved. Retry this title to reconnect the same task.':error.message||'Task was not confirmed. Retry this title.';if(!confirmed && [400,403,409].includes(Number(error.status)))state.request=null;}
       finally{state.busy=false;queueMicrotask(()=>document.querySelector(`[data-tree-entry="${keyOf(naplet)}"]`)?.focus());}
@@ -174,10 +182,23 @@ export function canvasTaskTreeStore() {
       catch(error){this.treeState(naplet).error=error.message;}
     },
     async zoomTaskTree(naplet,factor){const v=naplet.layout.task_tree?.viewport||{x:0,y:0,scale:1};try{await this.saveTreeView(naplet,{viewport:{...v,scale:v.scale*factor}});}catch(error){this.treeState(naplet).error=error.message;}},
-    loadMoreTree(naplet){return runtime.advance(keyOf(naplet),{more:true});},
-    refreshTaskTree(naplet){return runtime.refresh(keyOf(naplet));},
+    loadMoreTree(naplet){return startRuntime().advance(keyOf(naplet),{more:true});},
+    refreshTaskTree(naplet){return startRuntime().refresh(keyOf(naplet));},
     removeTreeDraft(naplet){this.treeDrafts=this.treeDrafts.filter(row=>row.id!==naplet.id);this.naplets=this.naplets.filter(row=>row.id!==naplet.id);runtime?.remove(keyOf(naplet));},
     openTreeTask(naplet,task){this.taskDetailFrame={id:task.record_id,key:crypto.randomUUID(),url:''};this.taskDetailFrame.url=this.makeChatUrl(this.taskDetailFrame.key,{canvastask:task.record_id});queueMicrotask(()=>document.querySelector('.canvas-task-detail-dialog')?.showModal());},
     closeTreeTask(){document.querySelector('.canvas-task-detail-dialog')?.close();this.taskDetailFrame=null;for(const naplet of this.naplets)if(naplet.source?.type==='task_tree'&&!naplet._treeDraft)void this.refreshTaskTree(naplet);},
   };
+}
+
+// Observe the body, which has no intersection when minimised. Transforms,
+// fullscreen dialogs and viewport movement are handled by the browser.
+export function registerTaskTreeVisibility(Alpine) {
+  Alpine.directive('task-tree-visibility',(element,{expression},{evaluate,cleanup})=>{
+    const key=evaluate(expression);
+    const observer=new IntersectionObserver(entries=>{
+      Alpine.store('canvas').setTaskTreeVisible(key,entries[0]?.isIntersecting===true);
+    });
+    observer.observe(element);
+    cleanup(()=>{observer.disconnect();Alpine.store('canvas').setTaskTreeVisible(key,false);});
+  });
 }
