@@ -111,7 +111,7 @@ export function canvasDocumentComments(deps = {}) {
     wholeDocumentComment() { if (!this.commentBusy) { this.replyTo = ''; this.commentAnchor = null; pending = null; } },
     revealDocumentComment(root) {
       const result = revealCanvasDocumentAnchor(rootElement, root);
-      this.commentError = result.state === 'found' ? '' : 'The selected text has changed or is no longer available.';
+      this.commentError = result.state === 'found' ? '' : result.state === 'loading' ? 'The document is still loading. Try showing the selected text again when it finishes.' : 'The selected text has changed or is no longer available.';
     },
     async sendDocumentComment() {
       const body = this.commentBody.trim();

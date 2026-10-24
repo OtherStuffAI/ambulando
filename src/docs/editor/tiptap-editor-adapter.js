@@ -1,6 +1,6 @@
 import { FlightDeckWikiLink, createWikiPicker } from './wiki-extension.js';
 import { Editor } from '@tiptap/core';
-import { DOMParser } from '@tiptap/pm/model';
+import { DOMParser, Fragment } from '@tiptap/pm/model';
 import { createFlightDeckTiptapExtensions } from './prosemirror-flightdeck-schema.js';
 import { resolveDocumentProseMirrorState } from './markdown-to-prosemirror.js';
 import { prosemirrorToFlightDeckContentModel } from './prosemirror-to-flightdeck.js';
@@ -22,7 +22,7 @@ export function createTiptapEditorAdapter({
   const editor = new Editor({
     element,
     editable,
-    extensions: extensions || createFlightDeckTiptapExtensions({ placeholder }).map((extension) => extension.name === 'fdWikiLink' && wiki ? FlightDeckWikiLink.configure(wiki) : extension).concat(wiki ? [createWikiPicker(wiki)] : []),
+    extensions: extensions || createFlightDeckTiptapExtensions({ placeholder, editable }).map((extension) => extension.name === 'fdWikiLink' && wiki ? FlightDeckWikiLink.configure(wiki) : extension).concat(wiki ? [createWikiPicker(wiki)] : []),
     content: editorState || resolveDocumentProseMirrorState(document || {}),
     editorProps: {
       handlePaste: (_view, event) => onPaste(event, editor) === true,
@@ -85,6 +85,14 @@ export function createTiptapEditorAdapter({
       }
       return prosemirrorToFlightDeckContentModel(DOMParser.fromSchema(editor.schema)
         .parse(surface, { preserveWhitespace: 'full' }).toJSON());
+    },
+    appendReadOnlyContent(nodes) {
+      if (editor.isEditable) throw new Error('Progressive content is only available to readers.');
+      // Append at the document end; existing selections and block identities map
+      // through the transaction and no editable draft/update callback is made.
+      const fragment = Fragment.fromArray(nodes.map(node => editor.schema.nodeFromJSON(node)));
+      editor.view.dispatch(editor.state.tr.insert(editor.state.doc.content.size, fragment)
+        .setMeta('preventUpdate', true).setMeta('addToHistory', false));
     },
     setEditable(nextEditable) {
       // Access changes do not modify content or create a new recovery draft.

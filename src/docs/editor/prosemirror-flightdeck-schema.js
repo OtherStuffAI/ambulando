@@ -175,6 +175,7 @@ export function createFlightDeckTiptapExtensions(options = {}) {
   return [
     StarterKit.configure({
       link: false,
+      ...(options.editable === false ? { trailingNode: false, undoRedo: false, dropcursor: false } : {}),
       heading: { levels: [1, 2, 3, 4] },
     }),
     Link.configure({
@@ -192,10 +193,10 @@ export function createFlightDeckTiptapExtensions(options = {}) {
         }), 0];
       },
     }),
-    Placeholder.configure({
+    ...(options.editable === false ? [] : [Placeholder.configure({
       placeholder: options.placeholder || 'Start writing...',
-    }),
-    Table.configure({ resizable: true }),
+    })]),
+    Table.configure({ resizable: options.editable !== false }),
     TableRow,
     TableHeader,
     TableCell,

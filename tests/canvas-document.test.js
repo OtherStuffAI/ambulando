@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { it, expect, vi } from 'vitest';
-import { registerCanvasDocument, captureCanvasDocumentAnchor } from '../src/canvas/document.js';
+import { registerCanvasDocument, captureCanvasDocumentAnchor, revealCanvasDocumentAnchor } from '../src/canvas/document.js';
 
 const loader = vi.hoisted(() => vi.fn());
 vi.mock('../src/docs/editor/lazy-tiptap-editor.js', () => ({ loadTiptapEditorAdapter: loader }));
@@ -33,7 +33,7 @@ it('mounts read-only, coalesces loading updates, preserves layout-only state and
   const scroll = reader.element.parentElement;
   scroll.scrollTop = 80; scroll.scrollLeft = 12;
   reader.update('> Changed');
-  expect(adapter.setContent).toHaveBeenCalledWith(expect.objectContaining({ type: 'doc' }), { preserveSelection: true });
+  await vi.waitFor(() => expect(adapter.setContent).toHaveBeenCalledWith(expect.objectContaining({ type: 'doc' }), { preserveSelection: true }));
   expect([scroll.scrollTop, scroll.scrollLeft]).toEqual([80, 12]);
   reader.dispose();
   expect(adapter.destroy).toHaveBeenCalledOnce();
@@ -118,5 +118,44 @@ it('captures the native read-only selection rather than stale editor focus', asy
   expect(captureCanvasDocumentAnchor(reader.element.parentElement)).toMatchObject({ anchor_quote: 'Selected passage', anchor_start_offset: 1, anchor_end_offset: 17 });
   selection.removeAllRanges();
   expect(captureCanvasDocumentAnchor(reader.element.parentElement)).toBeNull();
+  reader.dispose();
+});
+
+
+it('yields between real content batches and cancels remaining work when removed', async () => {
+  const native = { type: 'doc', content: Array.from({ length: 100 }, (_, i) => ({ type: 'paragraph', content: [{ type: 'text', text: `Block ${i}` }] })) };
+  const adapter = { destroy: vi.fn(), appendReadOnlyContent: vi.fn() };
+  const create = vi.fn(() => adapter);
+  loader.mockResolvedValue({ createTiptapEditorAdapter: create });
+  const body = JSON.stringify({ format: 'document_content_v1', content_model: { content_format: 'prosemirror', editor_state: native } });
+  const reader = mount(body);
+  adapter.appendReadOnlyContent.mockImplementationOnce(() => reader.dispose());
+  await vi.waitFor(() => expect(adapter.destroy).toHaveBeenCalledOnce());
+  expect(create.mock.calls[0][0].editorState.content).toHaveLength(16);
+  expect(adapter.appendReadOnlyContent).toHaveBeenCalledOnce();
+  await new Promise(resolve => setTimeout(resolve, 20));
+  expect(adapter.appendReadOnlyContent).toHaveBeenCalledOnce();
+});
+
+it('replaces an in-flight progressive source and completes only the latest body', async () => {
+  const native = { type: 'doc', content: Array.from({ length: 100 }, (_, i) => ({ type: 'paragraph', content: [{ type: 'text', text: `Old ${i}` }] })) };
+  const adapter = { destroy: vi.fn(), appendReadOnlyContent: vi.fn(), setContent: vi.fn() };
+  loader.mockResolvedValue({ createTiptapEditorAdapter: () => adapter });
+  const reader = mount(JSON.stringify({ format: 'document_content_v1', content_model: { content_format: 'prosemirror', editor_state: native } }));
+  adapter.appendReadOnlyContent.mockImplementationOnce(() => reader.update('# New authorized body'));
+  await vi.waitFor(() => expect(adapter.setContent).toHaveBeenCalledOnce());
+  expect(JSON.stringify(adapter.setContent.mock.calls[0][0])).toContain('New authorized body');
+  expect(adapter.appendReadOnlyContent).toHaveBeenCalledOnce();
+  expect(reader.element.getAttribute('aria-busy')).toBe('false');
+  reader.dispose();
+});
+
+
+it('reports a still-loading comment target without scanning a partial document as stale', async () => {
+  loader.mockReturnValue(new Promise(() => {}));
+  const reader = mount('Loading source');
+  reader.element.setAttribute('x-canvas-document', 'body');
+  reader.element.setAttribute('aria-busy', 'true');
+  expect(revealCanvasDocumentAnchor(reader.element.parentElement, { anchor_quote: 'Later passage' })).toEqual({ state: 'loading' });
   reader.dispose();
 });

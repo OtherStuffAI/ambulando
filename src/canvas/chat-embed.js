@@ -2,7 +2,7 @@ import { canvasChatReference } from './chat-references.js';
 import { createCanvasChatSignerClient } from './chat-signer.js';
 import { getTowerPgThread, getTowerPgTask, setBaseUrl } from '../api.js';
 import { canvasContext } from './projection.js';
-import { openWorkspaceDb } from '../db.js';
+import { openWorkspaceDbProgressively } from '../db.js';
 import { tryAutoLoginFromStorage, pubkeyToNpub, setExtensionSignerBridge, clearExtensionSignerBridge } from '../auth/nostr.js';
 import { setActiveSessionNpub } from '../crypto/group-keys.js';
 import { hydrateTowerPgChannel } from '../pg-read-hydrator.js';
@@ -77,7 +77,7 @@ export const canvasChatEmbedMixin = {
       this.backendUrl = workspace.directHttpsUrl || workspace.pgDescriptor?.tower_base_url;
       setBaseUrl(this.backendUrl);
       this.navSection = 'status';
-      openWorkspaceDb(workspace.workspaceKey);
+      await openWorkspaceDbProgressively(workspace.workspaceKey);
       await this.ensureWorkspaceSessionKey();
       // Establish the normal command-revision fence before the targeted read;
       // transport starts only after that read and the thread are initialized.

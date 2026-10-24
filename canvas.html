@@ -187,7 +187,7 @@
           <button class="canvas-resize" x-show="!minimised &amp;&amp; !expanded &amp;&amp; $store.canvas.selected?.type === 'naplet' && $store.canvas.selected.id === naplet.id" aria-label="Resize naplet" @pointerdown.stop="$store.canvas.startItemInteraction('naplet', naplet, $event, 'resize')"></button>
         </dialog></template>
       </div>
-      <div class="canvas-pan-shield" x-show="$store.canvas.tool === 'hand'" aria-hidden="true"></div>
+      <div class="canvas-pan-shield" :style="{ display: $store.canvas.tool === 'hand' ? 'block' : 'none' }" aria-hidden="true"></div>
       <div class="canvas-selection-box" x-show="$store.canvas.selectionBox" :style="$store.canvas.selectionBoxStyle()" aria-hidden="true"></div>
     </section>
     <p class="canvas-toast" role="alert" x-show="$store.canvas.error && $store.canvas.status === 'ready'" x-text="$store.canvas.error" x-cloak></p>

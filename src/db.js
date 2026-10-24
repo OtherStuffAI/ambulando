@@ -1,3 +1,4 @@
+import { yieldToBrowser } from './utils/yield-to-browser.js';
 import { clampBranchEffectiveMessageIds, threadHistoryLineage, mergeThreadHistoryIds, threadHistoryAuthority } from './thread-history-coverage.js';
 import Dexie from 'dexie';
 import { PIPELINE_VIEWER_STORES } from './pipeline-viewer-store.js';
@@ -204,8 +205,7 @@ const WORKSPACE_STORES_V29 = {
   workspace_agents: '&id, workspace_id, connection_id, agent_id, agent_npub, sort_order, is_visible, archived_at, updated_at, [connection_id+sort_order]',
 };
 
-export function createWorkspaceDb(workspaceDbKey) {
-  const db = new Dexie(`wingman-fd-ws-${workspaceDbKey}`);
+function* workspaceDbRegistration(workspaceDbKey, db = new Dexie(`wingman-fd-ws-${workspaceDbKey}`)) {
   const WORKSPACE_STORES_V2 = {
     workspace_settings: '&workspace_owner_npub, record_id, updated_at',
     channels:           'record_id, owner_npub, *group_ids, scope_id, scope_product_id, scope_project_id, scope_deliverable_id',
@@ -225,6 +225,7 @@ export function createWorkspaceDb(workspaceDbKey) {
     read_cursors:       '&record_id, cursor_key, viewer_npub, read_until',
   };
   // v1: original schema (without read_cursors)
+  yield;
   db.version(1).stores({
     workspace_settings: '&workspace_owner_npub, record_id, updated_at',
     channels:           'record_id, owner_npub, *group_ids, scope_id, scope_product_id, scope_project_id, scope_deliverable_id',
@@ -243,8 +244,10 @@ export function createWorkspaceDb(workspaceDbKey) {
     sync_state:         'key',
   });
   // v2: add read_cursors for unread indicators
+  yield;
   db.version(2).stores(WORKSPACE_STORES_V2);
   // v3: add reports table
+  yield;
   db.version(3).stores({
     ...WORKSPACE_STORES_V2,
     reports: 'record_id, owner_npub, declaration_type, surface, generated_at, updated_at, *group_ids, scope_id, scope_product_id, scope_project_id, scope_deliverable_id',
@@ -256,44 +259,67 @@ export function createWorkspaceDb(workspaceDbKey) {
   };
   delete WORKSPACE_STORES_V4.flows;
   delete WORKSPACE_STORES_V4.approvals;
+  yield;
   db.version(4).stores(WORKSPACE_STORES_V4);
   // v5: add flows, approvals tables + task flow extension indexes
   const WORKSPACE_STORES_V5 = { ...WORKSPACE_STORES };
   delete WORKSPACE_STORES_V5.persons;
   delete WORKSPACE_STORES_V5.organisations;
+  yield;
   db.version(5).stores(WORKSPACE_STORES_V5);
   // v6: add persons, organisations tables
+  yield;
   db.version(6).stores(WORKSPACE_STORES);
+  yield;
   db.version(7).stores(WORKSPACE_STORES);
+  yield;
   db.version(8).stores(WORKSPACE_STORES_V8);
   // Delete the retired legacy store without keeping its identifier in runtime bundles.
   const retiredAgentChatStore = [
     97, 103, 101, 110, 116, 95, 99, 104, 97, 116, 95, 116, 114, 105, 103, 103, 101, 114, 115,
   ].map((code) => String.fromCharCode(code)).join('');
+  yield;
   db.version(9).stores({ [retiredAgentChatStore]: null });
+  yield;
   db.version(10).stores(WORKSPACE_STORES_V10);
+  yield;
   db.version(11).stores(WORKSPACE_STORES_V11);
+  yield;
   db.version(12).stores(WORKSPACE_STORES_V12);
+  yield;
   db.version(13).stores(WORKSPACE_STORES_V13);
+  yield;
   db.version(14).stores(WORKSPACE_STORES_V14);
+  yield;
   db.version(15).stores(WORKSPACE_STORES_V15);
+  yield;
   db.version(16).stores(WORKSPACE_STORES_V16);
+  yield;
   db.version(17).stores(WORKSPACE_STORES_V17);
+  yield;
   db.version(18).stores(WORKSPACE_STORES_V18);
+  yield;
   db.version(19).stores(WORKSPACE_STORES_V19);
+  yield;
   db.version(20).stores(WORKSPACE_STORES_V20);
+  yield;
   db.version(21).stores(WORKSPACE_STORES_V21);
+  yield;
   db.version(22).stores(WORKSPACE_STORES_V22);
   // v23: additive channel/time index for bounded, thread-aware chat presentation reads.
+  yield;
   db.version(23).stores(WORKSPACE_STORES_V23);
   // v24: workspace/document-scoped durable editor drafts and recovery metadata.
+  yield;
   db.version(24).stores(WORKSPACE_STORES_V24);
+  yield;
   db.version(25).stores(WORKSPACE_STORES_V25).upgrade(async (tx) => {
     await tx.table('chat_messages').toCollection().modify((row) => Object.assign(row, messageIndexFields(row)));
     await tx.table('tasks').toCollection().modify((row) => Object.assign(row, taskIndexFields(row)));
     await tx.table('documents').toCollection().modify((row) => Object.assign(row, { cache_active: row.record_state === 'deleted' ? 0 : 1, cache_time: String(row.updated_at || row.created_at || '') }));
     await tx.table('comments').toCollection().modify((row) => Object.assign(row, { cache_active: row.record_state === 'deleted' ? 0 : 1, cache_time: String(row.updated_at || row.created_at || '') }));
   });
+  yield;
   db.version(26).stores(WORKSPACE_STORES_V26).upgrade(async tx => {
     // Additive derived-index repair only; retain all rows, pending writes,
     // canonical generations and cursors. Dexie owns the atomic upgrade.
@@ -302,9 +328,13 @@ export function createWorkspaceDb(workspaceDbKey) {
       await tx.table(table).toCollection().modify(row => Object.assign(row, activityIndexFields(row)));
     }
   });
+  yield;
   db.version(27).stores({ ...WORKSPACE_STORES_V26, drive_shares: '&key, context, id', drive_listings: '&key, context, share_key, fetched_at' });
+  yield;
   db.version(28).stores({ ...WORKSPACE_STORES_V28, drive_shares: '&key, context, id', drive_listings: '&key, context, share_key, fetched_at' });
+  yield;
   db.version(29).stores({ ...WORKSPACE_STORES_V29, drive_shares: '&key, context, id', drive_listings: '&key, context, share_key, fetched_at' });
+  yield;
   db.version(30).stores({
     feed_subscriptions: '&key, context, id, status',
     feed_item_states: '&key, context, subscription_id, item_id',
@@ -313,6 +343,7 @@ export function createWorkspaceDb(workspaceDbKey) {
     feed_commands: '&mutation_id, context, subscription_id',
     feed_connection_transports: '&key, context, connection_id',
   });
+  yield;
   db.version(31).stores({
     context_components: '&record_id, workspace_id, scope_id, parent_id, [scope_id+parent_id], [scope_id+sort_order]',
     context_references: '&record_id, workspace_id, scope_id, component_id, [scope_id+component_id]',
@@ -320,29 +351,42 @@ export function createWorkspaceDb(workspaceDbKey) {
     context_reference_resolutions: '&record_id, component_id, scope_id',
   });
   // Autopilot-local viewer projections are never Tower record families.
+  yield;
   db.version(32).stores(PIPELINE_VIEWER_STORES);
+  yield;
   db.version(33).stores({ file_blossom_status: '&key, workspace_id, file_id' });
   // Read-only authority snapshots, partitioned by viewer/workspace/range.
+  yield;
   db.version(34).stores({ message_activity: '&key, context, range' });
+  yield;
   db.version(35).stores({ org_data: '&key' });
+  yield;
   db.version(38).stores({ nostr_notifications: '&key, context, id', nostr_notification_states: '&key, context' });
+  yield;
   db.version(39).stores({ thread_pins: '&record_id, context, [context+thread_id]', thread_pin_outbox: '++seq, context, [context+threadId]' });
+  yield;
   db.version(40).stores({ thread_pins: '&record_id, context, [context+thread_id], [context+resource_type+resource_id]', thread_pin_outbox: '++seq, context, [context+threadId], [context+targetKey]' }).upgrade(async tx => {
     await tx.thread_pins.toCollection().modify(row => { row.key = row.record_id; row.resource_type ||= 'thread'; row.resource_id ||= row.thread_id; });
     await tx.thread_pin_outbox.toCollection().modify(row => { row.resourceType ||= 'thread'; row.targetKey ||= `${row.resourceType}:${row.threadId}`; });
   });
   // Current-authority Canvas projections. Cached rows never render until the
   // active viewer has completed a fresh signed list/snapshot read.
+  yield;
   db.version(42).stores({ private_preferences: '&key, context' });
+  yield;
   db.version(41).stores({
     canvas_definitions: '&key, context, canvas_id, [context+position]',
     canvas_snapshots: '&key, context, canvas_id, authorized_at',
   });
   // Viewer-partitioned unsaved Excalidraw board drafts. Saved versions remain
   // Tower File versions; a draft is local work that only Save publishes.
+  yield;
   db.version(43).stores({ canvas_board_drafts: '&key, context, file_id' });
+  yield;
   db.version(44).stores({}).upgrade(tx => tx.table('canvas_snapshots').toCollection().modify(row => { delete row.comments; }));
+  yield;
   db.version(37).stores({ hosting_billing: '&key' });
+  yield;
   db.version(36).stores({ scope_orders: '&record_id, workspace_id', pg_archived_targets: '&key, family, id' });
   const commentFields = activityIndexFields;
   db.documents.hook('creating', (_key, row) => { Object.assign(row, commentFields(row)); });
@@ -356,7 +400,52 @@ export function createWorkspaceDb(workspaceDbKey) {
   return db;
 }
 
-export function openWorkspaceDb(workspaceDbKey) {
+export function createWorkspaceDb(workspaceDbKey) {
+  const registration = workspaceDbRegistration(workspaceDbKey);
+  let step;
+  do { step = registration.next(); } while (!step.done);
+  return step.value;
+}
+
+let workspaceOpenGeneration = 0, progressiveWorkspaceOpen = null;
+// Embedded windows share the parent's event loop. Register the exact same
+// versions/hooks in bounded tasks before opening IndexedDB, without publishing
+// a partially configured handle to queries or commands.
+export async function openWorkspaceDbProgressively(workspaceDbKey) {
+  if (!workspaceDbKey) throw new Error('workspaceDbKey is required to open a workspace database');
+  if (_currentWorkspaceDbKey === workspaceDbKey && _currentWorkspaceDb) {
+    // Selecting the already-open workspace still supersedes a different pending
+    // preparation; that older handle must never become the active workspace.
+    if (progressiveWorkspaceOpen && progressiveWorkspaceOpen.key !== workspaceDbKey) {
+      ++workspaceOpenGeneration; progressiveWorkspaceOpen = null;
+    }
+    return _currentWorkspaceDb;
+  }
+  if (progressiveWorkspaceOpen?.key === workspaceDbKey) return progressiveWorkspaceOpen.promise;
+  const generation = ++workspaceOpenGeneration;
+  const db = new Dexie(`wingman-fd-ws-${workspaceDbKey}`);
+  const promise = (async () => {
+    try {
+      const registration = workspaceDbRegistration(workspaceDbKey, db);
+      let started = performance.now();
+      await yieldToBrowser();
+      for (;;) {
+        if (generation !== workspaceOpenGeneration) throw new DOMException('Workspace changed during startup', 'AbortError');
+        const step = registration.next();
+        if (step.done) break;
+        if (performance.now() - started >= 8) { await yieldToBrowser(); started = performance.now(); }
+      }
+      return openWorkspaceDb(workspaceDbKey, db);
+    } catch (error) { db.close(); throw error; }
+    finally { if (progressiveWorkspaceOpen?.generation === generation) progressiveWorkspaceOpen = null; }
+  })();
+  progressiveWorkspaceOpen = { key: workspaceDbKey, generation, promise };
+  return promise;
+}
+
+export function openWorkspaceDb(workspaceDbKey, preparedDb = null) {
+  ++workspaceOpenGeneration;
+  progressiveWorkspaceOpen = null;
   if (!workspaceDbKey) throw new Error('workspaceDbKey is required to open a workspace database');
   if (_currentWorkspaceDbKey === workspaceDbKey && _currentWorkspaceDb) {
     return _currentWorkspaceDb;
@@ -366,13 +455,15 @@ export function openWorkspaceDb(workspaceDbKey) {
   if (_currentWorkspaceDb) {
     try { if (!documentDraftDbUsers.get(_currentWorkspaceDb)) _currentWorkspaceDb.close(); } catch { /* already closed */ }
   }
-  _currentWorkspaceDb = createWorkspaceDb(workspaceDbKey);
+  _currentWorkspaceDb = preparedDb || createWorkspaceDb(workspaceDbKey);
   _currentWorkspaceDbKey = workspaceDbKey;
   return _currentWorkspaceDb;
 }
 
 // Logout releases the active handle without deleting any durable workspace state.
 export function closeWorkspaceDb() {
+  ++workspaceOpenGeneration;
+  progressiveWorkspaceOpen = null;
   const db = _currentWorkspaceDb;
   _currentWorkspaceDb = null;
   _currentWorkspaceDbKey = null;

@@ -199,7 +199,7 @@ export function canvasPageStore() {
       this.error = error?.status === 403 || error?.status === 404 ? 'Canvas unavailable.' : (error?.message || 'Canvas could not be refreshed.');
     },
     refreshBoardsSnapshot() { return syncRuntime?.refresh().catch(() => undefined); },
-    async refresh() { this.status = 'loading'; this.error = ''; await syncRuntime?.refresh().catch(() => undefined); },
+    async refresh() { if (!this.canvas) this.status = 'loading'; this.error = ''; await syncRuntime?.refresh().catch(() => undefined); },
     stageRect() { return canvasElement('stage').getBoundingClientRect(); },
     toWorld(event) { return worldPoint(this.viewport, event, this.stageRect()); },
     zoomBy(factor, origin = null) {

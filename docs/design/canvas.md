@@ -476,3 +476,37 @@ The direct refresh completion and Dexie observer publish a committed request ID
 once per runtime, avoiding duplicate full UI reconciliation. Stop invalidates
 pending work and resets publication identity; resume obtains fresh authority.
 Snapshot payloads and per-source authorization remain unchanged.
+
+
+## Window startup responsiveness
+
+Document readers show a local loading status and append read-only ProseMirror
+content in batches, with one reader conversion/mount/batch per painted frame.
+The normal document schema, block identities, native selection and comment
+anchors remain in use. Source changes and directive cleanup invalidate pending
+batches. Reader appends do not emit editable updates or create editor drafts.
+Editing-only placeholder, trailing-paragraph and history behavior is omitted
+from read-only adapters; ordinary editable editors retain it.
+
+Canvas refresh keeps an already authorized surface visible while awaiting the
+next read; authorization errors still clear it. Initial loading never displays
+an unauthenticated saved projection. Embedded chat/task startup registers the
+same Dexie versions and upgrade callbacks cooperatively before publishing a
+complete workspace handle. Synchronous DB callers and worker APIs retain their
+existing behavior. Each registration and each indivisible document node can
+still exceed the scheduling budget; this is cooperative scheduling, not a
+universal hard real-time guarantee.
+
+`tests/e2e/canvas-startup.spec.cjs` dispatches real toolbar input throughout
+reader mounting and ordinary embedded chat initialization, including delayed
+reads. It reports click round trips, event delays, next-paint delays and animation
+heartbeat gaps, with a fixed 200 ms ordinary-run gate. It also exercises loading
+minimize/restore, removal, access loss and replacement. CPU-throttled runs are
+additional diagnostics; they do not change the ordinary regression gate.
+
+The transparent Hand pan shield binds its display directly to current tool state.
+It deliberately does not use Alpine's asynchronous `x-show` transition cascade:
+several Hand/Select changes before a paint can leave an old show callback active
+after the last hide callback has consumed its promise. The delayed-paint browser
+regression uses ordinary tool clicks and requires Select to hide the shield and
+release existing window controls, without force clicks or direct tool mutation.

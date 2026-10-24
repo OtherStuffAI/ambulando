@@ -5214,6 +5214,28 @@
       "notes": [
         "Embedded Canvas chats no longer initialize unrelated hidden WApp editors."
       ]
+    },
+    {
+      "buildNumber": 2633,
+      "label": "Keep Canvas responsive while windows load",
+      "notes": [
+        "Document windows load progressively so Canvas controls can respond during startup. Embedded chats and task details yield between database schema registration steps.",
+        "Refreshing a Canvas keeps its existing controls available while the read finishes. Access failures still clear unavailable content."
+      ]
+    },
+    {
+      "buildNumber": 2634,
+      "label": "Progressive document loading feedback",
+      "notes": [
+        "Long document readers adapt their loading batches to keep controls responsive without needlessly delaying the rest of the document. Comment links report when their document is still loading."
+      ]
+    },
+    {
+      "buildNumber": 2635,
+      "label": "Release Canvas controls after switching tools",
+      "notes": [
+        "Switching from Hand to Select reliably releases the transparent pan shield, including when window startup delayed a previous paint."
+      ]
     }
   ]
 }
