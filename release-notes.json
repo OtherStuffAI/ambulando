@@ -5089,6 +5089,12 @@
       "notes": [
         "Agent Space and Autopilot capability checks share a scoped connection safely, preventing duplicate signing grants when opening agents or retrying discovery."
       ]
+    },
+    {
+      "buildNumber": 2612,
+      "label": "Bounded release validation workers",
+      "notes": [],
+      "noUserVisibleChanges": true
     }
   ]
 }

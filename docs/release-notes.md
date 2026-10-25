@@ -22,3 +22,9 @@ using its 50 ms observation as a release gate. `bun run test` retains the strict
 benchmark threshold for dedicated performance investigation. Worker results and
 actual event-loop progress remain asserted in both modes. Never suppress a
 functional failure as benchmark noise.
+
+Release validation limits Vitest to two workers to reduce CPU contention with
+simultaneous native packaging and other release sessions. The same
+full functional suite, transaction deadline and event-loop assertions still run.
+A default-parallel failure remains evidence; rerun the complete bounded suite
+before treating resource contention as resolved.

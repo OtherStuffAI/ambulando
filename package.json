@@ -19,7 +19,7 @@
     "verify:dist": "node scripts/verify-dist-assets.mjs",
     "validate": "bun run lint && bun run check:public-source && bun run test && bun run build && bun run verify:dist && git diff --check",
     "test": "vitest run",
-    "test:release": "FLIGHTDECK_RELEASE_MEASUREMENTS=report vitest run",
+    "test:release": "FLIGHTDECK_RELEASE_MEASUREMENTS=report vitest run --maxWorkers=2",
     "test:e2e": "playwright test",
     "test:e2e:perf": "PLAYWRIGHT_DISABLE_VIDEO=1 playwright test tests/e2e/performance-baseline.spec.cjs",
     "test:feed:wire": "bun scripts/check-feed-wapp-wire.mjs",
