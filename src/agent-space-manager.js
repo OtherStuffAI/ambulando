@@ -57,6 +57,11 @@ export function formatAgentConnectError(error, fallback) {
 
 const managerError = formatAgentConnectError;
 
+async function releaseTransientClient(client) {
+  // Cleanup must not replace the operation's error or strand its busy state.
+  try { await client?.disconnect(); } catch { /* Native teardown is best effort. */ }
+}
+
 export const agentSpaceManagerMixin = {
   agentConnections: [], workspaceAgents: [], agentConnectInput: '', agentConnectError: '', agentConnectBusy: false,
   agentConnectStep: 'package', agentDiscoveredAgents: [], agentSelectedDiscoveryIds: [], _verifiedAgentConnectPackage: null,
@@ -77,9 +82,10 @@ export const agentSpaceManagerMixin = {
   },
   async verifyAndDiscoverAutopilotAgents() {
     this.agentConnectBusy = true; this.agentConnectError = '';
+    let client;
     try {
       const verified = verifyAutopilotConnectPackage(this.agentConnectInput);
-      const client = createAutopilotDiscoveryClient(verified);
+      client = createAutopilotDiscoveryClient(verified);
       const health = await client.health();
       if (!health.ok) throw new Error('Autopilot reported that this installation is not healthy.');
       const agents = await client.discoverAgents();
@@ -87,9 +93,8 @@ export const agentSpaceManagerMixin = {
       this.agentDiscoveredAgents = agents;
       this.agentSelectedDiscoveryIds = agents.map((agent) => agent.agentId);
       this.agentConnectStep = 'agents';
-      await client.disconnect();
     } catch (error) { this.agentConnectError = managerError(error, 'Could not verify this Autopilot connection package.'); }
-    finally { this.agentConnectBusy = false; }
+    finally { await releaseTransientClient(client); this.agentConnectBusy = false; }
   },
   async installSelectedAutopilotAgents() {
     const verified = this._verifiedAgentConnectPackage;
@@ -186,9 +191,11 @@ export const agentSpaceManagerMixin = {
     const connection = (this.agentConnections || []).find((item) => item.id === row?.connection_id);
     if (!row || !connection) { this.agentSpaceData = null; this.agentSpaceError = row ? 'Installation connection is unavailable offline.' : ''; return; }
     this.agentSpaceLoading = true; this.agentSpaceError = '';
+    let client;
     try {
       const agent = { agentId: row.agent_id, botNpub: row.agent_npub, paths: row.metadata?.paths || {} };
-      const payload = await createAutopilotDiscoveryClient(storedPackage(connection)).readAgent(agent, this.agentSpaceView);
+      client = createAutopilotDiscoveryClient(storedPackage(connection));
+      const payload = await client.readAgent(agent, this.agentSpaceView);
       this.agentSpaceData = this.agentSpaceView === 'pipelines' ? normalizeAgentPipelineView(payload)
         : this.agentSpaceView === 'schedules' ? normalizeAgentBoundRows(payload, 'schedules', agent)
           : this.agentSpaceView === 'triggers' ? normalizeAgentBoundRows(payload, 'triggers', agent) : payload.agent;
@@ -196,7 +203,7 @@ export const agentSpaceManagerMixin = {
       this.agentSpaceError = globalThis.navigator?.onLine === false
         ? 'Agent Space is offline. The installed agent remains available after reconnecting.'
         : managerError(error, 'Could not load this Agent Space view.');
-    } finally { this.agentSpaceLoading = false; }
+    } finally { await releaseTransientClient(client); this.agentSpaceLoading = false; }
   },
   openControlledRestartConfirm() {
     this.controlledRestartError = '';
@@ -210,8 +217,9 @@ export const agentSpaceManagerMixin = {
     const verified = this._verifiedControlledRestartPackages?.get(connection?.id);
     if (!connection || !verified || this.controlledRestartAvailability !== 'available') return;
     this.controlledRestartBusy = true; this.controlledRestartError = '';
+    let client;
     try {
-      const client = createAutopilotDiscoveryClient(verified);
+      client = createAutopilotDiscoveryClient(verified);
       this.controlledRestartStatus = await client.controlledRestart();
       this.controlledRestartConfirmOpen = false;
       await this.pollControlledRestartStatus();
@@ -223,7 +231,7 @@ export const agentSpaceManagerMixin = {
         if (resumed) return;
       }
       this.controlledRestartError = managerError(error, 'Could not request the controlled restart. Check that the configured admin browser signer is available and authorized.');
-    } finally { this.controlledRestartBusy = false; }
+    } finally { await releaseTransientClient(client); this.controlledRestartBusy = false; }
   },
   async pollControlledRestartStatus() {
     const connection = this.controlledRestartConnection;
@@ -231,8 +239,9 @@ export const agentSpaceManagerMixin = {
     if (!connection || !verified) return;
     const deadline = Date.now() + 120_000;
     while (Date.now() < deadline) {
+      let client;
       try {
-        const client = createAutopilotDiscoveryClient(verified);
+        client = createAutopilotDiscoveryClient(verified);
         const status = await client.controlledRestartStatus();
         this.controlledRestartStatus = status;
         this.controlledRestartError = '';
@@ -240,7 +249,7 @@ export const agentSpaceManagerMixin = {
         if (!status?.inProgress && (['complete', 'partial', 'failed'].includes(finalStatus) || status?.outcome || status?.marker?.status === 'failed')) return status;
       } catch {
         this.controlledRestartStatus = { inProgress: true, marker: { status: 'restarting-disconnected' } };
-      }
+      } finally { await releaseTransientClient(client); }
       await new Promise((resolve) => setTimeout(resolve, 2000));
     }
     this.controlledRestartError = 'Autopilot did not report a final restart result within two minutes. Reopen Agents to resume the status check.';
@@ -250,15 +259,17 @@ export const agentSpaceManagerMixin = {
     const connection = this.controlledRestartConnection;
     const verified = this._verifiedControlledRestartPackages?.get(connection?.id);
     if (!connection || !verified) return false;
+    let client;
     try {
-      const status = await createAutopilotDiscoveryClient(verified).controlledRestartStatus();
+      client = createAutopilotDiscoveryClient(verified);
+      const status = await client.controlledRestartStatus();
       this.controlledRestartStatus = status;
       this.controlledRestartError = '';
       if (status?.inProgress) void this.pollControlledRestartStatus();
       return Boolean(status?.operation || status?.marker || status?.outcome);
     } catch {
       return false;
-    }
+    } finally { await releaseTransientClient(client); }
   },
   get selectedWorkspaceAgent() { return (this.workspaceAgents || []).find((row) => row.id === this.selectedWorkspaceAgentId) || null; },
   get selectedAgentConnection() { return (this.agentConnections || []).find((row) => row.id === this.selectedWorkspaceAgent?.connection_id) || null; },

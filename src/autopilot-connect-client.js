@@ -259,6 +259,46 @@ function normalizeAgent(row) {
   });
 }
 
+// Native signing requires exactly one grant for an exact endpoint. Share only
+// within the same provider and verified transport tuple; clients own leases.
+const transportHandles = new WeakMap();
+
+async function acquireAutopilotHandle(transport, options) {
+  let handles = transportHandles.get(transport);
+  if (!handles) { handles = new Map(); transportHandles.set(transport, handles); }
+  const key = JSON.stringify([options.endpoint, options.peerNpub, options.purpose]);
+  let entry = handles.get(key);
+  if (entry?.closing) {
+    await entry.closing;
+    return acquireAutopilotHandle(transport, options);
+  }
+  if (!entry) {
+    entry = { users: 0, promise: Promise.resolve().then(() => transport.connect(options)) };
+    handles.set(key, entry);
+  }
+  entry.users++;
+  let descriptor;
+  try { descriptor = await entry.promise; }
+  catch (error) {
+    entry.users--;
+    if (handles.get(key) === entry) handles.delete(key);
+    throw error;
+  }
+  let released = false;
+  return {
+    descriptor,
+    async release() {
+      if (released) return;
+      released = true;
+      if (--entry.users !== 0) return;
+      entry.closing = Promise.resolve().then(() => descriptor?.disconnect?.()).finally(() => {
+        if (handles.get(key) === entry) handles.delete(key);
+      });
+      await entry.closing;
+    },
+  };
+}
+
 export function createAutopilotDiscoveryClient(verifiedPackage, {
   transport = globalThis.window?.fipsTransport,
   authHeader = createNip98AuthHeader,
@@ -273,6 +313,8 @@ export function createAutopilotDiscoveryClient(verifiedPackage, {
   }
   let connected = false;
   let handle = null;
+  let lease = null;
+  let connecting = null;
   let connectionGeneration = 0;
   const requestId = verifiedPackage.correlationId || correlationId();
   const advertisedPaths = new Set([verifiedPackage.healthPath, verifiedPackage.agentsPath]);
@@ -294,13 +336,15 @@ export function createAutopilotDiscoveryClient(verifiedPackage, {
   async function connect() {
     const epoch = connectionGeneration;
     let descriptor;
+    let acquired;
     diagnose('native_connect_invoked', requestId);
     try {
-      descriptor = await transport.connect({
+      acquired = await acquireAutopilotHandle(transport, {
         endpoint: verifiedPackage.fipsEndpoint,
         peerNpub: verifiedPackage.transportNpub,
         purpose: 'autopilot',
       });
+      descriptor = acquired.descriptor;
     }
     catch (error) {
       const nativeError = nativePublicError(error);
@@ -315,20 +359,24 @@ export function createAutopilotDiscoveryClient(verifiedPackage, {
     if (descriptor?.version !== 2 || descriptor.endpoint !== verifiedPackage.fipsEndpoint
       || descriptor.peerNpub !== verifiedPackage.transportNpub || descriptor.purpose !== 'autopilot'
       || typeof descriptor.fetch !== 'function' || typeof descriptor.disconnect !== 'function') {
-      await descriptor?.disconnect?.();
+      await acquired.release();
       fail('endpoint_mismatch', 'Native FIPS bridge connected to a different endpoint than the signed package.');
     }
     if (epoch !== connectionGeneration) {
-      await descriptor.disconnect();
+      await acquired.release();
       fail('connection_failed', 'The selected Autopilot connection changed before connecting.');
     }
+    lease = acquired;
     handle = descriptor;
     diagnose('native_connect_succeeded', requestId);
     connected = true;
   }
 
   async function requestResponse(path, operation, { method = 'GET', body, accept = 'application/json', signal } = {}) {
-    if (!connected) await connect();
+    if (!connected) {
+      if (!connecting) connecting = connect().finally(() => { connecting = null; });
+      await connecting;
+    }
     const requestUrl = `${verifiedPackage.fipsEndpoint}${path}`;
     const normalizedMethod = text(method).toUpperCase();
     const serializedBody = body === undefined
@@ -490,9 +538,10 @@ export function createAutopilotDiscoveryClient(verifiedPackage, {
     async disconnect() {
       connectionGeneration++;
       connected = false;
-      const selectedHandle = handle;
+      const selectedLease = lease;
+      lease = null;
       handle = null;
-      await selectedHandle?.disconnect?.();
+      await selectedLease?.release();
     },
   });
 }

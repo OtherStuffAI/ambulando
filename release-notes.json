@@ -5082,6 +5082,13 @@
       "label": "Release validation policy",
       "notes": [],
       "noUserVisibleChanges": true
+    },
+    {
+      "buildNumber": 2611,
+      "label": "Agent connection reliability",
+      "notes": [
+        "Agent Space and Autopilot capability checks share a scoped connection safely, preventing duplicate signing grants when opening agents or retrying discovery."
+      ]
     }
   ]
 }

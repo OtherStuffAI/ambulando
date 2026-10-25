@@ -40,3 +40,12 @@ Agent Space never synthesizes paths or falls back to HTTPS.
 Packages containing credential-like fields or secret URI/key prefixes are
 rejected before verification. The client does not log packages, authorization
 headers, response bodies, or native bridge capabilities.
+
+Autopilot clients in the same native transport provider share one scoped handle
+for an identical endpoint, peer identity and purpose. Each client owns a lease;
+concurrent initial requests connect once, and only the final release disconnects
+the native handle. A client cancelled while connecting releases its pending
+lease without revoking another consumer. Agent Space discovery, read and restart
+status clients release their leases in `finally`, including errors and retries.
+This prevents overlapping capability refresh and overview reads from creating
+ambiguous native signing grants without broadening endpoint consent.
