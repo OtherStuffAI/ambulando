@@ -3,7 +3,8 @@
 // transport field names. Unknown or foreign-identity payloads are rejected, never guessed.
 export const NOTIFICATION_ITEM_SCHEMA = 'org.wingman.notification.item';
 export const NOTIFICATION_SNAPSHOT_PAGE_LIMIT = 100;
-export const NOTIFICATION_SNAPSHOT_MAX_PAGES = 30;
+// Pages per bounded job; a snapshot continues across jobs until next_cursor is null.
+export const NOTIFICATION_SNAPSHOT_PAGES_PER_JOB = 30;
 export const NOTIFICATION_CHANGES_PAGE_LIMIT = 200;
 export const NOTIFICATION_COUNT_CAP = 999;
 // Item statuses that remove the row from every local partition.
@@ -27,8 +28,8 @@ export function isRemovedItem(raw) {
 /** Validate one item against the active context and flatten it into a local row. */
 export function normalizeNotificationItem(raw, context) {
   if (!raw || typeof raw !== 'object') throw new NotificationWireError('Notification item is not an object');
-  if (raw.schema !== undefined && raw.schema !== NOTIFICATION_ITEM_SCHEMA) throw new NotificationWireError('Unsupported notification schema', 'unsupported_schema');
-  if (raw.version !== undefined && raw.version !== 1) throw new NotificationWireError('Unsupported notification version', 'unsupported_schema');
+  // A newer item schema/version is tracked by id and sequence and shown as a safe generic card, never a sync failure.
+  const unsupported = (raw.schema !== undefined && raw.schema !== NOTIFICATION_ITEM_SCHEMA) || (raw.version !== undefined && raw.version !== 1);
   const id = text(raw.id, 128);
   if (!id || !positiveInt(raw.change_seq) || !Number.isSafeInteger(raw.row_version) || raw.row_version < 1) throw new NotificationWireError('Notification item is missing its identity or versions');
   // Defence in depth: the server already scopes by workspace and recipient.
@@ -60,10 +61,11 @@ export function normalizeNotificationItem(raw, context) {
     activity_version: positiveInt(raw.subject?.activity_version) ? raw.subject.activity_version : null,
     unavailable,
     // Unavailable items carry no routable target and only generic wording.
-    title: unavailable ? 'Item no longer available' : text(presentation.title, TITLE_MAX) || 'New notification',
-    body: unavailable ? '' : text(presentation.body, BODY_MAX),
-    icon: text(presentation.icon, 32),
-    target: unavailable || !target ? null : Object.fromEntries(Object.entries(target).filter(([, value]) => typeof value === 'string').map(([key, value]) => [key, text(value, 128)])),
+    unsupported,
+    title: unavailable ? 'Item no longer available' : unsupported ? 'New notification (update Ambulando to view details)' : text(presentation.title, TITLE_MAX) || 'New notification',
+    body: unavailable || unsupported ? '' : text(presentation.body, BODY_MAX),
+    icon: unsupported ? '' : text(presentation.icon, 32),
+    target: unavailable || unsupported || !target ? null : Object.fromEntries(Object.entries(target).filter(([, value]) => typeof value === 'string').map(([key, value]) => [key, text(value, 128)])),
     occurred_at: occurredAt,
     occurred_ms: Number.isFinite(occurredMs) ? occurredMs : 0,
     read: Boolean(state.read),

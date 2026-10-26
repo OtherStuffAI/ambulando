@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { openWorkspaceDb, deleteWorkspaceDb, getWorkspaceDb } from '../src/db.js';
 import { notificationInboxMixin } from '../src/notification-inbox-manager.js';
-import { notificationInboxContext, queueNotificationPatch } from '../src/notification-inbox-store.js';
+import { applyNotificationInboxOperation, notificationInboxContext, queueNotificationPatch } from '../src/notification-inbox-store.js';
 import { normalizeNotificationItem } from '../src/notification-inbox-wire.js';
 
 const key = 'notification-inbox-manager-test';
@@ -76,6 +76,53 @@ describe('notification inbox manager', () => {
     expect(pending[0]).toMatchObject({ kind: 'item', item_id: 't1', patch: { read: true }, expected_row_version: 1, observed_change_seq: 1 });
     expect(s.notificationInboxOpen).toBe(false);
     vi.unstubAllGlobals(); s.disposeNotificationInbox();
+  });
+
+  it('navigates before marking read, uses the rendered version, and leaves the item unread when loading fails', async () => {
+    const s = store(); await seed(s, [rawItem('t1', 1), rawItem('t2', 2)]);
+    s.activateNotificationInbox();
+    await vi.waitFor(() => expect(s.notificationInboxItems).toHaveLength(2));
+    const events = [];
+    vi.stubGlobal('window', { history: { pushState: () => events.push('navigate') } });
+    const db = getWorkspaceDb();
+    const originalPut = db.notification_inbox.put.bind(db.notification_inbox);
+    db.notification_inbox.put = async (...args) => { if (args[0]?.pending?.length) events.push('queue-read'); return originalPut(...args); };
+    const rendered = s.notificationInboxItems.find(item => item.id === 't1');
+    // A newer fold lands locally after the user rendered the card: the CAS must still use the rendered version.
+    await db.notification_items.update(`${notificationInboxContext(s).key}|t1`, { row_version: 2, change_seq: 5 });
+    await s.openNotification(rendered);
+    expect(events).toEqual(['navigate', 'queue-read']);
+    expect((await db.notification_inbox.toArray())[0].pending[0]).toMatchObject({ item_id: 't1', expected_row_version: 1, observed_change_seq: 1 });
+    // Failed load: still opens from saved data, but nothing is cleared.
+    s.requestTowerSyncFamily = vi.fn(async () => { throw new Error('offline'); });
+    events.length = 0;
+    await s.openNotification(s.notificationInboxItems.find(item => item.id === 't2'));
+    expect(events).toEqual(['navigate']);
+    expect(s.notificationInboxMessage).toMatch(/stays unread/);
+    expect((await db.notification_inbox.toArray())[0].pending.map(op => op.item_id)).toEqual(['t1']);
+    db.notification_inbox.put = originalPut;
+    vi.unstubAllGlobals(); s.disposeNotificationInbox();
+  });
+
+  it('invalidates the local inbox after a preference change so the list is rebuilt from Tower', async () => {
+    const s = store(); const context = await seed(s, [rawItem('a', 1)]);
+    const db = getWorkspaceDb();
+    s.getTowerSyncService = () => ({ materialize: async (_family, bundle) => applyNotificationInboxOperation(structuredClone(bundle.notification_inbox_operation), db) });
+    s.buildTowerPgMaterializationStoreSnapshot = () => ({});
+    const row = { key: 'flightdeck.core|mention', source_app_id: 'flightdeck.core', category: 'mention', mandatory: false, inboxOn: true };
+    s.notificationPrefsRows = [row];
+    const sent = [];
+    const transport = async (_w, route, options) => { sent.push([route, options.method]); return { identity: { workspace_id: 'workspace-a' }, rules: [] }; };
+    await s.setNotificationInboxRule(row, false, { transport });
+    expect(sent).toEqual([['rules', 'PUT']]);
+    expect(s.notificationPrefsRows[0].inboxOn).toBe(false);
+    expect((await db.notification_inbox.get(context.key)).needs_snapshot).toBe(true);
+    expect(s.requestTowerSyncFamily).toHaveBeenCalledWith('notification-inbox');
+    // A rejected save reloads the server's truth rather than leaving a fabricated state.
+    s.loadNotificationInboxPreferences = vi.fn(async () => {});
+    await s.setNotificationInboxRule(row, true, { transport: async () => { throw Object.assign(new Error('Tower said no'), { status: 403 }); } });
+    expect(s.notificationPrefsError).toBe('Tower said no');
+    expect(s.loadNotificationInboxPreferences).toHaveBeenCalled();
   });
 
   it('shows honest unsupported and not-ready states and refuses writes before the first load', async () => {

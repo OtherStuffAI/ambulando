@@ -106,9 +106,12 @@ function intentSatisfied(patch, row) {
   return Object.entries(patch).every(([key, value]) => Boolean(row[key]) === Boolean(value));
 }
 
-/** Observation-sensitive intents must not be blindly re-applied over newer server activity. */
+/**
+ * Intents that clear unseen activity (read, dismiss and archive all imply read) must never be
+ * re-applied over a newer server row. Only explicit un-do intents are safe to re-apply.
+ */
 function observationSensitive(patch) {
-  return patch.read === true && !patch.dismissed && !patch.archived;
+  return patch.read === true || patch.dismissed === true || patch.archived === true;
 }
 
 export async function applyNotificationInboxOperation(input, db = getWorkspaceDb()) {
@@ -118,20 +121,26 @@ export async function applyNotificationInboxOperation(input, db = getWorkspaceDb
     const upsert = async (rows) => { for (const row of rows) { if (row.removed) await db.notification_items.delete(row.key); else await putIfNewer(db, row); } };
     switch (input.action) {
       case 'snapshot_page': {
-        if (input.first) state.snapshot = { gen: input.gen, seq: input.head_seq, partition: input.partition || 'inbox', started_at: input.inbox_started_at || '' };
+        if (input.first) state.snapshot = { gen: input.gen, seq: input.head_seq, partition: input.partition || 'inbox', started_at: input.inbox_started_at || '', cursor: null, pages: 0 };
         if (state.snapshot?.gen !== input.gen) break;
         await upsert(input.items.map(row => ({ ...row, snapshot_gen: input.gen })));
+        // Continuation survives bounded jobs: the original first-page head and generation are kept.
+        state.snapshot.cursor = input.next_cursor || null;
+        state.snapshot.pages += 1;
+        if (state.snapshot.partition === 'inbox' && !state.ready) state.status = 'loading';
         break;
       }
+      case 'snapshot_abort':
+        if (!input.gen || state.snapshot?.gen === input.gen) state.snapshot = null;
+        break;
       case 'snapshot_finish': {
         if (state.snapshot?.gen !== input.gen) break;
         const { seq, partition } = state.snapshot;
-        // Rows the authoritative list no longer contains and nothing newer touched are gone.
-        if (!input.partial) {
-          const stale = await db.notification_items.where('context').equals(context.key)
-            .filter(row => row.partition === partition && row.snapshot_gen !== input.gen && row.change_seq <= seq).primaryKeys();
-          await db.notification_items.bulkDelete(stale);
-        }
+        // Finish only runs after the last page (next_cursor null). Rows the authoritative list no
+        // longer contains, and nothing newer touched, are gone.
+        const stale = await db.notification_items.where('context').equals(context.key)
+          .filter(row => row.partition === partition && row.snapshot_gen !== input.gen && row.change_seq <= seq).primaryKeys();
+        await db.notification_items.bulkDelete(stale);
         if (partition === 'inbox') {
           state.ready = true;
           // The snapshot's head is the replay origin, even after a server restore moved the head backwards.
@@ -167,6 +176,13 @@ export async function applyNotificationInboxOperation(input, db = getWorkspaceDb
         break;
       case 'needs_snapshot':
         state.needs_snapshot = true;
+        break;
+      case 'request_archived':
+        state.archived_requested = true;
+        break;
+      case 'rehydrate_archived':
+        state.archived_hydrated = false;
+        state.archived_requested = true;
         break;
       case 'status':
         state.status = input.status;
@@ -210,7 +226,7 @@ export async function applyNotificationInboxOperation(input, db = getWorkspaceDb
         if (!server || server.removed || intentSatisfied(entry.patch, server)) state.pending.splice(index, 1);
         else if (observationSensitive(entry.patch) || (entry.conflicts || 0) >= MAX_CONFLICT_RETRIES) {
           state.pending.splice(index, 1);
-          state.notice = 'A notification changed on another device or received newer activity, so it was left unread. Review it, then mark it read.';
+          state.notice = 'A notification changed on another device or received newer activity, so your change was not applied. Review it, then try again.';
         } else {
           // Idempotent intents (dismiss/archive/unread) are re-applied to the server's current row under a new identity.
           state.pending[index] = { ...entry, mutation_id: input.newMutationId, expected_row_version: server.row_version, observed_change_seq: server.change_seq, attempted: false, conflicts: (entry.conflicts || 0) + 1 };
@@ -246,7 +262,7 @@ async function requireReady(db, context) {
   return state;
 }
 
-export async function queueNotificationPatch(db, context, itemId, patch) {
+export async function queueNotificationPatch(db, context, itemId, patch, observed = null) {
   const clean = Object.fromEntries(ITEM_PATCH_KEYS.filter(key => typeof patch?.[key] === 'boolean').map(key => [key, patch[key]]));
   if (!Object.keys(clean).length) throw new Error('Nothing to change.');
   return db.transaction('rw', db.notification_inbox, db.notification_items, async () => {
@@ -258,9 +274,12 @@ export async function queueNotificationPatch(db, context, itemId, patch) {
       // CAS against the version the user actually saw, never a version fetched later: a newer fold must conflict.
       const row = await db.notification_items.get(`${context.key}|${itemId}`);
       const behind = [...state.pending].reverse().find(op => op.kind === 'item' && op.item_id === itemId);
-      const expected = behind ? (behind.expected_row_version ?? 0) + 1 : row?.row_version;
+      // `observed` is what the user actually saw rendered; it wins over whatever a later sync stored.
+      const seenVersion = Number.isSafeInteger(observed?.row_version) ? observed.row_version : row?.row_version;
+      const seenSeq = Number.isSafeInteger(observed?.change_seq) ? observed.change_seq : row?.change_seq;
+      const expected = behind ? (behind.expected_row_version ?? 0) + 1 : seenVersion;
       if (!Number.isSafeInteger(expected)) throw new Error('That notification is no longer available.');
-      state.pending.push({ kind: 'item', mutation_id: crypto.randomUUID(), item_id: itemId, patch: clean, expected_row_version: expected, observed_change_seq: behind ? undefined : row.change_seq, attempted: false, conflicts: 0, created_at: new Date().toISOString() });
+      state.pending.push({ kind: 'item', mutation_id: crypto.randomUUID(), item_id: itemId, patch: clean, expected_row_version: expected, observed_change_seq: behind ? undefined : seenSeq, attempted: false, conflicts: 0, created_at: new Date().toISOString() });
     }
     state.error = '';
     await db.notification_inbox.put(state);

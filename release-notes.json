@@ -5292,6 +5292,14 @@
         "Choose which kinds of activity reach your inbox in Settings. Opening a notification takes you to the item without marking the item itself as viewed.",
         "Older Tower versions without the shared inbox show a clear message instead of failing; Needs You and Web Push are unchanged."
       ]
+    },
+    {
+      "buildNumber": 2654,
+      "label": "Safer notification inbox",
+      "notes": [
+        "Notifications only count as read when you have seen their latest activity: read, dismiss and archive changes made on a stale view are not applied and you are told why.",
+        "Opening a notification loads its destination first and keeps it unread if loading fails; very large inboxes now load completely before they are shown as ready."
+      ]
     }
   ]
 }

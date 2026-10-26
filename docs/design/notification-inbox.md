@@ -23,6 +23,11 @@ this note records how the browser uses it.
 1. Cold start: page `items?view=inbox`, keeping `head_seq` of the first page as
    `S`; then replay `changes?after_seq=S` until `has_more=false`. Rows not
    re-listed and not newer than `S` are deleted (snapshot generation stamp).
+   The snapshot is resumable: generation, `S` and the page cursor are persisted
+   after every page, a pass processes a bounded number of pages, and the next
+   pass continues from the saved cursor. The inbox is `ready` (and anything is
+   deleted) only after `next_cursor=null`; an expired cursor restarts it once
+   with a new origin.
 2. Steady state: hint -> `changes?after_seq=local_seq`. `local_seq` only
    advances to a delivered `through_seq`.
 3. `410 reset_required` -> cold start again; unsent intent is kept.
@@ -42,19 +47,29 @@ overlaid at render time and sent through the sync owner with a fixed
 
 - `expected_row_version` and `observed_change_seq` are captured when the user
   acts, never when the request is sent. A newer fold therefore conflicts.
-- A conflicting `read` is dropped (newer activity stays unread, with a notice);
-  idempotent intents (dismiss, archive, unread) are re-applied once against the
-  server row with a new `mutation_id`; satisfied intents are simply completed.
+- Any intent that clears activity (`read:true`, `dismissed:true`, `archived:true`)
+  that conflicts with a newer server row is dropped with a notice, so unseen
+  activity stays unread. Only un-do intents (mark unread, restore) are
+  re-applied once against the server row with a new `mutation_id`; intents the
+  server already satisfies are simply completed.
+- The version captured is the one the user saw rendered, not one stored by a
+  later sync.
 - "Mark all read" is a bulk `up_to_seq = local_seq`; concurrent newer items stay
   unread.
-- Sent bodies are immutable across uncertain retries; `mutation_id_reused`
-  completes the intent.
+- Sent bodies are immutable across uncertain retries. An identical retry returns
+  the original acknowledgement (200); `409 mutation_id_reused` means a different
+  request used the id, so the intent is rejected with a notice and the state is
+  re-pulled.
 
 ## Semantics that must not be merged
 
 - Notification read/dismiss/archive never writes resource view state.
-- Opening a notification navigates (the normal open flow writes resource view)
-  and marks only the notification read.
+- Opening a notification loads and navigates first, then marks only that
+  notification read using the rendered version. If loading fails the route still
+  opens from saved data but the notification stays unread (the resource-view
+  bridge will derive read when the resource is viewed).
+- A future item schema/version renders as a generic card and is still tracked by
+  id and sequence; it never fails sync.
 - Needs You / attention and Web Push subscriptions are unchanged.
 - No historical import: the inbox starts empty at `inbox_started_at`.
 

@@ -1,7 +1,8 @@
 const { test, expect } = require('playwright/test');
 
-// Renders the shared notification inbox from seeded store state. It needs no
-// Tower: sync, Dexie projection and CAS commands are covered by unit tests.
+// FIXTURE-ONLY render check: the panel is driven from seeded store state, not a live Tower.
+// Sync, Dexie projection and CAS commands are covered by unit tests; a live-Tower smoke
+// follows Tower activation.
 async function blockExternalRequests(page) {
   await page.route('**/*', route => {
     const url = new URL(route.request().url());
@@ -45,7 +46,7 @@ async function seed(page, viewport) {
   ]);
 }
 
-test('notification inbox panel renders, is keyboard operable and fits narrow screens', async ({ page }) => {
+test('fixture: notification inbox panel renders, is keyboard operable and fits narrow screens', async ({ page }) => {
   await seed(page, { width: 1280, height: 800 });
   const button = page.getByTestId('notification-inbox-button');
   await expect(button).toBeVisible();
@@ -82,7 +83,7 @@ test('notification inbox panel renders, is keyboard operable and fits narrow scr
   expect(overflow).toBe(false);
 });
 
-test('empty and unsupported states are explicit, never a blank panel', async ({ page }) => {
+test('fixture: empty and unsupported states are explicit, never a blank panel', async ({ page }) => {
   await seed(page, { width: 1280, height: 800 });
   await page.evaluate(() => {
     const store = window.Alpine.store('chat');

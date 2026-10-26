@@ -108,6 +108,65 @@ describe('snapshot and replay', () => {
     expect(unreadCount(await rows(one), await state(one))).toBe(131);
   });
 
+  it('resumes a larger-than-budget snapshot from its original origin and is ready only after the last page', async () => {
+    const [one] = devices;
+    for (let i = 1; i <= 7; i += 1) server.emit('alice', `n${i}`);
+    const observations = [];
+    // Two-item pages and a one-page budget: the snapshot needs four jobs.
+    const transport = async (_w, route, options) => {
+      if (route === 'items') {
+        const st = await state(one);
+        observations.push({ ready: Boolean(st?.ready), cursor: st?.snapshot?.cursor ?? null, seq: st?.snapshot?.seq ?? null, rows: (await rows(one)).length });
+        if (observations.length === 3) server.emit('alice', 'mid'); // arrives while older pages are still unread
+        return server.handle('alice', route, { ...options, query: { ...options.query, limit: 2 } });
+      }
+      return server.handle('alice', route, options);
+    };
+    await synchronizeNotificationInbox(one.store, { db: one.db, transport, now: () => one.clock, snapshotPageBudget: 1 });
+    expect(observations.length).toBe(4);
+    expect(observations.every(o => o.ready === false)).toBe(true); // never ready mid-snapshot
+    expect(observations[0].cursor).toBeNull();
+    expect(observations.slice(1).every(o => o.cursor !== null)).toBe(true); // continuation persisted between jobs
+    expect(new Set(observations.slice(1).map(o => o.seq))).toEqual(new Set([7])); // original first-page origin kept
+    const final = await state(one);
+    expect(final.ready).toBe(true);
+    expect(final.snapshot).toBeNull();
+    expect(final.local_seq).toBe(8); // replay from origin 7 picked up the mid-snapshot arrival
+    expect((await rows(one)).map(r => r.id).sort()).toEqual(['mid', 'n1', 'n2', 'n3', 'n4', 'n5', 'n6', 'n7']);
+    expect(unreadCount(await rows(one), final)).toBe(8);
+  });
+
+  it('restarts a continuation whose saved cursor the server no longer accepts', async () => {
+    const [one] = devices;
+    for (let i = 1; i <= 5; i += 1) server.emit('alice', `n${i}`);
+    let rejectOnce = true;
+    const transport = async (_w, route, options) => {
+      if (route === 'items' && options.query.cursor && rejectOnce) { rejectOnce = false; throw Object.assign(new Error('bad cursor'), { status: 400, payload: { code: 'invalid_cursor', error: 'invalid cursor' } }); }
+      return server.handle('alice', route, route === 'items' ? { ...options, query: { ...options.query, limit: 2 } } : options);
+    };
+    await synchronizeNotificationInbox(one.store, { db: one.db, transport, now: () => one.clock, snapshotPageBudget: 1 });
+    const final = await state(one);
+    expect(final.ready).toBe(true);
+    expect((await rows(one)).length).toBe(5);
+  });
+
+  it('shows a future item version as a safe generic card instead of failing the sync', async () => {
+    const [one] = devices;
+    server.emit('alice', 'a');
+    const wire = server.wire.bind(server);
+    server.wire = (actor, item) => item.id === 'a' ? { ...wire(actor, item), schema: 'org.wingman.notification.item', version: 2, presentation: { title: 'secret future text' }, action: { type: 'open', target: { kind: 'thread', channel_id: 'c1' } } } : wire(actor, item);
+    server.emit('alice', 'b');
+    await one.sync();
+    const all = await view(one);
+    const future = all.find(r => r.id === 'a');
+    expect(future.unsupported).toBe(true);
+    expect(future.title).toMatch(/update Ambulando/);
+    expect(JSON.stringify(future)).not.toContain('secret future text');
+    expect(notificationTargetRoute(future)).toBeNull();
+    expect(future.change_seq).toBe(1);
+    expect((await state(one)).local_seq).toBe(2);
+  });
+
   it('removes rows the authoritative list no longer holds and applies tombstones and unavailable stubs', async () => {
     const [one] = devices;
     server.emit('alice', 'a'); server.emit('alice', 'b'); server.emit('alice', 'c');
@@ -170,19 +229,50 @@ describe('state commands', () => {
     expect(server.calls.find(c => c.method === 'PATCH').body.expected_row_version).toBe(1);
   });
 
-  it('does not let a stale read acknowledge newer folded activity, and re-applies idempotent intents', async () => {
+  it('never lets read, dismiss or archive clear activity the user did not see; only undo intents are re-applied', async () => {
     const [one, two] = devices;
-    server.emit('alice', 'a'); server.emit('alice', 'b'); await one.sync(); await two.sync();
-    await queueNotificationPatch(one.db, one.context, 'a', { read: true });
-    await queueNotificationPatch(one.db, one.context, 'b', { dismissed: true });
-    server.emit('alice', 'a', { fold: true }); server.emit('alice', 'b', { fold: true }); // both change before device one syncs
+    for (const id of ['r', 'd', 'x', 'u']) server.emit('alice', id);
+    server.emit('alice', 'u', { read: true }); // already read elsewhere, so "mark unread" is an undo intent
+    await one.sync(); await two.sync();
+    const rendered = Object.fromEntries((await rows(one)).map(row => [row.id, row]));
+    await queueNotificationPatch(one.db, one.context, 'r', { read: true }, rendered.r);
+    await queueNotificationPatch(one.db, one.context, 'd', { dismissed: true }, rendered.d);
+    await queueNotificationPatch(one.db, one.context, 'x', { archived: true }, rendered.x);
+    await queueNotificationPatch(one.db, one.context, 'u', { read: false }, rendered.u);
+    for (const id of ['r', 'd', 'x', 'u']) server.emit('alice', id, { fold: true }); // all fold before device one syncs
+    server.actor('alice').items.get('u').read = true; // the folded undo target is read again on the server
     await one.sync();
-    const rest = await view(one);
-    expect(rest.map(r => [r.id, r.read])).toEqual([['a', false]]); // read dropped: newer activity stays unread; dismiss re-applied
+    const items = server.actor('alice').items;
+    expect(items.get('r').read).toBeFalsy();
+    expect(items.get('d').dismissed).toBeFalsy();
+    expect(items.get('x').archived).toBeFalsy();
+    expect(items.get('u').read).toBe(false); // un-do re-applied under a new identity
     expect((await state(one)).pending).toEqual([]);
-    expect((await state(one)).notice).toMatch(/left unread/);
-    expect(server.actor('alice').items.get('b').dismissed).toBe(true);
+    expect((await state(one)).notice).toMatch(/not applied/);
+    expect((await view(one)).filter(r => !r.read).map(r => r.id).sort()).toEqual(['d', 'r', 'u', 'x']);
+  });
+
+  it('uses the version the user saw even when a later sync stored a newer row', async () => {
+    const [one] = devices;
+    server.emit('alice', 'a'); await one.sync();
+    const seen = (await rows(one))[0];
+    server.emit('alice', 'a', { fold: true }); await one.sync(); // newer row now stored locally
+    await queueNotificationPatch(one.db, one.context, 'a', { read: true }, seen);
+    await one.sync();
     expect(server.actor('alice').items.get('a').read).toBeFalsy();
+    expect(server.calls.find(c => c.method === 'PATCH').body).toMatchObject({ expected_row_version: 1, observed_change_seq: 1 });
+  });
+
+  it('rejects a mutation_id reused with a different body instead of treating it as success', async () => {
+    const [one] = devices;
+    server.emit('alice', 'a'); await one.sync();
+    await queueNotificationPatch(one.db, one.context, 'a', { read: true });
+    const pending = (await state(one)).pending[0];
+    // Another request already used this id with a different body.
+    server.handle('alice', 'items/a', { method: 'PATCH', body: { mutation_id: pending.mutation_id, expected_row_version: 1, patch: { archived: true } } });
+    await one.sync();
+    expect((await state(one)).pending).toEqual([]);
+    expect((await state(one)).notice).toMatch(/could not be confirmed/);
   });
 
   it('treats an intent the server already satisfies as complete', async () => {

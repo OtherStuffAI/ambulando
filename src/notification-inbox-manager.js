@@ -179,7 +179,8 @@ export const notificationInboxMixin = {
   async mutateNotification(item, patch, announcement) {
     try {
       const context = notificationInboxContext(this);
-      await queueNotificationPatch(getWorkspaceDb(), context, item.id, patch);
+      // The versions the user saw rendered, not whatever a later sync stored.
+      await queueNotificationPatch(getWorkspaceDb(), context, item.id, patch, { row_version: item.row_version, change_seq: item.change_seq });
       if (announcement) this.notificationInboxAnnouncement = announcement;
       void this.requestTowerSyncFamily?.('notification-inbox').catch(() => {});
       return true;
@@ -203,19 +204,31 @@ export const notificationInboxMixin = {
     } catch (error) { this.notificationInboxMessage = error.message; }
   },
 
-  /** Opening navigates and marks this notification read; it never marks the underlying resource viewed. */
+  /**
+   * Opening navigates first and marks only this notification read afterwards. A failed load never
+   * clears the notification: the route still opens from saved data (the resource-view bridge will
+   * derive read once the resource is viewed), but the item stays unread with an explanation.
+   */
   async openNotification(item) {
     if (!item || this.notificationInboxBusy) return;
     this.notificationInboxBusy = true;
     try {
-      if (!item.read && !item.unavailable) await this.mutateNotification(item, { read: true });
       const route = item.route;
-      if (!route) return; // generic card: nothing to open, stays visible in the inbox
+      if (!route) {
+        // A generic card has nothing to load; the explicit click is the acknowledgement.
+        if (!item.read && !item.unavailable) await this.mutateNotification(item, { read: true });
+        return;
+      }
+      let loaded = true;
+      if (route.ensure) {
+        try { await this.requestTowerSyncFamily?.(route.ensure.family, route.ensure.id, { force: true }); } catch { loaded = false; }
+      }
       const url = buildSectionUrl({ workspaceSlug: this.currentWorkspaceSlug || null, section: route.section, scopeid: route.scopeid || null, params: route.params });
-      if (route.ensure) await this.requestTowerSyncFamily?.(route.ensure.family, route.ensure.id, { force: true }).catch(() => {});
       window.history.pushState({ source: 'notification-inbox' }, '', url);
       await this.applyRouteFromLocation?.();
       this.notificationInboxOpen = false;
+      if (loaded) { if (!item.read) await this.mutateNotification(item, { read: true }); }
+      else this.notificationInboxMessage = 'Opened from saved data because the latest could not be loaded. The notification stays unread.';
     } finally { this.notificationInboxBusy = false; }
   },
 
@@ -233,14 +246,16 @@ export const notificationInboxMixin = {
       this.notificationPrefsError = [404, 405, 501].includes(error.status) ? STATUS_COPY.unsupported : (error.message || 'Could not load notification preferences.');
     } finally { if (notificationInboxContextOrNull(this)?.key === key) this.notificationPrefsLoading = false; }
   },
-  async setNotificationInboxRule(row, on) {
+  async setNotificationInboxRule(row, on, options = {}) {
     const key = notificationInboxContextOrNull(this)?.key;
     this.notificationPrefsError = '';
     try {
-      const result = await saveInboxRule(this, row, on);
+      const result = await saveInboxRule(this, row, on, options);
       if (notificationInboxContextOrNull(this)?.key !== key) return;
       this.notificationPrefsRows = this.notificationPrefsRows.map(item => item.key === row.key ? { ...item, inboxOn: item.mandatory ? true : on, explicit: true } : item);
-      void result;
+      // A rule changes which items the server shows and counts: rebuild the local inbox from the authority.
+      await this.getTowerSyncService()?.materialize('workspace-bundle', { notification_inbox_operation: { action: 'needs_snapshot', context: { key: result.contextKey, workspaceId: notificationInboxContext(this).workspaceId, actorId: notificationInboxContext(this).actorId } } }, { workspaceDbKey: this.workspaceDbKey, store: this.buildTowerPgMaterializationStoreSnapshot() });
+      void this.requestTowerSyncFamily?.('notification-inbox').catch(() => {});
     } catch (error) {
       this.notificationPrefsError = error.message || 'Could not save this preference.';
       await this.loadNotificationInboxPreferences(); // show the server's truth again

@@ -3,7 +3,7 @@ import { getWorkspaceDb } from './db.js';
 import { notificationInboxContext } from './notification-inbox-store.js';
 import { unreadCount } from './notification-inbox-store.js';
 import {
-  NOTIFICATION_CHANGES_PAGE_LIMIT, NOTIFICATION_SNAPSHOT_MAX_PAGES, NOTIFICATION_SNAPSHOT_PAGE_LIMIT,
+  NOTIFICATION_CHANGES_PAGE_LIMIT, NOTIFICATION_SNAPSHOT_PAGES_PER_JOB, NOTIFICATION_SNAPSHOT_PAGE_LIMIT,
   errorCode, isUnsupportedBackend, normalizeChangesPage, normalizeCounts, normalizeItemsPage, normalizeNotificationItem, requestBodyForMutation,
 } from './notification-inbox-wire.js';
 
@@ -17,7 +17,7 @@ const slots = new WeakMap();
  * reconnect, a fallback tick or a local intent all call this, and a request made
  * while a pass is running schedules exactly one more pass.
  */
-export async function synchronizeNotificationInbox(store, { db = getWorkspaceDb(), transport = towerPgNotificationInbox, now = Date.now } = {}) {
+export async function synchronizeNotificationInbox(store, { db = getWorkspaceDb(), transport = towerPgNotificationInbox, now = Date.now, snapshotPageBudget = NOTIFICATION_SNAPSHOT_PAGES_PER_JOB } = {}) {
   const service = store.getTowerSyncService();
   if (!service) return { skipped: 'no-service' };
   let context;
@@ -29,14 +29,14 @@ export async function synchronizeNotificationInbox(store, { db = getWorkspaceDb(
     try {
       do {
         slot.dirty = false;
-        await pass(store, service, context, { db, transport, now });
+        await pass(store, service, context, { db, transport, now, snapshotPageBudget });
       } while (slot.dirty && !service.disposed);
     } finally { slot.running = null; }
   });
   return slot.running;
 }
 
-async function pass(store, service, context, { db, transport, now }) {
+async function pass(store, service, context, { db, transport, now, snapshotPageBudget }) {
   const current = () => !service.disposed && notificationInboxContextSafe(store)?.key === context.key && (store._workspaceSelectionGeneration || 0) === (context.generation || 0);
   const materialize = async input => current() ? service.materialize('workspace-bundle', { notification_inbox_operation: { ...input, context: { key: context.key, workspaceId: context.workspaceId, actorId: context.actorId } } }, { workspaceDbKey: store.workspaceDbKey, store: store.buildTowerPgMaterializationStoreSnapshot() }) : null;
   const request = (route, options = {}) => transport(context.workspaceId, route, { baseUrl: context.baseUrl, appNpub: context.appNpub, signal: service.readAbortController.signal, ...options });
@@ -45,9 +45,17 @@ async function pass(store, service, context, { db, transport, now }) {
   let state = await readState();
   if (state?.status === 'unsupported' && now() < state.retry_after) return;
   try {
-    if (!state?.ready || state.needs_snapshot) await snapshot('inbox');
+    if (!state?.ready || state.needs_snapshot || state.snapshot?.partition === 'inbox') {
+      // Ready only at next_cursor=null; a budget-bounded job resumes in the next pass with the same origin.
+      if (!await snapshot('inbox')) { slots.get(service).dirty = current(); return; }
+    }
     if (!current()) return;
     await catchUp();
+    if (!current()) return;
+    state = await readState();
+    if ((state.archived_requested && !state.archived_hydrated) || state.snapshot?.partition === 'archived') {
+      if (!await snapshot('archived')) { slots.get(service).dirty = current(); return; }
+    }
     if (!current()) return;
     const flushed = await flush();
     if (!current()) return;
@@ -63,20 +71,34 @@ async function pass(store, service, context, { db, transport, now }) {
     throw error;
   }
 
-  async function snapshot(partition) {
-    const gen = crypto.randomUUID();
-    let cursor = null, head = null, pages = 0;
-    do {
-      const page = normalizeItemsPage(await request('items', { query: { view: partition === 'archived' ? 'archived' : 'inbox', limit: NOTIFICATION_SNAPSHOT_PAGE_LIMIT, cursor } }), context);
-      if (!current()) return;
-      // Capture the replay origin from the first page: later pages may be newer, which replay repairs.
-      if (head === null) head = page.head_seq;
-      await materialize({ action: 'snapshot_page', gen, first: pages === 0, head_seq: head, partition, items: page.items, inbox_started_at: page.inbox_started_at });
-      cursor = page.next_cursor;
-      pages += 1;
-    } while (cursor && pages < NOTIFICATION_SNAPSHOT_MAX_PAGES);
-    // An exhausted page budget (partial) leaves older rows untouched rather than guessing they were removed.
-    await materialize({ action: 'snapshot_finish', gen, partial: Boolean(cursor) });
+  /** Returns true once the whole partition is applied; false when the page budget ended first. */
+  async function snapshot(partition, { restart = false } = {}) {
+    let attempts = 0;
+    for (;;) {
+      state = await readState();
+      let snap = !restart && attempts === 0 && state?.snapshot?.partition === partition ? state.snapshot : null;
+      if (!snap && state?.snapshot) await materialize({ action: 'snapshot_abort' });
+      const gen = snap?.gen || crypto.randomUUID();
+      let cursor = snap?.cursor || null, head = snap?.seq ?? null, started = snap?.started_at || '', pages = 0;
+      try {
+        do {
+          const page = normalizeItemsPage(await request('items', { query: { view: partition === 'archived' ? 'archived' : 'inbox', limit: NOTIFICATION_SNAPSHOT_PAGE_LIMIT, cursor } }), context);
+          if (!current()) return false;
+          // The first page's head is the replay origin for the whole snapshot, across jobs.
+          if (head === null) { head = page.head_seq; started = page.inbox_started_at; }
+          await materialize({ action: 'snapshot_page', gen, first: !snap && pages === 0, head_seq: head, partition, items: page.items, inbox_started_at: started, next_cursor: page.next_cursor });
+          cursor = page.next_cursor;
+          pages += 1;
+        } while (cursor && pages < snapshotPageBudget);
+      } catch (error) {
+        // A cursor we persisted has expired or no longer matches: start over once with a new origin.
+        if (snap && attempts === 0 && (error.status === 400 || errorCode(error) === 'invalid_cursor')) { attempts += 1; snap = null; await materialize({ action: 'snapshot_abort', gen }); restart = true; continue; }
+        throw error;
+      }
+      if (cursor) return false; // older pages remain: never mark ready or delete anything yet
+      await materialize({ action: 'snapshot_finish', gen });
+      return true;
+    }
   }
 
   async function catchUp() {
@@ -90,8 +112,9 @@ async function pass(store, service, context, { db, transport, now }) {
         // Cursor older than the retained tombstones (or ahead of a restored head): rebuild, keep local intent.
         if ((error.status === 410 || errorCode(error) === 'reset_required') && !resetOnce) {
           resetOnce = true;
-          await snapshot('inbox');
-          if (state.archived_hydrated) await snapshot('archived');
+          // Rebuild from a fresh origin; unsent intent is kept, archived rows re-hydrate in the next pass.
+          if (!await snapshot('inbox', { restart: true })) { slots.get(service).dirty = current(); return; }
+          if (state.archived_hydrated) await materialize({ action: 'rehydrate_archived' });
           continue;
         }
         throw error;
@@ -121,7 +144,10 @@ async function pass(store, service, context, { db, transport, now }) {
       } catch (error) {
         if (!current()) return sent;
         const code = errorCode(error);
-        if (error.status === 409 && code === 'mutation_id_reused') { await materialize({ action: 'ack', mutationId: ready.mutation_id, row: null }); sent = true; continue; }
+        // An identical retry returns 200 with the original acknowledgement. A 409 reuse means the server saw a
+        // different request under this id: that is a rejection, never a silent success. Drop the overlay, say so,
+        // and let the follow-up `changes` pull show the current state.
+        if (error.status === 409 && code === 'mutation_id_reused') { await materialize({ action: 'reject', mutationId: ready.mutation_id, notice: 'A notification change could not be confirmed and was discarded. The latest state has been reloaded.' }); sent = true; continue; }
         if (error.status === 409 && ready.kind === 'item') {
           let row = null;
           try { row = error.payload?.item ? normalizeNotificationItem(error.payload.item, context) : null; } catch { row = null; }
@@ -156,23 +182,11 @@ function notificationInboxContextSafe(store) {
   try { return notificationInboxContext(store); } catch { return null; }
 }
 
-/** Load a non-default partition on demand (archived items are never hydrated implicitly). */
+/** Ask the sync owner to hydrate archived items; they then follow `changes` like inbox items. */
 export async function hydrateArchivedNotifications(store, options = {}) {
   const service = store.getTowerSyncService();
   if (!service) return;
   const context = notificationInboxContext(store);
-  const { db = getWorkspaceDb(), transport = towerPgNotificationInbox } = options;
-  return service.coalesce(`notification-inbox-archived:${context.key}`, async () => {
-    const gen = crypto.randomUUID();
-    let cursor = null, head = null, pages = 0;
-    do {
-      const page = normalizeItemsPage(await transport(context.workspaceId, 'items', { baseUrl: context.baseUrl, appNpub: context.appNpub, signal: service.readAbortController.signal, query: { view: 'archived', limit: NOTIFICATION_SNAPSHOT_PAGE_LIMIT, cursor } }), context);
-      if (head === null) head = page.head_seq;
-      await service.materialize('workspace-bundle', { notification_inbox_operation: { action: 'snapshot_page', gen, first: pages === 0, head_seq: head, partition: 'archived', items: page.items, context: { key: context.key, workspaceId: context.workspaceId, actorId: context.actorId } } }, { workspaceDbKey: store.workspaceDbKey, store: store.buildTowerPgMaterializationStoreSnapshot() });
-      cursor = page.next_cursor;
-      pages += 1;
-    } while (cursor && pages < NOTIFICATION_SNAPSHOT_MAX_PAGES);
-    if (!cursor) await service.materialize('workspace-bundle', { notification_inbox_operation: { action: 'snapshot_finish', gen, context: { key: context.key, workspaceId: context.workspaceId, actorId: context.actorId } } }, { workspaceDbKey: store.workspaceDbKey, store: store.buildTowerPgMaterializationStoreSnapshot() });
-    return db.notification_inbox.get(context.key);
-  });
+  await service.materialize('workspace-bundle', { notification_inbox_operation: { action: 'request_archived', context: { key: context.key, workspaceId: context.workspaceId, actorId: context.actorId } } }, { workspaceDbKey: store.workspaceDbKey, store: store.buildTowerPgMaterializationStoreSnapshot() });
+  await synchronizeNotificationInbox(store, options);
 }
