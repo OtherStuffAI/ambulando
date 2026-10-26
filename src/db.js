@@ -385,6 +385,10 @@ function* workspaceDbRegistration(workspaceDbKey, db = new Dexie(`wingman-fd-ws-
   yield;
   db.version(44).stores({}).upgrade(tx => tx.table('canvas_snapshots').toCollection().modify(row => { delete row.comments; }));
   yield;
+  // Local-first pasted text attachments: the exact bytes and upload state stay
+  // here until the message that carries them is accepted locally.
+  db.version(45).stores({ text_attachment_drafts: '&draft_id, composer_draft_key, workspace_id' });
+  yield;
   db.version(37).stores({ hosting_billing: '&key' });
   yield;
   db.version(36).stores({ scope_orders: '&record_id, workspace_id', pg_archived_targets: '&key, family, id' });
@@ -1067,6 +1071,24 @@ export async function upsertDocumentDraft(draft = {}) {
   if (!db) return row;
   await queueDocumentDraftWrite(db, draftKey, () => db.document_drafts.put(row));
   return row;
+}
+
+export async function putTextAttachmentDraft(row) {
+  if (!row?.draft_id) return null;
+  await wsDb().text_attachment_drafts.put({ ...row, updated_at: new Date().toISOString() });
+  return row.draft_id;
+}
+
+export async function listTextAttachmentDrafts(composerDraftKey) {
+  const key = String(composerDraftKey || '').trim();
+  if (!key) return [];
+  return wsDb().text_attachment_drafts.where('composer_draft_key').equals(key).sortBy('created_at');
+}
+
+export async function deleteTextAttachmentDrafts(draftIds = []) {
+  const ids = (Array.isArray(draftIds) ? draftIds : []).map((id) => String(id || '')).filter(Boolean);
+  if (ids.length) await wsDb().text_attachment_drafts.bulkDelete(ids);
+  return ids.length;
 }
 
 export async function deleteDocumentDraft(workspaceId, documentId) {

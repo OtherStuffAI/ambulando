@@ -572,6 +572,7 @@ export const chatMessageManagerMixin = {
       this.threadAudioDrafts = [...(draft?.audioDrafts || [])];
     }
     this.scheduleComposerAutosize?.(context);
+    void this.restoreTextAttachmentDrafts?.(context);
   },
 
   clearCurrentChatComposerDraft(context = 'message') {
@@ -2635,7 +2636,7 @@ export const chatMessageManagerMixin = {
       };
       if (isThreadCreate) this.threadAudioDrafts = [];
       else this.messageAudioDrafts = [];
-      if (typeof this.clearChatFileDrafts === 'function') this.clearChatFileDrafts(composer);
+      if (typeof this.clearChatFileDrafts === 'function') this.clearChatFileDrafts(composer, { discardPersisted: true });
       else if (isThreadCreate) this.threadFileDrafts = [];
       else this.messageFileDrafts = [];
       this.scheduleComposerAutosize(composer, { resetManualSize: true });
@@ -2902,7 +2903,7 @@ export const chatMessageManagerMixin = {
         thread: [],
       };
       this.threadAudioDrafts = [];
-      if (typeof this.clearChatFileDrafts === 'function') this.clearChatFileDrafts('thread');
+      if (typeof this.clearChatFileDrafts === 'function') this.clearChatFileDrafts('thread', { discardPersisted: true });
       else this.threadFileDrafts = [];
       this.scheduleComposerAutosize('thread', { resetManualSize: true });
       this.clearCurrentChatComposerDraft('thread');

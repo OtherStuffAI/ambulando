@@ -1,4 +1,5 @@
 import { convertPasteToTextAttachment, guardInlineTyping, undoTextPasteConversion, updateComposerCounter } from './text-attachment-composer.js';
+import { discardPersistedTextDrafts, persistTextDraft, restorePersistedTextDrafts } from './text-attachment-drafts.js';
 import { textAttachmentMarker } from './text-attachments.js';
 import { canvasQuery, canvasChatSuggestions, createCanvasReferencePill, CanvasReferenceCatalog } from './canvas/chat-references.js';
 import { hydrateCanvasList } from './canvas/sync-service.js';
@@ -10005,7 +10006,9 @@ export function initApp() {
         composer_draft_key: this.getChatComposerDraftKey(context),
         ...(options.textAttachment ? { text_attachment: textAttachmentMarker(options.textAttachment) } : {}),
       };
+      draft.created_at = new Date().toISOString();
       this.setChatFileDrafts(context, [...this.getChatFileDrafts(context), draft]);
+      void persistTextDraft(this, context, draft);
       this.uploadChatFileDraft(draft.draft_id, context);
       return draft;
     },
@@ -10032,6 +10035,7 @@ export function initApp() {
       };
       const patchDraft = (patch) => {
         Object.assign(draft, patch);
+        if (draft.text_attachment) void persistTextDraft(this, context, draft);
         this.setChatFileDrafts(context, this.getChatFileDrafts(context).map(item => item.draft_id === draftId ? { ...item, ...patch } : item));
         const key = draft.composer_draft_key;
         const saved = this.chatComposerDrafts?.[key];
@@ -10126,6 +10130,7 @@ export function initApp() {
       this._chatUploadControllers?.get(draftId)?.abort();
       const draft = this.getChatFileDrafts(context).find((item) => item.draft_id === draftId);
       this.resolveChatFileDraftInlineToken(draftId, context, '');
+      void discardPersistedTextDrafts([draft]);
       this.revokeChatFileDraftPreview(draft);
       if (this.chatImagePreviewModal.open && this.chatImagePreviewModal.src === draft?.preview_url) {
         this.closeChatImagePreview();
@@ -10138,7 +10143,15 @@ export function initApp() {
       if (previewUrl && typeof globalThis.URL?.revokeObjectURL === 'function') globalThis.URL.revokeObjectURL(previewUrl);
     },
 
-    clearChatFileDrafts(context = 'message') {
+    async restoreTextAttachmentDrafts(context = 'message') {
+      const restored = await restorePersistedTextDrafts(this, context);
+      for (const draft of restored) {
+        if (draft.status === 'error' && globalThis.navigator?.onLine !== false) this.uploadChatFileDraft(draft.draft_id, context);
+      }
+    },
+
+    clearChatFileDrafts(context = 'message', { discardPersisted = false } = {}) {
+      if (discardPersisted) void discardPersistedTextDrafts(this.getChatFileDrafts(context));
       for (const draft of this.getChatFileDrafts(context)) this.revokeChatFileDraftPreview(draft);
       this.setChatFileDrafts(context, []);
       if (this.chatImagePreviewModal.open) this.closeChatImagePreview({ restoreFocus: false });
