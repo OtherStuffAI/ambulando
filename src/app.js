@@ -1,3 +1,5 @@
+import { convertPasteToTextAttachment, guardInlineTyping, undoTextPasteConversion, updateComposerCounter } from './text-attachment-composer.js';
+import { textAttachmentMarker } from './text-attachments.js';
 import { canvasQuery, canvasChatSuggestions, createCanvasReferencePill, CanvasReferenceCatalog } from './canvas/chat-references.js';
 import { hydrateCanvasList } from './canvas/sync-service.js';
 import { canvasContext, canvasPartition } from './canvas/projection.js';
@@ -1536,6 +1538,8 @@ export function initApp() {
     // ui
     messageInput: '',
     composerDraftHasText: { message: false, thread: false },
+    composerCounter: { message: null, thread: null },
+    textPasteUndo: { message: null, thread: null },
     chatComposerDrafts: {},
     messageAudioDrafts: [],
     messageFileDrafts: [],
@@ -9042,6 +9046,8 @@ export function initApp() {
 
     handleComposerKeydown(event, sendAction) {
       if (event.isComposing) return;
+      const composerName = String(event.currentTarget?.dataset?.chatComposer || '');
+      if (undoTextPasteConversion(this, event, composerName)) return;
       this.handleMentionKeydown(event);
       if (!event.defaultPrevented && ['Backspace', 'Delete'].includes(event.key)
         && (event.currentTarget?.isContentEditable || event.currentTarget?.getAttribute?.('contenteditable') === 'true')
@@ -9161,6 +9167,7 @@ export function initApp() {
       if (['message', 'thread'].includes(composer)) {
         const hasText = Boolean(value.trim());
         if (this.composerDraftHasText[composer] !== hasText) this.composerDraftHasText[composer] = hasText;
+        updateComposerCounter(this, composer, value);
         let elements = MENTION_COMPOSER_ELEMENTS.get(this);
         if (!elements) {
           elements = new Map();
@@ -9194,6 +9201,10 @@ export function initApp() {
         canShrink: previousValue != null && value !== previousValue && value.length <= previousValue.length,
       });
       return value;
+    },
+
+    handleComposerBeforeInput(event) {
+      guardInlineTyping(event, String(event.currentTarget?.dataset?.chatComposer || ''));
     },
 
     syncMentionComposerDraft(el) {
@@ -9245,6 +9256,7 @@ export function initApp() {
         else await this.handleChatPaste(event, composer);
         return;
       }
+      if (convertPasteToTextAttachment(this, event, composer)) return;
       event.preventDefault();
       insertPlainTextAtSelection(event.currentTarget, event.clipboardData?.getData('text/plain') || '');
       this.syncMentionComposerModel(event.currentTarget);
@@ -9991,6 +10003,7 @@ export function initApp() {
         error: '',
         inline_upload_token: String(options.inlineUploadToken || ''),
         composer_draft_key: this.getChatComposerDraftKey(context),
+        ...(options.textAttachment ? { text_attachment: textAttachmentMarker(options.textAttachment) } : {}),
       };
       this.setChatFileDrafts(context, [...this.getChatFileDrafts(context), draft]);
       this.uploadChatFileDraft(draft.draft_id, context);
@@ -10088,7 +10101,7 @@ export function initApp() {
           }, uploadContext.options);
         }
         controller.signal.throwIfAborted();
-        patchDraft({ storage_object_id: prepared.object_id, status: 'ready', error: '', upload_inflight: false });
+        patchDraft({ storage_object_id: prepared.object_id, sha256_hex: sha256Hex, status: 'ready', error: '', upload_inflight: false });
         this.resolveChatFileDraftInlineToken(draftId, context, this.createStorageMarkdown(
           prepared.object_id,
           draft.filename,

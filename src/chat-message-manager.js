@@ -1,3 +1,4 @@
+import { inlineCounterState } from './text-attachments.js';
 import { withCanvasChatOrigin } from './canvas/chat-references.js';
 import { cleanSharedText, isNoteToSelf } from './note-to-self.js';
 import { readLiveChatDraft, rebindChatComposer } from './chat-composer-draft.js';
@@ -2517,6 +2518,10 @@ export const chatMessageManagerMixin = {
       this.error = 'Wait for attachments to finish uploading or remove failed attachments.';
       return;
     }
+    if (!hasBodyOverride && inlineCounterState(input).over) {
+      this.error = 'Message is over the 10,000 character limit. Shorten it or paste long text as an attachment.';
+      return false;
+    }
     if (!hasBodyOverride && (imageUploadCount > 0 || this.containsInlineImageUploadToken(input))) {
       this.error = 'Wait for image upload to finish.';
       return;
@@ -2753,6 +2758,10 @@ export const chatMessageManagerMixin = {
     if (fileDrafts.some((draft) => draft.status !== 'ready')) {
       this.error = 'Wait for attachments to finish uploading or remove failed attachments.';
       return;
+    }
+    if (!hasBodyOverride && inlineCounterState(this.threadInput).over) {
+      this.error = 'Message is over the 10,000 character limit. Shorten it or paste long text as an attachment.';
+      return false;
     }
     if (!hasBodyOverride && (this.threadImageUploadCount > 0 || this.containsInlineImageUploadToken(this.threadInput))) {
       this.error = 'Wait for image upload to finish.';

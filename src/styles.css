@@ -25603,3 +25603,11 @@ button.task-desc-toggle:focus-visible {
 .deck-inbox-title > span { overflow-wrap: anywhere; }
 .deck-inbox-title .thread-pin-button { flex-shrink: 0; min-width: 44px; min-height: 44px; }
 @media (min-width: 769px) { .deck-inbox-title .thread-pin-button { min-width: 36px; min-height: 36px; } }
+
+.composer-limit-counter {
+  font-size: 12px;
+  text-align: right;
+  color: var(--muted, #8a94a6);
+  padding: 2px 8px 0;
+}
+.composer-limit-counter.composer-limit-over { color: #e5484d; font-weight: 600; }
