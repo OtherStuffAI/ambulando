@@ -64,6 +64,8 @@ import { storageImageManagerMixin } from './storage-image-manager.js';
 import { jobsManagerMixin } from './jobs-manager.js';
 import { workspaceManagerMixin, guessDefaultBackendUrl } from './workspace-manager.js';
 import { chatMessageManagerMixin } from './chat-message-manager.js';
+import { textAttachmentViewerMixin } from './text-attachment-viewer.js';
+import { firstLinePreview } from './text-attachments.js';
 import { readAloudManagerMixin } from './read-aloud.js';
 import { reactionsManagerMixin } from './reactions-manager.js';
 import { syncManagerMixin } from './sync-manager.js';
@@ -10004,7 +10006,7 @@ export function initApp() {
         error: '',
         inline_upload_token: String(options.inlineUploadToken || ''),
         composer_draft_key: this.getChatComposerDraftKey(context),
-        ...(options.textAttachment ? { text_attachment: textAttachmentMarker(options.textAttachment) } : {}),
+        ...(options.textAttachment ? { text_attachment: textAttachmentMarker(options.textAttachment), preview_line: firstLinePreview(options.textAttachment.text) } : {}),
       };
       draft.created_at = new Date().toISOString();
       this.setChatFileDrafts(context, [...this.getChatFileDrafts(context), draft]);
@@ -10549,6 +10551,7 @@ export function initApp() {
     taskDetailManagerMixin,
     workspaceManagerMixin,
     chatMessageManagerMixin,
+    textAttachmentViewerMixin,
     readAloudManagerMixin,
     reactionsManagerMixin,
     syncManagerMixin,

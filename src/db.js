@@ -389,6 +389,10 @@ function* workspaceDbRegistration(workspaceDbKey, db = new Dexie(`wingman-fd-ws-
   // here until the message that carries them is accepted locally.
   db.version(45).stores({ text_attachment_drafts: '&draft_id, composer_draft_key, workspace_id' });
   yield;
+  // Offline read cache for sent text attachments, keyed by immutable object or
+  // file-version id so a cached entry can never go stale.
+  db.version(46).stores({ text_attachment_cache: '&key, workspace_id' });
+  yield;
   db.version(37).stores({ hosting_billing: '&key' });
   yield;
   db.version(36).stores({ scope_orders: '&record_id, workspace_id', pg_archived_targets: '&key, family, id' });
@@ -1077,6 +1081,16 @@ export async function putTextAttachmentDraft(row) {
   if (!row?.draft_id) return null;
   await wsDb().text_attachment_drafts.put({ ...row, updated_at: new Date().toISOString() });
   return row.draft_id;
+}
+
+export async function getTextAttachmentCache(key) {
+  return wsDb().text_attachment_cache.get(String(key || ''));
+}
+
+export async function putTextAttachmentCache(row) {
+  if (!row?.key) return null;
+  await wsDb().text_attachment_cache.put({ ...row, cached_at: new Date().toISOString() });
+  return row.key;
 }
 
 export async function listTextAttachmentDrafts(composerDraftKey) {

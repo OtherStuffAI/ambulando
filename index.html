@@ -187,6 +187,52 @@
     </section>
   </div>
   <div
+    class="text-attachment-backdrop"
+    x-show="$store.chat.textAttachmentModal.open"
+    x-cloak
+    @keydown.escape.window="$store.chat.textAttachmentModal.open && ($store.chat.textAttachmentModal.editing ? $store.chat.cancelTextAttachmentEdit() : $store.chat.closeTextAttachmentModal())"
+  >
+    <section class="text-attachment-modal" role="dialog" aria-modal="true" x-sol-dialog aria-label="Text attachment">
+      <header class="text-attachment-header">
+        <input type="text" class="text-attachment-name" aria-label="File name" maxlength="120" x-model="$store.chat.textAttachmentModal.filename" :readonly="!$store.chat.textAttachmentModal.editing" :class="{ 'is-readonly': !$store.chat.textAttachmentModal.editing }">
+        <select class="text-attachment-versions" aria-label="Version" x-show="$store.chat.textAttachmentModal.versions.length > 1" :value="$store.chat.textAttachmentModal.viewing" @change="$store.chat.viewTextAttachmentVersion($event.target.value)">
+          <template x-for="entry in $store.chat.textAttachmentModal.versions" :key="entry.id"><option :value="entry.id" x-text="entry.label"></option></template>
+        </select>
+      </header>
+      <p role="status" x-show="$store.chat.textAttachmentModal.status === 'loading'">Loading…</p>
+      <p role="alert" class="error-text" x-show="$store.chat.textAttachmentModal.error" x-text="$store.chat.textAttachmentModal.error"></p>
+      <div class="text-attachment-conflict" x-show="$store.chat.textAttachmentModal.conflict" x-cloak>
+        <p x-text="'Latest saved: ' + ($store.chat.textAttachmentModal.conflict?.theirsStats?.lines || 0).toLocaleString() + ' lines · Yours: ' + ($store.chat.textAttachmentModal.conflict?.mineStats?.lines || 0).toLocaleString() + ' lines'"></p>
+        <div class="text-attachment-actions">
+          <button type="button" class="btn-secondary" @click="$store.chat.resolveTextAttachmentConflict('copy-mine')">Copy my text</button>
+          <button type="button" class="btn-secondary" @click="$store.chat.resolveTextAttachmentConflict('use-theirs')">Use latest, discard mine</button>
+          <button type="button" class="btn-confirm" @click="$store.chat.resolveTextAttachmentConflict('keep-mine')">Save mine on top</button>
+        </div>
+      </div>
+      <textarea class="text-attachment-body" spellcheck="false" wrap="off" aria-label="Text content"
+        x-show="$store.chat.textAttachmentModal.status === 'ready'"
+        :readonly="!$store.chat.textAttachmentModal.editing"
+        x-model="$store.chat.textAttachmentModal.pageValue"
+        @input="$store.chat.textModalMarkDirty()"></textarea>
+      <nav class="text-attachment-pager" x-show="$store.chat.textAttachmentModal.pages.length > 1" aria-label="Pages">
+        <button type="button" class="btn-secondary" :disabled="$store.chat.textAttachmentModal.pageIndex === 0" @click="$store.chat.textModalGoToPage($store.chat.textAttachmentModal.pageIndex - 1)">Previous</button>
+        <span x-text="'Page ' + ($store.chat.textAttachmentModal.pageIndex + 1).toLocaleString() + ' of ' + $store.chat.textAttachmentModal.pages.length.toLocaleString()"></span>
+        <button type="button" class="btn-secondary" :disabled="$store.chat.textAttachmentModal.pageIndex >= $store.chat.textAttachmentModal.pages.length - 1" @click="$store.chat.textModalGoToPage($store.chat.textAttachmentModal.pageIndex + 1)">Next</button>
+      </nav>
+      <footer class="text-attachment-footer">
+        <span class="text-attachment-status" role="status" x-text="$store.chat.textModalFooter()"></span>
+        <div class="text-attachment-actions">
+          <button type="button" class="btn-secondary" x-show="$store.chat.textAttachmentModal.status === 'ready'" @click="$store.chat.copyTextAttachmentModal()">Copy</button>
+          <button type="button" class="btn-secondary" x-show="$store.chat.textAttachmentModal.status === 'ready'" @click="$store.chat.downloadTextAttachmentModal()">Download</button>
+          <button type="button" class="btn-secondary" x-show="$store.chat.textAttachmentModal.mode === 'sent' && !$store.chat.textAttachmentModal.editing && $store.chat.textAttachmentModal.canEdit && !$store.chat.textAttachmentModal.readOnlyReason && $store.chat.textAttachmentModal.status === 'ready' && $store.chat.textAttachmentIsLatest()" @click="$store.chat.startTextAttachmentEdit()">Edit</button>
+          <button type="button" class="btn-secondary" x-show="$store.chat.textAttachmentModal.editing" @click="$store.chat.cancelTextAttachmentEdit()">Cancel</button>
+          <button type="button" class="btn-confirm" x-show="$store.chat.textAttachmentModal.editing && !$store.chat.textAttachmentModal.conflict" :disabled="$store.chat.textAttachmentModal.saving" @click="$store.chat.textAttachmentModal.mode === 'draft' ? $store.chat.saveTextAttachmentDraft() : $store.chat.saveSentTextAttachment()">Save</button>
+          <button type="button" class="btn-secondary" x-show="!$store.chat.textAttachmentModal.editing" @click="$store.chat.closeTextAttachmentModal()">Close</button>
+        </div>
+      </footer>
+    </section>
+  </div>
+  <div
     class="sync-progress-modal-overlay"
     x-show="$store.chat.showSyncProgressModal"
     x-cloak
@@ -4331,7 +4377,7 @@
 
                       <div class="chat-file-attachment-list" x-show="$store.chat.standaloneChatFileAttachments(msg).length > 0">
                         <template x-for="attachment in $store.chat.standaloneChatFileAttachments(msg)" :key="attachment.storage_object_id">
-                          <div class="chat-file-attachment"><div x-stable-html="$store.chat.renderMarkdown($store.chat.chatAttachmentMarkdown(attachment))"></div><span x-text="[attachment.content_type, $store.chat.formatAttachmentSize(attachment.size_bytes)].filter(Boolean).join(' · ')"></span></div>
+                          <div class="chat-file-attachment"><div x-stable-html="$store.chat.renderMarkdown($store.chat.chatAttachmentMarkdown(attachment))"></div><span x-text="[attachment.content_type, $store.chat.formatAttachmentSize(attachment.size_bytes)].filter(Boolean).join(' · ')"></span><button type="button" class="chat-text-attachment-open" x-show="$store.chat.isTextAttachment(attachment)" @click.stop="$store.chat.openSentTextAttachment(msg, attachment)">Open</button></div>
                         </template>
                       </div>
                     </div>
@@ -4603,7 +4649,7 @@
                       </div>
                       <div class="chat-file-attachment-list" x-show="$store.chat.standaloneChatFileAttachments($store.chat.getThreadParentMessage()).length > 0">
                         <template x-for="attachment in $store.chat.standaloneChatFileAttachments($store.chat.getThreadParentMessage())" :key="attachment.storage_object_id">
-                          <div class="chat-file-attachment"><div x-stable-html="$store.chat.renderMarkdown($store.chat.chatAttachmentMarkdown(attachment))"></div><span x-text="[attachment.content_type, $store.chat.formatAttachmentSize(attachment.size_bytes)].filter(Boolean).join(' · ')"></span></div>
+                          <div class="chat-file-attachment"><div x-stable-html="$store.chat.renderMarkdown($store.chat.chatAttachmentMarkdown(attachment))"></div><span x-text="[attachment.content_type, $store.chat.formatAttachmentSize(attachment.size_bytes)].filter(Boolean).join(' · ')"></span><button type="button" class="chat-text-attachment-open" x-show="$store.chat.isTextAttachment(attachment)" @click.stop="$store.chat.openSentTextAttachment($store.chat.getThreadParentMessage(), attachment)">Open</button></div>
                         </template>
                       </div>
                       <div class="audio-attachment-list" x-show="($store.chat.getThreadParentMessage()?.attachments || []).length > 0">
@@ -4711,7 +4757,7 @@
                       </div>
                       <div class="chat-file-attachment-list" x-show="$store.chat.standaloneChatFileAttachments(reply).length > 0">
                         <template x-for="attachment in $store.chat.standaloneChatFileAttachments(reply)" :key="attachment.storage_object_id">
-                          <div class="chat-file-attachment"><div x-stable-html="$store.chat.renderMarkdown($store.chat.chatAttachmentMarkdown(attachment))"></div><span x-text="[attachment.content_type, $store.chat.formatAttachmentSize(attachment.size_bytes)].filter(Boolean).join(' · ')"></span></div>
+                          <div class="chat-file-attachment"><div x-stable-html="$store.chat.renderMarkdown($store.chat.chatAttachmentMarkdown(attachment))"></div><span x-text="[attachment.content_type, $store.chat.formatAttachmentSize(attachment.size_bytes)].filter(Boolean).join(' · ')"></span><button type="button" class="chat-text-attachment-open" x-show="$store.chat.isTextAttachment(attachment)" @click.stop="$store.chat.openSentTextAttachment(reply, attachment)">Open</button></div>
                         </template>
                       </div>
                       <div class="audio-attachment-list" x-show="$store.chat.getAudioAttachmentsForRecord(reply).length > 0">
@@ -4884,7 +4930,8 @@
               <div class="chat-file-draft-list" x-show="$store.chat.threadFileDrafts.some(d => d.kind !== 'image')" x-cloak>
                 <template x-for="draft in $store.chat.threadFileDrafts.filter(d => d.kind !== 'image')" :key="draft.draft_id">
                   <div class="chat-file-draft" :class="{ 'chat-file-draft-error': draft.status === 'error' }">
-                    <div class="chat-file-draft-copy"><strong x-text="draft.filename"></strong><span x-text="$store.chat.formatAttachmentSize(draft.size_bytes) + ' · ' + (draft.status === 'uploading' ? 'Uploading…' : draft.status === 'error' ? draft.error : 'Ready to send')"></span></div>
+                    <div class="chat-file-draft-copy"><strong x-text="draft.filename"></strong><span x-text="$store.chat.formatAttachmentSize(draft.size_bytes) + ' · ' + (draft.status === 'uploading' ? 'Uploading…' : draft.status === 'error' ? draft.error : 'Ready to send')"></span><span class="chat-file-draft-preview" x-show="draft.text_attachment && draft.preview_line" x-text="draft.preview_line"></span></div>
+                    <button type="button" x-show="draft.text_attachment" @click="$store.chat.openTextAttachmentDraft(draft.draft_id, 'thread')">Open</button>
                     <button type="button" x-show="draft.status === 'error'" @click="$store.chat.uploadChatFileDraft(draft.draft_id, 'thread')">Retry</button>
                     <button type="button" aria-label="Remove attachment" @click="$store.chat.removeChatFileDraft(draft.draft_id, 'thread')">&times;</button>
                   </div>

@@ -25611,3 +25611,21 @@ button.task-desc-toggle:focus-visible {
   padding: 2px 8px 0;
 }
 .composer-limit-counter.composer-limit-over { color: #e5484d; font-weight: 600; }
+
+.chat-file-draft-preview { display:block; max-width:22rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:0.78rem; color:var(--muted-foreground); }
+.chat-text-attachment-open { margin-left:0.5rem; }
+.text-attachment-backdrop { position:fixed; inset:0; z-index:1310; display:grid; place-items:center; padding:1rem; background:color-mix(in srgb, var(--primary) 82%, transparent); }
+.text-attachment-modal { display:flex; flex-direction:column; gap:0.6rem; width:min(56rem, 94vw); height:min(46rem, 90vh); padding:1rem; border-radius:var(--radius-panel); background:var(--surface); }
+.text-attachment-header { display:flex; gap:0.5rem; align-items:center; }
+.text-attachment-name { flex:1; min-width:0; font-weight:600; }
+.text-attachment-name.is-readonly { border-color:transparent; background:transparent; }
+.text-attachment-body { flex:1; min-height:0; width:100%; resize:none; font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:0.85rem; line-height:1.45; white-space:pre; overflow:auto; tab-size:4; }
+.text-attachment-footer { display:flex; flex-wrap:wrap; gap:0.5rem; align-items:center; justify-content:space-between; }
+.text-attachment-actions { display:flex; flex-wrap:wrap; gap:0.4rem; }
+.text-attachment-pager { display:flex; gap:0.75rem; align-items:center; justify-content:center; font-size:0.85rem; }
+.text-attachment-status { color:var(--muted-foreground); font-size:0.82rem; }
+.text-attachment-conflict { padding:0.5rem; border:1px solid var(--border); border-radius:var(--radius-control, 8px); }
+@media (max-width: 640px) {
+  .text-attachment-backdrop { padding:0; }
+  .text-attachment-modal { width:100vw; height:100dvh; border-radius:0; }
+}

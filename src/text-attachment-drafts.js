@@ -2,6 +2,7 @@
 // exact bytes and upload state so refresh, relaunch or a destination change
 // cannot lose them; they are deleted only on explicit removal or acceptance of
 // the local message that carries them.
+import { firstLinePreview } from './text-attachments.js';
 import { deleteTextAttachmentDrafts, listTextAttachmentDrafts, putTextAttachmentDraft } from './db.js';
 
 function workspaceIdOf(store) {
@@ -71,6 +72,7 @@ export async function restorePersistedTextDrafts(store, context) {
       inline_upload_token: '',
       composer_draft_key: row.composer_draft_key,
       text_attachment: row.text_attachment,
+      preview_line: firstLinePreview(new TextDecoder().decode(row.bytes.slice(0, 2048)).replace(/\uFFFD+$/, '')),
       sha256_hex: row.sha256_hex || '',
       created_at: row.created_at,
       ...(row.storage_upload ? { storage_upload: row.storage_upload } : {}),
