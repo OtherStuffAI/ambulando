@@ -284,3 +284,17 @@ describe('capture hooks', () => {
     expect(events).toHaveLength(0); capture.stop();
   });
 });
+
+describe('local diagnostics export', () => {
+  it('exports only sanitized bounded events in the consented scope; opt-out exports no retained history', async () => {
+    await recorder.configure('a', settings);
+    await recorder.append('a', [event({ route: '/api/v4/flightdeck-pg/workspaces/private-user/resource-view-states?cursor=SECRET', body: 'SECRET', authorization: 'SECRET' })]);
+    const snapshot = await recorder.export('a');
+    expect(snapshot.historyAvailable).toBe(true);
+    expect(snapshot.events).toHaveLength(1);
+    expect(JSON.stringify(snapshot)).not.toMatch(/SECRET|private-user|npub1agent|bugs/);
+    expect((await recorder.export('b')).events).toEqual([]);
+    await recorder.configure('a', { enabled: false });
+    expect(await recorder.export('a')).toEqual({ version: 1, historyAvailable: false, events: [] });
+  });
+});

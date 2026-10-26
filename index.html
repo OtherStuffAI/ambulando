@@ -347,19 +347,7 @@
         <span class="sol-theme-label" x-text="$store.appearance.resolved === 'dark' ? 'Dark' : 'Light'"></span>
       </button>
       <div class="session-controls" x-show="$store.chat.isLoggedIn">
-        <template x-if="$store.chat.towerConnectionIndicatorLabel">
-          <div
-            class="tower-connection-indicator"
-            data-testid="tower-connection-indicator"
-            role="status"
-            aria-live="polite"
-            :title="$store.chat.towerConnectionIndicatorTitle"
-            :data-state="$store.chat.towerReachabilityState"
-          >
-            <span class="tower-connection-dot" aria-hidden="true"></span>
-            <span x-text="$store.chat.towerConnectionIndicatorLabel"></span>
-          </div>
-        </template>
+
         <button
           class="avatar-chip"
           :class="{
@@ -523,6 +511,7 @@
           <p>Clear deletes local history and queued reports. Already sent messages and attachments remain subject to channel retention; remove them in that channel.</p>
           <p class="sync-error-text" role="alert" x-show="$store.chat.diagnosticsError" x-text="$store.chat.diagnosticsError"></p>
           <div class="diagnostics-actions">
+            <button type="button" :disabled="$store.chat.diagnosticsBusy || $store.chat.diagnosticsSettingsDirty" @click="$store.chat.exportDiagnostics()">Export diagnostics</button>
             <button type="button" :disabled="$store.chat.diagnosticsBusy" @click="$store.chat.clearDiagnosticsHistory()">Clear local history</button>
             <button type="button" :disabled="$store.chat.diagnosticsBusy" @click="$store.chat.retryDiagnosticsReports()">Retry queued reports</button>
             <button type="button" :disabled="$store.chat.diagnosticsBusy || !$store.chat.diagnosticsDescription.trim()" @click="$store.chat.queueManualDiagnosticReport()">Send report</button>
@@ -7707,6 +7696,12 @@
 
         <template x-if="$store.chat.navSection === 'settings'">
           <div class="settings-section">
+          <section class="settings-panel" x-show="$store.chat.isTowerPgMode" aria-label="Connection">
+            <h2>Connection</h2>
+            <p role="status" data-testid="settings-connection-status" x-text="$store.chat.settingsConnectionLabel"></p>
+            <button type="button" @click="$store.chat.retrySettingsConnection()">Retry connection</button>
+            <button type="button" @click="$store.chat.openDiagnosticsDialog()">Diagnostics</button>
+          </section>
           <div class="settings-tabs">
             <button class="settings-tab" :class="{ active: $store.chat.settingsTab === 'connection' }" @click="$store.chat.settingsTab = 'connection'">NStack</button>
             <button x-show="$store.chat.canAdminWorkspace" class="settings-tab" :class="{ active: $store.chat.settingsTab === 'workspace' }" @click="$store.chat.settingsTab = 'workspace'">Workspace</button>

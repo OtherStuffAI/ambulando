@@ -242,6 +242,17 @@ export const syncManagerMixin = {
     flightDeckTrace('message-timing', message, details);
   },
 
+  get settingsConnectionLabel() {
+    if (isBrowserOffline() || this.towerReachabilityState === 'offline' || this.towerViewStateConnectionFailed) return 'Connection lost';
+    if (this.towerReachabilityState === 'reconnecting') return 'Reconnecting';
+    return 'Connected';
+  },
+
+  async retrySettingsConnection() {
+    this.ensureBackgroundSync(true);
+    await this.refreshTowerPgResourceViewStates?.({ readOnly: true });
+  },
+
   get towerConnectionIndicatorLabel() {
     if (!isTowerPgBackendMode() || !this.isLoggedIn) return '';
     if (isBrowserOffline() || this.towerReachabilityState === 'offline') return 'Offline';
@@ -3510,6 +3521,7 @@ export const syncManagerMixin = {
   },
 
   stopBackgroundSync() {
+    this.teardownUnreadTracking?.();
     const service = this._towerSyncService;
     if (this.backgroundSyncTimer) clearTimeout(this.backgroundSyncTimer);
     this.cancelScheduledOfflineMessageResync?.();
@@ -3546,6 +3558,7 @@ export const syncManagerMixin = {
       this.visibilityHandler = (event) => {
         if (document.hidden) return;
         this.ensureBackgroundSync(true);
+        if (!isBrowserOffline()) void this.refreshTowerPgResourceViewStates?.({ readOnly: true });
         if (event?.type === 'online') {
           this.markTowerReachabilityRecovered?.('browser-online', { refresh: false });
           void this.reconnectSelectedDocDraft?.().catch((error) => {

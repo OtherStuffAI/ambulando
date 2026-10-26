@@ -5244,6 +5244,14 @@
         "Add clickable comment pins and threaded replies to Canvas boards, with shape following, resolve/reopen and version-safe saves.",
         "Agents can read board discussions with drawing context and reply through the broker-aware board CLI."
       ]
+    },
+    {
+      "buildNumber": 2648,
+      "label": "Connection recovery and local diagnostics export",
+      "notes": [
+        "Settings shows simple connection status and Retry. Temporary Inbox view-state read failures retry automatically without replaying writes.",
+        "Export redacted local diagnostics from Report a problem. Recording consent and existing report delivery remain in your control."
+      ]
     }
   ]
 }

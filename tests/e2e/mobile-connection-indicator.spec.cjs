@@ -1,6 +1,6 @@
 const { test, expect } = require('playwright/test');
 
-test('mobile connection badge recovers through polling and still reports failed pulls and offline', async ({ page, context }) => {
+test('mobile Settings connection status recovers through polling and still reports failed pulls and offline', async ({ page, context }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   // This deterministic UI probe uses no external backend or workspace data.
   await page.route('**/*', route => {
@@ -25,9 +25,10 @@ test('mobile connection badge recovers through polling and still reports failed 
     };
     store.requestTowerSyncFamily = async () => ({ applied: 0, pages: 1 });
     store.handleSSEStatus({ status: 'reconnecting', connectionKey: store.buildSSEConnectionKey() });
+    store.navSection = 'settings';
   });
 
-  const badge = page.getByTestId('tower-connection-indicator');
+  const badge = page.getByTestId('settings-connection-status');
   await expect(badge).toBeVisible();
   await expect(badge).toHaveText('Reconnecting');
   const bounds = await badge.boundingBox();
@@ -40,7 +41,7 @@ test('mobile connection badge recovers through polling and still reports failed 
     store.handleSSEStatus({ status: 'fallback-polling', connectionKey: store.buildSSEConnectionKey() });
     store.handleSSEStatus({ status: 'reconnecting', connectionKey: store.buildSSEConnectionKey() });
   });
-  await expect(badge).toHaveCount(0);
+  await expect(badge).toHaveText('Connected');
   expect(await page.evaluate(() => window.Alpine.store('chat').agentActivityRecoveryError)).toContain('Retrying');
 
   await page.evaluate(async () => {
@@ -53,6 +54,6 @@ test('mobile connection badge recovers through polling and still reports failed 
 
   await context.setOffline(true);
   await page.evaluate(() => window.Alpine.store('chat').markTowerReachabilityDegraded('browser-offline', 'offline'));
-  await expect(badge).toHaveText('Offline');
+  await expect(badge).toHaveText('Connection lost');
   await context.setOffline(false);
 });

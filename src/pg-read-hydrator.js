@@ -1851,7 +1851,7 @@ async function syncTowerPgRecordWorkspace(store, options, deps) {
     preparePage: async (page, state) => {
       if (state.viewBaselineInitialized) return;
       await (deps.getTowerPgResourceViewStates || getTowerPgResourceViewStates)(context.workspaceId, {
-        baseUrl: context.baseUrl, appNpub: context.appNpub, limit: 1, useWorkspaceKey: false,
+        baseUrl: context.baseUrl, appNpub: context.appNpub, limit: 1, useWorkspaceKey: false, signal: deviceGuard?.signal || options.signal,
       });
       const canReadDirectory = store.currentWorkspace?.pgMe?.permissions?.includes('workspace.read') === true;
       if (Array.isArray(page.actors) && !canReadDirectory) return;
@@ -1980,7 +1980,7 @@ async function syncTowerPgRecordWorkspace(store, options, deps) {
       // visible resource watermarks once; its journal changes join the snapshot
       // handover. Only one returned state is needed, not a second history pull.
       await (deps.getTowerPgResourceViewStates || getTowerPgResourceViewStates)(context.workspaceId, {
-        baseUrl: context.baseUrl, appNpub: context.appNpub, limit: 1,
+        baseUrl: context.baseUrl, appNpub: context.appNpub, limit: 1, signal: options.signal,
       });
       viewBaselineInitialized = true;
     }
@@ -3381,6 +3381,10 @@ export async function hydrateTowerPgEventUpdates(store, events = [], deps = {}) 
   assertTowerPgWorkspaceCurrent(store, activityContext);
   const failedCore = results.find(result => result.status === 'rejected');
   if (failedCore) throw failedCore.reason;
+  if (resourceViewStateUpdates.length) {
+    store?.clearTowerPgViewStateConnectionFailure?.();
+    store?.markTowerReachabilityRecovered?.('view-state-event-refresh');
+  }
   if (attentionStateChanged) await store?.refreshUnreadFlags?.();
   return {
     ...(absentTargets.length ? { absentTargets } : {}),

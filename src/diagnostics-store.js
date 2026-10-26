@@ -31,6 +31,13 @@ export class DiagnosticsStore {
   info(key) { return this.mutate(key, row => ({ settings: row.settings, count: row.events.length,
     pending: row.queue.length, lastReport: row.lastReport || null, revision: row.revision })); }
 
+  export(key) {
+    return this.mutate(key, (row, now) => ({ version: 1,
+      historyAvailable: row.settings.enabled,
+      events: row.settings.enabled ? boundDiagnosticEvents(row.events, now) : [],
+    }));
+  }
+
   configure(key, settings) {
     return this.mutate(key, row => {
       const before = row.settings;

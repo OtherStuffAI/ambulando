@@ -211,7 +211,8 @@ describe('resource view-state Dexie materialization', () => {
   it('monotonically consumes the viewer-scoped Tower SSE payload and refreshes aggregates', async () => {
     await upsertResourceViewState(state({ viewed_activity_version: 3, activity_version: 4 }));
     const refreshUnreadFlags = vi.fn(async () => {});
-    await hydrateTowerPgEventUpdates({ refreshUnreadFlags }, [{
+    const clearTowerPgViewStateConnectionFailure = vi.fn();
+    await hydrateTowerPgEventUpdates({ refreshUnreadFlags, clearTowerPgViewStateConnectionFailure }, [{
       event_type: 'flightdeck_pg.resource_view_state.updated',
       entity_type: 'resource_view_state',
       entity_id: 'task-a',
@@ -224,6 +225,7 @@ describe('resource view-state Dexie materialization', () => {
       activity_version: 4, viewed_activity_version: 4,
     });
     expect(refreshUnreadFlags).toHaveBeenCalledOnce();
+    expect(clearTowerPgViewStateConnectionFailure).toHaveBeenCalledOnce();
   });
 });
 

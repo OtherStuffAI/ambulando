@@ -507,7 +507,7 @@ export async function createNip98AuthHeader(url, method, body = null, options = 
   throw new Error(`Unsupported NIP-98 auth method: ${authMethod}`);
 }
 
-export async function createNip98AuthHeaderForSecret(url, method, body = null, secret) {
+export async function createNip98AuthHeaderForSecret(url, method, body = null, secret, options = {}) {
   if (!secret) throw new Error('No secret key available for scoped NIP-98 auth.');
 
   let payloadHash = null;
@@ -517,6 +517,7 @@ export async function createNip98AuthHeaderForSecret(url, method, body = null, s
   }
 
   const eventTemplate = buildHttpAuthEvent(url, method, payloadHash);
+  if (options.freshContent) eventTemplate.content = crypto.randomUUID();
   const signedEvent = finalizeEvent(eventTemplate, normalizeSecret(secret));
   return `Nostr ${btoa(JSON.stringify(signedEvent))}`;
 }

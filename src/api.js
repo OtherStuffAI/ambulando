@@ -122,10 +122,11 @@ async function createAuthHeaderForIntendedUrl(requestUrl, method, body = null, o
       signTimeoutMs: authTimeoutMs,
       timeoutMessage,
       priority,
+      ...(options.freshContent ? { freshContent: true } : {}),
     }), authTimeoutMs, timeoutMessage);
   }
   return withTimeout(
-    createNip98AuthHeaderForSecret(requestUrl, method, body ?? null, workspaceSecret),
+    createNip98AuthHeaderForSecret(requestUrl, method, body ?? null, workspaceSecret, ...(options.freshContent ? [{ freshContent: true }] : [])),
     authTimeoutMs,
     timeoutMessage,
   );
@@ -338,20 +339,46 @@ async function signedTowerPgFetch(pathOrUrl, {
   rawBody = false,
   signal,
   diagnosticOperation,
+  readAttempt = 0,
+  readIdentity = null,
 } = {}) {
   const requestUrl = resolveTowerPgUrl(pathOrUrl, baseUrl);
   const diagnostic = diagnosticOperationMetadata(diagnosticOperation);
+  // Only the idempotent view-state read is eligible. Every attempt re-enters
+  // signing; signer failures and mutations never enter this retry path.
+  const retryableRead = method === 'GET' && /\/resource-view-states$/.test(new URL(requestUrl).pathname);
+  const identity = JSON.stringify([_baseUrl, getActiveSessionNpub(), getActiveWorkspaceKeyNpub()]);
+  const expectedIdentity = readIdentity ?? identity;
+  const assertCurrent = () => {
+    signal?.throwIfAborted();
+    if (retryableRead && JSON.stringify([_baseUrl, getActiveSessionNpub(), getActiveWorkspaceKeyNpub()]) !== expectedIdentity) {
+      throw new DOMException('Read identity changed', 'AbortError');
+    }
+  };
+  const retry = async () => {
+    emitDiagnostic({ ...diagnostic, source: 'network', code: 'request', route: requestUrl, method,
+      stage: 'retry', outcome: 'attempt', level: 'info' });
+    await new Promise((resolve, reject) => {
+      const abort = () => { clearTimeout(timer); reject(signal.reason); };
+      const timer = setTimeout(() => { signal?.removeEventListener('abort', abort); resolve(); }, 300 * 2 ** readAttempt);
+      signal?.addEventListener('abort', abort, { once: true });
+      if (signal?.aborted) abort();
+    });
+    assertCurrent();
+    return signedTowerPgFetch(pathOrUrl, { method, body, baseUrl, appNpub, authTimeoutMs, timeoutMs,
+      useWorkspaceKey, rawBody, signal, diagnosticOperation, readAttempt: readAttempt + 1, readIdentity: expectedIdentity });
+  };
   const start = performance.now();
   let stage = 'signing';
   try {
-    signal?.throwIfAborted();
+    assertCurrent();
     const headers = {
-      Authorization: await createApiAuthHeader(requestUrl, method, body ?? null, { authTimeoutMs, useWorkspaceKey }),
+      Authorization: await createApiAuthHeader(requestUrl, method, body ?? null, { authTimeoutMs, useWorkspaceKey, freshContent: retryableRead }),
     };
     const cleanAppNpub = String(appNpub || '').trim();
     if (cleanAppNpub) headers['x-flightdeck-pg-app-npub'] = cleanAppNpub;
     if (body !== undefined) headers['Content-Type'] = 'application/json';
-    signal?.throwIfAborted();
+    assertCurrent();
     const timeoutSignal = createFetchTimeoutSignal(timeoutMs);
     const combined = signal && timeoutSignal ? combineTowerRequestSignals(signal, timeoutSignal) : signal || timeoutSignal;
 
@@ -365,6 +392,11 @@ async function signedTowerPgFetch(pathOrUrl, {
     emitDiagnostic({ ...diagnostic, source: 'network', code: 'request', route: requestUrl, method, stage,
       level: response.ok || diagnostic.correlation ? 'info' : 'error', outcome: diagnostic.correlation ? 'attempt' : response.ok ? 'succeeded' : 'failed',
       category: response.status === 401 ? 'auth' : 'http', status: response.status, durationMs: performance.now() - start });
+    assertCurrent();
+    if (retryableRead && readAttempt < 2 && [408, 429, 502, 503, 504].includes(response.status)) {
+      void response.body?.cancel().catch(() => {});
+      return retry();
+    }
     return response;
   } catch (error) {
     const cancelled = signal?.aborted === true;
@@ -372,6 +404,10 @@ async function signedTowerPgFetch(pathOrUrl, {
       level: diagnostic.correlation || cancelled ? 'info' : 'error', outcome: cancelled ? 'cancelled' : diagnostic.correlation ? 'attempt' : 'failed',
       category: cancelled ? 'cancellation' : error?.code === 'auth_timeout' ? 'auth' : ['TimeoutError', 'AbortError'].includes(error?.name) ? 'timeout' : stage === 'signing' ? 'auth' : 'transport',
       status: 0, name: error?.name, errorCode: error?.code, durationMs: performance.now() - start });
+    if (retryableRead && readAttempt < 2 && !cancelled && stage === 'request'
+      && (error instanceof TypeError || ['NetworkError', 'TimeoutError', 'AbortError'].includes(error?.name))) {
+      return retry();
+    }
     throw error;
   }
 }
@@ -1185,7 +1221,7 @@ export async function getTowerPgChannelThreads(workspaceId, channelId, { baseUrl
   return json(resp, { requestUrl, method: 'GET', prefix: 'Tower PG API' });
 }
 
-export async function getTowerPgResourceViewStates(workspaceId, { baseUrl = _baseUrl, appNpub = FLIGHT_DECK_PG_APP_NPUB, resourceType = null, channelId = null, limit = 200, cursor = null, useWorkspaceKey = true } = {}) {
+export async function getTowerPgResourceViewStates(workspaceId, { baseUrl = _baseUrl, appNpub = FLIGHT_DECK_PG_APP_NPUB, resourceType = null, channelId = null, limit = 200, cursor = null, useWorkspaceKey = true, signal } = {}) {
   const encodedWorkspaceId = encodeURIComponent(String(workspaceId || '').trim());
   if (!encodedWorkspaceId) throw new Error('Tower PG workspace id is required');
   const params = new URLSearchParams();
@@ -1195,7 +1231,7 @@ export async function getTowerPgResourceViewStates(workspaceId, { baseUrl = _bas
   if (cursor) params.set('cursor', String(cursor));
   const requestPath = `/api/v4/flightdeck-pg/workspaces/${encodedWorkspaceId}/resource-view-states?${params.toString()}`;
   const requestUrl = resolveTowerPgUrl(requestPath, baseUrl);
-  const resp = await signedTowerPgFetch(requestPath, { baseUrl, appNpub, useWorkspaceKey });
+  const resp = await signedTowerPgFetch(requestPath, { baseUrl, appNpub, useWorkspaceKey, signal });
   return json(resp, { requestUrl, method: 'GET', prefix: 'Tower PG API' });
 }
 

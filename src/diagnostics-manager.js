@@ -1,6 +1,7 @@
 import { DiagnosticsWorkerClient, DiagnosticsCapture } from './diagnostics-runtime.js';
 import { deliverDiagnosticIncident } from './diagnostics-delivery.js';
 import { emitDiagnostic } from './diagnostics-events.js';
+import { getRunningBuildId, getRunningBuildNumber } from './version-check.js';
 import { defaultDiagnosticsSettings } from './diagnostics-store.js';
 import { getPgChannelScopeId } from './pg-record-context.js';
 
@@ -150,6 +151,28 @@ export const diagnosticsManagerMixin = {
     this.diagnosticsPending = info.pending ?? this.diagnosticsPending;
     this.diagnosticsLastReport = info.lastReport ?? null;
     this.diagnosticsStatus = info.settings.enabled ? (info.settings.automatic ? 'Recording · automatic reports enabled' : 'Recording · manual reports only') : 'Diagnostics are off.';
+  },
+
+  async exportDiagnostics() {
+    this.initDiagnosticsLifecycle();
+    await this.refreshDiagnosticsScope();
+    const runtime = runtimes.get(this);
+    if (!runtime?.key || this.diagnosticsSettingsDirty) {
+      this.diagnosticsError = 'Save or discard diagnostics settings before exporting.';
+      return;
+    }
+    const key = runtime.key, generation = runtime.generation;
+    try {
+      await this.flushDiagnosticsEvents();
+      const snapshot = { ...await runtime.client.call('export', key),
+        build: getRunningBuildId(), buildNumber: getRunningBuildNumber(),
+        exportedAt: new Date().toISOString(), platform: 'web' };
+      if (generation !== runtime.generation || diagnosticsScope(this) !== key) return;
+      const url = URL.createObjectURL(new Blob([JSON.stringify(snapshot, null, 2)], { type: 'application/json' }));
+      const link = document.createElement('a');
+      link.href = url; link.download = 'ambulando-diagnostics.json'; link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch { this.diagnosticsError = 'Local diagnostics export is unavailable.'; }
   },
 
   async openDiagnosticsDialog() {

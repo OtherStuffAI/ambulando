@@ -3857,3 +3857,15 @@ it('captures the originating context before transport and preserves non-message 
   await command;
   expect(settled).toBe(true);
 });
+
+it('places simple connection labels and explicit read-only retry on the Settings seam', async () => {
+  const label = Object.getOwnPropertyDescriptor(syncManagerMixin, 'settingsConnectionLabel').get;
+  expect(label.call({ towerReachabilityState: 'online' })).toBe('Connected');
+  expect(label.call({ towerReachabilityState: 'online', towerViewStateConnectionFailed: true })).toBe('Connection lost');
+  expect(label.call({ towerReachabilityState: 'offline' })).toBe('Connection lost');
+  expect(label.call({ towerReachabilityState: 'reconnecting' })).toBe('Reconnecting');
+  const store = { ensureBackgroundSync: vi.fn(), refreshTowerPgResourceViewStates: vi.fn(async () => {}) };
+  await syncManagerMixin.retrySettingsConnection.call(store);
+  expect(store.ensureBackgroundSync).toHaveBeenCalledWith(true);
+  expect(store.refreshTowerPgResourceViewStates).toHaveBeenCalledWith({ readOnly: true });
+});

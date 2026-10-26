@@ -105,3 +105,36 @@ describe('Tower resource view state', () => {
     await expect(readCompleteResourceViewStateSnapshot(readPage)).rejects.toThrow('repeated cursor');
   });
 });
+
+describe('view-state refresh lifecycle', () => {
+  const makeStore = () => ({ ...unreadStoreMixin, session: { npub: 'viewer' },
+    currentWorkspace: { workspaceId: 'workspace', directHttpsUrl: 'https://tower.example' }, selectedBoardId: 'scope-a' });
+
+  it('coalesces concurrent recovery reads and cancels the old scope before starting a new one', async () => {
+    const store = makeStore();
+    const runs = [];
+    store.runTowerPgResourceViewStateRefresh = vi.fn((_context, signal, current, options) => new Promise(resolve => runs.push({ signal, current, options, resolve })));
+    const first = store.refreshTowerPgResourceViewStates({ readOnly: true });
+    expect(store.refreshTowerPgResourceViewStates({ readOnly: true })).toBe(first);
+    expect(runs[0].options.readOnly).toBe(true);
+    store.selectedBoardId = 'scope-b';
+    const second = store.refreshTowerPgResourceViewStates({ readOnly: true });
+    expect(runs[0].signal.aborted).toBe(true);
+    expect(runs[0].current()).toBe(false);
+    expect(runs[1].current()).toBe(true);
+    runs[0].resolve(); await first;
+    store.teardownUnreadTracking();
+    expect(runs[1].signal.aborted).toBe(true);
+    runs[1].resolve(); await second;
+  });
+
+  it('invalidates a late result when the signing identity changes', async () => {
+    const store = makeStore();
+    let check, finish;
+    store.runTowerPgResourceViewStateRefresh = (_context, _signal, current) => new Promise(resolve => { check = current; finish = resolve; });
+    const pending = store.refreshTowerPgResourceViewStates();
+    store.session = { npub: 'other' };
+    expect(check()).toBe(false);
+    finish(); await pending;
+  });
+});

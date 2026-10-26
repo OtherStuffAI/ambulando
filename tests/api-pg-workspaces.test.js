@@ -1539,3 +1539,79 @@ describe('Tower PG API helpers', () => {
     ]);
   });
 });
+
+describe('view-state read recovery', () => {
+  const originalFetch = globalThis.fetch;
+  beforeEach(() => { vi.useFakeTimers(); globalThis.fetch = vi.fn(); });
+  afterEach(() => { vi.useRealTimers(); globalThis.fetch = originalFetch; vi.clearAllMocks(); });
+  const response = (status = 200) => ({ ok: status === 200, status, text: async () => '{}', json: async () => ({ states: [] }) });
+
+  it('automatically recovers with freshly minted auth and redacted retry evidence', async () => {
+    const api = await import('../src/api.js');
+    const { createNip98AuthHeader } = await import('../src/auth/nostr.js');
+    createNip98AuthHeader.mockClear();
+    createNip98AuthHeader.mockImplementation(async () => `fresh-${createNip98AuthHeader.mock.calls.length}`);
+    globalThis.fetch.mockRejectedValueOnce(new TypeError('SECRET')).mockResolvedValueOnce(response());
+    const events = [];
+    const stop = observeDiagnostics(input => events.push(sanitizeDiagnosticEvent({ ...input, ts: Date.now() })));
+    const pending = api.getTowerPgResourceViewStates('SECRET', { baseUrl: 'https://tower.example', cursor: 'SECRET' });
+    await vi.runAllTimersAsync();
+    await pending;
+    expect(globalThis.fetch).toHaveBeenCalledTimes(2);
+    expect(createNip98AuthHeader).toHaveBeenCalledTimes(2);
+    expect(globalThis.fetch.mock.calls.map(call => call[1].headers.Authorization)).toEqual(['fresh-1', 'fresh-2']);
+    expect(events.some(event => event.stage === 'retry')).toBe(true);
+    expect(events.at(-1).outcome).toBe('succeeded');
+    expect(JSON.stringify(events)).not.toContain('SECRET');
+    stop();
+  });
+
+  it('bounds transient reads at three attempts and does not retry writes or access errors', async () => {
+    const api = await import('../src/api.js');
+    globalThis.fetch.mockResolvedValue(response(503));
+    const pending = expect(api.getTowerPgResourceViewStates('w', { baseUrl: 'https://tower.example' })).rejects.toMatchObject({ status: 503 });
+    await vi.runAllTimersAsync(); await pending;
+    expect(globalThis.fetch).toHaveBeenCalledTimes(3);
+    for (const status of [401, 403, 409]) {
+      globalThis.fetch.mockClear().mockResolvedValue(response(status));
+      await expect(api.getTowerPgResourceViewStates('w', { baseUrl: 'https://tower.example' })).rejects.toMatchObject({ status });
+      expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+    }
+    globalThis.fetch.mockClear().mockResolvedValue(response(503));
+    await expect(api.putTowerPgResourceViewState('w', 'task', 't', 1, { baseUrl: 'https://tower.example' })).rejects.toMatchObject({ status: 503 });
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('cancels backoff and stops on identity change without sending again', async () => {
+    const api = await import('../src/api.js');
+    const { getActiveSessionNpub } = await import('../src/crypto/group-keys.js');
+    for (const cancel of ['signal', 'identity']) {
+      globalThis.fetch.mockClear().mockResolvedValue(response(503));
+      const controller = new AbortController();
+      const pending = expect(api.getTowerPgResourceViewStates('w', { baseUrl: 'https://tower.example', signal: controller.signal })).rejects.toMatchObject({ name: 'AbortError' });
+      await vi.advanceTimersByTimeAsync(0);
+      if (cancel === 'signal') controller.abort();
+      else getActiveSessionNpub.mockReturnValueOnce('different');
+      await vi.runAllTimersAsync(); await pending;
+      expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+    }
+  });
+
+  it('does not retry signer failures', async () => {
+    const api = await import('../src/api.js');
+    const { createNip98AuthHeader } = await import('../src/auth/nostr.js');
+    createNip98AuthHeader.mockRejectedValueOnce(Object.assign(new Error('approval needed'), { code: 'auth_timeout' }));
+    await expect(api.getTowerPgResourceViewStates('w', { baseUrl: 'https://tower.example' })).rejects.toMatchObject({ code: 'auth_timeout' });
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+});
+
+it('mints distinct workspace-key NIP-98 events for reads within the same second', async () => {
+  const { createNip98AuthHeaderForSecret } = await vi.importActual('../src/auth/nostr.js');
+  const secret = new Uint8Array(32).fill(1);
+  const first = await createNip98AuthHeaderForSecret('https://tower.example/read', 'GET', null, secret, { freshContent: true });
+  const second = await createNip98AuthHeaderForSecret('https://tower.example/read', 'GET', null, secret, { freshContent: true });
+  const decode = header => JSON.parse(atob(header.slice(6)));
+  expect(decode(first).id).not.toBe(decode(second).id);
+  expect(decode(first).tags).toEqual(decode(second).tags);
+});

@@ -91,6 +91,8 @@ function taskCommentsFor(comments = [], taskId = '') {
 }
 
 
+const viewStateRefreshes = new WeakMap();
+
 function usesTowerResourceViewState(store) {
   return isTowerPgBackendMode()
     && Boolean(store?.isTowerPgMode || store?.currentWorkspace?.pgBackendMode || store?.pgBackendMode);
@@ -495,11 +497,26 @@ export const unreadStoreMixin = {
    */
   async initUnreadTracking() {
     if (!isWorkspaceDbOpenForKey(this.currentWorkspaceKey)) return;
+    if (!this._viewStateScopeWatchersInstalled && this.$watch) {
+      this._viewStateScopeWatchersInstalled = true;
+      for (const field of ['session', 'currentWorkspace', 'backendUrl', 'selectedBoardId']) {
+        this.$watch(field, () => this.teardownUnreadTracking());
+      }
+    }
     await this.refreshUnreadFlags();
   },
 
+  towerViewStateConnectionFailed: false,
+
+  clearTowerPgViewStateConnectionFailure() {
+    this.towerViewStateConnectionFailed = false;
+  },
+
   teardownUnreadTracking() {
-    // No-op for now. Unread state is refreshed on sync completion and explicit read actions.
+    this.towerViewStateConnectionFailed = false;
+    viewStateRefreshes.get(this)?.controller.abort();
+    viewStateRefreshes.delete(this);
+    this._towerPgResourceViewStateRefreshGeneration = Number(this._towerPgResourceViewStateRefreshGeneration || 0) + 1;
   },
 
   /**
@@ -758,13 +775,31 @@ export const unreadStoreMixin = {
     return this._towerPgUnreadProjectionRefreshPromise;
   },
 
-  async refreshTowerPgResourceViewStates() {
+  refreshTowerPgResourceViewStates(options = {}) {
     const context = resolveTowerPgWorkspaceContext(this);
-    if (!context.workspaceId || !context.baseUrl) return;
+    if (!context.workspaceId || !context.baseUrl || !context.sessionNpub) return Promise.resolve();
+    const key = JSON.stringify([context.baseUrl, context.workspaceId, context.sessionNpub, context.generation, this.selectedBoardId]);
+    const previous = viewStateRefreshes.get(this);
+    if (previous?.key === key) return previous.promise;
+    previous?.controller.abort();
+    const controller = new AbortController();
+    const current = () => {
+      const latest = resolveTowerPgWorkspaceContext(this);
+      return !controller.signal.aborted && key === JSON.stringify([latest.baseUrl, latest.workspaceId, latest.sessionNpub, latest.generation, this.selectedBoardId]);
+    };
+    const promise = this.runTowerPgResourceViewStateRefresh(context, controller.signal, current, options)
+      .catch(() => { /* Keep the cached Inbox available. */ })
+      .finally(() => { if (viewStateRefreshes.get(this)?.controller === controller) viewStateRefreshes.delete(this); });
+    viewStateRefreshes.set(this, { key, controller, promise });
+    return promise;
+  },
+
+  async runTowerPgResourceViewStateRefresh(context, signal, current, options) {
     const refreshGeneration = Number(this._towerPgResourceViewStateRefreshGeneration || 0) + 1;
     this._towerPgResourceViewStateRefreshGeneration = refreshGeneration;
     const localBefore = await getResourceViewStates();
-    for (const pending of localBefore.filter((state) => state.sync_status === 'pending')) {
+    for (const pending of localBefore.filter((state) => options.readOnly !== true && state.sync_status === 'pending')) {
+      if (!current()) return;
       try {
         const result = await putTowerPgResourceViewState(
           this,
@@ -772,29 +807,40 @@ export const unreadStoreMixin = {
           { baseUrl: context.baseUrl, appNpub: context.appNpub },
         );
         const row = mapTowerResourceViewState(result?.state);
-        if (row) await upsertResourceViewState(row);
+        if (row && current()) await upsertResourceViewState(row);
       } catch {
         // Keep the optimistic monotonic row pending for the next reconnect/sync pass.
       }
     }
+    if (!current()) return;
     const { getPgAttentionProjection } = await import('./pg-record-delta.js');
-    if ((this.applyPgAttentionProjection || unreadStoreMixin.applyPgAttentionProjection).call(this, await getPgAttentionProjection(this))) return;
+    const projection = await getPgAttentionProjection(this);
+    if (!current()) return;
+    if ((this.applyPgAttentionProjection || unreadStoreMixin.applyPgAttentionProjection).call(this, projection)) return;
     try {
       const result = await readCompleteResourceViewStateSnapshot((cursor) => (
         getTowerPgResourceViewStates(context.workspaceId, {
-          baseUrl: context.baseUrl, appNpub: context.appNpub, limit: 200, cursor,
+          baseUrl: context.baseUrl, appNpub: context.appNpub, limit: 200, cursor, signal,
         })
       ));
       const rows = (Array.isArray(result?.states) ? result.states : [])
         .map((state) => mapTowerResourceViewState(state))
         .filter(Boolean);
-      if (this._towerPgResourceViewStateRefreshGeneration === refreshGeneration) {
+      if (current() && this._towerPgResourceViewStateRefreshGeneration === refreshGeneration) {
         await replaceResourceViewStates(rows);
+        if (current()) {
+          this.clearTowerPgViewStateConnectionFailure();
+          this.markTowerReachabilityRecovered?.('view-state-refresh');
+        }
       }
-    } catch {
+    } catch (error) {
+      if (current() && ([408, 429, 502, 503, 504].includes(error?.status) || ['TypeError', 'NetworkError', 'TimeoutError'].includes(error?.name))) {
+        this.towerViewStateConnectionFailed = true;
+        this.markTowerReachabilityDegraded?.('view-state-unreachable');
+      }
       // Offline rendering continues from Dexie.
     }
-    this.applyTowerPgResourceViewStates(await getResourceViewStates());
+    if (current()) this.applyTowerPgResourceViewStates(await getResourceViewStates());
   },
 
   async markTowerPgResourceViewed(resourceType, resourceId, activityVersion = null) {
