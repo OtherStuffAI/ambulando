@@ -142,6 +142,30 @@ describe('sent text attachment viewer', () => {
   });
 });
 
+describe('exact UTF-8 BOM and Unicode preservation', () => {
+  it.each([
+    ['NFC', '\u00e9', false], ['NFC with BOM', '\u00e9', true],
+    ['NFD', 'e\u0301', false], ['NFD with BOM', 'e\u0301', true],
+  ])('keeps %s bytes through a no-op version and an appended edit', async (_label, form, bom) => {
+    const text = `${bom ? '\ufeff' : ''}${form}\r\nUnchanged ${form} 😀`;
+    api.downloadStorageObjectBlob.mockResolvedValue(new Blob([enc(text)]));
+    api.createTowerPgChannelFile.mockResolvedValue({ file: { id: 'unicode-file', current_version_id: 'unicode-v1', display_name: attachment.filename } });
+    api.createTowerPgFileVersion.mockResolvedValue({ file: { id: 'unicode-file', current_version_id: 'unicode-v2', display_name: attachment.filename }, version: { id: 'unicode-v2' } });
+    const store = makeStore();
+    await store.openSentTextAttachment(message, attachment);
+    expect(Array.from(enc(store.textModalFullText()))).toEqual(Array.from(enc(text)));
+    expect(store.textAttachmentModal.pages[0].startsWith('\ufeff')).toBe(bom);
+    store.startTextAttachmentEdit();
+    await store.saveSentTextAttachment();
+    expect(api.uploadStorageObject.mock.calls[0][1]).toEqual(enc(text));
+    store.startTextAttachmentEdit();
+    store.textAttachmentModal.pageValue += '\n尾';
+    store.textModalMarkDirty();
+    await store.saveSentTextAttachment();
+    expect(api.uploadStorageObject.mock.calls[1][1]).toEqual(enc(text + '\r\n尾'));
+  });
+});
+
 describe('draft text attachment editor', () => {
   function draftStore(text) {
     const store = makeStore();
