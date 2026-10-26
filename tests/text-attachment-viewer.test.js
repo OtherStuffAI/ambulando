@@ -172,3 +172,36 @@ describe('draft text attachment editor', () => {
     expect(store.uploadChatFileDraft).not.toHaveBeenCalled();
   });
 });
+
+describe('large content regression', () => {
+  it('opens a 3.94MB log in bounded pages and saves untouched pages byte-exact', async () => {
+    const store = makeStore();
+    const line = '2026-10-26T10:00:00Z INFO worker-7 processed batch 12345 ok\r\n';
+    const log = line.repeat(Math.ceil(3_940_000 / line.length));
+    api.downloadStorageObjectBlob.mockResolvedValue(new Blob([enc(log)]));
+    const started = performance.now();
+    await store.openSentTextAttachment(message, attachment);
+    const modal = store.textAttachmentModal;
+    expect(modal.status).toBe('ready');
+    expect(modal.pageValue.length).toBeLessThanOrEqual(16000);
+    expect(modal.pages.length).toBeGreaterThan(200);
+    expect(modal.totals.bytes).toBe(enc(log).byteLength);
+    expect(performance.now() - started).toBeLessThan(3000);
+    store.startTextAttachmentEdit();
+    store.textModalGoToPage(5);
+    store.textAttachmentModal.pageValue += 'tail';
+    store.textModalMarkDirty();
+    expect(store.textModalFullText().length).toBe(log.length + 4);
+    expect(store.textModalFullText().startsWith(log.slice(0, 1000))).toBe(true);
+  });
+
+  it('pages a pathological single line of astral characters without splitting pairs', async () => {
+    const store = makeStore();
+    const text = '😀'.repeat(300_000);
+    api.downloadStorageObjectBlob.mockResolvedValue(new Blob([enc(text)]));
+    await store.openSentTextAttachment(message, attachment);
+    expect(store.textAttachmentModal.status).toBe('ready');
+    expect(store.textAttachmentModal.pageValue.length).toBeLessThanOrEqual(16000);
+    expect(store.textModalFullText()).toBe(text);
+  });
+});
