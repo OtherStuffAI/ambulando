@@ -98,7 +98,7 @@ test('sent modal shows history and retains a conflict before explicit save-on-to
         postCount += 1;
         if (postCount === 1) {
           latest = 'v2';
-          return route.fulfill({ status: 409, contentType: 'application/json', body: JSON.stringify({ code: 'stale_base_version', error: 'A newer version exists', file: lineage(), current_version: { id: 'v2' } }) });
+          return route.fulfill({ status: 409, contentType: 'application/json', body: JSON.stringify({ code: 'stale_base_version', error: 'A newer version exists', file: lineage(), current_version: { id: 'v2', version_number: 2 } }) });
         }
         latest = 'v3'; body = { file: lineage(), version: { id: 'v3', version_number: 3 } };
       }
@@ -124,6 +124,9 @@ test('sent modal shows history and retains a conflict before explicit save-on-to
   await modal.getByRole('button', { name: 'Save', exact: true }).click();
   await expect(modal).toContainText('Someone saved a newer version first');
   await expect(editor).toHaveValue('my retained edit');
+  await expect(modal.getByText('Loading…', { exact: true })).toBeHidden();
+  await expect(page.getByRole('combobox', { name: 'Version', exact: true })).toContainText('Version 2 (latest)');
+  await expect(page.getByRole('combobox', { name: 'Version', exact: true })).toContainText('Version 1 (editing base)');
   await page.screenshot({ path: test.info().outputPath('text-editor-version-conflict.png') });
   await modal.getByRole('button', { name: 'Save mine on top', exact: true }).click();
   await expect(modal).toContainText('Saved as new version');

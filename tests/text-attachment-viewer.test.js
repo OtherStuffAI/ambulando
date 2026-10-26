@@ -101,11 +101,17 @@ describe('sent text attachment viewer', () => {
     store.textAttachmentModal.pageValue = 'mine';
     store.textModalMarkDirty();
     const canonical = { id: 'file-9', current_version_id: 'ver-9' };
-    api.createTowerPgChannelFile.mockRejectedValue(Object.assign(new Error('409'), { status: 409, code: 'lineage_file_exists', payload: { file: canonical, current_version: { id: 'ver-9' } } }));
+    api.createTowerPgChannelFile.mockRejectedValue(Object.assign(new Error('409'), { status: 409, code: 'lineage_file_exists', payload: { file: canonical, current_version: { id: 'ver-9', version_number: 9 } } }));
     api.getTowerPgFileVersionObjectBytes.mockResolvedValue({ bytes: enc('theirs').buffer });
     await store.saveSentTextAttachment();
     const conflict = store.textAttachmentModal.conflict;
     expect(conflict).toMatchObject({ mine: 'mine', theirs: 'theirs', upload: { objectId: 'new-1' } });
+    expect(store.textAttachmentModal.status).toBe('ready');
+    expect(store.textAttachmentModal.pages.join('')).toBe('mine');
+    expect(store.textAttachmentModal.versions.find(v => v.id === 'ver-9').label).toBe('Version 9 (latest)');
+    expect(store.textAttachmentModal.versions.find(v => v.id === 'original').label).toBe('Original (sent) (editing base)');
+    expect(store.textAttachmentIsLatest()).toBe(false);
+    expect(store.textModalFooter()).toMatch(/^1 line ·/);
     expect(api.createTowerPgFileVersion).not.toHaveBeenCalled();
     api.createTowerPgFileVersion.mockResolvedValue({ version: { id: 'ver-10' }, file: { id: 'file-9' } });
     api.getTowerPgFileVersions.mockResolvedValue({ versions: [] });

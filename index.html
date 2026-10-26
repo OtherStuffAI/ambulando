@@ -203,7 +203,7 @@
       <p role="status" x-show="$store.chat.textAttachmentModal.status === 'loading'">Loading…</p>
       <p role="alert" class="error-text" x-show="$store.chat.textAttachmentModal.error" x-text="$store.chat.textAttachmentModal.error"></p>
       <div class="text-attachment-conflict" x-show="$store.chat.textAttachmentModal.conflict" x-cloak>
-        <p x-text="'Latest saved: ' + ($store.chat.textAttachmentModal.conflict?.theirsStats?.lines || 0).toLocaleString() + ' lines · Yours: ' + ($store.chat.textAttachmentModal.conflict?.mineStats?.lines || 0).toLocaleString() + ' lines'"></p>
+        <p x-text="'Latest saved: ' + $store.chat.textAttachmentLineLabel($store.chat.textAttachmentModal.conflict?.theirsStats?.lines || 0) + ' · Yours: ' + $store.chat.textAttachmentLineLabel($store.chat.textAttachmentModal.conflict?.mineStats?.lines || 0)"></p>
         <div class="text-attachment-actions">
           <button type="button" class="btn-secondary" @click="$store.chat.resolveTextAttachmentConflict('copy-mine')">Copy my text</button>
           <button type="button" class="btn-secondary" @click="$store.chat.resolveTextAttachmentConflict('use-theirs')">Use latest, discard mine</button>

@@ -5276,6 +5276,13 @@
         "Agent Space and capability discovery share scoped Autopilot connections, avoiding duplicate grants while opening agents or retrying discovery.",
         "Release validation limits parallel workers and reports host latency separately while preserving functional checks."
       ]
+    },
+    {
+      "buildNumber": 2652,
+      "label": "Clear text-version conflict status",
+      "notes": [
+        "Text edit conflicts clearly show the latest saved version and your editing base, keep your local text, and finish their loading state."
+      ]
     }
   ]
 }

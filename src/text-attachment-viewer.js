@@ -150,11 +150,15 @@ export const textAttachmentViewerMixin = {
     };
   },
 
+  textAttachmentLineLabel(count = 0) {
+    return `${count.toLocaleString()} line${count === 1 ? '' : 's'}`;
+  },
+
   textModalFooter() {
     const { totals, mode, saving, saveState, dirty } = this.textAttachmentModal;
     const draft = mode === 'draft' ? this.getChatFileDrafts(this.textAttachmentModal.context).find(item => item.draft_id === this.textAttachmentModal.draftId) : null;
     const state = draft?.local_persistence_error ? 'Local save failed — retry Save' : draft?.local_persistence_state === 'saving' ? 'Saving locally…' : saving ? 'Saving…' : saveState || (dirty ? 'Unsaved changes' : (mode === 'draft' ? 'Saved locally' : ''));
-    return [`${totals.lines.toLocaleString()} lines`, formatByteSize(totals.bytes), state].filter(Boolean).join(' · ');
+    return [this.textAttachmentLineLabel(totals.lines), formatByteSize(totals.bytes), state].filter(Boolean).join(' · ');
   },
 
   async closeTextAttachmentModal() {
@@ -508,6 +512,7 @@ export const textAttachmentViewerMixin = {
 
   // Local edit and its uploaded object are kept; the user decides explicitly.
   async enterTextAttachmentConflict(file, currentVersion, mine) {
+    this._textVersionRequest = (this._textVersionRequest || 0) + 1;
     const { workspaceId, options } = this.textAttachmentModal.workspace || this.textAttachmentWorkspaceOptions();
     let theirs = '';
     try {
@@ -515,8 +520,17 @@ export const textAttachmentViewerMixin = {
       theirs = decodeTextBytes(bytes) ?? '';
     } catch { /* comparison unavailable; still offer the choice */ }
     if (this.textAttachmentModal.token !== mine.token) return;
+    const modal = this.textAttachmentModal;
+    this._textVersionRequest = (this._textVersionRequest || 0) + 1;
+    const latest = { ...file, current_version_id: currentVersion.id };
+    const entries = modal.versions.filter(entry => entry.id !== currentVersion.id).map(entry => ({
+      ...entry,
+      label: entry.label.replace(/ \(latest\)/g, '').replace(/ \(editing base\)/g, '') + (entry.id === modal.viewing ? ' (editing base)' : ''),
+    }));
+    entries.unshift({ id: currentVersion.id, label: currentVersion.version_number ? `Version ${currentVersion.version_number} (latest)` : 'Latest saved version', version_number: currentVersion.version_number });
     this.textAttachmentModal = {
-      ...this.textAttachmentModal, saving: false,
+      ...modal, status: 'ready', saving: false, localSavePending: false,
+      source: { ...modal.source, lineage: latest }, versions: entries,
       conflict: { file, currentVersion, mine: mine.text, upload: mine.upload, theirs, theirsStats: totalsOf([theirs]), mineStats: totalsOf([mine.text]) },
       error: 'Someone saved a newer version first. Your edit is kept below.',
     };
