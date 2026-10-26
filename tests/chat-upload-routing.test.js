@@ -11,7 +11,7 @@ function method(source, name, bindings) {
   const start = source.search(re) + 1;
   assert.ok(start, name);
   const end = source.indexOf('\n    },', start) + 7;
-  bindings = { isNoteToSelf, sanitizeNoteImage, ...bindings };
+  bindings = { isNoteToSelf, sanitizeNoteImage, discardPersistedTextDrafts: async () => {}, ...bindings };
   return new Function(...Object.keys(bindings), `return ({${source.slice(start, end)}}).${name}`)(
     ...Object.values(bindings),
   );

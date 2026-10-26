@@ -63,6 +63,7 @@ export function nextPastedTextName(existingNames = []) {
 }
 
 export function normalizeTextAttachmentName(name = '', fallback = `${TEXT_ATTACHMENT_BASE_NAME}.txt`) {
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: Filename sanitation intentionally removes ASCII control characters.
   const cleaned = String(name ?? '').replace(/[\u0000-\u001f\u007f/\\[\]]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 120);
   if (!cleaned || cleaned === '.' || cleaned === '..') return fallback;
   return /\.[A-Za-z0-9]{1,8}$/.test(cleaned) ? cleaned : `${cleaned}.txt`;

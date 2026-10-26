@@ -3,6 +3,7 @@
 import { readFileSync } from 'node:fs';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import Alpine from 'alpinejs';
+import * as textComposer from '../src/text-attachment-composer.js';
 import * as composer from '../src/mention-composer.js';
 import * as drafts from '../src/chat-composer-draft.js';
 import { installStableHtml } from '../src/stable-html.js';
@@ -12,7 +13,7 @@ import { renderMarkdownToHtml } from '../src/markdown.js';
 
 const app = readFileSync('src/app.js', 'utf8');
 const chat = readFileSync('src/chat-message-manager.js', 'utf8');
-const bindings = { ...composer, ...drafts, preserveHydratedDocumentContent, defaultRecordSignature, sameListBySignature, renderMarkdownToHtml,
+const bindings = { ...textComposer, ...composer, ...drafts, preserveHydratedDocumentContent, defaultRecordSignature, sameListBySignature, renderMarkdownToHtml,
   MENTION_COMPOSER_MODELS: new WeakMap(), MENTION_COMPOSER_ELEMENTS: new WeakMap(), markdownRenderCaches: new WeakMap() };
 for (const [name, end] of [['renderMarkdownCached', '// Constants'], ['documentRecordSignature', '\nconst NUMBER_FORMATTER']]) {
   const start = app.indexOf(`function ${name}(`);

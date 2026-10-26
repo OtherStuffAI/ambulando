@@ -46,30 +46,26 @@ export function convertPasteToTextAttachment(store, event, composer) {
   // The composer text and selection are untouched; remember how to undo.
   store.textPasteUndo = {
     ...(store.textPasteUndo || {}),
-    [composer]: { draft_id: draft.draft_id, text: pasted, signature: current },
+    [composer]: [...(store.textPasteUndo?.[composer] || []), { draft_id: draft.draft_id, signature: current }],
   };
   return true;
 }
 
-// Ctrl/Cmd+Z straight after a conversion restores the text and drops the file.
+// Undo removes the paste itself; the untouched composer and selection stay put.
 export function undoTextPasteConversion(store, event, composer) {
   if (!TEXT_COMPOSERS.has(composer)) return false;
   if (!(event.metaKey || event.ctrlKey) || event.shiftKey || String(event.key).toLowerCase() !== 'z') return false;
-  const entry = store.textPasteUndo?.[composer];
-  const el = event.currentTarget;
-  if (!entry || serializeMentionComposer(el) !== entry.signature) return false;
-  const draft = store.getChatFileDrafts(composer).find((item) => item.draft_id === entry.draft_id);
-  store.textPasteUndo = { ...store.textPasteUndo, [composer]: null };
-  if (!draft) return false;
-  const projected = codePointLength(entry.signature) - selectedLength(el) + codePointLength(entry.text);
-  if (projected > TEXT_ATTACHMENT_INLINE_LIMIT) {
-    store.error = 'Pasted text is too long to restore inline. Keep it as an attachment.';
+  const entries = store.textPasteUndo?.[composer] || [];
+  const entry = entries.at(-1);
+  if (!entry) return false;
+  if (serializeMentionComposer(event.currentTarget) !== entry.signature) {
+    forgetTextPasteUndo(store, composer);
     return false;
   }
+  store.textPasteUndo = { ...store.textPasteUndo, [composer]: entries.slice(0, -1) };
+  if (!store.getChatFileDrafts(composer).some((item) => item.draft_id === entry.draft_id)) return false;
   event.preventDefault();
   store.removeChatFileDraft(entry.draft_id, composer);
-  insertPlainTextAtSelection(el, entry.text);
-  store.syncMentionComposerModel(el);
   return true;
 }
 

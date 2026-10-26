@@ -1685,7 +1685,7 @@ export async function upsertTowerPgDailyScopeAgentAccess(workspaceId, body, { ba
   return json(resp, { requestUrl, method: 'POST', prefix: 'Tower PG API' });
 }
 
-export async function getTowerPgChannelDocs(workspaceId, channelId, { baseUrl = _baseUrl, appNpub = FLIGHT_DECK_PG_APP_NPUB, limit = 200, archived = false } = {}) {
+export async function getTowerPgChannelDocs(workspaceId, channelId, { baseUrl = _baseUrl, appNpub = FLIGHT_DECK_PG_APP_NPUB, limit = 200, archived = false, origin_message_id, origin_storage_object_id } = {}) {
   const encodedWorkspaceId = encodeURIComponent(String(workspaceId || '').trim());
   const encodedChannelId = encodeURIComponent(String(channelId || '').trim());
   if (!encodedWorkspaceId) throw new Error('Tower PG workspace id is required');
@@ -1693,6 +1693,8 @@ export async function getTowerPgChannelDocs(workspaceId, channelId, { baseUrl = 
   const params = new URLSearchParams();
   if (limit) params.set('limit', String(limit));
   if (archived) params.set('archived', 'true');
+  if (origin_message_id) params.set('origin_message_id', origin_message_id);
+  if (origin_storage_object_id) params.set('origin_storage_object_id', origin_storage_object_id);
   const requestPath = `/api/v4/flightdeck-pg/workspaces/${encodedWorkspaceId}/channels/${encodedChannelId}/docs${params.size > 0 ? `?${params.toString()}` : ''}`;
   const requestUrl = resolveTowerPgUrl(requestPath, baseUrl);
   const resp = await signedTowerPgFetch(requestPath, { baseUrl, appNpub });

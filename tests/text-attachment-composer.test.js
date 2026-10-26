@@ -22,6 +22,8 @@ async function createStore() {
   initApp();
   const store = alpineStoreMock.mock.calls.find(([name]) => name === 'chat')?.[1];
   store.uploadChatFileDraft = vi.fn();
+  store.persistTextAttachmentDraft = vi.fn(async () => true);
+  store.discardTextAttachmentDraftRows = vi.fn(async () => {});
   store.$nextTick = (callback) => callback?.();
   return store;
 }
@@ -109,7 +111,8 @@ describe('automatic text attachments in the composer', () => {
     store.handleComposerKeydown(undo, vi.fn());
     expect(undo.preventDefault).toHaveBeenCalled();
     expect(store.messageFileDrafts).toHaveLength(0);
-    expect(serializeMentionComposer(target)).toBe('a' + text + 'b');
+    expect(serializeMentionComposer(target)).toBe('ab');
+    expect(document.getSelection().anchorOffset).toBe(1);
 
     const changed = await setup('ab', 1);
     await changed.store.handleMentionComposerPaste(pasteEvent(changed.target, text), 'message');
@@ -118,6 +121,20 @@ describe('automatic text attachments in the composer', () => {
     changed.store.handleComposerKeydown(late, vi.fn());
     expect(late.preventDefault).not.toHaveBeenCalled();
     expect(changed.store.messageFileDrafts).toHaveLength(1);
+  });
+
+  it('undoes repeated huge pastes in reverse order without moving the caret or showing a warning', async () => {
+    const { store, target } = await setup('keep', 2);
+    await store.handleMentionComposerPaste(pasteEvent(target, 'x'.repeat(12000)), 'message');
+    await store.handleMentionComposerPaste(pasteEvent(target, 'y'.repeat(12000)), 'message');
+    const undo = { currentTarget: target, preventDefault: vi.fn(), ctrlKey: true, key: 'z' };
+    store.handleComposerKeydown(undo, vi.fn());
+    expect(store.messageFileDrafts).toHaveLength(1);
+    store.handleComposerKeydown(undo, vi.fn());
+    expect(store.messageFileDrafts).toHaveLength(0);
+    expect(serializeMentionComposer(target)).toBe('keep');
+    expect(document.getSelection().anchorOffset).toBe(2);
+    expect(store.error).toBeFalsy();
   });
 
   it('caps typing at 10000 code points without splitting surrogate pairs and reports the counter', async () => {

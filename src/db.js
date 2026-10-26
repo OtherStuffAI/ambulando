@@ -1077,31 +1077,47 @@ export async function upsertDocumentDraft(draft = {}) {
   return row;
 }
 
-export async function putTextAttachmentDraft(row) {
+// Alpine wraps nested metadata in proxies. Snapshot plain metadata separately
+// from binary content: JSON sanitation alone would corrupt typed byte arrays.
+function textAttachmentStorageRow(row) {
+  const { bytes, command, ...metadata } = row;
+  const result = sanitizeForStorage(metadata);
+  if (bytes) result.bytes = new Uint8Array(bytes);
+  if (command) {
+    const { bytes: commandBytes, ...commandMetadata } = command;
+    result.command = sanitizeForStorage(commandMetadata);
+    if (commandBytes) result.command.bytes = new Uint8Array(commandBytes);
+  }
+  return result;
+}
+
+export async function putTextAttachmentDraft(row, db = wsDb()) {
   if (!row?.draft_id) return null;
-  await wsDb().text_attachment_drafts.put({ ...row, updated_at: new Date().toISOString() });
+  const snapshot = textAttachmentStorageRow({ ...row, updated_at: new Date().toISOString() });
+  await withDocumentDraftDb(db, () => db.text_attachment_drafts.put(snapshot));
   return row.draft_id;
 }
 
-export async function getTextAttachmentCache(key) {
-  return wsDb().text_attachment_cache.get(String(key || ''));
+export async function getTextAttachmentCache(key, db = wsDb()) {
+  return withDocumentDraftDb(db, () => db.text_attachment_cache.get(String(key || '')));
 }
 
-export async function putTextAttachmentCache(row) {
+export async function putTextAttachmentCache(row, db = wsDb()) {
   if (!row?.key) return null;
-  await wsDb().text_attachment_cache.put({ ...row, cached_at: new Date().toISOString() });
+  const snapshot = textAttachmentStorageRow({ ...row, cached_at: new Date().toISOString() });
+  await withDocumentDraftDb(db, () => db.text_attachment_cache.put(snapshot));
   return row.key;
 }
 
-export async function listTextAttachmentDrafts(composerDraftKey) {
+export async function listTextAttachmentDrafts(composerDraftKey, db = wsDb()) {
   const key = String(composerDraftKey || '').trim();
   if (!key) return [];
-  return wsDb().text_attachment_drafts.where('composer_draft_key').equals(key).sortBy('created_at');
+  return withDocumentDraftDb(db, () => db.text_attachment_drafts.where('composer_draft_key').equals(key).sortBy('created_at'));
 }
 
-export async function deleteTextAttachmentDrafts(draftIds = []) {
+export async function deleteTextAttachmentDrafts(draftIds = [], db = wsDb()) {
   const ids = (Array.isArray(draftIds) ? draftIds : []).map((id) => String(id || '')).filter(Boolean);
-  if (ids.length) await wsDb().text_attachment_drafts.bulkDelete(ids);
+  if (ids.length) await withDocumentDraftDb(db, () => db.text_attachment_drafts.bulkDelete(ids));
   return ids.length;
 }
 

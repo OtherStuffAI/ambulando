@@ -3906,7 +3906,7 @@ describe('chat message actions menu', () => {
         messageInput: 'Offline body @[Agent](mention:agent:npub1agent)',
         messageFileDrafts: [{
           draft_id: 'draft-file-1', status: 'ready', file: { name: 'brief.pdf' },
-          error: '', preview_url: 'blob:brief', ...attachment,
+          error: '', preview_url: 'blob:brief', preview_line: 'private local preview', composer_draft_key: 'local-destination', created_at: 'local-time', local_persistence_state: 'saved', local_persistence_error: '', ...attachment,
         }],
         selectedAgentMentionsByComposer: { message: [mention], thread: [] },
         clearChatFileDrafts: vi.fn(function clearChatFileDrafts(context) {
@@ -3925,6 +3925,7 @@ describe('chat message actions menu', () => {
         pg_client_request_id: failed.record_id,
       });
 
+      expect(failed.attachments).toEqual([attachment]);
       await expect(store.retryUnsyncedOutgoingMessages()).resolves.toEqual({ attempted: 1, sent: 1, failed: 0 });
 
       const retry = createTowerPgMessageFromLocal.mock.calls[1][1];

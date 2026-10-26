@@ -194,7 +194,8 @@
   >
     <section class="text-attachment-modal" role="dialog" aria-modal="true" x-sol-dialog aria-label="Text attachment">
       <header class="text-attachment-header">
-        <input type="text" class="text-attachment-name" aria-label="File name" maxlength="120" x-model="$store.chat.textAttachmentModal.filename" :readonly="!$store.chat.textAttachmentModal.editing" :class="{ 'is-readonly': !$store.chat.textAttachmentModal.editing }">
+        <button type="button" class="btn-secondary" aria-label="Close text attachment" @click="$store.chat.closeTextAttachmentModal()">Close</button>
+        <input type="text" class="text-attachment-name" aria-label="File name" maxlength="120" x-model="$store.chat.textAttachmentModal.filename" @input="$store.chat.textModalMarkDirty()" :readonly="!$store.chat.textAttachmentModal.editing" :class="{ 'is-readonly': !$store.chat.textAttachmentModal.editing }">
         <select class="text-attachment-versions" aria-label="Version" x-show="$store.chat.textAttachmentModal.versions.length > 1" :value="$store.chat.textAttachmentModal.viewing" @change="$store.chat.viewTextAttachmentVersion($event.target.value)">
           <template x-for="entry in $store.chat.textAttachmentModal.versions" :key="entry.id"><option :value="entry.id" x-text="entry.label"></option></template>
         </select>
@@ -213,6 +214,7 @@
         x-show="$store.chat.textAttachmentModal.status === 'ready'"
         :readonly="!$store.chat.textAttachmentModal.editing"
         x-model="$store.chat.textAttachmentModal.pageValue"
+        @paste="$store.chat.textModalPaste($event)"
         @input="$store.chat.textModalMarkDirty()"></textarea>
       <nav class="text-attachment-pager" x-show="$store.chat.textAttachmentModal.pages.length > 1" aria-label="Pages">
         <button type="button" class="btn-secondary" :disabled="$store.chat.textAttachmentModal.pageIndex === 0" @click="$store.chat.textModalGoToPage($store.chat.textAttachmentModal.pageIndex - 1)">Previous</button>

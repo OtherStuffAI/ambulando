@@ -1,4 +1,4 @@
-import { convertPasteToTextAttachment, guardInlineTyping, undoTextPasteConversion, updateComposerCounter } from './text-attachment-composer.js';
+import { convertPasteToTextAttachment, forgetTextPasteUndo, guardInlineTyping, undoTextPasteConversion, updateComposerCounter } from './text-attachment-composer.js';
 import { discardPersistedTextDrafts, persistTextDraft, restorePersistedTextDrafts } from './text-attachment-drafts.js';
 import { textAttachmentMarker } from './text-attachments.js';
 import { canvasQuery, canvasChatSuggestions, createCanvasReferencePill, CanvasReferenceCatalog } from './canvas/chat-references.js';
@@ -9215,6 +9215,7 @@ export function initApp() {
     },
 
     syncMentionComposerDraft(el) {
+      forgetTextPasteUndo(this, String(el?.dataset?.chatComposer || ''));
       return this.syncMentionComposerModel(el, { deferReactive: true });
     },
 
@@ -10041,7 +10042,7 @@ export function initApp() {
       };
       const patchDraft = (patch) => {
         Object.assign(draft, patch);
-        if (draft.text_attachment) void this.persistTextAttachmentDraft?.(context, draft);
+        const persistence = draft.text_attachment ? this.persistTextAttachmentDraft?.(context, draft) : Promise.resolve(true);
         this.setChatFileDrafts(context, this.getChatFileDrafts(context).map(item => item.draft_id === draftId ? { ...item, ...patch } : item));
         const key = draft.composer_draft_key;
         const saved = this.chatComposerDrafts?.[key];
@@ -10050,6 +10051,7 @@ export function initApp() {
             ...saved, fileDrafts: saved.fileDrafts.map(item => item.draft_id === draftId ? { ...item, ...patch } : item),
           } };
         }
+        return persistence;
       };
       const operation = createDiagnosticOperation('upload');
       uploadContext.options.diagnosticOperation = operation;
@@ -10061,6 +10063,7 @@ export function initApp() {
       };
       patchDraft({ status: 'uploading', error: '', upload_inflight: true });
       try {
+        if (draft.text_attachment && !await this.persistTextAttachmentDraft(context, draft)) throw new Error('Could not save the text attachment locally. Retry before uploading.');
         assertActive();
         if (!retained && draft.kind === 'image' && isNoteToSelf(context === 'thread' ? this.activeThreadChannel : this.selectedChannel, this.session?.npub)) {
           const clean = await sanitizeNoteImage(draft.file);
@@ -10078,7 +10081,7 @@ export function initApp() {
           }), uploadContext);
           storage = { prepared, workspaceId: uploadContext.workspaceId,
             baseUrl: uploadContext.options.baseUrl, ownerNpub, transferred: false };
-          patchDraft({ storage_upload: storage });
+          if (!await patchDraft({ storage_upload: storage })) throw new Error('Could not save upload progress locally. Retry to keep this upload identity.');
         }
         assertActive();
         const prepared = storage.prepared;
@@ -10100,12 +10103,12 @@ export function initApp() {
             recordStage('transfer');
             await uploadStorageObject(prepared, bytes, draft.content_type, uploadContext.options);
             storage = { ...storage, transferred: true };
-            patchDraft({ storage_upload: storage });
+            if (!await patchDraft({ storage_upload: storage })) throw new Error('Could not save upload progress locally. Retry to keep this upload identity.');
           }
           assertActive();
           recordStage('completion');
           storage = { ...storage, completionAttempted: true };
-          patchDraft({ storage_upload: storage });
+          if (!await patchDraft({ storage_upload: storage })) throw new Error('Could not save upload progress locally. Retry to keep this upload identity.');
           await completeStorageObject(prepared.object_id, {
             size_bytes: bytes.byteLength, sha256_hex: sha256Hex,
           }, uploadContext.options);
