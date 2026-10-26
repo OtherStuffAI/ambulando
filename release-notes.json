@@ -5268,6 +5268,14 @@
       "notes": [
         "Text edits keep their exact bytes and version history safely in local browser storage, including offline retries and explicit conflict resolution."
       ]
+    },
+    {
+      "buildNumber": 2651,
+      "label": "Shared agent connections and safer release validation",
+      "notes": [
+        "Agent Space and capability discovery share scoped Autopilot connections, avoiding duplicate grants while opening agents or retrying discovery.",
+        "Release validation limits parallel workers and reports host latency separately while preserving functional checks."
+      ]
     }
   ]
 }

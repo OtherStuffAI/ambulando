@@ -43,6 +43,7 @@ test('real modal keeps exact offline drafts, bounds a 3.94MB paste, and restores
   await expect(composer).toHaveText('keep');
   const card = page.locator('.chat-thread-panel .chat-file-draft');
   await expect(card).toHaveCount(1);
+  await page.screenshot({ path: test.info().outputPath('text-attachment-draft-card.png') });
   await card.getByRole('button', { name: 'Open', exact: true }).click();
   const editor = page.getByRole('textbox', { name: 'Text content', exact: true });
   await expect(editor).toBeVisible();
@@ -128,4 +129,24 @@ test('sent modal shows history and retains a conflict before explicit save-on-to
   await expect(modal).toContainText('Saved as new version');
   await expect(page.getByRole('combobox', { name: 'Version', exact: true })).toContainText('Version 3 (latest)');
   expect(postCount).toBe(2);
+  await page.screenshot({ path: test.info().outputPath('text-editor-sent-version.png') });
+});
+
+test('phone text editor fills the screen and keeps header Close reachable', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.route('**/*', route => new URL(route.request().url()).pathname === '/__text-fixture.js'
+    ? route.fulfill({ contentType: 'text/javascript', body: bundle }) : serveBuiltFlightDeck(route));
+  await setup(page);
+  await page.evaluate(() => {
+    const s = Alpine.store('chat');
+    s.addChatFileDraft(new File(['phone text\r\n'.repeat(300)], 'Phone.txt', { type: 'text/plain' }), 'thread', { textAttachment: { source: 'paste', text: 'phone text\r\n'.repeat(300) } });
+  });
+  await page.locator('.chat-thread-panel .chat-file-draft').getByRole('button', { name: 'Open', exact: true }).click();
+  const modal = page.locator('.text-attachment-modal');
+  await expect(page.getByRole('textbox', { name: 'Text content', exact: true })).toBeVisible();
+  const box = await modal.boundingBox();
+  expect(box.x).toBe(0); expect(box.width).toBe(390); expect(box.height).toBe(844);
+  await page.screenshot({ path: test.info().outputPath('text-editor-phone.png') });
+  await page.getByRole('button', { name: 'Close text attachment', exact: true }).click();
+  await expect(modal).toBeHidden();
 });

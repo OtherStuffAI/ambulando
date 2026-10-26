@@ -8,6 +8,7 @@ import {
   createAutopilotDiscoveryClient,
   verifyAutopilotConnectPackage,
 } from '../src/autopilot-connect-client.js';
+import { refreshInstalledAutopilotConnection } from '../src/autopilot-connection-refresh.js';
 import { createNip98AuthHeaderForSecret } from '../src/auth/nostr.js';
 
 afterEach(() => vi.unstubAllGlobals());
@@ -490,5 +491,140 @@ describe('Autopilot NIP-98/FIPS discovery client', () => {
     };
     await expect(createAutopilotDiscoveryClient(verified, { transport: scoped(identityBridge), authHeader: vi.fn(async () => 'Nostr signed') }).health())
       .rejects.toMatchObject({ code: 'installation_mismatch' });
+  });
+});
+
+describe('Autopilot exact transport handle leases', () => {
+  function setup() {
+    const { envelope } = fixture();
+    const verified = verifyAutopilotConnectPackage(envelope, { now: NOW });
+    let active = 0;
+    const disconnect = vi.fn(async () => { active--; });
+    const transport = {
+      version: 2,
+      connect: vi.fn(async (options) => {
+        active++;
+        return { version: 2, ...options, disconnect, fetch: async () => response({ ok: true }) };
+      }),
+    };
+    const authHeader = vi.fn(async () => {
+      if (active !== 1) throw Object.assign(new Error('Ambiguous signing scope'), { code: 'fips_signing_scope_required' });
+      return 'Nostr scoped';
+    });
+    const client = (pkg = verified) => createAutopilotDiscoveryClient(pkg, { transport, authHeader });
+    return { verified, transport, disconnect, authHeader, client };
+  }
+
+  it('keeps concurrent overview, capability refresh and retained activity on one exact grant', async () => {
+    const { client, transport, disconnect, verified } = setup();
+    const activity = client();
+    const overview = client();
+    const refreshed = client({ ...verified, capabilities: [...verified.capabilities, 'new-capability'] });
+    await Promise.all([activity.requestJson(verified.healthPath), overview.requestJson(verified.healthPath), refreshed.requestJson(verified.healthPath)]);
+    expect(transport.connect).toHaveBeenCalledTimes(1);
+    await overview.disconnect();
+    await refreshed.disconnect();
+    expect(disconnect).not.toHaveBeenCalled();
+    await expect(activity.requestJson(verified.healthPath)).resolves.toEqual({ ok: true });
+    await activity.disconnect();
+    expect(disconnect).toHaveBeenCalledTimes(1);
+    for (let i = 0; i < 3; i++) {
+      const retry = client();
+      await retry.requestJson(verified.healthPath);
+      await retry.disconnect();
+    }
+    expect(disconnect).toHaveBeenCalledTimes(4);
+  });
+
+  it('refreshes installed capabilities concurrently with an overview without ambiguous signing grants', async () => {
+    const { client, verified, transport, disconnect } = setup();
+    const connection = {
+      id: 'installed', row_version: 1, installation_id: verified.installationId,
+      fips_transport_npub: verified.transportNpub, fips_endpoint: verified.fipsEndpoint,
+      capabilities: verified.capabilities,
+      metadata: { installation_npub: verified.installationNpub, health_path: verified.healthPath, agents_path: verified.agentsPath },
+    };
+    const store = { currentWorkspace: { workspaceId: 'workspace' } };
+    const overview = client();
+    const refresh = refreshInstalledAutopilotConnection(store, connection, {
+      createClient: (pkg) => {
+        const selected = client(pkg);
+        return { ...selected, health: () => selected.requestJson(pkg.healthPath), refreshConnectPackage: async () => verified };
+      },
+      persist: async () => ({ autopilot_connection: connection }),
+    });
+    await Promise.all([refresh, overview.requestJson(verified.healthPath)]);
+    expect(transport.connect).toHaveBeenCalledTimes(1);
+    expect(disconnect).not.toHaveBeenCalled();
+    await overview.disconnect();
+    expect(disconnect).toHaveBeenCalledOnce();
+  });
+
+  it('single-flights concurrent first requests from one client', async () => {
+    const { client, transport, disconnect, verified } = setup();
+    const selected = client();
+    await Promise.all([selected.requestJson(verified.healthPath), selected.requestJson(verified.healthPath)]);
+    await selected.disconnect();
+    expect(transport.connect).toHaveBeenCalledTimes(1);
+    expect(disconnect).toHaveBeenCalledTimes(1);
+  });
+
+  it('releases a cancelled pending connect without revoking another consumer', async () => {
+    const { client, transport, disconnect, verified } = setup();
+    const original = transport.connect.getMockImplementation();
+    let resume;
+    transport.connect.mockImplementation(async (options) => {
+      await new Promise((resolve) => { resume = resolve; });
+      return original(options);
+    });
+    const cancelled = client(), retained = client();
+    const abandoned = cancelled.requestJson(verified.healthPath);
+    const observed = expect(abandoned).rejects.toMatchObject({ code: 'connection_failed' });
+    const working = retained.requestJson(verified.healthPath);
+    await Promise.resolve();
+    await cancelled.disconnect();
+    resume();
+    await observed;
+    await working;
+    expect(disconnect).not.toHaveBeenCalled();
+    await retained.disconnect();
+    expect(disconnect).toHaveBeenCalledOnce();
+  });
+
+  it('waits for final native teardown before a replacement client connects', async () => {
+    const { client, transport, disconnect, verified } = setup();
+    const first = client();
+    await first.requestJson(verified.healthPath);
+    const original = disconnect.getMockImplementation();
+    let finish;
+    disconnect.mockImplementationOnce(async () => {
+      await new Promise((resolve) => { finish = resolve; });
+      await original();
+    });
+    const closing = first.disconnect();
+    await Promise.resolve();
+    const next = client();
+    const opening = next.requestJson(verified.healthPath);
+    await Promise.resolve();
+    expect(transport.connect).toHaveBeenCalledTimes(1);
+    finish();
+    await closing;
+    await opening;
+    expect(transport.connect).toHaveBeenCalledTimes(2);
+    await next.disconnect();
+  });
+
+  it('recovers after a failed first connect and keeps distinct endpoints separate', async () => {
+    const { client, transport, verified } = setup();
+    transport.connect.mockRejectedValueOnce(new Error('offline'));
+    const retry = client();
+    await expect(retry.requestJson(verified.healthPath)).rejects.toMatchObject({ code: 'fips_connection_failed' });
+    await retry.requestJson(verified.healthPath);
+    await retry.disconnect();
+    const different = client({ ...verified, fipsEndpoint: verified.fipsEndpoint.replace(':43101', ':43102') });
+    await different.requestJson(verified.healthPath);
+    await different.disconnect();
+    expect(transport.connect).toHaveBeenCalledTimes(3);
+    expect(transport.connect.mock.calls[2][0].endpoint).toContain(':43102');
   });
 });
