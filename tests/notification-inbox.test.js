@@ -14,7 +14,7 @@ import { normalizeNotificationItem } from '../src/notification-inbox-wire.js';
 // shares state between the independent Dexie/service pairs below.
 class FakeTower {
   constructor(workspace = 'ws') { this.workspace = workspace; this.actors = new Map(); this.receipts = new Map(); this.offline = new Set(); this.unsupported = false; this.floor = 0; this.calls = []; }
-  actor(id) { if (!this.actors.has(id)) this.actors.set(id, { seq: 0, items: new Map(), tombstones: [] }); return this.actors.get(id); }
+  actor(id) { if (!this.actors.has(id)) this.actors.set(id, { seq: 0, items: new Map(), tombstones: [], rules: new Map(), rulesRevision: 1 }); return this.actors.get(id); }
   wire(actorId, item) {
     return { schema: 'org.wingman.notification.item', version: 1, id: item.id, workspace_id: this.workspace, recipient_actor_id: actorId, change_seq: item.change_seq, row_version: item.row_version,
       source: { app_id: 'flightdeck.core', label: 'Flight Deck', kind: 'tower_rule' }, category: item.category || 'mention', reasons: ['mention'], severity: 'normal', status: item.status || 'active', origin: 'live',
@@ -30,7 +30,30 @@ class FakeTower {
     a.items.set(id, item); return item;
   }
   remove(actorId, id) { const a = this.actor(actorId); a.items.delete(id); a.tombstones.push({ id, change_seq: ++a.seq }); }
-  unread(a) { return [...a.items.values()].filter(i => !i.read && !i.dismissed && !i.archived && (i.status || 'active') === 'active').length; }
+  // Wire v1.1 visibility: a presentation filter per client app. Hiding never touches the shared item or its read state.
+  visible(a, item, client) {
+    if (!client) return true;
+    if (item.hidden_from?.includes(client)) return false;
+    const rule = a.rules.get(`flightdeck.core|${item.category || 'mention'}|${client}|inbox`);
+    return !(rule && rule.mode === 'off');
+  }
+  unread(a, client) { return [...a.items.values()].filter(i => this.visible(a, i, client) && !i.read && !i.dismissed && !i.archived && (i.status || 'active') === 'active').length; }
+  rulesBody(a) { return { rules: [...a.rules.values()].map(r => ({ ...r })), rules_revision: a.rulesRevision }; }
+  putRules(actorId, body) {
+    const a = this.actor(actorId); const receiptKey = `${actorId}:rules:${body.mutation_id}`;
+    if (this.receipts.has(receiptKey)) { const prior = this.receipts.get(receiptKey); if (JSON.stringify(prior.body) !== JSON.stringify(body)) throw Object.assign(new Error('reused'), { status: 409, payload: { error: 'reused', code: 'mutation_id_reused' } }); return prior.result; }
+    const keyOf = r => `${r.source_app_id}|${r.category}|${r.client_app_id}|${r.channel}`;
+    const conflicts = body.rules.filter(r => (a.rules.get(keyOf(r))?.row_version ?? 0) !== r.expected_row_version);
+    // All-or-nothing: one stale key writes nothing.
+    if (conflicts.length) throw Object.assign(new Error('conflict'), { status: 409, payload: { error: 'rules conflict', code: 'rules_conflict', conflicts: conflicts.map(r => ({ ...r, current: a.rules.get(keyOf(r)) || null })), ...this.rulesBody(a) } });
+    for (const r of body.rules) {
+      const { expected_row_version, ...rule } = r;
+      if (r.mode === 'default') { const prior = a.rules.get(keyOf(r)); a.rules.set(keyOf(r), { ...rule, preview: null, row_version: (prior?.row_version ?? 0) + 1 }); continue; }
+      a.rules.set(keyOf(r), { ...rule, row_version: expected_row_version + 1 });
+    }
+    a.rulesRevision += 1;
+    const result = this.rulesBody(a); this.receipts.set(receiptKey, { body, result }); return result;
+  }
   handle(actorId, route, { method = 'GET', query = {}, body } = {}) {
     this.calls.push({ route, method, query, body });
     if (this.offline.has(actorId)) throw new Error('offline');
@@ -38,19 +61,24 @@ class FakeTower {
     const a = this.actor(actorId); const identity = { workspace_id: this.workspace };
     if (route === 'items' && method === 'GET') {
       const view = query.view || 'inbox';
-      const all = [...a.items.values()].filter(i => view === 'archived' ? i.archived && !i.dismissed : !i.archived && !i.dismissed).sort((x, y) => y.change_seq - x.change_seq);
+      const all = [...a.items.values()].filter(i => this.visible(a, i, query.client_app_id)).filter(i => view === 'archived' ? i.archived && !i.dismissed : !i.archived && !i.dismissed).sort((x, y) => y.change_seq - x.change_seq);
       const start = Number(query.cursor || 0), size = Number(query.limit || 50);
-      return { identity, items: all.slice(start, start + size).map(i => this.wire(actorId, i)), next_cursor: start + size < all.length ? String(start + size) : null, head_seq: a.seq, inbox_started_at: '2026-10-26T00:00:00Z' };
+      return { identity, items: all.slice(start, start + size).map(i => this.wire(actorId, i)), next_cursor: start + size < all.length ? String(start + size) : null, head_seq: a.seq, rules_revision: a.rulesRevision, inbox_started_at: '2026-10-26T00:00:00Z' };
     }
     if (route === 'changes') {
       const after = Number(query.after_seq); if (after < this.floor) throw Object.assign(new Error('reset'), { status: 410, payload: { error: 'Cursor reset required', code: 'reset_required' } });
+      if (query.rules_revision !== undefined && Number(query.rules_revision) !== a.rulesRevision) throw Object.assign(new Error('reset'), { status: 410, payload: { error: 'Cursor reset required', code: 'reset_required', reason: 'rules_changed', rules_revision: a.rulesRevision } });
       const limit = Number(query.limit || 200);
-      const changes = [...[...a.items.values()].map(i => this.wire(actorId, i)), ...a.tombstones.map(t => ({ schema: 'org.wingman.notification.tombstone', version: 1, id: t.id, workspace_id: this.workspace, change_seq: t.change_seq, change_type: 'remove', removal_reason: 'access_lost' }))]
+      // Items hidden from this client are omitted; tombstones are content-free and always delivered.
+      const changes = [...[...a.items.values()].filter(i => this.visible(a, i, query.client_app_id)).map(i => this.wire(actorId, i)), ...a.tombstones.map(t => ({ schema: 'org.wingman.notification.tombstone', version: 1, id: t.id, workspace_id: this.workspace, change_seq: t.change_seq, change_type: 'remove', removal_reason: 'access_lost' }))]
         .filter(c => c.change_seq > after).sort((x, y) => x.change_seq - y.change_seq);
-      const page = changes.slice(0, limit);
-      return { identity, changes: page, through_seq: page.length ? page.at(-1).change_seq : after, head_seq: a.seq, has_more: changes.length > limit };
+      const page = changes.slice(0, limit); const hasMore = changes.length > limit;
+      // A filtered-out tail still advances: through_seq is the head once the last page is returned.
+      return { identity, changes: page, through_seq: hasMore ? page.at(-1).change_seq : a.seq, head_seq: a.seq, rules_revision: a.rulesRevision, has_more: hasMore };
     }
-    if (route === 'counts') return { identity, unread_total: this.unread(a), by_category: {}, by_source_app: {}, badge: this.unread(a), capped_at: 999, head_seq: a.seq };
+    if (route === 'counts') return { identity, unread_total: this.unread(a, query.client_app_id), by_category: {}, by_source_app: {}, badge: this.unread(a, query.client_app_id), capped_at: 999, head_seq: a.seq, rules_revision: a.rulesRevision };
+    if (route === 'rules' && method === 'GET') return { identity, ...this.rulesBody(a) };
+    if (route === 'rules' && method === 'PUT') return { identity, ...this.putRules(actorId, body) };
     const receiptKey = `${actorId}:${body?.mutation_id}`;
     if (method === 'PATCH') {
       const id = route.split('/')[1]; const item = a.items.get(id);
@@ -65,7 +93,7 @@ class FakeTower {
     if (route === 'bulk') {
       if (this.receipts.has(receiptKey)) return this.receipts.get(receiptKey).result;
       let affected = 0;
-      for (const item of a.items.values()) if (item.change_seq <= body.selector.up_to_seq && (!body.selector.category || item.category === body.selector.category) && body.op === 'mark_read' && !item.read) { Object.assign(item, { read: true, row_version: item.row_version + 1, change_seq: ++a.seq }); affected += 1; }
+      for (const item of a.items.values()) if (this.visible(a, item, body.selector.client_app_id) && item.change_seq <= body.selector.up_to_seq && (!body.selector.category || item.category === body.selector.category) && body.op === 'mark_read' && !item.read) { Object.assign(item, { read: true, row_version: item.row_version + 1, change_seq: ++a.seq }); affected += 1; }
       const result = { affected, through_seq: a.seq }; this.receipts.set(receiptKey, { body, result }); return result;
     }
     throw Object.assign(new Error('unknown route'), { status: 404 });
@@ -415,10 +443,158 @@ describe('inbox preferences', () => {
     const { saveInboxRule, fetchNotificationPreferences, buildCategoryRows } = await import('../src/notification-rules.js');
     const [one] = devices; const sent = [];
     const transport = async (_w, route, options) => { sent.push({ route, ...options }); return { identity: { workspace_id: 'ws' }, rules: [] }; };
-    await saveInboxRule(one.store, { source_app_id: 'flightdeck.core', category: 'mention' }, false, { transport });
-    expect(sent[0]).toMatchObject({ route: 'rules', method: 'PUT', body: { rules: [{ source_app_id: 'flightdeck.core', category: 'mention', client_app_id: '*', channel: 'inbox', mode: 'off' }] } });
+    await saveInboxRule(one.store, { source_app_id: 'flightdeck.core', category: 'mention', expected_row_version: 0 }, false, { transport });
+    expect(sent[0]).toMatchObject({ route: 'rules', method: 'PUT', body: { rules: [{ source_app_id: 'flightdeck.core', category: 'mention', client_app_id: 'ambulando', channel: 'inbox', mode: 'off', expected_row_version: 0 }] } });
     expect(sent[0].body.mutation_id).toMatch(/[0-9a-f-]{36}/);
     await expect(saveInboxRule(one.store, buildCategoryRows(registry, [])[2], false, { transport })).rejects.toThrow('always on');
     await expect(fetchNotificationPreferences(one.store, { transport: async () => ({ identity: { workspace_id: 'other' }, sources: [], rules: [] }) })).rejects.toThrow('another workspace');
+  });
+});
+
+describe('wire v1.1: per-app view, rules revision and rule CAS', () => {
+  const callsTo = route => server.calls.filter(c => c.route === route);
+  const rule = (category, mode, expected, extra = {}) => ({ source_app_id: 'flightdeck.core', category, client_app_id: 'ambulando', channel: 'inbox', mode, preview: null, expected_row_version: expected, ...extra });
+
+  it('filters every read and bulk by client_app_id=ambulando', async () => {
+    const [one] = devices;
+    server.emit('alice', 'a');
+    await one.sync();
+    await queueNotificationBulk(one.db, one.context, 'mark_read');
+    await one.sync();
+    for (const route of ['items', 'changes', 'counts']) expect(callsTo(route).every(c => c.query.client_app_id === 'ambulando')).toBe(true);
+    expect(callsTo('bulk')[0].body.selector).toMatchObject({ client_app_id: 'ambulando', up_to_seq: 1 });
+  });
+
+  it('keeps an item hidden for this app out of the list while another app still sees it with the same shared read state', async () => {
+    const [one] = devices;
+    server.emit('alice', 'shared');
+    server.emit('alice', 'hidden', { hidden_from: ['ambulando'] });
+    await one.sync();
+    expect((await rows(one)).map(r => r.id)).toEqual(['shared']);
+    expect(unreadCount(await rows(one), await state(one))).toBe(1);
+    expect(server.handle('alice', 'counts', { query: { client_app_id: 'ambulando' } }).unread_total).toBe(1);
+    expect(server.handle('alice', 'counts', { query: { client_app_id: 'blinkers' } }).unread_total).toBe(2);
+    // Reading in Ambulando is the one shared read state: the other app sees the same row_version and read flag.
+    await queueNotificationPatch(one.db, one.context, 'shared', { read: true });
+    await one.sync();
+    const other = server.handle('alice', 'items', { query: { client_app_id: 'blinkers' } }).items.find(item => item.id === 'shared');
+    expect(other.state.read).toBe(true);
+    expect(other.row_version).toBe((await rows(one)).find(r => r.id === 'shared').row_version);
+    expect(server.handle('alice', 'items', { query: { client_app_id: 'blinkers' } }).items.map(item => item.id).sort()).toEqual(['hidden', 'shared']);
+  });
+
+  it('persists rules_revision from the first snapshot page and sends it on changes', async () => {
+    const [one] = devices;
+    server.emit('alice', 'a');
+    await one.sync();
+    expect((await state(one)).rules_revision).toBe(1);
+    expect(callsTo('changes').every(c => c.query.rules_revision === 1)).toBe(true);
+  });
+
+  it('resets and flags preferences stale when rules change on another device', async () => {
+    const [one, two] = devices;
+    server.emit('alice', 'm', { category: 'mention' });
+    server.emit('alice', 'c', { category: 'chat_thread' });
+    await one.sync();
+    expect((await rows(one)).length).toBe(2);
+    const { saveInboxRule } = await import('../src/notification-rules.js');
+    await saveInboxRule(two.store, { source_app_id: 'flightdeck.core', category: 'mention', expected_row_version: 0 }, false, { transport: two.transport });
+    server.calls.length = 0;
+    await one.sync();
+    expect(server.calls.filter(c => c.route === 'changes').map(c => c.query.rules_revision)).toEqual([1, 2]);
+    expect(callsTo('items').length).toBeGreaterThan(0);
+    expect((await rows(one)).map(r => r.id)).toEqual(['c']);
+    const after = await state(one);
+    expect(after.rules_revision).toBe(2);
+    expect(after.prefs_stale).toBe(true);
+    expect(after.ready).toBe(true);
+  });
+
+  it('re-snapshots when a counts response reports a different rules_revision', async () => {
+    const [one] = devices;
+    server.emit('alice', 'm', { category: 'mention' });
+    await one.sync();
+    server.actor('alice').rulesRevision = 5; // changed elsewhere between the changes call and counts
+    const realHandle = server.handle.bind(server);
+    server.handle = (actor, route, options) => realHandle(actor, route, route === 'changes' ? { ...options, query: { ...options.query, rules_revision: undefined } } : options);
+    await one.sync();
+    expect((await state(one)).rules_revision).toBe(5);
+  });
+
+  it('advances past a page the filter emptied and does not loop', async () => {
+    const [one] = devices;
+    server.emit('alice', 'a');
+    await one.sync();
+    server.emit('alice', 'x', { hidden_from: ['ambulando'] });
+    server.emit('alice', 'y', { hidden_from: ['ambulando'] });
+    server.calls.length = 0;
+    await one.sync();
+    expect(callsTo('changes').length).toBe(1);
+    expect((await state(one)).local_seq).toBe(3);
+    expect(callsTo('items').length).toBe(0); // no rebuild: counts agree because they use the same predicate
+  });
+
+  it('writes this app\'s own key with per-entry expected_row_version and adopts the response', async () => {
+    const [one] = devices;
+    const { saveInboxRule } = await import('../src/notification-rules.js');
+    const sent = [];
+    const transport = async (...args) => { sent.push(args[2].body); return one.transport(...args); };
+    const first = await saveInboxRule(one.store, { source_app_id: 'flightdeck.core', category: 'mention', expected_row_version: 0 }, false, { transport });
+    expect(sent[0].rules).toEqual([rule('mention', 'off', 0)]);
+    expect(sent[0].rules[0].client_app_id).toBe('ambulando');
+    expect(first.rulesRevision).toBe(2);
+    expect(first.rules[0]).toMatchObject({ client_app_id: 'ambulando', mode: 'off', row_version: 1 });
+  });
+
+  it('rules_conflict is atomic, adopts every current rule and needs a user retry with a new mutation id', async () => {
+    const [one, two] = devices;
+    const { saveInboxRule, NotificationRulesConflictError } = await import('../src/notification-rules.js');
+    // Another device wrote the same key first.
+    await saveInboxRule(two.store, { source_app_id: 'flightdeck.core', category: 'mention', expected_row_version: 0 }, false, { transport: two.transport });
+    const mutationIds = [];
+    const transport = async (...args) => { mutationIds.push(args[2].body.mutation_id); return one.transport(...args); };
+    const stale = { source_app_id: 'flightdeck.core', category: 'mention', expected_row_version: 0 };
+    const error = await saveInboxRule(one.store, stale, true, { transport }).catch(e => e);
+    expect(error).toBeInstanceOf(NotificationRulesConflictError);
+    expect(error.rulesRevision).toBe(2);
+    expect(error.rules.map(r => [r.category, r.mode, r.row_version])).toEqual([['mention', 'off', 1]]);
+    expect(server.actor('alice').rules.get('flightdeck.core|mention|ambulando|inbox').mode).toBe('off'); // nothing written
+    // Atomicity across entries: one stale key blocks the fresh one too.
+    const mixed = await one.transport('ws', 'rules', { method: 'PUT', body: { mutation_id: crypto.randomUUID(), rules: [rule('chat_thread', 'off', 0), rule('mention', 'on', 0)] } }).catch(e => e);
+    expect(mixed.payload.code).toBe('rules_conflict');
+    expect(server.actor('alice').rules.has('flightdeck.core|chat_thread|ambulando|inbox')).toBe(false);
+    // User retry from the adopted rows uses the current version and a new mutation id.
+    const { buildCategoryRows } = await import('../src/notification-rules.js');
+    const registry = { sources: [{ app_id: 'flightdeck.core', label: 'Flight Deck', categories: [{ category: 'mention', label: 'Mentions', default_inbox: 'on' }] }] };
+    const [row] = buildCategoryRows(registry, error.rules);
+    expect(row).toMatchObject({ inboxOn: false, expected_row_version: 1 });
+    const ok = await saveInboxRule(one.store, row, true, { transport });
+    expect(new Set(mutationIds).size).toBe(2);
+    expect(ok.rules[0]).toMatchObject({ mode: 'on', row_version: 2 });
+  });
+
+  it('treats mutation_id reuse as a rejection, not a conflict to retry', async () => {
+    const [one] = devices;
+    const { NotificationRulesConflictError } = await import('../src/notification-rules.js');
+    const body = { mutation_id: 'fixed-id', rules: [rule('mention', 'off', 0)] };
+    await one.transport('ws', 'rules', { method: 'PUT', body });
+    const error = await one.transport('ws', 'rules', { method: 'PUT', body: { ...body, rules: [rule('mention', 'on', 0)] } }).catch(e => e);
+    expect(error.payload.code).toBe('mutation_id_reused');
+    expect(error).not.toBeInstanceOf(NotificationRulesConflictError);
+    expect((await one.transport('ws', 'rules', { method: 'PUT', body })).rules_revision).toBe(2); // identical replay is the stored 200
+  });
+
+  it('resolves app rules, inherited default rows and the most specific level; the shared switch cannot be overridden by an app rule', async () => {
+    const { resolveInboxMode, buildCategoryRows } = await import('../src/notification-rules.js');
+    const r = (source, category, client, mode, row_version = 1) => ({ source_app_id: source, category, client_app_id: client, channel: 'inbox', mode, row_version });
+    expect(resolveInboxMode([r('flightdeck.core', 'mention', '*', 'off'), r('flightdeck.core', 'mention', 'ambulando', 'on')], 'flightdeck.core', 'mention')).toBe('on');
+    expect(resolveInboxMode([r('flightdeck.core', '*', 'ambulando', 'off'), r('flightdeck.core', 'mention', '*', 'on')], 'flightdeck.core', 'mention')).toBe('on'); // (src,cat) beats (src,*)
+    expect(resolveInboxMode([r('flightdeck.core', 'mention', 'ambulando', 'default'), r('*', '*', '*', 'off')], 'flightdeck.core', 'mention')).toBe('off'); // default inherits downwards
+    expect(resolveInboxMode([], 'flightdeck.core', 'mention')).toBeNull();
+    const registry = { sources: [{ app_id: 'flightdeck.core', label: 'Flight Deck', categories: [{ category: 'mention', label: 'Mentions', default_inbox: 'on' }, { category: 'dm', label: 'DMs', default_inbox: 'on' }] }] };
+    const rows = buildCategoryRows(registry, [r('flightdeck.core', 'mention', 'ambulando', 'default', 4), r('flightdeck.core', 'dm', '*', 'off', 2), r('flightdeck.core', 'dm', 'ambulando', 'on', 3)]);
+    // A durable default row still supplies the version for CAS while the registry default decides the display.
+    expect(rows[0]).toMatchObject({ inboxOn: true, explicit: false, expected_row_version: 4, sharedOff: false });
+    expect(rows[1]).toMatchObject({ inboxOn: false, sharedOff: true, expected_row_version: 3 });
   });
 });

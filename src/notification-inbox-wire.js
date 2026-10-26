@@ -7,6 +7,8 @@ export const NOTIFICATION_SNAPSHOT_PAGE_LIMIT = 100;
 export const NOTIFICATION_SNAPSHOT_PAGES_PER_JOB = 30;
 export const NOTIFICATION_CHANGES_PAGE_LIMIT = 200;
 export const NOTIFICATION_COUNT_CAP = 999;
+// Presentation filter for the shared inbox (wire v1.1). It selects what this app shows; it is never access authority.
+export const NOTIFICATION_CLIENT_APP_ID = 'ambulando';
 // Item statuses that remove the row from every local partition.
 const REMOVED_STATUSES = new Set(['withdrawn', 'expired', 'revoked']);
 const TITLE_MAX = 120;
@@ -95,29 +97,39 @@ function requireIdentity(response, context) {
   if (workspaceId !== undefined && workspaceId !== context.workspaceId) throw new NotificationWireError('Notification response belongs to another workspace', 'identity_mismatch');
 }
 
+/** Per-recipient preference generation (wire v1.1); null when an older Tower omits it. */
+export function rulesRevisionOf(response) {
+  return positiveInt(response?.rules_revision) ? response.rules_revision : null;
+}
+
 export function normalizeItemsPage(response, context) {
   requireIdentity(response, context);
   if (!Array.isArray(response?.items) || !positiveInt(response.head_seq)) throw new NotificationWireError('Invalid notification list response');
-  return { items: response.items.map(item => normalizeNotificationItem(item, context)), next_cursor: response.next_cursor || null, head_seq: response.head_seq, inbox_started_at: text(response.inbox_started_at, 40) };
+  return { rules_revision: rulesRevisionOf(response), items: response.items.map(item => normalizeNotificationItem(item, context)), next_cursor: response.next_cursor || null, head_seq: response.head_seq, inbox_started_at: text(response.inbox_started_at, 40) };
 }
 
 export function normalizeChangesPage(response, context) {
   requireIdentity(response, context);
   if (!Array.isArray(response?.changes) || !positiveInt(response.through_seq)) throw new NotificationWireError('Invalid notification changes response');
-  return { changes: response.changes.map(change => normalizeNotificationChange(change, context)), through_seq: response.through_seq, head_seq: positiveInt(response.head_seq) ? response.head_seq : response.through_seq, has_more: response.has_more === true };
+  return { rules_revision: rulesRevisionOf(response), changes: response.changes.map(change => normalizeNotificationChange(change, context)), through_seq: response.through_seq, head_seq: positiveInt(response.head_seq) ? response.head_seq : response.through_seq, has_more: response.has_more === true };
 }
 
 export function normalizeCounts(response, context) {
   requireIdentity(response, context);
   if (!positiveInt(response?.unread_total)) throw new NotificationWireError('Invalid notification counts response');
   const record = value => Object.fromEntries(Object.entries(value && typeof value === 'object' ? value : {}).filter(([, count]) => positiveInt(count)));
-  return { unread_total: response.unread_total, by_category: record(response.by_category), by_source_app: record(response.by_source_app), badge: positiveInt(response.badge) ? response.badge : null, capped_at: positiveInt(response.capped_at) ? response.capped_at : NOTIFICATION_COUNT_CAP, head_seq: positiveInt(response.head_seq) ? response.head_seq : null, inbox_started_at: text(response.inbox_started_at, 40) };
+  return { rules_revision: rulesRevisionOf(response), unread_total: response.unread_total, by_category: record(response.by_category), by_source_app: record(response.by_source_app), badge: positiveInt(response.badge) ? response.badge : null, capped_at: positiveInt(response.capped_at) ? response.capped_at : NOTIFICATION_COUNT_CAP, head_seq: positiveInt(response.head_seq) ? response.head_seq : null, inbox_started_at: text(response.inbox_started_at, 40) };
 }
 
 export function requestBodyForMutation(pending) {
   return pending.kind === 'bulk'
     ? { mutation_id: pending.mutation_id, op: pending.op, selector: pending.selector }
     : { mutation_id: pending.mutation_id, expected_row_version: pending.expected_row_version, ...(Number.isSafeInteger(pending.observed_change_seq) ? { observed_change_seq: pending.observed_change_seq } : {}), patch: pending.patch };
+}
+
+/** 410 reset_required because the recipient's rules changed since the snapshot (wire v1.1). */
+export function isRulesChangedReset(error) {
+  return (error?.status === 410 || errorCode(error) === 'reset_required') && error?.payload?.reason === 'rules_changed';
 }
 
 /** Collection routes missing on an older Tower, as opposed to a transient failure. Never use for item-level 404s. */

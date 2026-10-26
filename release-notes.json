@@ -5300,6 +5300,14 @@
         "Notifications only count as read when you have seen their latest activity: read, dismiss and archive changes made on a stale view are not applied and you are told why.",
         "Opening a notification loads its destination first and keeps it unread if loading fails; very large inboxes now load completely before they are shown as ready."
       ]
+    },
+    {
+      "buildNumber": 2655,
+      "label": "Per-app notification preferences",
+      "notes": [
+        "Notification inbox preferences now change only what Ambulando shows; your read state stays shared with your other apps.",
+        "If preferences change on another device, the inbox reloads and the settings list refreshes; conflicting saves keep your other device's choices and ask you to try again."
+      ]
     }
   ]
 }

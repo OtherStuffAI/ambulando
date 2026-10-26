@@ -1,6 +1,7 @@
 import { resolvePgReaderActorId } from './pg-reader-identity.js';
 import { resolveTowerPgWorkspaceContext } from './pg-workspace-context.js';
 import { getWorkspaceDb } from './db.js';
+import { NOTIFICATION_CLIENT_APP_ID } from './notification-inbox-wire.js';
 
 // Local shape of the shared notification inbox. Server truth lives in
 // `notification_items`; user intent that has not been acknowledged lives only in
@@ -28,7 +29,7 @@ export function notificationInboxContextOrNull(store) {
 const emptyState = context => ({
   key: context.key, context: context.key, ready: false, status: 'unknown', local_seq: 0, head_seq: 0,
   counts: null, pending: [], error: '', notice: '', archived_hydrated: false, snapshot: null, activated_at: null,
-  retry_after: 0, heal_after: 0,
+  retry_after: 0, heal_after: 0, rules_revision: null, prefs_stale: false,
 });
 
 // ---- pure projection helpers (shared by the worker reducer and the UI) -----
@@ -121,8 +122,13 @@ export async function applyNotificationInboxOperation(input, db = getWorkspaceDb
     const upsert = async (rows) => { for (const row of rows) { if (row.removed) await db.notification_items.delete(row.key); else await putIfNewer(db, row); } };
     switch (input.action) {
       case 'snapshot_page': {
-        if (input.first) state.snapshot = { gen: input.gen, seq: input.head_seq, partition: input.partition || 'inbox', started_at: input.inbox_started_at || '', cursor: null, pages: 0 };
+        if (input.first) state.snapshot = { gen: input.gen, seq: input.head_seq, partition: input.partition || 'inbox', started_at: input.inbox_started_at || '', rules_revision: input.rules_revision ?? null, cursor: null, pages: 0 };
         if (state.snapshot?.gen !== input.gen) break;
+        // Preferences changed while this snapshot was paging: the pages mix two visibility predicates.
+        // An archived load against a different revision than the inbox is discarded; the inbox rebuilds.
+        if (state.snapshot.partition === 'archived' && state.rules_revision && input.page_rules_revision && input.page_rules_revision !== state.rules_revision) {
+          state.snapshot = null; state.needs_snapshot = true; state.prefs_stale = true; break;
+        }
         await upsert(input.items.map(row => ({ ...row, snapshot_gen: input.gen })));
         // Continuation survives bounded jobs: the original first-page head and generation are kept.
         state.snapshot.cursor = input.next_cursor || null;
@@ -147,6 +153,8 @@ export async function applyNotificationInboxOperation(input, db = getWorkspaceDb
           state.local_seq = seq;
           state.activated_at = state.snapshot.started_at || state.activated_at || '';
           state.needs_snapshot = false;
+          // Replay and later changes send the revision that was current at the snapshot's first page.
+          state.rules_revision = state.snapshot.rules_revision ?? null;
         } else state.archived_hydrated = true;
         state.head_seq = partition === 'inbox' ? seq : state.head_seq;
         state.status = 'ok';
@@ -176,6 +184,12 @@ export async function applyNotificationInboxOperation(input, db = getWorkspaceDb
         break;
       case 'needs_snapshot':
         state.needs_snapshot = true;
+        break;
+      case 'prefs_stale':
+        state.prefs_stale = true;
+        break;
+      case 'prefs_fresh':
+        state.prefs_stale = false;
         break;
       case 'request_archived':
         state.archived_requested = true;
@@ -291,7 +305,7 @@ export async function queueNotificationBulk(db, context, op, filters = {}) {
   if (!BULK_OPS.includes(op)) throw new Error('Unsupported bulk action.');
   return db.transaction('rw', db.notification_inbox, async () => {
     const state = await requireReady(db, context);
-    const selector = { up_to_seq: state.local_seq, ...(filters.category ? { category: filters.category } : {}), ...(filters.source_app_id ? { source_app_id: filters.source_app_id } : {}), ...(filters.view === 'unread' ? { view: 'unread' } : {}) };
+    const selector = { up_to_seq: state.local_seq, client_app_id: NOTIFICATION_CLIENT_APP_ID, ...(filters.category ? { category: filters.category } : {}), ...(filters.source_app_id ? { source_app_id: filters.source_app_id } : {}), ...(filters.view === 'unread' ? { view: 'unread' } : {}) };
     state.pending.push({ kind: 'bulk', mutation_id: crypto.randomUUID(), op, selector, attempted: true, conflicts: 0, created_at: new Date().toISOString() });
     state.error = '';
     await db.notification_inbox.put(state);

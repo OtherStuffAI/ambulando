@@ -6,7 +6,7 @@ import {
   queueNotificationPatch, unreadCount,
 } from './notification-inbox-store.js';
 import { hydrateArchivedNotifications } from './notification-inbox-sync.js';
-import { buildCategoryRows, fetchNotificationPreferences, saveInboxRule } from './notification-rules.js';
+import { NotificationRulesConflictError, buildCategoryRows, fetchNotificationPreferences, saveInboxRule } from './notification-rules.js';
 
 const subscriptions = new WeakMap();
 export const NOTIFICATION_BADGE_CAP = 99;
@@ -77,6 +77,9 @@ export const notificationInboxMixin = {
   notificationPrefsLoaded: false,
   notificationPrefsLoading: false,
   notificationPrefsError: '',
+  notificationPrefsRegistry: null,
+  notificationPrefsRules: [],
+  notificationPrefsRevision: null,
 
   get notificationInboxBadge() {
     const count = this.notificationInboxUnread;
@@ -111,6 +114,9 @@ export const notificationInboxMixin = {
     this.notificationPrefsRows = [];
     this.notificationPrefsLoaded = false;
     this.notificationPrefsError = '';
+    this.notificationPrefsRegistry = null;
+    this.notificationPrefsRules = [];
+    this.notificationPrefsRevision = null;
   },
 
   activateNotificationInbox() {
@@ -152,6 +158,8 @@ export const notificationInboxMixin = {
     this.notificationInboxPending = state?.pending?.length || 0;
     this.notificationInboxNotice = state?.notice || '';
     this.notificationInboxMessage = STATUS_COPY[state?.status] || state?.error || '';
+    // Preferences changed on another device (a rules_changed reset or a newer rules_revision seen by sync): the settings list is stale.
+    if (this.notificationPrefsLoaded && state?.prefs_stale) this.notificationPrefsLoaded = false;
   },
 
   toggleNotificationInbox(open = !this.notificationInboxOpen) {
@@ -239,8 +247,9 @@ export const notificationInboxMixin = {
     try {
       const result = await fetchNotificationPreferences(this);
       if (notificationInboxContextOrNull(this)?.key !== key) return; // workspace changed while loading
-      this.notificationPrefsRows = buildCategoryRows(result.registry, result.rules);
+      this.adoptNotificationPreferences(result.registry, result.rules, result.rulesRevision);
       this.notificationPrefsLoaded = true;
+      void this.markNotificationPreferencesFresh();
     } catch (error) {
       if (notificationInboxContextOrNull(this)?.key !== key) return;
       this.notificationPrefsError = [404, 405, 501].includes(error.status) ? STATUS_COPY.unsupported : (error.message || 'Could not load notification preferences.');
@@ -252,14 +261,39 @@ export const notificationInboxMixin = {
     try {
       const result = await saveInboxRule(this, row, on, options);
       if (notificationInboxContextOrNull(this)?.key !== key) return;
-      this.notificationPrefsRows = this.notificationPrefsRows.map(item => item.key === row.key ? { ...item, inboxOn: item.mandatory ? true : on, explicit: true } : item);
+      // The response carries every current rule and the new revision: render and CAS from the server's truth.
+      this.adoptNotificationPreferences(this.notificationPrefsRegistry, result.rules, result.rulesRevision);
       // A rule changes which items the server shows and counts: rebuild the local inbox from the authority.
-      await this.getTowerSyncService()?.materialize('workspace-bundle', { notification_inbox_operation: { action: 'needs_snapshot', context: { key: result.contextKey, workspaceId: notificationInboxContext(this).workspaceId, actorId: notificationInboxContext(this).actorId } } }, { workspaceDbKey: this.workspaceDbKey, store: this.buildTowerPgMaterializationStoreSnapshot() });
+      await this.getTowerSyncService()?.materialize('workspace-bundle', { notification_inbox_operation: { action: 'needs_snapshot', context: this.notificationInboxOperationContext(result.contextKey) } }, { workspaceDbKey: this.workspaceDbKey, store: this.buildTowerPgMaterializationStoreSnapshot() });
       void this.requestTowerSyncFamily?.('notification-inbox').catch(() => {});
     } catch (error) {
+      if (notificationInboxContextOrNull(this)?.key !== key) return;
+      if (error instanceof NotificationRulesConflictError) {
+        // Nothing was written. Adopt every current rule and the revision, then leave the retry to the user (new mutation id on that retry).
+        if (error.rules.length) this.adoptNotificationPreferences(this.notificationPrefsRegistry, error.rules, error.rulesRevision);
+        else this.notificationPrefsLoaded = false;
+        this.notificationPrefsError = error.message;
+        return;
+      }
       this.notificationPrefsError = error.message || 'Could not save this preference.';
       await this.loadNotificationInboxPreferences(); // show the server's truth again
     }
+  },
+
+  adoptNotificationPreferences(registry, rules, revision) {
+    this.notificationPrefsRegistry = registry;
+    this.notificationPrefsRules = rules;
+    this.notificationPrefsRevision = revision ?? null;
+    this.notificationPrefsRows = buildCategoryRows(registry, rules);
+  },
+  notificationInboxOperationContext(key = notificationInboxContext(this).key) {
+    const context = notificationInboxContext(this);
+    return { key, workspaceId: context.workspaceId, actorId: context.actorId };
+  },
+  async markNotificationPreferencesFresh() {
+    try {
+      await this.getTowerSyncService()?.materialize('workspace-bundle', { notification_inbox_operation: { action: 'prefs_fresh', context: this.notificationInboxOperationContext() } }, { workspaceDbKey: this.workspaceDbKey, store: this.buildTowerPgMaterializationStoreSnapshot() });
+    } catch { /* the revision comparison still detects a stale list */ }
   },
 
   clearNotificationInboxNotice() {

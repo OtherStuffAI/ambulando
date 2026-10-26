@@ -8478,7 +8478,7 @@
               <div class="settings-panel-header">
                 <div>
                   <h2>Notification inbox</h2>
-                  <p>Choose which kinds of activity reach your in-app inbox in this workspace. Your inbox and its read state are shared by every app you use here.</p>
+                  <p>Choose which kinds of activity Ambulando shows from your inbox in this workspace. Your inbox and its read state are shared by every app you use here; these choices only change what this app shows.</p>
                 </div>
                 <button type="button" class="btn-cancel btn-compact" @click="$store.chat.notificationPrefsLoaded = false; $store.chat.notificationPrefsError = ''; $store.chat.loadNotificationInboxPreferences()" :disabled="$store.chat.notificationPrefsLoading">Refresh</button>
               </div>
@@ -8487,8 +8487,8 @@
               <div class="notification-category-list">
                 <template x-for="row in $store.chat.notificationPrefsRows" :key="row.key">
                   <label class="settings-checkbox-row notification-category-row">
-                    <input type="checkbox" :checked="row.inboxOn" :disabled="row.mandatory" :data-testid="'notification-inbox-rule-' + row.category" @change="$store.chat.setNotificationInboxRule(row, $event.target.checked)" />
-                    <span><strong x-text="row.label"></strong> <small x-text="row.source_label"></small><small x-show="row.mandatory"> · always on</small></span>
+                    <input type="checkbox" :checked="row.inboxOn" :disabled="row.mandatory || row.sharedOff" :data-testid="'notification-inbox-rule-' + row.category" @change="$store.chat.setNotificationInboxRule(row, $event.target.checked)" />
+                    <span><strong x-text="row.label"></strong> <small x-text="row.source_label"></small><small x-show="row.mandatory"> · always on</small><small x-show="row.sharedOff"> · off for every app</small></span>
                   </label>
                 </template>
               </div>

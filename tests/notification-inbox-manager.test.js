@@ -109,15 +109,29 @@ describe('notification inbox manager', () => {
     const db = getWorkspaceDb();
     s.getTowerSyncService = () => ({ materialize: async (_family, bundle) => applyNotificationInboxOperation(structuredClone(bundle.notification_inbox_operation), db) });
     s.buildTowerPgMaterializationStoreSnapshot = () => ({});
-    const row = { key: 'flightdeck.core|mention', source_app_id: 'flightdeck.core', category: 'mention', mandatory: false, inboxOn: true };
-    s.notificationPrefsRows = [row];
+    const registry = { sources: [{ app_id: 'flightdeck.core', label: 'Flight Deck', categories: [{ category: 'mention', label: 'Mentions', default_inbox: 'on' }] }] };
+    s.adoptNotificationPreferences(registry, [], 1);
+    const row = s.notificationPrefsRows[0];
     const sent = [];
-    const transport = async (_w, route, options) => { sent.push([route, options.method]); return { identity: { workspace_id: 'workspace-a' }, rules: [] }; };
+    const written = { source_app_id: 'flightdeck.core', category: 'mention', client_app_id: 'ambulando', channel: 'inbox', mode: 'off', row_version: 1 };
+    const transport = async (_w, route, options) => { sent.push([route, options.method, options.body?.rules?.[0]?.expected_row_version]); return { identity: { workspace_id: 'workspace-a' }, rules: [written], rules_revision: 2 }; };
     await s.setNotificationInboxRule(row, false, { transport });
-    expect(sent).toEqual([['rules', 'PUT']]);
+    expect(sent).toEqual([['rules', 'PUT', 0]]);
+    expect(s.notificationPrefsRevision).toBe(2);
+    expect(s.notificationPrefsRows[0].expected_row_version).toBe(1);
     expect(s.notificationPrefsRows[0].inboxOn).toBe(false);
     expect((await db.notification_inbox.get(context.key)).needs_snapshot).toBe(true);
     expect(s.requestTowerSyncFamily).toHaveBeenCalledWith('notification-inbox');
+    // Another device wrote first: nothing is written, every current rule and the revision are adopted, and the user retries.
+    const other = { ...written, mode: 'on', row_version: 3 };
+    await s.setNotificationInboxRule(s.notificationPrefsRows[0], true, { transport: async () => { throw Object.assign(new Error('conflict'), { status: 409, payload: { code: 'rules_conflict', rules: [other], rules_revision: 9 } }); } });
+    expect(s.notificationPrefsRevision).toBe(9);
+    expect(s.notificationPrefsRows[0]).toMatchObject({ inboxOn: true, expected_row_version: 3 });
+    expect(s.notificationPrefsError).toMatch(/changed on another device/);
+    // A rules_changed reset marks the loaded list stale so the settings panel refetches it.
+    s.notificationPrefsLoaded = true;
+    s.projectNotificationInbox({ rows: [], state: { prefs_stale: true, pending: [] } });
+    expect(s.notificationPrefsLoaded).toBe(false);
     // A rejected save reloads the server's truth rather than leaving a fabricated state.
     s.loadNotificationInboxPreferences = vi.fn(async () => {});
     await s.setNotificationInboxRule(row, true, { transport: async () => { throw Object.assign(new Error('Tower said no'), { status: 403 }); } });

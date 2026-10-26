@@ -4,7 +4,7 @@ import { notificationInboxContext } from './notification-inbox-store.js';
 import { unreadCount } from './notification-inbox-store.js';
 import {
   NOTIFICATION_CHANGES_PAGE_LIMIT, NOTIFICATION_SNAPSHOT_PAGES_PER_JOB, NOTIFICATION_SNAPSHOT_PAGE_LIMIT,
-  errorCode, isUnsupportedBackend, normalizeChangesPage, normalizeCounts, normalizeItemsPage, normalizeNotificationItem, requestBodyForMutation,
+  NOTIFICATION_CLIENT_APP_ID, errorCode, isRulesChangedReset, isUnsupportedBackend, normalizeChangesPage, normalizeCounts, normalizeItemsPage, normalizeNotificationItem, requestBodyForMutation,
 } from './notification-inbox-wire.js';
 
 const UNSUPPORTED_RETRY_MS = 10 * 60_000;
@@ -55,6 +55,8 @@ async function pass(store, service, context, { db, transport, now, snapshotPageB
     state = await readState();
     if ((state.archived_requested && !state.archived_hydrated) || state.snapshot?.partition === 'archived') {
       if (!await snapshot('archived')) { slots.get(service).dirty = current(); return; }
+      // Preferences moved during the archived load: its rows were computed under another revision, so rebuild everything.
+      if ((await readState())?.needs_snapshot) { slots.get(service).dirty = current(); return; }
     }
     if (!current()) return;
     const flushed = await flush();
@@ -79,14 +81,14 @@ async function pass(store, service, context, { db, transport, now, snapshotPageB
       let snap = !restart && attempts === 0 && state?.snapshot?.partition === partition ? state.snapshot : null;
       if (!snap && state?.snapshot) await materialize({ action: 'snapshot_abort' });
       const gen = snap?.gen || crypto.randomUUID();
-      let cursor = snap?.cursor || null, head = snap?.seq ?? null, started = snap?.started_at || '', pages = 0;
+      let cursor = snap?.cursor || null, head = snap?.seq ?? null, started = snap?.started_at || '', revision = snap ? snap.rules_revision ?? null : null, pages = 0;
       try {
         do {
-          const page = normalizeItemsPage(await request('items', { query: { view: partition === 'archived' ? 'archived' : 'inbox', limit: NOTIFICATION_SNAPSHOT_PAGE_LIMIT, cursor } }), context);
+          const page = normalizeItemsPage(await request('items', { query: { view: partition === 'archived' ? 'archived' : 'inbox', limit: NOTIFICATION_SNAPSHOT_PAGE_LIMIT, cursor, client_app_id: NOTIFICATION_CLIENT_APP_ID } }), context);
           if (!current()) return false;
           // The first page's head is the replay origin for the whole snapshot, across jobs.
-          if (head === null) { head = page.head_seq; started = page.inbox_started_at; }
-          await materialize({ action: 'snapshot_page', gen, first: !snap && pages === 0, head_seq: head, partition, items: page.items, inbox_started_at: started, next_cursor: page.next_cursor });
+          if (head === null) { head = page.head_seq; started = page.inbox_started_at; revision = page.rules_revision; }
+          await materialize({ action: 'snapshot_page', gen, first: !snap && pages === 0, head_seq: head, partition, items: page.items, inbox_started_at: started, rules_revision: revision, page_rules_revision: page.rules_revision, next_cursor: page.next_cursor });
           cursor = page.next_cursor;
           pages += 1;
         } while (cursor && pages < snapshotPageBudget);
@@ -107,11 +109,13 @@ async function pass(store, service, context, { db, transport, now, snapshotPageB
       state = await readState();
       let page;
       try {
-        page = normalizeChangesPage(await request('changes', { query: { after_seq: state.local_seq, limit: NOTIFICATION_CHANGES_PAGE_LIMIT } }), context);
+        page = normalizeChangesPage(await request('changes', { query: { after_seq: state.local_seq, limit: NOTIFICATION_CHANGES_PAGE_LIMIT, client_app_id: NOTIFICATION_CLIENT_APP_ID, ...(state.rules_revision ? { rules_revision: state.rules_revision } : {}) } }), context);
       } catch (error) {
         // Cursor older than the retained tombstones (or ahead of a restored head): rebuild, keep local intent.
         if ((error.status === 410 || errorCode(error) === 'reset_required') && !resetOnce) {
           resetOnce = true;
+          // Preferences changed elsewhere: the rebuilt snapshot carries the new revision and the settings list must refetch.
+          if (isRulesChangedReset(error)) await materialize({ action: 'prefs_stale' });
           // Rebuild from a fresh origin; unsent intent is kept, archived rows re-hydrate in the next pass.
           if (!await snapshot('inbox', { restart: true })) { slots.get(service).dirty = current(); return; }
           if (state.archived_hydrated) await materialize({ action: 'rehydrate_archived' });
@@ -164,10 +168,17 @@ async function pass(store, service, context, { db, transport, now, snapshotPageB
   }
 
   async function reconcileCounts() {
-    const counts = normalizeCounts(await request('counts'), context);
+    const counts = normalizeCounts(await request('counts', { query: { client_app_id: NOTIFICATION_CLIENT_APP_ID } }), context);
     if (!current()) return;
     await materialize({ action: 'counts', counts });
     state = await readState();
+    // Any response whose rules_revision differs from the snapshot's means this view was computed under other preferences.
+    if (counts.rules_revision !== null && state.rules_revision && counts.rules_revision !== state.rules_revision) {
+      await materialize({ action: 'prefs_stale' });
+      await materialize({ action: 'needs_snapshot' });
+      slots.get(service).dirty = true;
+      return;
+    }
     if (state.pending.length || counts.head_seq === null || counts.head_seq > state.local_seq || counts.unread_total >= counts.capped_at) return;
     const rows = await db.notification_items.where('context').equals(context.key).toArray();
     // A local/server disagreement at the same sequence means a lost transition: rebuild once per cooldown.
