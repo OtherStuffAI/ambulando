@@ -9170,7 +9170,7 @@ export function initApp() {
       if (['message', 'thread'].includes(composer)) {
         const hasText = Boolean(value.trim());
         if (this.composerDraftHasText[composer] !== hasText) this.composerDraftHasText[composer] = hasText;
-        updateComposerCounter(this, composer, value);
+        this.refreshComposerCounter?.(composer, value);
         let elements = MENTION_COMPOSER_ELEMENTS.get(this);
         if (!elements) {
           elements = new Map();
@@ -9204,6 +9204,10 @@ export function initApp() {
         canShrink: previousValue != null && value !== previousValue && value.length <= previousValue.length,
       });
       return value;
+    },
+
+    refreshComposerCounter(composer, value) {
+      updateComposerCounter(this, composer, value);
     },
 
     handleComposerBeforeInput(event) {
@@ -10010,7 +10014,7 @@ export function initApp() {
       };
       draft.created_at = new Date().toISOString();
       this.setChatFileDrafts(context, [...this.getChatFileDrafts(context), draft]);
-      void persistTextDraft(this, context, draft);
+      void this.persistTextAttachmentDraft?.(context, draft);
       this.uploadChatFileDraft(draft.draft_id, context);
       return draft;
     },
@@ -10037,7 +10041,7 @@ export function initApp() {
       };
       const patchDraft = (patch) => {
         Object.assign(draft, patch);
-        if (draft.text_attachment) void persistTextDraft(this, context, draft);
+        if (draft.text_attachment) void this.persistTextAttachmentDraft?.(context, draft);
         this.setChatFileDrafts(context, this.getChatFileDrafts(context).map(item => item.draft_id === draftId ? { ...item, ...patch } : item));
         const key = draft.composer_draft_key;
         const saved = this.chatComposerDrafts?.[key];
@@ -10132,7 +10136,7 @@ export function initApp() {
       this._chatUploadControllers?.get(draftId)?.abort();
       const draft = this.getChatFileDrafts(context).find((item) => item.draft_id === draftId);
       this.resolveChatFileDraftInlineToken(draftId, context, '');
-      void discardPersistedTextDrafts([draft]);
+      void this.discardTextAttachmentDraftRows?.([draft]);
       this.revokeChatFileDraftPreview(draft);
       if (this.chatImagePreviewModal.open && this.chatImagePreviewModal.src === draft?.preview_url) {
         this.closeChatImagePreview();
@@ -10145,6 +10149,14 @@ export function initApp() {
       if (previewUrl && typeof globalThis.URL?.revokeObjectURL === 'function') globalThis.URL.revokeObjectURL(previewUrl);
     },
 
+    persistTextAttachmentDraft(context, draft) {
+      return persistTextDraft(this, context, draft);
+    },
+
+    discardTextAttachmentDraftRows(drafts) {
+      return discardPersistedTextDrafts(drafts);
+    },
+
     async restoreTextAttachmentDrafts(context = 'message') {
       const restored = await restorePersistedTextDrafts(this, context);
       for (const draft of restored) {
@@ -10153,7 +10165,7 @@ export function initApp() {
     },
 
     clearChatFileDrafts(context = 'message', { discardPersisted = false } = {}) {
-      if (discardPersisted) void discardPersistedTextDrafts(this.getChatFileDrafts(context));
+      if (discardPersisted) void this.discardTextAttachmentDraftRows?.(this.getChatFileDrafts(context));
       for (const draft of this.getChatFileDrafts(context)) this.revokeChatFileDraftPreview(draft);
       this.setChatFileDrafts(context, []);
       if (this.chatImagePreviewModal.open) this.closeChatImagePreview({ restoreFocus: false });
