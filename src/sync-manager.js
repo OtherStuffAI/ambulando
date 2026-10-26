@@ -1,4 +1,5 @@
 import { synchronizePrivatePreferences } from './private-preference-sync.js';
+import { synchronizeNotificationInbox } from './notification-inbox-sync.js';
 import { synchronizeThreadPins } from './thread-pin-sync.js';
 import { hydrateHostingBilling } from './hosting-billing.js';
 import { canLoadPgTarget } from './pg-archive-state.js';
@@ -146,6 +147,7 @@ const PG_SSE_TARGETED_ONLY_ENTITY_TYPES = new Set([
   'response_activity',
   'reaction',
   'resource_view_state',
+  'notification_item',
   'personal_agent_settings',
   'workroom',
   'workroom_event',
@@ -389,6 +391,7 @@ export const syncManagerMixin = {
         'hosting-billing': { freshMs: 60000, load: (_id, options) => hydrateHostingBilling(this, options), materialize: result => result },
         'private-preferences': { trackFreshness: false, load: () => synchronizePrivatePreferences(this) },
         'thread-pins': { trackFreshness: false, load: () => synchronizeThreadPins(this) },
+        'notification-inbox': { trackFreshness: false, load: () => synchronizeNotificationInbox(this) },
         'scope-order': { freshMs: 30000, load: (_id, options) => hydrateScopeOrder(this, options) },
         'org-data-permissions': { trackFreshness: false, load: (_key, options) => readOrgDataPermissions(this, options) },
         'org-data-installations': { trackFreshness: false, load: (_key, options) => hydrateOrgData(this, { ...options, catalogue: true }) },
@@ -1026,7 +1029,9 @@ export const syncManagerMixin = {
       if (isCurrent()) {
         await synchronizeThreadPins(this);
         await this.activateNostrViewer?.();
+        this.activateNotificationInbox?.();
         await synchronizePrivatePreferences(this).catch(() => {});
+        void synchronizeNotificationInbox(this).catch(() => {}); // cold start must not delay startup
         this.finishStartupSyncProgress(null, { waitingForTab: result?.waitingForTab === true });
       }
       // Every committed workspace pull is connectivity evidence, including
@@ -3374,6 +3379,8 @@ export const syncManagerMixin = {
           const recovery = await (this.requestTowerSyncFamily?.('workspace-bootstrap', '', { force: targetRecoveryRequired }) ?? this.runTowerPgWorkspaceSync());
           if (recovery?.deferred) throw Object.assign(new Error('Workspace recovery deferred'), { code: 'pg_read_authority_changed' });
           this.towerPgLastReplayDeltaAt = Date.now();
+          // Replay/recovery may have skipped hints; the inbox cursor is the authority.
+          void this.requestTowerSyncFamily?.('notification-inbox').catch(() => {});
         }
         if (!isCurrent()) continue;
         if (eventResult?.optionalFailures?.length) throw eventResult.optionalFailures[0].error;
@@ -3388,6 +3395,8 @@ export const syncManagerMixin = {
         }
         if (fallbackRefreshRequested) await this.recoverVisibleAgentActivities();
         if (events.some(event => event?.entity_type === 'private_preference')) await this.requestTowerSyncFamily('private-preferences');
+        // A notification hint carries no content: it only means "pull changes now".
+        if (events.some(event => event?.entity_type === 'notification_item')) await this.requestTowerSyncFamily('notification-inbox');
         const refreshPersonalAgents = events.some((event) => (
           String(event?.entity_type || '').trim() === 'personal_agent_settings'
         ));
@@ -3583,6 +3592,8 @@ export const syncManagerMixin = {
   },
 
   async backgroundSyncTick() {
+    // Safety net while the stream is not delivering hints.
+    if (this.sseStatus !== 'connected') void synchronizeNotificationInbox(this).catch(() => {});
     if(this.navSection==='files'){try{await this.requestTowerSyncFamily('drive-shares','',{force:true});}catch(_){}}
     const cadence = this.getSyncCadenceMs();
     if (!cadence) {

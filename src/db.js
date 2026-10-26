@@ -393,6 +393,10 @@ function* workspaceDbRegistration(workspaceDbKey, db = new Dexie(`wingman-fd-ws-
   // file-version id so a cached entry can never go stale.
   db.version(46).stores({ text_attachment_cache: '&key, workspace_id' });
   yield;
+  // Shared Tower notification inbox: server-authoritative item rows plus one
+  // state row per (backend, app, workspace, actor) holding cursor and unsent intent.
+  db.version(47).stores({ notification_items: '&key, context, [context+occurred_ms]', notification_inbox: '&key, context' });
+  yield;
   db.version(37).stores({ hosting_billing: '&key' });
   yield;
   db.version(36).stores({ scope_orders: '&record_id, workspace_id', pg_archived_targets: '&key, family, id' });

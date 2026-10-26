@@ -1549,6 +1549,15 @@ describe('PG read hydrator', () => {
     expect(replacePgTasksForChannel).toHaveBeenCalledWith('channel-3', [expect.objectContaining({ record_id: 'task-channel-3' })]);
   });
 
+  it('leaves notification inbox hints to their actor-bound family without full-workspace fallback', async () => {
+    const getTowerPgChannelMessages = vi.fn();
+    const result = await hydrateTowerPgEventUpdates(store({}), [
+      { entity_type: 'notification_item', entity_id: 'n1', payload: { recipient_actor_id: 'actor', change_seq: 4 } },
+    ], { getTowerPgChannelMessages, getSyncState: async () => null, runWorkspaceSyncTransaction: async callback => callback() });
+    expect(result.fallbackEvents).toBe(0);
+    expect(getTowerPgChannelMessages).not.toHaveBeenCalled();
+  });
+
   it('reconciles channel reorder SSE events through one authoritative channel refresh', async () => {
     const refreshChannels = vi.fn(async () => []);
     const target = store({ refreshChannels });

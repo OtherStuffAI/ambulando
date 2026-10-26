@@ -3019,6 +3019,15 @@ export async function towerPgPrivatePreference(workspaceId, key, { baseUrl = _ba
   return json(await signedTowerPgFetch(path, { baseUrl, appNpub, signal, method, ...(body === undefined ? {} : { body }), useWorkspaceKey: false }), { requestUrl: resolveTowerPgUrl(path, baseUrl), method, prefix: 'Private preference' });
 }
 
+// Shared notification inbox (org.wingman.notification.item v1). Every request is
+// actor-bound NIP-98 and workspace scoped; the caller owns cursor/CAS semantics.
+export async function towerPgNotificationInbox(workspaceId, route, { baseUrl = _baseUrl, appNpub = FLIGHT_DECK_PG_APP_NPUB, signal, method = 'GET', query, body } = {}) {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(query || {})) if (value !== undefined && value !== null && value !== '') params.set(key, String(value));
+  const path = `/api/v4/flightdeck-pg/workspaces/${encodeURIComponent(workspaceId)}/notifications/${route}${params.size ? `?${params}` : ''}`;
+  return json(await signedTowerPgFetch(path, { baseUrl, appNpub, signal, method, ...(body === undefined ? {} : { body }), useWorkspaceKey: false }), { requestUrl: resolveTowerPgUrl(path, baseUrl), method, prefix: 'Notification inbox' });
+}
+
 // File version history and compare-and-swap publication (channel file.read /
 // file.write). Excalidraw boards are Files; a stale `base_version_id` is
 // rejected atomically by Tower with 409 `stale_base_version`.

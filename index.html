@@ -396,6 +396,67 @@
       </button>
       <div class="session-controls" x-show="$store.chat.isLoggedIn">
 
+        <div class="notification-inbox-control" x-show="$store.chat.isTowerPgMode" x-cloak>
+          <button
+            type="button"
+            class="notification-inbox-button"
+            data-testid="notification-inbox-button"
+            @click="$store.chat.toggleNotificationInbox()"
+            :aria-label="'Notifications' + ($store.chat.notificationInboxUnread ? ', ' + $store.chat.notificationInboxUnread + ' unread' : '')"
+            aria-haspopup="true"
+            :aria-expanded="$store.chat.notificationInboxOpen ? 'true' : 'false'"
+            aria-controls="notification-inbox-panel"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
+            <span class="notification-inbox-badge" data-testid="notification-inbox-badge" x-show="$store.chat.notificationInboxUnread > 0" x-text="$store.chat.notificationInboxBadge"></span>
+          </button>
+          <section id="notification-inbox-panel" class="notification-inbox-panel" data-testid="notification-inbox-panel" role="region" aria-label="Notifications" tabindex="-1" x-sol-menu="$store.chat.notificationInboxOpen" x-show="$store.chat.notificationInboxOpen" x-cloak @click.outside="$store.chat.notificationInboxOpen = false">
+            <header class="notification-inbox-header">
+              <h2>Notifications</h2>
+              <div class="notification-inbox-header-actions">
+                <button type="button" class="btn-cancel btn-compact" data-testid="notification-inbox-mark-all" @click="$store.chat.markAllNotificationsRead()" :disabled="!$store.chat.notificationInboxUnread || !$store.chat.notificationInboxReady">Mark all read</button>
+                <button type="button" class="btn-cancel btn-compact" data-testid="notification-inbox-close" aria-label="Close notifications" @click="$store.chat.notificationInboxOpen = false">Close</button>
+              </div>
+            </header>
+            <div class="notification-inbox-filters" role="group" aria-label="Notification filters">
+              <template x-for="view in [['inbox','All'],['unread','Unread'],['archived','Archived']]" :key="view[0]">
+                <button type="button" class="notification-inbox-filter" :class="{ active: $store.chat.notificationInboxView === view[0] }" :aria-pressed="String($store.chat.notificationInboxView === view[0])" :data-testid="'notification-inbox-view-' + view[0]" @click="$store.chat.setNotificationInboxView(view[0])" x-text="view[1]"></button>
+              </template>
+              <select class="notification-inbox-category" aria-label="Filter by category" data-testid="notification-inbox-category" x-show="$store.chat.notificationInboxCategories.length > 1" @change="$store.chat.setNotificationInboxCategory($event.target.value)">
+                <option value="">All categories</option>
+                <template x-for="category in $store.chat.notificationInboxCategories" :key="category">
+                  <option :value="category" :selected="$store.chat.notificationInboxCategory === category" x-text="category.replaceAll('_', ' ')"></option>
+                </template>
+              </select>
+            </div>
+            <p class="notification-inbox-status" role="status" aria-live="polite" data-testid="notification-inbox-status" x-show="$store.chat.notificationInboxMessage" x-text="$store.chat.notificationInboxMessage"></p>
+            <p class="notification-inbox-status notification-inbox-notice" role="status" x-show="$store.chat.notificationInboxNotice"><span x-text="$store.chat.notificationInboxNotice"></span> <button type="button" class="btn-cancel btn-compact" @click="$store.chat.clearNotificationInboxNotice()">Dismiss</button></p>
+            <span class="sr-only" role="status" aria-live="polite" x-text="$store.chat.notificationInboxAnnouncement"></span>
+            <ul class="notification-inbox-list" data-testid="notification-inbox-list">
+              <template x-for="item in $store.chat.notificationInboxItems" :key="item.key">
+                <li class="notification-inbox-item" :class="{ unread: !item.read, unavailable: item.unavailable, ['severity-' + item.severity]: true }" :data-testid="'notification-inbox-item'" :data-notification-id="item.id">
+                  <button type="button" class="notification-inbox-open" :disabled="$store.chat.notificationInboxBusy" @click="$store.chat.openNotification(item)" :aria-label="(item.read ? '' : 'Unread. ') + item.title + (item.route ? '. Open' : '')">
+                    <span class="notification-inbox-dot" aria-hidden="true"></span>
+                    <span class="notification-inbox-copy">
+                      <span class="notification-inbox-title" x-text="item.title"></span>
+                      <span class="notification-inbox-body" x-show="item.body" x-text="item.body"></span>
+                      <span class="notification-inbox-meta"><span x-text="item.source.label"></span> · <span x-text="item.category.replaceAll('_', ' ')"></span><template x-if="item.group && item.group.event_count > 1"><span> · <span x-text="item.group.event_count"></span> updates</span></template> · <span x-text="item.ageLabel"></span></span>
+                    </span>
+                  </button>
+                  <div class="notification-inbox-actions">
+                    <button type="button" class="btn-cancel btn-compact" x-show="!item.read" @click="$store.chat.markNotificationRead(item)">Mark read</button>
+                    <button type="button" class="btn-cancel btn-compact" x-show="item.read" @click="$store.chat.markNotificationUnread(item)">Mark unread</button>
+                    <button type="button" class="btn-cancel btn-compact" x-show="!item.archived" @click="$store.chat.archiveNotification(item)">Archive</button>
+                    <button type="button" class="btn-cancel btn-compact" x-show="item.archived" @click="$store.chat.unarchiveNotification(item)">Restore</button>
+                    <button type="button" class="btn-cancel btn-compact" @click="$store.chat.dismissNotification(item)">Dismiss</button>
+                  </div>
+                </li>
+              </template>
+            </ul>
+            <p class="notification-inbox-empty" data-testid="notification-inbox-empty" x-show="!$store.chat.notificationInboxItems.length" x-text="$store.chat.notificationInboxEmptyText"></p>
+          </section>
+        </div>
+
         <button
           class="avatar-chip"
           :class="{
@@ -8411,6 +8472,29 @@
               <p class="settings-field-help" x-show="$store.chat.notificationsSupported && !$store.chat.notificationVapidPublicKey">Waiting for Tower to publish the Web Push application server key.</p>
               <p class="settings-success" x-show="$store.chat.notificationNotice" x-text="$store.chat.notificationNotice"></p>
               <p class="error-text" x-show="$store.chat.notificationError" x-text="$store.chat.notificationError"></p>
+            </section>
+
+            <section class="settings-panel notification-settings-panel" data-testid="notification-inbox-settings" x-effect="$store.chat.settingsTab === 'notifications' && $store.chat.isTowerPgMode && !$store.chat.notificationPrefsLoaded && !$store.chat.notificationPrefsLoading && !$store.chat.notificationPrefsError && $store.chat.loadNotificationInboxPreferences()">
+              <div class="settings-panel-header">
+                <div>
+                  <h2>Notification inbox</h2>
+                  <p>Choose which kinds of activity reach your in-app inbox in this workspace. Your inbox and its read state are shared by every app you use here.</p>
+                </div>
+                <button type="button" class="btn-cancel btn-compact" @click="$store.chat.notificationPrefsLoaded = false; $store.chat.notificationPrefsError = ''; $store.chat.loadNotificationInboxPreferences()" :disabled="$store.chat.notificationPrefsLoading">Refresh</button>
+              </div>
+              <p class="settings-field-help" x-show="$store.chat.notificationInboxActivatedAt">Your inbox started <span x-text="new Date($store.chat.notificationInboxActivatedAt).toLocaleString()"></span>. Earlier activity is not imported.</p>
+              <p class="settings-field-help" x-show="$store.chat.notificationInboxStatus === 'unsupported'" x-text="$store.chat.notificationInboxMessage"></p>
+              <div class="notification-category-list">
+                <template x-for="row in $store.chat.notificationPrefsRows" :key="row.key">
+                  <label class="settings-checkbox-row notification-category-row">
+                    <input type="checkbox" :checked="row.inboxOn" :disabled="row.mandatory" :data-testid="'notification-inbox-rule-' + row.category" @change="$store.chat.setNotificationInboxRule(row, $event.target.checked)" />
+                    <span><strong x-text="row.label"></strong> <small x-text="row.source_label"></small><small x-show="row.mandatory"> · always on</small></span>
+                  </label>
+                </template>
+              </div>
+              <p class="settings-field-help" x-show="$store.chat.notificationPrefsLoading">Loading preferences…</p>
+              <p class="error-text" role="status" x-show="$store.chat.notificationPrefsError" x-text="$store.chat.notificationPrefsError"></p>
+              <p class="settings-field-help">Quiet hours and per-device alert settings are not available on this Tower yet, and operating-system push depends on the Web Push setup above. Notifications still arrive in your inbox either way.</p>
             </section>
 
             <section class="settings-panel notification-settings-panel">

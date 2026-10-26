@@ -90,6 +90,7 @@ import { threadLiveActivityManagerMixin } from './thread-live-activity-manager.j
 import { resolveDeckInboxEnabled } from './deck-inbox-preference.js';
 import { resolveMyFocusEnabled } from './my-focus-preference.js';
 import { notificationsManagerMixin } from './notifications-manager.js';
+import { notificationInboxMixin } from './notification-inbox-manager.js';
 import { wappImageManagerMixin } from './wapp-image-manager.js';
 import { wappPublishingManagerMixin } from './wapp-publishing-manager.js';
 import { wappManagementManagerMixin } from './wapp-management-manager.js';
@@ -10592,6 +10593,7 @@ export function initApp() {
     pipelineViewerManagerMixin,
     threadLiveActivityManagerMixin,
     notificationsManagerMixin,
+    notificationInboxMixin,
     subscribedReaderMixin,
     nostrNotificationsMixin,
     messageActivityMixin,

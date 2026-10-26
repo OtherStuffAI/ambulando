@@ -3181,7 +3181,7 @@ export async function hydrateTowerPgEventUpdates(store, events = [], deps = {}) 
     }
 
     // Private preferences have their own actor-bound read family in TowerSyncService.
-    if (entityType === 'private_preference') continue;
+    if (entityType === 'private_preference' || entityType === 'notification_item') continue; // own actor-bound families
     if (['scope_order','thread_pin','personal_pin'].includes(entityType) || (['scope', 'channel'].includes(entityType) && trimText(event?.operation) === 'archived')) {
       // These hints reconcile through the canonical journal only; no list or
       // content hydration is needed for a private preference or tombstone.
