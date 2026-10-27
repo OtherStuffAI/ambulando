@@ -5308,6 +5308,16 @@
         "Notification inbox preferences now change only what Ambulando shows; your read state stays shared with your other apps.",
         "If preferences change on another device, the inbox reloads and the settings list refreshes; conflicting saves keep your other device's choices and ask you to try again."
       ]
+    },
+    {
+      "buildNumber": 2656,
+      "label": "Thread mentions, inline image placement and phone canvas controls",
+      "notes": [
+        "Type @ to find chat threads by name alongside people, documents and tasks; choosing one inserts a thread link that opens the conversation.",
+        "Images added from the attachment picker or dropped into a reply now leave an editable image reference at the cursor, so you can move it to place the image in your message.",
+        "Clicking an image in a channel card opens only the image viewer instead of also opening the thread behind it.",
+        "On phones, canvas tools and Close sit at the bottom of the screen, and Close stays visible while the tools scroll."
+      ]
     }
   ]
 }
