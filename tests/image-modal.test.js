@@ -286,4 +286,20 @@ describe('image-modal', () => {
     expect(previewImg.src).toBe('https://cdn.example.com/remote-pic.jpg');
     expect(previewImg.alt).toBe('remote in thread');
   });
+
+  it('opens only the lightbox when an image inside a feed card is clicked', async () => {
+    const { readFileSync } = await import('node:fs');
+    const html = readFileSync('index.html', 'utf8');
+    expect(html).toContain(`@click="$event.target.closest('a, button, img.md-storage-image') || $store.chat.openThread(msg.record_id)"`);
+
+    const card = document.createElement('div');
+    const openThread = vi.fn();
+    card.innerHTML = '<span class="md-storage-image-wrap"><img class="md-storage-image" src="https://cdn.example.com/feed.png" alt="feed"></span>';
+    card.addEventListener('click', (event) => event.target.closest('a, button, img.md-storage-image') || openThread());
+    document.body.appendChild(card);
+
+    card.querySelector('img').click();
+    expect(isImageModalOpen()).toBe(true);
+    expect(openThread).not.toHaveBeenCalled();
+  });
 });

@@ -952,6 +952,16 @@ export async function getDocumentsByOwner(ownerNpub) {
   return rows.filter((row) => row.record_state !== 'deleted');
 }
 
+/** Most recently active cached chat roots (thread records and root messages) across channels. */
+export async function getRecentChatRoots(limit = 500) {
+  return wsDb().chat_messages
+    .where('[cache_parent+cache_active+cache_time+record_id]')
+    .between(['', 1, Dexie.minKey, Dexie.minKey], ['', 1, '\uffff', Dexie.maxKey])
+    .reverse()
+    .limit(Math.max(1, Number(limit) || 500))
+    .toArray();
+}
+
 export async function upsertDocument(document) {
   const incoming = sanitizeForStorage(document);
   if (!incoming?.record_id) return null;

@@ -253,6 +253,45 @@ describe('chat composer image previews', () => {
     expect(store.uploadChatFileDraft).toHaveBeenCalledOnce();
   });
 
+  it('keeps an editable inline reference at the caret for a dropped image', async () => {
+    const store = await createStore();
+    const target = composerAt('before after', 6);
+    store.selectedChannelId = 'channel-1';
+    store.channels = [{ record_id: 'channel-1', title: 'Channel' }];
+    store.uploadChatFileDraft = vi.fn((draftId, context) => store.resolveChatFileDraftInlineToken(
+      draftId, context, store.createStorageMarkdown('dropped-object', 'dropped.png'),
+    ));
+
+    await store.handleChatFileDrop({
+      currentTarget: target,
+      preventDefault: vi.fn(),
+      stopPropagation: vi.fn(),
+      dataTransfer: { files: [new File(['image'], 'dropped.png', { type: 'image/png' })] },
+    }, 'message');
+
+    expect(serializeMentionComposer(target)).toBe('before![dropped.png](storage://dropped-object) after');
+    expect(store.getChatFileDrafts('message')).toEqual([expect.objectContaining({ kind: 'image', inline_upload_token: expect.stringContaining('Uploading image') })]);
+  });
+
+  it('appends an editable inline reference for a picked image and leaves other files as attachments', async () => {
+    const store = await createStore();
+    store.selectedChannelId = 'channel-1';
+    store.channels = [{ record_id: 'channel-1', title: 'Channel' }];
+    store.messageInput = 'Look at this';
+    store.uploadChatFileDraft = vi.fn((draftId, context) => {
+      const draft = store.getChatFileDrafts(context).find((item) => item.draft_id === draftId);
+      if (draft.kind === 'image') store.resolveChatFileDraftInlineToken(draftId, context, store.createStorageMarkdown('picked-object', 'picked.png'));
+    });
+    const input = { files: [new File(['image'], 'picked.png', { type: 'image/png' }), new File(['pdf'], 'notes.pdf', { type: 'application/pdf' })], value: 'x' };
+
+    store.handleChatAttachmentSelection({ target: input }, 'message');
+
+    expect(input.value).toBe('');
+    expect(store.messageInput).toBe('Look at this ![picked.png](storage://picked-object)');
+    expect(store.getChatFileDrafts('message').map((draft) => [draft.kind, draft.inline_upload_token ? 'inline' : 'trailing']))
+      .toEqual([['image', 'inline'], ['file', 'trailing']]);
+  });
+
   it.each(['message', 'thread'])('keeps a large Markdown drop on the %s attachment path', async (context) => {
     const store = await createStore();
     const markdown = new File(

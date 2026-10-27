@@ -4414,7 +4414,7 @@
                       :class="{ 'chat-post-content-collapsed': !$store.chat.isChatMessageExpanded(msg.record_id) }"
                       :data-chat-preview-id="msg.record_id"
                       :data-chat-preview-max-lines="$store.chat.MESSAGE_PREVIEW_MAX_LINES"
-                      @click="$event.target.closest('a, button') || $store.chat.openThread(msg.record_id)"
+                      @click="$event.target.closest('a, button, img.md-storage-image') || $store.chat.openThread(msg.record_id)"
                       @keydown.enter.prevent="$store.chat.openThread(msg.record_id)"
                       @keydown.space.prevent="$store.chat.openThread(msg.record_id)"
                     >
@@ -11770,7 +11770,7 @@
             @click="$store.chat.selectMention(result)"
             @mouseenter="$store.chat.mentionSelectedIndex = idx"
           >
-            <span class="mention-result-type" x-text="result.type === 'canvas' ? 'CANVAS' : result.type === 'canvas-item' ? 'ITEM' : result.type === 'person' || result.type === 'agent' ? '@' : result.type === 'doc' ? 'DOC' : result.type === 'scope' ? 'SCOPE' : result.type === 'flow' ? 'FLOW' : result.type === 'opportunity' ? 'OPP' : result.type === 'channel' ? 'CHAN' : 'TASK'"></span>
+            <span class="mention-result-type" x-text="result.type === 'canvas' ? 'CANVAS' : result.type === 'canvas-item' ? 'ITEM' : result.type === 'person' || result.type === 'agent' ? '@' : result.type === 'doc' ? 'DOC' : result.type === 'scope' ? 'SCOPE' : result.type === 'flow' ? 'FLOW' : result.type === 'opportunity' ? 'OPP' : result.type === 'channel' ? 'CHAN' : result.type === 'chat' ? 'THREAD' : 'TASK'"></span>
             <span class="mention-result-label" x-text="result.label"></span>
             <span class="mention-result-sublabel" x-show="result.sublabel" x-text="result.sublabel"></span>
           </li>

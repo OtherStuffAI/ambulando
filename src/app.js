@@ -16,7 +16,7 @@ import { diagnosticsManagerMixin } from './diagnostics-manager.js';
 import { subscribedReaderMixin } from './feed/reader-manager.js';
 import { messageActivityMixin } from './message-activity/manager.js';
 import { driveManagerMixin } from './drive.js';
-import { registerChatComposer, resolveChatUploadToken } from './chat-composer-draft.js';
+import { liveChatComposer, registerChatComposer, resolveChatUploadToken } from './chat-composer-draft.js';
 /**
  * Alpine.js app store — the single source of reactive UI state.
  * All data comes from Dexie; network goes through the sync worker.
@@ -244,7 +244,9 @@ import {
   getChannelById,
   getAddressBookPeople,
   isWorkspaceDbOpenForKey,
+  getRecentChatRoots,
 } from './db.js';
+import { chatThreadMentionCandidates } from './chat-thread-mentions.js';
 import {
   registerWorkspaceKey,
   setBaseUrl,
@@ -1200,6 +1202,10 @@ export function initApp() {
     mentionResults: [],
     mentionSelectedIndex: 0,
     mentionDocumentIndex: [],
+    mentionThreadIndex: [],
+    _mentionThreadIndexKey: '',
+    _mentionThreadIndexLoadedAt: 0,
+    _mentionThreadIndexRefreshPromise: null,
     _mentionDocumentIndexRefreshPromise: null,
     _mentionDocumentIndexOwnerNpub: '',
     _mentionDocumentIndexLoaded: false,
@@ -8477,6 +8483,51 @@ export function initApp() {
       return refreshPromise;
     },
 
+    async refreshMentionThreadIndex() {
+      const workspaceKey = String(this.currentWorkspaceKey || '');
+      if (!workspaceKey) return [];
+      if (this._mentionThreadIndexKey !== workspaceKey) {
+        this.mentionThreadIndex = [];
+        this._mentionThreadIndexKey = workspaceKey;
+        this._mentionThreadIndexLoadedAt = 0;
+        this._mentionThreadIndexRefreshPromise = null;
+      }
+      if (Date.now() - Number(this._mentionThreadIndexLoadedAt || 0) < MENTION_DOCUMENT_INDEX_MAX_AGE_MS) return this.mentionThreadIndex;
+      if (this._mentionThreadIndexRefreshPromise) return this._mentionThreadIndexRefreshPromise;
+      const refreshPromise = getRecentChatRoots()
+        .then((rows = []) => {
+          if (this._mentionThreadIndexKey !== workspaceKey) return this.mentionThreadIndex || [];
+          this.mentionThreadIndex = Array.isArray(rows) ? rows : [];
+          return this.mentionThreadIndex;
+        })
+        .catch((error) => {
+          console.warn('[mentions] failed to refresh local chat thread index', error);
+          return this.mentionThreadIndex || [];
+        })
+        .finally(() => {
+          if (this._mentionThreadIndexKey === workspaceKey) this._mentionThreadIndexLoadedAt = Date.now();
+          if (this._mentionThreadIndexRefreshPromise === refreshPromise) this._mentionThreadIndexRefreshPromise = null;
+        });
+      this._mentionThreadIndexRefreshPromise = refreshPromise;
+      return refreshPromise;
+    },
+
+    getMentionChatThreads() {
+      const rows = this.mentionThreadIndex || [];
+      const channels = this.channels || [];
+      const cached = this._mentionChatThreadCandidates;
+      if (cached?.rows === rows && cached.channels === channels) return cached.value;
+      const channelsById = new Map(channels.map((channel) => [channel?.record_id, channel]));
+      const value = chatThreadMentionCandidates(rows, {
+        channelLabel: (channelId) => {
+          const channel = channelsById.get(channelId);
+          return channel ? (this.getChannelLabel?.(channel) || channel.title || channel.name || '') : '';
+        },
+      });
+      this._mentionChatThreadCandidates = { rows, channels, value };
+      return value;
+    },
+
     refreshActiveMentionResults() {
       if (!this.mentionActive || !this._mentionTargetEl) return;
       if (canvasQuery(this.mentionQuery) && this._mentionTargetEl.dataset?.chatComposer) { this.refreshCanvasMentionResults(this.mentionQuery, this._mentionTargetEl); return; }
@@ -8515,14 +8566,15 @@ export function initApp() {
       if (this.currentWorkspace?.pgBackendMode || this.pgBackendMode) void this.ensureChatMentionRoster();
       const normalizedQuery = String(query || '');
       const previousDocumentIndex = this.mentionDocumentIndex;
+      const previousThreadIndex = this.mentionThreadIndex;
       const mentionOptions = {
         visibleOnly: targetEl?.dataset?.workroomComposer === 'true'
           || targetEl?.dataset?.channelVisibleMentions === 'true',
       };
-      this.refreshMentionDocumentIndex()
+      Promise.all([this.refreshMentionDocumentIndex(), this.refreshMentionThreadIndex()])
         .then(() => {
           if (!this.mentionActive || this._mentionTargetEl !== targetEl || this.mentionQuery !== normalizedQuery) return;
-          if (this.mentionDocumentIndex === previousDocumentIndex) return;
+          if (this.mentionDocumentIndex === previousDocumentIndex && this.mentionThreadIndex === previousThreadIndex) return;
           this.mentionResults = normalizedQuery.length === 0
             ? this.getDefaultMentionResults(8, mentionOptions)
             : this.searchMentions(normalizedQuery, mentionOptions);
@@ -8768,7 +8820,7 @@ export function initApp() {
       // Parse type prefix: @scope:, @task:, @doc:, @channel:
       let typeFilter = null;
       let query = rawQuery;
-      const prefixMatch = rawQuery.match(/^(scope|task|doc|person|agent|flow|opportunity|channel|chat):/i);
+      const prefixMatch = rawQuery.match(/^(scope|task|doc|thread|person|agent|flow|opportunity|channel|chat):/i);
       if (prefixMatch) {
         typeFilter = prefixMatch[1].toLowerCase() === 'chat' ? 'channel' : prefixMatch[1].toLowerCase();
         query = rawQuery.slice(prefixMatch[0].length);
@@ -8810,6 +8862,13 @@ export function initApp() {
           if (!needle || (task.title || '').toLowerCase().includes(needle)) {
             results.push({ type: 'task', id: task.record_id, label: task.title || 'Untitled', sublabel: 'Task' });
           }
+        }
+      }
+
+      // Chat threads (`thread:` prefix; `chat:` remains the channel alias)
+      if (!typeFilter || typeFilter === 'thread') {
+        for (const thread of this.getMentionChatThreads()) {
+          if (!needle || thread.label.toLowerCase().includes(needle)) results.push(thread);
         }
       }
 
@@ -8937,6 +8996,8 @@ export function initApp() {
           add({ type: 'flow', id: flow.record_id, label: flow.title || 'Untitled', sublabel: 'Flow' });
         }
       }
+
+      for (const thread of this.getMentionChatThreads().slice(0, 2)) add(thread);
 
       return results;
     },
@@ -9973,9 +10034,7 @@ export function initApp() {
         return true;
       }
 
-      for (const file of files) {
-        this.addChatFileDraft(file, context);
-      }
+      for (const file of files) this.addChatFileDraftAtCaret(file, context, event.currentTarget);
       this.scheduleComposerAutosize(context);
       return true;
     },
@@ -9992,7 +10051,31 @@ export function initApp() {
     handleChatAttachmentSelection(event, context = 'message') {
       const files = [...(event?.target?.files || [])].filter(Boolean);
       if (event?.target) event.target.value = '';
-      for (const file of files) this.addChatFileDraft(file, context);
+      for (const file of files) this.addChatFileDraftAtCaret(file, context);
+      this.scheduleComposerAutosize(context);
+    },
+
+    // Images keep editable inline markup, as with paste, so the sender can
+    // move it to position the image. Other files remain trailing attachments.
+    addChatFileDraftAtCaret(file, context = 'message', target = null) {
+      if (!String(file?.type || '').startsWith('image/')) return this.addChatFileDraft(file, context);
+      const token = this.createChatImageUploadToken();
+      const root = target?.isConnected && target.matches?.('[data-chat-composer]') ? target : liveChatComposer(this, context);
+      if (root) {
+        const selection = root.ownerDocument.getSelection?.();
+        if (selection?.rangeCount && root.contains(selection.getRangeAt(0).commonAncestorContainer)) {
+          insertPlainTextAtSelection(root, token);
+        } else {
+          const value = serializeMentionComposer(root);
+          root.append(root.ownerDocument.createTextNode(`${value && !/\s$/.test(value) ? ' ' : ''}${token}`));
+        }
+        this.syncMentionComposerModel(root);
+      } else {
+        const modelKey = context === 'thread' ? 'threadInput' : 'messageInput';
+        const value = String(this[modelKey] || '');
+        this[modelKey] = `${value}${value && !/\s$/.test(value) ? ' ' : ''}${token}`;
+      }
+      return this.addChatFileDraft(file, context, { inlineUploadToken: token });
     },
 
     addChatFileDraft(file, context = 'message', options = {}) {

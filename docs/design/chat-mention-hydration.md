@@ -77,3 +77,24 @@ This policy change deliberately adds no destructive group cleanup. Removal of
 a member within a returned group updates that group's membership; complete
 workspace-member reads still remove retired roster identities. A mention never
 grants server access.
+
+## Record and chat-thread mentions
+
+The @ lookahead also offers records: documents, tasks, channels, scopes, flows,
+opportunities and chat threads. It filters them by case-insensitive substring on
+their label. Selection inserts the canonical `@[Label](mention:<type>:<id>)`
+markup as an atomic pill. Only `person` and `agent` mentions add structured
+routing `mentions`; record mentions live only in the body and grant no access.
+
+Chat threads use type `chat` and the channel-qualified id
+`<channelId>#<rootId>`, the same form as "FD Ref". `normalizeRecordLinkType`
+reads `thread`, `message` and `chat_message` as `chat`, so writers should always
+emit `chat`. Candidates come from the workspace Dexie root index
+`[cache_parent+cache_active+cache_time+record_id]`: the newest 500 cached roots
+across channels, refreshed at most every 30 seconds and reset when the
+workspace changes (`src/chat-thread-mentions.js`). A thread record whose
+source message is cached is represented by that message, as in the main feed.
+Labels drop markup and brackets and are capped at 80 characters, so inserted
+markup stays parseable. The `thread:` prefix restricts results to threads;
+`chat:` remains the channel alias. Opening a `chat` pill calls
+`openLinkedThread`, which rejects a channel mismatch or an unreadable message.
