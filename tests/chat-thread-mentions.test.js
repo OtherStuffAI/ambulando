@@ -83,4 +83,32 @@ describe('@ lookahead chat threads', () => {
       await deleteWorkspaceDb(workspaceKey);
     }
   });
+
+  it('finds a thread older than the recent index by name while bare @ stays bounded', async () => {
+    const store = await createStore();
+    const { clearRuntimeData, deleteWorkspaceDb, openWorkspaceDb } = await import('../src/db.js');
+    const workspaceKey = 'mention-thread-older';
+    const db = openWorkspaceDb(workspaceKey);
+    await clearRuntimeData();
+    try {
+      const time = (index) => new Date(Date.UTC(2026, 9, 1) + index * 60_000).toISOString();
+      await db.chat_messages.bulkPut([
+        { record_id: 'old-root', channel_id: 'chan-a', body: 'Quarterly sailing plan', record_state: 'active', updated_at: time(0) },
+        ...Array.from({ length: 520 }, (_, index) => ({ record_id: `recent-${index}`, channel_id: 'chan-a', body: `Recent ${index}`, record_state: 'active', updated_at: time(index + 1) })),
+      ]);
+      store.selectedWorkspaceKey = workspaceKey;
+      const recent = await store.refreshMentionThreadIndex();
+      expect(recent).toHaveLength(500);
+      expect(recent.some((row) => row.record_id === 'old-root')).toBe(false);
+      expect(store.searchMentions('sailing')).toEqual([]);
+
+      await store.refreshMentionThreadMatches('sailing');
+      expect(store.searchMentions('sailing')).toEqual([expect.objectContaining({ type: 'chat', id: 'chan-a#old-root' })]);
+      await store.refreshMentionThreadMatches('thread:sailing');
+      expect(store.searchMentions('thread:sailing').map((result) => result.id)).toEqual(['chan-a#old-root']);
+      expect(store.getDefaultMentionResults(8).some((result) => result.id === 'chan-a#old-root')).toBe(false);
+    } finally {
+      await deleteWorkspaceDb(workspaceKey);
+    }
+  });
 });

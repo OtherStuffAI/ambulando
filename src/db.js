@@ -952,13 +952,28 @@ export async function getDocumentsByOwner(ownerNpub) {
   return rows.filter((row) => row.record_state !== 'deleted');
 }
 
-/** Most recently active cached chat roots (thread records and root messages) across channels. */
-export async function getRecentChatRoots(limit = 500) {
+function chatRootCollection() {
   return wsDb().chat_messages
     .where('[cache_parent+cache_active+cache_time+record_id]')
     .between(['', 1, Dexie.minKey, Dexie.minKey], ['', 1, '\uffff', Dexie.maxKey])
-    .reverse()
-    .limit(Math.max(1, Number(limit) || 500))
+    .reverse();
+}
+
+/** Most recently active cached chat roots (thread records and root messages) across channels. */
+export async function getRecentChatRoots(limit = 500) {
+  return chatRootCollection().limit(Math.max(1, Number(limit) || 500)).toArray();
+}
+
+/**
+ * Newest cached chat roots whose title or body contains `query`
+ * (case-insensitive), scanning every cached root until `limit` match.
+ */
+export async function findChatRootsMatching(query, limit = 40) {
+  const needle = String(query || '').trim().toLowerCase();
+  if (!needle) return [];
+  return chatRootCollection()
+    .filter(row => [row.title, row.pg_thread_title, row.body].some(value => String(value || '').toLowerCase().includes(needle)))
+    .limit(Math.max(1, Number(limit) || 40))
     .toArray();
 }
 

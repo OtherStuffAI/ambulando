@@ -90,9 +90,12 @@ Chat threads use type `chat` and the channel-qualified id
 `<channelId>#<rootId>`, the same form as "FD Ref". `normalizeRecordLinkType`
 reads `thread`, `message` and `chat_message` as `chat`, so writers should always
 emit `chat`. Candidates come from the workspace Dexie root index
-`[cache_parent+cache_active+cache_time+record_id]`: the newest 500 cached roots
-across channels, refreshed at most every 30 seconds and reset when the
-workspace changes (`src/chat-thread-mentions.js`). A thread record whose
+`[cache_parent+cache_active+cache_time+record_id]`. Bare `@` uses only the
+newest 500 cached roots across channels, refreshed at most every 30 seconds.
+A typed query also scans every cached root, newest first, until 40 match its
+title or body (`findChatRootsMatching`), so older threads are still found by
+name. Both reset when the workspace changes, and a stale scan cannot replace a
+newer one (`src/chat-thread-mentions.js`). A thread record whose
 source message is cached is represented by that message, as in the main feed.
 Labels drop markup and brackets and are capped at 80 characters, so inserted
 markup stays parseable. The `thread:` prefix restricts results to threads;

@@ -245,6 +245,7 @@ import {
   getAddressBookPeople,
   isWorkspaceDbOpenForKey,
   getRecentChatRoots,
+  findChatRootsMatching,
 } from './db.js';
 import { chatThreadMentionCandidates } from './chat-thread-mentions.js';
 import {
@@ -1206,6 +1207,7 @@ export function initApp() {
     _mentionThreadIndexKey: '',
     _mentionThreadIndexLoadedAt: 0,
     _mentionThreadIndexRefreshPromise: null,
+    _mentionThreadMatches: { key: '', query: '', rows: [] },
     _mentionDocumentIndexRefreshPromise: null,
     _mentionDocumentIndexOwnerNpub: '',
     _mentionDocumentIndexLoaded: false,
@@ -8512,11 +8514,35 @@ export function initApp() {
       return refreshPromise;
     },
 
+    // Typed queries scan every cached root, so older threads stay findable by
+    // name; the bare-@ defaults keep using the bounded recent index.
+    async refreshMentionThreadMatches(rawQuery) {
+      const workspaceKey = String(this.currentWorkspaceKey || '');
+      const prefix = String(rawQuery || '').match(/^(scope|task|doc|thread|person|agent|flow|opportunity|channel|chat):/i);
+      if (!workspaceKey || (prefix && prefix[1].toLowerCase() !== 'thread')) return this._mentionThreadMatches;
+      const query = String(rawQuery || '').slice(prefix ? prefix[0].length : 0).trim().toLowerCase();
+      const current = this._mentionThreadMatches;
+      if (!query || (current?.key === workspaceKey && current.query === query)) return current;
+      const request = (this._mentionThreadMatchRequest = Number(this._mentionThreadMatchRequest || 0) + 1);
+      try {
+        const rows = await findChatRootsMatching(query);
+        if (request === this._mentionThreadMatchRequest && String(this.currentWorkspaceKey || '') === workspaceKey) {
+          this._mentionThreadMatches = { key: workspaceKey, query, rows };
+        }
+      } catch (error) {
+        console.warn('[mentions] failed to search local chat threads', error);
+      }
+      return this._mentionThreadMatches;
+    },
+
     getMentionChatThreads() {
-      const rows = this.mentionThreadIndex || [];
+      const index = this.mentionThreadIndex || [];
+      const matches = this._mentionThreadMatches?.key === this._mentionThreadIndexKey ? this._mentionThreadMatches.rows : [];
       const channels = this.channels || [];
       const cached = this._mentionChatThreadCandidates;
-      if (cached?.rows === rows && cached.channels === channels) return cached.value;
+      if (cached?.index === index && cached.matches === matches && cached.channels === channels) return cached.value;
+      const seen = new Set(index.map((row) => row?.record_id));
+      const rows = [...index, ...(matches || []).filter((row) => !seen.has(row?.record_id))];
       const channelsById = new Map(channels.map((channel) => [channel?.record_id, channel]));
       const value = chatThreadMentionCandidates(rows, {
         channelLabel: (channelId) => {
@@ -8524,7 +8550,7 @@ export function initApp() {
           return channel ? (this.getChannelLabel?.(channel) || channel.title || channel.name || '') : '';
         },
       });
-      this._mentionChatThreadCandidates = { rows, channels, value };
+      this._mentionChatThreadCandidates = { index, matches, channels, value };
       return value;
     },
 
@@ -8567,14 +8593,20 @@ export function initApp() {
       const normalizedQuery = String(query || '');
       const previousDocumentIndex = this.mentionDocumentIndex;
       const previousThreadIndex = this.mentionThreadIndex;
+      const previousThreadMatches = this._mentionThreadMatches;
       const mentionOptions = {
         visibleOnly: targetEl?.dataset?.workroomComposer === 'true'
           || targetEl?.dataset?.channelVisibleMentions === 'true',
       };
-      Promise.all([this.refreshMentionDocumentIndex(), this.refreshMentionThreadIndex()])
+      Promise.all([
+        this.refreshMentionDocumentIndex(),
+        this.refreshMentionThreadIndex(),
+        normalizedQuery ? this.refreshMentionThreadMatches(normalizedQuery) : null,
+      ])
         .then(() => {
           if (!this.mentionActive || this._mentionTargetEl !== targetEl || this.mentionQuery !== normalizedQuery) return;
-          if (this.mentionDocumentIndex === previousDocumentIndex && this.mentionThreadIndex === previousThreadIndex) return;
+          if (this.mentionDocumentIndex === previousDocumentIndex && this.mentionThreadIndex === previousThreadIndex
+            && this._mentionThreadMatches === previousThreadMatches) return;
           this.mentionResults = normalizedQuery.length === 0
             ? this.getDefaultMentionResults(8, mentionOptions)
             : this.searchMentions(normalizedQuery, mentionOptions);
