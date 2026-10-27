@@ -71,6 +71,15 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .canvas-source-list button.selected { border-color: var(--primary); background: color-mix(in srgb, var(--primary) 12%, var(--surface)); }
 .canvas-dialog-actions { display: flex; justify-content: flex-end; gap: 8px; }
 @media (max-width: 700px) { .canvas-toolbar { display: flex; gap: 4px; padding: 6px 8px; } .canvas-brand { flex-basis: 80px; max-width: 80px; } .canvas-brand img { width: 24px; height: 24px; } .canvas-toolbar-scroll { width: 100%; padding-bottom: 3px; } .canvas-toolbar button { min-height: 44px; } }
+/* Phone canvases are full-screen windows: navigation and exit sit at the
+   thumb-reachable bottom edge, and Close stays visible while tools scroll. */
+@media (max-width: 700px) {
+  .canvas-app { grid-template-rows: minmax(0, 1fr) auto; }
+  .canvas-status, .canvas-stage { grid-row: 1; }
+  .canvas-toolbar { grid-row: 2; border-bottom: 0; border-top: 1px solid var(--border); padding-bottom: calc(6px + env(safe-area-inset-bottom)); }
+  .canvas-toolbar-exit { position: sticky; right: 0; z-index: 1; padding-left: 6px; background: var(--card); box-shadow: -10px 0 8px -8px rgb(0 0 0 / 0.25); }
+  .canvas-app :is(.canvas-toast, .canvas-notice) { bottom: calc(72px + env(safe-area-inset-bottom)); }
+}
 
 /* Documents keep the Docs paper ink in either shell theme. The naplet, rather
    than the infinite canvas or browser page, owns reading overflow. */

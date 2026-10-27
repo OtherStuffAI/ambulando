@@ -98,6 +98,22 @@ for (const width of [320, 390, 700, 768, 1024, 1440, 2048]) test(`Toolbar stays 
     expect(geometry.stageHeight).toBeGreaterThanOrEqual(440);
   };
   await checkBounds();
+  // Phones put canvas navigation and an always-visible Close at the bottom edge.
+  const placement = await page.evaluate(() => {
+    const toolbar = document.querySelector('.canvas-toolbar').getBoundingClientRect();
+    const stage = document.querySelector('.canvas-stage').getBoundingClientRect();
+    const close = [...document.querySelectorAll('.canvas-toolbar button')].find(button => button.textContent === 'Close').getBoundingClientRect();
+    return { toolbarTop: toolbar.top, toolbarBottom: toolbar.bottom, stageTop: stage.top, stageBottom: stage.bottom, closeLeft: close.left, closeRight: close.right, height: innerHeight, width: innerWidth };
+  });
+  if (width <= 700) {
+    expect(Math.round(placement.toolbarBottom)).toBe(placement.height);
+    expect(placement.stageBottom).toBeLessThanOrEqual(placement.toolbarTop + 1);
+    expect(placement.closeLeft).toBeGreaterThanOrEqual(0);
+    expect(placement.closeRight).toBeLessThanOrEqual(placement.width + 1);
+  } else {
+    expect(Math.round(placement.toolbarTop)).toBe(0);
+    expect(placement.stageTop).toBeGreaterThanOrEqual(placement.toolbarBottom - 1);
+  }
   for (const title of ['Rectangle (R)', 'Diamond (D)', 'Ellipse (O)', 'Line (L)', 'Free draw (P)', 'Eraser (E)', 'Comment (C)']) await expect(page.getByTitle(title, { exact: true })).toHaveCount(0);
   await page.evaluate(() => {
     const store = Alpine.store('canvas'); store.setTool('select');

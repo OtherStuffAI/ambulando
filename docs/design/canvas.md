@@ -459,12 +459,21 @@ scrolls later controls into view. Words, Arrows, Frames and Groups remain,
 alongside selection, hand, zoom and editing controls. Legacy shapes and strokes
 still render and can be selected and edited, but have no creation tools or keys.
 
+At phone widths (700px and below) the canvas is a full-screen window without
+the shell's global navigation. The toolbar moves to the bottom edge, above the
+safe-area inset, so canvas navigation and exit are within thumb reach. The
+Refresh/Close group stays pinned at the strip's right edge while the other
+tools scroll, and toasts and notices sit above the toolbar. Wider viewports keep
+the toolbar at the top. On desktop, Deck opens each canvas in its own browser
+tab or window, so it can sit beside the main Ambulando window.
+
 Native canvas comments have been removed. Snapshot normalization ignores older
 server comment payloads and Dexie version 44 removes cached snapshot comments.
 Document comments and chat-thread naplets retain their independent paths.
 
 `tests/e2e/canvas-toolbar.spec.cjs` checks 320–2048px widths, long-title tooltip,
-non-wrapping groups, leftmost adds, keyboard focus scrolling, zoom, panning and
+non-wrapping groups, leftmost adds, bottom phone placement with a visible Close,
+keyboard focus scrolling, zoom, panning and
 embedded pane resizing using synthetic Tower records.
 
 ## Refresh work

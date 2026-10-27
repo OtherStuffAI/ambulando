@@ -39,7 +39,7 @@
           <button type="button" title="Delete" :disabled="!$store.canvas.selected" @click="$store.canvas.deleteItem()">Delete</button>
         </div>
         <div class="canvas-toolbar-group"><button type="button" @click="$store.canvas.zoomBy(0.9)" aria-label="Zoom out">−</button><button type="button" @click="$store.canvas.resetViewport()" x-text="Math.round($store.canvas.viewport.scale * 100) + '%'" aria-label="Reset zoom"></button><button type="button" @click="$store.canvas.zoomBy(1.1)" aria-label="Zoom in">+</button><button type="button" @click="$store.canvas.fitToContent()">Fit</button></div>
-        <div class="canvas-toolbar-group"><button type="button" @click="$store.canvas.refresh()">Refresh</button><button type="button" @click="window.close()" title="Close this canvas tab">Close</button></div>
+        <div class="canvas-toolbar-group canvas-toolbar-exit"><button type="button" @click="$store.canvas.refresh()">Refresh</button><button type="button" @click="window.close()" title="Close this canvas tab">Close</button></div>
       </div>
     </header>
     <section class="canvas-status" x-show="$store.canvas.status !== 'ready'"><div><h1 x-text="$store.canvas.status === 'loading' ? 'Opening canvas…' : 'Canvas unavailable'"></h1><p :class="{ 'canvas-error': $store.canvas.status === 'error' }" x-text="$store.canvas.error"></p><button type="button" x-show="$store.canvas.status === 'error'" @click="$store.canvas.refresh()">Try again</button></div></section>
