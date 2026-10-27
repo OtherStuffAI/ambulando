@@ -127,3 +127,23 @@ it('re-reads channel authority after a concurrent command cancellation, without 
   await expect(hydrateCanvasChatChannel({}, 'channel', changing)).rejects.toThrow('changed');
   expect(changing).toHaveBeenCalledTimes(3);
 });
+
+it('keeps mounted naplet order through binding and shared stacking changes without retaining removed or denied content', async () => {
+  const s = store();
+  await s.placeChat({ x: 0, y: 0 });
+  const draft = s.chatDrafts[0]; draft.source.id = thread;
+  const existing = { id: 'existing', access: 'ready', source: { type: 'chat_thread', id: 'other-thread' }, layout: { z: 1 } };
+  s.naplets = [existing, draft];
+  const saved = { id: 'saved', access: 'ready', source: { type: 'chat_thread', id: thread }, layout: { z: 1 } };
+  const changed = { ...existing, layout: { z: 2 } };
+  s.naplets = s.mergeChatNaplets([saved, changed]);
+  expect(s.naplets.map(row => row.id)).toEqual(['existing', 'saved']);
+  expect(s.naplets.map(row => row.layout.z)).toEqual([2, 1]);
+  expect(s.naplets[1]._chatKey).toBe(draft.id);
+  expect(s.chatDrafts).toHaveLength(0);
+  s.naplets = s.mergeChatNaplets([{ ...saved, title: 'Updated title' }, { id: 'new', source: { type: 'document', id: 'doc' } }, { id: 'existing', access: 'denied', layout: { z: 3 } }]);
+  expect(s.naplets.map(row => row.id)).toEqual(['existing', 'saved', 'new']);
+  expect(s.naplets[0]).not.toHaveProperty('source');
+  expect(s.naplets[1].title).toBe('Updated title');
+  expect(s.mergeChatNaplets([saved]).map(row => row.id)).toEqual(['saved']);
+});

@@ -5325,6 +5325,13 @@
       "notes": [
         "Typing after @ now finds chat threads by name across every conversation stored on this device, not only the most recent ones."
       ]
+    },
+    {
+      "buildNumber": 2658,
+      "label": "Keep Canvas chat signing connected",
+      "notes": [
+        "Canvas refreshes preserve open chat editors when stacking order changes, avoiding a signer connection warning after a successful message. Real send and signing failures remain visible and retryable."
+      ]
     }
   ]
 }

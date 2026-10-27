@@ -45,8 +45,11 @@ typing, pointer, wheel and paste events from Canvas pan/drag shortcuts.
 An IntersectionObserver and page visibility messages suspend background sync,
 live activity transport and activity ticks while an editor is offscreen,
 minimized or in a hidden tab. Resuming uses the existing sync service. The iframe
-and input DOM remain mounted, preserving selection and unsent input. Removing a
-naplet destroys its browsing context and disconnects the visibility observer.
+and input DOM remain mounted, preserving selection and unsent input. Snapshot
+reconciliation retains mounted naplet DOM order, including draft-to-saved chat
+bindings; shared `layout.z` controls visual stacking. Reordering dialog DOM nodes
+would reload their iframes and correctly revoke the old signing connection.
+Removing a naplet destroys its browsing context and disconnects the visibility observer.
 Embedded views do not register another service worker or version-check loop.
 Visible naplets still carry separate app stores and workers; very large boards
 with many simultaneously visible chats need further capacity measurement.

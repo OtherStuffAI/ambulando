@@ -582,8 +582,8 @@ for (const touch of [false, true]) test(`native arrow and text controls persist 
 test.describe('Canvas Chat', () => {
   test.use({ serviceWorkers: 'block' });
 
-for (const { parentOnly, signerProbe, revocationHistory } of [{ parentOnly: false }, { parentOnly: true }, { parentOnly: true, signerProbe: true }, { parentOnly: true, revocationHistory: true }]) {
-test(`Canvas Chat places locally and selects scope then channel into the normal composer${parentOnly ? ' with parent-only NIP07 signer' : ''}${signerProbe ? ' isolated rejection' : ''}${revocationHistory ? ' known concurrent-history revocation regression' : ''}`, async ({ page, context }) => {
+for (const { parentOnly, signerProbe, revocationHistory, reorderedSnapshot } of [{ parentOnly: true, reorderedSnapshot: true }, { parentOnly: false }, { parentOnly: true }, { parentOnly: true, signerProbe: true }, { parentOnly: true, revocationHistory: true }]) {
+test(`Canvas Chat places locally and selects scope then channel into the normal composer${parentOnly ? ' with parent-only NIP07 signer' : ''}${reorderedSnapshot ? ' reordered snapshot' : ''}${signerProbe ? ' isolated rejection' : ''}${revocationHistory ? ' known concurrent-history revocation regression' : ''}`, async ({ page, context }) => {
   test.skip(revocationHistory && process.env.CANVAS_REVOKED_HISTORY_REGRESSION !== '1', 'Known pending-status observation after signer revocation with live history writers; enable CANVAS_REVOKED_HISTORY_REGRESSION=1 to reproduce.');
   test.setTimeout(120000); page.setDefaultTimeout(5000); page.setDefaultNavigationTimeout(10000);
   console.log('CANVAS_CHAT_STAGE', 'start');
@@ -597,6 +597,8 @@ test(`Canvas Chat places locally and selects scope then channel into the normal 
   const agentNpub = require('nostr-tools').nip19.npubEncode('11'.repeat(32));
   const now = '2026-10-22T04:00:00.000Z';
   let bindingPosts = 0;
+  let bindingRejected = false;
+  const messageAttempts = [];
   let signedReads = 0;
   if (parentOnly) {
     const secret = Array.from(require('nostr-tools').generateSecretKey());
@@ -630,7 +632,10 @@ test(`Canvas Chat places locally and selects scope then channel into the normal 
     if (url.pathname.endsWith(`/channels/${channelId}/messages`) && request.method() === 'POST') {
       expect(request.headers().authorization).toMatch(/^Nostr /);
       if (parentOnly) checkAuth(request);
-      const body = request.postDataJSON(); sends.push(body);
+      const body = request.postDataJSON();
+      messageAttempts.push(body);
+      if (reorderedSnapshot && messageAttempts.length === 1) return route.fulfill({ status: 503, json: { error: 'Synthetic message unavailable' } });
+      sends.push(body);
       const threadId = body.thread_id || '60000000-0000-4000-8000-' + String(threads.size + 1).padStart(12, '0');
       const messageId = '70000000-0000-4000-8000-' + String(sends.length).padStart(12, '0');
       const sentAt = new Date(Date.parse(now) + sends.length * 60000).toISOString();
@@ -647,6 +652,10 @@ test(`Canvas Chat places locally and selects scope then channel into the normal 
     if (url.pathname.endsWith(`/channels/${channelId}/threads`)) return route.fulfill({ json: { threads: [...threads.values()] } });
     if (/\/threads\/[^/]+$/.test(url.pathname) && request.method() === 'GET') return route.fulfill({ json: { thread: threads.get(url.pathname.split('/').pop()) } });
     if (url.pathname.endsWith(`/canvases/${canvasId}/naplets`) && request.method() === 'POST') {
+      if (reorderedSnapshot && !bindingRejected) {
+        bindingRejected = true;
+        return route.fulfill({ status: 503, json: { error: 'Synthetic binding unavailable' } });
+      }
       bindingPosts++;
       const body = request.postDataJSON();
       naplets.push({ ...body, id: '80000000-0000-4000-8000-' + String(bindingPosts).padStart(12, '0'), row_version: 1, access: 'ready', content: { messages: [] } });
@@ -662,8 +671,8 @@ test(`Canvas Chat places locally and selects scope then channel into the normal 
       return route.fulfill({ json: { workspace_id: workspaceId, identity, naplet_id: artifactId, content: { file_id: artifactId, version_id: artifactVersion, version_number: 3, html: '<p>Referenced version three</p>' }, versions: [] } });
     }
     if (url.pathname.endsWith('/canvases')) return route.fulfill({ json: { workspace_id: workspaceId, identity, complete: true, canvases: [definition(), { ...definition(), id: '30000000-0000-4000-8000-000000000099', title: 'Ambulando brand' }] } });
-    if (url.pathname.endsWith('/canvases/30000000-0000-4000-8000-000000000099/snapshot')) return route.fulfill({ json: { workspace_id: workspaceId, identity, complete: true, canvas: { ...definition(), id: '30000000-0000-4000-8000-000000000099', title: 'Ambulando brand' }, naplets, elements: [], comments: [] } });
-    if (url.pathname.endsWith(`/canvases/${canvasId}/snapshot`)) return route.fulfill({ json: { workspace_id: workspaceId, identity, complete: true, canvas: definition(1, { x: 0, y: 0, scale: 1 }), naplets, elements: [], comments: [] } });
+    if (url.pathname.endsWith('/canvases/30000000-0000-4000-8000-000000000099/snapshot')) return route.fulfill({ json: { workspace_id: workspaceId, identity, complete: true, canvas: { ...definition(), id: '30000000-0000-4000-8000-000000000099', title: 'Ambulando brand' }, naplets: reorderedSnapshot ? [...naplets].reverse().map((row, index) => ({ ...row, layout: { ...row.layout, z: index + 1 } })) : naplets, elements: [], comments: [] } });
+    if (url.pathname.endsWith(`/canvases/${canvasId}/snapshot`)) return route.fulfill({ json: { workspace_id: workspaceId, identity, complete: true, canvas: definition(1, { x: 0, y: 0, scale: 1 }), naplets: reorderedSnapshot ? [...naplets].reverse().map((row, index) => ({ ...row, layout: { ...row.layout, z: index + 1 } })) : naplets, elements: [], comments: [] } });
     if (url.pathname.endsWith(`/workspaces/${workspaceId}/scopes`)) return route.fulfill({ json: { scopes: [{ id: scopeId, workspace_id: workspaceId, name: 'Canvas scope', row_version: 1 }] } });
     if (url.pathname.endsWith(`/scopes/${scopeId}/channels`)) return route.fulfill({ json: { channels: [{ id: channelId, workspace_id: workspaceId, scope_id: scopeId, name: 'Canvas channel', row_version: 1 }] } });
     if (parentOnly && url.pathname.endsWith(`/channels/${channelId}`)) { checkAuth(request); signedReads++; }
@@ -745,7 +754,18 @@ test(`Canvas Chat places locally and selects scope then channel into the normal 
     await expect(editor).toHaveText(draft);
   }
   await frame.getByRole('button', { name: 'Start thread', exact: true }).click();
+  if (reorderedSnapshot) {
+    await expect(frame.locator('.error-bar-message')).toContainText('Synthetic message unavailable');
+    expect(sends).toHaveLength(0);
+    await expect(editor).not.toHaveText('');
+    await frame.getByRole('button', { name: 'Start thread', exact: true }).click();
+  }
   await expect.poll(() => sends.length).toBe(1);
+  if (reorderedSnapshot) {
+    expect(messageAttempts).toHaveLength(2);
+    expect(messageAttempts[0].client_request_id).toBeTruthy();
+    expect(messageAttempts[1].client_request_id).toBe(messageAttempts[0].client_request_id);
+  }
   expect(sends[0].metadata.mentions).toEqual(expect.arrayContaining([expect.objectContaining({ type: 'agent', npub: agentNpub })]));
   expect(sends[0].message_signature).toBeTruthy();
   expect(sends[0].body).toContain('[From: Delivery map](');
@@ -758,8 +778,14 @@ test(`Canvas Chat places locally and selects scope then channel into the normal 
     expect(signature.nostr_event.content).toBe(sends[0].body);
     expect(await page.evaluate(() => window.__parentSignerEvents.some(e => e.kind === 33358))).toBe(true);
   }
+  if (reorderedSnapshot) {
+    await expect(page.locator('.canvas-chat-binding').first()).toContainText('Conversation sent; Canvas binding was not saved.');
+    expect(sends).toHaveLength(1);
+    await page.getByRole('button', { name: 'Retry saving Canvas binding', exact: true }).click();
+  }
   await expect.poll(() => naplets.length).toBe(1);
   await expect(editor).toHaveAttribute('aria-label', 'Reply to thread');
+  await expect(frame.locator('.error-bar-message')).not.toBeVisible();
   console.log('CANVAS_CHAT_STAGE', 'first ordinary signed thread bound');
   const firstThread = naplets[0].source.id;
   if (signerProbe) {
@@ -778,6 +804,7 @@ test(`Canvas Chat places locally and selects scope then channel into the normal 
     return;
   }
   const firstKey = await page.locator('.canvas-chat-frame').getAttribute('data-canvas-chat-frame');
+  await editor.evaluate(node => { window.__boundChatDocument = document; window.__boundChatEditor = node; });
   await editor.fill('First chat draft');
   console.log('CANVAS_CHAT_STAGE', 'placing');
   await page.getByRole('button', { name: 'Chat', exact: true }).click();
@@ -796,7 +823,27 @@ test(`Canvas Chat places locally and selects scope then channel into the normal 
   console.log('CANVAS_CHAT_STAGE', 'two independent threads bound');
   expect(naplets[1].source.id).not.toBe(firstThread);
   await expect(editor).toHaveText('First chat draft');
+  expect(await editor.evaluate(node => document === window.__boundChatDocument && node === window.__boundChatEditor)).toBe(true);
+  await expect(frame.locator('.error-bar-message')).not.toBeVisible();
+  expect(sends).toHaveLength(2);
+  expect(bindingPosts).toBe(2);
   await expect(page.locator('.canvas-chat-frame').first()).toHaveAttribute('data-canvas-chat-frame', firstKey);
+  if (reorderedSnapshot) {
+    await editor.fill('Reply after shared stacking changes');
+    expect(await frame.locator('body').evaluate(() => Alpine.store('chat').sendThreadReply())).toBe(true);
+    expect(sends).toHaveLength(3);
+    expect(sends[2].thread_id).toBe(firstThread);
+    expect(bindingPosts).toBe(2);
+    await expect(frame.locator('.error-bar-message')).not.toBeVisible();
+    await page.reload();
+    await expect(page.locator('.canvas-chat-frame')).toHaveCount(2);
+    const restored = page.frameLocator(`.canvas-chat-frame[src*="canvasthread=${firstThread}"]`);
+    await expect(restored.locator('.thread-replies')).toContainText('Reply after shared stacking changes');
+    await expect(restored.locator('.error-bar-message')).not.toBeVisible();
+    expect(sends).toHaveLength(3);
+    console.log('CANVAS_CHAT_REORDER_EVIDENCE', JSON.stringify({ messages: sends.length, bindings: bindingPosts, messageFailureRetried: true, sameClientRequestId: true, bindingFailureRetried: bindingRejected, documentAndDraftRetained: true, replySigned: true, reload: true }));
+    return;
+  }
   // A different browsing context materializes replies into the shared Dexie.
   await page.evaluate(async ({ workspaceKey, firstThread, channelId, agentNpub, now }) => {
     const m = await import('/__canvas-seed.js'); m.openWorkspaceDb(workspaceKey);

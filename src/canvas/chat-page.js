@@ -39,7 +39,14 @@ export function canvasChatStore() {
         if (row.source?.type === 'chat_thread' && keys.has(row.id)) row._chatKey = keys.get(row.id);
       }
       this.saveChatRecovery();
-      return [...rows, ...(this.canvas?.can_manage ? this.chatDrafts : [])];
+      // Snapshot order follows shared stacking order. Moving an existing dialog
+      // in Alpine's x-for disconnects its iframe, reloads its document and
+      // correctly revokes the signer. Keep mounted DOM order (including a draft
+      // becoming a saved naplet); authoritative layout.z controls visual stacking.
+      const positions = new Map((this.naplets || []).map((row, index) => [row._chatKey || row.id, index]));
+      const position = row => positions.get(row._chatKey || row.id) ?? positions.size;
+      return [...rows, ...(this.canvas?.can_manage ? this.chatDrafts : [])]
+        .sort((a, b) => position(a) - position(b));
     },
     async placeChat(point) {
       if (!this.canvas?.can_manage) return;
