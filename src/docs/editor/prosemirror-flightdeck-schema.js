@@ -87,9 +87,9 @@ export const FlightDeckMention = Mark.create({
   inclusive: false,
   addAttributes() {
     return {
-      mentionType: { default: null },
-      mentionId: { default: null },
-      label: { default: null },
+      mentionType: { default: null, parseHTML: el => el.dataset.fdMentionType || el.dataset.mentionType },
+      mentionId: { default: null, parseHTML: el => el.dataset.fdMentionId || el.dataset.mentionId },
+      label: { default: null, parseHTML: el => el.getAttribute('label') || el.textContent },
     };
   },
   parseHTML() {

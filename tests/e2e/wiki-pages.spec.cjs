@@ -644,3 +644,118 @@ test('Move dialog uses the supported command and old ID opens renamed moved reco
   await expect(page.locator('.doc-title-display')).toHaveText('Renamed after move');
   expect(await page.evaluate(() => ({ id: Alpine.store('chat').selectedDocId, channel: Alpine.store('chat').selectedChannelId, scope: Alpine.store('chat').selectedDocument.scope_id }))).toEqual({ id: 'wiki-target', channel: 'move-channel', scope: 'move-scope' });
 });
+
+test('document @ picker saves ID references and follows renamed and unavailable pages', async ({ page }) => {
+  test.setTimeout(45000);
+  await seed(page, '**Index**');
+  await page.evaluate(() => {
+    const s = window.Alpine.store('chat');
+    s.refreshMentionDocumentIndex = async () => [];
+    s.refreshMentionThreadIndex = async () => [];
+    s.refreshMentionThreadMatches = async () => [];
+    s.ensureChatMentionRoster = async () => [];
+    s._canvasReferenceCatalog = { read: async () => [] };
+  });
+  const editor = page.locator('.doc-rich-editor .ProseMirror');
+  await editor.click(); await page.keyboard.press('End'); await page.keyboard.type(' @doc:Plant');
+  const picker = page.getByRole('listbox', { name: 'Link to a record' });
+  await expect(picker).toBeVisible();
+  await expect(picker).toContainText('Plant list');
+  await page.keyboard.press('Escape'); await expect(picker).toBeHidden();
+  await page.keyboard.type(' list');
+  await expect(picker).toBeVisible();
+  await page.keyboard.press('Enter');
+  await expect(editor.locator('[data-mention-id="wiki-target"]')).toHaveText('Plant list');
+  await expect(picker).toBeHidden();
+  await page.keyboard.type('after');
+  await page.evaluate(async () => {
+    const s = window.Alpine.store('chat');
+    await s.saveSelectedDocItem();
+    s.documents = s.documents.map(doc => doc.record_id === 'wiki-target' ? { ...doc, title: 'Renamed page' } : doc);
+    s.docRichEditorAdapter.setContent(s.selectedDocument.editor_state);
+  });
+  await expect(editor.locator('strong')).toContainText('Index');
+  await expect(editor).toContainText('after');
+  await editor.locator('[data-mention-id="wiki-target"]').click();
+  await expect.poll(() => page.evaluate(() => window.Alpine.store('chat').selectedDocId)).toBe('wiki-target');
+  await page.evaluate(() => {
+    const s = window.Alpine.store('chat'); s.openDoc('wiki-home');
+    s.documents = s.documents.map(doc => doc.record_id === 'wiki-target' ? { ...doc, record_state: 'deleted' } : doc);
+  });
+  await editor.locator('[data-mention-id="wiki-target"]').click();
+  await expect.poll(() => page.evaluate(() => window.Alpine.store('chat').internalLinkOpenError)).toContain('unavailable');
+  await expect(editor).toContainText('after');
+});
+
+test('document @ canvas and task links survive reopening and navigate without losing prose', async ({ page }) => {
+  test.setTimeout(60000);
+  await seed(page, 'Index');
+  await page.evaluate(() => {
+    const s = window.Alpine.store('chat');
+    s.refreshMentionDocumentIndex = async () => [];
+    s.refreshMentionThreadIndex = async () => [];
+    s.refreshMentionThreadMatches = async () => [];
+    s.ensureChatMentionRoster = async () => [];
+    s._canvasReferenceCatalog = { read: async () => [{ canvas_id: 'canvas-fixture', title: 'Garden plan' }] };
+    s.tasks = [{ record_id: 'task-fixture', title: 'Water plants', record_state: 'active', pg_channel_id: 'wiki-channel' }];
+    s.openTaskDetail = id => { s.__openedTask = id; };
+  });
+  const editor = page.locator('.doc-rich-editor .ProseMirror');
+  const picker = page.getByRole('listbox', { name: 'Link to a record' });
+  await editor.click(); await page.keyboard.press('End'); await page.keyboard.type(' @canvas:Garden');
+  await expect(picker).toContainText('Garden plan');
+  await picker.getByRole('option', { name: 'Garden plan · Canvas' }).click();
+  await page.keyboard.type(' @task:Water');
+  await expect(picker).toContainText('Water plants');
+  await page.keyboard.press('Enter');
+  await page.keyboard.type(' keep this');
+  await page.evaluate(async () => {
+    const s = window.Alpine.store('chat'); await s.saveSelectedDocItem();
+    s.docRichEditorAdapter.setContent(s.selectedDocument.editor_state);
+    s.persistSelectedDocDraft = s.__navigationOriginals.persistSelectedDocDraft;
+  });
+  await page.keyboard.press('ControlOrMeta+End');
+  await page.keyboard.type(' unsaved draft');
+  const canvas = editor.locator('a[href*="canvasid=canvas-fixture"]');
+  await expect(canvas).toHaveText('Garden plan');
+  const popupPromise = page.waitForEvent('popup', { timeout: 10000 });
+  await canvas.click();
+  const popup = await popupPromise;
+  await expect(popup).toHaveURL(/canvas.html\?workspaceid=.+&canvasid=canvas-fixture/);
+  await popup.close();
+  await expect(editor).toContainText('keep this');
+  await editor.locator('[data-mention-id="task-fixture"]').click();
+  await expect.poll(() => page.evaluate(() => window.Alpine.store('chat').__openedTask)).toBe('task-fixture');
+  const drafts = await page.evaluate(async () => {
+    const s = Alpine.store('chat');
+    const db = await new Promise((resolve, reject) => { const req = indexedDB.open(s.__draftDbName); req.onsuccess = () => resolve(req.result); req.onerror = () => reject(req.error); });
+    const rows = await new Promise((resolve, reject) => { const req = db.transaction('document_drafts').objectStore('document_drafts').getAll(); req.onsuccess = () => resolve(req.result); req.onerror = () => reject(req.error); });
+    db.close(); return rows;
+  });
+  expect(drafts.find(row => row.document_id === 'wiki-home')?.content).toContain('unsaved draft');
+});
+
+test('document @ picker and saved links work with touch', async ({ browser }) => {
+  test.setTimeout(45000);
+  const context = await browser.newContext({ hasTouch: true, viewport: { width: 390, height: 844 } });
+  const page = await context.newPage();
+  try {
+    await seed(page, 'Touch index');
+    await page.evaluate(() => {
+      const s = window.Alpine.store('chat');
+      s.refreshMentionDocumentIndex = async () => [];
+      s.refreshMentionThreadIndex = async () => [];
+      s.refreshMentionThreadMatches = async () => [];
+      s._canvasReferenceCatalog = { read: async () => [] };
+    });
+    const editor = page.locator('.doc-rich-editor .ProseMirror');
+    await editor.tap(); await page.keyboard.press('End'); await page.keyboard.type(' @doc:Plant');
+    const choice = page.getByRole('listbox', { name: 'Link to a record' }).getByRole('option', { name: 'Plant list · Doc' });
+    await choice.tap();
+    const link = editor.locator('[data-mention-id="wiki-target"]');
+    await expect(link).toBeVisible();
+    await page.evaluate(async () => { const s = window.Alpine.store('chat'); await s.saveSelectedDocItem(); s.docRichEditorAdapter.setContent(s.selectedDocument.editor_state); });
+    await link.tap();
+    await expect.poll(() => page.evaluate(() => window.Alpine.store('chat').selectedDocId)).toBe('wiki-target');
+  } finally { await context.close(); }
+});

@@ -4924,3 +4924,61 @@ describe('canonical document command cache isolation', () => {
   expect(store.syncRoute).toHaveBeenCalledWith(true);
   expect(store.docEditorContent).toBe('Keep my draft'); expect(store.applySelectedDocAuthoritativeContent).not.toHaveBeenCalled();
  });
+
+describe('document canvas link departure', () => {
+  it('checkpoints before opening the canvas and refuses another workspace', async () => {
+    const target = { opener: {}, location: { href: 'about:blank' }, close: vi.fn() };
+    const open = vi.fn(() => target);
+    vi.stubGlobal('window', { open });
+    let done;
+    const store = {
+      currentWorkspace: { workspaceId: 'one' }, selectedDocId: 'source',
+      docEditDraftDirty: true,
+      persistSelectedDocDraft: vi.fn(() => new Promise(resolve => { done = resolve; })),
+    };
+    try {
+      const pending = docsManagerMixin.openDocCanvasLink.call(store, 'https://example.com/canvas.html?workspaceid=one&canvasid=canvas');
+      expect(open).toHaveBeenCalledOnce();
+      expect(target.location.href).toBe('about:blank');
+      done({ document_id: 'source' });
+      expect(await pending).toBe(true);
+      expect(target.location.href).toContain('canvasid=canvas');
+      expect(await docsManagerMixin.openDocCanvasLink.call(store, 'https://example.com/canvas.html?workspaceid=other&canvasid=canvas')).toBe(false);
+      expect(open).toHaveBeenCalledOnce();
+      expect(store.error).toContain('another workspace');
+    } finally { vi.unstubAllGlobals(); }
+  });
+  it('closes the reserved tab after a failed draft checkpoint or changed visit', async () => {
+    const target = { location: {}, close: vi.fn() };
+    vi.stubGlobal('window', { open: () => target });
+    const store = { currentWorkspace: { workspaceId: 'one' }, selectedDocId: 'source', docEditDraftDirty: true,
+      persistSelectedDocDraft: async () => null };
+    try {
+      expect(await docsManagerMixin.openDocCanvasLink.call(store, 'https://example.com/canvas.html?workspaceid=one&canvasid=canvas')).toBe(false);
+      expect(target.close).toHaveBeenCalledOnce();
+      expect(store.error).toContain('preserve');
+      store.persistSelectedDocDraft = async () => { store.selectedDocId = 'other'; return {}; };
+      expect(await docsManagerMixin.openDocCanvasLink.call(store, 'https://example.com/canvas.html?workspaceid=one&canvasid=canvas')).toBe(false);
+      expect(target.close).toHaveBeenCalledTimes(2);
+    } finally { vi.unstubAllGlobals(); }
+  });
+});
+
+it('document record discovery excludes instruction actors and rejects stale workspace results', async () => {
+  vi.stubGlobal('location', { origin: 'https://example.com' });
+  let finish;
+  const publish = vi.fn();
+  const store = {
+    currentWorkspace: { workspaceId: 'one' }, selectedDocId: 'source',
+    searchMentions: () => [{ type: 'agent', id: 'agent', label: 'Agent' }, { type: 'person', id: 'person', label: 'Person' }, { type: 'doc', id: 'page', label: 'Page' }, { type: 'chat', id: 'thread-id', label: 'Thread' }],
+    _canvasReferenceCatalog: { read: () => new Promise(resolve => { finish = resolve; }) },
+  };
+  try {
+    const pending = docsManagerMixin.searchDocRecordLinks.call(store, 'Page', publish);
+    await Promise.resolve(); await Promise.resolve();
+    expect(publish).toHaveBeenCalledWith({ choices: [{ type: 'doc', id: 'page', label: 'Page' }, { type: 'chat', id: 'thread-id', label: 'Thread' }], message: '' });
+    store.currentWorkspace = { workspaceId: 'two' };
+    finish([{ canvas_id: 'canvas', title: 'Page' }]);
+    expect(await pending).toEqual([]);
+  } finally { vi.unstubAllGlobals(); }
+});

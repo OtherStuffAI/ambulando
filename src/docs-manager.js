@@ -1,3 +1,6 @@
+import { CanvasReferenceCatalog, canvasChatSuggestions, parseCanvasChatReference } from './canvas/chat-references.js';
+import { hydrateCanvasList } from './canvas/sync-service.js';
+import { canvasContext, canvasPartition } from './canvas/projection.js';
 import { decodeDocumentContent } from './docs/stored-content.js';
 import { restoreReferenceComposerDraft } from './internal-reference-navigation.js';
 import { visibleWikiIntegrityText } from './docs/editor/wiki-visible-text.js';
@@ -1815,6 +1818,8 @@ export const docsManagerMixin = {
         document: sourceDoc,
         editorState: sourceDoc.editor_state,
         editable: this.isSelectedDocRichEditorEditable(),
+        onCanvasLink: href => this.openDocCanvasLink(href),
+        recordLinks: { search: (query, publish) => this.searchDocRecordLinks(query, publish) },
         wiki: {
           pages: () => this.wikiPages,
           isBusy: () => this.wikiCreateBusy,
@@ -1864,6 +1869,64 @@ export const docsManagerMixin = {
     // effects. Never expose the rejecting import/factory promise.
     this.docRichEditorMountPromise = mountPromise;
     return mountPromise;
+  },
+
+  async openDocCanvasLink(href) {
+    const reference = parseCanvasChatReference(href);
+    if (!reference) return false;
+    const context = canvasContext(this), partition = canvasPartition(context), docId = this.selectedDocId;
+    if (new URL(reference.url).searchParams.get('workspaceid') !== context.workspaceId) {
+      this.error = 'This canvas link belongs to another workspace. Open that workspace to follow it.';
+      return false;
+    }
+    // Reserve the user-activated tab before awaiting the durable local checkpoint.
+    const target = window.open('about:blank', '_blank');
+    if (!target) { this.error = 'Allow a new tab to open this canvas.'; return false; }
+    target.opener = null;
+    try {
+      const draft = await this.persistSelectedDocDraft();
+      if (this.docEditDraftDirty && !draft) throw new Error('Draft checkpoint unavailable');
+      if (this.selectedDocId !== docId || canvasPartition(canvasContext(this)) !== partition) { target.close(); return false; }
+      target.location.href = reference.url;
+      return true;
+    } catch {
+      target.close(); this.error = 'Could not preserve the document draft. Try opening the canvas again.';
+      return false;
+    }
+  },
+
+  async searchDocRecordLinks(query, publish = () => {}) {
+    const context = canvasContext(this), partition = canvasPartition(context);
+    const docId = this.selectedDocId;
+    const current = () => this.selectedDocId === docId && canvasPartition(canvasContext(this)) === partition;
+    const canvasOnly = /^canvas(?::|$)/i.test(query);
+    // Existing body saves derive agent instructions from actor tokens. Do not
+    // offer actors here until link-only actor semantics have an owned contract.
+    const allowed = new Set(['doc', 'task', 'chat', 'thread', 'channel']);
+    await Promise.all([this.refreshMentionDocumentIndex?.(), this.refreshMentionThreadIndex?.(),
+      this.refreshMentionThreadMatches?.(query)]);
+    if (!current()) return [];
+    const records = canvasOnly ? [] : (query ? this.searchMentions(query) : this.searchMentions('doc:')
+      .concat(this.searchMentions('task:'), this.getDefaultMentionResults(8)))
+      .filter(row => allowed.has(row.type));
+    publish({ choices: records.slice(0, 30), message: canvasOnly ? 'Searching canvases…' : '' });
+    // Canvas uses its established URL contract; mention IDs remain unchanged.
+    let canvases = [], message = '';
+    if (canvasOnly || !/^[a-z]+:/i.test(query)) {
+      try {
+        this._canvasReferenceCatalog ||= new CanvasReferenceCatalog();
+        const rows = await this._canvasReferenceCatalog.read(partition, () => hydrateCanvasList(context));
+        canvases = canvasChatSuggestions(canvasOnly ? query : `canvas:${query}`, rows, null, location.origin, context.workspaceId)
+          .map(row => { const url = new URL(row.url); return { ...row, url: `${url.pathname}${url.search}` }; });
+      } catch { message = 'Canvases unavailable. Reconnect to search them.'; }
+    }
+    if (!current()) return [];
+    const seen = new Set();
+    return { choices: [...canvases, ...records].filter(row => {
+      const key = `${row.type}:${row.id}`;
+      if (seen.has(key)) return false;
+      seen.add(key); return true;
+    }).slice(0, 30), message };
   },
 
   isSelectedDocRichEditorEditable() {

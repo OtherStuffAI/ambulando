@@ -5341,6 +5341,50 @@
         "Document links keep their IDs and current titles across renames and moves. Creation retries recover the same page, and Move protects unsaved drafts.",
         "Backlinks include accessible cached pages across channels and explain when content has not loaded on this device."
       ]
+    },
+    {
+      "buildNumber": 2661,
+      "label": "Link records from document bodies",
+      "notes": [
+        "Type @ in a document to link accessible canvases, documents, tasks and conversations. Links keep their target IDs across renames.",
+        "The document picker adds record links. Existing [[page links]], agent-mention behavior and draft saving remain available."
+      ]
+    },
+    {
+      "buildNumber": 2662,
+      "label": "Document record links ready for review",
+      "notes": [
+        "The document @ picker offers canvases, documents, tasks, threads and channels. People and agents remain outside this picker while existing mention behavior is preserved."
+      ]
+    },
+    {
+      "buildNumber": 2663,
+      "label": "Preserve document drafts before opening Canvas",
+      "notes": [
+        "Canvas links in the rich editor open on the first click after preserving the source document draft on this device."
+      ]
+    },
+    {
+      "buildNumber": 2664,
+      "label": "Portable Canvas links and selection safety",
+      "notes": [
+        "New document Canvas links work across web and native. Selecting text across a reference does not open it."
+      ]
+    },
+    {
+      "buildNumber": 2665,
+      "label": "Document record links across web and native",
+      "notes": [
+        "Use @ in document bodies to link canvases, pages, tasks, threads and channels, with keyboard and touch selection and stable record IDs.",
+        "Canvas opens after a local draft checkpoint; formatting, undo and existing wiki links remain available. People and agents are not offered by this picker."
+      ]
+    },
+    {
+      "buildNumber": 2666,
+      "label": "Include conversation targets in document links",
+      "notes": [
+        "Document record discovery includes the existing chat-thread reference type as well as canvases, documents, tasks and channels."
+      ]
     }
   ]
 }

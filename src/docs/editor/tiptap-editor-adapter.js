@@ -1,4 +1,6 @@
 import { FlightDeckWikiLink, createWikiPicker } from './wiki-extension.js';
+import { parseCanvasChatReference } from '../../canvas/chat-references.js';
+import { createRecordLinkPicker } from './record-link-extension.js';
 import { Editor } from '@tiptap/core';
 import { DOMParser, Fragment } from '@tiptap/pm/model';
 import { createFlightDeckTiptapExtensions } from './prosemirror-flightdeck-schema.js';
@@ -16,22 +18,56 @@ export function createTiptapEditorAdapter({
   onKeydown = () => false,
   extensions,
   wiki,
+  recordLinks,
+  onCanvasLink,
   placeholder = 'Start writing...',
 } = {}) {
   if (!element) throw new Error('Tiptap editor adapter requires a mount element.');
+  let referencePointer = null, referenceDragged = false;
+  const pointerSurface = element.ownerDocument;
+  const trackReferenceDrag = event => {
+    if (referencePointer && Math.hypot(event.clientX - referencePointer.x, event.clientY - referencePointer.y) > 5) referenceDragged = true;
+  };
+  const stopReferenceTracking = () => {
+    pointerSurface.removeEventListener('pointermove', trackReferenceDrag);
+    pointerSurface.removeEventListener('pointerup', stopReferenceTracking);
+    pointerSurface.removeEventListener('pointercancel', cancelReferencePointer);
+  };
+  const cancelReferencePointer = () => { referenceDragged = true; stopReferenceTracking(); };
   const editor = new Editor({
     element,
     editable,
-    extensions: extensions || createFlightDeckTiptapExtensions({ placeholder, editable }).map((extension) => extension.name === 'fdWikiLink' && wiki ? FlightDeckWikiLink.configure(wiki) : extension).concat(wiki ? [createWikiPicker(wiki)] : []),
+    extensions: extensions || createFlightDeckTiptapExtensions({ placeholder, editable }).map((extension) => extension.name === 'fdWikiLink' && wiki ? FlightDeckWikiLink.configure(wiki) : extension).concat(wiki ? [createWikiPicker(wiki)] : []).concat(recordLinks ? [createRecordLinkPicker(recordLinks)] : []),
     content: editorState || resolveDocumentProseMirrorState(document || {}),
     editorProps: {
       handlePaste: (_view, event) => onPaste(event, editor) === true,
       handleDOMEvents: {
+        click: (_view, event) => {
+          const reference = event.target.closest?.('.mention-link, a[href]');
+          if (recordLinks && reference && (event.shiftKey || referenceDragged)) {
+            event.preventDefault(); event.stopPropagation(); return true;
+          }
+          const link = event.target.closest?.('a[href]');
+          if (!onCanvasLink || !link || !parseCanvasChatReference(link.href)
+            || event.button !== 0 || event.shiftKey || !editor.state.selection.empty) return false;
+          event.preventDefault();
+          onCanvasLink(link.href);
+          return true;
+        },
         beforeinput: () => {
           onEditIntent('input');
           return false;
         },
         pointerdown: (_view, event) => {
+          if (recordLinks) {
+            stopReferenceTracking(); referenceDragged = false; referencePointer = null;
+            if (event.target.closest?.('.mention-link, a[href]')) {
+              referencePointer = { x: event.clientX, y: event.clientY };
+              pointerSurface.addEventListener('pointermove', trackReferenceDrag);
+              pointerSurface.addEventListener('pointerup', stopReferenceTracking);
+              pointerSurface.addEventListener('pointercancel', cancelReferencePointer);
+            }
+          }
           if (event.target.closest?.('[data-wiki-title]')) return false;
           onEditIntent('pointer');
           return false;
@@ -112,6 +148,7 @@ export function createTiptapEditorAdapter({
       }
     },
     destroy() {
+      stopReferenceTracking();
       editor.destroy();
     },
   };
