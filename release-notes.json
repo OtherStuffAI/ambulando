@@ -5385,6 +5385,13 @@
       "notes": [
         "Document record discovery includes the existing chat-thread reference type as well as canvases, documents, tasks and channels."
       ]
+    },
+    {
+      "buildNumber": 2667,
+      "label": "Resilient document link editing",
+      "notes": [
+        "Keep document link handlers safe when synthetic events have no element target, while preserving link navigation and text selection."
+      ]
     }
   ]
 }

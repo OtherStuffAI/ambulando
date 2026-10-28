@@ -7,6 +7,14 @@ import { createFlightDeckTiptapExtensions } from './prosemirror-flightdeck-schem
 import { resolveDocumentProseMirrorState } from './markdown-to-prosemirror.js';
 import { prosemirrorToFlightDeckContentModel } from './prosemirror-to-flightdeck.js';
 
+// Event targets can be absent on synthetic events or be text nodes.
+// Use the mount document's DOM shape rather than a global Element instanceof
+// check so references also work when the editor is mounted in another window.
+function eventTargetElement(event) {
+  const target = event.target;
+  return target?.nodeType === 1 ? target : target?.parentElement || null;
+}
+
 export function createTiptapEditorAdapter({
   element,
   document,
@@ -43,11 +51,11 @@ export function createTiptapEditorAdapter({
       handlePaste: (_view, event) => onPaste(event, editor) === true,
       handleDOMEvents: {
         click: (_view, event) => {
-          const reference = event.target.closest?.('.mention-link, a[href]');
+          const reference = eventTargetElement(event)?.closest?.('.mention-link, a[href]');
           if (recordLinks && reference && (event.shiftKey || referenceDragged)) {
             event.preventDefault(); event.stopPropagation(); return true;
           }
-          const link = event.target.closest?.('a[href]');
+          const link = eventTargetElement(event)?.closest?.('a[href]');
           if (!onCanvasLink || !link || !parseCanvasChatReference(link.href)
             || event.button !== 0 || event.shiftKey || !editor.state.selection.empty) return false;
           event.preventDefault();
@@ -61,14 +69,14 @@ export function createTiptapEditorAdapter({
         pointerdown: (_view, event) => {
           if (recordLinks) {
             stopReferenceTracking(); referenceDragged = false; referencePointer = null;
-            if (event.target.closest?.('.mention-link, a[href]')) {
+            if (eventTargetElement(event)?.closest?.('.mention-link, a[href]')) {
               referencePointer = { x: event.clientX, y: event.clientY };
               pointerSurface.addEventListener('pointermove', trackReferenceDrag);
               pointerSurface.addEventListener('pointerup', stopReferenceTracking);
               pointerSurface.addEventListener('pointercancel', cancelReferencePointer);
             }
           }
-          if (event.target.closest?.('[data-wiki-title]')) return false;
+          if (eventTargetElement(event)?.closest?.('[data-wiki-title]')) return false;
           onEditIntent('pointer');
           return false;
         },
