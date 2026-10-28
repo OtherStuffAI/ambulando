@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('../src/db.js', () => ({
   upsertDocument: mocks.upsertDocument,
+  captureDocumentUpsert: () => mocks.upsertDocument,
   upsertMessage: mocks.upsertMessage,
   upsertTask: mocks.upsertTask,
 }));
@@ -58,6 +59,8 @@ function store(overrides = {}) {
   Object.defineProperties(target, Object.getOwnPropertyDescriptors(recordTransferManagerMixin));
   return target;
 }
+
+beforeEach(() => vi.clearAllMocks());
 
 describe('record transfer manager', () => {
   beforeEach(() => {
@@ -155,3 +158,48 @@ describe('record transfer manager', () => {
     expect(subject.openThread).not.toHaveBeenCalled();
   });
 });
+
+ it('checkpoints a dirty document and requires Save before the typed move, then follows accepted context', async () => {
+  const original = { record_id: 'doc-draft', title: 'Draft', pg_backend: true, scope_id: 'scope-a', pg_channel_id: 'channel-source', version: 4 };
+  const subject = store({ documents: [original], selectedDocument: original, selectedDocId: original.record_id, docEditDraftDirty: true,
+    preserveWikiNavigationDraft: vi.fn(async () => true), selectPgChannelContext: vi.fn() });
+  subject.openRecordMove('document', original);
+  subject.recordTransfer = { ...subject.recordTransfer, destinationScopeId: 'scope-b', destinationChannelId: 'channel-cross-scope' };
+  expect(await subject.submitRecordTransfer()).toBe(false);
+  expect(subject.preserveWikiNavigationDraft).toHaveBeenCalled(); expect(mocks.moveDoc).not.toHaveBeenCalled();
+  expect(subject.recordTransfer.error).toContain('Save or recover');
+  subject.docEditDraftDirty = false;
+  mocks.moveDoc.mockResolvedValue({ ...original, version: 5, scope_id: 'scope-b', pg_channel_id: 'channel-cross-scope' });
+  expect(await subject.submitRecordTransfer()).toBe(true);
+  expect(mocks.moveDoc).toHaveBeenCalledWith(subject, original, 'channel-cross-scope', 'scope-b');
+  expect(subject.selectPgChannelContext).toHaveBeenCalledWith('channel-cross-scope', { preserveDetail: true });
+ });
+
+ it('writes a late document move to its captured partition and leaves a newer workspace view untouched', async () => {
+  const original = { record_id: 'late-doc', pg_backend: true, scope_id: 'scope-a', pg_channel_id: 'channel-source' };
+  const subject = store({ currentWorkspace: { workspaceId: 'origin' }, session: { npub: 'actor' }, documents: [original], selectedDocId: original.record_id, selectedDocument: original,
+    preserveWikiNavigationDraft: vi.fn(async () => true), selectPgChannelContext: vi.fn() });
+  let finish; mocks.moveDoc.mockImplementation(() => new Promise(resolve => { finish = resolve; }));
+  subject.openRecordMove('document', original); subject.recordTransfer = { ...subject.recordTransfer, destinationScopeId: 'scope-b', destinationChannelId: 'channel-cross-scope' };
+  const moving = subject.submitRecordTransfer();
+  await vi.waitFor(() => expect(mocks.moveDoc).toHaveBeenCalled());
+  subject.currentWorkspace = { workspaceId: 'new' }; subject.session = { npub: 'other' };
+  subject.documents = [{ record_id: 'new-doc' }]; subject.recordTransfer = { open: true, record: { record_id: 'new-doc' } };
+  finish({ ...original, pg_channel_id: 'channel-cross-scope', scope_id: 'scope-b' });
+  expect(await moving).toBe(true);
+  expect(mocks.upsertDocument).toHaveBeenCalled(); expect(subject.documents).toEqual([{ record_id: 'new-doc' }]);
+  expect(subject.patchDocumentLocal).not.toHaveBeenCalled(); expect(subject.selectPgChannelContext).not.toHaveBeenCalled();
+  expect(subject.recordTransfer.record.record_id).toBe('new-doc');
+ });
+ it('preserves edits entered while a selected document move is awaiting Tower', async () => {
+  const original = { record_id: 'typing-doc', pg_backend: true, scope_id: 'scope-a', pg_channel_id: 'channel-source' };
+  const subject = store({ selectedDocId: original.record_id, selectedDocument: original, docEditDraftDirty: false,
+    docEditorContent: 'Before', preserveWikiNavigationDraft: vi.fn(async () => true), cancelDocAutosave: vi.fn() });
+  let finish; mocks.moveDoc.mockImplementation(() => new Promise(resolve => { finish = resolve; }));
+  subject.openRecordMove('document', original); subject.recordTransfer = { ...subject.recordTransfer, destinationScopeId: 'scope-b', destinationChannelId: 'channel-cross-scope' };
+  const moving = subject.submitRecordTransfer(); await vi.waitFor(() => expect(mocks.moveDoc).toHaveBeenCalled());
+  subject.docEditDraftDirty = true; subject.docEditorContent = 'Typed while moving';
+  finish({ ...original, pg_channel_id: 'channel-cross-scope', scope_id: 'scope-b' }); await moving;
+  expect(subject.preserveWikiNavigationDraft).toHaveBeenCalledTimes(2);
+  expect(subject.docEditorContent).toBe('Typed while moving'); expect(subject.docEditDraftDirty).toBe(true);
+ });

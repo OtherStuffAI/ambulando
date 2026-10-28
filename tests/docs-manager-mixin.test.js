@@ -112,6 +112,8 @@ import {
 } from '../src/docs-manager.js';
 import {
   getDocumentById,
+  openWikiCreationJournal,
+  captureDocumentUpsert,
   getDocumentDraft,
   getPendingWrites,
   openWorkspaceDb,
@@ -4853,3 +4855,72 @@ describe('canonical document command cache isolation', () => {
     expect(await descriptor.reconcile(accepted)).toBe(accepted);
   });
 });
+
+ describe('durable wiki creation retries', () => {
+  it('reuses a persisted upload after reload and never recreates a renamed or unavailable accepted ID', async () => {
+    const db = openWorkspaceDb(`wiki-retry-${crypto.randomUUID()}`); await db.open();
+    isTowerPgBackendModeMock.mockReturnValue(true);
+    const accepted = { id: 'wiki-durable-target', workspace_id: 'workspace-1', scope_id: 'scope-1', channel_id: 'channel-1', storage_object_id: 'wiki-upload', title: 'Created page', row_version: 1 };
+    const options = { scopeId: 'scope-1', channelId: 'channel-1', open: false, throwOnError: true, wikiCreationKey: 'actor-source-destination-title', wikiSourceId: 'source', wikiActorId: 'actor' };
+    const make = () => createStore({
+      workspaceOwnerNpub: 'npub1owner',
+      currentWorkspace: { workspaceId: 'workspace-1', workspaceOwnerNpub: 'npub1owner', directHttpsUrl: 'https://tower.example', appNpub: 'flightdeck_pg' },
+      selectedChannelId: 'channel-1', channels: [{ record_id: 'channel-1', scope_id: 'scope-1' }],
+      getInheritedDirectoryShares: () => [], buildDocAccessForScope: () => ({ scope_id: 'scope-1', shares: [], group_ids: [] }),
+      prepareDocumentContentForEnvelope: vi.fn(async () => ({ content_storage_object_id: 'wiki-upload' })),
+      refreshDocuments: vi.fn(),
+    });
+    const first = make();
+    createTowerPgChannelDocMock.mockRejectedValueOnce(new Error('Offline'));
+    await expect(first.createDocument('Created page', options)).rejects.toThrow('Offline');
+    const resumed = make();
+    getTowerPgChannelDocsMock.mockResolvedValue({ docs: [accepted] });
+    const recovered = await resumed.createDocument('Created page', options);
+    expect(recovered.record_id).toBe(accepted.id);
+    expect(resumed.prepareDocumentContentForEnvelope).not.toHaveBeenCalled();
+    expect(createTowerPgChannelDocMock).toHaveBeenCalledTimes(1);
+    await upsertDocument({ ...recovered, title: 'Renamed', pg_channel_id: 'moved-channel' });
+    expect((await make().createDocument('Created page', options)).title).toBe('Renamed');
+    await upsertDocument({ ...recovered, record_state: 'deleted' });
+    await expect(make().createDocument('Created page', options)).rejects.toThrow('ID will not be replaced');
+    expect(createTowerPgChannelDocMock).toHaveBeenCalledTimes(1);
+    const savedSource = { record_id: 'source', content: '[Original](wiki:wiki-durable-target)' };
+    await resumed.completeWikiCreationsForSavedDocument(savedSource, 'different-actor');
+    expect(await openWikiCreationJournal().get(options.wikiCreationKey)).toBeTruthy();
+    await resumed.completeWikiCreationsForSavedDocument(savedSource, 'actor');
+    expect(await openWikiCreationJournal().get(options.wikiCreationKey)).toBeUndefined();
+    const fresh = make();
+    fresh.prepareDocumentContentForEnvelope.mockResolvedValue({ content_storage_object_id: 'wiki-new-upload' });
+    getTowerPgChannelDocsMock.mockResolvedValue({ docs: [] });
+    createTowerPgChannelDocMock.mockResolvedValueOnce({ doc: { ...accepted, id: 'new-deliberate-page', storage_object_id: 'wiki-new-upload' } });
+    expect((await fresh.createDocument('Created page', options)).record_id).toBe('new-deliberate-page');
+    expect(createTowerPgChannelDocMock).toHaveBeenCalledTimes(2);
+    expect(savedSource.content).toContain('wiki:wiki-durable-target');
+  });
+ });
+
+ it('persists a delayed move acknowledgement only in the captured workspace database', async () => {
+  const origin = openWorkspaceDb(`move-origin-${crypto.randomUUID()}`); await origin.open();
+  const writeOrigin = captureDocumentUpsert();
+  const other = openWorkspaceDb(`move-other-${crypto.randomUUID()}`); await other.open();
+  await writeOrigin({ record_id: 'moved-only-in-origin', title: 'Moved', pg_channel_id: 'destination', scope_id: 'destination-scope' });
+  expect(await getDocumentById('moved-only-in-origin')).toBeUndefined();
+  await origin.open();
+  expect(await origin.documents.get('moved-only-in-origin')).toMatchObject({ pg_channel_id: 'destination' });
+  origin.close();
+ });
+
+ it('refreshes a cached moved document location by ID without overwriting a dirty draft or adding Back history', async () => {
+  isTowerPgBackendModeMock.mockReturnValue(true);
+  let finish;
+  const store = createStore({ documents: [{ record_id: 'cached-moved', pg_channel_id: 'old-channel', content: 'Cached' }], selectedChannelId: 'old-channel',
+    hydrateSelectedDocWithRetry: vi.fn(() => new Promise(resolve => { finish = resolve; })),
+    selectPgChannelContext: vi.fn(), applySelectedDocAuthoritativeContent: vi.fn() });
+  store.openDoc('cached-moved');
+  expect(store.selectedDocId).toBe('cached-moved');
+  store.docEditDraftDirty = true; store.docEditorContent = 'Keep my draft';
+  finish({ record_id: 'cached-moved', pg_channel_id: 'current-channel', scope_id: 'current-scope', title: 'Renamed', content: 'Fresh' });
+  await vi.waitFor(() => expect(store.selectPgChannelContext).toHaveBeenCalledWith('current-channel', { preserveDetail: true }));
+  expect(store.syncRoute).toHaveBeenCalledWith(true);
+  expect(store.docEditorContent).toBe('Keep my draft'); expect(store.applySelectedDocAuthoritativeContent).not.toHaveBeenCalled();
+ });

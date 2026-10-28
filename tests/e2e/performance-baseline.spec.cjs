@@ -1,5 +1,7 @@
 const { test, expect } = require('playwright/test');
 const { serveBuiltFlightDeck } = require('./fixtures/serve-built-flightdeck.cjs');
+// Keep staged asset interception authoritative for production-bundle measurements.
+if (process.env.FLIGHTDECK_PERF_DIST === '1') test.use({ serviceWorkers: 'block' });
 
 const CHANNEL_ID = 'perf-channel';
 const THREAD_ID = 'perf-thread';

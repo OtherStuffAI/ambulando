@@ -395,6 +395,8 @@ function* workspaceDbRegistration(workspaceDbKey, db = new Dexie(`wingman-fd-ws-
   yield;
   // Shared Tower notification inbox: server-authoritative item rows plus one
   // state row per (backend, app, workspace, actor) holding cursor and unsent intent.
+  db.version(48).stores({ wiki_creation_intents: '&key, sourceId' });
+  yield;
   db.version(47).stores({ notification_items: '&key, context, [context+occurred_ms]', notification_inbox: '&key, context' });
   yield;
   db.version(37).stores({ hosting_billing: '&key' });
@@ -977,10 +979,10 @@ export async function findChatRootsMatching(query, limit = 40) {
     .toArray();
 }
 
-export async function upsertDocument(document) {
+export async function upsertDocument(document, { database } = {}) {
   const incoming = sanitizeForStorage(document);
   if (!incoming?.record_id) return null;
-  const db = wsDb();
+  const db = database || wsDb();
   return db.transaction('rw', db.documents, async () => {
     const current = await db.documents.get(incoming.record_id);
     const next = preserveHydratedDocumentContent(current, incoming);
@@ -3473,4 +3475,25 @@ export async function getWindowedReportsByOwner(ownerNpub, options = {}) {
 export async function getWindowedWappsByOwner(ownerNpub, options = {}) {
   const rows = await getWappsByOwner(ownerNpub);
   return takeNewestWindow(rows, resolveWindowLimit('wapps', options));
+}
+
+// Local recovery journal. Never synchronized; bound to this workspace database
+// and an actor/source/destination key. Reuses the same uploaded object on retry.
+export function openWikiCreationJournal() {
+  const table = wsDb().wiki_creation_intents;
+  return {
+    get: key => table.get(key), put: intent => table.put(sanitizeForStorage(intent)),
+    async complete(sourceId, actorId, documentIds) {
+      const targets = new Set(documentIds);
+      const rows = await table.where('sourceId').equals(sourceId).toArray();
+      await table.bulkDelete(rows.filter(row => row.actorId === actorId && targets.has(row.acceptedId)).map(row => row.key));
+    },
+  };
+}
+
+// Retain the originating partition for a move response even if the user leaves
+// that workspace while Tower is processing the request.
+export function captureDocumentUpsert() {
+  const database = wsDb();
+  return document => withDocumentDraftDb(database, () => upsertDocument(document, { database }));
 }

@@ -7,7 +7,8 @@ import { wikiManagerMixin } from '../src/docs/wiki-manager.js';
 import { updateTowerPgChannel } from '../src/tower-command-intents.js';
 import { upsertChannel, getDocumentById } from '../src/db.js';
 vi.mock('../src/tower-command-intents.js', () => ({ updateTowerPgChannel: vi.fn() }));
-vi.mock('../src/db.js', () => ({ upsertChannel: vi.fn(), getDocumentById: vi.fn(), getTaskById: vi.fn(), getScopeById: vi.fn(), getChannelById: vi.fn(), getDirectoryById: vi.fn(), getReportById: vi.fn() }));
+const journalGet = vi.hoisted(() => vi.fn(async () => null));
+vi.mock('../src/db.js', () => ({ openWikiCreationJournal: () => ({ get: journalGet, complete: async () => {} }), upsertChannel: vi.fn(), getDocumentById: vi.fn(), getTaskById: vi.fn(), getScopeById: vi.fn(), getChannelById: vi.fn(), getDirectoryById: vi.fn(), getReportById: vi.fn() }));
 vi.mock('../src/pg-read-hydrator.js', () => ({
   resolveTowerPgWorkspaceContext: () => ({ workspaceId: 'workspace', baseUrl: 'http://localhost:3100', appNpub: 'app', workspaceOwnerNpub: 'owner' }),
   mapPgChannelToLocal: (row) => ({ ...row, record_id: row.id }),
@@ -20,7 +21,7 @@ const pages = [
 function store() {
   const channel = { record_id: 'channel', metadata: { docs_home_document_id: 'page-a', agent_chat: { context_prompt: 'Keep' } } };
   const value = {
-    documents: structuredClone(pages), selectedChannel: channel, selectedChannelId: 'channel', channels: [channel], isTowerPgMode: true,
+    session: { npub: 'actor' }, documents: structuredClone(pages), selectedChannel: channel, selectedChannelId: 'channel', channels: [channel], isTowerPgMode: true,
     selectedDocument: { record_id: 'origin', pg_channel_id: 'channel', scope_id: 'scope' }, selectedDocId: 'origin',
     navSection: 'docs', docsHomeVisit: 0, docEditAccessState: 'editing',
     openDoc: vi.fn(), persistSelectedDocDraft: vi.fn().mockResolvedValue({ document_id: 'origin' }), refreshDocuments: vi.fn(), closeDocEditor: vi.fn(), syncRoute: vi.fn(),
@@ -33,7 +34,7 @@ function store() {
   return value;
 }
 describe('channel wiki pages', () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => { vi.clearAllMocks(); journalGet.mockResolvedValue(null); });
   it('excludes deleted and other-channel pages and never retargets missing IDs', () => {
     expect(channelWikiPages(pages, 'channel')).toHaveLength(1);
     expect(resolveWikiPage(pages, 'channel', { documentId: 'deleted', title: 'Plant list' }).state).toBe('unavailable');
@@ -113,7 +114,7 @@ describe('channel wiki pages', () => {
     expect(await s.followDocWikiLink('page-a')).toBe(false);
     expect(s.openDoc).not.toHaveBeenCalled();
     finish(); expect(await work).toBe(true);
-    expect(s.createDocument).toHaveBeenCalledWith('New', { scopeId: 'scope', channelId: 'channel', open: false, initialContent: '', throwOnError: true });
+    expect(s.createDocument).toHaveBeenCalledWith('New', { scopeId: 'scope', channelId: 'channel', open: false, initialContent: '', throwOnError: true, wikiCreationKey: '["actor","origin","channel","new"]', wikiSourceId: 'origin', wikiActorId: 'actor' });
     expect(events).toEqual(['create', 'insert', 'save', 'open']);
     expect(s.enterSelectedDocEditMode).not.toHaveBeenCalled();
     expect(s.wikiCreateBusy).toBe(false);
@@ -249,6 +250,7 @@ describe('channel wiki pages', () => {
     const editor = { isDestroyed: false, state: { doc: {} }, setEditable: vi.fn(), chain: () => ({ focus() { return this; }, insertContentAt: insert, run() {} }) };
     const creating = s.createDocWikiPage('New', { from: 1, to: 5 }, editor);
     expect(editor.setEditable).toHaveBeenCalledWith(false);
+    await vi.waitFor(() => expect(s.createDocument).toHaveBeenCalled());
     // Programmatic/mapped updates can still arrive while native entry is paused.
     editor.state.doc = { changed: true };
     finish({ record_id: 'created', title: 'New' });
@@ -274,7 +276,7 @@ describe('channel wiki pages', () => {
 });
 
  describe('incoming wiki links', () => {
-  it('reads rich and canonical source, excludes history/self/other channel/code, deduplicates and follows renames', () => {
+  it('reads rich and canonical source, excludes history/self/code and includes accessible cross-channel IDs, deduplicates and follows renames', () => {
     const target = { record_id: 'target', title: 'Renamed', pg_channel_id: 'channel' };
     const rows = [target,
       { record_id: 'source', title: 'Source', pg_channel_id: 'channel', content: '[Old](wiki:target) [Again](wiki:target)' },
@@ -283,11 +285,59 @@ describe('channel wiki pages', () => {
       { record_id: 'code', title: 'Code', pg_channel_id: 'channel', content: '`[[Renamed]]`' },
       { record_id: 'outside', pg_channel_id: 'other', content: '[Old](wiki:target)' },
       { record_id: 'deleted', pg_channel_id: 'channel', record_state: 'deleted', content: '[Old](wiki:target)' }];
-    expect(incomingWikiPages(rows, target).map(p => p.record_id)).toEqual(['rich', 'source', 'title']);
+    expect(incomingWikiPages(rows, target).map(p => p.record_id)).toEqual(['outside', 'rich', 'source', 'title']);
     expect(incomingWikiPages(rows, { ...target, record_id: 'another' })).toEqual([]);
     const duplicate = { ...target, record_id: 'duplicate' };
-    expect(incomingWikiPages([...rows, duplicate], target).map(p => p.record_id)).toEqual(['rich', 'source']);
+    expect(incomingWikiPages([...rows, duplicate], target).map(p => p.record_id)).toEqual(['outside', 'rich', 'source']);
     rows[1].content = 'Removed';
-    expect(incomingWikiPages(rows, target).map(p => p.record_id)).toEqual(['rich', 'title']);
+    expect(incomingWikiPages(rows, target).map(p => p.record_id)).toEqual(['outside', 'rich', 'title']);
   });
+ });
+
+ describe('workspace wiki identity', () => {
+  it('resolves IDs across scopes and channels while keeping title lookup local and denied IDs anonymous', () => {
+    const moved = { ...pages[0], pg_channel_id: 'new-channel', scope_id: 'new-scope', title: 'Current title' };
+    expect(resolveWikiPage([moved], 'channel', { documentId: 'page-a', title: 'Old' })).toMatchObject({ state: 'available', title: 'Current title' });
+    expect(resolveWikiPage([moved], 'channel', { title: 'Current title' }).state).toBe('unresolved');
+    expect(resolveWikiPage([{ ...moved, can_read: false }], 'channel', { documentId: 'page-a', title: 'Private' })).toMatchObject({ state: 'unavailable', title: 'Unavailable page' });
+    const s = store(); s.documents.push({ ...moved, pg_workspace_id: 'foreign' });
+    expect(s.resolveDocWikiLink({ documentId: 'page-a' }).page.title).toBe('Plant list');
+  });
+  it('keeps moved channel home local and includes only bound cross-channel backlinks', async () => {
+    const s = store(); s.documents[0].pg_channel_id = 'elsewhere';
+    expect(s.channelDocsHome).toBeNull();
+    await s.openChannelDocsHome(); expect(s.openDoc).not.toHaveBeenCalled();
+    const target = pages[0];
+    const source = { record_id: 'outside', pg_channel_id: 'elsewhere', content: '[[Plant list]]' };
+    expect(incomingWikiPages([target, source], target)).toEqual([]);
+    source.content = '[Saved](wiki:page-a)'; expect(incomingWikiPages([target, source], target)).toEqual([source]);
+  });
+ });
+
+ it('refuses a picker result after workspace or actor ownership changes', async () => {
+  const s = store(), insert = vi.fn();
+  const editor = { state: { doc: {} }, chain: () => ({ focus() { return this; }, insertContentAt: insert, run() {} }) };
+  s.openDocWikiPicker('', { from: 1, to: 1 }, editor);
+  s.currentWorkspace = { workspaceId: 'another' };
+  expect(await s.selectDocWikiTarget('page-a')).toBe(false);
+  expect(insert).not.toHaveBeenCalled(); expect(s.wikiLinkPicker.error).toContain('source changed');
+ });
+ it('uses the journal before title matching when retrying a created target', async () => {
+  const s = store(); journalGet.mockResolvedValueOnce({ acceptedId: 'original-target' });
+  s.documents.push({ record_id: 'title-replacement', title: 'New', pg_channel_id: 'channel' });
+  s.createDocument.mockResolvedValue({ record_id: 'original-target', title: 'Renamed' });
+  s.openDoc.mockImplementation(id => { s.selectedDocId = id; });
+  const insert = vi.fn().mockReturnThis();
+  const chain = { focus() { return this; }, insertContentAt(...args) { insert(...args); return this; }, run() {} };
+  const editor = { state: { doc: {} }, setEditable: vi.fn(), chain: () => chain };
+  expect(await s.createDocWikiPage('New', { from: 1, to: 2 }, editor)).toBe(true);
+  expect(s.createDocument).toHaveBeenCalled();
+  expect(insert).toHaveBeenCalledWith({ from: 1, to: 2 }, { type: 'fdWikiLink', attrs: { documentId: 'original-target', title: 'Renamed' } });
+ });
+
+ it('falls back from a known moved channel home without waiting for collection sync', async () => {
+  const s = store(); s.documents[0].pg_channel_id = 'moved-channel';
+  s.refreshDocuments.mockImplementation(() => new Promise(() => {}));
+  expect(await s.openChannelDocsHome()).toBe(false);
+  expect(s.refreshDocuments).not.toHaveBeenCalled(); expect(s.closeDocEditor).toHaveBeenCalled();
  });

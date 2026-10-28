@@ -1,17 +1,22 @@
 const { test, expect } = require('playwright/test');
+const { serveBuiltFlightDeck } = require('./fixtures/serve-built-flightdeck.cjs');
+if (process.env.FLIGHTDECK_TEST_DIST) test.use({ serviceWorkers: 'block' });
+test.beforeEach(async ({ page }) => {
+  if (process.env.FLIGHTDECK_TEST_DIST) await page.route('**/*', route => serveBuiltFlightDeck(route));
+});
 
-async function seed(page, content = 'Notebook', durable = false) {
+async function seed(page, content = 'Notebook', durable = false, workspaceKey = '') {
   await page.goto('/');
   await page.waitForFunction(() => window.Alpine?.store?.('chat')?.routeSyncPaused === false);
-  await page.evaluate(async ({ content, durable }) => {
+  await page.evaluate(async ({ content, durable, workspaceKey }) => {
     const s = window.Alpine.store('chat');
     s.__navigationOriginals = Object.fromEntries(['hydrateSelectedDocWithRetry', 'inspectSelectedDocEditLease', 'persistSelectedDocDraft', 'restoreSelectedDocDraft', 'loadDocComments'].map(name => [name, s[name]]));
     const owner = 'npub1wikibrowsertest';
     s.session = { ...(s.session || {}), npub: owner };
-    if (durable) {
+    { // Every fixture owns an isolated database, including wiki recovery intent.
       s.bootstrapSelectedWorkspace = async () => {};
       s.ensurePgWorkspaceAvailable = async workspace => workspace;
-      const key = `wiki-navigation-${crypto.randomUUID()}`;
+      const key = workspaceKey || `wiki-navigation-${crypto.randomUUID()}`;
       s.knownWorkspaces = [{ workspaceKey: key, workspaceId: key, workspaceOwnerNpub: owner, directHttpsUrl: 'http://127.0.0.1:3100', appNpub: 'flightdeck_pg', pgBackendMode: true }];
       for (const name of ['startWorkspaceLiveQueries', 'startSharedLiveQueries', 'stopWorkspaceLiveQueries', 'ensureWorkspaceSessionKey', 'loadLocalWorkspaceCoreData', 'persistWorkspaceSettings', 'refreshWorkspaceSettings', 'refreshLegacyWorkspaceRecovery']) s[name] = async () => {};
       await s.selectWorkspace(key, { skipPgVerification: true });
@@ -62,7 +67,7 @@ async function seed(page, content = 'Notebook', durable = false) {
     s.navSection = 'docs';
     s.openDoc('wiki-home');
     // Open is immediately editable; no manual Edit or target lease wait.
-  }, { content, durable });
+  }, { content, durable, workspaceKey });
   await expect(page.locator('.doc-rich-editor .ProseMirror')).toBeVisible();
   // Finish the unauthenticated shell route before the seeded notebook starts.
   // Otherwise an opening during routeSyncPaused never enters browser history.
@@ -425,12 +430,17 @@ for (const mobile of [false, true]) {
           });
           expect(draft.find(row => row.document_id === 'wiki-home')?.content).toContain('Durable local draft');
           await page.getByRole('button', { name: 'Backlinks (1)', exact: true }).click();
-          const backlink = await measure(page.locator('#doc-backlinks-list').getByRole('button', { name: 'Home page' }), 'Durable local draft');
+          const backlink = await measure(page.locator('#doc-backlinks-list').getByRole('button', { name: 'Home page' }), 'Plant list');
           expect(backlink.clickToContentMs).toBeLessThan(200);
+          // Current draft policy offers an explicit choice rather than replacing saved content.
+          await page.getByRole('button', { name: 'Resume draft', exact: true }).click();
+          await expect(editor).toContainText('Durable local draft');
           await page.goBack();
           await expect(editor).toContainText('Plant details');
-          const home = await measure(page.getByRole('navigation', { name: 'Channel notebook' }).getByRole('button', { name: 'Home', exact: true }), 'Durable local draft');
+          const home = await measure(page.getByRole('navigation', { name: 'Channel notebook' }).getByRole('button', { name: 'Home', exact: true }), 'Plant list');
           expect(home.clickToContentMs).toBeLessThan(200);
+          await page.getByRole('button', { name: 'Resume draft', exact: true }).click();
+          await expect(editor).toContainText('Durable local draft');
           // Several selection changes in one turn must not let an earlier visit win.
           await page.evaluate(() => { const s = Alpine.store('chat'); s.openDoc('wiki-target'); s.openDoc('wiki-home'); s.openDoc('wiki-target'); });
           await expect(editor).toContainText('Plant details');
@@ -548,3 +558,89 @@ for (const width of [1120, 390]) {
     await expect(page.locator('.tiptap')).toContainText('Plant details');
   });
 }
+
+test('toolbar explicitly selects duplicate cross-scope IDs and create destination', async ({ page }) => {
+  await seed(page, 'Link here ');
+  await page.evaluate(() => {
+    const s = Alpine.store('chat');
+    s.scopes = [{ record_id: 'wiki-scope', title: 'Personal' }, { record_id: 'shared-scope', title: 'Shared' }];
+    s.channels = [...s.channels, { record_id: 'shared-channel', scope_id: 'shared-scope', title: 'Team docs' }];
+    s.documents = [...s.documents, { ...s.documents[1], record_id: 'shared-target', title: 'Plant list', scope_id: 'shared-scope', pg_channel_id: 'shared-channel' }];
+    s.enterSelectedDocEditMode = async () => { s.docEditAccessState = 'editing'; return true; };
+  });
+  await page.getByRole('button', { name: 'Link to doc or note', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Link to doc or note', exact: true });
+  await dialog.getByRole('textbox', { name: 'Search or name a page' }).fill('Plant list');
+  await expect(dialog.getByRole('group', { name: 'Matching pages' }).getByRole('button')).toHaveCount(1);
+  await dialog.getByRole('checkbox').check();
+  await expect(dialog.getByRole('group', { name: 'Matching pages' }).getByRole('button')).toHaveCount(2);
+  await expect(dialog).toContainText('Shared / Team docs');
+  if (process.env.WIKI_WEB_SCREENSHOT) await page.screenshot({ path: process.env.WIKI_WEB_SCREENSHOT });
+  await dialog.getByRole('button').filter({ hasText: 'Shared / Team docs' }).click();
+  await expect(dialog).toBeHidden();
+  await expect(page.locator('[data-wiki-id="shared-target"]')).toHaveText('Plant list');
+  await page.evaluate(() => {
+    const s = Alpine.store('chat');
+    s.documents = s.documents.map(row => row.record_id === 'shared-target' ? { ...row, title: 'Renamed across scopes' } : row);
+    s.docRichEditorAdapter.refreshWikiLinks();
+  });
+  await expect(page.locator('[data-wiki-id="shared-target"]')).toHaveText('Renamed across scopes');
+  await page.locator('[data-wiki-id="shared-target"]').click();
+  await expect(page.locator('.doc-title-display')).toHaveText('Renamed across scopes');
+  await page.goBack();
+  await expect(page.locator('.doc-title-display')).toHaveText('Home page');
+  await page.getByRole('button', { name: 'Link to doc or note', exact: true }).click();
+  await dialog.getByRole('textbox').fill('Destination page');
+  await dialog.getByRole('combobox', { name: 'Create document in' }).selectOption('shared-channel');
+  await dialog.getByRole('button', { name: 'Create and link', exact: true }).click();
+  await expect(dialog).toBeHidden();
+  expect(await page.evaluate(() => Alpine.store('chat').__events.filter(event => event[0] === 'create').at(-1)[2])).toBe('shared-channel');
+});
+
+test('inline picker opens the broader link dialog and preserves code literals', async ({ page }) => {
+  await seed(page, 'Prose `[[literal]]` after');
+  const editor = page.locator('.doc-rich-editor .ProseMirror');
+  await editor.click(); await page.keyboard.press('End'); await page.keyboard.type(' [[Search');
+  await page.getByRole('listbox').getByRole('button', { name: 'Link to doc or note…' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Link to doc or note', exact: true });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole('textbox')).toHaveValue('Search');
+  await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await expect(editor.locator('code')).toHaveText('[[literal]]');
+});
+
+test('Move dialog uses the supported command and old ID opens renamed moved record after reload', async ({ page }) => {
+  const workspaceKey = `wiki-move-${Date.now()}`;
+  const source = '[Plant list](wiki:wiki-target)';
+  const destinations = async () => page.evaluate(() => {
+    const s = Alpine.store('chat');
+    s.scopes = [{ record_id: 'wiki-scope', title: 'Personal' }, { record_id: 'move-scope', title: 'Shared' }];
+    s.channels = [...s.channels, { record_id: 'move-channel', scope_id: 'move-scope', title: 'Team docs' }];
+  });
+  await seed(page, source, false, workspaceKey); await destinations();
+  await page.locator('[data-wiki-id="wiki-target"]').click();
+  await page.evaluate(() => {
+    const s = Alpine.store('chat');
+    s.commandTowerWorkspace = async (name, input) => {
+      s.__moveCommand = { name, id: input.document.record_id, version: input.document.version, destination: input.destinationChannelId };
+      return { ...input.document, version: 2, title: 'Renamed after move', pg_channel_id: input.destinationChannelId, scope_id: input.destinationScopeId };
+    };
+  });
+  await page.getByRole('button', { name: 'More actions', exact: true }).click();
+  await page.locator('.doc-actions-popover').getByRole('button', { name: 'Move to…', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Move to…' });
+  await expect(dialog).toContainText('source access may lose access');
+  await dialog.getByTestId('record-transfer-scope').selectOption('move-scope');
+  await dialog.getByTestId('record-transfer-channel').selectOption('move-channel');
+  await dialog.getByRole('button', { name: 'Move', exact: true }).click();
+  await expect(dialog).toBeHidden();
+  expect(await page.evaluate(() => Alpine.store('chat').__moveCommand)).toEqual({ name: 'document.move', id: 'wiki-target', version: 1, destination: 'move-channel' });
+  expect(await page.evaluate(() => Alpine.store('chat').selectedChannelId)).toBe('move-channel');
+  // Reload the served app, reopen the same isolated partition, and resolve the
+  // target only from durable Dexie data rather than a seeded target row.
+  await seed(page, source, false, workspaceKey); await destinations();
+  await page.evaluate(() => { const s = Alpine.store('chat'); s.documents = s.documents.filter(row => row.record_id !== 'wiki-target'); s.docRichEditorAdapter.refreshWikiLinks(); });
+  await page.locator('[data-wiki-id="wiki-target"]').click();
+  await expect(page.locator('.doc-title-display')).toHaveText('Renamed after move');
+  expect(await page.evaluate(() => ({ id: Alpine.store('chat').selectedDocId, channel: Alpine.store('chat').selectedChannelId, scope: Alpine.store('chat').selectedDocument.scope_id }))).toEqual({ id: 'wiki-target', channel: 'move-channel', scope: 'move-scope' });
+});

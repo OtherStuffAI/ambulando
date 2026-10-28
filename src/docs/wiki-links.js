@@ -2,19 +2,22 @@ import { markdownToProseMirrorDoc } from './editor/markdown-to-prosemirror.js';
 
 // Channel-local lookup uses only materialized, readable rows. IDs never fall back
 // to title lookup: a deleted target must not silently become a different page.
+export function readableWikiPages(documents = []) {
+  return documents.filter(doc => !['deleted', 'archived'].includes(doc.record_state)
+    && doc.pg_record_type !== 'file' && !doc.deleted_at && !doc.archived_at && doc.can_read !== false && doc.readable !== false);
+}
+
 export function channelWikiPages(documents = [], channelId = '') {
   if (!channelId) return [];
-  return documents.filter((doc) => doc.pg_channel_id === channelId
-    && !['deleted', 'archived'].includes(doc.record_state)
-    && !doc.deleted_at && !doc.archived_at);
+  return readableWikiPages(documents).filter(doc => doc.pg_channel_id === channelId);
 }
 
 export function resolveWikiPage(documents, channelId, { documentId, title } = {}) {
-  const pages = channelWikiPages(documents, channelId);
+  const pages = documentId ? readableWikiPages(documents) : channelWikiPages(documents, channelId);
   const matches = documentId ? pages.filter((doc) => doc.record_id === documentId)
     : pages.filter((doc) => String(doc.title || '').trim().toLocaleLowerCase() === String(title || '').trim().toLocaleLowerCase());
   if (matches.length === 1) return { state: 'available', page: matches[0], title: matches[0].title };
-  return { state: matches.length > 1 ? 'ambiguous' : documentId ? 'unavailable' : 'unresolved', title };
+  return { state: matches.length > 1 ? 'ambiguous' : documentId ? 'unavailable' : 'unresolved', title: documentId ? 'Unavailable page' : title };
 }
 
 export function wikiSource({ documentId, title }) {
@@ -39,7 +42,7 @@ export function bindWikiState(state, documents, channelId) {
 
 // Cache parsing per immutable materialized row; selection/title resolution stays live.
 const referencesByRow = new WeakMap();
-function pageReferences(page) {
+export function wikiPageReferences(page) {
   const signature = [page.editor_state, page.content, page.content_blocks];
   const cached = referencesByRow.get(page);
   if (cached && signature.every((value, index) => value === cached.signature[index])) return cached.links;
@@ -54,13 +57,13 @@ function pageReferences(page) {
 }
 export function incomingWikiPages(documents, target) {
   if (!target?.record_id || !target.pg_channel_id) return [];
-  const pages = channelWikiPages(documents, target.pg_channel_id);
+  const pages = readableWikiPages(documents);
   if (!pages.some(page => page.record_id === target.record_id)) return [];
   const title = String(target.title || '').trim().toLocaleLowerCase();
-  const uniqueTitle = pages.filter(page => String(page.title || '').trim().toLocaleLowerCase() === title).length === 1;
-  return pages.filter(page => page.record_id !== target.record_id && pageReferences(page).some(attrs =>
+  const uniqueTitle = channelWikiPages(documents, target.pg_channel_id).filter(page => String(page.title || '').trim().toLocaleLowerCase() === title).length === 1;
+  return pages.filter(page => page.record_id !== target.record_id && wikiPageReferences(page).some(attrs =>
     attrs.documentId ? attrs.documentId === target.record_id
-      : uniqueTitle && String(attrs.title || '').trim().toLocaleLowerCase() === title))
+      : page.pg_channel_id === target.pg_channel_id && uniqueTitle && String(attrs.title || '').trim().toLocaleLowerCase() === title))
     .filter((page, index, all) => all.findIndex(other => other.record_id === page.record_id) === index)
     .sort((a, b) => String(a.title || '').localeCompare(String(b.title || '')));
 }

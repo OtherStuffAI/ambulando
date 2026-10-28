@@ -43,12 +43,12 @@ Canonical source is ordinary Markdown with a `wiki:` destination:
 ```
 
 The ID is authoritative; the label is a saved fallback. Rendering looks up the
-current readable channel-local title, so renaming preserves navigation. Deleted
+current readable workspace title, so renaming preserves navigation. Deleted
 or inaccessible IDs remain visibly unavailable and are never reassigned by title.
 Existing agent document create/update tools can put canonical links in their
 Markdown content without a new tool. Escape Markdown brackets and backslashes
-in labels as usual. Links are scoped to the document's channel, not all workspace
-documents; they do not confer access to the target.
+in labels as usual. Bound IDs resolve throughout the same workspace, independently of channel and scope.
+Title-only matching remains channel-local. Links do not confer access to the target.
 
 Pasted or agent-authored `[[Plant list]]` is a title-only link. A unique,
 case-insensitive exact title in that channel binds to its document ID when the
@@ -98,10 +98,43 @@ and remote autosave has a 15-second debounce; explicit creation save bypasses
 that debounce.
 
 The collapsed **Backlinks** bar at the bottom lists incoming references from
-readable, materialized pages in the current channel. It excludes the current
+readable, materialized pages across the workspace’s channels. Title-only sources
+contribute only within the target’s channel; bound IDs contribute across channels. It excludes the current
 page and deleted/archived sources, deduplicates source IDs and resolves unique
 title links without guessing ambiguous titles. Rich JSON and canonical Markdown
 are supported; code literals are excluded. Parsing is cached by row and content
 identity. Sources whose bodies have not yet materialized cannot contribute
 links until they load. Opening a backlink uses the same draft checkpoint and
 navigation path as a forward link. The panel resets on document changes.
+
+## Destination picker and moves
+
+**Link to doc or note** in the rich editor opens a searchable picker. The `[[`
+picker also offers this action, and ambiguous title links open it directly.
+Results show scope, channel and a short ID; duplicate titles require an explicit
+selection. Search defaults to the source channel. **Search all accessible
+channels** requests the existing document refresh while displaying cached results;
+when offline the picker explains that results may be incomplete. **Create and
+link** uses the chosen destination, defaulting to the source channel. Code
+positions cannot invoke the picker.
+
+Note to self is a private singleton DM channel. Its pages use ordinary document
+records and wiki links; there is no new note record family. Creation in another
+channel follows that channel’s access rules. Linking never shares a target.
+
+A workspace-local, actor/source/destination/title-keyed IndexedDB journal keeps
+the uploaded storage object before submitting creation. Retry reconciles that
+same object through the existing create adapter, including after browser reload.
+While source linking is incomplete, the accepted permanent target ID is retained through source-save failure,
+rename or move. Deleted/unavailable accepted IDs are never replaced. Web Locks
+serialize same-intent creation across tabs where supported. The source link is
+checkpointed before canonical save; failed saves retain the link and draft for
+recovery. Canonical source saves retire completed intents; a later deliberate unresolved title can create a new page without retargeting any bound link. This journal is local recovery data and does not change Tower schemas.
+
+**Move to…** reuses the typed document move command with the latest row version.
+The dialog explains destination access consequences. A selected dirty/recovering
+or saving document must be saved first; Move checkpoints its draft and refuses
+to relocate unsaved content. Server denials and stale-version errors remain
+visible without changing local placement. Successful moves update selected
+channel context, retain IDs and preserve the server’s body/comment/history
+semantics. A moved-out channel home falls back to that channel’s document list.

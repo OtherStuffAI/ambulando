@@ -25629,3 +25629,10 @@ button.task-desc-toggle:focus-visible {
   .text-attachment-backdrop { padding:0; }
   .text-attachment-modal { width:100vw; height:100dvh; border-radius:0; }
 }
+
+.wiki-link-results { display:flex; flex-direction:column; gap:6px; max-height:240px; overflow-y:auto; margin:12px 0; }
+.wiki-link-results button { text-align:left; white-space:normal; overflow-wrap:anywhere; }
+.wiki-link-results small { display:block; opacity:.75; }
+
+.wiki-link-modal { position:relative; padding:1.25rem; box-sizing:border-box; max-height:calc(100dvh - 2rem); overflow-y:auto; }
+.wiki-link-modal .modal-close { position:absolute; top:.5rem; right:.5rem; }

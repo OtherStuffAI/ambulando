@@ -5332,6 +5332,15 @@
       "notes": [
         "Canvas refreshes preserve open chat editors when stacking order changes, avoiding a signer connection warning after a successful message. Real send and signing failures remain visible and retryable."
       ]
+    },
+    {
+      "buildNumber": 2660,
+      "label": "Link documents across scopes",
+      "notes": [
+        "Use Link to doc or note to find pages across accessible channels or create a linked page in a chosen destination.",
+        "Document links keep their IDs and current titles across renames and moves. Creation retries recover the same page, and Move protects unsaved drafts.",
+        "Backlinks include accessible cached pages across channels and explain when content has not loaded on this device."
+      ]
     }
   ]
 }

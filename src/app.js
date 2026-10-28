@@ -1234,6 +1234,7 @@ export function initApp() {
     docEditorRichFeatureEnabled: true,
     docEditorProseMirrorState: null,
     docEditorContentModel: null,
+    wikiLinkPicker: { open: false, query: '', broader: false, destinationChannelId: '', originId: '', range: null, submitting: false, error: '' },
     wikiCreateBusy: false,
     wikiCreateTimings: [],
     docBacklinksOpen: false,

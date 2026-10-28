@@ -22,6 +22,7 @@ import {
   normalizeDocumentBlocks,
 } from './utils/state-helpers.js';
 import {
+  openWikiCreationJournal,
   upsertDocument,
   replaceDocumentRecord,
   upsertDirectory,
@@ -1009,6 +1010,10 @@ export const docsManagerMixin = {
           .then(async (fresh) => {
             await draftRestore;
             if (!fresh || fresh.record_id !== recordId || !isCurrent()) return;
+            if (this.navSection === 'docs' && fresh.pg_channel_id && fresh.pg_channel_id !== this.selectedChannelId) {
+              this.selectPgChannelContext?.(fresh.pg_channel_id, { preserveDetail: true });
+              this.syncRoute?.(true);
+            }
             if (!this.docEditDraftDirty
               && this.docEditorTitle === openedTitle && this.docEditorContent === openedContent
               && !this.docLocalDraft && !this.docDraftChoice && !this.docDraftReadSaved
@@ -1817,6 +1822,8 @@ export const docsManagerMixin = {
           resolve: (attrs) => this.resolveDocWikiLink(attrs),
           open: (id) => { void this.followDocWikiLink(id); },
           create: (title, range, editor) => this.createDocWikiPage(title, range, editor),
+          choose: (title, range, editor) => this.openDocWikiPicker(title, range, editor),
+          label: (page) => this.wikiPageLocation(page),
           error: (message) => { this.error = message; },
         },
         onEditIntent: (intent) => intent === 'input' && this.handleDocRichEditIntent(),
@@ -4088,6 +4095,9 @@ export const docsManagerMixin = {
   },
 
   async createDocument(title = 'Untitled document', options = {}) {
+    if (options.wikiCreationKey && !options.wikiLockHeld && globalThis.navigator?.locks?.request) {
+      return navigator.locks.request(`wiki-create:${options.wikiCreationKey}`, () => this.createDocument(title, { ...options, wikiLockHeld: true }));
+    }
     const ownerNpub = this.workspaceOwnerNpub;
     if (!ownerNpub) {
       this.error = 'Sign in first';
@@ -4114,7 +4124,31 @@ export const docsManagerMixin = {
       this.error = 'Select a scope before creating a document.';
       return null;
     }
-    const recordId = crypto.randomUUID();
+    const creationWorkspace = this.currentWorkspace;
+    const creationActor = this.session?.npub;
+    const creationGeneration = this._workspaceSelectionGeneration;
+    const assertCreationVisit = () => {
+      if (options.wikiCreationKey && (this.currentWorkspace !== creationWorkspace || this.session?.npub !== creationActor || this._workspaceSelectionGeneration !== creationGeneration)) throw new Error('Workspace changed. Return to the source to recover the created page.');
+    };
+    const journal = options.wikiCreationKey ? openWikiCreationJournal() : null;
+    const creationIntent = journal ? await journal.get(options.wikiCreationKey) : null;
+    const creationJournalFields = { key: options.wikiCreationKey, sourceId: options.wikiSourceId, actorId: options.wikiActorId || creationActor };
+    assertCreationVisit();
+    if (creationIntent?.acceptedId) {
+      let existing = await getDocumentById(creationIntent.acceptedId);
+      assertCreationVisit();
+      if (!existing) {
+        await this.requestTowerSyncFamily?.('document', creationIntent.acceptedId, { force: true });
+        existing = await getDocumentById(creationIntent.acceptedId);
+      }
+      if (!existing || ['deleted', 'archived'].includes(existing.record_state) || existing.can_read === false || existing.readable === false) {
+        throw new Error('The previously created page is unavailable. Its ID will not be replaced.');
+      }
+      assertCreationVisit();
+      this.patchDocumentLocal(existing);
+      return existing;
+    }
+    const recordId = creationIntent?.recordId || crypto.randomUUID();
     const now = new Date().toISOString();
     const initialContent = typeof options.initialContent === 'string' ? options.initialContent : '';
     const contentModel = createDocumentEditorState({ content: initialContent, content_blocks: [] }).contentModel;
@@ -4122,11 +4156,13 @@ export const docsManagerMixin = {
       try {
         const pgWorkspaceContext = resolveTowerPgWorkspaceContext(this);
         const pgWorkspaceOwnerNpub = pgWorkspaceContext.workspaceOwnerNpub || ownerNpub;
-        const contentPayload = await this.prepareDocumentContentForEnvelope({
+        const contentPayload = creationIntent?.contentPayload || await this.prepareDocumentContentForEnvelope({
           record_id: recordId,
           owner_npub: pgWorkspaceOwnerNpub,
           title,
         }, contentModel, [], null, { pgStorageContext: pgWorkspaceContext });
+        if (options.wikiCreationKey) await journal.put({ ...creationJournalFields, recordId, contentPayload });
+        assertCreationVisit();
         const accepted = await createTowerPgDocFromLocal(this, {
           record_id: recordId,
           owner_npub: pgWorkspaceOwnerNpub,
@@ -4137,6 +4173,8 @@ export const docsManagerMixin = {
           pg_channel_id: pgContext.channelId,
           pg_thread_id: pgContext.threadId || null,
         });
+        if (options.wikiCreationKey) await journal.put({ ...creationJournalFields, recordId, contentPayload, acceptedId: accepted.record_id });
+        assertCreationVisit();
         const acceptedRow = {
           ...accepted,
           content: contentModel.content,
@@ -4354,6 +4392,12 @@ export const docsManagerMixin = {
 
   async saveSelectedDocItem(options = {}) {
     const autosave = options.autosave === true;
+    if (this.recordTransfer?.mode === 'move' && this.recordTransfer.submitting && this.recordTransfer.record?.record_id === this.selectedDocId) {
+      if (this.docEditDraftDirty) await this.persistSelectedDocDraft({ immediate: true });
+      this.docAutosaveState = 'pending';
+      if (!autosave) this.error = 'Wait for the move to finish before saving. Your draft is preserved.';
+      return null;
+    }
     this.error = null;
     if (this.docEditorMode === 'rich' && ['loading', 'error'].includes(this.docRichEditorLoadState)) {
       if (this.docEditDraftDirty) await this.persistSelectedDocDraft();
@@ -4386,8 +4430,11 @@ export const docsManagerMixin = {
         return this.saveSelectedPgDocItem(latest, this.workspaceOwnerNpub, options);
       })();
       this.pgDocSavePromises[recordId] = savePromise;
+      const saveWorkspace = this.currentWorkspace, saveActor = this.session?.npub;
       try {
-        return await savePromise;
+        const saved = await savePromise;
+        if (saved?.sync_status === 'synced' && this.currentWorkspace === saveWorkspace && this.session?.npub === saveActor) await this.completeWikiCreationsForSavedDocument(saved, saveActor);
+        return saved;
       } finally {
         if (this.pgDocSavePromises?.[recordId] === savePromise) {
           delete this.pgDocSavePromises[recordId];

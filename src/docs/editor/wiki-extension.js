@@ -66,6 +66,7 @@ export const FlightDeckWikiLink = Node.create({
         const resolved = this.options.resolve(current.attrs);
         if (current.attrs.documentId || resolved.state === 'available') this.options.open(current.attrs.documentId || resolved.page.record_id);
         else if (resolved.state === 'unresolved') this.options.create(current.attrs.title, { from: getPos(), to: getPos() + current.nodeSize }, editor);
+        else if (resolved.state === 'ambiguous') this.options.choose(current.attrs.title, { from: getPos(), to: getPos() + current.nodeSize }, editor);
         else this.options.error(dom.title);
       };
       dom.addEventListener('click', activate);
@@ -80,19 +81,19 @@ export const FlightDeckWikiLink = Node.create({
         ignoreMutation: () => true, update(next) { if (next.type !== node.type) return false; current = next; refresh(); return true; }, destroy() { editor.off('transaction', refresh); stopTracking(); } };
     };
   },
-  addOptions() { return { resolve: () => ({ state: 'unavailable' }), open: () => {}, create: () => {}, error: () => {}, isBusy: () => false, isEditing: () => false }; },
+  addOptions() { return { resolve: () => ({ state: 'unavailable' }), open: () => {}, create: () => {}, choose: () => {}, error: () => {}, isBusy: () => false, isEditing: () => false }; },
 });
 
 export function wikiPickerRange(state) {
   const { $from, empty } = state.selection;
-  if (!empty || !$from.parent.isTextblock || $from.parent.type.name === 'codeBlock') return null;
+  if (!empty || !$from.parent.isTextblock || $from.parent.type.name === 'codeBlock' || $from.marks().some(mark => mark.type.name === 'code')) return null;
   const before = $from.parent.textBetween(0, $from.parentOffset, '', '\ufffc');
   const match = /\[\[([^\]\n]*)$/.exec(before);
   if (!match) return null;
   return { from: $from.pos - match[0].length, to: $from.pos, query: match[1] };
 }
 
-export function createWikiPicker({ pages, resolve, create, error, isEditing, isBusy = () => false }) {
+export function createWikiPicker({ pages, resolve, create, choose: choosePage, label = () => '', error, isEditing, isBusy = () => false }) {
   return Extension.create({
     name: 'fdWikiPicker',
     addProseMirrorPlugins() {
@@ -152,13 +153,20 @@ export function createWikiPicker({ pages, resolve, create, error, isEditing, isB
             choices.forEach((choice, index) => {
               const button = document.createElement('button');
               button.type = 'button'; button.setAttribute('role', 'option'); button.setAttribute('aria-selected', String(index === active));
-              button.textContent = choice ? `${choice.title} · ${choice.record_id.slice(0, 8)}` : `Create “${range.query.trim()}”`;
+              button.textContent = choice ? `${choice.title} · ${label(choice)} · ${choice.record_id.slice(0, 8)}` : `Create “${range.query.trim()}”`;
               button.disabled = pending;
               button.addEventListener('pointerdown', (event) => event.preventDefault());
               button.addEventListener('click', () => { void choose(index); });
               el.append(button);
             });
             if (!choices.length) el.textContent = 'Type a page name to search or create';
+            if (choosePage) {
+              const broader = document.createElement('button'); broader.type = 'button';
+              broader.textContent = 'Link to doc or note…';
+              broader.addEventListener('pointerdown', event => event.preventDefault());
+              broader.addEventListener('click', () => { const selected = { ...range }; dismissed = signature; el.hidden = true; choosePage(selected.query, selected, this.editor); });
+              el.append(broader);
+            }
             const rect = view.coordsAtPos(view.state.selection.from);
             el.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - Math.min(360, window.innerWidth - 16)))}px`;
             el.style.top = `${Math.max(8, Math.min(rect.bottom + 4, window.innerHeight - 240))}px`;
