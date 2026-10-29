@@ -25640,3 +25640,28 @@ button.task-desc-toggle:focus-visible {
 
 .wiki-link-modal { position:relative; padding:1.25rem; box-sizing:border-box; max-height:calc(100dvh - 2rem); overflow-y:auto; }
 .wiki-link-modal .modal-close { position:absolute; top:.5rem; right:.5rem; }
+
+/* Workspace administration and app preferences share handlers, not navigation groups. */
+.settings-context { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-shrink: 0; }
+.settings-context-identity { display: flex; align-items: center; gap: .75rem; min-width: 0; }
+.settings-context-identity > img, .settings-context-identity > .avatar-fallback { width: 40px; height: 40px; flex-shrink: 0; object-fit: cover; border-radius: var(--radius-control); }
+.settings-context-identity > div { min-width: 0; }
+.settings-context h1 { margin: 0; font-size: 1.2rem; }
+.settings-context p { margin: .2rem 0 0; overflow-wrap: anywhere; color: var(--muted-foreground); }
+.settings-connection-compact { background: var(--secondary); color: var(--secondary-foreground); border: 1px solid var(--border); border-radius: var(--radius-control); padding: .35rem .6rem; font-size: .8rem; }
+.settings-layout { display: flex; gap: 1.5rem; flex: 1; min-height: 0; min-width: 0; overflow: hidden; }
+.settings-navigation.settings-tabs { display: flex; flex-direction: column; gap: 1.25rem; width: 220px; flex: 0 0 220px; border: 0; margin: 0; overflow-y: auto; }
+.settings-navigation-group { display: flex; flex-direction: column; gap: .2rem; }
+.settings-navigation h2 { margin: 0 0 .3rem; font-size: .8rem; color: var(--muted-foreground); }
+.settings-navigation .settings-tab { text-align: left; white-space: normal; border: 1px solid transparent; border-radius: var(--radius-control); }
+.settings-navigation .settings-tab.active { background: var(--secondary); border-color: var(--primary); }
+.settings-details { display: flex; flex-direction: column; flex: 1; min-height: 0; min-width: 0; overflow: hidden; }
+@media (max-width: 767px) {
+  .settings-context { align-items: flex-start; flex-wrap: wrap; gap: .5rem; }
+  .settings-layout { flex-direction: column; gap: .75rem; overflow-y: auto; }
+  .settings-navigation.settings-tabs { flex: 0 0 auto; width: 100%; flex-direction: row; gap: .75rem; overflow: visible; }
+  .settings-navigation-group { flex: 1; min-width: 0; }
+  .settings-navigation .settings-tab { padding: .5rem; min-height: 44px; font-size: .8rem; }
+  .settings-details { flex: 0 0 auto; overflow: visible; }
+  .settings-details > .settings-tab-content { overflow: visible; }
+}

@@ -356,10 +356,11 @@ describe('flight deck summary template', () => {
     expect(html).not.toContain('$store.chat.settingsTab === \'flows\'');
   });
 
-  it('labels setup without changing the settings route', () => {
+  it('keeps personal Settings and Manage Workspace on the existing settings route', () => {
     const html = readFileSync(INDEX_PATH, 'utf8');
 
-    expect(html).toContain('@click="$store.chat.showAvatarMenu = false; $store.chat.navigateTo(\'settings\')">Setup</button>');
+    expect(html).toContain('@click="$store.chat.openManageWorkspace()">Manage Workspace</button>');
+    expect(html).toContain('@click="$store.chat.showAvatarMenu = false; $store.chat.navigateTo(\'settings\'); $store.chat.openSettingsTab(\'deck\')">Settings</button>');
     expect(html).not.toContain('<span class="sidebar-label">Setup</span>');
     expect(html).not.toContain('<span class="sidebar-label">Settings</span>');
   });

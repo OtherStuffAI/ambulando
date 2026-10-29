@@ -5436,6 +5436,14 @@
         "Keep people and agent identities distinct when tagging task and document comments, including document replies.",
         "Preserve spaces and new lines when composing document comments with mention tags."
       ]
+    },
+    {
+      "buildNumber": 2674,
+      "label": "Manage Workspace navigation",
+      "notes": [
+        "Open Manage Workspace from the workspace menu, with workspace identity and grouped administration sections.",
+        "Keep personal preferences and Connection & Diagnostics separately accessible, with compact connection status in workspace management."
+      ]
     }
   ]
 }

@@ -19,17 +19,19 @@ describe('settings admin gating template', () => {
     expect(html).toContain('<div class="settings-tab-content" x-show="$store.chat.canAdminWorkspace && $store.chat.settingsTab === \'sharing\'">');
   });
 
-  it('labels the connection tab NStack and lists it first, before Workspace', () => {
+  it('groups workspace administration separately from personal settings and connection recovery', () => {
     const html = readFileSync(INDEX_PATH, 'utf8');
-    const tabsStart = html.indexOf('<div class="settings-tabs">');
-    const tabsEnd = html.indexOf('</div>', tabsStart);
-    const tabs = [...html.slice(tabsStart, tabsEnd).matchAll(/<button[^>]*settingsTab === '([a-z]+)'[^>]*>([^<]*)<\/button>/g)]
-      .map(([, key, label]) => ({ key, label }));
-
-    expect(tabs[0]).toEqual({ key: 'connection', label: 'NStack' });
-    expect(tabs[1]).toEqual({ key: 'workspace', label: 'Workspace' });
-    expect(tabs.some(({ label }) => label === 'Connection')).toBe(false);
-    expect(html).toContain('<button class="settings-tab" :class="{ active: $store.chat.settingsTab === \'connection\' }" @click="$store.chat.settingsTab = \'connection\'">NStack</button>');
+    const navigation = html.slice(html.indexOf('<nav class="settings-tabs settings-navigation"'), html.indexOf('<div class="settings-details">'));
+    expect(navigation).toContain('Manage Workspace');
+    expect(navigation).toContain('Personal &amp; Device');
+    expect(navigation).toContain('Scopes &amp; Channels');
+    expect(navigation).toContain('Apps &amp; Integrations');
+    expect(navigation).toContain('Connection &amp; Diagnostics');
+    expect(html).toContain('data-testid="settings-workspace-context"');
+    expect(html).toContain('@click="$store.chat.openManageWorkspace()"');
+    const connection = html.indexOf('aria-label="Connection & Diagnostics"');
+    expect(connection).toBeGreaterThan(html.indexOf(`x-show="$store.chat.settingsTab === 'connection'"`));
+    expect(html).not.toContain('aria-label="Connection">');
   });
 
   it('hides advanced settings tabs behind the workspace advanced checkbox', () => {

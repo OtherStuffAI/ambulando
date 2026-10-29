@@ -562,7 +562,9 @@
           <button type="button" @click="$store.chat.syncNow()">Full sync</button>
           <button type="button" x-show="!$store.chat.isTowerPgMode" @click="$store.chat.openPendingWritesModal()">Pending Writes</button>
           <button type="button" @click="$store.chat.showAvatarMenu = false; $store.chat.navigateTo('settings'); $store.chat.openSettingsTab('apps')">App Management</button>
-          <button type="button" @click="$store.chat.showAvatarMenu = false; $store.chat.navigateTo('settings')">Setup</button>
+          <button type="button" @click="$store.chat.openManageWorkspace()">Manage Workspace</button>
+          <button type="button" @click="$store.chat.showAvatarMenu = false; $store.chat.navigateTo('settings'); $store.chat.openSettingsTab('deck')">Settings</button>
+          <button type="button" @click="$store.chat.showAvatarMenu = false; $store.chat.navigateTo('settings'); $store.chat.openSettingsTab('connection')">Connection &amp; Diagnostics</button>
           <button type="button" @click="$store.chat.logout()">Log out</button>
         </div>
       </div>
@@ -1586,6 +1588,7 @@
             </button>
 
             <div class="sidebar-workspace-popover" x-show="$store.chat.showWorkspaceSwitcherMenu" x-cloak @click.outside="$store.chat.closeWorkspaceSwitcherMenu()">
+              <button type="button" class="sidebar-workspace-option" @click="$store.chat.openManageWorkspace()" :disabled="$store.chat.isWorkspaceSwitching">Manage Workspace</button>
               <div class="sidebar-workspace-popover-header">
                 <strong>Switch workspace</strong>
                 <span x-text="$store.chat.knownWorkspaces.length + ' available'"></span>
@@ -7810,24 +7813,37 @@
 
         <template x-if="$store.chat.navSection === 'settings'">
           <div class="settings-section">
-          <section class="settings-panel" x-show="$store.chat.isTowerPgMode" aria-label="Connection">
-            <h2>Connection</h2>
-            <p role="status" data-testid="settings-connection-status" x-text="$store.chat.settingsConnectionLabel"></p>
-            <button type="button" @click="$store.chat.retrySettingsConnection()">Retry connection</button>
-            <button type="button" @click="$store.chat.openDiagnosticsDialog()">Diagnostics</button>
-          </section>
-          <div class="settings-tabs">
-            <button class="settings-tab" :class="{ active: $store.chat.settingsTab === 'connection' }" @click="$store.chat.settingsTab = 'connection'">NStack</button>
-            <button x-show="$store.chat.canAdminWorkspace" class="settings-tab" :class="{ active: $store.chat.settingsTab === 'workspace' }" @click="$store.chat.settingsTab = 'workspace'">Workspace</button>
-            <button class="settings-tab" :class="{ active: $store.chat.settingsTab === 'deck' }" @click="$store.chat.openSettingsTab('deck')">Deck</button>
-            <button class="settings-tab" :class="{ active: $store.chat.settingsTab === 'notifications' }" @click="$store.chat.openSettingsTab('notifications')">Notifications</button>
-            <button class="settings-tab" :class="{ active: $store.chat.settingsTab === 'apps' }" @click="$store.chat.openSettingsTab('apps')">App Management</button>
-            <button x-show="$store.chat.isTowerPgMode" class="settings-tab" :class="{ active: $store.chat.settingsTab === 'permissions' }" @click="$store.chat.openSettingsTab('permissions')">Permissions</button>
-            <button x-show="false" x-cloak class="settings-tab" :class="{ active: $store.chat.settingsTab === 'schedules' }" @click="$store.chat.openSettingsTab('schedules')">Schedules</button>
-            <button x-show="$store.chat.canAccessScopeSettings" class="settings-tab" :class="{ active: $store.chat.settingsTab === 'scopes' }" @click="$store.chat.openSettingsTab('scopes')">Scopes</button>
-            <button x-show="$store.chat.workspaceAdvancedOptionsEnabled && !$store.chat.isTowerPgMode" class="settings-tab" :class="{ active: $store.chat.settingsTab === 'data' }" @click="$store.chat.settingsTab = 'data'">Sync</button>
-            <button x-show="$store.chat.canAdminWorkspace" class="settings-tab" :class="{ active: $store.chat.settingsTab === 'sharing' }" @click="$store.chat.openSettingsTab('sharing')">Groups &amp; Members</button>
-          </div>
+          <header class="settings-context" data-testid="settings-workspace-context">
+            <div class="settings-context-identity">
+              <template x-if="$store.chat.currentWorkspaceAvatarUrl"><img :src="$store.chat.currentWorkspaceAvatarUrl" alt="" /></template>
+              <template x-if="!$store.chat.currentWorkspaceAvatarUrl"><span class="avatar-fallback" x-text="$store.chat.currentWorkspaceInitials"></span></template>
+              <div><h1 x-text="$store.chat.isWorkspaceSettingsSection ? 'Manage Workspace' : 'Settings'"></h1><p x-text="$store.chat.currentWorkspaceName"></p></div>
+            </div>
+            <button type="button" class="settings-connection-compact" x-show="$store.chat.isTowerPgMode" @click="$store.chat.openSettingsTab('connection')" :aria-label="$store.chat.settingsConnectionLabel + ' — open Connection & Diagnostics'">
+              <span role="status" data-testid="settings-connection-status" x-text="$store.chat.settingsConnectionLabel"></span>
+              <span x-show="$store.chat.settingsConnectionLabel !== 'Connected'"> · Connection &amp; Diagnostics →</span>
+            </button>
+          </header>
+          <div class="settings-layout">
+          <nav class="settings-tabs settings-navigation" aria-label="Settings sections">
+            <div class="settings-navigation-group" aria-labelledby="manage-workspace-label">
+              <h2 id="manage-workspace-label">Manage Workspace</h2>
+              <button x-show="$store.chat.canAdminWorkspace" class="settings-tab" :class="{ active: $store.chat.settingsTab === 'workspace' }" @click="$store.chat.openSettingsTab('workspace')" :aria-current="$store.chat.settingsTab === 'workspace' ? 'page' : null">Workspace</button>
+              <button x-show="$store.chat.canAccessScopeSettings" class="settings-tab" :class="{ active: $store.chat.settingsTab === 'scopes' }" @click="$store.chat.openSettingsTab('scopes')" :aria-current="$store.chat.settingsTab === 'scopes' ? 'page' : null">Scopes &amp; Channels</button>
+              <button x-show="$store.chat.canAdminWorkspace" class="settings-tab" :class="{ active: $store.chat.settingsTab === 'sharing' }" @click="$store.chat.openSettingsTab('sharing')" :aria-current="$store.chat.settingsTab === 'sharing' ? 'page' : null">Groups &amp; Members</button>
+              <button x-show="$store.chat.isTowerPgMode" class="settings-tab" :class="{ active: $store.chat.settingsTab === 'permissions' }" @click="$store.chat.openSettingsTab('permissions')" :aria-current="$store.chat.settingsTab === 'permissions' ? 'page' : null">Permissions</button>
+              <button class="settings-tab" :class="{ active: $store.chat.settingsTab === 'apps' }" @click="$store.chat.openSettingsTab('apps')" :aria-current="$store.chat.settingsTab === 'apps' ? 'page' : null">Apps &amp; Integrations</button>
+              <button x-show="false" x-cloak class="settings-tab" :class="{ active: $store.chat.settingsTab === 'schedules' }" @click="$store.chat.openSettingsTab('schedules')">Schedules</button>
+            </div>
+            <div class="settings-navigation-group" aria-labelledby="personal-settings-label">
+              <h2 id="personal-settings-label">Personal &amp; Device</h2>
+              <button class="settings-tab" :class="{ active: $store.chat.settingsTab === 'deck' }" @click="$store.chat.openSettingsTab('deck')" :aria-current="$store.chat.settingsTab === 'deck' ? 'page' : null">Deck</button>
+              <button class="settings-tab" :class="{ active: $store.chat.settingsTab === 'notifications' }" @click="$store.chat.openSettingsTab('notifications')" :aria-current="$store.chat.settingsTab === 'notifications' ? 'page' : null">Notifications</button>
+              <button class="settings-tab" :class="{ active: $store.chat.settingsTab === 'connection' }" @click="$store.chat.openSettingsTab('connection')" :aria-current="$store.chat.settingsTab === 'connection' ? 'page' : null">Connection &amp; Diagnostics</button>
+              <button x-show="$store.chat.workspaceAdvancedOptionsEnabled && !$store.chat.isTowerPgMode" class="settings-tab" :class="{ active: $store.chat.settingsTab === 'data' }" @click="$store.chat.openSettingsTab('data')" :aria-current="$store.chat.settingsTab === 'data' ? 'page' : null">Sync</button>
+            </div>
+          </nav>
+          <div class="settings-details">
           <div class="settings-tab-content" x-show="$store.chat.canAdminWorkspace && $store.chat.settingsTab === 'workspace'">
           <section class="settings-panel workspace-settings-panel">
             <div class="settings-panel-header">
@@ -7966,6 +7982,14 @@
           </div>
 
           <div class="settings-tab-content" x-show="$store.chat.settingsTab === 'connection'">
+            <section class="settings-panel" aria-label="Connection & Diagnostics">
+              <h2>Connection &amp; Diagnostics</h2>
+              <p>Connection configuration and recovery for this app. Cached workspace records remain available while reconnecting.</p>
+              <div class="settings-actions">
+                <button type="button" x-show="$store.chat.isTowerPgMode" @click="$store.chat.retrySettingsConnection()">Retry connection</button>
+                <button type="button" @click="$store.chat.openDiagnosticsDialog()">Diagnostics</button>
+              </div>
+            </section>
           <section class="settings-panel nstack-settings-panel" x-init="$store.chat.initializeNStackDiscovery()">
             <div class="settings-panel-header">
               <div>
@@ -10182,6 +10206,8 @@
                 </template>
               </dialog>
             </section>
+          </div>
+          </div>
           </div>
           </div>
           </div>

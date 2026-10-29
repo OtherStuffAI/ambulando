@@ -454,6 +454,17 @@ export const workspaceManagerMixin = {
     this.normalizeSettingsTab();
   },
 
+  get isWorkspaceSettingsSection() {
+    return ['workspace', 'scopes', 'sharing', 'permissions', 'apps', 'schedules'].includes(this.settingsTab);
+  },
+
+  openManageWorkspace() {
+    this.showAvatarMenu = false;
+    this.closeWorkspaceSwitcherMenu?.();
+    this.navigateTo('settings');
+    this.openSettingsTab(this.canAdminWorkspace ? 'workspace' : this.canAccessScopeSettings ? 'scopes' : 'apps');
+  },
+
   normalizeSettingsTab() {
     const advancedTabs = this.workspaceAdvancedOptionsEnabled && !isFlightDeckSurfaceDisabled('flows') ? ['flows', 'data'] : (this.workspaceAdvancedOptionsEnabled ? ['data'] : []);
     const adminAdvancedTabs = this.workspaceAdvancedOptionsEnabled && !isFlightDeckSurfaceDisabled('schedules') ? ['schedules'] : [];

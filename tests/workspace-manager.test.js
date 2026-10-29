@@ -1237,3 +1237,20 @@ describe('mergeKnownWorkspaces', () => {
     expect(store.knownWorkspaces.find((w) => w.workspaceOwnerNpub === 'npub1b')).toBeTruthy();
   });
 });
+
+
+describe('Manage Workspace entry', () => {
+  it.each([
+    [true, true, 'workspace'],
+    [false, true, 'scopes'],
+    [false, false, 'apps'],
+  ])('uses existing authority for the landing section (%s, %s)', (admin, scopes, tab) => {
+    const store = { canAdminWorkspace: admin, canAccessScopeSettings: scopes,
+      showAvatarMenu: true, closeWorkspaceSwitcherMenu: vi.fn(), navigateTo: vi.fn(), openSettingsTab: vi.fn() };
+    workspaceManagerMixin.openManageWorkspace.call(store);
+    expect(store.navigateTo).toHaveBeenCalledWith('settings');
+    expect(store.openSettingsTab).toHaveBeenCalledWith(tab);
+    expect(store.showAvatarMenu).toBe(false);
+    expect(store.closeWorkspaceSwitcherMenu).toHaveBeenCalledOnce();
+  });
+});
