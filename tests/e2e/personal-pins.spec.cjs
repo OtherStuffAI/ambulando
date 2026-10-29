@@ -139,6 +139,7 @@ for(const width of [375,1440])test(`channel Inbox pins persist and navigate acro
 });
 
 for(const width of [375,1440])test(`mixed personal pins reorder with pointer, keyboard and touch at ${width}px`,async({page})=>{
+ page.setDefaultTimeout(10000);
  await page.setViewportSize({width,height:1000});
  await page.route('**/*',route=>new URL(route.request().url()).pathname==='/__personal-pins.js'?route.fulfill({contentType:'text/javascript',body:bundle}):serveBuiltFlightDeck(route));
  await openFixture(page,true);
@@ -147,9 +148,12 @@ for(const width of [375,1440])test(`mixed personal pins reorder with pointer, ke
   s.closeThread({syncRoute:false});s.stopBackgroundSync();s.requestTowerSyncFamily=async()=>{};
   const key='pin-order-browser',workspaceId='workspace',actor='actor';
   const db=m.openWorkspaceDb(key);await db.open();window.personalPinDb=db;
-  Object.defineProperties(s,Object.getOwnPropertyDescriptors(m.pinnedThreadsMixin));
   s.knownWorkspaces=[{workspaceKey:key,workspaceId,workspaceOwnerNpub:s.session.npub,appNpub:'npub1test',directHttpsUrl:'http://127.0.0.1:3100',pgBackendMode:true,pgMe:{actor:{actor_id:actor,npub:s.session.npub}}}];
-  s.selectedWorkspaceKey=key;s.workspaceDbKey=key;s.isTowerPgMode=true;s.navSection='status';s.deckInboxEnabled=true;
+  // Open the application's real DB singleton through workspace selection.
+  // The seed bundle is a separate module graph and must not replace the mixin.
+  s.ensureWorkspaceSessionKey=async()=>{};s.loadLocalWorkspaceCoreData=async()=>{};s.persistWorkspaceSettings=async()=>{};
+  await s.selectWorkspace(key,{skipPgVerification:true});
+  s.isTowerPgMode=true;s.navSection='status';s.deckInboxEnabled=true;
   const context=JSON.stringify(['http://127.0.0.1:3100','npub1test',workspaceId,actor]);
   await db.sync_state.put({key:`pin-order-support:${context}`,value:true});
   await db.sync_state.put({key:`thread-pin-support:${context}`,value:true});
@@ -160,7 +164,7 @@ for(const width of [375,1440])test(`mixed personal pins reorder with pointer, ke
   s.syncPinnedThreadsContext(s.pinnedThreadsPartition);
   s.testPinOpens=0;s.openPinnedThread=async()=>{s.testPinOpens++;};
  });
- if(width<769)await page.getByRole('button',{name:'Show Pinned items',exact:true}).click();
+ if(width<769)await page.getByRole('button',{name:'Show Pinned items',exact:true}).click({timeout:5000});
  const panel=page.getByTestId('deck-pinned-threads'),rows=panel.locator('.pinned-thread-row');
  await expect(rows).toHaveCount(3);
  if(width<769)await expect.poll(async()=>(await panel.boundingBox()).x).toBeLessThan(20);

@@ -12,3 +12,18 @@ it('cancel, workspace switches and concurrent unpins do not save; new pins are n
  s.startPinMove(pin);s.pinnedThreadsPartition='other';await s.finishPinMove();expect(s.savePersonalPinMove).not.toHaveBeenCalled();
  s.startPinMove(pin);s.pinnedThreads.shift();await s.finishPinMove();expect(s.savePersonalPinMove).not.toHaveBeenCalled();expect(s.pinMoveAnnouncement).toContain('unpinned');
 });
+it('commits a quick pointer release before any preview animation frame',()=>{
+ const s=store(), listeners=new Map();
+ vi.stubGlobal('requestAnimationFrame',vi.fn(()=>1));
+ vi.stubGlobal('cancelAnimationFrame',vi.fn());
+ const rows=s.pinnedThreads.map((pin,i)=>({dataset:{pinKey:pin.key},getBoundingClientRect:()=>({top:i*50,height:50})}));
+ const list={getBoundingClientRect:()=>({top:0,bottom:300}),querySelectorAll:()=>rows};
+ const handle={closest:()=>list,focus:vi.fn(),setPointerCapture:vi.fn(),hasPointerCapture:()=>false,
+  addEventListener:(name,fn)=>listeners.set(name,fn),removeEventListener:vi.fn()};
+ const pointer={button:0,pointerId:1,clientY:20,currentTarget:handle,preventDefault:vi.fn(),stopPropagation:vi.fn()};
+ s.pinPointerDown(pointer,s.pinnedThreads[0]);
+ listeners.get('pointerup')({...pointer,clientY:149});
+ expect(s.savePersonalPinMove).toHaveBeenCalledWith('channel:same',null,'task:other');
+ expect(s.pinMove).toBeNull();
+ vi.unstubAllGlobals();
+});

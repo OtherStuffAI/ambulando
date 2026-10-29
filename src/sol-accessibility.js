@@ -47,6 +47,17 @@ export function anchoredMenuPosition(triggerRect, menuRect, viewport = {}) {
 // Reuse existing Alpine open/close handlers. This directive owns focus only;
 // it never approves an action, changes a record or overrides a busy exit guard.
 export function installSolAccessibility(Alpine) {
+  Alpine.directive('sol-composer-focus', (element, _directive, { cleanup }) => {
+    const activate = (event) => {
+      // Leave selection, attachments, menus and send/cancel actions to their
+      // own controls. Only the unused composer surface forwards focus.
+      if (event.target.closest('button, a, input, label, select, textarea, [contenteditable], [role="menu"]')) return;
+      const editor = element.querySelector('[data-chat-composer="thread"][contenteditable="true"]');
+      editor?.focus({ preventScroll: true });
+    };
+    element.addEventListener('click', activate);
+    cleanup(() => element.removeEventListener('click', activate));
+  });
   Alpine.directive('sol-viewport', (element, _directive, { cleanup }) => {
     const viewport = window.visualViewport;
     if (!viewport) return;

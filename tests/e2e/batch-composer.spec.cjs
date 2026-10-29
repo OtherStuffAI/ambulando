@@ -1,0 +1,30 @@
+const {test,expect}=require('playwright/test');
+const {openFixture}=require('./fixtures/mobile-chat.cjs');
+test.use({serviceWorkers:'block',reducedMotion:'reduce'});
+test.setTimeout(30000);
+for(const width of [375,1440])test(`blank composer surface focuses without losing draft or action controls at ${width}px`,async({page})=>{
+ page.setDefaultTimeout(5000);
+ await page.setViewportSize({width,height:1000});await openFixture(page);
+ const editor=page.locator('[data-chat-composer="thread"]:visible');
+ const bar=page.locator('.thread-composer-region .thread-input-bar');
+ await expect(editor).toHaveAttribute('contenteditable','true');
+ await editor.evaluate(el=>el.blur());
+ // Actual blank outer padding, outside the contenteditable and action buttons.
+ await bar.click({position:{x:2,y:2}});await expect(editor).toBeFocused();
+ await page.keyboard.type('Retained reply draft');await expect(editor).toHaveText('Retained reply draft');
+ const menu=bar.locator('.chat-composer-menu-trigger');await menu.click();
+ await expect(menu).toHaveAttribute('aria-expanded','true');await expect(menu).toBeFocused();
+ await page.locator('.thread-replies').click({position:{x:2,y:2}});await expect(menu).toHaveAttribute('aria-expanded','false');
+ await bar.click({position:{x:2,y:2}});await expect(editor).toBeFocused();
+ await expect(editor).toHaveText('Retained reply draft');
+ await menu.focus();await page.keyboard.press('Shift+Tab');await expect(editor).toBeFocused();
+ const cdp=await page.context().newCDPSession(page);await cdp.send('Emulation.setTouchEmulationEnabled',{enabled:true,maxTouchPoints:1});
+ await menu.focus();const box=await bar.boundingBox();
+ await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:box.x+2,y:box.y+2}]});
+ await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+ await expect(editor).toBeFocused();await expect(editor).toHaveText('Retained reply draft');
+ await page.evaluate(()=>{const s=Alpine.store('chat');s.deckThreadComposerBusy=true;});
+ await expect(editor).toHaveAttribute('contenteditable','false');
+ await menu.focus();await bar.click({position:{x:2,y:2}});await expect(editor).not.toBeFocused();
+ console.log('BATCH_COMPOSER',JSON.stringify({width,pointer:true,touch:true,keyboard:true,draftRetained:true,actionsPreserved:true,disabledRespected:true}));
+});

@@ -54,7 +54,7 @@ export const pinReorderMixin = {
     this.startPinMove(pin);
     const startY = event.clientY;
     let y = startY, moved = false;
-    const update = () => {
+    const position = () => {
       if (!this.pinMove) return;
       const rect = list.getBoundingClientRect();
       if (moved) {
@@ -67,10 +67,21 @@ export const pinReorderMixin = {
         const keys = rows.map(row => row.dataset.pinKey); keys.splice(index, 0, this.pinMove.key);
         if (index !== this.pinMove.index) { this.pinMove = { ...this.pinMove, keys, index }; this.announcePinMove(); }
       }
+    };
+    const update = () => {
+      position();
       const gesture = gestures.get(this); if (gesture) gesture.frame = requestAnimationFrame(update);
     };
     const move = e => { if (e.pointerId !== event.pointerId) return; e.preventDefault(); e.stopPropagation(); y = e.clientY; moved ||= Math.abs(y - startY) > 5; };
-    const up = e => { if (e.pointerId !== event.pointerId) return; e.preventDefault(); e.stopPropagation(); if (moved) void this.finishPinMove(); else this.cancelPinMove(); };
+    const up = e => {
+      if (e.pointerId !== event.pointerId) return;
+      e.preventDefault(); e.stopPropagation();
+      y = e.clientY;
+      moved ||= Math.abs(y - startY) > 5;
+      // A quick drag can end before the next animation frame. Commit the final
+      // pointer position rather than the last preview frame's stale position.
+      if (moved) { position(); void this.finishPinMove(); } else this.cancelPinMove();
+    };
     const cancel = e => { if (e.pointerId === event.pointerId) this.cancelPinMove(); };
     handle.setPointerCapture(event.pointerId);
     handle.addEventListener('pointermove', move); handle.addEventListener('pointerup', up); handle.addEventListener('pointercancel', cancel); handle.addEventListener('lostpointercapture', cancel);

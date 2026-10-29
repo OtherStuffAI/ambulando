@@ -5444,6 +5444,14 @@
         "Open Manage Workspace from the workspace menu, with workspace identity and grouped administration sections.",
         "Keep personal preferences and Connection & Diagnostics separately accessible, with compact connection status in workspace management."
       ]
+    },
+    {
+      "buildNumber": 2675,
+      "label": "Reply focus and quick pin moves",
+      "notes": [
+        "Click or tap unused space in the reply composer to focus your draft while keeping attachment and send controls independent.",
+        "Save the final drop position when dragging a personal pin quickly."
+      ]
     }
   ]
 }
