@@ -23,8 +23,7 @@ Notifications, then Avatar; resource pin controls belong to the resource context
 The native Browser control and the native five-control toolbar are owned by the
 native apps. Adding a new web browser is not required to match those controls.
 
-Nostr Browser's canonical repository is `humansinstitute/nostr-browser`.
-Its browser implementation configures native upload pickers, download delegates,
+Nostr Browser's native implementation configures native upload pickers, download delegates,
 new-window handling and origin-scoped native API bridges. Those platform
 interceptors are not transferable to a normal web page. In the web app:
 
