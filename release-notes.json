@@ -5428,6 +5428,14 @@
       "notes": [
         "Show the last cloud sync time only for a confirmed synced document; local-only drafts retain local save status."
       ]
+    },
+    {
+      "buildNumber": 2673,
+      "label": "Reliable comment mentions",
+      "notes": [
+        "Keep people and agent identities distinct when tagging task and document comments, including document replies.",
+        "Preserve spaces and new lines when composing document comments with mention tags."
+      ]
     }
   ]
 }

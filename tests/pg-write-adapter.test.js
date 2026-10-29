@@ -1439,6 +1439,43 @@ describe('PG write adapter', () => {
     }, { baseUrl: 'https://frozen.example', appNpub: 'flightdeck_pg' });
   });
 
+  it.each(['task', 'document', 'reply'])('preserves canonical people and agents in %s comment writes and accepted rows', async (surface) => {
+    const api = await import('../src/api.js');
+    const body = 'Complete body\n\n@[Rich Agent](mention:agent:npub1fixtureagent) and @[Richard](mention:person:npub1fixtureperson).\n@[Rich Agent](mention:agent:npub1fixtureagent)';
+    const mentions = [
+      { type: 'agent', npub: 'npub1fixtureagent', label: 'Rich Agent' },
+      { type: 'person', npub: 'npub1fixtureperson', label: 'Richard' },
+    ];
+    const isTask = surface === 'task';
+    const create = isTask ? api.createTowerPgTaskComment : api.createTowerPgDocComment;
+    create.mockImplementation(async (_workspace, target, payload) => ({ comment: {
+      id: 'accepted-comment', workspace_id: 'workspace-1', channel_id: 'channel-1',
+      ...(isTask ? { task_id: target } : { doc_id: target }),
+      parent_comment_id: payload.parent_comment_id || null,
+      body: payload.body, metadata: payload.metadata, mentions: payload.mentions,
+      row_version: 1,
+    } }));
+    const local = {
+      record_id: 'draft-comment', target_record_id: isTask ? 'task-1' : 'doc-1', body,
+      ...(surface === 'reply' ? { parent_comment_id: 'root-comment' } : {}),
+      pg_metadata: { retained: 'anchor', mentions: [{ type: 'agent', npub: 'npub1stale' }] },
+    };
+    const accepted = await (isTask ? createTowerPgTaskCommentFromLocal : createTowerPgDocCommentFromLocal)(store(), local);
+    const payload = create.mock.calls[0][2];
+    expect(payload).toMatchObject({ body, mentions, metadata: { retained: 'anchor', mentions } });
+    expect(payload.parent_comment_id).toBe(surface === 'reply' ? 'root-comment' : undefined);
+    expect(accepted).toMatchObject({ body, pg_metadata: { mentions } });
+    const { openWorkspaceDb, deleteWorkspaceDb, upsertComment, getCommentById } = await import('../src/db.js');
+    const workspace = `comment-mentions-${surface}`;
+    openWorkspaceDb(workspace);
+    try {
+      await upsertComment(accepted);
+      expect(await getCommentById('accepted-comment')).toMatchObject({ body, pg_metadata: { mentions } });
+    } finally {
+      await deleteWorkspaceDb(workspace);
+    }
+  });
+
   it('creates Tower PG document comments with anchor metadata', async () => {
     const api = await import('../src/api.js');
     api.createTowerPgDocComment.mockResolvedValue({

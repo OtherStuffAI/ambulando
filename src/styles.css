@@ -12473,6 +12473,8 @@ html.wingman-iphone-webview .chat-channel-tab-scroll * {
 }
 
 .doc-thread-reply-input {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
   width: 100%;
   min-height: 5.5rem;
   padding: 0.65rem 0.75rem;
@@ -12688,6 +12690,8 @@ html.wingman-iphone-webview .chat-channel-tab-scroll * {
 }
 
 .doc-comment-modal-input {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
   width: 100%;
   min-height: 7rem;
   padding: 0.75rem;

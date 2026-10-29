@@ -49,10 +49,18 @@ import { buildAgentInstructionSignature } from './message-instruction-signatures
 import { mergeChatStorageAttachments } from './chat-attachments.js';
 import { canonicalTaskAgentMentions } from './task-agent-mentions.js';
 import { canonicalDocumentAgentMentions } from './document-agent-mentions.js';
+import { canonicalActorMentions } from './mention-composer.js';
+import { canonicalAgentMentionsFromSelection } from './agent-direct-chat.js';
 import { createDiagnosticOperation, finishDiagnosticOperation, emitDiagnostic } from './diagnostics-events.js';
 
 function trimText(value) {
   return String(value ?? '').trim();
+}
+
+// Comments share chat's actor types. Task/document body helpers intentionally
+// use the older agent-only contract and must not relabel a person comment tag.
+function canonicalCommentMentions(body) {
+  return canonicalAgentMentionsFromSelection(body, canonicalActorMentions(body));
 }
 
 function isMissingPgMessageDeleteError(error) {
@@ -517,11 +525,12 @@ export async function createTowerPgTaskCommentFromLocal(store, comment, contextO
     : {};
   const clientRecordId = trimText(comment.pg_client_record_id || comment.record_id);
   if (clientRecordId) metadata.client_record_id = clientRecordId;
-  metadata.mentions = canonicalTaskAgentMentions(comment.body);
+  const mentions = canonicalCommentMentions(comment.body);
+  metadata.mentions = mentions;
   const result = await createTowerPgTaskComment(context.workspaceId, comment.target_record_id, {
     body: comment.body,
     ...(comment.pg_thread_id ? { thread_id: comment.pg_thread_id } : {}),
-    mentions: canonicalTaskAgentMentions(comment.body),
+    mentions,
     metadata,
   }, pgRequestOptions(context));
   return mapPgTaskCommentToLocal(result.comment, {
@@ -543,11 +552,12 @@ export async function createTowerPgDocCommentFromLocal(store, comment) {
   if (comment.anchor_start_offset != null && Number.isFinite(Number(comment.anchor_start_offset))) metadata.anchor_start_offset = Number(comment.anchor_start_offset);
   if (comment.anchor_end_offset != null && Number.isFinite(Number(comment.anchor_end_offset))) metadata.anchor_end_offset = Number(comment.anchor_end_offset);
   metadata.comment_status = comment.comment_status || metadata.comment_status || 'open';
-  metadata.mentions = canonicalDocumentAgentMentions(comment.body);
+  const mentions = canonicalCommentMentions(comment.body);
+  metadata.mentions = mentions;
   const body = {
     body: comment.body,
     ...(comment.parent_comment_id ? { parent_comment_id: comment.parent_comment_id } : {}),
-    mentions: canonicalDocumentAgentMentions(comment.body),
+    mentions,
     metadata,
   };
   const result = await createTowerPgDocComment(context.workspaceId, comment.target_record_id, body, pgRequestOptions(context));

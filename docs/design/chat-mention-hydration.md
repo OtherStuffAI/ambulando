@@ -78,6 +78,29 @@ a member within a returned group updates that group's membership; complete
 workspace-member reads still remove retired roster identities. A mention never
 grants server access.
 
+## Comment composers
+
+Task comments and document comments/replies use the same local workspace roster,
+picker, canonical actor pills and Markdown serialization as chat. Comment writes
+preserve `person` and `agent` types in structured `mentions` and metadata; task
+and document body mention contracts remain independent. Tower resolves the actual
+workspace identity and read permissions, and only structured agent mentions can
+instruct agents. Visible Markdown alone grants no authority.
+
+Document comment contenteditables preserve whitespace, including the separator
+inserted after a mention and authored line breaks. Their drawer and modal share
+this behavior. Existing canonical tags render through the normal Markdown link
+handler without rewriting stored comments.
+
+`e2e/comment-mentions.spec.cjs` mounts the production task, document-comment and
+document-reply composers with synthetic local records. It checks `@ric`, keyboard
+and touchscreen selection, person and agent tags, complete multiline bodies,
+intercepted sends, structured mentions, Dexie persistence and page reload. The
+network and signer are isolated fixtures, so these tests do not establish live
+Tower authorization or agent delivery. The comment adapter tests cover the same
+canonical types and accepted-row persistence. Task replies and comment body
+editing are not currently exposed by these web surfaces.
+
 ## Record and chat-thread mentions
 
 The @ lookahead also offers records: documents, tasks, channels, scopes, flows,
