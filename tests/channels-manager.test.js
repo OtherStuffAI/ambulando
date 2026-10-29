@@ -869,6 +869,10 @@ describe('channels-manager pure utilities', () => {
       closeNewChannelModal: vi.fn(),
     });
 
+    store.setNewChannelAccessCapacity(1, 'viewer');
+    expect(store.newChannelAccessRows[1].capacity).toBe('manager');
+    // Even a retained draft from an older client cannot replace the creator's recovery bundle.
+    store.newChannelAccessRows[1].capacity = 'viewer';
     await store.createNamedChannel();
 
     expect(createTowerPgScopeChannel).toHaveBeenCalledWith('workspace-1', 'scope-a', expect.objectContaining({
@@ -1004,6 +1008,38 @@ describe('channels-manager pure utilities', () => {
     ]);
   });
 
+  it('preserves custom scope defaults exactly instead of silently converting them to View', () => {
+    const scope = { record_id: 'scope-a', default_channel_grants: [
+      { principal_type: 'group', principal_id: 'group-custom', permissions: ['channel.read', 'task.comment'] },
+    ] };
+    const store = createPgGrantStore({ newChannelScopeId: 'scope-a', scopes: [scope], scopesMap: new Map([['scope-a', scope]]) });
+    store.resetNewChannelAccessRows();
+    expect(store.newChannelAccessRows[0].capacity).toBe('custom');
+    expect(buildChannelAccessGrantPayloads(store.newChannelAccessRows)).toEqual([
+      { principal_type: 'group', principal_id: 'group-custom', permissions: ['channel.read', 'task.comment'] },
+    ]);
+    store.setNewChannelAccessCapacity(0, 'manager');
+    store.setNewChannelAccessPrincipal(0, 'actor:someone-else');
+    expect(store.newChannelAccessRows[0]).toMatchObject({ principal_id: 'group-custom', capacity: 'custom' });
+  });
+
+  it('recognizes creator Manage, preserves its alias on roundtrip and removes it on downgrade', async () => {
+    const permissions = [...permissionsForPgChannelCapacity('manager'), 'channel.grant'];
+    expect(capacityForPgChannelPermissions(permissions)).toBe('manager');
+    expect(capacityForPgChannelPermissions([...permissions, 'unknown.permission'])).toBe('custom');
+    const store = createPgGrantStore({ canAdminWorkspace: true });
+    const grant = { principal_type: 'actor', principal_id: 'creator', capacity: 'manager', permissions };
+    expect(store.canEditPgChannelGrantRow(grant)).toBe(true);
+    await store.updateChannelGrantCapacity(grant, 'manager');
+    expect(updateTowerPgChannelGrant).toHaveBeenCalledWith('workspace-1', 'channel-1', 'actor', 'creator', {
+      permissions: [...permissionsForPgChannelCapacity('manager'), 'channel.grant'],
+    }, { baseUrl: 'https://tower.example', appNpub: 'flightdeck-app' });
+    await store.updateChannelGrantCapacity(grant, 'contributor');
+    expect(updateTowerPgChannelGrant).toHaveBeenLastCalledWith('workspace-1', 'channel-1', 'actor', 'creator', {
+      access_level: 'contribute',
+    }, { baseUrl: 'https://tower.example', appNpub: 'flightdeck-app' });
+  });
+
   it('renders inherited scope access with direct channel grants overriding duplicates', () => {
     const scope = {
       record_id: 'scope-a',
@@ -1052,6 +1088,16 @@ describe('channels-manager pure utilities', () => {
       }),
     ]);
     expect(store.channelGrantRows.filter((grant) => grant.principal_id === 'group-contributors')).toHaveLength(1);
+  });
+
+  it('does not treat a scope default as authority to manage an existing channel', () => {
+    const scope = { record_id: 'scope-a', default_channel_access_rows: [
+      { principal_type: 'actor', principal_id: 'actor-manager', capacity: 'manager' },
+    ] };
+    const store = createPgGrantStore({ canAdminWorkspace: false, channelGrants: [],
+      channels: [{ record_id: 'channel-1', scope_id: 'scope-a' }], scopes: [scope], scopesMap: new Map([['scope-a', scope]]) });
+    expect(store.channelGrantRows.some(row => row.inherited)).toBe(true);
+    expect(store.canManageSelectedPgChannelGrants).toBe(false);
   });
 
   it('preserves concrete scope channel permission rows when deriving inherited access', () => {
@@ -3163,6 +3209,18 @@ describe('PG channel lifecycle controls', () => {
     expect(state.channelSettingsName).toBe('  Renamed  ');
     expect(state.channels[0].title).toBe('Original');
     expect(upsertChannel).not.toHaveBeenCalled();
+  });
+
+  it('does not allow a workspace-wide channel manage union to manage or reorder an unrelated channel', () => {
+    const state = store({ canAdminWorkspace: false });
+    state.currentWorkspace.pgMe.permissions = ['workspace.read', 'channel.manage', 'channel.grants.manage'];
+    expect(state.canManageChannel(channel)).toBe(false);
+    expect(state.canDeleteChannel(channel)).toBe(false);
+    expect(state.canReorderSelectedChannel).toBe(false);
+    state.channelGrantsChannelId = channel.record_id;
+    state.channelGrants = [{ principal_type: 'person', principal_id: 'actor-manager', permissions: ['channel.manage'] }];
+    expect(state.canManageChannel(channel)).toBe(true);
+    expect(state.canReorderSelectedChannel).toBe(true);
   });
 
   it('gates management separately from grant management and protects system/DM channels', () => {

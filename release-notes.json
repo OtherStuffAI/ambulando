@@ -5452,6 +5452,21 @@
         "Click or tap unused space in the reply composer to focus your draft while keeping attachment and send controls independent.",
         "Save the final drop position when dragging a personal pin quickly."
       ]
+    },
+    {
+      "buildNumber": 2676,
+      "label": "Channel access and creator recovery",
+      "notes": [
+        "Recognize creator Manage access while preserving legacy permissions, and apply explicit access downgrades without retaining management rights.",
+        "Preserve custom channel creation defaults and keep scope defaults separate from authority over an existing channel."
+      ]
+    },
+    {
+      "buildNumber": 2677,
+      "label": "Channel management access checks",
+      "notes": [
+        "Use the selected channel’s grants for management and reordering instead of permissions held on another channel."
+      ]
     }
   ]
 }

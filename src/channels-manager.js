@@ -618,7 +618,14 @@ async function ensureTowerPgDmChannel(store, targetNpub) {
 }
 
 export function capacityForPgChannelPermissions(permissions = []) {
-  return PG_CHANNEL_GRANT_CAPACITY_BY_SIGNATURE.get(permissionSetSignature(permissions)) || 'custom';
+  const exact = PG_CHANNEL_GRANT_CAPACITY_BY_SIGNATURE.get(permissionSetSignature(permissions));
+  if (exact) return exact;
+  // Tower's creator bundle also contains the retired channel.grant alias. It is still Manage;
+  // retain that concrete permission when editing rather than silently discarding it.
+  if (permissions.includes('channel.grant')
+    && permissionSetSignature(permissions.filter(permission => permission !== 'channel.grant'))
+      === permissionSetSignature(PG_CHANNEL_GRANT_CAPACITY_PRESETS.manager)) return 'manager';
+  return 'custom';
 }
 
 export function describePgPermissionDenied(error, fallbackAction = 'do this') {
@@ -791,9 +798,8 @@ function cloneScopeChannelAccessRowsForDraft(scope = {}) {
       id: crypto.randomUUID(),
       principal_type: row.principal_type,
       principal_id: row.principal_id,
-      capacity: detectedCapacity === 'custom'
-        ? normalizePgChannelCapacity(row.access_level || row.capacity)
-        : detectedCapacity,
+      capacity: detectedCapacity,
+      ...(detectedCapacity === 'custom' ? { permissions: [...row.permissions] } : {}),
     };
   });
 }
@@ -954,7 +960,9 @@ function normalizeNewChannelAccessRow(row = {}) {
   return {
     principal_type: principalType,
     principal_id: principalId,
-    capacity: normalizePgChannelCapacity(capacity),
+    capacity: capacity === 'custom' && Array.isArray(row.permissions) && row.permissions.length
+      ? 'custom' : normalizePgChannelCapacity(capacity),
+    ...(capacity === 'custom' && Array.isArray(row.permissions) ? { permissions: [...row.permissions] } : {}),
   };
 }
 
@@ -968,7 +976,7 @@ export function buildChannelAccessGrantPayloads(rows = []) {
   return [...byPrincipal.values()].map((row) => ({
     principal_type: row.principal_type,
     principal_id: row.principal_id,
-    ...(accessLevelForPgChannelCapacity(row.capacity)
+    ...(row.capacity === 'custom' ? { permissions: [...row.permissions] } : accessLevelForPgChannelCapacity(row.capacity)
       ? { access_level: accessLevelForPgChannelCapacity(row.capacity) }
       : { permissions: permissionsForPgChannelCapacity(row.capacity) }),
   }));
@@ -1705,7 +1713,7 @@ export const channelsManagerMixin = {
     const principalId = idParts.join(':');
     if (!['actor', 'group'].includes(principalType) || !principalId) return;
     const rows = Array.isArray(this.newChannelAccessRows) ? [...this.newChannelAccessRows] : [];
-    if (!rows[index]) return;
+    if (!rows[index] || rows[index].capacity === 'custom') return;
     rows[index] = {
       ...rows[index],
       principal_type: principalType,
@@ -1717,8 +1725,10 @@ export const channelsManagerMixin = {
   setNewChannelAccessCapacity(index, capacity) {
     const nextCapacity = ['viewer', 'contributor', 'manager', 'agent'].includes(capacity) ? capacity : 'viewer';
     const rows = Array.isArray(this.newChannelAccessRows) ? [...this.newChannelAccessRows] : [];
-    if (!rows[index]) return;
-    rows[index] = { ...rows[index], capacity: nextCapacity };
+    if (!rows[index] || rows[index].capacity === 'custom') return;
+    const creator = rows[index].principal_type === 'actor'
+      && rows[index].principal_id === pgMeActorId(this.currentWorkspace || {});
+    rows[index] = { ...rows[index], capacity: creator ? 'manager' : nextCapacity };
     this.newChannelAccessRows = rows;
   },
 
@@ -1795,7 +1805,7 @@ export const channelsManagerMixin = {
     if (!isTowerPgBackendMode()) return Boolean(this.canAdminWorkspace);
     const workspace = this.currentWorkspace || {};
     return canManagePgChannelGrantsFromRows({
-      grants: this.channelGrantRows || [],
+      grants: (this.channelGrantRows || []).filter(row => !row.inherited),
       actorId: pgMeActorId(workspace),
       viewerNpub: pgMeActorNpub(workspace) || this.session?.npub || '',
       groups: Array.isArray(this.currentWorkspaceGroups) && this.currentWorkspaceGroups.length > 0
@@ -1836,10 +1846,10 @@ export const channelsManagerMixin = {
     if (!channel?.record_id || channel.record_state === 'deleted'
       || channel.virtual || channel.system_key || channel.metadata?.system_key || (channel.pg_kind || channel.channel_type) === 'system') return false;
     if (!isTowerPgBackendMode()) return Boolean(this.canAdminWorkspace);
-    if (this.canAdminWorkspace || pgMePermissionNames(this.currentWorkspace || {}).includes('channel.manage')) return true;
+    if (this.canAdminWorkspace) return true;
     return canManagePgChannelFromRows({
       grants: String(this.channelGrantsChannelId || '') === channel.record_id
-        ? this.getSelectedChannelGrantRows(channel.record_id) : embeddedChannelGrants(channel),
+        ? this.getSelectedChannelGrantRows(channel.record_id).filter(row => !row.inherited) : embeddedChannelGrants(channel),
       actorId: pgMeActorId(this.currentWorkspace || {}),
       viewerNpub: pgMeActorNpub(this.currentWorkspace || {}) || this.session?.npub || '',
       groups: Array.isArray(this.currentWorkspaceGroups) && this.currentWorkspaceGroups.length > 0
@@ -1903,9 +1913,9 @@ export const channelsManagerMixin = {
   get canReorderSelectedChannel() {
     if (!isTowerPgBackendMode()) return Boolean(this.canAdminWorkspace);
     const workspace = this.currentWorkspace || {};
-    if (pgMePermissionNames(workspace).includes('channel.manage') || this.canAdminWorkspace) return true;
+    if (this.canAdminWorkspace) return true;
     return canManagePgChannelFromRows({
-      grants: this.channelGrantRows || [],
+      grants: (this.channelGrantRows || []).filter(row => !row.inherited),
       actorId: pgMeActorId(workspace),
       viewerNpub: pgMeActorNpub(workspace) || this.session?.npub || '',
       groups: Array.isArray(this.currentWorkspaceGroups) && this.currentWorkspaceGroups.length > 0
@@ -2673,7 +2683,9 @@ export const channelsManagerMixin = {
         channelId,
         principalType,
         principalId,
-        buildPgChannelGrantMutationPayload(nextCapacity),
+        nextCapacity === 'manager' && grant.permissions?.includes('channel.grant')
+          ? { permissions: [...permissionsForPgChannelCapacity(nextCapacity), 'channel.grant'] }
+          : buildPgChannelGrantMutationPayload(nextCapacity),
         { baseUrl, appNpub },
       );
       await this.refreshChannelGrants();
@@ -3904,7 +3916,11 @@ export const channelsManagerMixin = {
     const title = this.newChannelName.trim();
     const selectedGroupRef = this.newChannelGroupId;
     const groupId = this.resolveGroupId(selectedGroupRef);
-    const initialGrants = buildChannelAccessGrantPayloads(this.newChannelAccessRows);
+    const creatorId = pgMeActorId(this.currentWorkspace || {});
+    const initialGrants = buildChannelAccessGrantPayloads(this.newChannelAccessRows).map(grant =>
+      grant.principal_type === 'actor' && creatorId && grant.principal_id === creatorId
+        ? { principal_type: 'actor', principal_id: creatorId, access_level: 'manage' }
+        : grant);
     if (isTowerPgBackendMode() && initialGrants.length === 0 && groupId) {
       initialGrants.push({
         principal_type: 'group',

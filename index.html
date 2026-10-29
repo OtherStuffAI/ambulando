@@ -10532,7 +10532,7 @@
                         </button>
                       </template>
                       <span x-text="$store.chat.getPgChannelGrantPrincipalLabel(grant)"></span>
-                      <small x-text="(grant.principal_type === 'group' ? 'Group' : 'User') + (grant.inherited ? ' · Scope default' : ' · Channel')"></small>
+                      <small x-text="(grant.principal_type === 'group' ? 'Group' : 'User') + (grant.inherited ? ' · Scope default (not a channel grant)' : ' · Channel')"></small>
                     </div>
                     <div class="channel-grant-actions">
                       <select
@@ -10890,7 +10890,7 @@
                       <template x-for="(row, index) in $store.chat.newChannelAccessRows" :key="$store.chat.getNewChannelAccessRowKey(row, index)">
                         <div class="new-channel-access-row">
                           <div class="new-channel-access-principal">
-                            <select class="new-channel-select" :aria-label="`Permission row ${index + 1} principal`" :data-testid="`new-channel-permission-principal-${index}`" :value="$store.chat.getNewChannelAccessPrincipalValue(row)" @change="$store.chat.setNewChannelAccessPrincipal(index, $event.target.value)">
+                            <select class="new-channel-select" :disabled="row.capacity === 'custom'" :aria-label="`Permission row ${index + 1} principal`" :data-testid="`new-channel-permission-principal-${index}`" :value="$store.chat.getNewChannelAccessPrincipalValue(row)" @change="$store.chat.setNewChannelAccessPrincipal(index, $event.target.value)">
                               <template x-for="option in $store.chat.newChannelAccessPrincipalOptions" :key="option.disabled ? `label-${option.label}` : option.value">
                                 <option :value="option.value || ''" :disabled="option.disabled" x-text="option.disabled ? option.label : `${option.label} (${option.type === 'group' ? 'Group' : 'Person'})`"></option>
                               </template>
@@ -10898,7 +10898,8 @@
                             <small x-text="$store.chat.getNewChannelAccessPrincipalLabel(row)"></small>
                           </div>
                           <div class="new-channel-access-capacity">
-                            <select class="new-channel-select" :aria-label="`Permission row ${index + 1} access level`" :data-testid="`new-channel-permission-capacity-${index}`" :value="row.capacity" @change="$store.chat.setNewChannelAccessCapacity(index, $event.target.value)">
+                            <select class="new-channel-select" :disabled="row.capacity === 'custom'" :aria-label="`Permission row ${index + 1} access level`" :data-testid="`new-channel-permission-capacity-${index}`" :value="row.capacity" @change="$store.chat.setNewChannelAccessCapacity(index, $event.target.value)">
+                              <template x-if="row.capacity === 'custom'"><option value="custom">Custom (preserved)</option></template>
                               <template x-for="capacity in $store.chat.pgChannelGrantCapacityOptions" :key="capacity.value">
                                 <option :value="capacity.value" x-text="capacity.label"></option>
                               </template>
