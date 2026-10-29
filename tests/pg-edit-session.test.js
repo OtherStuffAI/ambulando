@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   acquirePgEditLeaseForRecord,
+  DOCUMENT_EDIT_PROTOCOL,
+  renewPgEditLeaseForRecord,
+  setPgEditLeaseSession,
   inspectPgEditLeaseForRecord,
   releasePgEditLeaseForRecord,
   PG_EDIT_CONFLICT_MESSAGE,
@@ -71,6 +74,8 @@ describe('PG edit sessions', () => {
 
     expect(api.acquireTowerPgEditLease).toHaveBeenCalledWith('workspace-1', {
       entity_type: 'document',
+      document_edit_protocol: 'document_edit_session_v1',
+      editor_session_id: expect.any(String),
       entity_id: 'doc-1',
       ttl_seconds: 120,
     }, { baseUrl: 'https://tower.example', appNpub: 'flightdeck_pg' });
@@ -248,5 +253,121 @@ describe('PG edit sessions', () => {
 
     await expect(Promise.all([first, second])).resolves.toEqual([true, true]);
     expect(api.releaseTowerPgEditLease).toHaveBeenCalledTimes(1);
+  });
+});
+
+
+describe('document device authority', () => {
+  const record = { record_id: 'doc-devices', pg_backend: true, sync_status: 'synced' };
+
+  it('keeps ordinary Save compatible with older Tower but does not offer unsafe takeover', async () => {
+    const api = await import('../src/api.js');
+    api.acquireTowerPgEditLease.mockResolvedValueOnce({ lease: { id: 'legacy', lease_token: 'ordinary' } });
+    const target = store();
+    await acquirePgEditLeaseForRecord(target, record, 'document');
+    expect(target.pgEditLeaseSessions['document:doc-devices'].documentProtocolSupported).toBe(false);
+    await expect(acquirePgEditLeaseForRecord(target, record, 'document', { takeover: true, expectedLeaseId: 'legacy' })).rejects.toThrow('not confirmed');
+    expect(api.acquireTowerPgEditLease).toHaveBeenCalledTimes(1);
+  });
+
+  it('takes over only the observed lease with a fresh session id and matching protocol echo', async () => {
+    const api = await import('../src/api.js');
+    const target = store({ pgEditLeaseSessions: { 'document:doc-devices': {
+      editorSessionId: 'previous-session', documentProtocolSupported: true,
+    } } });
+    api.acquireTowerPgEditLease.mockImplementationOnce(async (_workspace, body) => ({
+      document_edit_protocol: DOCUMENT_EDIT_PROTOCOL,
+      lease: { id: 'next', lease_token: 'next-token', editor_session_id: body.editor_session_id },
+      canonical_version: { row_version: 5, body_sha256_hex: 'a'.repeat(64) },
+    }));
+    await acquirePgEditLeaseForRecord(target, record, 'document', { takeover: true, expectedLeaseId: 'observed' });
+    const body = api.acquireTowerPgEditLease.mock.calls[0][1];
+    expect(body).toMatchObject({ takeover: true, expected_lease_id: 'observed', document_edit_protocol: DOCUMENT_EDIT_PROTOCOL });
+    expect(body.editor_session_id).not.toBe('previous-session');
+    expect(target.pgEditLeaseSessions['document:doc-devices'].takeoverHead.row_version).toBe(5);
+  });
+
+  it('refuses a takeover response without echo even when support was previously advertised', async () => {
+    const api = await import('../src/api.js');
+    const target = store({ pgEditLeaseSessions: { 'document:doc-devices': { documentProtocolSupported: true } } });
+    api.acquireTowerPgEditLease.mockResolvedValueOnce({ lease: { id: 'old-server', lease_token: 'ignored-takeover' } });
+    api.releaseTowerPgEditLease.mockResolvedValueOnce({});
+    await expect(acquirePgEditLeaseForRecord(target, record, 'document', { takeover: true, expectedLeaseId: 'observed' })).rejects.toThrow('did not confirm');
+    expect(target.pgEditLeaseSessions['document:doc-devices'].lease).toBeNull();
+    expect(api.releaseTowerPgEditLease).toHaveBeenCalledTimes(1);
+  });
+
+  it('retains a superseded session on retry and never silently requests fresh authority', async () => {
+    const api = await import('../src/api.js');
+    const target = store({ pgEditLeaseSessions: { 'document:doc-devices': { editorSessionId: 'old-session' } } });
+    api.acquireTowerPgEditLease.mockRejectedValueOnce(Object.assign(new Error('superseded'), { status: 409, code: 'document_edit_session_superseded' }));
+    await expect(acquirePgEditLeaseForRecord(target, record, 'document')).rejects.toThrow('superseded');
+    await expect(acquirePgEditLeaseForRecord(target, record, 'document')).rejects.toThrow('another device');
+    expect(target.pgEditLeaseSessions['document:doc-devices'].editorSessionId).toBe('old-session');
+    expect(api.acquireTowerPgEditLease).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not let an old renewal resurrect authority after replacement', async () => {
+    const api = await import('../src/api.js');
+    let finish;
+    api.renewTowerPgEditLease.mockReturnValueOnce(new Promise(resolve => { finish = resolve; }));
+    const target = store({ pgEditLeaseSessions: { 'document:doc-devices': {
+      editorSessionId: 'old', lease: { id: 'old', lease_token: 'old-token' },
+    } } });
+    const pending = renewPgEditLeaseForRecord(target, record, 'document');
+    setPgEditLeaseSession(target, 'document', record.record_id, { editorSessionId: 'new', lease: { id: 'new', lease_token: 'new-token' } });
+    finish({ lease: { id: 'old', lease_token: 'old-token' } });
+    expect(await pending).toBeNull();
+    expect(target.pgEditLeaseSessions['document:doc-devices'].lease.lease_token).toBe('new-token');
+  });
+
+  it('keeps the open editor identity after hidden release and ignores a late prior release', async () => {
+    const api = await import('../src/api.js');
+    const target = store({ pgEditLeaseSessions: { 'document:doc-devices': {
+      editorSessionId: 'open-editor', lease: { id: 'first', lease_token: 'first-token' },
+    } } });
+    api.releaseTowerPgEditLease.mockResolvedValueOnce({});
+    await releasePgEditLeaseForRecord(target, record, 'document');
+    expect(target.pgEditLeaseSessions['document:doc-devices']).toMatchObject({ editorSessionId: 'open-editor', lease: null });
+    let finish;
+    api.releaseTowerPgEditLease.mockReturnValueOnce(new Promise(resolve => { finish = resolve; }));
+    setPgEditLeaseSession(target, 'document', record.record_id, { lease: { id: 'second', lease_token: 'second-token' } });
+    const pending = releasePgEditLeaseForRecord(target, record, 'document');
+    setPgEditLeaseSession(target, 'document', record.record_id, { editorSessionId: 'new-editor', lease: { id: 'third', lease_token: 'third-token' } });
+    finish({});
+    await pending;
+    expect(target.pgEditLeaseSessions['document:doc-devices'].lease.lease_token).toBe('third-token');
+  });
+});
+
+describe('document lease connection identity', () => {
+  const record = { record_id: 'same-uuid', pg_backend: true, sync_status: 'synced' };
+  it('does not reuse an existing token after an origin/actor change with the same workspace and document UUIDs', async () => {
+    const api = await import('../src/api.js');
+    api.acquireTowerPgEditLease.mockResolvedValueOnce({ lease: { id: 'first', lease_token: 'first-token' } });
+    const target = store({ session: { npub: 'actor-one' } });
+    await acquirePgEditLeaseForRecord(target, record, 'document');
+    target.currentWorkspace = { ...target.currentWorkspace, directHttpsUrl: 'https://second-tower.example' };
+    target.session = { npub: 'actor-two' };
+    api.acquireTowerPgEditLease.mockResolvedValueOnce({ lease: { id: 'second', lease_token: 'second-token' } });
+    const next = await preparePgSyncedRecordMutation(target, record, 'document');
+    expect(next.lease_token).toBe('second-token');
+    expect(api.acquireTowerPgEditLease).toHaveBeenCalledTimes(2);
+    expect(api.acquireTowerPgEditLease.mock.calls[1][2].baseUrl).toBe('https://second-tower.example');
+  });
+
+  it('does not install late inspection from another origin with matching UUIDs', async () => {
+    const api = await import('../src/api.js');
+    let finish;
+    api.getTowerPgEditLease.mockReturnValueOnce(new Promise(resolve => { finish = resolve; }));
+    const target = store({ session: { npub: 'actor-one' } });
+    const pending = inspectPgEditLeaseForRecord(target, record, 'document');
+    await Promise.resolve();
+    target.currentWorkspace = { ...target.currentWorkspace, directHttpsUrl: 'https://second-tower.example' };
+    api.getTowerPgEditLease.mockResolvedValueOnce({ document_edit_protocol: DOCUMENT_EDIT_PROTOCOL, lease: { id: 'second' } });
+    await inspectPgEditLeaseForRecord(target, record, 'document');
+    finish({ lease: { id: 'first' } });
+    expect(await pending).toBeNull();
+    expect(target.pgEditLeaseSessions['document:same-uuid'].inspectedLease.id).toBe('second');
   });
 });

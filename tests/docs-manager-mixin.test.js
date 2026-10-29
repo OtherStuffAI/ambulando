@@ -4982,3 +4982,181 @@ it('document record discovery excludes instruction actors and rejects stale work
     expect(await pending).toEqual([]);
   } finally { vi.unstubAllGlobals(); }
 });
+
+describe('explicit document device takeover', () => {
+  beforeEach(async () => {
+    const db = openWorkspaceDb('document-device-takeover');
+    await db.open();
+    await Promise.all(db.tables.map(table => table.clear()));
+    isTowerPgBackendModeMock.mockReturnValue(true);
+    acquireTowerPgEditLeaseMock.mockReset();
+    updateTowerPgDocMock.mockReset();
+    releaseTowerPgEditLeaseMock.mockReset().mockResolvedValue({});
+    getTowerPgEditLeaseMock.mockReset().mockResolvedValue({ lease: null });
+    vi.spyOn(globalThis, 'setInterval').mockReturnValue('takeover-renew-timer');
+  });
+
+  function takeoverStore() {
+    const state = createSyncedPgDocSaveStore({ currentModel: richDocContentModel('My older unsaved draft') });
+    const { record, store } = state;
+    store.session = { npub: 'npub1same-user' };
+    store.docEditAccessState = 'blocked';
+    store.docEditLeaseInfo = { id: 'observed-device-lease', holder_actor_npub: store.session.npub };
+    store.pgEditLeaseSessions[`document:${record.record_id}`] = {
+      editorSessionId: 'this-editor', documentProtocolSupported: true,
+      inspectedLease: store.docEditLeaseInfo,
+    };
+    return state;
+  }
+
+  it('preserves divergent content as a separate recovery before taking over and loading remote title/body/base', async () => {
+    const { store, record, adapter } = takeoverStore();
+    const order = [];
+    updateTowerPgDocMock.mockImplementationOnce(async (_workspace, _id, body) => {
+      order.push('recovery');
+      expect(body).toMatchObject({ base_available: false, title: 'Race document', summary: 'My older unsaved draft' });
+      throw Object.assign(new Error('recovery'), { status: 409, code: 'document_recovery_created', payload: {
+        recovery: { id: 'preserved-older-draft' },
+      } });
+    });
+    const head = { row_version: 44, body_sha256_hex: 'a'.repeat(64) };
+    acquireTowerPgEditLeaseMock.mockImplementationOnce(async (_workspace, body) => {
+      order.push('takeover');
+      expect(body).toMatchObject({ takeover: true, expected_lease_id: 'observed-device-lease' });
+      return { document_edit_protocol: 'document_edit_session_v1', canonical_version: head,
+        lease: { id: 'takeover-lease', lease_token: 'new-authority', editor_session_id: body.editor_session_id } };
+    });
+    const remote = { ...record, ...richDocContentModel('Latest remote body'), title: 'Latest remote title', version: 44,
+      pg_canonical_body_sha256_hex: head.body_sha256_hex, content_storage_status: 'loaded' };
+    store.hydrateSelectedDocWithRetry = vi.fn(async () => { order.push('fresh-body'); return remote; });
+    const api = await import('../src/api.js');
+    api.renewTowerPgEditLease.mockResolvedValueOnce({ lease: { id: 'takeover-lease', lease_token: 'new-authority' } });
+    expect(await store.takeOverSelectedDocEditing()).toBe(true);
+    expect(order).toEqual(['recovery', 'takeover', 'fresh-body']);
+    expect(store.docEditorTitle).toBe('Latest remote title');
+    expect(store.docEditorContent).toBe('Latest remote body');
+    expect(store.docEditBaseRowVersion).toBe(44);
+    expect(store.docEditBaseBodySha256Hex).toBe('a'.repeat(64));
+    expect(store.docEditDraftDirty).toBe(false);
+    expect(store.docEditAccessState).toBe('editing');
+    expect(adapter.setEditable).toHaveBeenLastCalledWith(true);
+    expect(await getDocumentDraft('workspace-1', record.record_id)).toBeUndefined();
+  });
+
+  it('aborts takeover if the older local draft cannot be acknowledged as a cloud recovery', async () => {
+    const { store, record } = takeoverStore();
+    updateTowerPgDocMock.mockRejectedValueOnce(new Error('offline'));
+    expect(await store.takeOverSelectedDocEditing()).toBe(false);
+    expect(acquireTowerPgEditLeaseMock).not.toHaveBeenCalled();
+    expect(store.docEditDraftDirty).toBe(true);
+    expect(store.docEditorContent).not.toBe('Latest remote body');
+    expect(await getDocumentDraft('workspace-1', record.record_id)).toMatchObject({ content: 'My older unsaved draft' });
+  });
+
+  it('keeps the older recovery and local draft when the latest body cannot load after takeover', async () => {
+    const { store, record, adapter } = takeoverStore();
+    updateTowerPgDocMock.mockRejectedValueOnce(Object.assign(new Error('recovery'), { status: 409, code: 'document_recovery_created',
+      payload: { recovery: { id: 'preserved-older-draft' } } }));
+    acquireTowerPgEditLeaseMock.mockImplementationOnce(async (_workspace, body) => ({
+      document_edit_protocol: 'document_edit_session_v1', canonical_version: { row_version: 44, body_sha256_hex: 'a'.repeat(64) },
+      lease: { id: 'takeover-lease', lease_token: 'new-authority', editor_session_id: body.editor_session_id },
+    }));
+    store.hydrateSelectedDocWithRetry = vi.fn(async () => null);
+    expect(await store.takeOverSelectedDocEditing()).toBe(false);
+    expect(store.docEditDraftDirty).toBe(true);
+    expect(store.docEditBaseRowVersion).toBe(43);
+    expect(adapter.setContent).not.toHaveBeenCalled();
+    expect(adapter.setEditable).toHaveBeenLastCalledWith(false);
+    expect(await getDocumentDraft('workspace-1', record.record_id)).toMatchObject({ content: 'My older unsaved draft', recovery_id: 'preserved-older-draft' });
+    expect(releaseTowerPgEditLeaseMock).toHaveBeenCalledWith('workspace-1', 'takeover-lease', { lease_token: 'new-authority' }, expect.any(Object));
+  });
+
+  it('does not silently resume a superseded editor, including offline', async () => {
+    const { store, record } = takeoverStore();
+    store.pgEditLeaseSessions[`document:${record.record_id}`].superseded = true;
+    expect(await store.beginSelectedDocLeaseAcquisition()).toBe(false);
+    expect(acquireTowerPgEditLeaseMock).not.toHaveBeenCalled();
+    expect(store.docEditAccessState).toBe('blocked');
+    expect(store.docEditDraftDirty).toBe(true);
+  });
+});
+
+describe('document checkpoint retry and lifecycle flush', () => {
+  beforeEach(async () => {
+    const db = openWorkspaceDb('document-cloud-retry');
+    await db.open();
+    await Promise.all(db.tables.map(table => table.clear()));
+    isTowerPgBackendModeMock.mockReturnValue(true);
+    updateTowerPgDocMock.mockReset();
+    releaseTowerPgEditLeaseMock.mockReset().mockResolvedValue({});
+  });
+
+  it('retains prepared object identity and a newer local draft when a cloud checkpoint fails, then schedules retry', async () => {
+    const { store, record, modelRef } = createSyncedPgDocSaveStore({ currentModel: richDocContentModel('First cloud submission') });
+    store.scheduleDocAutosave = vi.fn();
+    updateTowerPgDocMock.mockImplementationOnce(async () => {
+      modelRef.current = richDocContentModel('Fresh typing during failed request');
+      store.docEditorTitle = 'Fresh rename';
+      throw new Error('connection lost');
+    });
+    await expect(store.saveSelectedDocItem({ autosave: true })).rejects.toThrow('connection lost');
+    const local = await getDocumentDraft('workspace-1', record.record_id);
+    expect(local).toMatchObject({ title: 'Fresh rename', content: 'Fresh typing during failed request',
+      base_row_version: 43, submitted_storage_object_id: `storage-${'First cloud submission'.length}`,
+      submitted_body_sha256_hex: 'a'.repeat(64) });
+    expect(store.docEditDraftDirty).toBe(true);
+    expect(store.docAutosaveState).toBe('error');
+    expect(store.scheduleDocAutosave).toHaveBeenCalledWith({ retry: true });
+    expect(record.content).toBe('Original body');
+  });
+
+  it('attempts a dirty cloud flush before hidden release without reacquiring or restoring hidden editing', async () => {
+    const { store, record } = createSyncedPgDocSaveStore({ currentModel: richDocContentModel('Leaving draft') });
+    let finish;
+    store.saveSelectedDocItem = vi.fn(() => new Promise(resolve => { finish = resolve; }));
+    expect(store.handleDocEditLeaseLifecycleExit()).toBe(true);
+    expect(store.docEditAccessState).toBe('ready');
+    await vi.waitFor(() => expect(store.saveSelectedDocItem).toHaveBeenCalledWith({ autosave: true }));
+    expect(releaseTowerPgEditLeaseMock).not.toHaveBeenCalled();
+    expect(store.pgEditLeaseSessions[`document:${record.record_id}`].lease.lease_token).toBe('lease-token');
+    finish(null);
+    await vi.waitFor(() => expect(releaseTowerPgEditLeaseMock).toHaveBeenCalledTimes(1));
+    expect(store.docEditAccessState).toBe('ready');
+    expect(store.docRichEditorAdapter.setEditable).toHaveBeenLastCalledWith(false);
+    expect(await getDocumentDraft('workspace-1', record.record_id)).toMatchObject({ content: 'Leaving draft' });
+  });
+});
+
+it('does not release replacement authority when an older document close waited for its save', async () => {
+  isTowerPgBackendModeMock.mockReturnValue(true);
+  releaseTowerPgEditLeaseMock.mockReset();
+  const { store, record } = createSyncedPgDocSaveStore();
+  let finish;
+  const oldSave = new Promise(resolve => { finish = resolve; });
+  store.pgDocSavePromises = { [record.record_id]: oldSave };
+  store.pgEditLeaseSessions[`document:${record.record_id}`].editorSessionId = 'old-visit';
+  const closing = store.releaseSelectedDocLeaseWhenSafe(record);
+  store.pgEditLeaseSessions[`document:${record.record_id}`] = {
+    editorSessionId: 'new-visit', lease: { id: 'replacement', lease_token: 'replacement-token' },
+  };
+  finish(null);
+  expect(await closing).toBe(false);
+  expect(releaseTowerPgEditLeaseMock).not.toHaveBeenCalled();
+  expect(store.pgEditLeaseSessions[`document:${record.record_id}`].lease.lease_token).toBe('replacement-token');
+});
+
+it('cancels an old queued save instead of executing it in another actor/origin with the same document UUID', async () => {
+  isTowerPgBackendModeMock.mockReturnValue(true);
+  const { store } = createSyncedPgDocSaveStore();
+  store.session = { npub: 'first-actor' };
+  let finish;
+  store.saveSelectedPgDocItem = vi.fn(() => new Promise(resolve => { finish = resolve; }));
+  const first = store.saveSelectedDocItem();
+  const second = store.saveSelectedDocItem();
+  await Promise.resolve();
+  store.session = { npub: 'second-actor' };
+  store.currentWorkspace = { ...store.currentWorkspace, directHttpsUrl: 'https://second-origin.example' };
+  finish(null);
+  await Promise.all([first, second]);
+  expect(store.saveSelectedPgDocItem).toHaveBeenCalledTimes(1);
+});

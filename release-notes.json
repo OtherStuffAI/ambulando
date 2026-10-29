@@ -5392,6 +5392,42 @@
       "notes": [
         "Keep document link handlers safe when synthetic events have no element target, while preserving link navigation and text selection."
       ]
+    },
+    {
+      "buildNumber": 2668,
+      "label": "Continue documents across devices",
+      "notes": [
+        "Keep cloud checkpoints while editing and explicitly take over a document on another device when Tower supports safe takeover.",
+        "Preserve older drafts as recoveries, retain local edits after connection failures, and prevent late lease responses from replacing current editing authority."
+      ]
+    },
+    {
+      "buildNumber": 2669,
+      "label": "Verify document authority before resuming",
+      "notes": [
+        "Wait for the previous cloud flush before resuming an editor, then verify the latest saved content before retrying a document checkpoint."
+      ]
+    },
+    {
+      "buildNumber": 2670,
+      "label": "Preserve replacement editing sessions",
+      "notes": [
+        "Keep delayed editor closing and connection changes from releasing another device session or reusing its save authority."
+      ]
+    },
+    {
+      "buildNumber": 2671,
+      "label": "Scope queued document checkpoints",
+      "notes": [
+        "Cancel queued document saves when the editor visit, account or Tower connection changes."
+      ]
+    },
+    {
+      "buildNumber": 2672,
+      "label": "Accurate cloud checkpoint status",
+      "notes": [
+        "Show the last cloud sync time only for a confirmed synced document; local-only drafts retain local save status."
+      ]
     }
   ]
 }

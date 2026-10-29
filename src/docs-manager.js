@@ -69,6 +69,7 @@ import {
   deleteTowerPgDocCommentFromLocal,
   deleteTowerPgDocFromLocal,
   updateTowerPgDocFromLocal,
+  updateTowerPgDocumentMetadata,
   updateTowerPgDocCommentFromLocal,
   queueTowerPendingWrite,
 } from './tower-command-intents.js';
@@ -106,6 +107,8 @@ import { getPgChannelScopeId } from './pg-record-context.js';
 import {
   acquirePgEditLeaseForRecord,
   clearPgEditLeaseSession,
+  setPgEditLeaseSession,
+  renewPgEditLeaseForRecord,
   getPgEditLeaseSession,
   inspectPgEditLeaseForRecord,
   isOnlineForPgEdit,
@@ -1060,6 +1063,8 @@ export const docsManagerMixin = {
 
   async releaseSelectedDocLeaseWhenSafe(record, options = {}) {
     if (!record?.record_id) return false;
+    const initialLeaseSession = getPgEditLeaseSession(this, 'document', record.record_id);
+    const releaseContext = resolveTowerPgWorkspaceContext(this), releaseActor = this.session?.npub;
     if (options.draftPromise) await Promise.resolve(options.draftPromise).catch((error) => {
       this.docEditAccessMessage = `Local draft could not be saved: ${error?.message || error}`;
     });
@@ -1073,6 +1078,12 @@ export const docsManagerMixin = {
       pendingSave = nextSave;
     }
     if (isTowerPgBackendMode()) {
+      const current = getPgEditLeaseSession(this, 'document', record.record_id);
+      const context = resolveTowerPgWorkspaceContext(this);
+      if (releaseContext.workspaceId !== context.workspaceId || releaseContext.baseUrl !== context.baseUrl
+        || releaseActor !== this.session?.npub
+        || (initialLeaseSession?.editorSessionId && current?.editorSessionId !== initialLeaseSession.editorSessionId)
+        || (initialLeaseSession?.lease?.id && current?.lease?.id !== initialLeaseSession.lease.id)) return false;
       return releasePgEditLeaseForRecord(this, record, 'document', {
         reportError: options.reportError === true,
       });
@@ -1085,9 +1096,12 @@ export const docsManagerMixin = {
   handleDocEditLeaseLifecycleExit() {
     const record = this.selectedDocument;
     if (!record?.record_id) return false;
-    const draftPromise = this.docEditDraftDirty
-      ? this.persistSelectedDocDraft({ immediate: true })
-      : null;
+    const canFlush = this.docEditAccessState === 'editing' && isOnlineForPgEdit()
+      && !this.docNeedsHeadCheck && Boolean(getPgEditLeaseSession(this, 'document', record.record_id)?.lease?.lease_token);
+    const localCheckpoint = this.docEditDraftDirty ? this.persistSelectedDocDraft({ immediate: true }) : null;
+    const draftPromise = canFlush && this.docEditDraftDirty
+      ? Promise.resolve(localCheckpoint).then(() => this.saveSelectedDocItem({ autosave: true })).catch(() => null)
+      : localCheckpoint;
     this.cancelDocAutosave();
     this.cancelDocLocalDraftPersistence();
     if (isTowerPgBackendMode()) {
@@ -1097,7 +1111,12 @@ export const docsManagerMixin = {
       this.docEditAccessState = 'ready';
       this.docRichEditorAdapter?.setEditable?.(false);
     }
-    void this.releaseSelectedDocLeaseWhenSafe(record, { draftPromise, reportError: false });
+    const exitPromise = this.releaseSelectedDocLeaseWhenSafe(record, { draftPromise, reportError: false }).finally(() => {
+      if (this.selectedDocId === record.record_id) this.docNeedsHeadCheck = true;
+      if (this.docLeaseLifecycleExitPromise === exitPromise) this.docLeaseLifecycleExitPromise = null;
+    });
+    this.docLeaseLifecycleExitPromise = exitPromise;
+    void exitPromise;
     return true;
   },
 
@@ -1223,8 +1242,17 @@ export const docsManagerMixin = {
       return;
     }
 
+    if (isTowerPgBackendMode() && isSyncedPgRecord(item)) {
+      // A visit begins with explicit navigation. Hidden/visible and retry retain this id.
+      clearPgEditLeaseSession(this, 'document', item.record_id);
+      setPgEditLeaseSession(this, 'document', item.record_id, { editorSessionId: crypto.randomUUID() });
+    }
+    this.docTakeoverInFlight = false;
+    this.docEditAcquirePromise = null;
+    this.docEditAcquirePromiseRecordId = null;
     this.docReconnectCheck = null;
     this.docNeedsHeadCheck = false;
+    this.docLastCloudSyncedAt = item.sync_status === 'synced' ? item.updated_at || null : null;
     this.docSavedSnapshot = toRaw(item);
     this.docDraftReadSaved = false;
     this.docEditorBodyLoaded = isDocumentContentReadyForEditor(item);
@@ -1603,8 +1631,8 @@ export const docsManagerMixin = {
     return true;
   },
 
-  async reconnectSelectedDocDraft() {
-    if (this.docReconnectCheck || !isOnlineForPgEdit() || !this.docEditDraftDirty || this.docDraftChoice || this.docDraftReadSaved) return false;
+  async reconnectSelectedDocDraft(options = {}) {
+    if (this.docReconnectCheck || !isOnlineForPgEdit() || (!this.docEditDraftDirty && !options.verifyClean) || this.docDraftChoice || this.docDraftReadSaved) return false;
     const item = this.selectedDocument;
     const generation = this.docEditAccessGeneration;
     const workspaceId = this.getSelectedDocWorkspaceId(item);
@@ -1627,6 +1655,11 @@ export const docsManagerMixin = {
         this.docEditAccessMessage = 'Saved on this device; Tower head could not be verified. Retry sync when connected.';
         await releasePgEditLeaseForRecord(this, item, 'document', { reportError: false });
         return false;
+      }
+      if (!this.docEditDraftDirty) {
+        this.applySelectedDocAuthoritativeContent(head, { preserveSelection: true });
+        this.docNeedsHeadCheck = false;
+        return true;
       }
       if (!draftBaseMatchesHead(this.buildSelectedDocDraftRow(), documentEditorBaseIdentity(head))) {
         this.docEditConflict = { baseVersion: this.docEditBaseRowVersion,
@@ -1681,6 +1714,7 @@ export const docsManagerMixin = {
     if (!item || item.record_id !== this.selectedDocId) return false;
     const contentBlocks = normalizeDocumentBlocks(item.content_blocks, item.content);
     const editorState = createDocumentEditorState(item);
+    this.docLastCloudSyncedAt = item.sync_status === 'synced' ? item.updated_at || null : null;
     this.docSavedSnapshot = toRaw(item);
     this.docDraftReadSaved = false;
     this.docEditorBodyLoaded = isDocumentContentReadyForEditor(item);
@@ -2047,7 +2081,7 @@ export const docsManagerMixin = {
     const generation = Number(this.docEditAccessGeneration || 0);
     const session = await inspectPgEditLeaseForRecord(this, record, 'document');
     if (this.selectedDocId !== recordId || Number(this.docEditAccessGeneration || 0) !== generation) return null;
-    this.docEditLeaseInfo = session?.inspectedLease || null;
+    this.docEditLeaseInfo = session?.inspectedLease || session?.blockedLease || null;
     if (session?.inspectionState === 'offline' && this.docEditAccessState === 'ready') {
       this.docEditAccessMessage = 'Complete cached documents can be edited offline; drafts wait to sync.';
     }
@@ -2055,10 +2089,22 @@ export const docsManagerMixin = {
   },
 
   async beginSelectedDocLeaseAcquisition(options = {}) {
+    if (this.docTakeoverInFlight) return false;
     const item = this.selectedDocument;
+    if (this.docLeaseLifecycleExitPromise) {
+      await this.docLeaseLifecycleExitPromise;
+      if (this.selectedDocument?.record_id !== item?.record_id) return false;
+    }
     if (!item) return false;
     if (!isTowerPgBackendMode() || !isSyncedPgRecord(item)) {
       return this.enterSelectedDocEditMode(options.mode || 'rich');
+    }
+    if (getPgEditLeaseSession(this, 'document', item.record_id)?.superseded) {
+      this.docEditAccessState = 'blocked';
+      this.docEditAccessMessage = 'Editing continued on another device. Your draft is preserved; reopen or explicitly take over to continue.';
+      this.docRichEditorAdapter?.setEditable?.(false);
+      this.cancelDocAutosave();
+      return false;
     }
     if (!isOnlineForPgEdit() && this.isSelectedDocDraftReadyForPersistence()) {
       this.docNeedsHeadCheck = true;
@@ -2072,12 +2118,14 @@ export const docsManagerMixin = {
       this.docRichEditorAdapter?.setEditable?.(false);
       return false;
     }
+    if (this.docNeedsHeadCheck && !options.reconnect) return this.reconnectSelectedDocDraft({ verifyClean: true });
     if (this.docEditAccessState === 'editing' && !options.reconnect) return true;
     const recordId = String(item.record_id || '');
     if (this.docEditAcquirePromise && this.docEditAcquirePromiseRecordId === recordId) {
       return this.docEditAcquirePromise;
     }
     const generation = Number(this.docEditAccessGeneration || 0);
+    const acquireContext = resolveTowerPgWorkspaceContext(this), acquireActor = this.session?.npub;
     this.docEditAccessState = 'acquiring';
     this.docEditAccessMessage = 'Acquiring edit access…';
     this.error = null;
@@ -2085,7 +2133,9 @@ export const docsManagerMixin = {
     const promise = (async () => {
       const acquired = await this.acquireSelectedDocCheckout({ reportError: false });
       const stillSelected = this.selectedDocId === recordId
-        && Number(this.docEditAccessGeneration || 0) === generation;
+        && Number(this.docEditAccessGeneration || 0) === generation
+        && acquireContext.workspaceId === resolveTowerPgWorkspaceContext(this).workspaceId
+        && acquireContext.baseUrl === resolveTowerPgWorkspaceContext(this).baseUrl && acquireActor === this.session?.npub;
       if (!stillSelected) {
         if (acquired) await releasePgEditLeaseForRecord(this, item, 'document', { reportError: false });
         return false;
@@ -2097,6 +2147,7 @@ export const docsManagerMixin = {
         this.docEditLeaseInfo = session?.blockedLease || session?.inspectedLease || null;
         this.docRichEditorAdapter?.setEditable?.(false);
         this.cancelDocAutosave();
+        void this.inspectSelectedDocEditLease(item);
         return false;
       }
       this.docEditAccessState = 'editing';
@@ -2116,6 +2167,114 @@ export const docsManagerMixin = {
         this.docEditAcquirePromise = null;
         this.docEditAcquirePromiseRecordId = null;
       }
+    }
+  },
+
+  canTakeOverSelectedDocEditing() {
+    const item = this.selectedDocument;
+    const session = getPgEditLeaseSession(this, 'document', item?.record_id);
+    const lease = this.docEditLeaseInfo || session?.blockedLease || session?.inspectedLease;
+    return isTowerPgBackendMode() && isSyncedPgRecord(item) && isOnlineForPgEdit()
+      && !this.docTakeoverInFlight && this.docEditAccessState !== 'acquiring' && session?.documentProtocolSupported === true
+      && Boolean(lease?.id) && lease.holder_actor_npub === this.session?.npub;
+  },
+
+  async preserveSelectedDocBeforeTakeover(item, options = {}) {
+    const context = resolveTowerPgWorkspaceContext(this);
+    const current = options.isCurrent || (() => true);
+    if (!current()) return false;
+    if (!this.docEditDraftDirty && !this.docLocalDraft) return true;
+    const draft = await this.persistSelectedDocDraft({ immediate: true });
+    if (!draft) throw new Error('The local draft could not be preserved. Takeover was not started.');
+    if (!current()) return false;
+    const contentModel = toRaw(this.buildSelectedDocContentModel());
+    const payload = await this.prepareDocumentContentForEnvelope({ record_id: item.record_id,
+      owner_npub: context.workspaceOwnerNpub, title: draft.title }, contentModel, [], item, { pgStorageContext: context });
+    if (!current()) return false;
+    try {
+      await updateTowerPgDocumentMetadata(this, context.workspaceId, item.record_id, {
+        base_available: false, storage_object_id: payload.content_storage_object_id,
+        title: draft.title || 'Untitled document', summary: contentModel.content || null,
+      }, { baseUrl: context.baseUrl, appNpub: context.appNpub });
+      throw new Error('Tower did not acknowledge a separate recovery copy. Your local draft is retained.');
+    } catch (error) {
+      if (!isPgDocumentRecoveryCreatedError(error)) throw error;
+      const recovery = error.payload?.recovery || JSON.parse(error.responseText || '{}').recovery;
+      if (!recovery?.id) throw new Error('The recovery copy could not be verified. Your local draft is retained.');
+      if (!current()) return true; // The old draft is durable and its cloud recovery is acknowledged.
+      await this.persistSelectedDocDraft({ row: { ...draft, recovery, recovery_id: recovery.id,
+        draft_status: 'recovery', last_remote_save_outcome: { status: 'recovery', at: new Date().toISOString() } } });
+      return true;
+    }
+  },
+
+  async takeOverSelectedDocEditing() {
+    if (!this.canTakeOverSelectedDocEditing()) return false;
+    const item = this.selectedDocument;
+    const generation = this.docEditAccessGeneration;
+    const workspaceId = this.getSelectedDocWorkspaceId(item);
+    const takeoverOrigin = resolveTowerPgWorkspaceContext(this).baseUrl, takeoverActor = this.session?.npub;
+    const current = () => this.selectedDocId === item.record_id && generation === this.docEditAccessGeneration
+      && workspaceId === this.getSelectedDocWorkspaceId() && takeoverOrigin === resolveTowerPgWorkspaceContext(this).baseUrl
+      && takeoverActor === this.session?.npub;
+    const session = getPgEditLeaseSession(this, 'document', item.record_id);
+    const observedLease = this.docEditLeaseInfo || session?.blockedLease || session?.inspectedLease;
+    this.cancelDocAutosave();
+    this.cancelDocLocalDraftPersistence();
+    stopPgEditLeaseRenewal(this, item, 'document');
+    this.docTakeoverInFlight = true;
+    this.docEditingTitle = false;
+    this.docEditAccessState = 'acquiring';
+    this.docEditAccessMessage = 'Preserving this draft and taking over editing…';
+    this.docRichEditorAdapter?.setEditable?.(false);
+    try {
+      let pending = this.pgDocSavePromises?.[item.record_id];
+      while (pending) {
+        await pending.catch(() => {});
+        if (!current()) return false;
+        const next = this.pgDocSavePromises?.[item.record_id];
+        if (!next || next === pending) break;
+        pending = next;
+      }
+      await this.preserveSelectedDocBeforeTakeover(item, { isCurrent: current });
+      if (!current()) return false;
+      const lease = await acquirePgEditLeaseForRecord(this, item, 'document', {
+        takeover: true, expectedLeaseId: observedLease.id,
+      });
+      if (!current()) { await releasePgEditLeaseForRecord(this, item, 'document'); return false; }
+      const head = getPgEditLeaseSession(this, 'document', item.record_id)?.takeoverHead;
+      const fresh = await this.hydrateSelectedDocWithRetry(item.record_id, { requireFresh: true, isCurrent: current });
+      if (!current()) { await releasePgEditLeaseForRecord(this, item, 'document'); return false; }
+      if (!head?.row_version || !fresh || fresh.version !== Number(head.row_version)
+        || fresh.pg_canonical_body_sha256_hex !== head.body_sha256_hex) {
+        throw new Error('The latest saved document could not be verified after takeover. Your previous draft is preserved; retry loading.');
+      }
+      const renewed = await renewPgEditLeaseForRecord(this, item, 'document');
+      if (!current() || !renewed || renewed.lease_token !== lease.lease_token) throw new Error('Editing authority changed while loading. Your previous draft is preserved.');
+      if (!await this.clearSelectedDocDraft(item)) throw new Error('The previous local draft could not be replaced. Its recovery is preserved.');
+      if (!current()) return false;
+      await upsertDocument(fresh);
+      if (!current()) return false;
+      this.patchDocumentLocal(fresh);
+      this.applySelectedDocAuthoritativeContent(fresh, { preserveSelection: false });
+      this.docNeedsHeadCheck = false;
+      this.docDraftChoice = null;
+      this.docEditAccessState = 'editing';
+      this.docEditLeaseInfo = renewed;
+      this.docEditAccessMessage = 'Editing on this device. The latest saved document is loaded; any older draft is preserved as a recovery.';
+      this.docRichEditorAdapter?.setEditable?.(true);
+      startPgEditLeaseRenewal(this, fresh, 'document');
+      return true;
+    } catch (error) {
+      if (!current()) return false;
+      this.docEditAccessState = 'blocked';
+      this.docEditAccessMessage = error?.message || 'Takeover failed. Your draft is preserved.';
+      this.docRichEditorAdapter?.setEditable?.(false);
+      await releasePgEditLeaseForRecord(this, item, 'document');
+      void this.inspectSelectedDocEditLease(item);
+      return false;
+    } finally {
+      if (current()) this.docTakeoverInFlight = false;
     }
   },
 
@@ -2261,6 +2420,7 @@ export const docsManagerMixin = {
       const hasFollowupChanges = currentTitle !== submittedTitle
         || documentContentSignature(currentContentModel) !== documentContentSignature(submittedDocument || canonical);
       this.setSelectedDocBaseIdentity(canonicalIdentity);
+      this.docLastCloudSyncedAt = new Date().toISOString();
       this.docSavedSnapshot = toRaw(canonical);
       this.docEditBaseContentSignature = documentContentSignature(canonical);
       this.docEditConflict = null;
@@ -3368,6 +3528,7 @@ export const docsManagerMixin = {
   },
 
   finishDocTitleEdit() {
+    if (this.docTakeoverInFlight) return;
     this.docEditingTitle = false;
     this.docEditDraftDirty = true;
     this.scheduleDocLocalDraftPersistence();
@@ -3381,6 +3542,7 @@ export const docsManagerMixin = {
   },
 
   handleDocSourceInput(value) {
+    if (this.docTakeoverInFlight) return;
     this.docEditorContent = value;
     this.syncDocBlocksFromContent();
     this.refreshProseMirrorStateFromCompatibility();
@@ -3468,7 +3630,7 @@ export const docsManagerMixin = {
     this.docBlockEditorMinHeightPx = 0;
   },
 
-  scheduleDocAutosave() {
+  scheduleDocAutosave(options = {}) {
     this.scheduleDocLocalDraftPersistence();
     if (!this.docsEditorOpen) return;
     if (this.docEditorMode === 'rich' && ['loading', 'error'].includes(this.docRichEditorLoadState)) return;
@@ -3476,7 +3638,7 @@ export const docsManagerMixin = {
     if (!isOnlineForPgEdit() || this.docNeedsHeadCheck || this.docReconnectCheck || this.docDraftChoice || this.docDraftReadSaved) return;
     if (isTowerPgBackendMode() && isSyncedPgRecord(this.selectedDocument)
       && !['editing', 'recovery'].includes(this.docEditAccessState)) return;
-    this.docAutosaveState = 'pending';
+    if (!options.retry) this.docAutosaveState = 'pending';
     if (this.docAutosaveTimer) return;
     this.docAutosaveTimer = setTimeout(async () => {
       this.docAutosaveTimer = null;
@@ -4454,6 +4616,7 @@ export const docsManagerMixin = {
   },
 
   async saveSelectedDocItem(options = {}) {
+    if (this.docTakeoverInFlight) return null;
     const autosave = options.autosave === true;
     if (this.recordTransfer?.mode === 'move' && this.recordTransfer.submitting && this.recordTransfer.record?.record_id === this.selectedDocId) {
       if (this.docEditDraftDirty) await this.persistSelectedDocDraft({ immediate: true });
@@ -4486,10 +4649,15 @@ export const docsManagerMixin = {
       const recordId = item.record_id;
       this.pgDocSavePromises = this.pgDocSavePromises || {};
       const previousSave = this.pgDocSavePromises[recordId] || null;
+      const queuedWorkspace = this.currentWorkspace, queuedActor = this.session?.npub;
+      const queuedGeneration = this.docEditAccessGeneration;
+      const queuedOrigin = resolveTowerPgWorkspaceContext(this).baseUrl;
       const savePromise = (async () => {
         if (previousSave) await previousSave.catch(() => {});
         const latest = this.selectedDocument;
-        if (!latest || latest.record_id !== recordId) return null;
+        if (!latest || latest.record_id !== recordId || this.currentWorkspace !== queuedWorkspace
+          || this.session?.npub !== queuedActor || this.docEditAccessGeneration !== queuedGeneration
+          || resolveTowerPgWorkspaceContext(this).baseUrl !== queuedOrigin) return null;
         return this.saveSelectedPgDocItem(latest, this.workspaceOwnerNpub, options);
       })();
       this.pgDocSavePromises[recordId] = savePromise;
@@ -4621,8 +4789,10 @@ export const docsManagerMixin = {
     if ((this.docReconnectCheck && !options.checkedReconnect) || this.docDraftChoice || this.docDraftReadSaved || !this.isSelectedDocDraftReadyForPersistence()) return null;
     const generation = this.docEditAccessGeneration;
     const workspaceId = this.getSelectedDocWorkspaceId(item);
+    const saveOrigin = resolveTowerPgWorkspaceContext(this).baseUrl, saveActor = this.session?.npub;
     const stillSelected = () => this.selectedDocId === item.record_id
-      && generation === this.docEditAccessGeneration && workspaceId === this.getSelectedDocWorkspaceId();
+      && generation === this.docEditAccessGeneration && workspaceId === this.getSelectedDocWorkspaceId()
+      && saveOrigin === resolveTowerPgWorkspaceContext(this).baseUrl && saveActor === this.session?.npub;
     const baseSnapshot = {
       available: this.docEditBaseAvailable, version: this.docEditBaseRowVersion,
       versionId: this.docEditBaseVersionId, hash: this.docEditBaseBodySha256Hex,
@@ -4858,6 +5028,11 @@ export const docsManagerMixin = {
         title: nextTitle,
       }, contentModel, [], storageReuseRecord, { pgStorageContext: pgWorkspaceContext });
       if (workspaceId !== this.getSelectedDocWorkspaceId()) return null;
+      if (stillSelected()) await this.persistSelectedDocDraft({
+        submittedStorageObjectId: contentPayload.content_storage_object_id,
+        submittedBodySha256Hex: contentPayload.content_sha256_hex,
+      });
+      if (!stillSelected()) return null;
       const updated = {
         ...item,
         title: nextTitle,
@@ -4952,6 +5127,16 @@ export const docsManagerMixin = {
         });
         void releasePgEditLeaseForRecord(this, item, 'document', { reportError: false });
         if (!autosave) this.error = this.docEditAccessMessage;
+      } else if (Number(error?.status) === 409 && /lease|document_edit_session/.test(String(error?.code || ''))) {
+        stopPgEditLeaseRenewal(this, item, 'document');
+        setPgEditLeaseSession(this, 'document', item.record_id, { lease: null, acquireState: 'blocked',
+          superseded: error?.code === 'document_edit_session_superseded' });
+        this.cancelDocAutosave();
+        this.docNeedsHeadCheck = true;
+        this.docEditAccessState = 'blocked';
+        this.docEditAccessMessage = 'Editing authority was lost. Your draft is saved on this device; reopen or explicitly take over to continue.';
+        this.docRichEditorAdapter?.setEditable?.(false);
+        void this.inspectSelectedDocEditLease(item);
       } else if (error?.status === 403) {
         this.cancelDocAutosave();
         this.docEditAccessState = 'blocked';
@@ -4966,7 +5151,11 @@ export const docsManagerMixin = {
           remoteOutcome: { status: 'error', code: error?.code || 'save_failed', at: new Date().toISOString() },
         });
       }
-      if (stillSelected()) this.docAutosaveState = 'error';
+      if (stillSelected()) {
+        this.docAutosaveState = 'error';
+        const retryable = !error?.status || Number(error.status) >= 500 || Number(error.status) === 429;
+        if (retryable && this.docEditDraftDirty && this.docEditAccessState === 'editing') this.scheduleDocAutosave({ retry: true });
+      }
       throw error;
     }
   },

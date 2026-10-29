@@ -5428,7 +5428,7 @@
                         <span>Checked out</span>
                       </span>
                     </template>
-                    <span class="doc-sync-indicator" :title="$store.chat.docSyncStatusLabel">
+                    <span class="doc-sync-indicator" :title="[$store.chat.docSyncStatusLabel, $store.chat.docLastSyncedLabel].filter(Boolean).join(' · ')">
                       <span class="doc-sync-dot" :class="$store.chat.docSyncStatusClass"></span>
                     </span>
                     <span
@@ -5572,6 +5572,7 @@
                   </div>
                   <div class="doc-edit-access-actions">
                     <button type="button" x-show="$store.chat.docEditAccessState === 'conflict'" @click="$store.chat.preserveSelectedDocConflictAsRecovery()">Preserve draft in Tower for reconciliation</button>
+                    <button type="button" x-show="$store.chat.canTakeOverSelectedDocEditing()" @click="$store.chat.takeOverSelectedDocEditing()">Take over editing on this device</button>
                     <button type="button" x-show="$store.chat.docEditAccessState === 'recovery_available'" @click="$store.chat.openSelectedDocRecoveryDraft()">Continue recovery</button>
                     <button type="button" x-show="$store.chat.docRecovery?.resolution_state === 'open'" :disabled="$store.chat.docRecoveryActionState || $store.chat.docEditDraftDirty" title="Save current recovery edits first" @click="$store.chat.promoteSelectedDocRecovery()" x-text="$store.chat.docRecoveryActionState === 'promoting' ? 'Saving…' : 'Use recovery as document'">Use recovery as document</button>
                     <button type="button" x-show="$store.chat.docRecovery?.resolution_state === 'open'" :disabled="$store.chat.docRecoveryActionState || $store.chat.docEditDraftDirty" title="Save or copy current recovery edits before discarding" @click="$store.chat.discardSelectedDocRecovery()" x-text="$store.chat.docRecoveryActionState === 'discarding' ? 'Discarding…' : 'Discard recovery'">Discard recovery</button>

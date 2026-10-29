@@ -6,7 +6,7 @@ const app = readFileSync(new URL('../src/app.js', import.meta.url), 'utf8');
 
 describe('document recovery UI', () => {
   it('keeps ordinary save state compact beside Save', () => {
-    expect(app).toContain("if (this.docAutosaveState === 'pending') return 'Unsaved changes';");
+    expect(app).toContain("if (this.docAutosaveState === 'pending') return this.docLocalDraft ? 'Saved locally · waiting to sync' : 'Unsaved changes';");
     expect(app).toContain("if (this.docAutosaveState === 'saving') return 'Saving…';");
     expect(app).toContain("return 'Saved';");
     expect(html).toContain('class="doc-edit-status"');

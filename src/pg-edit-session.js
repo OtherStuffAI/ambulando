@@ -6,8 +6,15 @@ import {
 } from './api.js';
 import { resolveTowerPgWorkspaceContext } from './pg-read-hydrator.js';
 
+export const DOCUMENT_EDIT_PROTOCOL = 'document_edit_session_v1';
+
 export const PG_SYNCED_OFFLINE_EDIT_MESSAGE = 'Reconnect to edit this synced Tower PG record.';
 export const PG_EDIT_CONFLICT_MESSAGE = 'Another actor is editing this Tower PG record. View mode until the lease is available.';
+
+function documentSessionContextKey(store) {
+  const context = resolveTowerPgWorkspaceContext(store);
+  return JSON.stringify([context.baseUrl, context.workspaceId, context.appNpub, store?.session?.npub]);
+}
 
 function trimText(value) {
   return String(value ?? '').trim();
@@ -45,13 +52,15 @@ export function pgEditLeaseSessionKey(entityType, recordId) {
 export function getPgEditLeaseSession(store, entityType, recordId) {
   const key = pgEditLeaseSessionKey(entityType, recordId);
   if (!key) return null;
-  return store?.pgEditLeaseSessions?.[key] || null;
+  const session = store?.pgEditLeaseSessions?.[key] || null;
+  if (entityType === 'document' && session?.contextKey && session.contextKey !== documentSessionContextKey(store)) return null;
+  return session;
 }
 
 export function setPgEditLeaseSession(store, entityType, recordId, patch = {}) {
   const key = pgEditLeaseSessionKey(entityType, recordId);
   if (!key || !store) return null;
-  const current = store.pgEditLeaseSessions?.[key] || {};
+  const current = getPgEditLeaseSession(store, entityType, recordId) || {};
   const next = {
     ...current,
     ...patch,
@@ -91,9 +100,13 @@ export async function inspectPgEditLeaseForRecord(store, record, entityType, opt
       inspectedLease: null,
     });
   }
-  const key = pgEditLeaseSessionKey(entityType, recordId);
+  const inspectionContextKey = documentSessionContextKey(store);
+  const key = entityType === 'document' ? `${pgEditLeaseSessionKey(entityType, recordId)}:${inspectionContextKey}:${getPgEditLeaseSession(store, entityType, recordId)?.editorSessionId}` : pgEditLeaseSessionKey(entityType, recordId);
   store.pgEditLeaseInspectionPromises = store.pgEditLeaseInspectionPromises || {};
   if (store.pgEditLeaseInspectionPromises[key]) return store.pgEditLeaseInspectionPromises[key];
+  const inspectedSessionId = getPgEditLeaseSession(store, entityType, recordId)?.editorSessionId;
+  const stillCurrent = () => documentSessionContextKey(store) === inspectionContextKey
+    && getPgEditLeaseSession(store, entityType, recordId)?.editorSessionId === inspectedSessionId;
   setPgEditLeaseSession(store, entityType, recordId, { inspectionState: 'loading' });
   let promise;
   promise = Promise.resolve().then(async () => {
@@ -104,12 +117,15 @@ export async function inspectPgEditLeaseForRecord(store, record, entityType, opt
         baseUrl: context.baseUrl,
         appNpub: context.appNpub,
       });
+      if (!stillCurrent()) return null;
       const inspectedLease = result?.lease || result?.edit_lease || result?.leases?.[0] || null;
       return setPgEditLeaseSession(store, entityType, recordId, {
         inspectionState: 'ready',
         inspectedLease,
+        documentProtocolSupported: entityType === 'document' && result?.document_edit_protocol === DOCUMENT_EDIT_PROTOCOL,
       });
     } catch {
+      if (!stillCurrent()) return null;
       return setPgEditLeaseSession(store, entityType, recordId, {
         inspectionState: 'unknown',
         inspectedLease: null,
@@ -137,7 +153,7 @@ export function stopPgEditLeaseRenewal(store, record, entityType, options = {}) 
 }
 
 function normalizeAcquireError(error) {
-  if (Number(error?.status) === 409) {
+  if (Number(error?.status) === 409 && error?.code !== 'document_edit_session_superseded') {
     error.userMessage = PG_EDIT_CONFLICT_MESSAGE;
     return error;
   }
@@ -155,28 +171,54 @@ export async function acquirePgEditLeaseForRecord(store, record, entityType, opt
   }
 
   const recordId = trimText(record?.record_id);
-  const existing = getPgEditLeaseSession(store, entityType, recordId);
-  if (existing?.lease?.lease_token) return existing.lease;
+  const context = resolveTowerPgWorkspaceContext(store);
+  const contextKey = documentSessionContextKey(store);
+  const previous = getPgEditLeaseSession(store, entityType, recordId);
+  const existing = previous?.contextKey && previous.contextKey !== contextKey ? null : previous;
+  const isDocument = entityType === 'document';
+  if (isDocument && existing?.superseded && !options.takeover) {
+    throw Object.assign(new Error('Editing continued on another device. Reopen the document or explicitly take over; this draft is preserved.'), { code: 'document_edit_session_superseded' });
+  }
+  if (existing?.lease?.lease_token && !options.takeover) return existing.lease;
+  if (options.takeover && (!isDocument || !existing?.documentProtocolSupported || !options.expectedLeaseId)) {
+    throw new Error('This Tower has not confirmed safe device takeover support. Ordinary Save and local drafts remain available.');
+  }
+  const editorSessionId = isDocument ? (options.takeover && !existing?.takeoverPending ? crypto.randomUUID() : existing?.editorSessionId || crypto.randomUUID()) : null;
+  if (isDocument) setPgEditLeaseSession(store, entityType, recordId, { editorSessionId, contextKey, takeoverPending: options.takeover === true });
 
-  const key = pgEditLeaseSessionKey(entityType, recordId);
+  const key = isDocument ? `${pgEditLeaseSessionKey(entityType, recordId)}:${contextKey}:${editorSessionId}` : pgEditLeaseSessionKey(entityType, recordId);
   store.pgEditLeaseAcquirePromises = store.pgEditLeaseAcquirePromises || {};
   if (store.pgEditLeaseAcquirePromises[key]) return store.pgEditLeaseAcquirePromises[key];
 
-  const context = resolveTowerPgWorkspaceContext(store);
   if (!context.workspaceId || !context.baseUrl) throw new Error('Tower PG workspace is not ready');
   let promise;
   promise = Promise.resolve().then(async () => {
     try {
-      setPgEditLeaseSession(store, entityType, recordId, { acquireState: 'acquiring', message: '' });
+      setPgEditLeaseSession(store, entityType, recordId, { acquireState: 'acquiring', message: '', ...(isDocument ? { editorSessionId, contextKey, superseded: false } : {}) });
       const result = await acquireTowerPgEditLease(context.workspaceId, {
         entity_type: entityType,
         entity_id: recordId,
         ttl_seconds: options.ttlSeconds || 120,
+        ...(isDocument ? { document_edit_protocol: DOCUMENT_EDIT_PROTOCOL, editor_session_id: editorSessionId } : {}),
+        ...(options.takeover ? { takeover: true, expected_lease_id: options.expectedLeaseId } : {}),
       }, {
         baseUrl: context.baseUrl,
         appNpub: context.appNpub,
       });
+      if (isDocument && getPgEditLeaseSession(store, entityType, recordId)?.editorSessionId !== editorSessionId) {
+        if (result?.lease?.id && result?.lease?.lease_token) await releaseTowerPgEditLease(context.workspaceId, result.lease.id, { lease_token: result.lease.lease_token }, { baseUrl: context.baseUrl, appNpub: context.appNpub }).catch(() => {});
+        throw Object.assign(new Error('The editor visit changed while acquiring access.'), { code: 'editor_visit_changed' });
+      }
+      const supported = result?.document_edit_protocol === DOCUMENT_EDIT_PROTOCOL
+        && result?.lease?.editor_session_id === editorSessionId;
+      if (options.takeover && !supported) {
+        if (result?.lease?.id && result?.lease?.lease_token) {
+          await releaseTowerPgEditLease(context.workspaceId, result.lease.id, { lease_token: result.lease.lease_token }, { baseUrl: context.baseUrl, appNpub: context.appNpub }).catch(() => {});
+        }
+        throw new Error('Tower did not confirm safe takeover. Your local draft is preserved.');
+      }
       setPgEditLeaseSession(store, entityType, recordId, {
+        ...(isDocument ? { documentProtocolSupported: supported, takeoverHead: options.takeover ? result.canonical_version : null, superseded: false, takeoverPending: false } : {}),
         acquireState: 'held',
         lease: result.lease || null,
         message: '',
@@ -184,10 +226,13 @@ export async function acquirePgEditLeaseForRecord(store, record, entityType, opt
       return result.lease || null;
     } catch (error) {
       const normalized = normalizeAcquireError(error);
+      if (isDocument && getPgEditLeaseSession(store, entityType, recordId)?.editorSessionId !== editorSessionId) throw normalized;
       setPgEditLeaseSession(store, entityType, recordId, {
         acquireState: 'blocked',
         lease: null,
-        blockedLease: {
+        ...(isDocument ? { superseded: normalized?.code === 'document_edit_session_superseded' || existing?.superseded === true, takeoverPending: false } : {}),
+        blockedLease: normalized?.lease || normalized?.payload?.details?.lease || {
+          id: normalized?.lease_id || normalized?.payload?.details?.lease_id || null,
           holder_actor_npub: normalized?.holder_actor_npub || normalized?.holder_npub || null,
           holder_display_name: normalized?.holder_display_name || normalized?.holder_name || null,
           expires_at: normalized?.expires_at || null,
@@ -217,6 +262,8 @@ export async function renewPgEditLeaseForRecord(store, record, entityType, optio
     baseUrl: context.baseUrl,
     appNpub: context.appNpub,
   });
+  const current = getPgEditLeaseSession(store, entityType, recordId);
+  if (current?.lease?.lease_token !== session.lease.lease_token || current?.editorSessionId !== session.editorSessionId) return null;
   setPgEditLeaseSession(store, entityType, recordId, { acquireState: 'held', lease: result.lease || session.lease });
   return result.lease || session.lease;
 }
@@ -245,13 +292,19 @@ export function startPgEditLeaseRenewal(store, record, entityType, options = {})
     try {
       await renewPgEditLeaseForRecord(store, record, entityType, options);
     } catch (error) {
+      const latest = getPgEditLeaseSession(store, entityType, record.record_id);
+      if (latest?.lease?.lease_token !== current.lease.lease_token || latest?.editorSessionId !== current.editorSessionId) return;
       const message = error?.userMessage || error?.message || 'Unable to renew Tower PG edit lease.';
       setPgEditLeaseSession(store, entityType, record.record_id, {
         acquireState: 'blocked',
+        lease: null,
+        ...(entityType === 'document' ? { superseded: error?.code === 'document_edit_session_superseded' } : {}),
         message,
       });
       stopPgEditLeaseRenewal(store, record, entityType, options);
       if (entityType === 'document' && store?.selectedDocId === record.record_id) {
+        store.docNeedsHeadCheck = true;
+        void store.persistSelectedDocDraft?.({ immediate: true });
         store.docEditAccessState = 'blocked';
         store.docEditAccessMessage = store.docEditDraftDirty
           ? 'Draft preserved — the edit lease expired. Retry edit access before saving.'
@@ -276,14 +329,21 @@ export async function releasePgEditLeaseForRecord(store, record, entityType, opt
   stopPgEditLeaseRenewal(store, record, entityType, options);
   const session = getPgEditLeaseSession(store, entityType, recordId);
   if (!session?.lease?.id || !session?.lease?.lease_token) return false;
-  const key = pgEditLeaseSessionKey(entityType, recordId);
+  const key = `${pgEditLeaseSessionKey(entityType, recordId)}:${session.lease.id}`;
+  const clearReleased = () => {
+    const current = getPgEditLeaseSession(store, entityType, recordId);
+    if (current?.lease?.lease_token !== session.lease.lease_token || current?.editorSessionId !== session.editorSessionId) return;
+    if (entityType === 'document' && session.editorSessionId) {
+      setPgEditLeaseSession(store, entityType, recordId, { lease: null, acquireState: 'ready' });
+    } else clearPgEditLeaseSession(store, entityType, recordId);
+  };
   store.pgEditLeaseReleasePromises = store.pgEditLeaseReleasePromises || {};
   if (store.pgEditLeaseReleasePromises[key]) return store.pgEditLeaseReleasePromises[key];
 
   let promise;
   promise = (async () => {
     if (options.clearLocalBeforeRelease) {
-      clearPgEditLeaseSession(store, entityType, recordId);
+      clearReleased();
     }
     try {
       const context = resolveTowerPgWorkspaceContext(store);
@@ -294,13 +354,13 @@ export async function releasePgEditLeaseForRecord(store, record, entityType, opt
         appNpub: context.appNpub,
       });
       if (!options.clearLocalBeforeRelease) {
-        clearPgEditLeaseSession(store, entityType, recordId);
+        clearReleased();
       }
       return true;
     } catch (error) {
       if (options.reportError && store) store.error = error?.message || 'Unable to release Tower PG edit lease.';
       if (!options.clearLocalBeforeRelease) {
-        clearPgEditLeaseSession(store, entityType, recordId);
+        clearReleased();
       }
       return false;
     } finally {

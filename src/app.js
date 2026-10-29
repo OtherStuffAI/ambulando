@@ -1253,6 +1253,8 @@ export function initApp() {
     docEditAccessState: 'ready',
     docEditAccessMessage: '',
     docEditDraftDirty: false,
+    docLastCloudSyncedAt: null,
+    docTakeoverInFlight: false,
     docEditBaseRecordId: null,
     docEditBaseRowVersion: 0,
     docEditBaseVersionId: null,
@@ -2123,6 +2125,12 @@ export function initApp() {
       return this.docEditorBlocks.length > 0;
     },
 
+    get docLastSyncedLabel() {
+      if (!this.docLastCloudSyncedAt) return '';
+      const date = new Date(this.docLastCloudSyncedAt);
+      return Number.isNaN(date.getTime()) ? '' : `Last synced ${date.toLocaleString()}`;
+    },
+
     get docSyncStatusClass() {
       if (this.docAutosaveState === 'error') return 'doc-sync-dot-unsynced';
       if (this.docAutosaveState === 'pending') return 'doc-sync-dot-unsynced';
@@ -2133,7 +2141,7 @@ export function initApp() {
     get docSyncStatusLabel() {
       if (this.docAutosaveState === 'device') return 'Saved on this device · waiting to sync';
       if (this.docAutosaveState === 'error') return 'Save failed';
-      if (this.docAutosaveState === 'pending') return 'Unsaved changes';
+      if (this.docAutosaveState === 'pending') return this.docLocalDraft ? 'Saved locally · waiting to sync' : 'Unsaved changes';
       if (this.docAutosaveState === 'saving') return 'Saving…';
       if (this.docEditAccessState === 'recovery') return this.docRecovery ? 'Recovery draft preserved' : 'Draft kept locally';
       return 'Saved';
