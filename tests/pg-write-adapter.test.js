@@ -1749,3 +1749,28 @@ describe('PG write adapter', () => {
     expect(moved).toMatchObject({ record_id: 'doc-1', scope_id: 'scope-2', pg_channel_id: 'channel-2', content: 'Full local body', version: 5 });
   });
 });
+
+it('refuses a retained message from another workspace before signing or transport', async () => {
+  const api = await import('../src/api.js');
+  const { buildAgentInstructionSignature } = await import('../src/message-instruction-signatures.js');
+  api.createTowerPgChannelMessage.mockClear(); buildAgentInstructionSignature.mockClear();
+  await expect(createTowerPgMessageFromLocal(store(), { record_id: 'local', pg_workspace_id: 'other-workspace', channel_id: 'channel-1', body: 'Preserve' })).rejects.toThrow('original workspace');
+  expect(buildAgentInstructionSignature).not.toHaveBeenCalled();
+  expect(api.createTowerPgChannelMessage).not.toHaveBeenCalled();
+});
+
+it.each(['workspace', 'identity', 'connection', 'generation'])('stops message delivery when %s changes during instruction signing', async change => {
+  const api = await import('../src/api.js');
+  const { buildAgentInstructionSignature } = await import('../src/message-instruction-signatures.js');
+  const s = store();
+  api.createTowerPgChannelMessage.mockClear();
+  buildAgentInstructionSignature.mockImplementationOnce(async () => {
+    if (change === 'workspace') s.currentWorkspace = { ...s.currentWorkspace, workspaceId: 'other' };
+    if (change === 'identity') s.session = { npub: 'other' };
+    if (change === 'connection') s.currentWorkspace = { ...s.currentWorkspace, directHttpsUrl: 'https://other.test' };
+    if (change === 'generation') s._workspaceSelectionGeneration = 1;
+    return { signed_event_id: 'signature' };
+  });
+  await expect(createTowerPgMessageFromLocal(s, { record_id: 'local', pg_workspace_id: 'workspace-1', channel_id: 'channel-1', body: 'Preserve' })).rejects.toThrow('original workspace');
+  expect(api.createTowerPgChannelMessage).not.toHaveBeenCalled();
+});

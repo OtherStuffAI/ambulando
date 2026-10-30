@@ -298,12 +298,24 @@ function isRepairableTowerPgDmAuthorizationFailure(error) {
 }
 
 async function createTowerPgMessageWithLazyDmRepair(store, localRow, channel, options = {}) {
-  const createMessage = () => Object.keys(options).length > 0
+  const context = resolveTowerPgWorkspaceContext(store);
+  const assertSource = () => {
+    const current = resolveTowerPgWorkspaceContext(store);
+    if (['workspaceId', 'baseUrl', 'appNpub', 'sessionNpub', 'generation'].some(key => current[key] !== context[key])
+      || (localRow.pg_workspace_id && context.workspaceId && localRow.pg_workspace_id !== context.workspaceId)) {
+      throw new Error('Workspace changed before message could be sent. Retry in its original workspace.');
+    }
+  };
+  const createMessage = () => {
+    assertSource();
+    return Object.keys(options).length > 0
     ? createTowerPgMessageFromLocal(store, localRow, options)
     : createTowerPgMessageFromLocal(store, localRow);
+  };
   try {
     return await createMessage();
   } catch (error) {
+    assertSource();
     const targetNpub = resolveAgentDmTargetNpub(channel, store.botNpub, store.session?.npub);
     if (
       !isAgentDmChannel(channel, targetNpub, store.session?.npub)
@@ -317,6 +329,16 @@ async function createTowerPgMessageWithLazyDmRepair(store, localRow, channel, op
     store.error = null;
     return createMessage();
   }
+}
+
+// Keep voice drafts with their original composer when text delivery finishes
+// after navigation. Returning to that composer exposes an explicit recovery note.
+function retainChatSendAudio(store, key, drafts, notice) {
+  if (!key || drafts.length === 0) return;
+  const existing = store.chatComposerDrafts?.[key] || { value: '', mentions: [] };
+  store.chatComposerDrafts = { ...(store.chatComposerDrafts || {}), [key]: {
+    ...existing, audioDrafts: [...drafts], sendRecoveryError: notice,
+  } };
 }
 
 function setComposerSendPending(store, composer, pending) {
@@ -564,6 +586,10 @@ export const chatMessageManagerMixin = {
       ...(this.selectedAgentMentionsByComposer || {}),
       [context]: Array.isArray(draft?.mentions) ? [...draft.mentions] : [],
     };
+    if (Array.isArray(draft?.audioDrafts)) {
+      this[context === 'thread' ? 'threadAudioDrafts' : 'messageAudioDrafts'] = [...draft.audioDrafts];
+    }
+    if (draft?.sendRecoveryError) this.error = draft.sendRecoveryError;
     if (context === 'thread' && this.deckThreadComposerOpen) {
       this.threadTitleDraft = draft?.title || '';
       this.deckThreadTitleManuallyEdited = Boolean(draft?.titleManuallyEdited);
@@ -2551,6 +2577,30 @@ export const chatMessageManagerMixin = {
       return;
     }
 
+    const sourceDraftKey = this.getChatComposerDraftKey(composer);
+    if (isThreadCreate && !hasBodyOverride) this.saveChatComposerDraft(composer);
+    const preserveAudio = notice => retainChatSendAudio(this, sourceDraftKey, drafts, notice);
+    const sendContext = resolveTowerPgWorkspaceContext(this);
+    if (pgMode && channel.pg_workspace_id && sendContext.workspaceId && channel.pg_workspace_id !== sendContext.workspaceId) {
+      this.error = 'Channel belongs to a different workspace. Reopen it before sending.';
+      return false;
+    }
+    const sendDbKey = getCurrentWorkspaceDbKey();
+    const sendWorkspaceKey = this.currentWorkspaceKey;
+    const sendSelection = this.channelSelectionGeneration;
+    const persistMessage = operation => withWorkspaceMessageTransaction(sendDbKey, operation);
+    const isSendWorkspaceCurrent = () => {
+      const current = resolveTowerPgWorkspaceContext(this);
+      return this.currentWorkspaceKey === sendWorkspaceKey
+        && ['workspaceId', 'baseUrl', 'appNpub', 'sessionNpub', 'generation'].every(key => current[key] === sendContext[key]);
+    };
+    const isSendCurrent = () => isSendWorkspaceCurrent()
+      && this.selectedChannelId === channel.record_id && this.channelSelectionGeneration === sendSelection;
+    const patchMessage = (row, replacedId) => {
+      if (!isSendCurrent()) return;
+      if (replacedId) this.messages = this.messages.filter(message => message.record_id !== replacedId);
+      this.patchMessageLocal(row);
+    };
     const msgId = String(options?.clientRequestId || '').trim() || crypto.randomUUID();
     const now = new Date().toISOString();
     const rawBody = hasBodyOverride ? bodyOverride : input.trim();
@@ -2623,15 +2673,12 @@ export const chatMessageManagerMixin = {
 
     if (pgMode && retrySourceMessage?.pg_metadata) localRow.pg_metadata = { ...retrySourceMessage.pg_metadata };
     const replacedRecordId = String(options?.replaceRecordId || '').trim();
-    if (replacedRecordId) await replaceMessageRecord(replacedRecordId, localRow);
-    else await upsertMessage(localRow);
-    if (replacedRecordId && replacedRecordId !== localRow.record_id) {
-      this.messages = this.messages.filter((message) => message.record_id !== replacedRecordId);
-    }
-    this.patchMessageLocal(localRow);
-    this.scheduleChatFeedScrollToBottom();
+    await persistMessage(() => replacedRecordId
+      ? replaceMessageRecord(replacedRecordId, localRow) : upsertMessage(localRow));
+    patchMessage(localRow, replacedRecordId);
+    if (isSendCurrent()) this.scheduleChatFeedScrollToBottom();
     const clearComposer = () => {
-      if (hasBodyOverride) return;
+      if (hasBodyOverride || !isSendCurrent()) return;
       if (isThreadCreate) this.threadInput = '';
       else this.messageInput = '';
       this.selectedAgentMentionsByComposer = {
@@ -2651,17 +2698,30 @@ export const chatMessageManagerMixin = {
     if (pgMode) {
       let accepted = null;
       try {
+        if (!isSendWorkspaceCurrent()) throw new Error('Workspace changed before message could be sent');
         accepted = {
           ...localRow,
           ...await createTowerPgMessageWithLazyDmRepair(this, localRow, channel),
           pg_client_record_id: localRow.record_id,
           pg_reconciliation_pending: true,
         };
-        await replaceMessageRecord(localRow.record_id, accepted);
-        accepted = await getMessageById(accepted.record_id) || accepted;
-        this.messages = this.messages.filter((message) => message.record_id !== localRow.record_id);
-        this.patchMessageLocal(accepted);
-        if (drafts.length > 0) {
+        accepted = await persistMessage(async () => {
+          await replaceMessageRecord(localRow.record_id, accepted);
+          return await getMessageById(accepted.record_id) || accepted;
+        });
+        patchMessage(accepted, localRow.record_id);
+        if (isThreadCreate) {
+          if (isSendCurrent()) clearComposer();
+          else if (this.chatComposerDrafts?.[sourceDraftKey]?.value === input) {
+            const savedDrafts = { ...this.chatComposerDrafts };
+            delete savedDrafts[sourceDraftKey];
+            this.chatComposerDrafts = savedDrafts;
+          }
+        }
+        if (drafts.length > 0 && !isSendWorkspaceCurrent()) {
+          preserveAudio('Message sent, but its voice note was not attached after switching workspace. Send the retained voice note from this composer.');
+        }
+        if (drafts.length > 0 && isSendWorkspaceCurrent()) {
           try {
             const { attachments: pgAudioAttachments } = await this.materializeAudioDrafts({
               drafts,
@@ -2677,34 +2737,39 @@ export const chatMessageManagerMixin = {
                 ...accepted,
                 attachments: [...existingAttachments, ...pgAudioAttachments],
               };
-              await upsertMessage(acceptedWithAudio);
-              this.messages = this.messages.filter((message) => message.record_id !== accepted.record_id);
-              this.patchMessageLocal(acceptedWithAudio);
+              await persistMessage(() => upsertMessage(acceptedWithAudio));
+              patchMessage(acceptedWithAudio, accepted.record_id);
               accepted = acceptedWithAudio;
             }
           } catch (audioError) {
+            preserveAudio('Message sent, but its voice note could not be attached. The voice draft is retained for review.');
+            if (!isSendCurrent()) return options.returnMessage === true ? accepted : true;
             if (isThreadCreate) this.threadAudioDrafts = drafts;
             else this.messageAudioDrafts = drafts;
             this.error = `Message sent, but failed to attach voice note: ${audioError?.message || 'Failed to sync PG audio note'}`;
           }
         }
-        if (isThreadCreate) clearComposer();
-        this.scheduleChatFeedScrollToBottom();
+        if (isSendCurrent()) this.scheduleChatFeedScrollToBottom();
         Promise.resolve()
-          .then(() => this.refreshMessages({ scrollToLatest: true }))
+          .then(() => isSendCurrent() && this.refreshMessages({ scrollToLatest: true }))
           .catch((refreshError) => {
             console.warn('[flightdeck] PG message refresh failed after send', refreshError);
           });
       } catch (error) {
         if (isThreadCreate) {
-          await deleteMessageRuntimeState(msgId);
-          this.messages = this.messages.filter((message) => message.record_id !== msgId);
-          this.syncChatPreviewState?.();
+          await persistMessage(() => deleteMessageRuntimeState(msgId));
+          if (isSendCurrent()) {
+            this.messages = this.messages.filter((message) => message.record_id !== msgId);
+            this.syncChatPreviewState?.();
+          }
         } else {
-          await this.setMessageSyncStatus(msgId, 'failed');
+          const failed = await persistMessage(() => updateExistingMessageSyncStatus(msgId, 'failed'));
+          if (failed) patchMessage(failed);
         }
-        this.markTowerReachabilityOperationFailed?.('chat-message-send-failed');
-        this.error = error?.message || 'Failed to sync PG message';
+        preserveAudio('Message delivery failed. Its voice note is retained; review it before resending.');
+        if (isSendCurrent() && drafts.length > 0) this[isThreadCreate ? 'threadAudioDrafts' : 'messageAudioDrafts'] = drafts;
+        if (isSendWorkspaceCurrent()) this.markTowerReachabilityOperationFailed?.('chat-message-send-failed');
+        if (isSendCurrent()) this.error = error?.message || 'Failed to sync PG message';
         return false;
       }
       return options.returnMessage === true ? accepted : true;
@@ -2828,6 +2893,8 @@ export const chatMessageManagerMixin = {
       }
     }
 
+    const sourceDraftKey = this.getChatComposerDraftKey('thread');
+    const preserveAudio = notice => retainChatSendAudio(this, sourceDraftKey, drafts, notice);
     const sendThreadId = retrySourceMessage?.parent_message_id || this.activeThreadId;
     const sendWorkspace = this.currentWorkspaceKey;
     const sendDbKey = getCurrentWorkspaceDbKey();
@@ -2929,6 +2996,9 @@ export const chatMessageManagerMixin = {
         });
         patchReply(accepted, localRow.record_id);
         if (isSendCurrent()) this.armThreadActivityAutoScroll(accepted);
+        if (drafts.length > 0 && !isSendWorkspaceCurrent()) {
+          preserveAudio('Reply sent, but its voice note was not attached after switching workspace. Send the retained voice note from this composer.');
+        }
         if (drafts.length > 0 && isSendWorkspaceCurrent()) {
           try {
             const { attachments: pgAudioAttachments } = await this.materializeAudioDrafts({
@@ -2949,6 +3019,7 @@ export const chatMessageManagerMixin = {
               patchReply(acceptedWithAudio, accepted.record_id);
             }
           } catch (audioError) {
+            preserveAudio('Reply sent, but its voice note could not be attached. The voice draft is retained for review.');
             if (!isSendCurrent()) return true;
             this.threadAudioDrafts = drafts;
             this.error = `Reply sent, but failed to attach voice note: ${audioError?.message || 'Failed to sync PG audio note'}`;
@@ -2965,7 +3036,9 @@ export const chatMessageManagerMixin = {
       } catch (error) {
         const failed = await persistReply(() => updateExistingMessageSyncStatus(msgId, 'failed'));
         if (failed) patchReply(failed);
-        this.markTowerReachabilityOperationFailed?.('chat-reply-send-failed');
+        preserveAudio('Reply delivery failed. Its voice note is retained; review it before resending.');
+        if (isSendCurrent() && drafts.length > 0) this.threadAudioDrafts = drafts;
+        if (isSendWorkspaceCurrent()) this.markTowerReachabilityOperationFailed?.('chat-reply-send-failed');
         if (isSendCurrent()) this.error = error?.message || 'Failed to sync PG reply';
         return false;
       }
@@ -3096,6 +3169,8 @@ export const chatMessageManagerMixin = {
     return Boolean(
       isTowerPgBackendMode()
       && message?.pg_backend === true
+      && (!message.pg_workspace_id || !resolveTowerPgWorkspaceContext(this).workspaceId
+        || message.pg_workspace_id === resolveTowerPgWorkspaceContext(this).workspaceId)
       && message?.read_only !== true
       && message?.record_state !== 'deleted'
       && message?.sync_status === 'failed'

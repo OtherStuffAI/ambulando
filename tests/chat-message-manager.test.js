@@ -5530,3 +5530,93 @@ it('does not resurrect an optimistic row when a lost POST response fails after S
     expect((await getMessageById('accepted')).sync_status).toBe('synced');
   } finally { await deleteWorkspaceDb(key); }
 });
+
+it.each([false, true])('keeps late first-message completion in the source database (failure=%s)', async failure => {
+  const source = `send-isolation-source-${failure}`, destination = `send-isolation-destination-${failure}`;
+  openWorkspaceDb(source); await clearRuntimeData();
+  isTowerPgBackendMode.mockReturnValue(true);
+  let finish;
+  const transport = new Promise((resolve, reject) => { finish = failure ? reject : resolve; });
+  createTowerPgMessageFromLocal.mockImplementation(async (_store, row) => {
+    await transport;
+    return { ...row, record_id: 'accepted-source', sync_status: 'synced', pg_record_type: 'message' };
+  });
+  const s = createStore({ session: { npub: 'viewer' }, currentWorkspaceKey: source,
+    currentWorkspace: { workspaceId: 'source' }, selectedChannelId: 'channel', channels: [{ record_id: 'channel' }], messageInput: 'Source body',
+    messageAudioDrafts: [{ storage_object_id: 'source-voice', title: 'Voice' }],
+    markTowerReachabilityOperationFailed: vi.fn() });
+  const sourceDraftKey = s.getChatComposerDraftKey('message');
+  try {
+    const sending = s.sendMessage();
+    await vi.waitFor(() => expect(createTowerPgMessageFromLocal).toHaveBeenCalledTimes(1));
+    const id = createTowerPgMessageFromLocal.mock.calls[0][1].record_id;
+    openWorkspaceDb(destination); await clearRuntimeData();
+    s.currentWorkspaceKey = destination; s.currentWorkspace = { workspaceId: 'destination' };
+    s.messages = []; s.messageInput = 'Destination draft'; s.error = 'Destination status';
+    finish(failure ? new Error('Network failed') : undefined);
+    expect(await sending).toBe(!failure);
+    expect(await getMessagesByChannel('channel')).toEqual([]);
+    expect(s.messages).toEqual([]);
+    expect(s.messageInput).toBe('Destination draft'); expect(s.error).toBe('Destination status');
+    expect(s.markTowerReachabilityOperationFailed).not.toHaveBeenCalled();
+    expect(s.chatComposerDrafts[sourceDraftKey].audioDrafts).toEqual([{ storage_object_id: 'source-voice', title: 'Voice' }]);
+    expect(s.chatComposerDrafts[sourceDraftKey].sendRecoveryError).toContain('voice note');
+    openWorkspaceDb(source);
+    const rows = await getMessagesByChannel('channel');
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ record_id: failure ? id : 'accepted-source', body: 'Source body', sync_status: failure ? 'failed' : 'synced' });
+    s.currentWorkspaceKey = source; s.currentWorkspace = { workspaceId: 'source' };
+    s.restoreChatComposerDraft('message');
+    expect(s.messageAudioDrafts[0].storage_object_id).toBe('source-voice');
+    expect(s.error).toContain('voice note');
+    if (failure) {
+      s.messages = rows;
+      createTowerPgMessageFromLocal.mockImplementationOnce(async (_store, row) => ({ ...row, record_id: 'retried-source', sync_status: 'synced' }));
+      expect(await s.resendFailedMessage(id)).toBe(true);
+      expect(createTowerPgMessageFromLocal.mock.calls[1][1].pg_client_request_id).toBe(id);
+      expect(await getMessageById(id)).toBeUndefined();
+      expect((await getMessagesByChannel('channel')).map(row => row.record_id)).toEqual(['retried-source']);
+    }
+  } finally { await deleteWorkspaceDb(source); await deleteWorkspaceDb(destination); }
+});
+
+it('refuses retrying a failed command in a different workspace without changing its payload', async () => {
+  isTowerPgBackendMode.mockReturnValue(true);
+  const failed = { record_id: 'source-command', pg_client_request_id: 'source-command', pg_backend: true,
+    pg_workspace_id: 'source', channel_id: 'channel', body: 'Original body', sender_npub: 'viewer', sync_status: 'failed',
+    attachments: [{ storage_object_id: 'source-object' }], pg_metadata: { mentions: [{ type: 'agent', npub: 'agent' }] } };
+  const s = createStore({ session: { npub: 'viewer' }, currentWorkspace: { workspaceId: 'destination' }, messages: [failed] });
+  expect(await s.resendFailedMessage(failed.record_id)).toBe(false);
+  expect(createTowerPgMessageFromLocal).not.toHaveBeenCalled();
+  expect(failed.pg_workspace_id).toBe('source'); expect(failed.body).toBe('Original body');
+});
+
+it('keeps a rejected new-thread draft and attachments in its original workspace after switching', async () => {
+  const source = 'new-thread-source', destination = 'new-thread-destination';
+  openWorkspaceDb(source); await clearRuntimeData(); isTowerPgBackendMode.mockReturnValue(true);
+  let rejectSend;
+  createTowerPgMessageFromLocal.mockImplementation(() => new Promise((_resolve, reject) => { rejectSend = reject; }));
+  const file = { storage_object_id: 'source-file', filename: 'kept.txt', status: 'ready' };
+  const voice = { storage_object_id: 'source-voice' };
+  const s = createStore({ session: { npub: 'viewer' }, currentWorkspaceKey: source, currentWorkspace: { workspaceId: 'source' },
+    selectedChannelId: 'channel', channels: [{ record_id: 'channel' }], deckThreadComposerOpen: true,
+    deckThreadComposerChannelId: 'channel', threadInput: 'Keep my new thread', threadTitleDraft: 'Title',
+    deckThreadCreateRequestId: 'original-request', threadFileDrafts: [file], threadAudioDrafts: [voice] });
+  const key = s.getChatComposerDraftKey('thread');
+  try {
+    const sending = s.sendMessage({ composerContext: 'thread-create', clientRequestId: 'original-request' });
+    await vi.waitFor(() => expect(createTowerPgMessageFromLocal).toHaveBeenCalledTimes(1));
+    openWorkspaceDb(destination); await clearRuntimeData();
+    s.currentWorkspaceKey = destination; s.currentWorkspace = { workspaceId: 'destination' };
+    s.threadInput = 'Destination text'; s.threadFileDrafts = []; s.threadAudioDrafts = []; s.messages = [];
+    rejectSend(new Error('Signing or transport failed'));
+    expect(await sending).toBe(false);
+    expect(s.threadInput).toBe('Destination text'); expect(s.threadAudioDrafts).toEqual([]);
+    expect(await getMessagesByChannel('channel')).toEqual([]);
+    openWorkspaceDb(source); expect(await getMessageById('original-request')).toBeUndefined();
+    expect(s.chatComposerDrafts[key]).toMatchObject({ value: 'Keep my new thread', requestId: 'original-request', fileDrafts: [file], audioDrafts: [voice] });
+    s.currentWorkspaceKey = source; s.currentWorkspace = { workspaceId: 'source' }; s.restoreChatComposerDraft('thread');
+    expect(s.threadInput).toBe('Keep my new thread'); expect(s.threadFileDrafts).toEqual([file]); expect(s.threadAudioDrafts).toEqual([voice]);
+    expect(s.deckThreadCreateRequestId).toBe('original-request');
+  } finally { await deleteWorkspaceDb(source); await deleteWorkspaceDb(destination); }
+});

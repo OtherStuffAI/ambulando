@@ -590,3 +590,19 @@ describe('audioRecordingManagerMixin', () => {
     expect(store.error).toBe('Voice note is not available yet. Sync audio notes and try again.');
   });
 });
+
+it('stops voice-note batches after a workspace switch without writing or displaying the acceptance in the destination', async () => {
+  mocks.isTowerPgBackendMode.mockReturnValue(true);
+  const store = createStore({ backendUrl: 'https://tower.example', workspaceOwnerNpub: 'owner', session: { npub: 'viewer' },
+    selectedChannelId: 'channel', channels: [{ record_id: 'channel', scope_id: 'scope' }],
+    currentWorkspace: { workspaceId: 'source', directHttpsUrl: 'https://tower.example', appNpub: 'flightdeck_pg' } });
+  mocks.createTowerPgChannelAudioNote.mockImplementationOnce(async () => {
+    store.currentWorkspace = { workspaceId: 'destination', directHttpsUrl: 'https://other.test', appNpub: 'flightdeck_pg' };
+    return { audio_note: { id: 'accepted-source', workspace_id: 'source', channel_id: 'channel', storage_object_id: 'voice-one' } };
+  });
+  await expect(store.materializeAudioDrafts({ drafts: [{ storage_object_id: 'voice-one' }, { storage_object_id: 'voice-two' }],
+    target_record_id: 'message', target_record_family_hash: recordFamilyHash('chat_message'), scopeId: 'scope', channelId: 'channel' })).rejects.toThrow('original workspace');
+  expect(mocks.createTowerPgChannelAudioNote).toHaveBeenCalledTimes(1);
+  expect(mocks.upsertAudioNote).not.toHaveBeenCalled();
+  expect(store.audioNotes).toEqual([]);
+});

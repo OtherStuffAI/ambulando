@@ -495,6 +495,14 @@ export const audioRecordingManagerMixin = {
         boardId: this.selectedBoardId,
       });
     }
+    const sendContext = pgContext ? resolveTowerPgWorkspaceContext(this) : null;
+    const assertAudioSource = () => {
+      if (!sendContext) return;
+      const current = resolveTowerPgWorkspaceContext(this);
+      if (['workspaceId', 'baseUrl', 'appNpub', 'sessionNpub', 'generation'].some(key => current[key] !== sendContext[key])) {
+        throw new Error('Workspace changed while attaching voice note. Review the retained voice draft in its original workspace.');
+      }
+    };
     const audioWriteFields = pgContext ? null : await getRecordWriteFieldsForStore(this, {
       group_ids: target_group_ids,
     }, {
@@ -505,6 +513,7 @@ export const audioRecordingManagerMixin = {
     const resolvedWriteGroupRef = audioWriteFields?.write_group_ref || null;
 
     for (const draft of drafts) {
+      assertAudioSource();
       const recordId = crypto.randomUUID();
       const now = new Date().toISOString();
       const localRow = {
@@ -537,6 +546,7 @@ export const audioRecordingManagerMixin = {
       };
       if (pgContext) {
         const accepted = await createTowerPgAudioNoteFromLocal(this, localRow);
+        assertAudioSource();
         await upsertAudioNote(accepted);
         audioNotes.push(accepted);
         attachments.push({
@@ -570,6 +580,7 @@ export const audioRecordingManagerMixin = {
       });
     }
 
+    assertAudioSource();
     if (audioNotes.length > 0) {
       this.audioNotes = [...this.audioNotes, ...audioNotes]
         .sort((a, b) => String(a.updated_at || '').localeCompare(String(b.updated_at || '')));

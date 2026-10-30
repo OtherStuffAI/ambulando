@@ -609,6 +609,14 @@ export async function deleteTowerPgDocCommentFromLocal(store, comment) {
 export async function createTowerPgMessageFromLocal(store, message, options = {}) {
   const context = resolveTowerPgWorkspaceContext(store);
   if (!context.workspaceId || !message?.channel_id) throw new Error('Tower PG chat is not ready');
+  const assertSource = () => {
+    const current = resolveTowerPgWorkspaceContext(store);
+    if ((message.pg_workspace_id && message.pg_workspace_id !== context.workspaceId)
+      || ['workspaceId', 'baseUrl', 'appNpub', 'sessionNpub', 'generation'].some(key => current[key] !== context[key])) {
+      throw new Error('Workspace changed before message could be sent. Retry in its original workspace.');
+    }
+  };
+  assertSource();
   const parentMessage = options.parentMessage || null;
   const threadId = trimText(options.threadId || parentMessage?.pg_thread_id || message?.pg_thread_id || message?.thread_id);
   if (trimText(message?.parent_message_id) && !threadId) {
@@ -634,6 +642,7 @@ export async function createTowerPgMessageFromLocal(store, message, options = {}
   // Signing may wait for native/user approval. Diagnostics consent can be
   // revoked while that prompt is open, so recheck immediately before delivery.
   await options.assertCanSend?.();
+  assertSource();
   const result = await createTowerPgChannelMessage(context.workspaceId, message.channel_id, {
     body: message.body,
     message_signature: messageSignature,

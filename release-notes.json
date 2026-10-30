@@ -5504,6 +5504,13 @@
         "Take over document editing from another writer or device when you have write access, preserving drafts and loading the latest saved content.",
         "Temporary connection or server failures renewing document edit access no longer disable editing and autosave. Active edited documents continue to autosave every 15 seconds."
       ]
+    },
+    {
+      "buildNumber": 2683,
+      "label": "Keep message sends in their workspace",
+      "notes": [
+        "Messages finishing after a workspace switch stay in their original workspace. Sending stops safely if workspace or identity changes while signing, and failed messages retain their original retry identity."
+      ]
     }
   ]
 }

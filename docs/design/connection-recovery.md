@@ -36,3 +36,27 @@ Regression tests cover retries and fresh signatures, cancellation and coalescing
 cache preservation, auth separation, event recovery and consent/redaction. The
 browser connection probe uses production code, real IndexedDB and a controlled
 loopback transport; it does not establish production backend availability.
+
+## Outgoing chat and workspace switches
+
+A first-message send captures its source Dexie partition before local persistence.
+Late acceptance or failure stays in that partition; only the original selected
+channel can receive composer, feed and scroll updates. Reply sends use their
+existing source-partition transaction. A late failure cannot change the newly
+selected workspace's reachability status.
+
+The PG message adapter checks the record's workspace before signing, then checks
+workspace, connection, app, identity and selection generation again after
+instruction signing. Lazy DM permission repair is fenced to the same context.
+A context change stops delivery; it never moves an unsent command into the new
+workspace. Failed-message retry keeps its command ID, body, attachments, mentions
+and original thread, and refuses a row belonging to another workspace. A lost
+response can still mean Tower accepted the command, so retry uses its existing
+idempotency key.
+
+Voice notes are attached after text acceptance. If navigation prevents attachment,
+or delivery fails, the voice draft stays with the original composer and displays
+a recovery explanation when restored. It is not silently attached to the newly
+selected workspace. Composer recovery is in memory, like the existing composer
+drafts; this does not promise recovery after a page reload. A retained voice note
+requires review before sending when the prior response was uncertain.
