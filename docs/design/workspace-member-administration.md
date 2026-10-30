@@ -3,7 +3,10 @@
 Settings → Groups & Members → Members → Inspect access opens an online Tower
 authority inspection for the selected actor. It shows the canonical Tower
 `display_name` and full `npub`, followed by effective workspace, scope and channel
-permissions. Nostr profile names do not override administration identity labels.
+permissions. Permission labels and known scope/channel/group names explain the
+access in plain language; exact permission codes, resource IDs and grant IDs
+remain available in expandable details. Missing names are explicitly unavailable,
+not guessed. Nostr profile names do not override administration identity labels.
 The inspector is discarded when the selected workspace, endpoint or identity changes.
 
 The canonical workspace owner can assign or revoke the explicit workspace

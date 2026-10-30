@@ -5482,6 +5482,13 @@
         "Inspect exact member identities and their effective workspace, scope and channel permissions.",
         "Workspace owners can explicitly assign an agent-manager role or preview and confirm member removal while preserving authorship and audit history."
       ]
+    },
+    {
+      "buildNumber": 2680,
+      "label": "Readable workspace access previews",
+      "notes": [
+        "Review member access and removal using understandable permissions and known scope, channel and group names, with exact codes and IDs available in details."
+      ]
     }
   ]
 }

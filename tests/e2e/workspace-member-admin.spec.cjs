@@ -54,6 +54,12 @@ for (const width of [1280, 390]) {
     const remove = panel.getByRole('button', { name: 'Confirm remove from workspace' });
     await expect(panel).toContainText('Historical messages and authorship are preserved.');
     await expect(panel).toContainText('Agents');
+    await expect(panel).toContainText('Read channel');
+    await expect(panel).toContainText('Channel: Private A');
+    const technicalDetails = panel.getByText('Technical details', { exact: true }).first().locator('..');
+    await expect(technicalDetails.getByText('channel-a', { exact: true })).toBeHidden();
+    await technicalDetails.locator('summary').click();
+    await expect(technicalDetails.getByText('channel-a', { exact: true })).toBeVisible();
     await expect(remove).toBeDisabled();
     await panel.getByLabel('Type this member’s full npub to confirm removal').fill(actor.npub);
     await remove.click();

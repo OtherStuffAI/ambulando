@@ -6,7 +6,41 @@ function contextKey(context) {
   return JSON.stringify([context.workspaceId, context.baseUrl, context.appNpub, context.generation, context.sessionNpub]);
 }
 
+const permissionLabels = {
+  'workspace.read': 'View workspace', 'workspace.manage': 'Manage workspace', 'workspace.invite': 'Invite workspace members',
+  'event_subscription.manage': 'Manage event subscriptions', 'scope.read': 'View scope', 'scope.create': 'Create scopes',
+  'scope.manage': 'Manage scope', 'context.edit': 'Edit scope context', 'channel.read': 'Read channel',
+  'channel.create': 'Create channels', 'channel.write': 'Write channel messages', 'channel.manage': 'Manage channel',
+  'channel.grant': 'Grant channel access', 'channel.grants.read': 'Inspect channel access', 'channel.grants.manage': 'Manage channel access',
+  'task.read': 'Read tasks', 'task.create': 'Create tasks', 'task.update': 'Update tasks', 'task.comment': 'Comment on tasks',
+  'comment.create': 'Create comments', 'doc.read': 'Read documents', 'doc.write': 'Write documents',
+  'file.read': 'Read files', 'file.write': 'Write files', 'audio_note.read': 'Read audio notes', 'audio_note.write': 'Write audio notes',
+  'daily_note.read': 'Read personal daily notes', 'daily_note.write': 'Write personal daily notes',
+  'org_data.read': 'Read organisation data', 'org_data.write': 'Write organisation data', 'org_data.schema': 'Manage organisation data schema',
+  'napplet.publish': 'Publish napplets', 'napplet.install': 'Install napplets',
+};
+
 export const workspaceMemberAdminMixin = {
+  getPgMemberAdminPermissionLabel(permission) {
+    return permissionLabels[permission] || 'Additional permission';
+  },
+  getPgMemberAdminGrantResourceLabel(grant) {
+    const coverage = this.pgMemberAdmin?.access?.coverage || {};
+    if (grant.resource_channel_id) {
+      const channel = (coverage.channels || []).find(row => row.id === grant.resource_channel_id);
+      const scope = channel && (coverage.scopes || []).find(row => row.id === channel.scope_id);
+      return `Channel: ${channel?.name || 'name unavailable'}${scope?.name ? ` · Scope: ${scope.name}` : ''}`;
+    }
+    if (grant.resource_scope_id) {
+      const scope = (coverage.scopes || []).find(row => row.id === grant.resource_scope_id);
+      return `Scope: ${scope?.name || 'name unavailable'}`;
+    }
+    return grant.resource_type === 'workspace' ? 'Workspace' : 'Resource name unavailable';
+  },
+  getPgMemberAdminGrantGroupLabel(grant) {
+    const group = (this.pgMemberAdmin?.preview?.groups || []).find(row => (row.id || row.group_id) === grant.principal_group_id);
+    return group?.name ? `Through group: ${group.name}` : 'Through an inherited group (name unavailable)';
+  },
   get pgMemberAdminVisible() {
     return Boolean(this.pgMemberAdmin && this.pgMemberAdmin.contextKey === contextKey(resolveTowerPgWorkspaceContext(this)));
   },

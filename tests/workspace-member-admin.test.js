@@ -68,6 +68,19 @@ describe('workspace membership administration', () => {
     }
     expect(setTowerPgWorkspaceAgentManager).not.toHaveBeenCalled();
   });
+  it('labels known permissions and resources without inventing missing names', async () => {
+    const state = await opened();
+    state.pgMemberAdmin.access.coverage = { scopes: [{ id: 'scope-a', name: 'Research' }], channels: [{ id: 'channel-a', scope_id: 'scope-a', name: 'Design' }] };
+    state.pgMemberAdmin.preview = { groups: [{ id: 'group-a', name: 'Editors' }] };
+    expect(state.getPgMemberAdminPermissionLabel('channel.read')).toBe('Read channel');
+    expect(state.getPgMemberAdminPermissionLabel('unknown.permission')).toBe('Additional permission');
+    expect(state.getPgMemberAdminGrantResourceLabel({ resource_channel_id: 'channel-a' })).toBe('Channel: Design · Scope: Research');
+    expect(state.getPgMemberAdminGrantResourceLabel({ resource_scope_id: 'scope-a' })).toBe('Scope: Research');
+    expect(state.getPgMemberAdminGrantResourceLabel({ resource_type: 'workspace' })).toBe('Workspace');
+    expect(state.getPgMemberAdminGrantResourceLabel({ resource_channel_id: 'unknown' })).toBe('Channel: name unavailable');
+    expect(state.getPgMemberAdminGrantGroupLabel({ principal_group_id: 'group-a' })).toBe('Through group: Editors');
+    expect(state.getPgMemberAdminGrantGroupLabel({ principal_group_id: 'unknown' })).toBe('Through an inherited group (name unavailable)');
+  });
   it('requires preview, exact identity and an unblocked token before removal', async () => {
     const state = await opened();
     state.pgMemberAdminConfirmNpub = actor.npub;
