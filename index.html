@@ -4906,10 +4906,10 @@
               <div class="thread-composer-region" x-sol-composer-scroll>
               <div class="thread-input-bar" x-sol-composer-focus>
                 <div class="chat-editing-banner" x-show="$store.chat.isEditingMessage('thread')" x-cloak>
-                  <div><strong>Editing reply</strong><span x-show="$store.chat.messageEdit.error" x-text="$store.chat.messageEdit.error"></span></div>
+                  <div><strong>Editing message</strong><span x-show="$store.chat.messageEdit.error" x-text="$store.chat.messageEdit.error"></span></div>
                   <button type="button" @click="$store.chat.cancelMessageEdit()" :disabled="$store.chat.messageEdit.submitting">Cancel</button>
                 </div>
-                <div class="recent-mention-chips composer-shortcuts-row" x-show="$store.chat.getRecentMentionChips('thread').length || $store.chat.threadFileDrafts.some(d => d.kind === 'image')" x-cloak aria-label="Composer shortcuts and pending image attachments">
+                <div class="recent-mention-chips composer-shortcuts-row" x-show="$store.chat.getRecentMentionChips('thread').length || (!$store.chat.isEditingMessage('thread') && $store.chat.threadFileDrafts.some(d => d.kind === 'image'))" x-cloak aria-label="Composer shortcuts and pending image attachments">
                   <template x-for="person in $store.chat.getRecentMentionChips('thread')" :key="person.id">
                     <div class="recent-mention-chip-group">
                       <button type="button" class="recent-mention-chip" @click="$store.chat.insertRecentMention('thread', person, $event)" :aria-label="'Mention ' + person.label">
@@ -4922,7 +4922,7 @@
                       </button>
                     </div>
                   </template>
-                  <template x-for="draft in $store.chat.threadFileDrafts.filter(d => d.kind === 'image')" :key="draft.draft_id">
+                  <template x-for="draft in ($store.chat.isEditingMessage('thread') ? [] : $store.chat.threadFileDrafts.filter(d => d.kind === 'image'))" :key="draft.draft_id">
                     <div class="chat-image-draft chat-image-draft-inline" :class="{ 'chat-image-draft-error': draft.status === 'error' }">
                       <button type="button" class="chat-image-draft-open" @click="$store.chat.openChatImagePreview(draft, 'thread', $event.currentTarget)" :aria-label="'Open ' + draft.filename + ' preview, ' + (draft.status === 'uploading' ? 'uploading' : draft.status === 'error' ? 'upload failed' : 'ready to send')"><img :src="draft.preview_url" alt="" /></button>
                       <span class="chat-image-draft-status" aria-hidden="true" x-text="draft.status === 'uploading' ? 'Uploading…' : draft.status === 'error' ? 'Upload failed' : 'Ready'"></span>
@@ -4962,14 +4962,14 @@
                       <button type="button" role="menuitem" @click="$store.chat.openAgentActivityDetails('thread'); open = false">Working history &amp; diagnostics</button>
                       <label class="chat-composer-file-action" role="menuitem">
                         <span>Attach photo or file</span>
-                        <input type="file" :disabled="!$store.chat.canComposeInThreadDestination" multiple aria-label="Choose photos or files to attach to reply" @change="$store.chat.handleChatAttachmentSelection($event, 'thread'); open = false" />
+                        <input type="file" :disabled="!$store.chat.canComposeInThreadDestination || $store.chat.isEditingMessage('thread')" multiple aria-label="Choose photos or files to attach to reply" @change="$store.chat.handleChatAttachmentSelection($event, 'thread'); open = false" />
                       </label>
-                      <button type="button" role="menuitem" :disabled="!$store.chat.canComposeInThreadDestination" @click="$store.chat.openAudioRecorder('thread'); open = false">Record Audio</button>
+                      <button type="button" role="menuitem" :disabled="!$store.chat.canComposeInThreadDestination || $store.chat.isEditingMessage('thread')" @click="$store.chat.openAudioRecorder('thread'); open = false">Record Audio</button>
                       <button type="button" role="menuitem" x-show="!$store.chat.deckThreadComposerOpen" @click="$store.chat.startThreadHangCall(); open = false" :disabled="!$store.chat.canComposeInThreadDestination || $store.chat.threadHangCallSending" x-text="$store.chat.threadHangCallSending ? 'Starting Hang call…' : 'Start Hang call'"></button>
                       <button type="button" role="menuitem" x-show="$store.chat.workroomsEnabled && !$store.chat.deckThreadComposerOpen" @click="$store.chat.openWorkroomCreation(); open = false" :disabled="!$store.chat.canComposeInThreadDestination || !$store.chat.isTowerPgMode || !$store.chat.selectedChannelId">Start Workroom</button>
                     </div>
                   </div>
-                  <button type="button" class="thread-reply-btn" @click="$store.chat.deckThreadComposerOpen ? $store.chat.sendDeckThread() : $store.chat.sendThreadReply()" :disabled="!$store.chat.canComposeInThreadDestination || $store.chat.deckThreadComposerBusy || $store.chat.composerSendPending.thread || ((!$store.chat.hasMentionComposerDraftText('thread') && $store.chat.threadAudioDrafts.length === 0 && $store.chat.threadFileDrafts.length === 0) || $store.chat.threadImageUploadCount > 0 || $store.chat.threadFileDrafts.some(d => d.status !== 'ready') || $store.chat.messageEdit.submitting)" :aria-busy="($store.chat.deckThreadComposerBusy || $store.chat.composerSendPending.thread).toString()" :aria-label="$store.chat.deckThreadComposerOpen ? (($store.chat.deckThreadComposerBusy || $store.chat.composerSendPending.thread) ? 'Starting…' : 'Start thread') : ($store.chat.isEditingMessage('thread') ? ($store.chat.messageEdit.submitting ? 'Saving…' : 'Save') : ($store.chat.composerSendPending.thread ? 'Sending…' : 'Reply'))" :title="$store.chat.deckThreadComposerOpen ? (($store.chat.deckThreadComposerBusy || $store.chat.composerSendPending.thread) ? 'Starting…' : 'Start thread') : ($store.chat.isEditingMessage('thread') ? ($store.chat.messageEdit.submitting ? 'Saving…' : 'Save') : ($store.chat.composerSendPending.thread ? 'Sending…' : 'Reply'))"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m22 2-7 20-4-9-9-4Z M22 2 11 13" /></svg></button>
+                  <button type="button" class="thread-reply-btn" @click="$store.chat.deckThreadComposerOpen ? $store.chat.sendDeckThread() : $store.chat.sendThreadReply()" :disabled="!$store.chat.canComposeInThreadDestination || $store.chat.deckThreadComposerBusy || $store.chat.composerSendPending.thread || ((!$store.chat.hasMentionComposerDraftText('thread') && $store.chat.threadAudioDrafts.length === 0 && $store.chat.threadFileDrafts.length === 0) || (!$store.chat.isEditingMessage('thread') && ($store.chat.threadImageUploadCount > 0 || $store.chat.threadFileDrafts.some(d => d.status !== 'ready'))) || $store.chat.messageEdit.submitting)" :aria-busy="($store.chat.deckThreadComposerBusy || $store.chat.composerSendPending.thread).toString()" :aria-label="$store.chat.deckThreadComposerOpen ? (($store.chat.deckThreadComposerBusy || $store.chat.composerSendPending.thread) ? 'Starting…' : 'Start thread') : ($store.chat.isEditingMessage('thread') ? ($store.chat.messageEdit.submitting ? 'Saving…' : 'Save') : ($store.chat.composerSendPending.thread ? 'Sending…' : 'Reply'))" :title="$store.chat.deckThreadComposerOpen ? (($store.chat.deckThreadComposerBusy || $store.chat.composerSendPending.thread) ? 'Starting…' : 'Start thread') : ($store.chat.isEditingMessage('thread') ? ($store.chat.messageEdit.submitting ? 'Saving…' : 'Save') : ($store.chat.composerSendPending.thread ? 'Sending…' : 'Reply'))"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m22 2-7 20-4-9-9-4Z M22 2 11 13" /></svg></button>
                   </div>
                 </div>
               </div>
@@ -4979,7 +4979,7 @@
                 <span x-text="$store.chat.threadHangCallError"></span>
                 <button type="button" x-show="$store.chat.threadHangCallRetryUrl" @click="$store.chat.retryThreadHangCall()" :disabled="$store.chat.threadHangCallSending" x-text="$store.chat.threadHangCallSending ? 'Retrying…' : 'Retry'"></button>
               </div>
-              <div class="audio-draft-list" x-show="$store.chat.threadAudioDrafts.length > 0">
+              <div class="audio-draft-list" x-show="!$store.chat.isEditingMessage('thread') && $store.chat.threadAudioDrafts.length > 0">
                 <template x-for="draft in $store.chat.threadAudioDrafts" :key="draft.draft_id">
                   <div class="audio-card audio-card-draft">
                     <div class="audio-card-main">
@@ -4993,7 +4993,7 @@
                   </div>
                 </template>
               </div>
-              <div class="chat-file-draft-list" x-show="$store.chat.threadFileDrafts.some(d => d.kind !== 'image')" x-cloak>
+              <div class="chat-file-draft-list" x-show="!$store.chat.isEditingMessage('thread') && $store.chat.threadFileDrafts.some(d => d.kind !== 'image')" x-cloak>
                 <template x-for="draft in $store.chat.threadFileDrafts.filter(d => d.kind !== 'image')" :key="draft.draft_id">
                   <div class="chat-file-draft" :class="{ 'chat-file-draft-error': draft.status === 'error' }">
                     <div class="chat-file-draft-copy"><strong x-text="draft.filename"></strong><span x-text="$store.chat.formatAttachmentSize(draft.size_bytes) + ' · ' + (draft.status === 'uploading' ? 'Uploading…' : draft.status === 'error' ? draft.error : 'Ready to send')"></span><span class="chat-file-draft-preview" x-show="draft.text_attachment && draft.preview_line" x-text="draft.preview_line"></span></div>

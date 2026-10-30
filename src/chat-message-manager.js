@@ -530,7 +530,7 @@ export const chatMessageManagerMixin = {
       ? String(destination.threadId ?? (this.deckThreadComposerOpen ? '__new_thread__' : this.activeThreadId) ?? '').trim()
       : '';
     if (context === 'thread' && !threadId) return '';
-    return [workspaceId, scopeId, channelId, threadId || '__channel__', ...(this.canvasChatEmbedded ? [new URLSearchParams(location.search).get('canvaskey')] : [])].join(':');
+    return [workspaceId, scopeId, channelId, threadId || '__channel__', ...(this.messageEdit?.context === context && this.messageEdit.recordId ? ['edit', this.messageEdit.recordId] : []), ...(this.canvasChatEmbedded ? [new URLSearchParams(location.search).get('canvaskey')] : [])].join(':');
   },
 
   saveChatComposerDraft(context = 'message', destination = {}) {
@@ -1862,6 +1862,10 @@ export const chatMessageManagerMixin = {
   },
 
   openThread(recordId, options = {}) {
+    if (this.messageEdit?.recordId && recordId !== this.messageEdit.threadRootId) {
+      if (this.messageEdit.submitting) return false;
+      this.cancelMessageEdit();
+    }
     this.prioritizeTowerPgForeground?.(`thread-open:${String(recordId || '').trim()}`);
     if (recordId !== this.activeThreadId) this.closeIdentityCard?.();
     if (options.saveDraft !== false) this.saveChatComposerDraft?.('thread');
@@ -3181,6 +3185,11 @@ export const chatMessageManagerMixin = {
 
     const context = 'thread';
     const modelKey = 'threadInput';
+    // Typing stays in the DOM until send. Capture it before replacing the editor.
+    this.commitMentionComposerDraft?.('message');
+    this.saveChatComposerDraft?.('message');
+    this.commitMentionComposerDraft?.(context);
+    this.saveChatComposerDraft?.(context);
     const existingMentions = message?.pg_metadata?.mentions || message?.metadata?.mentions;
     const mentions = (Array.isArray(existingMentions) ? existingMentions : [])
       .filter((mention) => ['agent', 'person'].includes(mention?.type) && mention?.npub)
@@ -3188,7 +3197,7 @@ export const chatMessageManagerMixin = {
 
     const threadRootId = message.parent_message_id || message.record_id;
     if (this.activeThreadId !== threadRootId) {
-      this.openThread(threadRootId, { preserveComposer: true });
+      this.openThread(threadRootId, { scrollToLatest: false });
     }
     this.messageEdit = {
       recordId: message.record_id,
@@ -3197,10 +3206,12 @@ export const chatMessageManagerMixin = {
       threadRootId,
       originalBody: message.body || '',
       draftBeforeEdit: this[modelKey] || '',
+      draftKeyBeforeEdit: this.getChatComposerDraftKey(context),
       mentionsBeforeEdit: [...(this.selectedAgentMentionsByComposer?.[context] || [])],
       submitting: false,
       error: '',
     };
+    rebindChatComposer(this, context);
     this[modelKey] = message.body || '';
     this.selectedAgentMentionsByComposer = {
       ...(this.selectedAgentMentionsByComposer || {}),
@@ -3219,19 +3230,22 @@ export const chatMessageManagerMixin = {
   cancelMessageEdit(options = {}) {
     const edit = this.messageEdit;
     if (!edit?.recordId || edit.submitting) return false;
+    this.clearCurrentChatComposerDraft?.(edit.context);
     const restoreDraft = options.restoreDraft !== false;
+    const savedDraft = edit.draftKeyBeforeEdit ? this.chatComposerDrafts?.[edit.draftKeyBeforeEdit] : null;
     const modelKey = edit.context === 'thread' ? 'threadInput' : 'messageInput';
     if (restoreDraft) {
-      this[modelKey] = edit.draftBeforeEdit || '';
+      this[modelKey] = savedDraft?.value ?? edit.draftBeforeEdit ?? '';
       this.selectedAgentMentionsByComposer = {
         ...(this.selectedAgentMentionsByComposer || {}),
-        [edit.context]: [...(edit.mentionsBeforeEdit || [])],
+        [edit.context]: [...(savedDraft?.mentions ?? edit.mentionsBeforeEdit ?? [])],
       };
     }
     this.messageEdit = {
       recordId: '', context: '', channelId: '', threadRootId: '', originalBody: '',
       draftBeforeEdit: '', mentionsBeforeEdit: [], submitting: false, error: '',
     };
+    rebindChatComposer(this, edit.context);
     this.closeMentionPopover?.();
     this.scheduleComposerAutosize(edit.context);
     return true;
@@ -3250,10 +3264,15 @@ export const chatMessageManagerMixin = {
       this.messageEdit = { ...edit, error: 'The chat context changed. Cancel and reopen the message to edit it.' };
       return;
     }
+    this.commitMentionComposerDraft?.(edit.context);
     const modelKey = edit.context === 'thread' ? 'threadInput' : 'messageInput';
     const body = String(this[modelKey] || '').trim();
     if (!body) {
       this.messageEdit = { ...edit, error: 'A message cannot be empty.' };
+      return;
+    }
+    if (inlineCounterState(body).over) {
+      this.messageEdit = { ...edit, error: 'Message is over the 10,000 character limit. Shorten it before saving.' };
       return;
     }
     const candidateMentions = canonicalAgentMentionsFromSelection(
@@ -3279,15 +3298,8 @@ export const chatMessageManagerMixin = {
       const accepted = await updateTowerPgMessageFromLocal(this, message, { body, mentions });
       await upsertMessage(accepted);
       this.patchMessageLocal(accepted);
-      const draftBeforeEdit = edit.draftBeforeEdit || '';
-      const mentionsBeforeEdit = [...(edit.mentionsBeforeEdit || [])];
       this.messageEdit = { ...this.messageEdit, submitting: false };
-      this.cancelMessageEdit({ restoreDraft: false });
-      this[modelKey] = draftBeforeEdit;
-      this.selectedAgentMentionsByComposer = {
-        ...(this.selectedAgentMentionsByComposer || {}),
-        [edit.context]: mentionsBeforeEdit,
-      };
+      this.cancelMessageEdit();
       this.scheduleComposerAutosize(edit.context);
     } catch (error) {
       await this.setMessageSyncStatus(message.record_id, 'synced');

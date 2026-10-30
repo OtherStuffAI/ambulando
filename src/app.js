@@ -9367,7 +9367,7 @@ export function initApp() {
         else await this.handleChatPaste(event, composer);
         return;
       }
-      if (convertPasteToTextAttachment(this, event, composer)) return;
+      if (!this.isEditingMessage?.(composer) && convertPasteToTextAttachment(this, event, composer)) return;
       event.preventDefault();
       insertPlainTextAtSelection(event.currentTarget, event.clipboardData?.getData('text/plain') || '');
       this.syncMentionComposerModel(event.currentTarget);
@@ -10099,6 +10099,10 @@ export function initApp() {
     // Images keep editable inline markup, as with paste, so the sender can
     // move it to position the image. Other files remain trailing attachments.
     addChatFileDraftAtCaret(file, context = 'message', target = null) {
+      if (this.isEditingMessage?.(context)) {
+        this.messageEdit = { ...this.messageEdit, error: 'Existing attachments are kept. Add new attachments in a reply.' };
+        return null;
+      }
       if (!String(file?.type || '').startsWith('image/')) return this.addChatFileDraft(file, context);
       const token = this.createChatImageUploadToken();
       const root = target?.isConnected && target.matches?.('[data-chat-composer]') ? target : liveChatComposer(this, context);
@@ -10385,6 +10389,10 @@ export function initApp() {
         .filter((item) => item?.kind === 'file' || String(item?.type || '').startsWith('image/'));
       if (fileItems.length === 0) return false;
       event.preventDefault();
+      if (this.isEditingMessage?.(context)) {
+        this.messageEdit = { ...this.messageEdit, error: 'Existing attachments are kept. Add new attachments in a reply.' };
+        return true;
+      }
 
       const channel = context === 'thread' && !this.deckThreadComposerOpen
         ? this.activeThreadChannel

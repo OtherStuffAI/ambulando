@@ -4123,7 +4123,7 @@ describe('chat message actions menu', () => {
     };
     const { fn, store } = bindMethod('startMessageEdit', {
       session: { npub: 'npub1operator-a' }, messages: [message], selectedChannelId: 'channel-1',
-      threadInput: 'preserved draft',
+      activeThreadId: 'msg-1', threadInput: 'preserved draft',
       selectedAgentMentionsByComposer: { message: [{ type: 'agent', npub: 'npub1sam', label: 'Sam' }], thread: [] },
     });
 
@@ -4133,6 +4133,68 @@ describe('chat message actions menu', () => {
     expect(store.threadInput).toBe(message.body);
     expect(store.messageEdit).toMatchObject({ recordId: 'msg-1', context: 'thread', threadRootId: 'msg-1', draftBeforeEdit: 'preserved draft' });
     expect(store.selectedAgentMentionsByComposer.thread).toEqual([{ type: 'agent', npub: 'npub1testagent', label: 'Test Agent' }]);
+  });
+
+  it('captures deferred live drafts and restores the target thread draft rather than another thread', () => {
+    isTowerPgBackendMode.mockReturnValue(true);
+    const message = { record_id: 'target', channel_id: 'channel-1', body: 'Original',
+      sender_npub: 'npub1operator-a', pg_backend: true, sync_status: 'synced', record_state: 'active' };
+    const store = createStore({ session: { npub: 'npub1operator-a' }, messages: [message],
+      selectedChannelId: 'channel-1', activeThreadId: 'source', currentWorkspaceKey: 'workspace',
+      threadInput: 'stale', messageInput: 'stale channel',
+      commitMentionComposerDraft: vi.fn(function(context) {
+        this[context === 'thread' ? 'threadInput' : 'messageInput'] = context === 'thread' ? 'live source' : 'live channel';
+      }),
+    });
+    const sourceKey = store.getChatComposerDraftKey('thread');
+    const targetKey = store.getChatComposerDraftKey('thread', { threadId: 'target' });
+    store.chatComposerDrafts[targetKey] = { value: 'target draft', mentions: [] };
+    store.startMessageEdit('target');
+    expect(store.commitMentionComposerDraft.mock.calls).toEqual([['message'], ['thread']]);
+    expect(store.chatComposerDrafts[sourceKey].value).toBe('live source');
+    expect(store.messageInput).toBe('live channel');
+    expect(store.messageEdit.draftBeforeEdit).toBe('target draft');
+    expect(store.getChatComposerDraftKey('thread')).not.toBe(targetKey);
+    const editKey = store.getChatComposerDraftKey('thread');
+    store.saveChatComposerDraft('thread');
+    expect(store.chatComposerDrafts[editKey].value).toBe('Original');
+    store.cancelMessageEdit();
+    expect(store.threadInput).toBe('target draft');
+    expect(store.chatComposerDrafts[sourceKey].value).toBe('live source');
+    expect(store.chatComposerDrafts[editKey]).toBeUndefined();
+  });
+
+  it('restores a pending upload result to the reply draft after cancel instead of the edit body', () => {
+    const store = createStore({ selectedChannelId: 'channel-1', activeThreadId: 'msg-1', currentWorkspaceKey: 'workspace',
+      threadInput: 'edit body', messageEdit: { recordId: 'msg-1', context: 'thread', submitting: false,
+        draftBeforeEdit: 'Before [ Uploading image... ]', draftKeyBeforeEdit: 'reply-key', mentionsBeforeEdit: [] },
+      chatComposerDrafts: { 'reply-key': { value: 'Before ![photo](storage://image)', mentions: [] } },
+    });
+    store.cancelMessageEdit();
+    expect(store.threadInput).toBe('Before ![photo](storage://image)');
+  });
+
+  it('cancels an edit before navigating and keeps the previous reply draft in its own thread', () => {
+    const store = createStore({ selectedChannelId: 'channel-1', activeThreadId: 'source', threadInput: 'edited',
+      messageEdit: { recordId: 'source', threadRootId: 'source', context: 'thread', draftBeforeEdit: 'source reply', submitting: false },
+    });
+    const sourceKey = store.getChatComposerDraftKey('thread', { threadId: 'source' }).split(':edit:')[0];
+    store.openThread('target');
+    expect(store.messageEdit.recordId).toBe('');
+    expect(store.chatComposerDrafts[sourceKey].value).toBe('source reply');
+    expect(store.threadInput).toBe('');
+    expect(store.activeThreadId).toBe('target');
+  });
+
+  it('does not open an edit for another author or a pending message', () => {
+    isTowerPgBackendMode.mockReturnValue(true);
+    const store = createStore({ session: { npub: 'npub1operator-a' }, threadInput: 'unsent', messages: [
+      { record_id: 'other', sender_npub: 'npub1other', pg_backend: true, sync_status: 'synced' },
+      { record_id: 'pending', sender_npub: 'npub1operator-a', pg_backend: true, sync_status: 'pending' },
+    ] });
+    store.startMessageEdit('other'); store.startMessageEdit('pending');
+    expect(store.messageEdit.recordId).toBe('');
+    expect(store.threadInput).toBe('unsent');
   });
 
   it('restores the prior composer draft and mention selection when editing is cancelled', () => {
@@ -4198,6 +4260,43 @@ describe('chat message actions menu', () => {
     } finally {
       await deleteWorkspaceDb(workspaceDbKey);
     }
+  });
+
+  it('commits deferred editing text and retains body and mentions for retry after an offline save', async () => {
+    isTowerPgBackendMode.mockReturnValue(true);
+    updateTowerPgMessageFromLocal.mockRejectedValue(new Error('Offline'));
+    const message = { record_id: 'msg-1', channel_id: 'channel-1', body: 'Original',
+      sender_npub: 'npub1operator-a', pg_backend: true, sync_status: 'synced', record_state: 'active', version: 2,
+      attachments: [{ storage_object_id: 'keep-file' }] };
+    const body = 'Revised @[Test Agent](mention:agent:npub1testagent)';
+    const mentions = [{ type: 'agent', npub: 'npub1testagent', label: 'Test Agent' }];
+    const store = createStore({ session: { npub: 'npub1operator-a' }, messages: [message], selectedChannelId: 'channel-1',
+      activeThreadId: 'msg-1', threadInput: 'stale', setMessageSyncStatus: vi.fn(),
+      commitMentionComposerDraft: vi.fn(function() { this.threadInput = body; this.selectedAgentMentionsByComposer.thread = mentions; }),
+      messageEdit: { recordId: 'msg-1', context: 'thread', submitting: false, draftBeforeEdit: 'unsent' },
+    });
+    await store.saveMessageEdit();
+    expect(updateTowerPgMessageFromLocal).toHaveBeenCalledWith(store, expect.objectContaining({ attachments: message.attachments }), { body, mentions });
+    expect(store.messageEdit).toMatchObject({ recordId: 'msg-1', submitting: false, error: 'Offline' });
+    expect(store.threadInput).toBe(body);
+    expect(store.selectedAgentMentionsByComposer.thread).toEqual(mentions);
+    expect(message.attachments).toEqual([{ storage_object_id: 'keep-file' }]);
+    expect(store.setMessageSyncStatus).toHaveBeenLastCalledWith('msg-1', 'synced');
+  });
+
+  it('keeps an over-limit edit open without sending or changing its accepted body', async () => {
+    isTowerPgBackendMode.mockReturnValue(true);
+    const message = { record_id: 'msg-1', channel_id: 'channel-1', body: 'Original',
+      sender_npub: 'npub1operator-a', pg_backend: true, sync_status: 'synced', record_state: 'active', version: 2 };
+    const store = createStore({ session: { npub: 'npub1operator-a' }, messages: [message], selectedChannelId: 'channel-1',
+      activeThreadId: 'msg-1', threadInput: 'x'.repeat(10001),
+      messageEdit: { recordId: 'msg-1', context: 'thread', submitting: false },
+    });
+    await store.saveMessageEdit();
+    expect(updateTowerPgMessageFromLocal).not.toHaveBeenCalled();
+    expect(store.messageEdit.error).toContain('10,000');
+    expect(store.threadInput).toHaveLength(10001);
+    expect(message.body).toBe('Original');
   });
 
   it('keeps the edited draft open and reports an optimistic conflict', async () => {

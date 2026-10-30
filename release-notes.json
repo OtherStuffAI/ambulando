@@ -5467,6 +5467,13 @@
       "notes": [
         "Use the selected channel’s grants for management and reordering instead of permissions held on another channel."
       ]
+    },
+    {
+      "buildNumber": 2678,
+      "label": "Message edit draft preservation",
+      "notes": [
+        "Edit previous messages in the thread composer with bot mentions while preserving unsent reply drafts and canonical signed revisions."
+      ]
     }
   ]
 }

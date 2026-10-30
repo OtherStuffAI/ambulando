@@ -124,3 +124,38 @@ Labels drop markup and brackets and are capped at 80 characters, so inserted
 markup stays parseable. The `thread:` prefix restricts results to threads;
 `chat:` remains the channel alias. Opening a `chat` pill calls
 `openLinkedThread`, which rejects a channel mismatch or an unreadable message.
+
+## Editing chat messages
+
+Edit opens the existing thread composer for a synced message owned by the
+current actor. Capture the live channel and thread editors before replacing
+their contents: typing normally defers the reactive model until send. A reply
+draft belongs to its original thread, while the edit uses a distinct draft and
+upload key. Save and Cancel restore the target thread's reply draft; switching
+to another thread must not move the source thread's draft with it. Pending
+reply uploads resolve to that saved reply draft, not into the edited message.
+Cancel clears only the edit draft. Existing attachment metadata remains on the
+message; new file/audio attachments belong in a reply and are disabled during
+text editing. Pending reply attachments remain available after editing.
+
+Saving serializes the live composer, including actor pills, and sends the full
+remaining structured actor mention set. The existing update API requires a
+fresh instruction signature over the exact revised body, with the message id,
+next revision and workspace/channel/thread context. Tower retains authorization
+and optimistic row-version checks. A visible tag alone does not authorize a bot.
+
+Tower compares the saved actor identities with the prior saved revision. Only
+newly added agent identities are eligible for revision delivery; Autopilot
+idempotency suppresses repeated delivery of the same message revision. Ordinary
+text edits with unchanged mentions do not run those bots again. Removing an
+agent, saving, and adding it in a later saved revision intentionally makes it
+newly eligible again. No shared routing contract changes are needed.
+
+A failed or offline Save keeps the edit text and selected mentions open for
+retry and leaves the prior accepted message intact. A conflict requires review
+of the latest saved version. Chat draft storage currently lives in memory;
+these guarantees do not imply recovery of an unfinished edit after a full page
+reload. Browser acceptance in `e2e/edit-message-mentions.spec.cjs` intercepts
+all requests and signs with an isolated test identity. It verifies canonical
+body, exact structured mentions and cryptographic revision signatures without
+writing to a real workspace or dispatching a bot.
