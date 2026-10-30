@@ -18,7 +18,7 @@ async function openCachedDocument(page, beforeOpen = async () => {}) {
     s.restoreSelectedDocDraft = async () => null;
     s.loadDocComments = async () => [];
     s.ensureBackgroundSync = () => {};
-    s.openDoc('loading-test');
+    s.openDoc('loading-test', { edit: true });
   });
 }
 

@@ -1001,6 +1001,18 @@ export const docsManagerMixin = {
       [recordId]: false,
     };
     this.loadDocEditorFromSelection();
+    // Enter through the existing permission/lease gate, after draft recovery.
+    // A setting change never switches an already open document's mode.
+    const openingMode = options.edit === true ? 'edit' : this.documentOpeningMode;
+    let openingAttempted = false;
+    const applyOpeningMode = async (record) => {
+      await this.docDraftRestorePromise;
+      if (openingMode !== 'edit' || openingAttempted || !isCurrent() || !isDocumentContentReadyForEditor(record)
+        || this.docEditorMode !== 'preview' || this.docDraftChoice || this.docDraftReadSaved) return;
+      openingAttempted = true;
+      await this.enterSelectedDocEditMode(this.isTiptapDocsEditorEnabled() ? 'rich' : 'block');
+    };
+    void applyOpeningMode(document).catch(error => { if (isCurrent()) this.error = error?.message || String(error); });
     restoreReferenceComposerDraft(this, 'doc', recordId);
     const openedTitle = this.docEditorTitle;
     const openedContent = this.docEditorContent;
@@ -1032,6 +1044,7 @@ export const docsManagerMixin = {
               // must not destroy and lazily remount the editor we just opened.
               this.applySelectedDocAuthoritativeContent(fresh, { preserveSelection: true });
             }
+            await applyOpeningMode(fresh);
             void this.loadSelectedDocRecoveries?.();
             this.markDocRead?.(recordId);
           })
@@ -1263,9 +1276,7 @@ export const docsManagerMixin = {
       : [];
     this.docEditorShares = this.getEffectiveDocShares(item)
       .map((share) => ({ ...share }));
-    this.docEditorMode = this.selectedDocType === 'document' && this.isTiptapDocsEditorEnabled()
-      ? 'rich'
-      : 'preview';
+    this.docEditorMode = 'preview';
     this.docEditAccessGeneration = Number(this.docEditAccessGeneration || 0) + 1;
     this.docEditAccessState = isTowerPgBackendMode() && isUnsyncedLocalPgRecord(item)
       ? 'editing'
@@ -4423,7 +4434,7 @@ export const docsManagerMixin = {
         };
         await upsertDocument(acceptedRow);
         this.patchDocumentLocal(acceptedRow);
-        if (options.open !== false) this.openDoc(accepted.record_id);
+        if (options.open !== false) this.openDoc(accepted.record_id, { edit: true });
         Promise.resolve()
           .then(() => this.refreshDocuments())
           .catch((refreshError) => {
@@ -4454,7 +4465,7 @@ export const docsManagerMixin = {
         });
         await upsertDocument(localRow);
         this.patchDocumentLocal(localRow);
-        this.openDoc(localRow.record_id);
+        this.openDoc(localRow.record_id, { edit: true });
         this.error = isOnlineForPgEdit()
           ? (error?.message || 'Could not create PG document.')
           : 'PG document saved locally. Reconnect to sync it.';
@@ -4517,12 +4528,12 @@ export const docsManagerMixin = {
     } catch (error) {
       await this.markDocRecordWriteFailed('document', row, error);
       await this.refreshDocuments();
-      if (options.open !== false) this.openDoc(recordId);
+      if (options.open !== false) this.openDoc(recordId, { edit: true });
       return;
     }
 
     await this.refreshDocuments();
-    if (options.open !== false) this.openDoc(recordId);
+    if (options.open !== false) this.openDoc(recordId, { edit: true });
     await this.flushAndBackgroundSync();
     return row;
   },

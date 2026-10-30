@@ -736,6 +736,19 @@ export async function saveAppPlacement(partition, entryId, shown, orderedIds = [
   });
 }
 
+// Explicit document opening choices belong to the signed-in user, across workspaces.
+// Never import editor/draft modes: those are incidental session state.
+export async function saveDocumentOpeningMode(userNpub, mode) {
+  if (!userNpub || !['view', 'edit'].includes(mode)) throw new Error('Sign in and choose View or Edit.');
+  return sharedDb.transaction('rw', sharedDb.app_settings, async () => {
+    const existing = await getSettings();
+    const choices = { ...existing?.documentOpeningModes, [userNpub]: mode };
+    if (existing) await sharedDb.app_settings.update(existing.id, { documentOpeningModes: choices });
+    else await sharedDb.app_settings.add({ documentOpeningModes: choices });
+    return choices;
+  });
+}
+
 // Personal thread pins are browser-local preferences, never shared record writes.
 export async function saveThreadPin(partition, thread, pinned) {
   if (!partition || !thread?.id || !thread?.channelId) throw new Error('Choose a workspace and sign in before pinning.');

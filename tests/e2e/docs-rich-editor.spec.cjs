@@ -78,35 +78,18 @@ async function seedSelectedDocument(page, options = {}) {
   }, options);
 }
 
-test('opening a document mounts the native Tiptap surface without acquiring edit access', async ({ page }) => {
+test('opening an unset document displays View without acquiring edit access', async ({ page }) => {
   await page.goto('/');
-
   await seedSelectedDocument(page, { enterEdit: false });
-
   await expect(page.locator('.docs-editor-v3')).toBeVisible();
   await expect(page.locator('.doc-title-display')).toHaveText('Tip Tap Test');
-  await expect(page.locator('.doc-rich-editor .ProseMirror')).toBeVisible();
-  await expect(page.locator('.doc-rich-editor .ProseMirror')).toContainText('This should open in Tiptap by default.');
-  await expect(page.locator('.doc-block-editor:visible')).toHaveCount(0);
-
-  const editorMetrics = await page.locator('.doc-rich-editor .ProseMirror').evaluate((node) => {
-    const rect = node.getBoundingClientRect();
-    return {
-      width: rect.width,
-      height: rect.height,
-      text: node.textContent || '',
-    };
-  });
-
-  expect(editorMetrics.width).toBeGreaterThan(300);
-  expect(editorMetrics.height).toBeGreaterThan(120);
-  expect(editorMetrics.text).toContain('This should open in Tiptap by default.');
-
+  await expect(page.locator('.doc-preview-surface')).toContainText('This should open in Tiptap by default.');
+  await expect(page.locator('.doc-rich-editor:visible')).toHaveCount(0);
   const access = await page.evaluate(() => {
     const store = window.Alpine.store('chat');
     return { mode: store.docEditorMode, state: store.docEditAccessState };
   });
-  expect(access).toEqual({ mode: 'rich', state: 'ready' });
+  expect(access).toEqual({ mode: 'preview', state: 'ready' });
 });
 
 test('leaving Docs closes the selected editor before section data is cleared', async ({ page }) => {

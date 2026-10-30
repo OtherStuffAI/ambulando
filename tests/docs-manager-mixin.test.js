@@ -1430,7 +1430,7 @@ describe('docsManagerMixin checkout orchestration', () => {
     expect(store.setDocEditorMode).toHaveBeenCalledWith('block');
   });
 
-  it('opens a synced PG document on the rich TipTap surface while lease inspection stays non-blocking', async () => {
+  it('opens an unset document in View while lease inspection stays non-blocking', async () => {
     isTowerPgBackendModeMock.mockReturnValue(true);
     let resolveInspection;
     getTowerPgEditLeaseMock.mockReturnValueOnce(new Promise((resolve) => { resolveInspection = resolve; }));
@@ -1457,7 +1457,7 @@ describe('docsManagerMixin checkout orchestration', () => {
 
     store.openDoc(record.record_id);
 
-    expect(store.docEditorMode).toBe('rich');
+    expect(store.docEditorMode).toBe('preview');
     expect(store.docEditorContent).toBe('Authoritative body');
     expect(acquireTowerPgEditLeaseMock).not.toHaveBeenCalled();
     expect(store.docEditLeaseInfo).toBeNull();
@@ -1465,6 +1465,38 @@ describe('docsManagerMixin checkout orchestration', () => {
     resolveInspection({ lease: { id: 'lease-other', holder_actor_npub: 'npub1other' } });
     await vi.waitFor(() => expect(store.docEditLeaseInfo?.id).toBe('lease-other'));
     expect(acquireTowerPgEditLeaseMock).not.toHaveBeenCalled();
+  });
+
+  it.each(['view', 'edit'])('uses explicit %s preference through the permission gate on reopening', async mode => {
+    const record = { record_id: 'preferred-doc', content: 'Saved body', content_blocks: [] };
+    const enter = vi.fn(async () => false); // permission denied: remain in View
+    const store = createStore({ documents: [record], documentOpeningMode: mode,
+      loadDocEditorFromSelection: docsManagerMixin.loadDocEditorFromSelection,
+      enterSelectedDocEditMode: enter });
+    store.openDoc(record.record_id);
+    await store.docDraftRestorePromise;
+    await Promise.resolve();
+    expect(enter).toHaveBeenCalledTimes(mode === 'edit' ? 1 : 0);
+    expect(store.docEditorMode).toBe('preview');
+    store.docEditorMode = 'rich'; // incidental manual mode is not a preference
+    store.openDoc(record.record_id);
+    await store.docDraftRestorePromise;
+    await Promise.resolve();
+    expect(enter).toHaveBeenCalledTimes(mode === 'edit' ? 2 : 0);
+    expect(store.docEditorMode).toBe('preview');
+  });
+
+  it('preserves explicit creation/edit intent while the preference is View', async () => {
+    const record = { record_id: 'new-doc', content: '', content_blocks: [] };
+    const enter = vi.fn(async () => true);
+    const store = createStore({ documents: [record], documentOpeningMode: 'view',
+      loadDocEditorFromSelection: docsManagerMixin.loadDocEditorFromSelection,
+      enterSelectedDocEditMode: enter });
+    store.openDoc(record.record_id, { edit: true });
+    await store.docDraftRestorePromise;
+    await Promise.resolve();
+    expect(enter).toHaveBeenCalledOnce();
+    expect(store.documentOpeningMode).toBe('view');
   });
 
   it('keeps acquisition typing ephemeral, deduplicates intent races, and continues without remounting after success', async () => {

@@ -201,6 +201,7 @@ import {
 import { getShortNpub, getInitials } from './utils/naming.js';
 import {
   getSettings,
+  saveDocumentOpeningMode,
   saveSettings,
   getWorkspaceSettings,
   upsertWorkspaceSettings,
@@ -604,6 +605,18 @@ export function initApp() {
     ownerNpub: '',
     botNpub: '',
     session: null,
+    get documentOpeningMode() {
+      return this.session?.npub && this.documentOpeningModes[this.session.npub] === 'edit' ? 'edit' : 'view';
+    },
+
+    async setDocumentOpeningMode(mode) {
+      try {
+        this.documentOpeningModes = await saveDocumentOpeningMode(this.session?.npub, mode);
+      } catch (error) {
+        this.error = `Could not save document opening mode: ${error.message}`;
+      }
+    },
+
     get signingNpub() {
       if (isTowerPgBackendMode()) return this.session?.npub || null;
       return getActiveWorkspaceKeyNpub() || this.session?.npub || null;
@@ -1230,6 +1243,7 @@ export function initApp() {
     docEditorContent: '',
     docEditorShares: [],
     docShareQuery: '',
+    documentOpeningModes: {},
     docEditorMode: 'preview',
     docMobilePane: 'document',
     docEditorRichFeatureEnabled: true,
@@ -2378,6 +2392,7 @@ export function initApp() {
       this.startSharedLiveQueries();
       const settings = await getSettings();
       if (settings) {
+        this.documentOpeningModes = settings.documentOpeningModes || {};
         this.backendUrl = normalizeBackendUrl(settings.backendUrl ?? '');
         this.ownerNpub = settings.ownerNpub ?? '';
         this.botNpub = settings.botNpub ?? '';

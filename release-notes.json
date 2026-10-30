@@ -5489,6 +5489,13 @@
       "notes": [
         "Review member access and removal using understandable permissions and known scope, channel and group names, with exact codes and IDs available in details."
       ]
+    },
+    {
+      "buildNumber": 2681,
+      "label": "Choose document opening mode",
+      "notes": [
+        "Documents open in View unless you explicitly choose Edit in your personal settings. Your choice is saved for your user in this browser across workspaces."
+      ]
     }
   ]
 }

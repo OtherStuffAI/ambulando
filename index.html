@@ -8410,6 +8410,12 @@
                 <option value="light">Light</option>
                 <option value="dark">Dark</option>
               </select>
+              <label class="settings-field-label" for="document-opening-mode">Default document opening mode</label>
+              <select id="document-opening-mode" data-testid="document-opening-mode" :value="$store.chat.documentOpeningMode" :disabled="!$store.chat.session?.npub" @change="$store.chat.setDocumentOpeningMode($event.target.value)" aria-describedby="document-opening-mode-help">
+                <option value="view">View</option>
+                <option value="edit">Edit</option>
+              </select>
+              <p id="document-opening-mode-help" class="settings-field-help">Choose how existing documents open. Saved for your user on this browser across workspaces. You can still switch View and Edit in a document.</p>
               <form @submit.prevent="$store.chat.saveNostrViewer()">
                 <label class="settings-field-label" for="nostr-viewer-base-url">Nostr viewer base URL</label>
                 <input id="nostr-viewer-base-url" type="text" inputmode="url" x-model="$store.chat.nostrViewerDraft" placeholder="https://njump.me/" aria-describedby="nostr-viewer-help nostr-viewer-error" :aria-invalid="Boolean($store.chat.nostrViewerError)" />

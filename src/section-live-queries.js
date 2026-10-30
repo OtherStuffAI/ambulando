@@ -406,6 +406,12 @@ function buildSharedSpecs() {
   if (this.canvasChatEmbedded && !this.canvasChatVisible) return [];
   return [
     {
+      key: 'document-opening-modes',
+      equals: sameLogicalValue,
+      query: async () => (await getSettings())?.documentOpeningModes || {},
+      onNext: choices => { this.documentOpeningModes = choices; },
+    },
+    {
       key: 'app-placements',
       equals: sameLogicalValue,
       query: async () => (await getSettings())?.appPlacements || {},

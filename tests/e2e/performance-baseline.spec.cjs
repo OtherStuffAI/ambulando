@@ -37,7 +37,7 @@ async function blockExternalRequests(page) {
 }
 
 async function waitForStore(page) {
-  await page.waitForFunction(() => Boolean(window.Alpine?.store?.('chat')));
+  await page.waitForFunction(() => window.Alpine?.store?.('chat')?.routeSyncPaused === false);
 }
 
 async function seedWorkspace(page, options = {}) {
