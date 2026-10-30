@@ -784,3 +784,11 @@ code, pre { font-family:var(--font-code); }
   .notification-inbox-panel { top:60px; right:0; left:0; width:auto; max-height:calc(100dvh - 60px); border-radius:0; }
   .notification-inbox-button, .notification-inbox-filter, .notification-inbox-actions button { min-height:44px; min-width:44px; }
 }
+
+/* Workspace authority inspection uses canonical identities even on narrow screens. */
+.access-member-npub { display: block; overflow-wrap: anywhere; white-space: normal; max-width: 100%; }
+.member-admin-panel { margin-top: 1rem; }
+.member-admin-panel details { margin: .75rem 0; }
+.member-admin-panel summary { cursor: pointer; font-weight: 600; }
+.member-admin-panel label { display: block; margin: .75rem 0; }
+.member-admin-panel .member-admin-confirm { display: flex; align-items: flex-start; gap: .5rem; }

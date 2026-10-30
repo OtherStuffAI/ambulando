@@ -5474,6 +5474,14 @@
       "notes": [
         "Edit previous messages in the thread composer with bot mentions while preserving unsent reply drafts and canonical signed revisions."
       ]
+    },
+    {
+      "buildNumber": 2679,
+      "label": "Workspace member administration",
+      "notes": [
+        "Inspect exact member identities and their effective workspace, scope and channel permissions.",
+        "Workspace owners can explicitly assign an agent-manager role or preview and confirm member removal while preserving authorship and audit history."
+      ]
     }
   ]
 }

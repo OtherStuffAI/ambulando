@@ -662,6 +662,19 @@ export async function updateTowerPgWorkspaceMemberProfile(workspaceId, actorId, 
   return json(resp, { requestUrl, method: 'PATCH', prefix: 'Tower PG API' });
 }
 
+async function workspaceMemberAdministration(workspaceId, actorId, action, method, body, { baseUrl = _baseUrl, appNpub = FLIGHT_DECK_PG_APP_NPUB } = {}) {
+  if (!String(workspaceId || '').trim() || !String(actorId || '').trim()) throw new Error('Workspace and actor ids are required');
+  const requestPath = `/api/v4/flightdeck-pg/workspaces/${encodeURIComponent(workspaceId)}/members/${encodeURIComponent(actorId)}/${action}`;
+  const requestUrl = resolveTowerPgUrl(requestPath, baseUrl);
+  const resp = await signedTowerPgFetch(requestPath, { method, body, baseUrl, appNpub });
+  return json(resp, { requestUrl, method, prefix: 'Tower PG API' });
+}
+
+export const getTowerPgWorkspaceMemberAccess = (workspaceId, actorId, options) => workspaceMemberAdministration(workspaceId, actorId, 'access', 'GET', undefined, options);
+export const previewTowerPgWorkspaceMemberRemoval = (workspaceId, actorId, options) => workspaceMemberAdministration(workspaceId, actorId, 'removal-preview', 'POST', {}, options);
+export const removeTowerPgWorkspaceMember = (workspaceId, actorId, body, options) => workspaceMemberAdministration(workspaceId, actorId, 'remove', 'POST', body, options);
+export const setTowerPgWorkspaceAgentManager = (workspaceId, actorId, body, options) => workspaceMemberAdministration(workspaceId, actorId, 'agent-manager', 'PUT', body, options);
+
 export async function getTowerPgWorkspaceDescriptor(workspaceId, { baseUrl = _baseUrl, appNpub = FLIGHT_DECK_PG_APP_NPUB, path = null } = {}) {
   const encodedWorkspaceId = encodeURIComponent(String(workspaceId || '').trim());
   if (!encodedWorkspaceId && !path) throw new Error('Tower PG workspace id is required');

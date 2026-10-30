@@ -1612,7 +1612,7 @@ export const channelsManagerMixin = {
     const query = String(this.pgWorkspaceMemberQuery || '').trim().toLowerCase();
     return (this.pgWorkspaceMembers || [])
       .filter((member) => member?.npub)
-      .map((member) => ({ member, label: member.display_name || this.getSenderName(member.npub) || member.npub }))
+      .map((member) => ({ member, label: this.getPgWorkspaceMemberLabel(member) }))
       .filter(({ member, label }) => !query
         || String(label || '').toLowerCase().includes(query)
         || String(member.npub || '').toLowerCase().includes(query)
@@ -4339,7 +4339,8 @@ export const channelsManagerMixin = {
       ? memberOrNpub
       : String(memberOrNpub?.npub || '').trim();
     if (!npub) return 'Unknown member';
-    return this.getSenderName(npub) || npub;
+    const member = typeof memberOrNpub === 'string' ? (this.pgWorkspaceMembers || []).find((entry) => entry.npub === npub) : memberOrNpub;
+    return String(member?.display_name || '').trim() || npub;
   },
 
   getPgWorkspaceMemberActorId(npub) {

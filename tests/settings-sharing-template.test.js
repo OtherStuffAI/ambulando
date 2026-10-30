@@ -33,7 +33,7 @@ describe('settings sharing template', () => {
     expect(html).toContain('group.effective_member_npubs');
     expect(html).toContain('@click="$store.chat.startPgWorkspaceMemberProfileEdit(member)"');
     expect(html).toContain('@submit.prevent="$store.chat.savePgWorkspaceMemberProfile(member)"');
-    expect(html).toContain('x-text="$store.chat.getShortNpub(member.npub)"');
+    expect(html).toContain('class="access-member-npub" x-text="member.npub"');
     expect(html).toContain('$store.chat.getPgWorkspaceMemberGroupNames(member.npub)');
   });
 });

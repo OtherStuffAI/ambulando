@@ -952,7 +952,7 @@ describe('channels-manager pure utilities', () => {
     expect(store.newChannelAccessPrincipalOptions).toEqual(expect.arrayContaining([
       expect.objectContaining({
         value: 'actor:actor-owner',
-        label: 'Owner',
+        label: 'npub1owner',
       }),
     ]));
   });
@@ -2801,7 +2801,7 @@ describe('channels-manager pure utilities', () => {
 
       expect(store.getPgGroupMemberCandidates('group-1')).toEqual([{
         npub: 'npub1newmember',
-        label: 'New Member',
+        label: 'npub1newmember',
         role: 'member',
       }]);
     });

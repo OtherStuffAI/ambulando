@@ -44,6 +44,8 @@ export const updateTowerPgPersonalAgentSettings = (store, ...args) => issueTyped
 export const deleteTowerPgWorkspace = (store, ...args) => issueTypedApi(store, 'workspace.delete', args, args[0]);
 export const createTowerPgAdminWorkspace = (store, ...args) => issueTypedApi(store, 'workspace.bootstrap', args, args[0]?.workspace_id || args[0]?.client_record_id);
 export const createTowerPgWorkspaceMember = (store, ...args) => issueTypedApi(store, 'workspace-member.create', args, args[1]?.user_npub || args[1]?.npub);
+export const removeTowerPgWorkspaceMember = (store, ...args) => issueTypedApi(store, 'workspace-member.remove', args, args[1], crypto.randomUUID());
+export const setTowerPgWorkspaceAgentManager = (store, ...args) => issueTypedApi(store, 'workspace-member.agent-manager.set', args, args[1], crypto.randomUUID());
 export const updateTowerPgWorkspaceMemberProfile = (store, ...args) => issueTypedApi(store, 'workspace-member.profile.update', args, args[1]);
 export const createTowerPgWorkspaceGroup = (store, ...args) => issueTypedApi(store, 'workspace-group.create', args, args[1]?.client_record_id || args[1]?.group_id);
 export const addTowerPgWorkspaceGroupMember = (store, ...args) => issueTypedApi(store, 'workspace-group-member.add', args, `${args[1]}:${args[2]?.actor_id || args[2]?.member_npub || ''}`);

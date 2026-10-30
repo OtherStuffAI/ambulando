@@ -9847,25 +9847,25 @@
               <ul class="access-member-list" aria-label="Workspace members" x-show="$store.chat.filteredPgWorkspaceMembers.length > 0">
                 <template x-for="member in $store.chat.filteredPgWorkspaceMembers" :key="member.actor_id || member.npub">
                   <li class="access-member-row" x-init="$store.chat.resolveChatProfile(member.npub)">
-                    <button type="button" class="identity-avatar-button" @click.stop="$store.chat.openIdentityCard($event, member.npub)" :aria-label="`Open profile for ${member.display_name || $store.chat.getSenderName(member.npub)}`">
+                    <button type="button" class="identity-avatar-button" @click.stop="$store.chat.openIdentityCard($event, member.npub)" :aria-label="`Open profile for ${$store.chat.getPgWorkspaceMemberLabel(member)}`">
                       <template x-if="$store.chat.getSenderAvatar(member.npub)">
                         <img class="group-member-avatar" :src="$store.chat.getSenderAvatar(member.npub)" alt="" @error="$store.chat.handleAvatarImageError($event)" />
                       </template>
                       <template x-if="!$store.chat.getSenderAvatar(member.npub)">
-                        <span class="group-member-avatar group-member-avatar-fallback" x-text="$store.chat.getInitials(member.display_name || $store.chat.getSenderName(member.npub))"></span>
+                        <span class="group-member-avatar group-member-avatar-fallback" x-text="$store.chat.getInitials($store.chat.getPgWorkspaceMemberLabel(member))"></span>
                       </template>
                     </button>
                     <div class="access-member-main">
                       <template x-if="$store.chat.pgWorkspaceMemberProfileEditingActorId !== (member.actor_id || member.id)">
                         <div>
                           <div class="access-member-identity">
-                            <span class="access-member-name" x-text="member.display_name || $store.chat.getSenderName(member.npub)"></span>
+                            <span class="access-member-name" x-text="$store.chat.getPgWorkspaceMemberLabel(member)"></span>
                             <span class="access-badge access-badge-info" x-show="(member.actor_id || member.id) === $store.chat.currentPgActorId">You</span>
                             <span class="access-badge access-badge-strong" x-show="member.role && member.role !== 'member'" x-text="String(member.role || '').charAt(0).toUpperCase() + String(member.role || '').slice(1)"></span>
                             <span class="access-badge" x-show="member.kind === 'agent'">Agent</span>
                           </div>
                           <div class="access-member-meta">
-                            <code :title="member.npub" x-show="(member.display_name || $store.chat.getSenderName(member.npub)) !== $store.chat.getShortNpub(member.npub)" x-text="$store.chat.getShortNpub(member.npub)"></code>
+                            <code class="access-member-npub" x-text="member.npub"></code>
                             <span x-text="$store.chat.getPgWorkspaceMemberGroupNames(member.npub).length ? 'Groups: ' + $store.chat.getPgWorkspaceMemberGroupNames(member.npub).join(', ') : 'Not in any group'"></span>
                           </div>
                         </div>
@@ -9879,13 +9879,56 @@
                         </form>
                       </template>
                     </div>
+                    <button type="button" class="btn-secondary btn-compact" @click="$store.chat.openPgMemberAdmin(member)" :disabled="$store.chat.pgMemberAdminBusy">Inspect access</button>
                     <button type="button" class="btn-secondary btn-compact access-row-action"
                       x-show="$store.chat.pgWorkspaceMemberProfileEditingActorId !== (member.actor_id || member.id) && $store.chat.canEditPgWorkspaceMemberProfile(member)"
-                      :aria-label="`Rename ${member.display_name || $store.chat.getSenderName(member.npub)}`"
+                      :aria-label="`Rename ${$store.chat.getPgWorkspaceMemberLabel(member)}`"
                       @click="$store.chat.startPgWorkspaceMemberProfileEdit(member)">Rename</button>
                   </li>
                 </template>
               </ul>
+              <section class="access-card member-admin-panel" x-show="$store.chat.pgMemberAdminVisible" x-cloak aria-label="Workspace member access" data-testid="workspace-member-admin">
+                <div class="access-panel-header"><h3>Workspace member access</h3><button type="button" class="btn-secondary" @click="$store.chat.closePgMemberAdmin()" :disabled="$store.chat.pgMemberAdminBusy">Close</button></div>
+                <p><strong x-text="$store.chat.pgMemberAdmin?.actor?.display_name || $store.chat.pgMemberAdmin?.actor?.npub"></strong></p>
+                <code class="access-member-npub" x-text="$store.chat.pgMemberAdmin?.actor?.npub"></code>
+                <p role="status" x-show="$store.chat.pgMemberAdminBusy">Checking Tower…</p>
+                <p class="access-alert access-alert-error" role="alert" x-show="$store.chat.pgMemberAdminError" x-text="$store.chat.pgMemberAdminError"></p>
+                <template x-if="$store.chat.pgMemberAdmin?.access">
+                  <div>
+                    <p x-text="$store.chat.pgMemberAdmin.access.agent_manager ? 'Workspace agent-manager: enabled. Covers existing and future scopes and channels.' : 'Workspace agent-manager: not assigned. Existing direct and group permissions apply.'"></p>
+                    <p>Permissions below are evaluated by Tower for this exact identity. A missing permission is shown as denied.</p>
+                    <details open><summary>Workspace permissions</summary><ul><template x-for="entry in ($store.chat.pgMemberAdmin.access.coverage?.workspace || [])" :key="entry.permission"><li><code x-text="entry.permission"></code>: <strong x-text="entry.allowed ? 'Allowed' : 'Denied'"></strong></li></template></ul></details>
+                    <details><summary x-text="`Scopes (${$store.chat.pgMemberAdmin.access.coverage?.scopes?.length || 0})`"></summary><template x-for="scope in ($store.chat.pgMemberAdmin.access.coverage?.scopes || [])" :key="scope.id"><div><h4 x-text="scope.name || scope.id"></h4><small x-text="scope.id"></small><ul><template x-for="entry in scope.permissions" :key="entry.permission"><li><code x-text="entry.permission"></code>: <strong x-text="entry.allowed ? 'Allowed' : 'Denied'"></strong></li></template></ul></div></template></details>
+                    <details><summary x-text="`Channels (${$store.chat.pgMemberAdmin.access.coverage?.channels?.length || 0})`"></summary><template x-for="channel in ($store.chat.pgMemberAdmin.access.coverage?.channels || [])" :key="channel.id"><div><h4 x-text="channel.name || channel.id"></h4><small x-text="channel.id"></small><ul><template x-for="entry in channel.permissions" :key="entry.permission"><li><code x-text="entry.permission"></code>: <strong x-text="entry.allowed ? 'Allowed' : 'Denied'"></strong></li></template></ul></div></template></details>
+                    <p x-show="!$store.chat.pgMemberAdmin.access.can_administer">Only the workspace owner can administer this role and remove members.</p>
+                    <div x-show="$store.chat.pgMemberAdmin.access.can_administer">
+                      <div x-show="['human', 'agent'].includes($store.chat.pgMemberAdmin.actor.kind) && !$store.chat.pgMemberAdmin.preview">
+                        <h4>Workspace agent-manager</h4>
+                        <p>This explicit workspace role grants management and working access across all existing and future scopes and channels, including private channels. It does not grant global rights, organisation data, napplet, or personal daily-note access, and does not authorize assigning this role or removing members. Revoking it leaves separately granted access in place.</p>
+                        <label class="member-admin-confirm"><input type="checkbox" x-model="$store.chat.pgMemberAdminRoleConfirmed" :disabled="$store.chat.pgMemberAdminBusy" /> I intend to change this exact member’s workspace-wide role.</label>
+                        <label>Type the member’s full npub<input class="new-group-input access-member-npub" type="text" autocomplete="off" x-model="$store.chat.pgMemberAdminConfirmNpub" :disabled="$store.chat.pgMemberAdminBusy" /></label>
+                        <button type="button" class="btn-primary" @click="$store.chat.setPgMemberAgentManager(!$store.chat.pgMemberAdmin.access.agent_manager)" :disabled="$store.chat.pgMemberAdminBusy || !$store.chat.pgMemberAdminRoleConfirmed || $store.chat.pgMemberAdminConfirmNpub !== $store.chat.pgMemberAdmin.actor.npub" x-text="$store.chat.pgMemberAdmin.access.agent_manager ? 'Revoke agent-manager role' : 'Assign agent-manager role'"></button>
+                      </div>
+                      <h4>Remove from workspace</h4>
+                      <p>Preview the affected access before confirming. Historical records and authorship remain; other workspaces are unaffected.</p>
+                      <button type="button" class="btn-secondary" @click="$store.chat.previewPgMemberRemoval()" :disabled="$store.chat.pgMemberAdminBusy">Preview removal</button>
+                      <template x-if="$store.chat.pgMemberAdmin.preview">
+                        <div>
+                          <p class="access-alert access-alert-error" x-show="$store.chat.pgMemberAdmin.preview.blocked_reason" x-text="$store.chat.getPgMemberRemovalBlockedMessage($store.chat.pgMemberAdmin.preview.blocked_reason)"></p>
+                          <p x-text="`Direct grants: ${$store.chat.pgMemberAdmin.preview.direct_grants?.length || 0}; group memberships: ${$store.chat.pgMemberAdmin.preview.groups?.length || 0}; agent-manager: ${$store.chat.pgMemberAdmin.preview.agent_manager ? 'enabled' : 'not assigned'}.`"></p>
+                          <ul><template x-for="group in ($store.chat.pgMemberAdmin.preview.groups || [])" :key="group.id || group.group_id"><li x-text="group.name || group.id || group.group_id"></li></template></ul>
+                          <ul><template x-for="grant in ($store.chat.pgMemberAdmin.preview.direct_grants || [])" :key="grant.id"><li><code x-text="grant.permission"></code> <span x-text="grant.resource_channel_id || grant.resource_scope_id || 'Workspace'"></span></li></template></ul>
+                          <details><summary x-text="`Inherited group grants (${$store.chat.pgMemberAdmin.preview.inherited_grants?.length || 0})`"></summary><ul><template x-for="grant in ($store.chat.pgMemberAdmin.preview.inherited_grants || [])" :key="grant.id"><li><code x-text="grant.permission"></code> <span x-text="grant.resource_channel_id || grant.resource_scope_id || 'Workspace'"></span></li></template></ul></details>
+                          <p x-text="`Subscription authority links to revoke: ${$store.chat.pgMemberAdmin.preview.subscriptions?.length || 0}.`"></p>
+                          <ul><template x-for="consequence in ($store.chat.pgMemberAdmin.preview.consequences || [])" :key="consequence"><li x-text="consequence"></li></template></ul>
+                          <label>Type this member’s full npub to confirm removal<input class="new-group-input access-member-npub" type="text" autocomplete="off" x-model="$store.chat.pgMemberAdminConfirmNpub" :disabled="$store.chat.pgMemberAdminBusy" /></label>
+                          <button type="button" class="btn-danger" @click="$store.chat.confirmPgMemberRemoval()" :disabled="$store.chat.pgMemberAdminBusy || !!$store.chat.pgMemberAdmin.preview.blocked_reason || !$store.chat.pgMemberAdmin.preview.confirmation_token || $store.chat.pgMemberAdminConfirmNpub !== $store.chat.pgMemberAdmin.actor.npub">Confirm remove from workspace</button>
+                        </div>
+                      </template>
+                    </div>
+                  </div>
+                </template>
+              </section>
             </section>
 
             <!-- Groups -->

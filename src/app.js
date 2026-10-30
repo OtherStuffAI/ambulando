@@ -58,6 +58,7 @@ import {
 } from './docs-table.js';
 import { scopeAccessManagerMixin } from './scope-access-manager.js';
 import { scopesManagerMixin } from './scopes-manager.js';
+import { workspaceMemberAdminMixin } from './workspace-member-admin.js';
 import { channelsManagerMixin } from './channels-manager.js';
 import { audioRecordingManagerMixin } from './audio-recording-manager.js';
 import { storageImageManagerMixin } from './storage-image-manager.js';
@@ -1374,6 +1375,11 @@ export function initApp() {
     shareInviteError: null,
     shareInviteCopied: false,
     pgWorkspaceMembers: [],
+    pgMemberAdmin: null,
+    pgMemberAdminBusy: false,
+    pgMemberAdminError: '',
+    pgMemberAdminConfirmNpub: '',
+    pgMemberAdminRoleConfirmed: false,
     pgWorkspaceMemberProfileEditingActorId: '',
     pgWorkspaceMemberProfileDraft: '',
     pgWorkspaceMemberProfileSaving: false,
@@ -10710,6 +10716,7 @@ export function initApp() {
     workspaceSelfIndexManagerMixin,
     onboardingAnnouncementsManagerMixin,
     channelsManagerMixin,
+    workspaceMemberAdminMixin,
     scopesManagerMixin,
     scopeAccessManagerMixin,
     docsManagerMixin,
