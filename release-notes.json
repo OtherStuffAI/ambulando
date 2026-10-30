@@ -5496,6 +5496,14 @@
       "notes": [
         "Documents open in View unless you explicitly choose Edit in your personal settings. Your choice is saved for your user in this browser across workspaces."
       ]
+    },
+    {
+      "buildNumber": 2682,
+      "label": "Document checkout override and autosave recovery",
+      "notes": [
+        "Take over document editing from another writer or device when you have write access, preserving drafts and loading the latest saved content.",
+        "Temporary connection or server failures renewing document edit access no longer disable editing and autosave. Active edited documents continue to autosave every 15 seconds."
+      ]
     }
   ]
 }

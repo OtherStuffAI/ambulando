@@ -307,6 +307,62 @@ describe('document device authority', () => {
     expect(api.acquireTowerPgEditLease).toHaveBeenCalledTimes(1);
   });
 
+  it.each([undefined, 503, 408, 429])('retries a temporary renewal failure (%s) without disabling document autosave', async (status) => {
+    const api = await import('../src/api.js');
+    api.renewTowerPgEditLease.mockReset()
+      .mockRejectedValueOnce(status ? Object.assign(new Error('temporary outage'), { status })
+        : new Error('request failed', { cause: new TypeError('Failed to fetch') }))
+      .mockResolvedValueOnce({ lease: { id: 'held', lease_token: 'token', expires_at: 'later' } });
+    const target = store({ selectedDocId: record.record_id, docEditAccessState: 'editing', docEditDraftDirty: true,
+      persistSelectedDocDraft: vi.fn().mockResolvedValue(true), cancelDocAutosave: vi.fn(),
+      docRichEditorAdapter: { setEditable: vi.fn() },
+      pgEditLeaseSessions: { 'document:doc-devices': { editorSessionId: 'this-editor', lease: { id: 'held', lease_token: 'token' } } } });
+    let tick;
+    const clearInterval = vi.fn();
+    startPgEditLeaseRenewal(target, record, 'document', { setInterval: (callback) => { tick = callback; return 'timer'; }, clearInterval });
+    await tick();
+    expect(target.docEditAccessState).toBe('editing');
+    expect(target.pgEditLeaseSessions['document:doc-devices'].lease.lease_token).toBe('token');
+    expect(target.persistSelectedDocDraft).toHaveBeenCalledWith({ immediate: true });
+    expect(target.cancelDocAutosave).not.toHaveBeenCalled();
+    expect(target.docRichEditorAdapter.setEditable).not.toHaveBeenCalled();
+    expect(clearInterval).not.toHaveBeenCalled();
+    await tick();
+    expect(api.renewTowerPgEditLease).toHaveBeenCalledTimes(2);
+    expect(target.pgEditLeaseSessions['document:doc-devices'].lease.expires_at).toBe('later');
+  });
+
+  it('reports local checkpoint failure during a temporary outage without an unhandled rejection', async () => {
+    const api = await import('../src/api.js');
+    api.renewTowerPgEditLease.mockReset().mockRejectedValueOnce(Object.assign(new Error('temporary outage'), { status: 503 }));
+    const target = store({ selectedDocId: record.record_id, docEditAccessState: 'editing',
+      persistSelectedDocDraft: vi.fn().mockRejectedValue(new Error('storage full')),
+      pgEditLeaseSessions: { 'document:doc-devices': { editorSessionId: 'this-editor', lease: { id: 'held', lease_token: 'token' } } } });
+    let tick;
+    startPgEditLeaseRenewal(target, record, 'document', { setInterval: (callback) => { tick = callback; return 'timer'; } });
+    await expect(tick()).resolves.toBeUndefined();
+    expect(target.docEditAccessState).toBe('editing');
+    expect(target.docEditAccessMessage).toBe('Local draft could not be saved: storage full');
+  });
+
+  it.each([403, 409, undefined])('stops editing on authority rejection or an unclassified failure (%s)', async (status) => {
+    const api = await import('../src/api.js');
+    api.renewTowerPgEditLease.mockReset().mockRejectedValueOnce(Object.assign(new Error('authority lost'), { status }));
+    const target = store({ selectedDocId: record.record_id, docEditAccessState: 'editing', docEditDraftDirty: true,
+      persistSelectedDocDraft: vi.fn().mockResolvedValue(true), cancelDocAutosave: vi.fn(),
+      docRichEditorAdapter: { setEditable: vi.fn() },
+      pgEditLeaseSessions: { 'document:doc-devices': { editorSessionId: 'this-editor', lease: { id: 'held', lease_token: 'token' } } } });
+    let tick;
+    const clearInterval = vi.fn();
+    startPgEditLeaseRenewal(target, record, 'document', { setInterval: (callback) => { tick = callback; return 'timer'; }, clearInterval });
+    await tick();
+    expect(target.docEditAccessState).toBe('blocked');
+    expect(target.pgEditLeaseSessions['document:doc-devices'].lease).toBeNull();
+    expect(target.persistSelectedDocDraft).toHaveBeenCalledWith({ immediate: true });
+    expect(target.cancelDocAutosave).toHaveBeenCalled();
+    expect(clearInterval).toHaveBeenCalledWith('timer');
+  });
+
   it('does not let an old renewal resurrect authority after replacement', async () => {
     const api = await import('../src/api.js');
     let finish;

@@ -2187,7 +2187,7 @@ export const docsManagerMixin = {
     const lease = this.docEditLeaseInfo || session?.blockedLease || session?.inspectedLease;
     return isTowerPgBackendMode() && isSyncedPgRecord(item) && isOnlineForPgEdit()
       && !this.docTakeoverInFlight && this.docEditAccessState !== 'acquiring' && session?.documentProtocolSupported === true
-      && Boolean(lease?.id) && lease.holder_actor_npub === this.session?.npub;
+      && Boolean(lease?.id);
   },
 
   async preserveSelectedDocBeforeTakeover(item, options = {}) {

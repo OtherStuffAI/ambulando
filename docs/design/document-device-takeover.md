@@ -15,8 +15,8 @@ The session identity survives hidden/visible changes, renewal failure and retry.
 Actual document navigation starts another visit. Origin, workspace, app and actor
 boundaries prevent reuse of a token or late command acknowledgement.
 
-The explicit **Take over editing on this device** action applies only to a lease
-held by the same actor. It freezes the editor, waits for any existing save, and
+The explicit **Take over editing** action can replace a lease held by another
+actor or device. Tower requires the requesting actor to have document write access. It freezes the editor, waits for any existing save, and
 preserves a divergent local draft through Tower's existing non-head recovery
 save (`base_available: false`). Only an acknowledged recovery permits takeover.
 The request includes `takeover: true`, the observed `expected_lease_id` and a new
@@ -31,7 +31,9 @@ An unsuccessful load leaves the previous draft and its recovery intact. Older
 Tower versions keep normal editing available and expose no takeover action.
 
 Renewal and release responses cannot restore or clear a replacement session's
-token. A lost lease stops autosave and preserves the local draft. A superseded
+token. Temporary transport, rate-limit and server renewal failures preserve the
+current token and retry at the next renewal; every save still validates authority
+with Tower. An explicit authority rejection stops autosave and preserves the local draft. A superseded
 session stays blocked until explicit takeover or a new document visit. Task and
 scope lease behavior is unchanged.
 

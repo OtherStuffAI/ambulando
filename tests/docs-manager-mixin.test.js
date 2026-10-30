@@ -5041,6 +5041,18 @@ describe('explicit document device takeover', () => {
     return state;
   }
 
+  it('offers explicit takeover of another writer without bypassing protocol or offline checks', () => {
+    const { store, record } = takeoverStore();
+    store.docEditLeaseInfo.holder_actor_npub = 'npub1another-writer';
+    expect(store.canTakeOverSelectedDocEditing()).toBe(true);
+    store.pgEditLeaseSessions[`document:${record.record_id}`].documentProtocolSupported = false;
+    expect(store.canTakeOverSelectedDocEditing()).toBe(false);
+    store.pgEditLeaseSessions[`document:${record.record_id}`].documentProtocolSupported = true;
+    vi.stubGlobal('navigator', { onLine: false });
+    try { expect(store.canTakeOverSelectedDocEditing()).toBe(false); }
+    finally { vi.unstubAllGlobals(); }
+  });
+
   it('preserves divergent content as a separate recovery before taking over and loading remote title/body/base', async () => {
     const { store, record, adapter } = takeoverStore();
     const order = [];

@@ -294,6 +294,24 @@ export function startPgEditLeaseRenewal(store, record, entityType, options = {})
     } catch (error) {
       const latest = getPgEditLeaseSession(store, entityType, record.record_id);
       if (latest?.lease?.lease_token !== current.lease.lease_token || latest?.editorSessionId !== current.editorSessionId) return;
+      // A transport failure does not prove that Tower revoked this lease.
+      // Keep its identity and retry; canonical saves still validate the token.
+      const status = Number(error?.status || 0);
+      const transportError = error?.cause || error;
+      const temporaryTransport = !status && (transportError instanceof TypeError
+        || ['NetworkError', 'TimeoutError', 'AbortError'].includes(transportError?.name));
+      if (entityType === 'document' && (temporaryTransport || status >= 500 || status === 408 || status === 429)) {
+        if (store?.selectedDocId === record.record_id) {
+          try { await store.persistSelectedDocDraft?.({ immediate: true }); }
+          catch (draftError) {
+            if (store.selectedDocId === record.record_id
+              && getPgEditLeaseSession(store, entityType, record.record_id)?.lease?.lease_token === current.lease.lease_token) {
+              store.docEditAccessMessage = `Local draft could not be saved: ${draftError?.message || draftError}`;
+            }
+          }
+        }
+        return;
+      }
       const message = error?.userMessage || error?.message || 'Unable to renew Tower PG edit lease.';
       setPgEditLeaseSession(store, entityType, record.record_id, {
         acquireState: 'blocked',
