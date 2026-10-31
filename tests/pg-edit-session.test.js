@@ -94,7 +94,7 @@ describe('PG edit sessions', () => {
     const second = acquirePgEditLeaseForRecord(target, record, 'document');
     await Promise.resolve();
 
-    expect(api.acquireTowerPgEditLease).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => expect(api.acquireTowerPgEditLease).toHaveBeenCalledTimes(1));
     resolveAcquire({ lease: { id: 'lease-race', lease_token: 'token-race' } });
     await expect(Promise.all([first, second])).resolves.toEqual([
       { id: 'lease-race', lease_token: 'token-race' },
@@ -426,4 +426,86 @@ describe('document lease connection identity', () => {
     expect(await pending).toBeNull();
     expect(target.pgEditLeaseSessions['document:same-uuid'].inspectedLease.id).toBe('second');
   });
+});
+
+describe('concurrent document capability negotiation', () => {
+  const record = { record_id: 'concurrent-document', pg_backend: true, sync_status: 'synced' };
+  const protocol = 'document_concurrent_edit_v1';
+
+  it('selects advertised concurrent sessions and validates matching acquire and renew echoes', async () => {
+    const api = await import('../src/api.js');
+    api.getTowerPgEditLease.mockResolvedValueOnce({ document_edit_protocol: DOCUMENT_EDIT_PROTOCOL, document_edit_protocols: [DOCUMENT_EDIT_PROTOCOL, protocol] });
+    api.acquireTowerPgEditLease.mockImplementationOnce(async (_workspace, body) => ({ document_edit_protocol: protocol,
+      lease: { id: 'concurrent-lease', lease_token: 'concurrent-token', editor_session_id: body.editor_session_id } }));
+    const target = store();
+    const lease = await acquirePgEditLeaseForRecord(target, record, 'document');
+    expect(api.acquireTowerPgEditLease.mock.lastCall[1]).toMatchObject({ document_edit_protocol: protocol, editor_session_id: expect.any(String) });
+    expect(target.pgEditLeaseSessions['document:concurrent-document'].documentProtocol).toBe(protocol);
+    api.renewTowerPgEditLease.mockResolvedValueOnce({ document_edit_protocol: protocol, lease });
+    expect(await renewPgEditLeaseForRecord(target, record, 'document')).toEqual(lease);
+    api.renewTowerPgEditLease.mockResolvedValueOnce({ document_edit_protocol: DOCUMENT_EDIT_PROTOCOL, lease });
+    await expect(renewPgEditLeaseForRecord(target, record, 'document')).rejects.toMatchObject({ code: 'document_edit_protocol_mismatch' });
+  });
+
+  it('rejects silent downgrade and releases an unconfirmed acquire token', async () => {
+    const api = await import('../src/api.js');
+    api.getTowerPgEditLease.mockResolvedValueOnce({ document_edit_protocols: [protocol] });
+    api.acquireTowerPgEditLease.mockImplementationOnce(async (_workspace, body) => ({ document_edit_protocol: DOCUMENT_EDIT_PROTOCOL,
+      lease: { id: 'wrong-mode', lease_token: 'wrong-token', editor_session_id: body.editor_session_id } }));
+    api.releaseTowerPgEditLease.mockResolvedValueOnce({ released: true });
+    const target = store();
+    await expect(acquirePgEditLeaseForRecord(target, record, 'document')).rejects.toThrow('did not confirm');
+    expect(target.pgEditLeaseSessions['document:concurrent-document'].lease).toBeNull();
+    expect(api.releaseTowerPgEditLease).toHaveBeenCalledWith('workspace-1', 'wrong-mode', { lease_token: 'wrong-token' }, expect.any(Object));
+  });
+
+  it('does not silently retry mixed-mode conflict with legacy acquisition', async () => {
+    const api = await import('../src/api.js');
+    api.getTowerPgEditLease.mockResolvedValueOnce({ document_edit_protocols: [protocol] });
+    api.acquireTowerPgEditLease.mockRejectedValueOnce(Object.assign(new Error('Exclusive lease remains active'), { status: 409, code: 'edit_lease_held' }));
+    const before = api.acquireTowerPgEditLease.mock.calls.length;
+    await expect(acquirePgEditLeaseForRecord(store(), record, 'document')).rejects.toMatchObject({ code: 'edit_lease_held' });
+    expect(api.acquireTowerPgEditLease.mock.calls.length).toBe(before + 1);
+    expect(api.acquireTowerPgEditLease.mock.lastCall[1].document_edit_protocol).toBe(protocol);
+  });
+});
+
+it('does not acquire a replacement visit after a delayed capability inspection', async () => {
+  const api = await import('../src/api.js');
+  let finish;
+  api.getTowerPgEditLease.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+  const target = store();
+  const record = { record_id: 'delayed-capability', pg_backend: true, sync_status: 'synced' };
+  const before = api.acquireTowerPgEditLease.mock.calls.length;
+  const acquiring = acquirePgEditLeaseForRecord(target, record, 'document');
+  const rejected = expect(acquiring).rejects.toMatchObject({ code: 'editor_visit_changed' });
+  await vi.waitFor(() => expect(finish).toBeTypeOf('function'));
+  setPgEditLeaseSession(target, 'document', record.record_id, { editorSessionId: 'replacement-visit' });
+  finish({ document_edit_protocols: ['document_concurrent_edit_v1'] });
+  await rejected;
+  expect(api.acquireTowerPgEditLease.mock.calls.length).toBe(before);
+});
+
+it.each([false, true])('never downgrades a previously concurrent editor after capability loss (held=%s)', async held => {
+  const api = await import('../src/api.js');
+  const record = { record_id: 'sticky-capability', pg_backend: true, sync_status: 'synced' };
+  const target = store();
+  setPgEditLeaseSession(target, 'document', record.record_id, { editorSessionId: 'same-visit',
+    documentProtocol: 'document_concurrent_edit_v1', documentConcurrentSupported: false, inspectionState: 'ready',
+    lease: held ? { id: 'held', lease_token: 'held-token' } : null });
+  const before = api.acquireTowerPgEditLease.mock.calls.length;
+  await expect(acquirePgEditLeaseForRecord(target, record, 'document')).rejects.toMatchObject({ code: 'document_edit_protocol_mismatch' });
+  expect(api.acquireTowerPgEditLease.mock.calls.length).toBe(before);
+});
+
+it('preserves a concurrent editor and refuses acquisition after capability inspection fails', async () => {
+  const api = await import('../src/api.js');
+  const record = { record_id: 'sticky-inspection', pg_backend: true, sync_status: 'synced' };
+  const target = store();
+  setPgEditLeaseSession(target, 'document', record.record_id, { editorSessionId: 'same-visit',
+    documentProtocol: 'document_concurrent_edit_v1', documentConcurrentSupported: true, inspectionState: 'unknown', lease: null });
+  const before = api.acquireTowerPgEditLease.mock.calls.length;
+  await expect(acquirePgEditLeaseForRecord(target, record, 'document')).rejects.toMatchObject({ code: 'document_edit_protocol_mismatch' });
+  expect(api.acquireTowerPgEditLease.mock.calls.length).toBe(before);
+  expect(target.pgEditLeaseSessions['document:sticky-inspection'].editorSessionId).toBe('same-visit');
 });

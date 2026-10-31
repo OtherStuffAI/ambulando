@@ -5556,6 +5556,43 @@
                   </div>
                 </div>
 
+                <details class="doc-version-review" x-show="$store.chat.docPreservedCopies.length" x-cloak>
+                  <summary>Previously replaced drafts on this device</summary>
+                  <template x-for="copy in $store.chat.docPreservedCopies" :key="copy.preserved_id"><div><strong x-text="copy.title"></strong><p x-text="`Draft from v${copy.base_row_version || 'unknown'} · preserved ${new Date(copy.preserved_at).toLocaleString()}`"></p><pre x-text="copy.content"></pre><button type="button" :disabled="$store.chat.docEditDraftDirty || $store.chat.docDraftChoice" @click="$store.chat.resumeSelectedDocPreservedCopy(copy)">Resume preserved draft</button><details x-show="copy.review_original"><summary>Original draft before merge</summary><pre x-text="copy.review_original?.content"></pre><button type="button" :disabled="$store.chat.docEditDraftDirty || $store.chat.docDraftChoice" @click="$store.chat.resumeSelectedDocPreservedCopy(copy.review_original)">Resume original draft</button></details></div></template>
+                </details>
+                <div class="doc-edit-access-banner doc-version-notice" x-show="$store.chat.docEditConflict" x-cloak role="status">
+                  <span>Newer version available — your draft is preserved.</span>
+                  <button type="button" class="btn-secondary" :disabled="$store.chat.docReviewBusy" @click="$store.chat.reviewSelectedDocChanges()">Review changes</button>
+                </div>
+                <section class="doc-version-review" x-show="$store.chat.docReview" x-cloak aria-label="Review document changes">
+                  <h3>Review changes</h3>
+                  <p x-text="`Your draft from v${$store.chat.docReview?.baseVersion || 'unknown'} compared with latest saved v${$store.chat.docReview?.head.version || 'unknown'}`"></p>
+                  <p>Removed text belongs to your draft; added text belongs to the latest saved version. Formatting changes are also checked during merge.</p>
+                  <div class="doc-review-copies">
+                    <div><h4>Your local draft</h4><strong x-text="$store.chat.docReview?.local.title"></strong><pre x-text="$store.chat.docReview?.local.content"></pre></div>
+                    <div><h4>Latest saved version</h4><strong x-text="$store.chat.docReview?.head.title"></strong><pre x-text="$store.chat.docReview?.head.content"></pre></div>
+                  </div>
+                  <pre class="doc-review-diff" aria-label="Local to latest diff"><template x-for="(part, index) in ($store.chat.docReview?.result.diff || [])" :key="index"><span :class="{ 'doc-diff-added': part.added, 'doc-diff-removed': part.removed }" x-text="(part.added ? '+ ' : part.removed ? '− ' : '  ') + part.value"></span></template></pre>
+                  <p x-show="$store.chat.docReview && !$store.chat.docReview.input.base">The common saved base is unavailable. Automatic merge is disabled; compare the copies manually. Your draft remains available to copy or edit.</p>
+                  <template x-for="conflict in ($store.chat.docReview?.result.conflicts || [])" :key="conflict.id">
+                    <fieldset class="doc-merge-conflict">
+                      <legend>Overlapping change — choose which to keep</legend>
+                      <div class="doc-review-copies"><div><strong>Your change</strong><pre x-text="$store.chat.describeDocMergeConflict(conflict.local)"></pre></div><div><strong>Latest change</strong><pre x-text="$store.chat.describeDocMergeConflict(conflict.latest)"></pre></div></div>
+                      <button type="button" :aria-pressed="conflict.choice === 'local'" :disabled="$store.chat.docReviewBusy" @click="$store.chat.resolveSelectedDocMerge(conflict.id, 'local')">Keep my change</button>
+                      <button type="button" :aria-pressed="conflict.choice === 'latest'" :disabled="$store.chat.docReviewBusy" @click="$store.chat.resolveSelectedDocMerge(conflict.id, 'latest')">Use latest change</button>
+                    </fieldset>
+                  </template>
+                  <p x-show="$store.chat.docReview?.input.base" x-text="`${$store.chat.docReview?.result.unresolved || 0} overlapping changes need a choice. Independent changes combine automatically. Review and edit the result before saving.`"></p>
+                  <label class="doc-review-confirm" x-show="$store.chat.docEditDraftDirty || $store.chat.docLocalDraft"><input type="checkbox" :checked="$store.chat.docReview?.confirmReplace" @change="if ($store.chat.docReview) $store.chat.docReview.confirmReplace = $event.target.checked"> Replace my unsaved draft with the latest saved version</label>
+                  <div class="doc-edit-access-actions">
+                    <button type="button" :disabled="$store.chat.docReviewBusy || (($store.chat.docEditDraftDirty || $store.chat.docLocalDraft) && !$store.chat.docReview?.confirmReplace)" @click="$store.chat.applySelectedDocReview('accept')">Accept latest</button>
+                    <button type="button" :disabled="$store.chat.docReviewBusy || !$store.chat.docReview?.input.base || $store.chat.docReview?.result.unresolved > 0" @click="$store.chat.applySelectedDocReview('merge')">Merge my changes — edit result</button>
+                    <button type="button" :disabled="$store.chat.docReviewBusy" @click="$store.chat.closeSelectedDocReview()">Keep editing / close review</button>
+                  </div>
+                  <template x-for="(previous, index) in $store.chat.docReviewPrevious" :key="index"><details><summary x-text="`Preserved earlier merge preview against v${previous.latestVersion}`"></summary><p x-show="previous.unresolved">This earlier preview still had unresolved overlaps.</p><strong x-text="previous.title"></strong><pre x-text="previous.content"></pre></details></template>
+                </section>
+                <div class="doc-edit-access-banner" x-show="$store.chat.docMergePending" x-cloak role="status">Merged draft ready. Edit the result below, then Save to publish. Automatic saving is paused until you save this result.</div>
+
                 <details
                   class="doc-edit-access-banner"
                   x-effect="$store.chat.selectedDocId; $el.open = false"

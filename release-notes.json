@@ -5511,6 +5511,14 @@
       "notes": [
         "Messages finishing after a workspace switch stay in their original workspace. Sending stops safely if workspace or identity changes while signing, and failed messages retain their original retry identity."
       ]
+    },
+    {
+      "buildNumber": 2684,
+      "label": "Review document changes without losing drafts",
+      "notes": [
+        "Keep your local document draft when another person or bot saves a newer version. Review the differences, accept latest with a preserved copy, or merge independent changes and resolve overlaps before saving.",
+        "Updated Towers support concurrent document editing sessions. Older Towers retain exclusive editing and preserve drafts for review."
+      ]
     }
   ]
 }

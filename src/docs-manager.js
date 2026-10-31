@@ -1,6 +1,7 @@
 import { CanvasReferenceCatalog, canvasChatSuggestions, parseCanvasChatReference } from './canvas/chat-references.js';
 import { hydrateCanvasList } from './canvas/sync-service.js';
 import { canvasContext, canvasPartition } from './canvas/projection.js';
+import { createDocumentReviewMixin } from './docs/document-review.js';
 import { decodeDocumentContent } from './docs/stored-content.js';
 import { restoreReferenceComposerDraft } from './internal-reference-navigation.js';
 import { visibleWikiIntegrityText } from './docs/editor/wiki-visible-text.js';
@@ -591,6 +592,7 @@ export function buildDocPrintHtml(title, bodyHtml) {
 // ---------------------------------------------------------------------------
 
 export const docsManagerMixin = {
+  ...createDocumentReviewMixin({ documentEditorBaseIdentity, documentContentSignature, isDocumentContentReadyForEditor }),
   getRecordCheckoutPolicyConfig(options = {}) {
     return options.checkoutPolicyConfig || this.recordCheckoutPolicyConfig || null;
   },
@@ -1136,10 +1138,15 @@ export const docsManagerMixin = {
   initDocEditLeaseLifecycle() {
     if (typeof window === 'undefined' || typeof document === 'undefined' || this.docEditLeaseLifecycleHandler) return;
     this.docEditLeaseLifecycleHandler = (event) => {
-      if (event?.type === 'visibilitychange' && document.visibilityState !== 'hidden') return;
+      if (event?.type === 'online' || event?.type === 'focus' || (event?.type === 'visibilitychange' && document.visibilityState !== 'hidden')) {
+        if (this.selectedDocId && isSyncedPgRecord(this.selectedDocument)) void this.checkSelectedDocLatest().catch(error => { this.docEditAccessMessage = `Your draft is preserved. ${error.message}`; });
+        return;
+      }
       this.handleDocEditLeaseLifecycleExit();
     };
     window.addEventListener('pagehide', this.docEditLeaseLifecycleHandler);
+    window.addEventListener('online', this.docEditLeaseLifecycleHandler);
+    window.addEventListener('focus', this.docEditLeaseLifecycleHandler);
     document.addEventListener('visibilitychange', this.docEditLeaseLifecycleHandler, { passive: true });
   },
 
@@ -1205,6 +1212,12 @@ export const docsManagerMixin = {
 
   loadDocEditorFromSelection(selectedItem = undefined) {
     const item = selectedItem === undefined ? this.selectedDocument : selectedItem;
+    this.docReview = null;
+    this.docReviewBusy = false;
+    this.docMergePending = false;
+    this.docLatestRemote = null;
+    this.docReviewPrevious = [];
+    this.docPreservedCopies = [];
     this.docShareQuery = '';
     this.docBacklinksOpen = false;
     this.destroyDocRichEditor?.();
@@ -1324,6 +1337,7 @@ export const docsManagerMixin = {
     this.docShareTargetId = '';
     this.scheduleDocCommentConnectorUpdate();
     this.scheduleStorageImageHydration();
+    void this.loadSelectedDocPreservedCopies().catch(error => { this.docEditAccessMessage = `Preserved drafts could not be read: ${error.message}`; });
     const restoreGeneration = Number(this.docEditAccessGeneration || 0);
     this.docDraftRestorePending = true;
     this.docDraftRestorePromise = this.restoreSelectedDocDraft(item, { generation: restoreGeneration }).finally(() => {
@@ -1352,10 +1366,14 @@ export const docsManagerMixin = {
         });
         if (options.isCurrent && !options.isCurrent()) return null;
         if (result?.doc?.id !== targetId || !result.canonical_version?.body_sha256_hex) return null;
-        return mapPgDocToLocal({ ...result.doc, canonical_version: result.canonical_version }, {
+        const row = mapPgDocToLocal({ ...result.doc, canonical_version: result.canonical_version }, {
           workspaceOwnerNpub: context.workspaceOwnerNpub,
         });
-      } catch {
+        const model = decodeStoredRecoveryContent(result);
+        if (options.requireComplete && !model) return null;
+        return model ? { ...row, ...model, content_storage_status: 'loaded' } : row;
+      } catch (error) {
+        if (options.throwError) throw error;
         return null;
       }
     }
@@ -1447,6 +1465,9 @@ export const docsManagerMixin = {
       editor_state_version: contentModel?.editor_state_version ?? null,
       needs_head_check: this.docNeedsHeadCheck === true || !isOnlineForPgEdit(),
       base_document: this.docSavedSnapshot || this.docLocalDraft?.base_document || (isDocumentContentReadyForEditor(item) ? toRaw(item) : null),
+      review_state: this.docReview ? toRaw(this.docReview) : (this.docLocalDraft?.review_state || null),
+      review_previous: toRaw(this.docReviewPrevious || this.docLocalDraft?.review_previous || []),
+      merge_pending: this.docMergePending === true,
       base_content_signature: this.docEditBaseContentSignature || null,
       base_available: this.docEditBaseAvailable === true,
       base_row_version: Number(this.docEditBaseRowVersion || 0) || null,
@@ -1581,6 +1602,8 @@ export const docsManagerMixin = {
       ? { ...draft, recovery_submission_signature: JSON.stringify([this.docEditorTitle, contentModel.content, documentContentSignature(contentModel)]) }
       : draft;
     this.docRecovery = draft.recovery || null;
+    this.docMergePending = draft.merge_pending === true;
+    this.docReviewPrevious = draft.review_previous || [];
     this.setSelectedDocBaseIdentity({
       ...(sameBase ? head : {}),
       base_available: recoveredBase ? true : draft.base_available,
@@ -1617,7 +1640,7 @@ export const docsManagerMixin = {
     if (this.docEditAccessState !== 'conflict') return false;
     this.docNeedsHeadCheck = false;
     this.docEditAccessState = 'recovery';
-    return this.saveSelectedDocItem({ autosave: false });
+    return this.saveSelectedDocItem({ autosave: false, preserveRecovery: true });
   },
 
   getPreservedDocDraft() {
@@ -1655,6 +1678,8 @@ export const docsManagerMixin = {
     this.docNeedsHeadCheck = true;
     try {
       this.cancelDocAutosave();
+      const latest = await this.checkSelectedDocLatest();
+      if (!current() || !latest || this.docEditConflict) return false;
       const acquired = await this.beginSelectedDocLeaseAcquisition({ reconnect: true });
       this.cancelDocAutosave();
       if (!current() || !acquired) return false;
@@ -2187,6 +2212,7 @@ export const docsManagerMixin = {
     const lease = this.docEditLeaseInfo || session?.blockedLease || session?.inspectedLease;
     return isTowerPgBackendMode() && isSyncedPgRecord(item) && isOnlineForPgEdit()
       && !this.docTakeoverInFlight && this.docEditAccessState !== 'acquiring' && session?.documentProtocolSupported === true
+      && session?.documentConcurrentSupported !== true
       && Boolean(lease?.id);
   },
 
@@ -2385,10 +2411,10 @@ export const docsManagerMixin = {
         currentHead: documentEditorBaseIdentity(item),
       };
       this.docEditAccessState = 'recovery';
-      this.docEditAccessMessage = 'The saved document has changed. Your editor remains available; the next save will preserve this draft separately.';
+      this.docEditAccessMessage = 'Newer version available — Review changes. Your draft is preserved.';
       this.docRichEditorAdapter?.setEditable?.(true);
       this.scheduleDocLocalDraftPersistence();
-      this.scheduleDocAutosave();
+      this.cancelDocAutosave();
       void releasePgEditLeaseForRecord(this, item, 'document', { reportError: false });
       return true;
     }
@@ -2436,6 +2462,8 @@ export const docsManagerMixin = {
       this.docEditBaseContentSignature = documentContentSignature(canonical);
       this.docEditConflict = null;
       this.docRecovery = null;
+      this.docMergePending = false;
+      this.docReviewPrevious = [];
       this.docEditDraftDirty = hasFollowupChanges;
     }
 
@@ -3644,6 +3672,7 @@ export const docsManagerMixin = {
   scheduleDocAutosave(options = {}) {
     this.scheduleDocLocalDraftPersistence();
     if (!this.docsEditorOpen) return;
+    if (this.docReview || this.docMergePending || this.docEditConflict) return;
     if (this.docEditorMode === 'rich' && ['loading', 'error'].includes(this.docRichEditorLoadState)) return;
     if (this.docEditorMode === 'preview') return;
     if (!isOnlineForPgEdit() || this.docNeedsHeadCheck || this.docReconnectCheck || this.docDraftChoice || this.docDraftReadSaved) return;
@@ -4903,13 +4932,13 @@ export const docsManagerMixin = {
     const submittedDraft = this.buildSelectedDocDraftRow({ item });
     await this.persistSelectedDocDraft({ row: submittedDraft });
     if (!stillSelected()) return null;
-    if (isSyncedPgRecord(item) && (!isOnlineForPgEdit() || (this.docNeedsHeadCheck && !options.checkedReconnect))) {
+    if (isSyncedPgRecord(item) && !isOnlineForPgEdit()) {
       this.docNeedsHeadCheck = true;
       this.docAutosaveState = 'device';
       this.docEditAccessState = 'offline';
       return null;
     }
-    if (this.docEditAccessState === 'conflict') return null;
+    if (this.docEditAccessState === 'conflict' && !options.preserveRecovery) return null;
     const roundTrip = validateDocumentContentModelRoundTrip(contentModel);
     if (!roundTrip.ok) {
       this.docAutosaveState = 'error';
@@ -4932,8 +4961,15 @@ export const docsManagerMixin = {
     if (!hasChanges) {
       this.docAutosaveState = 'saved';
       this.docEditDraftDirty = false;
+      this.docMergePending = false;
       await this.clearSelectedDocDraft(item);
       return item;
+    }
+    if (isSyncedPgRecord(item) && !options.preserveRecovery) {
+      if (options.autosave && (this.docMergePending || this.docReview || this.docEditConflict)) return null;
+      const latest = await this.checkSelectedDocLatest();
+      if (!stillSelected() || !latest || this.docEditConflict) return null;
+      if (Number(latest.version) !== Number(item.version)) return null;
     }
     const pgSession = getPgEditLeaseSession(this, 'document', item.record_id);
     const pgLeaseToken = pgSession?.lease?.lease_token;

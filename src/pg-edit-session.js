@@ -7,6 +7,7 @@ import {
 import { resolveTowerPgWorkspaceContext } from './pg-read-hydrator.js';
 
 export const DOCUMENT_EDIT_PROTOCOL = 'document_edit_session_v1';
+export const DOCUMENT_CONCURRENT_EDIT_PROTOCOL = 'document_concurrent_edit_v1';
 
 export const PG_SYNCED_OFFLINE_EDIT_MESSAGE = 'Reconnect to edit this synced Tower PG record.';
 export const PG_EDIT_CONFLICT_MESSAGE = 'Another actor is editing this Tower PG record. View mode until the lease is available.';
@@ -123,6 +124,8 @@ export async function inspectPgEditLeaseForRecord(store, record, entityType, opt
         inspectionState: 'ready',
         inspectedLease,
         documentProtocolSupported: entityType === 'document' && result?.document_edit_protocol === DOCUMENT_EDIT_PROTOCOL,
+        documentConcurrentSupported: entityType === 'document' && Array.isArray(result?.document_edit_protocols)
+          && result.document_edit_protocols.includes(DOCUMENT_CONCURRENT_EDIT_PROTOCOL),
       });
     } catch {
       if (!stillCurrent()) return null;
@@ -174,14 +177,39 @@ export async function acquirePgEditLeaseForRecord(store, record, entityType, opt
   const context = resolveTowerPgWorkspaceContext(store);
   const contextKey = documentSessionContextKey(store);
   const previous = getPgEditLeaseSession(store, entityType, recordId);
-  const existing = previous?.contextKey && previous.contextKey !== contextKey ? null : previous;
+  let existing = previous?.contextKey && previous.contextKey !== contextKey ? null : previous;
   const isDocument = entityType === 'document';
   if (isDocument && existing?.superseded && !options.takeover) {
     throw Object.assign(new Error('Editing continued on another device. Reopen the document or explicitly take over; this draft is preserved.'), { code: 'document_edit_session_superseded' });
   }
+  if (isDocument && existing?.documentProtocol === DOCUMENT_CONCURRENT_EDIT_PROTOCOL
+    && (existing?.documentConcurrentSupported !== true || existing?.inspectionState === 'unknown' || options.takeover)) {
+    throw Object.assign(new Error('Concurrent editing is no longer confirmed. Your draft is preserved; reconnect before saving.'), { code: 'document_edit_protocol_mismatch' });
+  }
   if (existing?.lease?.lease_token && !options.takeover) return existing.lease;
   if (options.takeover && (!isDocument || !existing?.documentProtocolSupported || !options.expectedLeaseId)) {
     throw new Error('This Tower has not confirmed safe device takeover support. Ordinary Save and local drafts remain available.');
+  }
+  if (isDocument && !options.takeover && !existing?.editorSessionId) {
+    existing = setPgEditLeaseSession(store, entityType, recordId, { editorSessionId: crypto.randomUUID(), contextKey });
+  }
+  if (isDocument && !options.takeover && existing?.inspectionState !== 'ready') {
+    const inspectedEditorSessionId = existing?.editorSessionId;
+    await inspectPgEditLeaseForRecord(store, record, entityType, options);
+    if (documentSessionContextKey(store) !== contextKey
+      || getPgEditLeaseSession(store, entityType, recordId)?.editorSessionId !== inspectedEditorSessionId) {
+      throw Object.assign(new Error('The editor changed while checking document capabilities.'), { code: 'editor_visit_changed' });
+    }
+    existing = getPgEditLeaseSession(store, entityType, recordId);
+  }
+  if (isDocument && existing?.documentProtocol === DOCUMENT_CONCURRENT_EDIT_PROTOCOL
+    && (existing?.documentConcurrentSupported !== true || existing?.inspectionState !== 'ready')) {
+    throw Object.assign(new Error('Concurrent editing could not be reconfirmed. Your draft is preserved; reconnect before saving.'), { code: 'document_edit_protocol_mismatch' });
+  }
+  const protocol = isDocument && !options.takeover && existing?.documentConcurrentSupported
+    ? DOCUMENT_CONCURRENT_EDIT_PROTOCOL : DOCUMENT_EDIT_PROTOCOL;
+  if (options.takeover && existing?.documentConcurrentSupported) {
+    throw new Error('Concurrent document editing does not use takeover. Your local draft is preserved.');
   }
   const editorSessionId = isDocument ? (options.takeover && !existing?.takeoverPending ? crypto.randomUUID() : existing?.editorSessionId || crypto.randomUUID()) : null;
   if (isDocument) setPgEditLeaseSession(store, entityType, recordId, { editorSessionId, contextKey, takeoverPending: options.takeover === true });
@@ -199,7 +227,7 @@ export async function acquirePgEditLeaseForRecord(store, record, entityType, opt
         entity_type: entityType,
         entity_id: recordId,
         ttl_seconds: options.ttlSeconds || 120,
-        ...(isDocument ? { document_edit_protocol: DOCUMENT_EDIT_PROTOCOL, editor_session_id: editorSessionId } : {}),
+        ...(isDocument ? { document_edit_protocol: protocol, editor_session_id: editorSessionId } : {}),
         ...(options.takeover ? { takeover: true, expected_lease_id: options.expectedLeaseId } : {}),
       }, {
         baseUrl: context.baseUrl,
@@ -209,16 +237,16 @@ export async function acquirePgEditLeaseForRecord(store, record, entityType, opt
         if (result?.lease?.id && result?.lease?.lease_token) await releaseTowerPgEditLease(context.workspaceId, result.lease.id, { lease_token: result.lease.lease_token }, { baseUrl: context.baseUrl, appNpub: context.appNpub }).catch(() => {});
         throw Object.assign(new Error('The editor visit changed while acquiring access.'), { code: 'editor_visit_changed' });
       }
-      const supported = result?.document_edit_protocol === DOCUMENT_EDIT_PROTOCOL
+      const supported = result?.document_edit_protocol === protocol
         && result?.lease?.editor_session_id === editorSessionId;
-      if (options.takeover && !supported) {
+      if ((options.takeover || protocol === DOCUMENT_CONCURRENT_EDIT_PROTOCOL) && !supported) {
         if (result?.lease?.id && result?.lease?.lease_token) {
           await releaseTowerPgEditLease(context.workspaceId, result.lease.id, { lease_token: result.lease.lease_token }, { baseUrl: context.baseUrl, appNpub: context.appNpub }).catch(() => {});
         }
-        throw new Error('Tower did not confirm safe takeover. Your local draft is preserved.');
+        throw new Error('Tower did not confirm the requested document editing protocol. Your local draft is preserved.');
       }
       setPgEditLeaseSession(store, entityType, recordId, {
-        ...(isDocument ? { documentProtocolSupported: supported, takeoverHead: options.takeover ? result.canonical_version : null, superseded: false, takeoverPending: false } : {}),
+        ...(isDocument ? { documentProtocolSupported: supported, documentProtocol: supported ? protocol : null, takeoverHead: options.takeover ? result.canonical_version : null, superseded: false, takeoverPending: false } : {}),
         acquireState: 'held',
         lease: result.lease || null,
         message: '',
@@ -264,6 +292,10 @@ export async function renewPgEditLeaseForRecord(store, record, entityType, optio
   });
   const current = getPgEditLeaseSession(store, entityType, recordId);
   if (current?.lease?.lease_token !== session.lease.lease_token || current?.editorSessionId !== session.editorSessionId) return null;
+  if (entityType === 'document' && session.documentProtocol === DOCUMENT_CONCURRENT_EDIT_PROTOCOL
+    && (result.document_edit_protocol !== DOCUMENT_CONCURRENT_EDIT_PROTOCOL || result.lease?.editor_session_id !== session.editorSessionId)) {
+    throw Object.assign(new Error('Tower did not confirm the concurrent document session. Your draft is preserved.'), { code: 'document_edit_protocol_mismatch' });
+  }
   setPgEditLeaseSession(store, entityType, recordId, { acquireState: 'held', lease: result.lease || session.lease });
   return result.lease || session.lease;
 }

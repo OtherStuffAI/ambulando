@@ -1094,13 +1094,39 @@ function queueDocumentDraftWrite(db, draftKey, operation) {
   return next;
 }
 
+// Accepted/replaced drafts share the existing local draft journal, but never
+// count as the current working draft. Ordinary clear/undo preserves this archive.
+export async function preserveDocumentDraftCopy(draft) {
+  const db = _currentWorkspaceDb;
+  const key = documentDraftKey(draft?.workspace_id, draft?.document_id);
+  if (!db || !key) throw new Error('Local draft storage is unavailable');
+  const copy = sanitizeForStorage({ ...draft, preserved_copies: undefined,
+    preserved_at: new Date().toISOString(), preserved_id: crypto.randomUUID() });
+  await queueDocumentDraftWrite(db, key, async () => {
+    const current = await db.document_drafts.get(key);
+    await db.document_drafts.put({ ...(current || draft), draft_key: key,
+      preserved_copies: [...(current?.preserved_copies || []), copy] });
+  });
+  return copy;
+}
+
+export async function getPreservedDocumentDraftCopies(workspaceId, documentId) {
+  const db = _currentWorkspaceDb;
+  const key = documentDraftKey(workspaceId, documentId);
+  if (!db || !key) return [];
+  while (documentDraftWrites.has(`${db.name}:${key}`)) await documentDraftWrites.get(`${db.name}:${key}`);
+  const row = await withDocumentDraftDb(db, () => db.document_drafts.get(key));
+  return row?.preserved_copies || [];
+}
+
 export async function getDocumentDraft(workspaceId, documentId) {
   const draftKey = documentDraftKey(workspaceId, documentId);
   const db = _currentWorkspaceDb;
   if (!draftKey || !db) return null;
   const key = `${db.name}:${draftKey}`;
   while (documentDraftWrites.has(key)) await documentDraftWrites.get(key);
-  return withDocumentDraftDb(db, () => db.document_drafts.get(draftKey));
+  const row = await withDocumentDraftDb(db, () => db.document_drafts.get(draftKey));
+  return row?.draft_status === 'archive' ? null : row;
 }
 
 export async function upsertDocumentDraft(draft = {}) {
@@ -1117,7 +1143,11 @@ export async function upsertDocumentDraft(draft = {}) {
   });
   const db = _currentWorkspaceDb;
   if (!db) return row;
-  await queueDocumentDraftWrite(db, draftKey, () => db.document_drafts.put(row));
+  await queueDocumentDraftWrite(db, draftKey, async () => {
+    const previous = await db.document_drafts.get(draftKey);
+    row.preserved_copies = previous?.preserved_copies || row.preserved_copies || [];
+    await db.document_drafts.put(row);
+  });
   return row;
 }
 
@@ -1169,7 +1199,13 @@ export async function deleteDocumentDraft(workspaceId, documentId) {
   const draftKey = documentDraftKey(workspaceId, documentId);
   const db = _currentWorkspaceDb;
   if (!draftKey || !db) return false;
-  await queueDocumentDraftWrite(db, draftKey, () => db.document_drafts.delete(draftKey));
+  await queueDocumentDraftWrite(db, draftKey, async () => {
+    const previous = await db.document_drafts.get(draftKey);
+    if (previous?.preserved_copies?.length) {
+      await db.document_drafts.put({ draft_key: draftKey, workspace_id: workspaceId, document_id: documentId,
+        draft_status: 'archive', preserved_copies: previous.preserved_copies, updated_at: new Date().toISOString() });
+    } else await db.document_drafts.delete(draftKey);
+  });
   return true;
 }
 

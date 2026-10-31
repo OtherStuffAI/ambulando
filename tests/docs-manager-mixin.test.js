@@ -115,6 +115,7 @@ import {
   openWikiCreationJournal,
   captureDocumentUpsert,
   getDocumentDraft,
+  getPreservedDocumentDraftCopies,
   getPendingWrites,
   openWorkspaceDb,
   upsertDocumentDraft,
@@ -235,6 +236,20 @@ beforeEach(() => {
   createTowerPgDocCommentMock.mockReset();
   updateTowerPgDocCommentMock.mockReset();
   deleteTowerPgDocCommentMock.mockReset();
+  getTowerPgDocBodyMock.mockReset();
+  getTowerPgDocBodyMock.mockImplementation(async (_workspaceId, id) => {
+    const store = [...testStores].reverse().find(s => s.selectedDocId === id);
+    const row = store?.selectedDocument;
+    if (!row) return null;
+    return {
+      doc: { id, workspace_id: row.pg_workspace_id || 'workspace-1', channel_id: row.pg_channel_id,
+        title: row.title, row_version: row.version, storage_object_id: row.content_storage_object_id,
+        scope_id: row.scope_id, record_state: row.record_state || 'active' },
+      canonical_version: { row_version: row.version, version_id: row.pg_canonical_version_id || `${id}:${row.version}`,
+        body_sha256_hex: row.pg_canonical_body_sha256_hex || row.content_sha256_hex || 'b'.repeat(64), storage_object_id: row.content_storage_object_id },
+      body: { base64_data: Buffer.from(JSON.stringify({ format: 'document_content_v1', content_model: row })).toString('base64') },
+    };
+  });
   getTowerPgDocVersionsMock.mockReset();
   getTowerPgDocRecoveriesMock.mockReset();
   getTowerPgDocRecoveryMock.mockReset();
@@ -1542,7 +1557,7 @@ describe('docsManagerMixin checkout orchestration', () => {
     expect(store.docEditAccessState).toBe('acquiring');
     expect(store.docEditDraftDirty).toBe(true);
     expect(store.docEditorContent).toBe('BaseABC');
-    expect(acquireTowerPgEditLeaseMock).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => expect(acquireTowerPgEditLeaseMock).toHaveBeenCalledTimes(1));
     expect(store.scheduleDocAutosave).not.toHaveBeenCalled();
 
     resolveAcquire({ lease: { id: 'lease-delayed', lease_token: 'token-delayed' } });
@@ -3078,7 +3093,7 @@ describe('docsManagerMixin durable recovery drafts', () => {
 
     store.docLocalDraft = { ...recoveryModel, workspace_id: 'workspace-1', document_id: record.record_id };
     expect(store.isSelectedDocDraftReadyForPersistence()).toBe(true);
-    await expect(store.saveSelectedDocItem({ autosave: false })).resolves.toBeNull();
+    await expect(store.saveSelectedDocItem({ autosave: false, preserveRecovery: true })).resolves.toBeNull();
 
     expect(updateTowerPgDocMock).toHaveBeenCalledTimes(1);
     expect(updateTowerPgDocMock.mock.calls[0][2]).toMatchObject({
@@ -3107,6 +3122,8 @@ describe('docsManagerMixin durable recovery drafts', () => {
     });
     updateTowerPgDocMock.mockRejectedValueOnce(recoveryError);
     await store.saveSelectedDocItem({ autosave: true });
+    expect(updateTowerPgDocMock).toHaveBeenCalledTimes(1);
+    await store.saveSelectedDocItem({ autosave: false, preserveRecovery: true });
     expect(updateTowerPgDocMock).toHaveBeenCalledTimes(2);
   });
 
@@ -3527,7 +3544,7 @@ describe('docsManagerMixin canonical row normalization', () => {
     })).toBe(true);
   });
 
-  it('submits a stale dirty buffer so Tower can preserve it as a typed recovery', async () => {
+  it('explicitly preserves a stale dirty buffer as a typed recovery', async () => {
     isTowerPgBackendModeMock.mockReturnValue(true);
     const source = buildSyntheticLongDocumentFixture();
     const staleModel = richDocContentModel('Stale editor prefix without the timeline');
@@ -3561,7 +3578,7 @@ describe('docsManagerMixin canonical row normalization', () => {
     };
     updateTowerPgDocMock.mockRejectedValueOnce(recoveryError);
 
-    await expect(store.saveSelectedPgDocItem(authoritative, 'npub1owner', { autosave: false })).resolves.toBeNull();
+    await expect(store.saveSelectedPgDocItem(authoritative, 'npub1owner', { autosave: false, preserveRecovery: true })).resolves.toBeNull();
     expect(store.docEditConflict).toMatchObject({ baseVersion: 43, currentVersion: 44 });
     expect(store.docEditAccessState).toBe('recovery');
     expect(store.docRecovery).toMatchObject({ id: 'recovery-1', reason_code: 'stale_base' });
@@ -4142,6 +4159,9 @@ describe('docsManagerMixin canonical row normalization', () => {
       docEditDraftDirty: true,
       docEditBaseRecordId: 'doc-1',
       docEditBaseRowVersion: 1,
+      docEditBaseAvailable: true,
+      docEditBaseBodySha256Hex: 'b'.repeat(64),
+      docEditBaseVersionId: 'doc-1:1',
       docRichEditorAdapter: { setEditable: vi.fn() },
       refreshDocuments: vi.fn(async function refreshDocuments() {
         this.patchDocumentLocal({
@@ -4725,7 +4745,7 @@ describe('offline document safety and asynchronous identity', () => {
     }; });
     store.saveSelectedDocItem = vi.fn(async () => { order.push('save'); return true; });
     await store.reconnectSelectedDocDraft();
-    expect(order).toEqual(changed ? ['lease', 'head'] : ['lease', 'head', 'save']);
+    expect(order).toEqual(changed ? ['head'] : ['head', 'lease', 'head', 'save']);
     if (changed) {
       expect(store.docEditAccessState).toBe('conflict');
       expect(await getDocumentDraft('workspace-1', record.record_id)).toMatchObject({ content: 'Offline draft' });
@@ -4829,7 +4849,7 @@ describe('reconnect freshness barrier', () => {
     await upsertDocument(record);
     store.beginSelectedDocLeaseAcquisition = vi.fn(async () => true);
     store.prefetchFlightDeckDoc = vi.fn().mockResolvedValue(record);
-    getTowerPgDocBodyMock.mockRejectedValueOnce(new Error('unreachable'));
+    getTowerPgDocBodyMock.mockRejectedValue(new Error('unreachable'));
     store.saveSelectedDocItem = vi.fn();
     expect(await store.reconnectSelectedDocDraft()).toBe(false);
     expect(store.prefetchFlightDeckDoc).not.toHaveBeenCalled();
@@ -5203,4 +5223,184 @@ it('cancels an old queued save instead of executing it in another actor/origin w
   finish(null);
   await Promise.all([first, second]);
   expect(store.saveSelectedPgDocItem).toHaveBeenCalledTimes(1);
+});
+
+describe('document latest-version review and common-base merge', () => {
+  beforeEach(async () => {
+    const db = openWorkspaceDb('document-review');
+    await db.open();
+    await Promise.all(db.tables.map(table => table.clear()));
+    isTowerPgBackendModeMock.mockReturnValue(true);
+  });
+
+  function reviewStore({ base = 'First paragraph\n\nSecond paragraph', local = 'My first paragraph\n\nSecond paragraph', remote = 'First paragraph\n\nTheir second paragraph' } = {}) {
+    const fixture = createSyncedPgDocSaveStore({ version: 6, content: base, currentModel: richDocContentModel(local) });
+    const { store, record, modelRef, adapter } = fixture;
+    Object.assign(record, richDocContentModel(base));
+    store.docEditorContent = local;
+    store.docSavedSnapshot = structuredClone(record);
+    store.docEditBaseContentSignature = documentContentSignature(record);
+    store.getEffectiveDocShares = () => [];
+    store.beginSelectedDocLeaseAcquisition = vi.fn(async () => true);
+    adapter.setContent.mockImplementation(state => { modelRef.current = prosemirrorToFlightDeckContentModel(state); });
+    const head = { ...record, ...richDocContentModel(remote), version: 8,
+      pg_canonical_version_id: `${record.record_id}:8`, pg_canonical_body_sha256_hex: 'c'.repeat(64),
+      content_sha256_hex: 'c'.repeat(64), content_storage_object_id: 'remote-v8', pg_canonical_storage_object_id: 'remote-v8' };
+    store.hydrateSelectedDocWithRetry = vi.fn(async () => structuredClone(head));
+    return { ...fixture, head };
+  }
+
+  it('detects v6 draft versus v8 on save without uploading or replacing local content', async () => {
+    const { store, modelRef, record } = reviewStore();
+    await store.saveSelectedDocItem();
+    expect(store.docEditConflict).toMatchObject({ baseVersion: 6, currentVersion: 8 });
+    expect(store.docEditBaseRowVersion).toBe(6);
+    expect(modelRef.current.content).toContain('My first paragraph');
+    expect(store.prepareDocumentContentForEnvelope).not.toHaveBeenCalled();
+    expect(await getDocumentDraft('workspace-1', record.record_id)).toMatchObject({ base_row_version: 6, content: modelRef.current.content });
+  });
+
+  it('accepts latest only after explicit dirty confirmation and creates no version', async () => {
+    const { store, head, record, modelRef } = reviewStore();
+    expect(await store.reviewSelectedDocChanges()).toBe(true);
+    expect(store.docReview.result.diff.some(p => p.added || p.removed)).toBe(true);
+    expect(await store.applySelectedDocReview('accept')).toBe(false);
+    store.docReview.confirmReplace = true;
+    expect(await store.applySelectedDocReview('accept')).toBe(true);
+    expect(store.docEditBaseRowVersion).toBe(8);
+    expect(modelRef.current.content).toBe(head.content);
+    expect(await getDocumentDraft('workspace-1', record.record_id)).toBeFalsy();
+    expect(updateTowerPgDocMock).not.toHaveBeenCalled();
+    expect(store.docEditDraftDirty).toBe(false);
+    const copies = await getPreservedDocumentDraftCopies('workspace-1', record.record_id);
+    expect(copies).toHaveLength(1);
+    expect(copies[0]).toMatchObject({ base_row_version: 6 });
+    expect(copies[0].content).toContain('My first paragraph');
+    await store.persistSelectedDocDraft();
+    await store.clearSelectedDocDraft();
+    expect(await getPreservedDocumentDraftCopies('workspace-1', record.record_id)).toHaveLength(1);
+    await store.resumeSelectedDocPreservedCopy(copies[0]);
+    expect(modelRef.current.content).toContain('My first paragraph');
+    expect(store.docEditBaseRowVersion).toBe(6);
+  });
+
+  it('previews independent merges, persists them across reload and publishes v9 once', async () => {
+    const { store, record, modelRef } = reviewStore();
+    await store.reviewSelectedDocChanges();
+    expect(store.docReview.result.unresolved).toBe(0);
+    expect(await store.applySelectedDocReview('merge')).toBe(true);
+    expect(modelRef.current.content).toContain('My first paragraph');
+    expect(modelRef.current.content).toContain('Their second paragraph');
+    expect(store.docEditBaseRowVersion).toBe(8);
+    expect(store.docMergePending).toBe(true);
+    const draft = await getDocumentDraft('workspace-1', record.record_id);
+    expect(draft).toMatchObject({ merge_pending: true, base_row_version: 8, review_original: { base_row_version: 6 } });
+    store.docsEditorOpen = true;
+    store.scheduleDocAutosave();
+    expect(store.docAutosaveTimer).toBeFalsy();
+    await store.saveSelectedDocItem({ autosave: true });
+    expect(updateTowerPgDocMock).not.toHaveBeenCalled();
+    updateTowerPgDocMock.mockResolvedValueOnce(acceptedPgDoc(9, modelRef.current.content));
+    await store.saveSelectedDocItem();
+    expect(updateTowerPgDocMock).toHaveBeenCalledTimes(1);
+    expect(updateTowerPgDocMock.mock.calls[0][2]).toMatchObject({ row_version: 8, base_body_sha256_hex: 'c'.repeat(64) });
+    store.hydrateSelectedDocWithRetry = vi.fn(async () => store.selectedDocument);
+    await store.saveSelectedDocItem();
+    expect(updateTowerPgDocMock).toHaveBeenCalledTimes(1);
+    expect(store.docEditBaseRowVersion).toBe(9);
+  });
+
+  it('requires overlap choices and retains them when review is closed and reopened', async () => {
+    const { store, modelRef } = reviewStore({ base: 'old', local: 'mine', remote: 'theirs' });
+    await store.reviewSelectedDocChanges();
+    expect(store.docReview.result.unresolved).toBeGreaterThan(0);
+    expect(await store.applySelectedDocReview('merge')).toBe(false);
+    for (const conflict of store.docReview.result.conflicts) await store.resolveSelectedDocMerge(conflict.id, 'local');
+    expect(store.docReview.result.unresolved).toBe(0);
+    await store.closeSelectedDocReview();
+    expect(modelRef.current.content).toBe('mine');
+    await store.reviewSelectedDocChanges();
+    expect(store.docReview.result.unresolved).toBe(0);
+    expect(await store.applySelectedDocReview('merge')).toBe(true);
+    expect(modelRef.current.content).toBe('mine');
+  });
+
+  it.each(['accept', 'merge'])('rechecks remote during %s and preserves earlier resolution work', async action => {
+    const { store, head, record, modelRef } = reviewStore();
+    await store.reviewSelectedDocChanges();
+    store.docReview.confirmReplace = true;
+    const v10 = { ...head, version: 10, pg_canonical_version_id: `${record.record_id}:10` };
+    store.hydrateSelectedDocWithRetry.mockResolvedValue(v10);
+    expect(await store.applySelectedDocReview(action)).toBe(false);
+    expect(modelRef.current.content).toContain('My first paragraph');
+    expect(store.docEditBaseRowVersion).toBe(6);
+    expect((await getDocumentDraft('workspace-1', record.record_id)).review_state.head.version).toBe(8);
+    await store.reviewSelectedDocChanges();
+    expect(store.docReview.head.version).toBe(10);
+    expect(store.docReviewPrevious[0].content).toContain('My first paragraph');
+    expect(store.docReviewPrevious[0].content).toContain('Their second paragraph');
+    expect(updateTowerPgDocMock).not.toHaveBeenCalled();
+  });
+
+  it('preserves an edited merge when latest advances again before publication', async () => {
+    const { store, head, modelRef, record } = reviewStore();
+    await store.reviewSelectedDocChanges();
+    await store.applySelectedDocReview('merge');
+    modelRef.current = richDocContentModel(`${modelRef.current.content}\n\nMy resolution edit`);
+    store.hydrateSelectedDocWithRetry.mockResolvedValue({ ...head, version: 9, pg_canonical_version_id: `${record.record_id}:9` });
+    await store.saveSelectedDocItem();
+    expect(updateTowerPgDocMock).not.toHaveBeenCalled();
+    expect(store.docEditConflict.currentVersion).toBe(9);
+    const draft = await getDocumentDraft('workspace-1', record.record_id);
+    expect(draft.content).toContain('My resolution edit');
+    expect(draft.base_row_version).toBe(8);
+    expect(draft.review_original.base_row_version).toBe(6);
+  });
+
+  it('refuses automatic merge without a verified common base', async () => {
+    const { store } = reviewStore();
+    store.docSavedSnapshot = null;
+    store.docEditBaseAvailable = false;
+    await store.reviewSelectedDocChanges();
+    expect(store.docReview.input.base).toBeNull();
+    expect(await store.applySelectedDocReview('merge')).toBe(false);
+    expect(updateTowerPgDocMock).not.toHaveBeenCalled();
+  });
+
+  it('retains local and review work when latest cannot be read', async () => {
+    const { store, record } = reviewStore();
+    await store.reviewSelectedDocChanges();
+    store.docReview.confirmReplace = true;
+    store.hydrateSelectedDocWithRetry.mockResolvedValue(null);
+    expect(await store.applySelectedDocReview('accept')).toBe(false);
+    expect(store.docNeedsHeadCheck).toBe(true);
+    expect((await getDocumentDraft('workspace-1', record.record_id)).content).toContain('My first paragraph');
+    expect(store.docReview.head.version).toBe(8);
+  });
+
+  it('ignores fresh-head completion after navigation without losing the old draft', async () => {
+    const { store, record } = reviewStore();
+    let finish;
+    store.hydrateSelectedDocWithRetry.mockImplementation(() => new Promise(resolve => { finish = resolve; }));
+    const checking = store.checkSelectedDocLatest();
+    await vi.waitFor(() => expect(finish).toBeTypeOf('function'));
+    store.docEditAccessGeneration++;
+    store.selectedDocId = 'another-document';
+    finish({ ...record, version: 8 });
+    expect(await checking).toBeNull();
+    expect(await getDocumentDraft('workspace-1', record.record_id)).toMatchObject({ base_row_version: 6 });
+  });
+});
+
+it('archives both a merged draft and its original common-base draft when accepting another head', async () => {
+  const db = openWorkspaceDb('accepted-merged-original'); await db.open();
+  await Promise.all(db.tables.map(table => table.clear()));
+  const { preserveDocumentDraftCopy, deleteDocumentDraft } = await import('../src/db.js');
+  await upsertDocumentDraft({ workspace_id: 'workspace', document_id: 'doc', content: 'merged local',
+    base_row_version: 8, review_original: { content: 'original local', base_row_version: 6 } });
+  await preserveDocumentDraftCopy(await getDocumentDraft('workspace', 'doc'));
+  await deleteDocumentDraft('workspace', 'doc');
+  const [copy] = await getPreservedDocumentDraftCopies('workspace', 'doc');
+  expect(copy.content).toBe('merged local');
+  expect(copy.review_original).toMatchObject({ content: 'original local', base_row_version: 6 });
 });

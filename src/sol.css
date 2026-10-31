@@ -792,3 +792,15 @@ code, pre { font-family:var(--font-code); }
 .member-admin-panel summary { cursor: pointer; font-weight: 600; }
 .member-admin-panel label { display: block; margin: .75rem 0; }
 .member-admin-panel .member-admin-confirm { display: flex; align-items: flex-start; gap: .5rem; }
+
+/* Document reconciliation stays usable on narrow phone and desktop layouts. */
+.doc-version-review { border: 1px solid var(--border-color, #8886); border-radius: 8px; padding: 1rem; margin-block: 1rem; min-width: 0; }
+.doc-review-copies { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+.doc-version-review pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 22rem; overflow: auto; padding: .75rem; background: var(--bg-secondary, #8881); }
+.doc-review-diff span { display: block; }
+.doc-diff-added { background: #16803b22; border-inline-start: 3px solid #16803b; }
+.doc-diff-removed { background: #bc303022; border-inline-start: 3px solid #bc3030; }
+.doc-merge-conflict { margin-block: 1rem; padding: .75rem; min-width: 0; }
+.doc-merge-conflict button[aria-pressed="true"] { outline: 2px solid currentColor; }
+.doc-review-confirm { display: flex; gap: .5rem; margin-block: 1rem; align-items: start; }
+@media (max-width: 640px) { .doc-review-copies { grid-template-columns: minmax(0, 1fr); } }
