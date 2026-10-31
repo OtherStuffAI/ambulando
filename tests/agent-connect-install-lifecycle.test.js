@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const api = vi.hoisted(() => ({
   createTowerPgAutopilotConnection: vi.fn(),
+  updateTowerPgAutopilotConnection: vi.fn(),
   createTowerPgWorkspaceAgent: vi.fn(),
 }));
 
@@ -150,6 +151,43 @@ describe('Agent Connect install lifecycle', () => {
     db.close();
     await openWorkspaceDb('agent-connect-install-lifecycle').open();
     expect(await getWorkspaceDb().workspace_agents.get(agentId)).toMatchObject({ agent_id: 'test-agent' });
+  });
+
+  it('persists an explicit HTTPS installation and repeated add keeps one connection and agent', async () => {
+    const store = makeStore();
+    store._verifiedAgentConnectPackage = { ...store._verifiedAgentConnectPackage, transportMode: 'https', version: 0,
+      fipsEndpoint: null, transportNpub: null, httpsEndpoint: 'https://agents.example' };
+    api.createTowerPgAutopilotConnection.mockImplementation(async (_workspaceId, payload) => ({ autopilot_connection: {
+      id: connectionId, workspace_id: workspaceId, ...payload, fips_transport_npub: null,
+      row_version: 1, created_by_actor_id: 'actor-1', updated_by_actor_id: 'actor-1', archived_by_actor_id: null,
+      created_at: '2026-09-24T00:00:00Z', updated_at: '2026-09-24T00:00:00Z', archived_at: null,
+    } }));
+    await store.installSelectedAutopilotAgents();
+    expect(store.agentConnectError).toBe('');
+    await store.installSelectedAutopilotAgents();
+    expect(store.agentConnectError).toBe('');
+    const db = getWorkspaceDb();
+    expect(await db.autopilot_connections.count()).toBe(1);
+    expect(await db.workspace_agents.count()).toBe(1);
+    expect(await db.autopilot_connections.get(connectionId)).toMatchObject({ metadata: { transport_mode: 'https' }, https_endpoint: 'https://agents.example', fips_transport_npub: null });
+    db.close(); await openWorkspaceDb('agent-connect-install-lifecycle').open();
+    expect((await getWorkspaceDb().autopilot_connections.get(connectionId)).metadata.transport_mode).toBe('https');
+  });
+
+  it('selects HTTPS explicitly while retaining an existing signed FIPS connection', async () => {
+    const store = makeStore();
+    store._verifiedAgentConnectPackage = { ...store._verifiedAgentConnectPackage, transportMode: 'https', version: 0,
+      fipsEndpoint: null, transportNpub: null, httpsEndpoint: 'https://agents.example' };
+    const existing = (await api.createTowerPgAutopilotConnection()).autopilot_connection;
+    api.createTowerPgAutopilotConnection.mockClear();
+    api.updateTowerPgAutopilotConnection.mockImplementation(async (_workspace, _id, patch) => ({ autopilot_connection: { ...existing, ...patch, row_version: 2 } }));
+    await store.installSelectedAutopilotAgents();
+    expect(store.agentConnectError).toBe('');
+    expect(api.updateTowerPgAutopilotConnection).toHaveBeenCalledWith(workspaceId, connectionId,
+      expect.objectContaining({ row_version: 1, https_endpoint: 'https://agents.example', metadata: expect.objectContaining({ transport_mode: 'https' }) }), expect.anything());
+    const patch = api.updateTowerPgAutopilotConnection.mock.calls[0][2];
+    expect(patch).not.toHaveProperty('fips_endpoint');
+    expect(patch).not.toHaveProperty('fips_transport_npub');
   });
 
   it('owns command transport and forced materialization outside an ambient Dexie transaction', async () => {

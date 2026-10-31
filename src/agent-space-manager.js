@@ -1,8 +1,10 @@
+import { discoverNStackServices, discoverHttpsAutopilot, requireRegisteredAmbulandoApp } from './nstack-agent-discovery.js';
 import { createAutopilotDiscoveryClient, verifyAutopilotConnectPackage } from './autopilot-connect-client.js';
-import { createTowerPgAutopilotConnection, createTowerPgWorkspaceAgent } from './tower-command-intents.js';
+import { createTowerPgAutopilotConnection, updateTowerPgAutopilotConnection, createTowerPgWorkspaceAgent } from './tower-command-intents.js';
 import { refreshInstalledAutopilotConnection, storedPackage } from './autopilot-connection-refresh.js';
 
 const text = (value) => String(value ?? '').trim();
+const discoveryContext = store => JSON.stringify([store.currentWorkspace?.workspaceId, store.currentWorkspace?.appNpub, store.currentWorkspace?.workspaceOwnerNpub, store.backendUrl, store.session?.npub]);
 const VIEWS = new Set(['overview', 'pipelines', 'schedules', 'triggers']);
 
 export function normalizeAgentPipelineView(payload = {}) {
@@ -63,8 +65,8 @@ async function releaseTransientClient(client) {
 }
 
 export const agentSpaceManagerMixin = {
-  agentConnections: [], workspaceAgents: [], agentConnectInput: '', agentConnectError: '', agentConnectBusy: false,
-  agentConnectStep: 'package', agentDiscoveredAgents: [], agentSelectedDiscoveryIds: [], _verifiedAgentConnectPackage: null,
+  agentNStackAddress: '', agentConnections: [], workspaceAgents: [], agentConnectInput: '', agentConnectError: '', agentConnectBusy: false,
+  _agentDiscoveryContext: '', agentConnectStep: 'package', agentDiscoveredAgents: [], agentSelectedDiscoveryIds: [], _verifiedAgentConnectPackage: null,
   selectedWorkspaceAgentId: '', agentSpaceView: 'overview', agentSpaceLoading: false, agentSpaceError: '', agentSpaceData: null,
   controlledRestartConfirmOpen: false, controlledRestartBusy: false, controlledRestartStatus: null, controlledRestartError: '',
   controlledRestartConnectionId: '', controlledRestartAvailability: 'idle', controlledRestartAvailabilityMessage: '',
@@ -72,7 +74,8 @@ export const agentSpaceManagerMixin = {
 
   openAgentConnectModal() {
     this.showAgentConnectModal = true; this.agentConnectStep = 'package'; this.agentConnectError = '';
-    this.agentConnectInput = ''; this.agentDiscoveredAgents = []; this.agentSelectedDiscoveryIds = []; this._verifiedAgentConnectPackage = null;
+    this.agentNStackAddress = this.currentWorkspace?.directHttpsUrl || this.backendUrl || '';
+    this.agentConnectInput = ''; this.agentDiscoveredAgents = []; this.agentSelectedDiscoveryIds = []; this._verifiedAgentConnectPackage = null; this._agentDiscoveryContext = '';
   },
   closeAgentConnectModal() { if (!this.agentConnectBusy) this.showAgentConnectModal = false; },
   toggleDiscoveredAgent(agentId) {
@@ -80,16 +83,43 @@ export const agentSpaceManagerMixin = {
     if (selected.has(id)) selected.delete(id); else selected.add(id);
     this.agentSelectedDiscoveryIds = [...selected];
   },
+  async discoverAgentsFromNStack() {
+    if (this.agentConnectBusy) return;
+    this.agentConnectBusy = true; this.agentConnectError = '';
+    let client;
+    const workspace = this.currentWorkspace;
+    const context = discoveryContext(this);
+    try {
+      if (!workspace?.workspaceId) throw new Error('Connect and select an accessible workspace first.');
+      const services = await discoverNStackServices(this.agentNStackAddress || workspace.directHttpsUrl || this.backendUrl);
+      if (services.origin !== new URL(workspace.directHttpsUrl || this.backendUrl).origin) throw new Error('Select a workspace on this nStack before discovering its agents. Use Add an NStack in Settings.');
+      await requireRegisteredAmbulandoApp(services.origin, workspace.workspaceOwnerNpub, { appNpub: workspace.appNpub, workspaceId: workspace.workspaceId, towerNpub: workspace.towerServiceNpub || workspace.serviceNpub });
+      if (!services.autopilot) throw new Error('This nStack has no advertised Autopilot HTTPS service. Ask its operator to configure NSTACK_AUTOPILOT_PUBLIC_ORIGIN on Tower.');
+      const verified = await discoverHttpsAutopilot(services.autopilot, workspace.workspaceOwnerNpub);
+      client = createAutopilotDiscoveryClient(verified);
+      const agents = await client.discoverAgents();
+      if (discoveryContext(this) !== context) throw new Error('The workspace changed. Retry discovery in the intended workspace.');
+      this._verifiedAgentConnectPackage = verified;
+      this._agentDiscoveryContext = discoveryContext(this);
+      this.agentDiscoveredAgents = agents; this.agentSelectedDiscoveryIds = [];
+      this.agentConnectStep = 'agents';
+      if (!agents.length) this.agentConnectError = 'No available agents were disclosed for your identity. Ask the Autopilot owner to enable an agent and grant you access, then retry.';
+    } catch (error) { this.agentConnectError = managerError(error, 'Could not discover this nStack’s agents.'); }
+    finally { await releaseTransientClient(client); this.agentConnectBusy = false; }
+  },
   async verifyAndDiscoverAutopilotAgents() {
     this.agentConnectBusy = true; this.agentConnectError = '';
     let client;
+    const context = discoveryContext(this);
     try {
       const verified = verifyAutopilotConnectPackage(this.agentConnectInput);
       client = createAutopilotDiscoveryClient(verified);
       const health = await client.health();
       if (!health.ok) throw new Error('Autopilot reported that this installation is not healthy.');
       const agents = await client.discoverAgents();
+      if (discoveryContext(this) !== context) throw new Error('The workspace changed. Retry discovery.');
       this._verifiedAgentConnectPackage = verified;
+      this._agentDiscoveryContext = discoveryContext(this);
       this.agentDiscoveredAgents = agents;
       this.agentSelectedDiscoveryIds = agents.map((agent) => agent.agentId);
       this.agentConnectStep = 'agents';
@@ -103,17 +133,32 @@ export const agentSpaceManagerMixin = {
     const workspaceId = text(this.currentWorkspace?.workspaceId);
     if (!verified || !workspaceId || agents.length === 0) { this.agentConnectError = 'Select at least one agent to add.'; return; }
     this.agentConnectBusy = true; this.agentConnectError = '';
+    const context = discoveryContext(this);
+    const assertContext = () => { if (discoveryContext(this) !== context || (this._agentDiscoveryContext && context !== this._agentDiscoveryContext)) throw new Error('The workspace or signer changed. Discover agents again before adding them.'); };
     try {
+      assertContext();
       const response = await createTowerPgAutopilotConnection(this, workspaceId, {
-        installation_id: verified.installationId, fips_transport_npub: verified.transportNpub,
+        installation_id: verified.installationId, ...(verified.transportNpub ? { fips_transport_npub: verified.transportNpub } : {}),
         display_name: `Autopilot ${verified.installationId}`,
-        fips_endpoint: verified.fipsEndpoint, https_endpoint: verified.httpsEndpoint, api_version: String(verified.apiVersion),
-        capabilities: [...verified.capabilities], metadata: { connect_package_version: verified.version, installation_npub: verified.installationNpub, health_path: verified.healthPath, agents_path: verified.agentsPath, pipeline_viewer_path: verified.pipelineViewerPath, controlled_restart_path: verified.controlledRestartPath, controlled_restart_status_path: verified.controlledRestartStatusPath },
+        fips_endpoint: verified.fipsEndpoint || verified.httpsEndpoint, https_endpoint: verified.httpsEndpoint, api_version: String(verified.apiVersion),
+        capabilities: [...verified.capabilities], metadata: { ...(verified.transportMode === 'https' ? { transport_mode: 'https' } : {}), connect_package_version: verified.version, installation_npub: verified.installationNpub, health_path: verified.healthPath, agents_path: verified.agentsPath, pipeline_viewer_path: verified.pipelineViewerPath, controlled_restart_path: verified.controlledRestartPath, controlled_restart_status_path: verified.controlledRestartStatusPath },
       }, { baseUrl: this.backendUrl });
+      assertContext();
       const connection = response?.autopilot_connection;
       if (!connection?.id) throw new Error('Tower did not return the Autopilot connection.');
+      if (verified.transportMode === 'https' && connection.metadata?.transport_mode !== 'https') {
+        // Add over HTTPS is an explicit preference change; retain signed FIPS
+        // identity/endpoints and all previously verified capabilities for recovery.
+        await updateTowerPgAutopilotConnection(this, workspaceId, connection.id, {
+          row_version: connection.row_version, https_endpoint: verified.httpsEndpoint,
+          metadata: { ...connection.metadata, transport_mode: 'https', installation_npub: verified.installationNpub,
+            health_path: verified.healthPath, agents_path: verified.agentsPath },
+        }, { baseUrl: this.backendUrl });
+        assertContext();
+      }
       let firstInstalledId = (this.workspaceAgents || []).find((row) => row.connection_id === connection.id && selected.has(row.agent_id))?.id || '';
       for (const [sortOrder, agent] of agents.entries()) {
+        assertContext();
         const existing = (this.workspaceAgents || []).find((row) => row.connection_id === connection.id && row.agent_id === agent.agentId);
         if (existing) { firstInstalledId ||= existing.id; continue; }
         const created = await createTowerPgWorkspaceAgent(this, workspaceId, {

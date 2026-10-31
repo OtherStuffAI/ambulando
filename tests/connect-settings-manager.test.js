@@ -45,7 +45,7 @@ function createStore(overrides = {}) {
     connectShowTokenFallback: false,
     showWorkspaceSwitcherMenu: false,
     mobileNavOpen: false,
-    showAgentConnectModal: false,
+    showAgentConfigModal: false,
     agentConnectJson: '',
     agentConfigCopied: false,
     presetConnecting: false,
@@ -551,17 +551,17 @@ describe('agent connect', () => {
     });
     fn();
     expect(store.showAvatarMenu).toBe(false);
-    expect(store.showAgentConnectModal).toBe(true);
+    expect(store.showAgentConfigModal).toBe(true);
     expect(store.agentConfigCopied).toBe(false);
     expect(store.agentConnectJson).toBeTruthy();
   });
 
   it('closeAgentConnect closes modal', () => {
     const { fn, store } = bindMethod('closeAgentConnect', {
-      showAgentConnectModal: true,
+      showAgentConfigModal: true,
     });
     fn();
-    expect(store.showAgentConnectModal).toBe(false);
+    expect(store.showAgentConfigModal).toBe(false);
   });
 
   it('copyContext writes the active Flight Deck context to clipboard', async () => {

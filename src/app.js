@@ -700,6 +700,7 @@ export function initApp() {
     connectShowTokenFallback: false,
     knownHosts: [],
     showAgentConnectModal: false,
+    showAgentConfigModal: false,
     pgRetainedAccessLost: false,
     syncStatus: 'synced',
     syncSession: {

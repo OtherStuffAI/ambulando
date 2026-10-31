@@ -3,6 +3,8 @@ import { FLIGHT_DECK_PG_APP_NPUB } from '../src/app-identity.js';
 
 const DEFAULT_BUILD_PG_APP_NPUB = FLIGHT_DECK_PG_APP_NPUB;
 
+vi.mock('../src/nstack-agent-discovery.js', () => ({ requireRegisteredAmbulandoApp: vi.fn(async () => ({})) }));
+
 vi.mock('../src/backend-mode.js', () => ({
   isTowerPgBackendMode: vi.fn(() => true),
 }));
@@ -326,114 +328,19 @@ describe('PG connect settings manager', () => {
     expect(api.getTowerPgWorkspaceMe).not.toHaveBeenCalled();
   });
 
-  it('falls back to Tower-visible PG workspaces when the build app namespace lists none', async () => {
+  it('lists all authorized locator/app pairs without choosing a build-global namespace', async () => {
     const api = await import('../src/api.js');
-    api.listTowerPgWorkspaces
-      .mockResolvedValueOnce({
-        workspaces: [],
-        towerPgRequest: {
-          method: 'GET',
-          url: `https://tower.example/api/v4/flightdeck-pg/workspaces?app_npub=${DEFAULT_BUILD_PG_APP_NPUB}`,
-          route: '/api/v4/flightdeck-pg/workspaces',
-          query: `app_npub=${DEFAULT_BUILD_PG_APP_NPUB}`,
-          body: null,
-          appNpub: DEFAULT_BUILD_PG_APP_NPUB,
-          appNpubSent: true,
-          signerNpub: 'npub1user',
-          usedWorkspaceKey: false,
-          transportMode: 'https',
-          httpStatus: 200,
-          responseShape: { type: 'object', keys: ['workspaces'], workspacesCount: 0 },
-        },
-      })
-      .mockResolvedValueOnce({
-        workspaces: [{
-          identity: {
-            tower_service_npub: 'npub1tower',
-            workspace_service_npub: 'npub1workspace',
-            workspace_owner_npub: 'npub1owner',
-            workspace_id: 'workspace-1',
-            app_npub: 'flightdeck_pg',
-          },
-          tower_base_url: 'https://tower.example',
-          label: 'Existing Tower Workspace',
-          description: 'Created under the Tower workspace namespace',
-          links: descriptor.links,
-        }],
-        towerPgRequest: {
-          method: 'GET',
-          url: 'https://tower.example/api/v4/flightdeck-pg/workspaces',
-          route: '/api/v4/flightdeck-pg/workspaces',
-          query: '',
-          body: null,
-          appNpub: '',
-          appNpubSent: false,
-          signerNpub: 'npub1user',
-          usedWorkspaceKey: false,
-          transportMode: 'https',
-          httpStatus: 200,
-          responseShape: { type: 'object', keys: ['workspaces'], workspacesCount: 1 },
-        },
-      });
+    api.listTowerPgWorkspaces.mockResolvedValue({ workspaces: ['one', 'two'].map(id => ({
+      ...descriptor, label: `Workspace ${id}`, identity: { ...descriptor.identity, workspace_id: id, app_npub: `app-${id}` },
+    })) });
     const { connectSettingsManagerMixin } = await import('../src/connect-settings-manager.js');
-    const store = createStore({
-      backendUrl: 'https://tower.example',
-      connectHostUrl: 'https://tower.example',
-      connectHostServiceNpub: 'npub1tower',
-      connectWorkspaces: [],
-    });
+    const store = createStore({ backendUrl: 'https://tower.example', connectHostUrl: 'https://tower.example' });
     Object.defineProperties(store, Object.getOwnPropertyDescriptors(connectSettingsManagerMixin));
-
     await store.loadConnectWorkspaces();
-
-    expect(api.listTowerPgWorkspaces).toHaveBeenNthCalledWith(1, {
-      baseUrl: 'https://tower.example',
-      appNpub: DEFAULT_BUILD_PG_APP_NPUB,
-      limit: undefined,
-    });
-    expect(api.listTowerPgWorkspaces).toHaveBeenNthCalledWith(2, {
-      baseUrl: 'https://tower.example',
-      appNpub: '',
-      limit: undefined,
-    });
-    expect(store.connectWorkspaces).toHaveLength(1);
-    expect(store.connectWorkspaces[0]).toMatchObject({
-      workspaceId: 'workspace-1',
-      workspaceOwnerNpub: 'npub1owner',
-      workspaceServiceNpub: 'npub1workspace',
-      appNpub: 'flightdeck_pg',
-      directHttpsUrl: 'https://tower.example',
-      name: 'Existing Tower Workspace',
-      pgBackendMode: true,
-    });
-    expect(store.connectWorkspacesError).toBeNull();
-    expect(store.connectWorkspaceRequestDiagnostics).toMatchObject({
-      screen: 'connect-modal-pg-workspace-picker',
-      sessionNpub: 'npub1user',
-      towerServiceNpub: 'npub1tower',
-      responseWorkspaceCount: 1,
-      mappedWorkspaceCount: 1,
-      visibleWorkspaceCount: null,
-      attempts: [
-        expect.objectContaining({
-          appNpub: DEFAULT_BUILD_PG_APP_NPUB,
-          appNpubSent: true,
-          signerNpub: 'npub1user',
-          httpStatus: 200,
-          responseShape: expect.objectContaining({ workspacesCount: 0 }),
-        }),
-        expect.objectContaining({
-          appNpub: '',
-          appNpubSent: false,
-          signerNpub: 'npub1user',
-          httpStatus: 200,
-          responseShape: expect.objectContaining({ workspacesCount: 1 }),
-        }),
-      ],
-    });
-    expect(store.connectWorkspaceRequestSummary()).toContain('retry GET https://tower.example/api/v4/flightdeck-pg/workspaces');
-    expect(store.connectWorkspaceRequestSummary()).toContain('without app_npub');
-    expect(store.connectWorkspaceRequestSummary()).toContain('fetched 1; mapped 1; visible rows pending');
+    expect(api.listTowerPgWorkspaces).toHaveBeenCalledWith({ baseUrl: 'https://tower.example', appNpub: '', limit: undefined });
+    expect(store.connectWorkspaces.map(row => [row.workspaceId, row.appNpub])).toEqual([['one', 'app-one'], ['two', 'app-two']]);
+    expect(store.selectWorkspace).not.toHaveBeenCalled();
+    expect(api.createTowerPgAdminWorkspace).not.toHaveBeenCalled();
   });
 
   it('keeps same-owner PG workspaces distinct and verifies the selected descriptor', async () => {

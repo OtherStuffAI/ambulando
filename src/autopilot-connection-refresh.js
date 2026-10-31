@@ -4,6 +4,14 @@ import { updateTowerPgAutopilotConnection } from './tower-command-intents.js';
 const text = (value) => String(value ?? '').trim();
 
 export function storedPackage(connection) {
+  if (connection?.metadata?.transport_mode === 'https') {
+    const endpoint = new URL(text(connection.https_endpoint));
+    if (endpoint.protocol !== 'https:' || endpoint.hostname.endsWith('.fips') || endpoint.username || endpoint.password || endpoint.pathname !== '/' || endpoint.search || endpoint.hash) throw new Error('Stored HTTPS Autopilot origin is unsafe.');
+    return Object.freeze({ transportMode: 'https', httpsEndpoint: endpoint.origin,
+      installationId: text(connection.installation_id), installationNpub: text(connection.metadata.installation_npub),
+      apiVersion: Number(connection.api_version), capabilities: [...(connection.capabilities || [])],
+      healthPath: text(connection.metadata.health_path), agentsPath: text(connection.metadata.agents_path) });
+  }
   const endpoint = new URL(text(connection?.fips_endpoint));
   const transportNpub = text(connection?.fips_transport_npub || connection?.metadata?.installation_npub);
   if (endpoint.protocol !== 'http:' || !endpoint.port || endpoint.origin !== `http://${transportNpub}.fips:${endpoint.port}`) {

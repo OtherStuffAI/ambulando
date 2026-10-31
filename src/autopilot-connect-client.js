@@ -303,12 +303,23 @@ export function createAutopilotDiscoveryClient(verifiedPackage, {
   transport = globalThis.window?.fipsTransport,
   authHeader = createNip98AuthHeader,
   timeoutMs = 20_000,
+  fetchImpl = globalThis.fetch,
 } = {}) {
-  if (!verifiedPackage?.fipsEndpoint || !verifiedPackage?.installationNpub || !verifiedPackage?.transportNpub) {
+  const https = verifiedPackage?.transportMode === 'https';
+  if (https) {
+    let endpoint;
+    try { endpoint = new URL(verifiedPackage.httpsEndpoint); } catch { /* Refused below. */ }
+    if (!endpoint || endpoint.protocol !== 'https:' || endpoint.hostname.endsWith('.fips')
+      || endpoint.username || endpoint.password || endpoint.pathname !== '/' || endpoint.search || endpoint.hash) {
+      fail('endpoint_invalid', 'An explicit credential-free HTTPS origin is required.');
+    }
+    if (!verifiedPackage.installationId || !verifiedPackage.installationNpub) fail('package_unverified', 'Verify the HTTPS installation identity before connecting.');
+  }
+  if (!https && (!verifiedPackage?.fipsEndpoint || !verifiedPackage?.installationNpub || !verifiedPackage?.transportNpub)) {
     fail('package_unverified', 'Verify the Autopilot Connect Package before connecting.');
   }
-  if (!transport || transport.version < 2 || transport.available === false
-    || typeof transport.connect !== 'function') {
+  if (!https && (!transport || transport.version < 2 || transport.available === false
+    || typeof transport.connect !== 'function')) {
     fail('fips_unavailable', 'Native FIPS transport is unavailable. Open Flight Deck in a supported, unlocked Wingman app.');
   }
   let connected = false;
@@ -373,11 +384,11 @@ export function createAutopilotDiscoveryClient(verifiedPackage, {
   }
 
   async function requestResponse(path, operation, { method = 'GET', body, accept = 'application/json', signal } = {}) {
-    if (!connected) {
+    if (!https && !connected) {
       if (!connecting) connecting = connect().finally(() => { connecting = null; });
       await connecting;
     }
-    const requestUrl = `${verifiedPackage.fipsEndpoint}${path}`;
+    const requestUrl = `${https ? verifiedPackage.httpsEndpoint : verifiedPackage.fipsEndpoint}${path}`;
     const normalizedMethod = text(method).toUpperCase();
     const serializedBody = body === undefined
       ? undefined
@@ -398,7 +409,7 @@ export function createAutopilotDiscoveryClient(verifiedPackage, {
     }
     let response;
     try {
-      response = await handle.fetch(requestUrl, {
+      response = await (https ? fetchImpl : handle.fetch.bind(handle))(requestUrl, {
         method: normalizedMethod,
         headers: {
           Accept: accept,
@@ -411,7 +422,7 @@ export function createAutopilotDiscoveryClient(verifiedPackage, {
         signal: signal || AbortSignal.timeout(timeoutMs),
       });
     } catch (error) {
-      fail('connection_failed', `Could not reach Autopilot ${operation} through FIPS.`, { cause: error });
+      fail('connection_failed', `Could not reach Autopilot ${operation} through ${https ? 'HTTPS' : 'FIPS'}.`, { cause: error });
     }
     if (!response.ok) {
       if (operation === 'pipeline viewer' && response.status === 409) {

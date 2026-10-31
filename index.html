@@ -938,7 +938,7 @@
                   <div class="connect-workspace-list" data-testid="connect-pg-workspace-list">
                     <template x-for="ws in $store.chat.connectWorkspaces" :key="ws.workspaceId || ws.workspace_id || ws.identity?.workspace_id || ws.workspace_owner_npub || ws.workspaceOwnerNpub">
                       <button type="button" class="connect-workspace-row" data-testid="connect-pg-workspace-row" @click="$store.chat.connectSelectWorkspace(ws)" x-show="!$store.chat.connectWorkspacesBusy" :disabled="$store.chat.connectCreatingWorkspace" :aria-label="`Open ${ws.name || 'Untitled workspace'}`">
-                        <span class="connect-workspace-name" x-text="ws.name || 'Untitled workspace'"></span>
+                        <span class="connect-workspace-name" x-text="ws.name || 'Untitled workspace'"></span><small x-show="ws.appNpub" x-text="`Registered app: ${ws.appNpub}`"></small>
                         <span class="connect-workspace-meta" x-text="ws.description || $store.chat.getShortNpub(ws.workspace_owner_npub || ws.workspaceOwnerNpub || '')"></span>
                       </button>
                     </template>
@@ -1077,7 +1077,7 @@
                 <div class="connect-workspace-list" x-show="$store.chat.connectWorkspaces.length > 0 && !$store.chat.connectWorkspacesBusy">
                   <template x-for="ws in $store.chat.connectWorkspaces" :key="ws.workspaceId || ws.workspace_id || ws.identity?.workspace_id || ws.workspace_owner_npub || ws.workspaceOwnerNpub">
                     <button type="button" class="connect-workspace-row" @click="$store.chat.connectSelectWorkspace(ws)">
-                      <span class="connect-workspace-name" x-text="ws.name || 'Untitled workspace'"></span>
+                      <span class="connect-workspace-name" x-text="ws.name || 'Untitled workspace'"></span><small x-show="ws.appNpub" x-text="`Registered app: ${ws.appNpub}`"></small>
                       <span class="connect-workspace-meta" x-text="ws.description || $store.chat.getShortNpub(ws.workspace_owner_npub || ws.workspaceOwnerNpub || '')"></span>
                     </button>
                   </template>
@@ -1109,7 +1109,7 @@
 
     <div
       class="modal-overlay"
-      x-show="$store.chat.showAgentConnectModal"
+      x-show="$store.chat.showAgentConfigModal"
       x-cloak
       @click.self="$store.chat.closeAgentConnect()"
       @keydown.escape.window="$store.chat.closeAgentConnect()"
@@ -11874,9 +11874,9 @@
 
   <div class="modal-overlay" x-show="$store.chat.showAgentConnectModal" x-cloak @keydown.escape.window="$store.chat.closeAgentConnectModal()" data-testid="agent-connect-modal">
     <section class="modal agent-connect-modal" role="dialog" aria-modal="true" x-sol-dialog aria-labelledby="agent-connect-title" @click.stop>
-      <header><div><p class="eyebrow">Native FIPS connection</p><h2 id="agent-connect-title">Connect Autopilot agents</h2></div><button type="button" class="btn-cancel" @click="$store.chat.closeAgentConnectModal()">Close</button></header>
-      <template x-if="$store.chat.agentConnectStep === 'package'"><div><p>Paste the short-lived signed connect-package from Autopilot. Ambulando verifies it locally, then uses only its exact native FIPS endpoint.</p><textarea rows="10" x-model="$store.chat.agentConnectInput" spellcheck="false" placeholder="{ &quot;manifest&quot;: …, &quot;signature&quot;: … }" aria-label="Autopilot connect package"></textarea><div class="modal-actions"><button type="button" class="btn-primary" @click="$store.chat.verifyAndDiscoverAutopilotAgents()" :disabled="$store.chat.agentConnectBusy || !$store.chat.agentConnectInput.trim()" x-text="$store.chat.agentConnectBusy ? 'Connecting…' : 'Verify and discover'"></button></div></div></template>
-      <template x-if="$store.chat.agentConnectStep === 'agents'"><div><p>Select the agents to make visible in this workspace.</p><div class="agent-connect-selection"><template x-for="agent in $store.chat.agentDiscoveredAgents" :key="agent.agentId"><label><input type="checkbox" :checked="$store.chat.agentSelectedDiscoveryIds.includes(agent.agentId)" @change="$store.chat.toggleDiscoveredAgent(agent.agentId)" /><span><strong x-text="agent.name"></strong><small x-text="agent.description || agent.agentId"></small><em x-text="agent.canInstruct ? 'Can receive instructions' : 'Read-only'"></em></span></label></template></div><div class="modal-actions"><button type="button" class="btn-secondary" @click="$store.chat.agentConnectStep = 'package'">Back</button><button type="button" class="btn-primary" @click="$store.chat.installSelectedAutopilotAgents()" :disabled="$store.chat.agentConnectBusy || $store.chat.agentSelectedDiscoveryIds.length === 0" x-text="$store.chat.agentConnectBusy ? 'Saving…' : 'Add selected agents'"></button></div></div></template>
+      <header><div><p class="eyebrow">nStack connection</p><h2 id="agent-connect-title">Connect Autopilot agents</h2></div><button type="button" class="btn-cancel" @click="$store.chat.closeAgentConnectModal()">Close</button></header>
+      <template x-if="$store.chat.agentConnectStep === 'package'"><div><p>Discover agents from the selected workspace’s nStack over HTTPS.</p><p>Confirm this registered app belongs to your Ambulando workspace: <code x-text="$store.chat.currentWorkspace?.appNpub"></code></p><label>nStack HTTPS address<input type="url" x-model="$store.chat.agentNStackAddress" placeholder="https://your-nstack.example" aria-label="Agent nStack HTTPS address" /></label><button type="button" class="btn-primary" @click="$store.chat.discoverAgentsFromNStack()" :disabled="$store.chat.agentConnectBusy" x-text="$store.chat.agentConnectBusy ? 'Discovering…' : 'Discover available agents'"></button><details><summary>Use a signed FIPS connection package</summary><p>Paste the short-lived signed connect-package from Autopilot. Ambulando verifies it locally, then uses only its exact native FIPS endpoint.</p><textarea rows="10" x-model="$store.chat.agentConnectInput" spellcheck="false" placeholder="{ &quot;manifest&quot;: …, &quot;signature&quot;: … }" aria-label="Autopilot connect package"></textarea><div class="modal-actions"><button type="button" class="btn-primary" @click="$store.chat.verifyAndDiscoverAutopilotAgents()" :disabled="$store.chat.agentConnectBusy || !$store.chat.agentConnectInput.trim()" x-text="$store.chat.agentConnectBusy ? 'Connecting…' : 'Verify and discover'"></button></div></details></div></template>
+      <template x-if="$store.chat.agentConnectStep === 'agents'"><div><p>Select the agents to make visible in this workspace.</p><p x-show="$store.chat._verifiedAgentConnectPackage?.transportMode === 'https'">Adding over HTTPS selects HTTPS for this installation. Existing verified FIPS details are kept.</p><div class="agent-connect-selection"><template x-for="agent in $store.chat.agentDiscoveredAgents" :key="agent.agentId"><label><input type="checkbox" :checked="$store.chat.agentSelectedDiscoveryIds.includes(agent.agentId)" @change="$store.chat.toggleDiscoveredAgent(agent.agentId)" /><span><strong x-text="agent.name"></strong><small x-text="agent.description || agent.agentId"></small><em x-text="agent.canInstruct ? 'Can receive instructions' : 'Read-only'"></em></span></label></template></div><div class="modal-actions"><button type="button" class="btn-secondary" @click="$store.chat.agentConnectStep = 'package'">Back</button><button type="button" class="btn-primary" @click="$store.chat.installSelectedAutopilotAgents()" :disabled="$store.chat.agentConnectBusy || $store.chat.agentSelectedDiscoveryIds.length === 0" x-text="$store.chat.agentConnectBusy ? 'Saving…' : ($store.chat._verifiedAgentConnectPackage?.transportMode === 'https' ? 'Add selected agents over HTTPS' : 'Add selected agents')"></button></div></div></template>
       <p class="error-text" role="alert" x-show="$store.chat.agentConnectError" x-text="$store.chat.agentConnectError"></p>
     </section>
   </div>

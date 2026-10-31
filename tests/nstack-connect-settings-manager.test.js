@@ -3,6 +3,8 @@ import { nip19 } from 'nostr-tools';
 
 import { FLIGHT_DECK_PG_APP_NPUB } from '../src/app-identity.js';
 
+vi.mock('../src/nstack-agent-discovery.js', () => ({ requireRegisteredAmbulandoApp: vi.fn(async () => ({})) }));
+
 vi.mock('../src/backend-mode.js', () => ({ isTowerPgBackendMode: vi.fn(() => true) }));
 vi.mock('../src/hosted-workspace-signup.js', () => ({
   hostedSignupConfig: vi.fn(),

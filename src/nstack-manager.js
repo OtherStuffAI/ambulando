@@ -229,7 +229,7 @@ export const nstackManagerMixin = {
         },
         label: disclosed.name,
       };
-      const { descriptor, me } = await this.verifyPgDescriptor(candidate, { baseUrl: disclosed.directHttpsUrl });
+      const { descriptor, me } = await this.verifyPgDescriptor(candidate, { baseUrl: disclosed.directHttpsUrl, verifyRegistration: true });
       if (descriptor.workspaceId !== disclosed.workspaceId
         || descriptor.workspaceOwnerNpub !== disclosed.workspaceOwnerNpub
         || descriptor.workspaceServiceNpub !== disclosed.workspaceServiceNpub

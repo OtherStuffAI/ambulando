@@ -1,3 +1,4 @@
+import { requireRegisteredAmbulandoApp } from './nstack-agent-discovery.js';
 import { towerFetch as fetch, connectTowerBridge, getTowerTransport, getTowerTransportPreference, saveTowerTransportPreference } from './tower-transport.js';
 /**
  * Connection, settings, and agent-connect methods extracted from app.js.
@@ -1260,7 +1261,9 @@ export const connectSettingsManagerMixin = {
       if (isTowerPgBackendMode()) {
         const result = await listTowerPgWorkspacesForPicker({
           baseUrl: this.connectHostUrl || this.backendUrl,
-          appNpub: FLIGHT_DECK_PG_APP_NPUB,
+          // App registrations are installation-specific. Show all authorized
+          // locator/app pairs and let the user confirm the exact identity.
+          appNpub: '',
         });
         const mappedWorkspaces = (result.workspaces || []).map((entry) => ({
           ...entry,
@@ -1332,13 +1335,14 @@ export const connectSettingsManagerMixin = {
     await this.selectWorkspace(workspace.workspaceKey || workspace.workspaceOwnerNpub);
   },
 
-  async verifyPgDescriptor(descriptorInput, { baseUrl = null } = {}) {
+  async verifyPgDescriptor(descriptorInput, { baseUrl = null, verifyRegistration = false } = {}) {
     if (!this.session?.npub) throw new Error('Sign in first');
     const candidate = parsePgWorkspaceDescriptor(descriptorInput);
     const towerBaseUrl = normalizeBackendUrl(baseUrl || candidate.towerBaseUrl);
+    const explicitAppNpub = candidate.raw?.identity?.app_npub || candidate.raw?.app_npub || null;
     const descriptor = await getTowerPgWorkspaceDescriptor(candidate.workspaceId, {
       baseUrl: towerBaseUrl,
-      appNpub: candidate.appNpub || FLIGHT_DECK_PG_APP_NPUB,
+      appNpub: explicitAppNpub,
       path: candidate.links.descriptor || null,
     });
     const verified = parsePgWorkspaceDescriptor({
@@ -1351,9 +1355,11 @@ export const connectSettingsManagerMixin = {
     if (candidate.workspaceServiceNpub && verified.workspaceServiceNpub !== candidate.workspaceServiceNpub) {
       throw new Error('Workspace descriptor workspace identity mismatch');
     }
-    if (candidate.appNpub && verified.appNpub !== candidate.appNpub) {
+    if (explicitAppNpub && verified.appNpub !== explicitAppNpub) {
       throw new Error('Workspace descriptor app identity mismatch');
     }
+    if (candidate.workspaceId !== verified.workspaceId || candidate.workspaceOwnerNpub !== verified.workspaceOwnerNpub) throw new Error('Workspace descriptor selection mismatch');
+    if (verifyRegistration) await requireRegisteredAmbulandoApp(towerBaseUrl, verified.workspaceOwnerNpub, { appNpub: verified.appNpub, workspaceId: verified.workspaceId, towerNpub: verified.towerServiceNpub });
     const me = await getTowerPgWorkspaceMe(verified.workspaceId, {
       baseUrl: towerBaseUrl,
       appNpub: verified.appNpub || FLIGHT_DECK_PG_APP_NPUB,
@@ -1421,7 +1427,7 @@ export const connectSettingsManagerMixin = {
   },
 
   async connectWithPgDescriptor(descriptorInput, { closeModal = true, selectWorkspaceOptions = {} } = {}) {
-    const { descriptor, me } = await this.verifyPgDescriptor(descriptorInput);
+    const { descriptor, me } = await this.verifyPgDescriptor(descriptorInput, { verifyRegistration: true });
     const workspace = await this.rememberVerifiedPgWorkspace(descriptor, me, { clearLocalForget: true });
     if (closeModal) this.showConnectModal = false;
     await this.selectWorkspace(workspace.workspaceKey || workspace.workspaceOwnerNpub, {
@@ -1447,7 +1453,7 @@ export const connectSettingsManagerMixin = {
       const { descriptor: verified, me } = await this.verifyPgDescriptor({
         ...descriptor,
         tower_base_url: descriptor.tower_base_url || baseUrl,
-      }, { baseUrl });
+      }, { baseUrl, verifyRegistration: true });
       const workspace = await this.rememberVerifiedPgWorkspace(verified, me, { clearLocalForget: true });
       this.showConnectModal = false;
       await this.selectWorkspace(workspace.workspaceKey || workspace.workspaceOwnerNpub, { pgVerified: true });
@@ -1813,11 +1819,11 @@ export const connectSettingsManagerMixin = {
       session: this.session,
       workspace: this.currentWorkspace,
     }), null, 2);
-    this.showAgentConnectModal = true;
+    this.showAgentConfigModal = true;
   },
 
   closeAgentConnect() {
-    this.showAgentConnectModal = false;
+    this.showAgentConfigModal = false;
   },
 
   async copyAgentConfig() {
