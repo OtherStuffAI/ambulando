@@ -5519,6 +5519,34 @@
         "Keep your local document draft when another person or bot saves a newer version. Review the differences, accept latest with a preserved copy, or merge independent changes and resolve overlaps before saving.",
         "Updated Towers support concurrent document editing sessions. Older Towers retain exclusive editing and preserve drafts for review."
       ]
+    },
+    {
+      "buildNumber": 2685,
+      "label": "Keep known Nostr names available",
+      "notes": [
+        "Saved Nostr names and avatars survive reloads and relay failures. Missing profiles recover in the background, hex and npub identities resolve together, and sparse profile responses preserve known details."
+      ]
+    },
+    {
+      "buildNumber": 2686,
+      "label": "Use saved names in member controls",
+      "notes": [
+        "Member labels and identity selectors use available cached profile names when the workspace has no explicit name. Workspace names retain precedence."
+      ]
+    },
+    {
+      "buildNumber": 2687,
+      "label": "Retain names across legacy identity keys",
+      "notes": [
+        "Prefer the latest saved name when older hex and npub address-book entries describe the same identity, while retaining available avatar details."
+      ]
+    },
+    {
+      "buildNumber": 2688,
+      "label": "Recover profiles when a relay stalls",
+      "notes": [
+        "Keep valid profile replies from responsive relays even when another relay connects but does not finish its response."
+      ]
     }
   ]
 }

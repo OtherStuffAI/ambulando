@@ -1548,6 +1548,8 @@ export const workspaceManagerMixin = {
         this.selectedReportId = null;
         this.activeOpportunityId = null;
         this.closeTaskDetail?.({ syncRoute: false });
+        this._profileWorkspaceGeneration = (this._profileWorkspaceGeneration || 0) + 1;
+        this._wsKeyDisplayMap = {};
         this.chatProfiles = {};
         this.channels = [];
         this.messages = [];

@@ -1,3 +1,4 @@
+import { canonicalProfileNpub, profileHex, mergeUsableProfile, usableProfileText } from './profile-identity.js';
 import { yieldToBrowser } from './utils/yield-to-browser.js';
 import { clampBranchEffectiveMessageIds, threadHistoryLineage, mergeThreadHistoryIds, threadHistoryAuthority } from './thread-history-coverage.js';
 import Dexie from 'dexie';
@@ -1940,17 +1941,19 @@ export async function deleteGroupById(groupId) {
 // ---------------------------------------------------------------------------
 
 export async function upsertAddressBookPerson(entry) {
-  const existing = await sharedDb.address_book.get(entry.npub);
-  const merged = {
-    npub: entry.npub,
-    label: entry.label ?? existing?.label ?? null,
-    avatar_url: entry.avatar_url ?? existing?.avatar_url ?? null,
-    bio: entry.bio ?? entry.about ?? existing?.bio ?? null,
-    nip05: entry.nip05 ?? existing?.nip05 ?? null,
-    source: entry.source ?? existing?.source ?? 'unknown',
-    last_used_at: entry.last_used_at ?? new Date().toISOString(),
-  };
-  return sharedDb.address_book.put(merged);
+  const npub = canonicalProfileNpub(entry.npub);
+  return sharedDb.transaction('rw', sharedDb.address_book, async () => {
+    const existing = await sharedDb.address_book.get(npub);
+    return sharedDb.address_book.put({
+      npub,
+      label: usableProfileText(entry.label, existing?.label),
+      avatar_url: usableProfileText(entry.avatar_url, existing?.avatar_url),
+      bio: usableProfileText(entry.bio, entry.about, existing?.bio),
+      nip05: usableProfileText(entry.nip05, existing?.nip05),
+      source: entry.source ?? existing?.source ?? 'unknown',
+      last_used_at: entry.last_used_at ?? new Date().toISOString(),
+    });
+  });
 }
 
 export async function getAddressBookPeople(query = '') {
@@ -1969,27 +1972,68 @@ export async function getAddressBookPeople(query = '') {
 // profiles — shared DB
 // ---------------------------------------------------------------------------
 
-const PROFILE_CACHE_HOURS = 24;
+// Freshness controls background refresh, never retention of last-known data.
+export async function cacheProfile(pubkey, profile, metadata = {}) {
+  const key = canonicalProfileNpub(pubkey);
+  return sharedDb.transaction('rw', sharedDb.profiles, async () => {
+    const previous = await getCachedProfileRow(key);
+    const timestamp = Number(metadata.created_at || 0);
+    if (previous?.created_at && timestamp < previous.created_at) return previous.profile;
+    if (timestamp === previous?.created_at && previous.event_id && metadata.id >= previous.event_id) {
+      // The same verified event is a successful revalidation. A failed read
+      // never reaches this write, and an older competing event does not renew it.
+      if (metadata.id === previous.event_id) {
+        await sharedDb.profiles.put({ ...previous, pubkey: key, cachedAt: Date.now() });
+      }
+      return previous.profile;
+    }
+    const merged = mergeUsableProfile(previous?.profile, sanitizeForStorage(profile));
+    await sharedDb.profiles.put({
+      pubkey: key, profile: merged, cachedAt: Date.now(),
+      created_at: timestamp || previous?.created_at || 0,
+      event_id: metadata.id || previous?.event_id || null,
+      lastAttemptAt: previous?.lastAttemptAt || 0,
+    });
+    return merged;
+  });
+}
 
-export async function cacheProfile(pubkey, profile) {
-  return sharedDb.profiles.put({
-    pubkey,
-    profile: sanitizeForStorage(profile),
-    cachedAt: Date.now(),
+export async function getCachedProfileRow(pubkey) {
+  const key = canonicalProfileNpub(pubkey);
+  let row = await sharedDb.profiles.get(key);
+  // Read old hex keys without deleting them or resetting any database.
+  try {
+    const legacy = await sharedDb.profiles.get(profileHex(key));
+    if (legacy) {
+      if (!row) row = legacy;
+      else {
+        // Event seconds and local milliseconds are different clocks. Prefer
+        // versioned metadata, then compare like units; merge retained fields.
+        const legacyWins = legacy.created_at && row.created_at
+          ? legacy.created_at > row.created_at
+          : legacy.created_at ? true : row.created_at ? false : legacy.cachedAt > row.cachedAt;
+        const winner = legacyWins ? legacy : row;
+        const other = legacyWins ? row : legacy;
+        row = { ...winner, profile: mergeUsableProfile(other.profile, winner.profile),
+          lastAttemptAt: Math.max(row.lastAttemptAt || 0, legacy.lastAttemptAt || 0) };
+      }
+    }
+  } catch { /* unknown legacy identifier */ }
+  return row || null;
+}
+
+export async function markProfileLookupAttempt(pubkey, now, retryMs) {
+  const key = canonicalProfileNpub(pubkey);
+  return sharedDb.transaction('rw', sharedDb.profiles, async () => {
+    const row = await getCachedProfileRow(key);
+    if (row?.lastAttemptAt && now - row.lastAttemptAt < retryMs) return false;
+    await sharedDb.profiles.put({ ...row, pubkey: key, lastAttemptAt: now });
+    return true;
   });
 }
 
 export async function getCachedProfile(pubkey) {
-  const row = await sharedDb.profiles.get(pubkey);
-  if (!row) return null;
-
-  const maxAge = PROFILE_CACHE_HOURS * 60 * 60 * 1000;
-  if (Date.now() - row.cachedAt > maxAge) {
-    await sharedDb.profiles.delete(pubkey);
-    return null;
-  }
-
-  return row.profile;
+  return (await getCachedProfileRow(pubkey))?.profile || null;
 }
 
 export async function clearCachedProfiles(pubkeys = null) {

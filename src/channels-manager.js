@@ -4340,7 +4340,7 @@ export const channelsManagerMixin = {
       : String(memberOrNpub?.npub || '').trim();
     if (!npub) return 'Unknown member';
     const member = typeof memberOrNpub === 'string' ? (this.pgWorkspaceMembers || []).find((entry) => entry.npub === npub) : memberOrNpub;
-    return String(member?.display_name || '').trim() || npub;
+    return String(member?.display_name || '').trim() || this.getSenderName?.(npub) || npub;
   },
 
   getPgWorkspaceMemberActorId(npub) {

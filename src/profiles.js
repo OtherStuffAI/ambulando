@@ -1,71 +1,64 @@
-import { PUBLIC_NOSTR_RELAYS } from './nostr-relays.js';
-import { nip19, SimplePool } from 'nostr-tools';
-import { cacheProfile, getCachedProfile } from './db.js';
+import { canonicalProfileNpub, profileHex } from './profile-identity.js';
+import { getCachedProfile } from './db.js';
 
-const PROFILE_KIND = 0;
-const RELAYS = PUBLIC_NOSTR_RELAYS;
-const FETCH_TIMEOUT_MS = 2500;
-const PER_RELAY_TIMEOUT_MS = 1200;
+export const npubToHex = profileHex;
+let worker;
+let nextId = 0;
+const requests = new Map();
+const inFlight = new Map();
+const queued = [];
+let active = 0;
 
-export function npubToHex(npub) {
-  const decoded = nip19.decode(npub);
-  if (decoded.type !== 'npub') throw new Error(`Expected npub, got ${decoded.type}`);
-  return decoded.data;
+async function inRelayLane(operation) {
+  if (active >= 4) await new Promise(resolve => queued.push(resolve));
+  active++;
+  try { return await operation(); }
+  finally { active--; queued.shift()?.(); }
 }
 
-export async function fetchProfileByNpub(npub, options = {}) {
-  if (!npub) return null;
-
-  const force = options?.force === true;
-  const cached = await getCachedProfile(npub);
-  if (!force && cached) return cached;
-
-  let pubkeyHex;
-  try {
-    pubkeyHex = npubToHex(npub);
-  } catch {
-    return null;
-  }
-
-  const pool = new SimplePool();
-  const filter = {
-    kinds: [PROFILE_KIND],
-    authors: [pubkeyHex],
-    limit: 1,
+function getWorker() {
+  if (worker) return worker;
+  if (typeof Worker === 'undefined') return null;
+  worker = new Worker(new URL('./worker/profile-worker.js', import.meta.url), { type: 'module' });
+  worker.onmessage = ({ data }) => {
+    const request = requests.get(data.id);
+    if (!request) return;
+    clearTimeout(request.timer);
+    requests.delete(data.id);
+    request.resolve(data.profile);
   };
-
-  try {
-    let events = [];
-
-    try {
-      events = await Promise.race([
-        pool.querySync(RELAYS, filter),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), FETCH_TIMEOUT_MS)),
-      ]);
-    } catch {
-      const relayResults = await Promise.allSettled(
-        RELAYS.map((relay) =>
-          Promise.race([
-            pool.querySync([relay], filter),
-            new Promise((resolve) => setTimeout(() => resolve([]), PER_RELAY_TIMEOUT_MS)),
-          ])
-        )
-      );
-
-      events = relayResults
-        .filter((result) => result.status === 'fulfilled')
-        .flatMap((result) => result.value || []);
+  worker.onerror = () => {
+    for (const request of requests.values()) {
+      clearTimeout(request.timer);
+      request.resolve(null);
     }
+    requests.clear();
+    worker?.terminate();
+    worker = null;
+  };
+  return worker;
+}
 
-    if (!events?.length) return cached || null;
-
-    const latest = events.reduce((a, b) => (a.created_at > b.created_at ? a : b));
-    const profile = JSON.parse(latest.content);
-    await cacheProfile(npub, profile);
-    return profile;
-  } catch {
-    return cached || null;
-  } finally {
-    pool.close(RELAYS);
-  }
+// Rendering can enqueue this method, but only the worker opens relay sockets.
+// Callers hydrate cached data separately, then apply this background result.
+export function fetchProfileByNpub(identity, options = {}) {
+  const npub = canonicalProfileNpub(identity);
+  if (!npub) return Promise.resolve(null);
+  if (inFlight.has(npub)) return inFlight.get(npub);
+  const promise = (async () => {
+    const cached = await getCachedProfile(npub);
+    try {
+      const profile = await inRelayLane(() => new Promise(resolve => {
+        const target = getWorker();
+        if (!target) { resolve(null); return; }
+        const id = ++nextId;
+        const timer = setTimeout(() => { requests.delete(id); resolve(null); }, 30_000);
+        requests.set(id, { resolve, timer });
+        target.postMessage({ id, npub, options: { force: options.force === true } });
+      }));
+      return profile || cached;
+    } catch { return cached; }
+  })().finally(() => inFlight.delete(npub));
+  inFlight.set(npub, promise);
+  return promise;
 }

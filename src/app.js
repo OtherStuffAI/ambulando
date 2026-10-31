@@ -3221,6 +3221,8 @@ export function initApp() {
       this.newGroupName = '';
       this.newGroupMemberQuery = '';
       this.newGroupMembers = [];
+      this._profileWorkspaceGeneration = (this._profileWorkspaceGeneration || 0) + 1;
+      this._wsKeyDisplayMap = {};
       this.chatProfiles = {};
       this.workspaceProfileRowsByKey = {};
       this.selectedWorkspaceKey = '';

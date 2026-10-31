@@ -7,8 +7,10 @@
 
 import {
   getAddressBookPeople,
+  getCachedProfile,
   upsertAddressBookPerson,
 } from './db.js';
+import { canonicalProfileNpub, usableProfileText } from './profile-identity.js';
 import { fetchProfileByNpub } from './profiles.js';
 import { fetchWorkspaceKeyMappings } from './api.js';
 
@@ -107,7 +109,19 @@ function getAddressBookPeopleMap(store) {
   let cached = addressBookPeopleMapCache.get(people);
   if (cached) return cached;
   cached = new Map();
-  for (const person of people) cached.set(person.npub, person);
+  // getAddressBookPeople is newest-first. Merge legacy hex/npub duplicates
+  // without letting an older alias replace the latest saved label.
+  for (const person of people) {
+    const key = canonicalProfileNpub(person.npub);
+    const newer = cached.get(key);
+    cached.set(key, newer ? {
+      ...person, ...newer,
+      label: usableProfileText(newer.label, person.label),
+      avatar_url: usableProfileText(newer.avatar_url, person.avatar_url),
+      bio: usableProfileText(newer.bio, person.bio),
+      nip05: usableProfileText(newer.nip05, person.nip05),
+    } : person);
+  }
   addressBookPeopleMapCache.set(people, cached);
   return cached;
 }
@@ -118,7 +132,7 @@ function isFullNpubCandidate(value = '') {
 }
 
 function addFullNpub(target, value) {
-  const npub = String(value || '').trim();
+  const npub = canonicalProfileNpub(value);
   if (isFullNpubCandidate(npub)) target.add(npub);
 }
 
@@ -203,6 +217,7 @@ export const peopleProfilesManagerMixin = {
 
   // Map of ws_key_npub → real user_npub for display resolution
   _wsKeyDisplayMap: {},
+  _profileWorkspaceGeneration: 0,
 
   /**
    * Fetch workspace key mappings from Tower and populate the display map.
@@ -210,8 +225,11 @@ export const peopleProfilesManagerMixin = {
    */
   async refreshWorkspaceKeyMappings() {
     if (!this.workspaceOwnerNpub) return;
+    const generation = this._profileWorkspaceGeneration;
+    const owner = this.workspaceOwnerNpub;
     try {
       const result = await fetchWorkspaceKeyMappings(this.workspaceOwnerNpub);
+      if (generation !== this._profileWorkspaceGeneration || owner !== this.workspaceOwnerNpub) return;
       const map = {};
       for (const entry of (result.mappings || [])) {
         const workspaceUserKeyNpub = String(
@@ -221,7 +239,7 @@ export const peopleProfilesManagerMixin = {
         ).trim();
         const userNpub = String(entry.user_npub || '').trim();
         if (!workspaceUserKeyNpub || !userNpub) continue;
-        map[workspaceUserKeyNpub] = userNpub;
+        map[canonicalProfileNpub(workspaceUserKeyNpub)] = canonicalProfileNpub(userNpub);
       }
       this._wsKeyDisplayMap = map;
     } catch {
@@ -236,7 +254,8 @@ export const peopleProfilesManagerMixin = {
    */
   resolveDisplayNpub(npub) {
     if (!npub) return npub;
-    return this._wsKeyDisplayMap[npub] || npub;
+    const canonical = canonicalProfileNpub(npub);
+    return this._wsKeyDisplayMap[canonical] || canonical;
   },
 
   // --- profile resolution ---
@@ -248,37 +267,41 @@ export const peopleProfilesManagerMixin = {
     const force = options?.force === true;
     const requirePicture = options?.requirePicture === true;
     if (!npub || current?.loading) return;
-    if (!force && current?.picture) return;
-    if (!force && current?.name && !requirePicture) return;
     const lastLookupAt = Number(current?.profileLookupAttemptedAt || 0);
     if (!force && lastLookupAt && Date.now() - lastLookupAt < PROFILE_LOOKUP_RETRY_MS) return;
     const cached = this.getCachedPerson(npub);
 
-    // Cap chatProfiles at 200 entries — evict oldest when full
-    const MAX_CHAT_PROFILES = 200;
-    const keys = Object.keys(this.chatProfiles);
-    if (keys.length >= MAX_CHAT_PROFILES) {
-      const trimmed = {};
-      // Keep the most recent half
-      const keep = keys.slice(keys.length - Math.floor(MAX_CHAT_PROFILES / 2));
-      for (const k of keep) trimmed[k] = this.chatProfiles[k];
-      this.chatProfiles = trimmed;
-    }
-
-    this.chatProfiles = {
-      ...this.chatProfiles,
-      [npub]: {
-        name: current?.name || cached?.label || null,
-        picture: current?.picture || cached?.avatar_url || null,
-        nip05: current?.nip05 || cached?.nip05 || null,
-        about: current?.about || current?.bio || cached?.bio || null,
-        loading: true,
-        profileLookupAttemptedAt: Date.now(),
-      },
+    const generation = this._profileWorkspaceGeneration;
+    const workspace = this.workspaceOwnerNpub;
+    const isCurrent = () => generation === this._profileWorkspaceGeneration && workspace === this.workspaceOwnerNpub;
+    const apply = (profile, loading) => {
+      if (!isCurrent()) return;
+      const existing = this.chatProfiles[npub] || current || {};
+      this.chatProfiles = {
+        ...this.chatProfiles,
+        [npub]: {
+          ...existing,
+          name: resolveProfileName(profile) || existing.name || cached?.label || null,
+          picture: normalizeProfilePictureUrl(resolveProfilePicture(profile) || existing.picture || cached?.avatar_url),
+          nip05: usableProfileText(profile?.nip05, existing.nip05, cached?.nip05),
+          about: usableProfileText(profile?.about, profile?.bio, existing.about, cached?.bio),
+          loading,
+          profileLookupAttemptedAt: Date.now(),
+          profileRefreshedAt: loading ? existing.profileRefreshedAt : Date.now(),
+        },
+      };
     };
+    apply(null, true);
+    // Hydrate independently of relay latency. A delayed hydration cannot replace
+    // a completed refresh or an authoritative member edit.
+    const hydrationState = this.chatProfiles[npub];
+    const hydration = getCachedProfile(npub).then(profile => {
+      if (this.chatProfiles[npub] === hydrationState) apply(profile, true);
+    }).catch(() => {});
 
-    fetchProfileByNpub(npub, { force: force || requirePicture })
+    return hydration.then(() => fetchProfileByNpub(npub, { force: force || requirePicture }))
       .then((profile) => {
+        if (!isCurrent()) return;
         const existingProfile = this.chatProfiles[npub] || current || {};
         const profileName = resolveProfileName(profile) || existingProfile?.name || cached?.label || null;
         const profilePicture = normalizeProfilePictureUrl(
@@ -295,6 +318,7 @@ export const peopleProfilesManagerMixin = {
             about: profileBio,
             loading: false,
             profileLookupAttemptedAt: Date.now(),
+            profileRefreshedAt: profile ? Date.now() : 0,
           },
         };
         if (profileName || profilePicture || profileNip05 || profileBio) {
@@ -313,19 +337,19 @@ export const peopleProfilesManagerMixin = {
           }).catch(() => {});
         }
       })
-      .catch(() => {
-        this.chatProfiles = {
-          ...this.chatProfiles,
-          [npub]: {
-            name: cached?.label || null,
-            picture: cached?.avatar_url || null,
-            nip05: cached?.nip05 || null,
-            about: cached?.bio || null,
-            loading: false,
-            profileLookupAttemptedAt: Date.now(),
-          },
-        };
-      });
+      .catch(() => { apply(null, false); });
+  },
+
+  refreshKnownNostrProfiles() {
+    if (typeof document !== 'undefined' && document.hidden) return;
+    // Rotate a bounded prefix through known active identities on the existing
+    // visible-session sync cadence. Cooldown and relay concurrency are separate.
+    const npubs = collectKnownProfileNpubs(this);
+    const offset = (this._profileRefreshOffset || 0) % Math.max(npubs.length, 1);
+    for (const npub of [...npubs.slice(offset), ...npubs.slice(0, offset)].slice(0, 20)) {
+      this.resolveChatProfile(npub);
+    }
+    this._profileRefreshOffset = offset + 20;
   },
 
   async refreshNostrProfileCache() {
@@ -334,7 +358,6 @@ export const peopleProfilesManagerMixin = {
     this.nostrProfilesRefreshMessage = '';
     try {
       const npubs = collectKnownProfileNpubs(this);
-      this.chatProfiles = {};
       for (const npub of npubs) {
         this.resolveChatProfile(npub, { force: true });
       }
@@ -351,7 +374,7 @@ export const peopleProfilesManagerMixin = {
 
   getCachedPerson(npub) {
     if (!npub) return null;
-    return getAddressBookPeopleMap(this).get(npub) ?? null;
+    return getAddressBookPeopleMap(this).get(canonicalProfileNpub(npub)) ?? null;
   },
 
   getCachedPersonForSender(rawNpub) {
@@ -373,7 +396,9 @@ export const peopleProfilesManagerMixin = {
     const npub = this.resolveDisplayNpub(rawNpub);
     const rawNpubCandidate = String(rawNpub || '').trim();
     const cached = this.getCachedPersonForSender(rawNpub);
-    const profileName = this.getProfileForSender(rawNpub)?.name;
+    const member = this.pgWorkspaceMembers?.find(member => canonicalProfileNpub(member.npub) === npub);
+    const memberName = usableProfileText(member?.display_name);
+    const profileName = memberName || this.getProfileForSender(rawNpub)?.name;
     if (profileName || cached?.label) return profileName || cached.label;
 
     if (isFullNpubCandidate(rawNpubCandidate) && rawNpubCandidate !== npub) {

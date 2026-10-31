@@ -3607,6 +3607,7 @@ export const syncManagerMixin = {
     }
 
     this.backgroundSyncInFlight = true;
+    this.refreshKnownNostrProfiles?.();
     // Existing active/connected cadence also checks the durable directory due
     // time. This adds no timer and never gates record sync or local rendering.
     if (isTowerPgBackendMode() && !isBrowserOffline()) {
