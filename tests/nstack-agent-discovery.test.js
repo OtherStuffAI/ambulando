@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { nip19 } from 'nostr-tools';
 import { sha256 } from '@noble/hashes/sha2.js';
 import { bytesToHex } from '@noble/hashes/utils.js';
-import { discoverNStackServices, discoverHttpsAutopilot, requireRegisteredAmbulandoApp } from '../src/nstack-agent-discovery.js';
+import { discoverNStackServices, discoverHttpsAutopilot, requireRegisteredAmbulandoApp, workspaceAutopilotConnections, chooseWorkspaceAutopilot } from '../src/nstack-agent-discovery.js';
 import { createAutopilotDiscoveryClient } from '../src/autopilot-connect-client.js';
 import { storedPackage } from '../src/autopilot-connection-refresh.js';
 import { FLIGHT_DECK_PG_APP_NPUB } from '../src/app-identity.js';
@@ -58,5 +58,40 @@ describe('nStack HTTPS agent discovery', () => {
     expect(fetchImpl.mock.calls.every(([url]) => url.startsWith('https://agents.example/'))).toBe(true);
     await client.disconnect();
     expect(() => createAutopilotDiscoveryClient({ ...verified, transportMode: undefined, fipsEndpoint: `http://${npub}.fips:3601`, transportNpub: npub }, { transport: null, fetchImpl })).toThrow(/FIPS transport is unavailable/);
+  });
+});
+
+
+describe('authorized workspace origin discovery', () => {
+  const row = { id: 'stored', workspace_id: 'fixture-workspace', installation_id: installation, https_endpoint: 'https://agents.example', metadata: { installation_npub: npub } };
+  it('reads exact typed workspace/app connections with no descriptor requirement', async () => {
+    const fetchImpl = vi.fn(async () => respond({ identity: registrationIdentity, autopilot_connections: [row], next_cursor: null }));
+    const rows = await workspaceAutopilotConnections('https://tower.example', npub, { workspaceId: 'fixture-workspace', appNpub: FLIGHT_DECK_PG_APP_NPUB, fetchImpl, authHeader: async () => 'Nostr fixture' });
+    expect(chooseWorkspaceAutopilot(rows)).toEqual({ endpoint: 'https://agents.example', connection: row });
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(fetchImpl.mock.calls[0][1].headers['x-flightdeck-pg-app-npub']).toBe(FLIGHT_DECK_PG_APP_NPUB);
+  });
+  it('requires selection for multiple stored installations, and permits an explicit first address', () => {
+    expect(() => chooseWorkspaceAutopilot([row, { ...row, id: 'other' }])).toThrow(/Choose/);
+    expect(chooseWorkspaceAutopilot([row], { connectionId: 'stored' }).connection).toBe(row);
+    expect(chooseWorkspaceAutopilot([], { address: 'https://first.example/' })).toEqual({ endpoint: 'https://first.example', connection: null });
+    expect(chooseWorkspaceAutopilot([row], { address: 'https://agents.example' }).connection).toBe(row);
+    expect(() => chooseWorkspaceAutopilot([{ ...row, https_endpoint: null }])).toThrow(/no stored HTTPS/);
+    expect(() => chooseWorkspaceAutopilot([], { connectionId: '__manual__' })).toThrow(/Enter/);
+    expect(() => chooseWorkspaceAutopilot([], { address: 'http://node.fips:3601' })).toThrow(/HTTPS/);
+  });
+  it('refuses cross-workspace/app/owner lists and archived rows', async () => {
+    const options = { workspaceId: 'fixture-workspace', appNpub: FLIGHT_DECK_PG_APP_NPUB, authHeader: async () => '' };
+    for (const payload of [
+      { identity: { ...registrationIdentity, app_npub: npub }, autopilot_connections: [row] },
+      { identity: { ...registrationIdentity, workspace_owner_npub: 'other' }, autopilot_connections: [row] },
+      { identity: registrationIdentity, autopilot_connections: [{ ...row, workspace_id: 'other' }] },
+    ]) await expect(workspaceAutopilotConnections('https://tower.example', npub, { ...options, fetchImpl: async () => respond(payload) })).rejects.toMatchObject({ code: 'connection_mismatch' });
+    expect(await workspaceAutopilotConnections('https://tower.example', npub, { ...options, fetchImpl: async () => respond({ identity: registrationIdentity, autopilot_connections: [{ ...row, archived_at: 'now' }] }) })).toEqual([]);
+  });
+  it('pins stored installation ID and public identity before any agent reads', async () => {
+    for (const pin of [{ expectedInstallationId: 'autopilot_wrong' }, { expectedInstallationNpub: nip19.npubEncode('22'.repeat(32)) }]) {
+      await expect(discoverHttpsAutopilot('https://agents.example', npub, { ...pin, fetchImpl: async () => respond(health), authHeader: async () => '' })).rejects.toMatchObject({ code: 'installation_mismatch' });
+    }
   });
 });

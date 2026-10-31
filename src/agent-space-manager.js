@@ -1,4 +1,4 @@
-import { discoverNStackServices, discoverHttpsAutopilot, requireRegisteredAmbulandoApp } from './nstack-agent-discovery.js';
+import { discoverNStackServices, discoverHttpsAutopilot, requireRegisteredAmbulandoApp, workspaceAutopilotConnections, chooseWorkspaceAutopilot, nstackHttpsOrigin } from './nstack-agent-discovery.js';
 import { createAutopilotDiscoveryClient, verifyAutopilotConnectPackage } from './autopilot-connect-client.js';
 import { createTowerPgAutopilotConnection, updateTowerPgAutopilotConnection, createTowerPgWorkspaceAgent } from './tower-command-intents.js';
 import { refreshInstalledAutopilotConnection, storedPackage } from './autopilot-connection-refresh.js';
@@ -65,7 +65,7 @@ async function releaseTransientClient(client) {
 }
 
 export const agentSpaceManagerMixin = {
-  agentNStackAddress: '', agentConnections: [], workspaceAgents: [], agentConnectInput: '', agentConnectError: '', agentConnectBusy: false,
+  agentAutopilotAddress: '', agentAutopilotConnectionId: '', agentSetupConnections: [], agentNStackAddress: '', agentConnections: [], workspaceAgents: [], agentConnectInput: '', agentConnectError: '', agentConnectBusy: false,
   _agentDiscoveryContext: '', agentConnectStep: 'package', agentDiscoveredAgents: [], agentSelectedDiscoveryIds: [], _verifiedAgentConnectPackage: null,
   selectedWorkspaceAgentId: '', agentSpaceView: 'overview', agentSpaceLoading: false, agentSpaceError: '', agentSpaceData: null,
   controlledRestartConfirmOpen: false, controlledRestartBusy: false, controlledRestartStatus: null, controlledRestartError: '',
@@ -74,6 +74,7 @@ export const agentSpaceManagerMixin = {
 
   openAgentConnectModal() {
     this.showAgentConnectModal = true; this.agentConnectStep = 'package'; this.agentConnectError = '';
+    this.agentAutopilotAddress = ''; this.agentAutopilotConnectionId = ''; this.agentSetupConnections = [];
     this.agentNStackAddress = this.currentWorkspace?.directHttpsUrl || this.backendUrl || '';
     this.agentConnectInput = ''; this.agentDiscoveredAgents = []; this.agentSelectedDiscoveryIds = []; this._verifiedAgentConnectPackage = null; this._agentDiscoveryContext = '';
   },
@@ -86,16 +87,29 @@ export const agentSpaceManagerMixin = {
   async discoverAgentsFromNStack() {
     if (this.agentConnectBusy) return;
     this.agentConnectBusy = true; this.agentConnectError = '';
+    this._verifiedAgentConnectPackage = null; this.agentDiscoveredAgents = []; this.agentSelectedDiscoveryIds = []; this.agentConnectStep = 'package';
     let client;
     const workspace = this.currentWorkspace;
     const context = discoveryContext(this);
     try {
       if (!workspace?.workspaceId) throw new Error('Connect and select an accessible workspace first.');
-      const services = await discoverNStackServices(this.agentNStackAddress || workspace.directHttpsUrl || this.backendUrl);
-      if (services.origin !== new URL(workspace.directHttpsUrl || this.backendUrl).origin) throw new Error('Select a workspace on this nStack before discovering its agents. Use Add an NStack in Settings.');
-      await requireRegisteredAmbulandoApp(services.origin, workspace.workspaceOwnerNpub, { appNpub: workspace.appNpub, workspaceId: workspace.workspaceId, towerNpub: workspace.towerServiceNpub || workspace.serviceNpub });
-      if (!services.autopilot) throw new Error('This nStack has no advertised Autopilot HTTPS service. Ask its operator to configure NSTACK_AUTOPILOT_PUBLIC_ORIGIN on Tower.');
-      const verified = await discoverHttpsAutopilot(services.autopilot, workspace.workspaceOwnerNpub);
+      const origin = nstackHttpsOrigin(this.agentNStackAddress || workspace.directHttpsUrl || this.backendUrl);
+      if (origin !== nstackHttpsOrigin(workspace.directHttpsUrl || this.backendUrl)) throw new Error('Select a workspace on this nStack before discovering its agents. Use Add an NStack in Settings.');
+      const options = { appNpub: workspace.appNpub, workspaceId: workspace.workspaceId, towerNpub: workspace.towerServiceNpub || workspace.serviceNpub };
+      await requireRegisteredAmbulandoApp(origin, workspace.workspaceOwnerNpub, options);
+      const connections = await workspaceAutopilotConnections(origin, workspace.workspaceOwnerNpub, options);
+      if (discoveryContext(this) !== context) throw new Error('The workspace changed. Retry discovery.');
+      this.agentSetupConnections = connections;
+      let choice = chooseWorkspaceAutopilot(connections, { connectionId: this.agentAutopilotConnectionId, address: this.agentAutopilotAddress });
+      if (!choice) {
+        // Optional advertisement is considered only when no stored/manual target exists.
+        const services = await discoverNStackServices(origin);
+        if (!services.autopilot) throw new Error('Enter the Autopilot HTTPS address below, then retry. No Tower configuration change is needed.');
+        choice = { endpoint: services.autopilot, connection: null };
+      }
+      const verified = await discoverHttpsAutopilot(choice.endpoint, workspace.workspaceOwnerNpub, {
+        expectedInstallationId: choice.connection?.installation_id, expectedInstallationNpub: choice.connection?.metadata?.installation_npub,
+      });
       client = createAutopilotDiscoveryClient(verified);
       const agents = await client.discoverAgents();
       if (discoveryContext(this) !== context) throw new Error('The workspace changed. Retry discovery in the intended workspace.');
@@ -146,7 +160,7 @@ export const agentSpaceManagerMixin = {
       assertContext();
       const connection = response?.autopilot_connection;
       if (!connection?.id) throw new Error('Tower did not return the Autopilot connection.');
-      if (verified.transportMode === 'https' && connection.metadata?.transport_mode !== 'https') {
+      if (verified.transportMode === 'https' && (connection.metadata?.transport_mode !== 'https' || connection.https_endpoint !== verified.httpsEndpoint)) {
         // Add over HTTPS is an explicit preference change; retain signed FIPS
         // identity/endpoints and all previously verified capabilities for recovery.
         await updateTowerPgAutopilotConnection(this, workspaceId, connection.id, {

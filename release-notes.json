@@ -5575,6 +5575,13 @@
       "notes": [
         "Discover available agents from the workspace nStack over advertised HTTPS without copying a short-lived FIPS package. Review the registered app identity and select agents explicitly; signed FIPS setup remains available."
       ]
+    },
+    {
+      "buildNumber": 2693,
+      "label": "Connect agents without Tower configuration",
+      "notes": [
+        "Reuse Autopilot HTTPS connections stored in your workspace, or enter an address during setup. No Tower environment change or service advertisement is required; installation identity and access are verified before agents are saved."
+      ]
     }
   ]
 }

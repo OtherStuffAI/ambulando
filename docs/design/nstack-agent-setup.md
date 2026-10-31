@@ -21,12 +21,36 @@ registered app, not automatic identification by display name. Different app
 namespaces remain separate workspace choices; no first-match search or fallback
 to another app is used.
 
-From Agents, Add agents discovers `/.well-known/nstack.json` at the selected
-nStack HTTPS origin. The Tower entry must match that origin. Exactly one
-explicitly configured `autopilot` service supplies the HTTPS origin; none is an
-actionable configuration error and multiple entries are refused. Tower advertises
-this service only when `NSTACK_AUTOPILOT_PUBLIC_ORIGIN` is configured as a safe
-root origin. Its health observation is `unknown` until clients check it.
+From Agents, Add agents first reads the selected workspace's existing typed
+`autopilot-connections` with fresh `workspace.read` authorization and the exact
+app identity. A single stored connection supplies its `https_endpoint`; multiple
+installations require an explicit selection. Archived and cross-workspace rows
+are refused. Stored installation ID and public identity (when present) must match
+fresh health. A stored record is a discovery input, not a health assertion.
+
+For a first connection, enter the Autopilot root HTTPS address in setup. It is
+verified before agent selection and saved through the existing typed commands
+only when the user adds agents. An address matching a stored connection retains
+its identity pins. No Tower environment change is required. A selected connection
+without HTTPS requires explicit address entry; selected FIPS never silently
+falls back. This setup action explicitly chooses HTTPS for the agents being added.
+
+Only when there is no stored or explicit target may `/.well-known/nstack.json`
+supply an optional `autopilot` hint. Missing advertisement prompts for the address;
+multiple hints require explicit input. Optional advertisement is never required
+for stored/manual targets, and is never retried as a fallback after denied or
+unavailable health/agent reads. The descriptor's Tower entry must match the
+selected origin when the descriptor is used.
+
+AP-to-workspace onboarding stores a Tower backend connection/subscription,
+workspace/app identity and workspace-key registration. That direction does not
+automatically publish the reverse typed `autopilot_connection` record or an
+Autopilot public HTTPS origin into the workspace. Older flat launcher settings
+may contain URLs (and local compatibility cards), but do not prove an installation
+identity. They are not silently promoted to typed connections by this flow.
+Existing typed connections avoid repeated address entry; when none exists, the
+address must be supplied once here (or by optional advertisement). Setup does not
+create an app registration, alter delegation, or auto-register every agent.
 
 Owner health and agent reads use fresh exact NIP-98 signatures over HTTPS.
 Autopilot independently checks owner/delegation scope, resource filters and agent
@@ -48,10 +72,12 @@ The native iPhone/Mac app shares the same HTTPS discovery and command flow in
 identity and confirms it visibly. Native still refuses FIPS; no native FIPS
 implementation is included. Android is deferred.
 
-Activation requires updated Tower source and the explicit Autopilot origin
-configuration, updated Autopilot owner-read routes, and updated clients. Backend
-source tests do not activate running services. Autopilot restart requires separate
-operator approval. After activation, check registration as a typed-only member,
-HTTPS discovery with FIPS unavailable, selected-agent add/retry/reload, and real
-browser-provider consent/revocation. Fixture agents do not establish a real Kato
+Running services still need to support the exact typed app-registration route
+and authorized owner HTTPS health/agent reads. That is a service-version and
+permission requirement, never a Tower environment prerequisite. Backend source
+tests do not activate running services. Autopilot restart requires separate
+operator approval. Check registration as a typed-only member, HTTPS discovery
+with FIPS unavailable, stored connection with no descriptor AP entry, first-time
+address, selected-agent add/retry/reload, denied/ambiguous/unavailable states, and
+real browser-provider consent/revocation. Fixture agents do not establish a live
 connection. Setup sends no instructions or messages to agents.

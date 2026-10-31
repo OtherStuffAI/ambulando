@@ -8,7 +8,7 @@ const { test, expect } = require('playwright/test');
 const { generateSecretKey, getPublicKey, finalizeEvent, nip19 } = require('nostr-tools');
 const { createHash } = require('node:crypto');
 
-for (const mode of ['available', 'no-agents', 'missing-app', 'offline', 'declined']) {
+for (const mode of ['available', 'stored-no-advertisement', 'first-address', 'ambiguous', 'identity-mismatch', 'no-address', 'no-agents', 'missing-app', 'offline', 'declined', 'stored-denied']) {
   test(`nStack agent setup UI: ${mode}`, async ({ page, baseURL }) => {
     test.setTimeout(60000);
 
@@ -39,8 +39,15 @@ for (const mode of ['available', 'no-agents', 'missing-app', 'offline', 'decline
       const json = body => route.fulfill({ contentType: 'application/json', body: JSON.stringify(body) });
       if (request.method() === 'POST' && url.pathname.endsWith('/autopilot-connections')) return json({ autopilot_connection: { id: '50000000-0000-4000-8000-000000000001', ...request.postDataJSON() } });
       if (request.method() === 'POST' && url.pathname.endsWith('/workspace-agents')) return json({ workspace_agent: { id: '50000000-0000-4000-8000-000000000002', ...request.postDataJSON() } });
+      if (request.method() === 'GET' && url.pathname.endsWith('/autopilot-connections')) {
+        if (mode === 'stored-denied') return route.fulfill({ status: 403, body: '{}' });
+        const row = { id: 'stored-installation', workspace_id: '10000000-0000-4000-8000-000000000001', installation_id: mode === 'identity-mismatch' ? 'autopilot_wrong' : installation,
+          display_name: 'Stored Autopilot', https_endpoint: 'https://agents.fixture', metadata: { installation_npub: npub } };
+        return json({ identity: { workspace_id: row.workspace_id, workspace_owner_npub: npub, app_npub: npub },
+          autopilot_connections: ['stored-no-advertisement', 'identity-mismatch', 'ambiguous'].includes(mode) ? [row, ...(mode === 'ambiguous' ? [{ ...row, id: 'second-installation', installation_id: 'autopilot_second' }] : [])] : [], next_cursor: null });
+      }
       if (url.pathname === '/.well-known/nstack.json') return json({ schema: 'org.wingman.nstack.services', schema_version: 1, services: [
-        { kind: 'tower', endpoint: 'https://stack.fixture' }, { kind: 'autopilot', endpoint: 'https://agents.fixture' },
+        { kind: 'tower', endpoint: 'https://stack.fixture' }, ...(['stored-no-advertisement', 'first-address', 'no-address'].includes(mode) ? [] : [{ kind: 'autopilot', endpoint: 'https://agents.fixture' }]),
       ] });
       if (url.pathname.endsWith('/app-registration')) {
         return json({ identity: { workspace_id: '10000000-0000-4000-8000-000000000001', workspace_owner_npub: npub, app_npub: npub }, registration: { installed: mode !== 'missing-app', enabled: mode !== 'missing-app', app_npub: npub } });
@@ -57,8 +64,15 @@ for (const mode of ['available', 'no-agents', 'missing-app', 'offline', 'decline
     await page.waitForFunction(() => Boolean(window.setupFixture));
     await page.evaluate(bytes => window.setupFixture(bytes), [...secret]);
     await expect(page.getByLabel('Agent nStack HTTPS address')).toHaveValue('https://stack.fixture');
+    if (mode === 'first-address') await page.getByLabel('Autopilot HTTPS address', { exact: true }).fill('https://agents.fixture');
     await page.getByRole('button', { name: 'Discover available agents', exact: true }).click();
-    if (mode === 'available') {
+    if (mode === 'ambiguous') {
+      await expect(page.getByTestId('agent-connect-modal')).toContainText('Choose the intended stored Autopilot');
+      expect(requests.some(r => r.url.includes('agents.fixture'))).toBe(false);
+      await page.getByLabel('Autopilot installation', { exact: true }).selectOption('stored-installation');
+      await page.getByRole('button', { name: 'Discover available agents', exact: true }).click();
+    }
+    if (['available', 'stored-no-advertisement', 'first-address', 'ambiguous'].includes(mode)) {
       await expect(page.locator('.agent-connect-selection')).toContainText('Fixture Agent');
       await expect(page.getByRole('button', { name: 'Add selected agents over HTTPS' })).toBeDisabled();
       await page.locator('.agent-connect-selection input').check();
@@ -67,10 +81,11 @@ for (const mode of ['available', 'no-agents', 'missing-app', 'offline', 'decline
       await expect(page.getByTestId('agent-connect-modal')).toBeHidden();
       expect(await page.evaluate(() => window.fixtureInstalledAgent)).toBe('50000000-0000-4000-8000-000000000002');
     } else {
-      const message = { 'no-agents': 'No available agents', 'missing-app': 'not registered and enabled', offline: 'unavailable (HTTP 503)', declined: 'cannot access this workspace or service' }[mode];
+      const message = { 'no-agents': 'No available agents', 'missing-app': 'not registered and enabled', offline: 'unavailable (HTTP 503)', declined: 'cannot access this workspace or service', 'stored-denied': 'cannot access this workspace or service', 'identity-mismatch': 'different installation', 'no-address': 'Enter the Autopilot HTTPS address below' }[mode];
       await expect(page.getByTestId('agent-connect-modal')).toContainText(message);
     }
-    expect(requests.filter(request => request.method === 'POST')).toHaveLength(mode === 'available' ? 2 : 0);
+    expect(requests.filter(request => request.method === 'POST')).toHaveLength(['available', 'stored-no-advertisement', 'first-address', 'ambiguous'].includes(mode) ? 2 : 0);
+    if (['stored-no-advertisement', 'first-address', 'ambiguous', 'stored-denied'].includes(mode)) expect(requests.some(r => r.url.endsWith('/nstack.json'))).toBe(false);
     expect(requests.some(request => /messages|instructions/.test(request.url))).toBe(false);
     expect(requests.filter(request => !request.url.endsWith('/nstack.json')).every(request => request.authorization?.startsWith('Nostr '))).toBe(true);
   });

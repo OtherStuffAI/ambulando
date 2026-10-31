@@ -14,8 +14,9 @@ export function nstackHttpsOrigin(value) {
   }
   return url.origin;
 }
-export async function nstackJson(url, { fetchImpl = globalThis.fetch, authHeader = createNip98AuthHeader, signed = true } = {}) {
+export async function nstackJson(url, { fetchImpl = globalThis.fetch, authHeader = createNip98AuthHeader, signed = true, appNpub } = {}) {
   const headers = { Accept: 'application/json' };
+  if (appNpub) headers['x-flightdeck-pg-app-npub'] = appNpub;
   if (signed) headers.Authorization = await authHeader(url, 'GET', null);
   let response;
   try { response = await fetchImpl(url, { headers, credentials: 'omit', redirect: 'error', signal: AbortSignal.timeout(15000) }); }
@@ -34,6 +35,36 @@ export async function discoverNStackServices(address, options = {}) {
   if (autopilots.length > 1) fail('descriptor_invalid', 'This nStack advertises multiple Autopilot services. Ask its operator to identify the intended service.');
   return { origin, autopilot: autopilots.length ? nstackHttpsOrigin(autopilots[0].endpoint) : null };
 }
+// Fresh typed records are discovery inputs, never proof that an endpoint is healthy.
+export async function workspaceAutopilotConnections(origin, ownerNpub, options = {}) {
+  const payload = await nstackJson(`${nstackHttpsOrigin(origin)}/api/v4/flightdeck-pg/workspaces/${encodeURIComponent(options.workspaceId)}/autopilot-connections`, options);
+  const identity = payload?.identity;
+  if (identity?.workspace_id !== options.workspaceId || identity?.workspace_owner_npub !== ownerNpub
+    || identity?.app_npub !== options.appNpub || (options.towerNpub && identity?.tower_service_npub !== options.towerNpub)) {
+    fail('connection_mismatch', 'Stored connections do not match the selected workspace. Refresh workspace discovery.');
+  }
+  if (!Array.isArray(payload.autopilot_connections) || payload.next_cursor) fail('connections_invalid', 'The workspace connection list is incomplete. Retry after the service is available.');
+  const rows = payload.autopilot_connections;
+  if (rows.some(row => row.workspace_id !== options.workspaceId)) fail('connection_mismatch', 'A connection belongs to another workspace.');
+  return rows.filter(row => !row.archived_at);
+}
+
+export function chooseWorkspaceAutopilot(connections, { connectionId = '', address = '' } = {}) {
+  // A manual address is an explicit setup action, never a fallback after a denial.
+  if (connectionId === '__manual__' || (!connectionId && text(address))) {
+    if (!text(address)) fail('endpoint_required', 'Enter the Autopilot HTTPS address, then retry.');
+    const endpoint = nstackHttpsOrigin(address);
+    const matches = connections.filter(row => row.https_endpoint && nstackHttpsOrigin(row.https_endpoint) === endpoint);
+    if (matches.length > 1) fail('connection_ambiguous', 'Several installations use this address. Choose a stored installation.');
+    return { endpoint, connection: matches[0] || null };
+  }
+  const row = connectionId ? connections.find(row => row.id === connectionId) : connections.length === 1 ? connections[0] : null;
+  if (!row && (connectionId || connections.length > 1)) fail('connection_ambiguous', 'Choose the intended stored Autopilot installation or enter a new HTTPS address.');
+  if (!row) return null;
+  if (!row.https_endpoint) fail('endpoint_required', 'This installation has no stored HTTPS address. Choose Enter an HTTPS address to supply it explicitly.');
+  return { endpoint: nstackHttpsOrigin(row.https_endpoint), connection: row };
+}
+
 export async function requireRegisteredAmbulandoApp(origin, ownerNpub, options = {}) {
   const appNpub = options.appNpub || FLIGHT_DECK_PG_APP_NPUB;
   try { if (nip19.decode(appNpub).type !== 'npub') throw new Error(); } catch { fail('ambulando_app_missing', 'The selected workspace has no valid registered app identity. Ask its owner for a valid workspace locator.'); }
@@ -55,6 +86,8 @@ export async function discoverHttpsAutopilot(endpoint, ownerNpub, options = {}) 
   if (health.ok !== true || health.api_version !== 1 || !/^autopilot_[a-f0-9]{32}$/.test(health.installation_id)) fail('installation_invalid', 'Autopilot health did not return a supported installation identity.');
   const expectedId = `autopilot_${bytesToHex(sha256(new TextEncoder().encode(nip19.decode(health.installation_npub).data))).slice(0, 32)}`;
   if (health.installation_id !== expectedId) fail('installation_invalid', 'Autopilot installation ID does not match its public identity.');
+  if (options.expectedInstallationId && health.installation_id !== options.expectedInstallationId
+    || options.expectedInstallationNpub && health.installation_npub !== options.expectedInstallationNpub) fail('installation_mismatch', 'This HTTPS address identifies a different installation than the stored connection. No agents were saved.');
   return Object.freeze({ installationId: health.installation_id, installationNpub: health.installation_npub,
     transportMode: 'https', httpsEndpoint: origin, fipsEndpoint: null, transportNpub: null,
     apiVersion: 1, version: 0, capabilities: ['health', 'agents.read'], healthPath: `${base}/health`, agentsPath: `${base}/agents` });
