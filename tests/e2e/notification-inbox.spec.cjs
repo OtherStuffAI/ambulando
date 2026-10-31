@@ -98,3 +98,26 @@ test('fixture: empty and unsupported states are explicit, never a blank panel', 
   await expect(page.getByTestId('notification-inbox-empty')).toContainText('does not provide');
   await expect(page.getByTestId('notification-inbox-mark-all')).toBeDisabled();
 });
+
+
+test('fixture: channel readers can mute notifications on desktop and phone; direct conversations keep their own policy', async ({ page }) => {
+  await seed(page, { width: 1280, height: 800 });
+  await page.evaluate(() => {
+    const s = window.Alpine.store('chat');
+    s.channels = [{ record_id: 'quiet-channel', title: 'Research', channel_type: 'channel' }];
+    s.selectedChannelId = 'quiet-channel';
+    s.channelSettingsChannelId = 'quiet-channel';
+    s.channelNotificationSupported = true; s.channelNotificationReady = true;
+    s.channelNotificationPreferences = [];
+    s.showChannelSettingsModal = true;
+    // Fixture checks the real bound control; transport/CAS/snapshot behavior has integration coverage.
+    s.setChannelMentionsOnly = async muted => { s.channelNotificationPreferences = [{ channel_id: 'quiet-channel', mode: muted ? 'mentions_only' : 'all', row_version: 1 }]; };
+  });
+  const toggle = page.getByTestId('channel-mentions-only');
+  await expect(toggle).toBeVisible(); await expect(toggle).toBeEnabled();
+  await toggle.check(); await expect(toggle).toBeChecked();
+  await page.setViewportSize({ width: 390, height: 760 });
+  await expect(toggle).toBeVisible(); await toggle.uncheck(); await expect(toggle).not.toBeChecked();
+  await page.evaluate(() => { const s = window.Alpine.store('chat'); s.channels[0].channel_type = 'dm'; });
+  await expect(toggle).toBeHidden();
+});

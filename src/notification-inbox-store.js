@@ -178,6 +178,10 @@ export async function applyNotificationInboxOperation(input, db = getWorkspaceDb
         state.head_seq = Math.max(state.head_seq, input.head_seq || 0);
         break;
       }
+      case 'channel_preferences':
+        state.channel_preferences = input.preferences;
+        state.channel_preferences_supported = input.supported;
+        break;
       case 'counts':
         state.counts = input.counts;
         if (input.counts?.inbox_started_at) state.activated_at = input.counts.inbox_started_at;

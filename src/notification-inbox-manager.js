@@ -1,3 +1,4 @@
+import { isDmChannel } from './dm-scope.js';
 import { liveQuery } from 'dexie';
 import { getWorkspaceDb } from './db.js';
 import { buildSectionUrl } from './route-helpers.js';
@@ -6,7 +7,7 @@ import {
   queueNotificationPatch, unreadCount,
 } from './notification-inbox-store.js';
 import { hydrateArchivedNotifications } from './notification-inbox-sync.js';
-import { NotificationRulesConflictError, buildCategoryRows, fetchNotificationPreferences, saveInboxRule } from './notification-rules.js';
+import { NotificationRulesConflictError, buildCategoryRows, fetchNotificationPreferences, saveInboxRule, saveChannelNotificationPreference } from './notification-rules.js';
 
 const subscriptions = new WeakMap();
 export const NOTIFICATION_BADGE_CAP = 99;
@@ -80,6 +81,11 @@ export const notificationInboxMixin = {
   notificationPrefsRegistry: null,
   notificationPrefsRules: [],
   notificationPrefsRevision: null,
+  channelNotificationPreferences: [],
+  channelNotificationSupported: false,
+  channelNotificationReady: false,
+  channelNotificationSaving: false,
+  channelNotificationError: '',
 
   get notificationInboxBadge() {
     const count = this.notificationInboxUnread;
@@ -117,6 +123,11 @@ export const notificationInboxMixin = {
     this.notificationPrefsRegistry = null;
     this.notificationPrefsRules = [];
     this.notificationPrefsRevision = null;
+    this.channelNotificationPreferences = [];
+    this.channelNotificationSupported = false;
+    this.channelNotificationReady = false;
+    this.channelNotificationSaving = false;
+    this.channelNotificationError = '';
   },
 
   activateNotificationInbox() {
@@ -151,6 +162,9 @@ export const notificationInboxMixin = {
     this.notificationInboxCategories = [...new Set(projectNotificationInbox(rows, state, { view }).map(item => item.category))].sort();
     this.notificationInboxItems = projected.map(item => ({ ...item, ageLabel: relativeTime(item.occurred_at), route: notificationTargetRoute(item) }));
     this.notificationInboxUnread = unreadCount(rows, state);
+    this.channelNotificationPreferences = state?.channel_preferences || [];
+    this.channelNotificationSupported = state?.channel_preferences_supported === true;
+    this.channelNotificationReady = typeof state?.channel_preferences_supported === 'boolean';
     this.notificationInboxReady = Boolean(state?.ready);
     this.notificationInboxStatus = state?.status || 'unknown';
     this.notificationInboxCounts = state?.counts || null;
@@ -160,6 +174,50 @@ export const notificationInboxMixin = {
     this.notificationInboxMessage = STATUS_COPY[state?.status] || state?.error || '';
     // Preferences changed on another device (a rules_changed reset or a newer rules_revision seen by sync): the settings list is stale.
     if (this.notificationPrefsLoaded && state?.prefs_stale) this.notificationPrefsLoaded = false;
+  },
+
+  get channelNotificationsApplicable() {
+    const channel = (this.channels || []).find(row => row.record_id === this.channelSettingsChannelId);
+    return Boolean(this.isTowerPgMode && channel && !isDmChannel(channel));
+  },
+  isChannelMentionsOnly(channelId) {
+    return this.channelNotificationPreferences.some(row => row.channel_id === channelId && row.mode === 'mentions_only');
+  },
+  async refreshChannelNotificationPreferences() {
+    const key = notificationInboxContextOrNull(this)?.key;
+    this.channelNotificationError = '';
+    try { await this.requestTowerSyncFamily?.('notification-inbox'); }
+    catch { if (notificationInboxContextOrNull(this)?.key === key) this.channelNotificationError = 'Could not refresh notification settings. Try again when connected.'; }
+  },
+  async setChannelMentionsOnly(mentionsOnly, options = {}) {
+    if (this.channelNotificationSaving || !this.channelNotificationsApplicable || !this.channelNotificationSupported) return;
+    const context = notificationInboxContextOrNull(this);
+    if (!context) { this.channelNotificationError = 'Sign in and finish workspace synchronization before changing notifications.'; return; }
+    const channelId = this.channelSettingsChannelId;
+    const prior = this.channelNotificationPreferences.find(row => row.channel_id === channelId);
+    const current = () => notificationInboxContextOrNull(this)?.key === context.key;
+    this.channelNotificationSaving = true;
+    this.channelNotificationError = '';
+    try {
+      const response = await saveChannelNotificationPreference(this, channelId, mentionsOnly ? 'mentions_only' : 'all', prior?.row_version ?? 0, options);
+      if (!current()) return;
+      const service = this.getTowerSyncService();
+      const savedState = await getWorkspaceDb().notification_inbox.get(context.key);
+      if (!current()) return;
+      const materializeOptions = { workspaceDbKey: this.workspaceDbKey, store: this.buildTowerPgMaterializationStoreSnapshot() };
+      const operationContext = this.notificationInboxOperationContext(context.key);
+      await service.materialize('workspace-bundle', { notification_inbox_operation: { action: 'channel_preferences', context: operationContext, preferences: response.channel_preferences, supported: true } }, materializeOptions);
+      await service.materialize('workspace-bundle', { notification_inbox_operation: { action: 'needs_snapshot', context: operationContext } }, materializeOptions);
+      if (savedState?.archived_hydrated) await service.materialize('workspace-bundle', { notification_inbox_operation: { action: 'rehydrate_archived', context: operationContext } }, materializeOptions);
+      await this.requestTowerSyncFamily?.('notification-inbox');
+    } catch (error) {
+      if (!current()) return;
+      this.channelNotificationError = error.status === 409
+        ? 'This channel setting changed on another device. Review the refreshed setting and try again.'
+        : (error.message || 'Could not save channel notifications.');
+      // Never retry a stale compare-and-set or assume an uncertain write failed.
+      try { await this.requestTowerSyncFamily?.('notification-inbox'); } catch { /* preserve error */ }
+    } finally { if (current()) this.channelNotificationSaving = false; }
   },
 
   toggleNotificationInbox(open = !this.notificationInboxOpen) {

@@ -45,6 +45,18 @@ async function pass(store, service, context, { db, transport, now, snapshotPageB
   let state = await readState();
   if (state?.status === 'unsupported' && now() < state.retry_after) return;
   try {
+    // Channel preferences share the actor-private inbox lifecycle and worker materialization.
+    // Older Towers still provide an inbox even when this optional control is unavailable.
+    try {
+      const preferences = await request('channel-preferences');
+      if (!current()) return;
+      if (preferences?.identity?.workspace_id !== undefined && preferences.identity.workspace_id !== context.workspaceId) throw new Error('Channel preferences belong to another workspace.');
+      if (!Array.isArray(preferences?.channel_preferences)) throw new Error('Invalid channel notification preferences.');
+      await materialize({ action: 'channel_preferences', preferences: preferences.channel_preferences, supported: true });
+    } catch (error) {
+      if (![404, 405, 501].includes(error.status)) throw error;
+      await materialize({ action: 'channel_preferences', preferences: [], supported: false });
+    }
     if (!state?.ready || state.needs_snapshot || state.snapshot?.partition === 'inbox') {
       // Ready only at next_cursor=null; a budget-bounded job resumes in the next pass with the same origin.
       if (!await snapshot('inbox')) { slots.get(service).dirty = current(); return; }

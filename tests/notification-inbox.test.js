@@ -14,7 +14,7 @@ import { normalizeNotificationItem } from '../src/notification-inbox-wire.js';
 // shares state between the independent Dexie/service pairs below.
 class FakeTower {
   constructor(workspace = 'ws') { this.workspace = workspace; this.actors = new Map(); this.receipts = new Map(); this.offline = new Set(); this.unsupported = false; this.floor = 0; this.calls = []; }
-  actor(id) { if (!this.actors.has(id)) this.actors.set(id, { seq: 0, items: new Map(), tombstones: [], rules: new Map(), rulesRevision: 1 }); return this.actors.get(id); }
+  actor(id) { if (!this.actors.has(id)) this.actors.set(id, { seq: 0, items: new Map(), tombstones: [], rules: new Map(), channelPreferences: new Map(), rulesRevision: 1 }); return this.actors.get(id); }
   wire(actorId, item) {
     return { schema: 'org.wingman.notification.item', version: 1, id: item.id, workspace_id: this.workspace, recipient_actor_id: actorId, change_seq: item.change_seq, row_version: item.row_version,
       source: { app_id: 'flightdeck.core', label: 'Flight Deck', kind: 'tower_rule' }, category: item.category || 'mention', reasons: ['mention'], severity: 'normal', status: item.status || 'active', origin: 'live',
@@ -32,6 +32,7 @@ class FakeTower {
   remove(actorId, id) { const a = this.actor(actorId); a.items.delete(id); a.tombstones.push({ id, change_seq: ++a.seq }); }
   // Wire v1.1 visibility: a presentation filter per client app. Hiding never touches the shared item or its read state.
   visible(a, item, client) {
+    if ((item.category || 'mention') === 'chat_thread' && a.channelPreferences.get(item.target?.channel_id || 'c1')?.mode === 'mentions_only') return false;
     if (!client) return true;
     if (item.hidden_from?.includes(client)) return false;
     const rule = a.rules.get(`flightdeck.core|${item.category || 'mention'}|${client}|inbox`);
@@ -59,6 +60,14 @@ class FakeTower {
     if (this.offline.has(actorId)) throw new Error('offline');
     if (this.unsupported) throw Object.assign(new Error('not found'), { status: 404 });
     const a = this.actor(actorId); const identity = { workspace_id: this.workspace };
+    if (route === 'channel-preferences') return { identity, channel_preferences: [...a.channelPreferences.values()], rules_revision: a.rulesRevision };
+    if (route.startsWith('channel-preferences/') && method === 'PUT') {
+      const channel_id = route.split('/')[1], prior = a.channelPreferences.get(channel_id);
+      if ((prior?.row_version ?? 0) !== body.expected_row_version) throw Object.assign(new Error('conflict'), { status: 409 });
+      a.channelPreferences.set(channel_id, { channel_id, mode: body.mode, row_version: (prior?.row_version ?? 0) + 1 });
+      a.rulesRevision += 1;
+      return { identity, channel_preferences: [...a.channelPreferences.values()], rules_revision: a.rulesRevision };
+    }
     if (route === 'items' && method === 'GET') {
       const view = query.view || 'inbox';
       const all = [...a.items.values()].filter(i => this.visible(a, i, query.client_app_id)).filter(i => view === 'archived' ? i.archived && !i.dismissed : !i.archived && !i.dismissed).sort((x, y) => y.change_seq - x.change_seq);
@@ -596,5 +605,38 @@ describe('wire v1.1: per-app view, rules revision and rule CAS', () => {
     // A durable default row still supplies the version for CAS while the registry default decides the display.
     expect(rows[0]).toMatchObject({ inboxOn: true, explicit: false, expected_row_version: 4, sharedOff: false });
     expect(rows[1]).toMatchObject({ inboxOn: false, sharedOff: true, expected_row_version: 3 });
+  });
+});
+
+
+describe('channel mentions-only preference synchronization', () => {
+  it('removes existing ordinary bell entries/counts on two devices without marking content read and preserves mentions/DMs/other actors', async () => {
+    const [one, two] = devices;
+    const bob = device('bob', { actor: 'bob' }); await bob.db.open();
+    for (const actor of ['alice', 'bob']) {
+      server.emit(actor, 'ordinary', { category: 'chat_thread' });
+      server.emit(actor, 'tag', { category: 'mention' });
+      server.emit(actor, 'dm', { category: 'dm' });
+      server.emit(actor, 'other-channel', { category: 'chat_thread', target: { kind: 'thread', channel_id: 'c2' } });
+    }
+    await one.sync(); await two.sync(); await bob.sync();
+    expect(unreadCount(await rows(one), await state(one))).toBe(4);
+    await one.transport('ws', 'channel-preferences/c1', { method: 'PUT', body: { mode: 'mentions_only', expected_row_version: 0 } });
+    await one.sync(); await two.sync(); await bob.sync();
+    for (const d of [one, two]) {
+      expect((await view(d)).map(i => i.id).sort()).toEqual(['dm', 'other-channel', 'tag']);
+      expect(unreadCount(await rows(d), await state(d))).toBe(3);
+      expect((await state(d)).channel_preferences).toEqual([{ channel_id: 'c1', mode: 'mentions_only', row_version: 1 }]);
+    }
+    expect(unreadCount(await rows(bob), await state(bob))).toBe(4);
+    expect(server.actor('alice').items.get('ordinary').read).toBeUndefined();
+    // Reopening a device materializes the persisted authority, not a device-only toggle.
+    const reopened = device('reopened'); await reopened.db.open(); await reopened.sync();
+    expect((await state(reopened)).channel_preferences[0].mode).toBe('mentions_only');
+    await two.transport('ws', 'channel-preferences/c1', { method: 'PUT', body: { mode: 'all', expected_row_version: 1 } });
+    server.emit('alice', 'future', { category: 'chat_thread' });
+    await one.sync(); await two.sync();
+    expect((await view(one)).map(i => i.id)).toContain('future');
+    expect(unreadCount(await rows(one), await state(one))).toBe(5);
   });
 });

@@ -5582,6 +5582,19 @@
       "notes": [
         "Reuse Autopilot HTTPS connections stored in your workspace, or enter an address during setup. No Tower environment change or service advertisement is required; installation identity and access are verified before agents are saved."
       ]
+    },
+    {
+      "buildNumber": 2694,
+      "label": "Quiet channel notifications except mentions",
+      "notes": [
+        "Mute ordinary channel push and bell notifications in Channel settings while keeping direct mentions. Your preference follows you across web, iPhone and Mac on an updated Tower; messages remain unread."
+      ]
+    },
+    {
+      "buildNumber": 2695,
+      "label": "Channel preference transport validation",
+      "notes": [],
+      "noUserVisibleChanges": true
     }
   ]
 }

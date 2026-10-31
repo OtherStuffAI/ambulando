@@ -10426,6 +10426,23 @@
             <p class="docs-browser-empty" x-text="$store.chat.selectedChannel ? $store.chat.getChannelLabel($store.chat.selectedChannel) : ''"></p>
             <p class="docs-browser-empty" x-text="$store.chat.selectedChannel ? (($store.chat.getChannelParticipants($store.chat.selectedChannel) || []).length + ' participants') : ''"></p>
 
+            <section class="channel-metadata-panel" x-show="$store.chat.channelNotificationsApplicable">
+              <label class="task-field-label" for="channel-mentions-only">Notifications for you</label>
+              <label class="settings-checkbox">
+                <input id="channel-mentions-only" type="checkbox" data-testid="channel-mentions-only"
+                  :checked="$store.chat.isChannelMentionsOnly($store.chat.channelSettingsChannelId)"
+                  :disabled="!$store.chat.channelNotificationSupported || $store.chat.channelNotificationSaving"
+                  @change="$store.chat.setChannelMentionsOnly($event.target.checked)" />
+                <span>Mute this channel except mentions</span>
+              </label>
+              <p class="groups-subtitle">Quiet ordinary channel push and bell notifications on all your devices. Direct mentions still follow your mention settings. Messages stay unread. Unmute to resume normal notifications.</p>
+              <p class="groups-subtitle" x-show="!$store.chat.channelNotificationReady">Loading notification settings…</p>
+              <p class="groups-subtitle" x-show="$store.chat.channelNotificationReady && !$store.chat.channelNotificationSupported">This Tower does not support channel notification muting yet.</p>
+              <p role="status" x-show="$store.chat.channelNotificationSaving">Saving and refreshing notifications…</p>
+              <p role="alert" class="channel-access-error" x-show="$store.chat.channelNotificationError" x-text="$store.chat.channelNotificationError"></p>
+              <button type="button" class="btn-secondary" x-show="$store.chat.channelNotificationError" @click="$store.chat.refreshChannelNotificationPreferences()">Refresh notification settings</button>
+            </section>
+
             <section class="channel-metadata-panel" x-show="$store.chat.isTowerPgMode && $store.chat.canManageSettingsChannel">
               <label class="task-field-label" for="channel-name-input">Channel name</label>
               <form class="channel-metadata-actions" @submit.prevent="$store.chat.renameSettingsChannel()">

@@ -156,3 +156,37 @@ describe('notification inbox manager', () => {
     expect(s.notificationInboxBadge).toBe('99+');
   });
 });
+
+
+describe('channel notification controls', () => {
+  it('writes the captured channel version, rebuilds from server truth, and prevents editing DMs', async () => {
+    const s = store(); await seed(s, []);
+    Object.assign(s, { isTowerPgMode: true, channels: [{ record_id: 'channel-a' }], channelSettingsChannelId: 'channel-a', channelNotificationSupported: true,
+      channelNotificationPreferences: [{ channel_id: 'channel-a', mode: 'all', row_version: 4 }], buildTowerPgMaterializationStoreSnapshot: () => ({}) });
+    const materialize = vi.fn(async (_f, bundle) => applyNotificationInboxOperation(bundle.notification_inbox_operation));
+    s.getTowerSyncService = () => ({ materialize });
+    const transport = vi.fn(async () => ({ identity: { workspace_id: 'workspace-a' }, channel_preferences: [{ channel_id: 'channel-a', mode: 'mentions_only', row_version: 5 }] }));
+    await s.setChannelMentionsOnly(true, { transport });
+    expect(transport.mock.calls[0][1]).toBe('channel-preferences/channel-a');
+    expect(transport.mock.calls[0][2].body).toEqual({ mode: 'mentions_only', expected_row_version: 4 });
+    const saved = await getWorkspaceDb().notification_inbox.get(notificationInboxContext(s).key);
+    expect(saved.needs_snapshot).toBe(true); expect(saved.channel_preferences[0].mode).toBe('mentions_only');
+    s.projectNotificationInbox({ rows: [], state: saved });
+    expect(s.isChannelMentionsOnly('channel-a')).toBe(true);
+    s.channels[0].channel_type = 'dm';
+    await s.setChannelMentionsOnly(false, { transport });
+    expect(transport).toHaveBeenCalledTimes(1);
+  });
+
+  it('never silently retries a conflicting preference and ignores a response after workspace switching', async () => {
+    const s = store();
+    Object.assign(s, { isTowerPgMode: true, channels: [{ record_id: 'channel-a' }], channelSettingsChannelId: 'channel-a', channelNotificationSupported: true });
+    const conflict = vi.fn(async () => { throw Object.assign(new Error('conflict'), { status: 409 }); });
+    await s.setChannelMentionsOnly(true, { transport: conflict });
+    expect(conflict).toHaveBeenCalledTimes(1); expect(s.channelNotificationError).toContain('another device');
+    const materialize = vi.fn(); s.getTowerSyncService = () => ({ materialize });
+    await s.setChannelMentionsOnly(true, { transport: async () => { s.currentWorkspace = { ...s.currentWorkspace, workspaceId: 'other-workspace' }; s.disposeNotificationInbox(); return { channel_preferences: [] }; } });
+    expect(materialize).not.toHaveBeenCalled();
+    expect(s.channelNotificationPreferences).toEqual([]);
+  });
+});

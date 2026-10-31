@@ -111,3 +111,16 @@ export async function saveInboxRule(store, row, on, { transport = towerPgNotific
   checkIdentity(response, context);
   return { contextKey: context.key, rules: Array.isArray(response?.rules) ? response.rules : [], rulesRevision: rulesRevisionOf(response) };
 }
+
+
+/** Actor-private channel preference; same CAS discipline as category rules. */
+export async function saveChannelNotificationPreference(store, channelId, mode, expectedRowVersion, { transport = towerPgNotificationInbox } = {}) {
+  const context = notificationInboxContext(store);
+  const response = await transport(context.workspaceId, `channel-preferences/${encodeURIComponent(channelId)}`, {
+    baseUrl: context.baseUrl, appNpub: context.appNpub, method: 'PUT',
+    body: { mode, expected_row_version: expectedRowVersion },
+  });
+  checkIdentity(response, context);
+  if (!Array.isArray(response?.channel_preferences)) throw new Error('Invalid channel notification preferences.');
+  return response;
+}

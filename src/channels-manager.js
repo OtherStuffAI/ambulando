@@ -2015,6 +2015,7 @@ export const channelsManagerMixin = {
     this.channelPositionSaving = false;
     this.channelDeleteSubmitting = false;
     this.showChannelSettingsModal = true;
+    void this.refreshChannelNotificationPreferences?.();
     if (isTowerPgBackendMode()) {
       this.preparePgChannelAccessPanel();
     }

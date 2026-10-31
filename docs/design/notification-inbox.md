@@ -107,3 +107,29 @@ read/unread/archive/restore/dismiss, targets routed by typed kind
 Settings -> Notifications has inbox on/off per category from
 `categories`/`rules` (mandatory categories locked). Quiet hours, installations
 and OS push transports are not offered because Tower does not provide them yet.
+
+
+## Per-person channel muting
+
+Channel settings offers “Mute this channel except mentions” to channel readers,
+independently of channel management rights. Direct conversations keep their
+existing DM notification policy. This is a shared Tower preference, keyed by
+workspace, signed-in actor and channel, rather than channel metadata or a
+browser-only setting.
+
+`GET notifications/channel-preferences` returns `channel_preferences` rows
+(`channel_id`, `mode: all | mentions_only`, `row_version`) and `rules_revision`.
+`PUT notifications/channel-preferences/:channelId` sends the displayed
+`expected_row_version` (0 for an absent row) and the requested mode. A conflict
+refreshes the authority and asks the user to retry; uncertain writes are read
+back before another intent. Existing category and push preferences remain
+independent: a direct mention still follows the user's mention settings.
+
+The notification sync family reads channel preferences and materializes them
+through the existing worker reducer into actor-keyed `notification_inbox` state.
+The bell and control project that state through Dexie liveQuery. Preference
+writes invalidate the inbox snapshot; Tower also advances `rules_revision` so
+other devices rebuild existing entries/counts. No channel message read state is
+changed. Older Towers disable the control with an explicit unsupported message
+while retaining the existing inbox. Android can consume the same contract; its
+channel control is a separate follow-up.
