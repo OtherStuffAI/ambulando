@@ -5547,6 +5547,27 @@
       "notes": [
         "Keep valid profile replies from responsive relays even when another relay connects but does not finish its response."
       ]
+    },
+    {
+      "buildNumber": 2689,
+      "label": "Task tree colours and local zoom",
+      "notes": [
+        "Task trees share task status colours, including green Review and blue Done. Zoom, reset and fit stay inside the tree; pinch or Ctrl/Command-wheel zooms without moving the canvas."
+      ]
+    },
+    {
+      "buildNumber": 2690,
+      "label": "Task tree touch navigation",
+      "notes": [
+        "Scroll a task tree by dragging from a card, then tap to open it. Pinch stays inside the tree and read-only viewers keep their zoom locally."
+      ]
+    },
+    {
+      "buildNumber": 2691,
+      "label": "Preserve task tree navigation during zoom",
+      "notes": [
+        "Changing a tree root or destination supersedes any pending zoom save, preserving your latest navigation."
+      ]
     }
   ]
 }

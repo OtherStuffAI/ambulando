@@ -203,16 +203,31 @@ test('phone graph touch pan keeps the canvas mounted without refreshing the oute
   for(let d=10;d<=110;d+=10){await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x,y:y-d}]});await page.waitForTimeout(20);}
   await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});await page.waitForTimeout(600);
   console.log('TOUCH_PAN_PROBE',await page.evaluate(()=>window.__panProbe));
-  expect(await page.evaluate(()=>window.__panProbe)).toEqual({refreshes:0,cancels:1});
+  expect(await page.evaluate(()=>window.__panProbe)).toEqual({refreshes:0,cancels:0});
   expect(await scroll.evaluate(el=>el.__originalTree)).toBe(true);
   expect(await page.evaluate(()=>({...Alpine.store('canvas').viewport}))).toEqual(await page.evaluate(()=>window.__panViewport));
   expect(await scroll.evaluate(el=>el.scrollTop)).toBeGreaterThan(0);
   await expect(tree.locator('.tree-task')).toHaveCount(13);
-  // Native cancellation and debounced viewport persistence retain the same view.
+  // Local pointer ownership and debounced viewport persistence retain the same view.
   const scale=await page.evaluate(()=>Alpine.store('canvas').naplets[0].layout.task_tree.viewport.scale);
   await tree.getByRole('button',{name:'Zoom tree in',exact:true}).tap();
   await expect.poll(()=>page.evaluate(()=>Alpine.store('canvas').naplets[0].layout.task_tree.viewport.scale)).toBeGreaterThan(scale);
   await scroll.evaluate(el=>{el.scrollTop=0;el.scrollLeft=0;});
+  // Pan starting on a node still scrolls, then pinch stays inside this tree.
+  const nodeBox=await tree.locator('.tree-task-open').first().boundingBox();
+  const finger={x:nodeBox.x+50,y:nodeBox.y+40};
+  await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[finger]});
+  await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:finger.x,y:finger.y-45}]});
+  await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+  expect(await scroll.evaluate(el=>el.scrollTop)).toBeGreaterThan(0);
+  const zoomBefore=Number((await tree.getByLabel('Tree zoom',{exact:true}).textContent()).replace('%',''));
+  const a={x:box.x+80,y:box.y+80},b={x:box.x+150,y:box.y+80};
+  await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{...a,id:1},{...b,id:2}]});
+  await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{...a,id:1},{...b,x:b.x+40,id:2}]});
+  await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+  await expect.poll(async()=>parseInt(await tree.getByLabel('Tree zoom',{exact:true}).textContent())).toBeGreaterThan(zoomBefore);
+  expect(await page.evaluate(()=>({...Alpine.store('canvas').viewport}))).toEqual(await page.evaluate(()=>window.__panViewport));
+  await tree.getByRole('button',{name:'Reset zoom',exact:true}).tap();
   await tree.locator('.tree-task-open').first().tap();await expect(page.locator('.canvas-task-detail-dialog')).toBeVisible();
   await expect(page.frameLocator('.canvas-task-detail-dialog iframe').locator('.task-detail-panel')).toBeVisible();
   await page.getByRole('button',{name:'Close task details',exact:true}).tap();
@@ -264,4 +279,39 @@ test('Task Tree polling skips minimised and offscreen views, then reauthorizes o
   await expect(page.locator('.canvas-task-tree').first().getByText('Task relationship unavailable. Access may have changed.',{exact:true})).toBeVisible();
   await expect(page.locator('.canvas-task-tree').first().locator('.tree-task')).toHaveCount(0);
   expect(reads).toBeGreaterThan(hiddenReads);
+});
+
+test('Task Tree colours follow edits and local zoom keeps canvas geometry and node activation',async({page,context})=>{
+  const f=await fixture(page,context);const tree=await addTree(page);
+  await tree.getByRole('button',{name:'New Task',exact:true}).click();await enter(tree,'Colour root');
+  const task=f.tasks.find(row=>row.title==='Colour root');task.state='review';
+  await tree.getByRole('button',{name:'Refresh tree',exact:true}).click();
+  const card=tree.locator(`[data-tree-task="${task.id}"]`);
+  await expect(card.locator('.tree-status')).toHaveText('Review');
+  await expect(card).toHaveCSS('border-top-color','rgb(52, 211, 153)');
+  for(const theme of ['light','dark']){
+    await page.evaluate(theme=>document.documentElement.dataset.theme=theme,theme);
+    await expect(card).toHaveCSS('border-top-color','rgb(52, 211, 153)');
+    await page.screenshot({path:path.resolve(__dirname,`../../tmp/docs/handoffs/task-tree-review-${theme}.png`)});
+  }
+  task.state='done';await tree.getByRole('button',{name:'Refresh tree',exact:true}).click();
+  await expect(card.locator('.tree-status')).toHaveText('Done');await expect(card).toHaveCSS('border-top-color','rgb(96, 165, 250)');
+  for(const theme of ['light','dark']){
+    await page.evaluate(theme=>document.documentElement.dataset.theme=theme,theme);
+    await expect(card).toHaveCSS('border-top-color','rgb(96, 165, 250)');
+    await page.screenshot({path:path.resolve(__dirname,`../../tmp/docs/handoffs/task-tree-done-${theme}.png`)});
+  }
+  const outer=await tree.boundingBox(),before=await card.boundingBox();
+  await tree.getByRole('button',{name:'Zoom tree out',exact:true}).click();
+  await expect(tree.getByLabel('Tree zoom',{exact:true})).toHaveText('80%');
+  expect((await card.boundingBox()).width).toBeCloseTo(before.width*0.8,0);
+  const box=await tree.locator('.tree-scroll').boundingBox();await page.mouse.move(box.x+box.width/2,box.y+box.height/2);
+  await page.keyboard.down('Control');await page.mouse.wheel(0,-30);await page.keyboard.up('Control');
+  await expect.poll(async()=>parseInt(await tree.getByLabel('Tree zoom',{exact:true}).textContent())).toBeGreaterThan(80);
+  expect((await tree.boundingBox()).width).toBeCloseTo(outer.width,0);
+  await tree.getByRole('button',{name:'Reset zoom',exact:true}).click();await expect(tree.getByLabel('Tree zoom',{exact:true})).toHaveText('100%');
+  await page.evaluate(()=>Alpine.store('canvas').canvas.can_manage=false);
+  await tree.getByRole('button',{name:'Zoom tree out',exact:true}).click();await expect(tree.getByLabel('Tree zoom',{exact:true})).toHaveText('80%');
+  await page.waitForTimeout(600);expect(f.naplets[0].layout.task_tree.viewport.scale).toBe(1);
+  await card.locator('.tree-task-open').click();await expect(page.locator('.canvas-task-detail-dialog')).toBeVisible();
 });

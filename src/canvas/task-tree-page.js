@@ -3,7 +3,7 @@ import { TaskTreeRuntime } from './task-tree-runtime.js';
 import { normalizeTaskTreeView } from './projection.js';
 import { buildSectionUrl } from '../route-helpers.js';
 import { buildPgChannelTaskBoardId } from '../pg-record-context.js';
-import { formatStateLabel } from '../translators/tasks.js';
+import { formatStateLabel, stateColor } from '../translators/tasks.js';
 
 const keyOf=naplet=>naplet.layout?.task_tree?.instance_id||naplet.id;
 const emptyGraph=()=>({nodes:[],edges:[],references:[],positions:{},bounded:false});
@@ -27,6 +27,8 @@ export function canvasTaskTreeStore() {
     treeKey: keyOf,
     treeState(naplet){return this.trees[keyOf(naplet)]||{graph:emptyGraph(),scopes:[],channels:[],tasks:[]};},
     treeStatus:formatStateLabel,
+    treeColor:stateColor,
+    treeViewport(naplet){return this.treeState(naplet).viewport||naplet.layout.task_tree?.viewport||{x:0,y:0,scale:1};},
     treeDestinationReady(naplet) {
       const state=this.treeState(naplet);
       return !naplet._treeDraft && Boolean(state.scopeId && state.channelId)
@@ -89,6 +91,7 @@ export function canvasTaskTreeStore() {
       finally{state.busy=false;}
     },
     async chooseTreeChannel(naplet,channelId) {
+      const scroll=this.treeScrollNode(naplet);if(scroll)clearTimeout(scroll._treeSave);
       const state=this.treeState(naplet);if(state.busy||!state.channels.some(row=>row.id===channelId))return;
       if(state.entry && !window.confirm('Discard this unsaved title and change destination?'))return;
       state.busy=true;state.error='';state.channelId=channelId;
@@ -99,7 +102,7 @@ export function canvasTaskTreeStore() {
           await operations.refresh();
           if(this.treeDrafts.some(row=>row.id===naplet.id))await operations.add({source:{type:'task_tree',id:channelId},title:'Task Tree',layout});
         } else await operations.save(naplet.id,{layout,tree_channel_id:channelId});
-        state.channelId=channelId;state.entry='';state.mode='';state.tasks=[];state.request=null;state.lastCreated=null;
+        state.viewport=null;state.channelId=channelId;state.entry='';state.mode='';state.tasks=[];state.request=null;state.lastCreated=null;
       }catch(error){state.error=error.message||'Destination was not saved. Retry the same channel.';}
       finally{state.busy=false;}
     },
@@ -113,6 +116,8 @@ export function canvasTaskTreeStore() {
     },
     treeSearchResults(naplet){const state=this.treeState(naplet);const query=String(state.query||'').toLowerCase();return state.tasks.filter(row=>!query||row.title.toLowerCase().includes(query));},
     async saveTreeView(naplet,patch) {
+      // A newer root/branch action supersedes any pending viewport-only save.
+      const scroll=this.treeScrollNode(naplet);if(scroll)clearTimeout(scroll._treeSave);
       const tree=normalizeTaskTreeView({...naplet.layout.task_tree,...patch,instance_id:keyOf(naplet)});
       if(!this.canvas?.can_manage){naplet.layout={...naplet.layout,task_tree:tree};startRuntime().bind(keyOf(naplet),tree.root_task_id,{collapsed:tree.collapsed,upstream:tree.upstream});return;}
       await operations.save(naplet.id,{layout:{...naplet.layout,task_tree:tree}});
@@ -120,7 +125,7 @@ export function canvasTaskTreeStore() {
     async selectTreeRoot(naplet,task) {
       const state=this.treeState(naplet);if(state.busy)return;
       state.busy=true;state.error='';
-      try{await this.saveTreeView(naplet,{root_task_id:task.id,collapsed:[],upstream:[],viewport:{x:0,y:0,scale:1}});state.mode='';state.tasks=[];}
+      try{state.viewport=null;await this.saveTreeView(naplet,{root_task_id:task.id,collapsed:[],upstream:[],viewport:{x:0,y:0,scale:1}});state.mode='';state.tasks=[];}
       catch(error){state.error=error.message||'Root selection was not saved.';}
       finally{state.busy=false;}
     },
@@ -163,25 +168,61 @@ export function canvasTaskTreeStore() {
     async toggleTreeBranch(naplet,task){const collapsed=new Set(naplet.layout.task_tree?.collapsed||[]);collapsed.has(task.record_id)?collapsed.delete(task.record_id):collapsed.add(task.record_id);try{await this.saveTreeView(naplet,{collapsed:[...collapsed]});}catch(error){this.treeState(naplet).error=error.message;}},
     async expandTreeReference(naplet,reference){try{await this.saveTreeView(naplet,{upstream:[...new Set([...(naplet.layout.task_tree?.upstream||[]),reference.targetId])]});}catch(error){this.treeState(naplet).error=error.message;}},
     treeChannelLabel(naplet,task){return task.pg_channel_id===naplet.source.id?naplet.content.channel_title:this.treeState(naplet).channels.find(row=>row.id===task.pg_channel_id)?.title||task.pg_channel_title||'Other channel';},
-    treeNodeStyle(naplet,task){const p=this.treeState(naplet).graph.positions[task.record_id]||{x:0,y:0};return {left:`${20+p.x*300}px`,top:`${20+p.y*180}px`};},
+    treeNodeStyle(naplet,task){const p=this.treeState(naplet).graph.positions[task.record_id]||{x:0,y:0};return {left:`${20+p.x*300}px`,top:`${20+p.y*180}px`,'--task-status-color':stateColor(task.state)};},
     treeEdgePath(naplet,edge){const p=this.treeState(naplet).graph.positions,a=p[edge.from],b=p[edge.to];if(!a||!b)return '';return edge.kind==='child'?`M ${140+a.x*300} ${150+a.y*180} L ${140+b.x*300} ${20+b.y*180}`:`M ${260+a.x*300} ${75+a.y*180} L ${20+b.x*300} ${75+b.y*180}`;},
-    treeWorldStyle(naplet){const view=naplet.layout.task_tree?.viewport||{x:0,y:0,scale:1};const positions=Object.values(this.treeState(naplet).graph.positions);return {width:`${Math.max(800,...positions.map(p=>p.x*300+300))}px`,height:`${Math.max(500,...positions.map(p=>p.y*180+180))}px`,transform:`scale(${view.scale})`,transformOrigin:'0 0'};},
-    startTreeScroll(event){if(event.pointerType!=='touch'||event.target.closest('button,input,select'))return;const node=event.currentTarget;node._treePan={id:event.pointerId,x:event.clientX,y:event.clientY,left:node.scrollLeft,top:node.scrollTop};node.setPointerCapture(event.pointerId);event.preventDefault();},
-    moveTreeScroll(event){const node=event.currentTarget,p=node._treePan;if(!p||p.id!==event.pointerId)return;const scale=node.getBoundingClientRect().width/node.offsetWidth||1;node.scrollLeft=p.left+(p.x-event.clientX)/scale;node.scrollTop=p.top+(p.y-event.clientY)/scale;event.preventDefault();},
-    endTreeScroll(event){event.currentTarget._treePan=null;},
-    async saveTreeScroll(naplet,node){if(naplet._treeDraft||!this.canvas?.can_manage)return;const v=naplet.layout.task_tree?.viewport||{scale:1};try{await this.saveTreeView(naplet,{viewport:{...v,x:-node.scrollLeft,y:-node.scrollTop}});}catch(error){this.treeState(naplet).error=error.message;}},
-    async fitTaskTree(naplet) {
-      const scroll=document.querySelector(`[data-task-tree="${keyOf(naplet)}"] .tree-scroll`);
-      if(scroll){scroll.scrollLeft=0;scroll.scrollTop=0;}
-      const positions=Object.values(this.treeState(naplet).graph.positions);
-      const width=Math.max(300,...positions.map(p=>p.x*300+300));
-      const height=Math.max(180,...positions.map(p=>p.y*180+180));
-      const ideal=Math.min(1,Math.max(1,(scroll?.clientWidth||naplet.layout.width)-20)/width,Math.max(1,(scroll?.clientHeight||naplet.layout.height-230)-20)/height);
-      this.treeState(naplet).fitLimited=ideal<0.85;
-      try{await this.saveTreeView(naplet,{viewport:{x:0,y:0,scale:Math.max(0.85,ideal)}});}
-      catch(error){this.treeState(naplet).error=error.message;}
+    treeSize(naplet){const positions=Object.values(this.treeState(naplet).graph.positions);return {width:Math.max(300,...positions.map(p=>p.x*300+320)),height:Math.max(180,...positions.map(p=>p.y*180+220))};},
+    treeWorldStyle(naplet){const size=this.treeSize(naplet);return {width:`${size.width}px`,height:`${size.height}px`,transform:`scale(${this.treeViewport(naplet).scale})`,transformOrigin:'0 0'};},
+    treeExtentStyle(naplet){const size=this.treeSize(naplet),scale=this.treeViewport(naplet).scale;return {width:`${size.width*scale}px`,height:`${size.height*scale}px`};},
+    treeScrollNode(naplet){return globalThis.document?.querySelector(`[data-task-tree="${keyOf(naplet)}"] .tree-scroll`);},
+    setTreeScale(naplet,scale,node=this.treeScrollNode(naplet),anchor=null){
+      const old=this.treeViewport(naplet),next=Math.max(0.2,Math.min(2,scale));
+      const point=anchor||{x:(node?.clientWidth||0)/2,y:(node?.clientHeight||0)/2};
+      const left=Math.max(0,((node?.scrollLeft||0)+point.x)*next/old.scale-point.x);
+      const top=Math.max(0,((node?.scrollTop||0)+point.y)*next/old.scale-point.y);
+      this.treeState(naplet).viewport={x:-left,y:-top,scale:next};
+      requestAnimationFrame(()=>{if(node){node.scrollLeft=left;node.scrollTop=top;}this.scheduleTreeViewport(naplet,node);});
     },
-    async zoomTaskTree(naplet,factor){const v=naplet.layout.task_tree?.viewport||{x:0,y:0,scale:1};try{await this.saveTreeView(naplet,{viewport:{...v,scale:v.scale*factor}});}catch(error){this.treeState(naplet).error=error.message;}},
+    scheduleTreeViewport(naplet,node){
+      if(!node)return;clearTimeout(node._treeSave);
+      node._treeSave=setTimeout(()=>this.saveTreeScroll(naplet,node),350);
+    },
+    treeWheel(naplet,event){
+      // Trackpad pinch is delivered as ctrl+wheel. Plain wheel retains local scrolling.
+      if(!event.ctrlKey&&!event.metaKey)return;
+      event.preventDefault();event.stopPropagation();const node=event.currentTarget,rect=node.getBoundingClientRect(),outer=rect.width/node.offsetWidth||1;
+      this.setTreeScale(naplet,this.treeViewport(naplet).scale*Math.exp(-event.deltaY*0.01),node,{x:(event.clientX-rect.left)/outer,y:(event.clientY-rect.top)/outer});
+    },
+    startTreeScroll(naplet,event){
+      if(event.pointerType!=='touch')return;
+      const node=event.currentTarget;node._treeTouches ||= new Map();if(!node._treeTouches.size)node._treeSuppressClick=false;node._treeTouches.set(event.pointerId,{x:event.clientX,y:event.clientY});
+      if(node._treeTouches.size===2){
+        const [a,b]=[...node._treeTouches.values()];node._treePinch={distance:Math.hypot(a.x-b.x,a.y-b.y),scale:this.treeViewport(naplet).scale};node._treePan=null;node._treeSuppressClick=true;
+        for(const id of node._treeTouches.keys())node.setPointerCapture(id);event.preventDefault();
+      }else {node._treePan={id:event.pointerId,x:event.clientX,y:event.clientY,left:node.scrollLeft,top:node.scrollTop,moved:false};}
+    },
+    moveTreeScroll(naplet,event){
+      const node=event.currentTarget;if(!node._treeTouches?.has(event.pointerId))return;
+      node._treeTouches.set(event.pointerId,{x:event.clientX,y:event.clientY});
+      const outer=node.getBoundingClientRect().width/node.offsetWidth||1;
+      if(node._treePinch&&node._treeTouches.size===2){
+        const [a,b]=[...node._treeTouches.values()],rect=node.getBoundingClientRect();
+        this.setTreeScale(naplet,node._treePinch.scale*Math.hypot(a.x-b.x,a.y-b.y)/Math.max(1,node._treePinch.distance),node,{x:((a.x+b.x)/2-rect.left)/outer,y:((a.y+b.y)/2-rect.top)/outer});event.preventDefault();return;
+      }
+      const p=node._treePan;if(!p||p.id!==event.pointerId)return;
+      if(!p.moved&&Math.hypot(p.x-event.clientX,p.y-event.clientY)<6)return;
+      p.moved=true;node._treeSuppressClick=true;node.setPointerCapture(event.pointerId);
+      node.scrollLeft=p.left+(p.x-event.clientX)/outer;node.scrollTop=p.top+(p.y-event.clientY)/outer;event.preventDefault();
+    },
+    endTreeScroll(naplet,event){const node=event.currentTarget;node._treeTouches?.delete(event.pointerId);node._treePan=null;node._treePinch=null;this.scheduleTreeViewport(naplet,node);},
+    treeClick(event){const node=event.currentTarget;if(node._treeSuppressClick){event.preventDefault();event.stopImmediatePropagation();node._treeSuppressClick=false;}},
+    async saveTreeScroll(naplet,node){
+      const viewport={...this.treeViewport(naplet),x:-node.scrollLeft,y:-node.scrollTop};this.treeState(naplet).viewport=viewport;
+      if(naplet._treeDraft||!this.canvas?.can_manage)return;
+      try{await this.saveTreeView(naplet,{viewport});}catch(error){this.treeState(naplet).error=error.message;}
+    },
+    fitTaskTree(naplet){const node=this.treeScrollNode(naplet),size=this.treeSize(naplet);const ideal=Math.min(1,(node?.clientWidth||naplet.layout.width)/size.width,(node?.clientHeight||300)/size.height);this.treeState(naplet).fitLimited=ideal<0.85;this.setTreeScale(naplet,Math.max(0.85,ideal),node,{x:0,y:0});requestAnimationFrame(()=>{if(node){node.scrollLeft=0;node.scrollTop=0;}});},
+    zoomTaskTree(naplet,factor){this.setTreeScale(naplet,this.treeViewport(naplet).scale*factor);},
+    resetTaskTree(naplet){const node=this.treeScrollNode(naplet);this.setTreeScale(naplet,1,node,{x:0,y:0});requestAnimationFrame(()=>{if(node){node.scrollLeft=0;node.scrollTop=0;}});},
     loadMoreTree(naplet){return startRuntime().advance(keyOf(naplet),{more:true});},
     refreshTaskTree(naplet){return startRuntime().refresh(keyOf(naplet));},
     removeTreeDraft(naplet){this.treeDrafts=this.treeDrafts.filter(row=>row.id!==naplet.id);this.naplets=this.naplets.filter(row=>row.id!==naplet.id);runtime?.remove(keyOf(naplet));},

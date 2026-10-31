@@ -142,3 +142,20 @@ their in-flight promise. Completed responses are discarded from the request map,
 so later polling/resume reauthorizes through Tower. Different cursors and bounds
 remain independent. The layout worker starts on the first visible projection;
 Canvases without Task Trees do not create a tree runtime/worker.
+
+## Status and local zoom
+
+Tree cards use the same `stateColor` palette as task lists, boards and details:
+Review is green and Done (including archive aliases) is blue. Labels remain
+visible alongside the colour cue in light and dark themes.
+
+Zoom controls, reset and readable fit affect only the graph. The scaled scroll
+footprint matches the graph, with internal scrolling for large trees. Ordinary
+wheel/trackpad scroll stays local; Ctrl/Command-wheel or trackpad pinch zooms
+around the pointer. Touch supports one-finger scrolling, including from a card,
+and two-finger pinch. A drag or pinch suppresses its accidental click; a new tap
+opens the ordinary task editor. Read-only viewers keep zoom locally.
+
+Swift iPhone and Mac share the task palette, graph scale bounds, labelled status
+chips and zoom/reset/fit controls; native pinch uses the platform magnification
+gesture. Android parity remains a separate follow-up.
