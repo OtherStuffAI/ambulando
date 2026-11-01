@@ -202,7 +202,7 @@ export async function getPgAttentionProjection(store) {
           viewerNpub: store.currentViewerNpub || store.session?.npub,
         });
       }
-      const unread = Number(mentionVersion || 0) > Number(row.viewed_activity_version || 0) ? 1 : 0;
+      const unread = row.unread && Number(mentionVersion || 0) > Number(row.viewed_activity_version || 0) ? 1 : 0;
       filtered.set(row.record_id, { ...row, unread });
       const delta = unread - Number(Boolean(row.unread));
       const section = row.resource_type === 'thread' ? 'chat' : row.resource_type === 'task' ? 'tasks' : 'docs';

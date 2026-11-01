@@ -30,6 +30,7 @@ export function isTaskAssignedToViewer(row, viewer) {
 // Exact mention position is separate from assignment and ordinary chat activity.
 // Muting changes presentation only; the original activity/read position survives.
 export function directMentionAttentionVersion(row = {}, state = {}, options = {}) {
+  if (row.deleted_at || row.archived_at || ['deleted', 'archived'].includes(row.record_state) || row.pg_record_type === 'file') return 0;
   const viewer = resolveTaskActivityViewer({ ...options, viewState: state });
   const attention = row.attention || row.pg_attention;
   const type = options.resourceType || state.resource_type || row.pg_record_type;
