@@ -27,10 +27,27 @@ export function isTaskAssignedToViewer(row, viewer) {
   return Boolean(npubs.length === 1 && viewer.npub && npubs[0] === viewer.npub);
 }
 
+// Exact mention position is separate from assignment and ordinary chat activity.
+// Muting changes presentation only; the original activity/read position survives.
+export function directMentionAttentionVersion(row = {}, state = {}, options = {}) {
+  const viewer = resolveTaskActivityViewer({ ...options, viewState: state });
+  const attention = row.attention || row.pg_attention;
+  const type = options.resourceType || state.resource_type || row.pg_record_type;
+  if (attention?.policy_version === 1) {
+    const comment = number(attention.mention_activity_versions?.[viewer.actorId]);
+    const body = ['document', 'doc'].includes(type)
+      && mentionsViewer(metadata(row).mentions || row.mentions, viewer)
+      && attention.body_actor_id !== viewer.actorId ? number(attention.body_activity_version) : 0;
+    return Math.max(comment, body);
+  }
+  return number(state.mention_activity_version);
+}
+
 export function personalAttentionVersion(row = {}, state = {}, options = {}) {
   const type = options.resourceType || state.resource_type || row.pg_record_type;
   const activity = number(row.activity_version || state.activity_version);
   if (row.deleted_at || row.archived_at || ['deleted', 'archived'].includes(row.record_state) || row.pg_record_type === 'file') return 0;
+  if (options.mentionsOnly ?? state.channel_mentions_only === true) return directMentionAttentionVersion(row, state, options);
   if (type === 'thread') return activity;
   const viewer = resolveTaskActivityViewer({ ...options, viewState: state });
   const attention = row.attention || row.pg_attention;

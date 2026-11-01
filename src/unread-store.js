@@ -728,6 +728,7 @@ export const unreadStoreMixin = {
       const row = state.resource_type === 'task' ? tasksById.get(state.resource_id)
         : state.resource_type === 'document' ? docsById.get(state.resource_id) : state;
       const options = { resourceType: state.resource_type,
+        mentionsOnly: this.isChannelMentionsOnly?.(state.channel_id) === true,
         viewerActorId: this.currentPgActorId, viewerNpub: this.currentViewerNpub || this.session?.npub,
         workspaceMembers: this.pgWorkspaceMembers,
         comments: comments.filter(comment => comment.target_record_id === state.resource_id) };
@@ -749,9 +750,15 @@ export const unreadStoreMixin = {
   async recomputeTowerPgUnreadProjection() {
     if (!usesTowerResourceViewState(this)) return false;
     if (!isWorkspaceDbOpenForKey(this.currentWorkspaceKey)) return false;
+    const contextKey = () => JSON.stringify(resolveTowerPgWorkspaceContext(this));
+    const initialContext = contextKey();
     const { getPgAttentionProjection } = await import('./pg-record-delta.js');
-    if ((this.applyPgAttentionProjection || unreadStoreMixin.applyPgAttentionProjection).call(this, await getPgAttentionProjection(this))) return true;
-    this.applyTowerPgResourceViewStates(await getResourceViewStates());
+    const projection = await getPgAttentionProjection(this);
+    if (contextKey() !== initialContext) return false;
+    if ((this.applyPgAttentionProjection || unreadStoreMixin.applyPgAttentionProjection).call(this, projection)) return true;
+    const states = await getResourceViewStates();
+    if (contextKey() !== initialContext) return false;
+    this.applyTowerPgResourceViewStates(states);
     return true;
   },
 

@@ -103,3 +103,25 @@ describe('personal attention policy', () => {
     expect(hasPersonalUnreadAttention(historical, { ...state(4), updated_at: '2026-10-05T01:00:00Z' }, { ...options, comments })).toBe(true);
   });
 });
+
+it('mentions-only hides old ordinary and assigned activity, keeps exact mentions, and never moves the read cursor', () => {
+  const viewed = state(4, 'thread');
+  const ordinary = { activity_version: 9, attention: attention() };
+  const muted = { ...options, mentionsOnly: true };
+  expect(hasPersonalUnreadAttention(ordinary, viewed, muted)).toBe(false);
+  expect(hasPersonalUnreadAttention(ordinary, viewed, options)).toBe(true);
+  expect(hasPersonalUnreadAttention({ ...ordinary, attention: attention({ viewer: 7 }) }, viewed, muted)).toBe(true);
+  expect(hasPersonalUnreadAttention({ ...ordinary, attention: attention({ viewer: 7 }) }, state(7, 'thread'), muted)).toBe(false);
+  expect(hasPersonalUnreadAttention(task(9, true), state(4), muted)).toBe(false);
+  expect(hasPersonalUnreadAttention({ ...ordinary, body: '@npub1viewer' }, viewed, muted)).toBe(false);
+  expect(hasPersonalUnreadAttention({ ...ordinary, attention: attention({ other: 9 }) }, viewed, muted)).toBe(false);
+  expect(viewed.viewed_activity_version).toBe(4);
+});
+
+it('consumes server mention-only view states without treating general attention as a mention', () => {
+  const server = { ...state(3, 'thread'), activity_version: 8, attention_activity_version: 8,
+    channel_mentions_only: true, mention_activity_version: 0 };
+  expect(hasPersonalUnreadAttention({}, server, options)).toBe(false);
+  expect(hasPersonalUnreadAttention({}, { ...server, mention_activity_version: 6 }, options)).toBe(true);
+  expect(hasPersonalUnreadAttention({}, { ...server, mention_activity_version: 6, viewed_activity_version: 6 }, options)).toBe(false);
+});

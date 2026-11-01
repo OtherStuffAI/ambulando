@@ -93,3 +93,30 @@ positions. The `summary-backfill-assignment-v2` pass repairs existing task
 assignee/index fields and attention in bounded transactions, preserving pending
 commands, device cursors and user viewed watermarks. Server repair and unresolved
 history are described in Tower's `docs/task-single-assignee.md`.
+
+## Muted channel attention
+
+The saved notification inbox channel preference also controls unread attention.
+For `mentions_only`, only the exact surviving direct mention position above the
+existing view watermark qualifies. Assignments, ordinary messages, agent working
+activity and body-text lookalikes cannot qualify a muted channel. DMs retain their
+existing policy. The channel preference is scoped to Tower origin, app, workspace
+and actual reader actor; the existing notification liveQuery schedules an unread
+projection refresh when a device receives a changed preference.
+
+Canonical thread `attention.mention_activity_versions` uses the same actor-keyed
+ledger as task/document mention activity. Existing resource view-state responses
+add `mention_activity_version` and `channel_mentions_only` for fallback clients.
+An older server without exact mention positions does not promote ordinary
+activity into a mention. Canonical current mention removal overrides stale
+personalized data. Historical mentions require recoverable exact event positions;
+missing provenance must remain neutral rather than borrowing newer activity.
+
+The worker retains the normal attention and read positions and stores a separate
+`mention_activity_version`. The read projection filters indexed muted-channel
+rows and adjusts displayed aggregates only. Unmuting immediately restores normal
+attention from the retained projection. Existing caches receive a bounded
+`summary-backfill-mentions-v3` / `mentionProjectionVersion` refresh, preserving
+sync cursors, drafts, pending writes and read positions. Pins use the same exact
+mention position. Ordinary Deck cards remain available without unread or working
+emphasis, and muted working activity does not create an Unread & Active entry.

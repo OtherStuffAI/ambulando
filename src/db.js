@@ -782,7 +782,7 @@ export async function getPinnedThreadRows(db, pins) {
     const activityAt = [row?.updated_at, root?.updated_at, latest?.updated_at].filter(Boolean).sort().at(-1) || '';
     return { ...pin, rootRecordId: canonical?.pg_parent_thread_id ? pin.id : (canonical?.pg_source_message_id || pin.rootRecordId),
       title: unavailable ? 'Thread unavailable' : (canonical?.title || root?.title || root?.subject || root?.body || 'Untitled thread'),
-      activityAt, unavailable, persistedUnread: attention ? Boolean(attention.unread) : null };
+      activityAt, unavailable, persistedMentionUnread: attention ? Number(attention.mention_activity_version || 0) > Number(attention.viewed_activity_version || 0) : null, persistedUnread: attention ? Boolean(attention.unread) : null };
   }));
 }
 

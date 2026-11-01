@@ -5595,6 +5595,13 @@
       "label": "Channel preference transport validation",
       "notes": [],
       "noUserVisibleChanges": true
+    },
+    {
+      "buildNumber": 2696,
+      "label": "Quiet unread attention in muted channels",
+      "notes": [
+        "Mute except mentions now quiets ordinary channel unread dots, Inbox emphasis and active sidebar entries while keeping direct mentions visible. Unmuting restores unread attention without changing your read position."
+      ]
     }
   ]
 }

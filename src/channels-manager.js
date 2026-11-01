@@ -1109,7 +1109,7 @@ export const channelsManagerMixin = {
     return buildSidebarUnreadChannels(
       this.sidebarScopeChannelGroups,
       (channelId) => this.isChannelUnread?.(channelId) === true,
-      (channelId) => activeChannelIds.has(channelId),
+      (channelId) => activeChannelIds.has(channelId) && !this.isChannelMentionsOnly?.(channelId),
     );
   },
 

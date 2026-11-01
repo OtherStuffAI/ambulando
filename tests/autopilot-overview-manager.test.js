@@ -2235,3 +2235,27 @@ describe('independent Inbox types', () => {
     expect(store.deckInboxType).toEqual(['file']);
   });
 });
+
+it('does not let cached Inbox/recent summaries reintroduce ordinary muted unread', () => {
+  const getter = Object.getOwnPropertyDescriptor(autopilotOverviewManagerMixin, 'autopilotOverviewThreads').get;
+  const messages = [{record_id:'root',pg_thread_id:'thread',channel_id:'muted',body:'Ordinary update',record_state:'active',created_at:'2026-11-01',updated_at:'2026-11-01'}];
+  const store = {navSection:'status',fileMessages:messages,channels:[{record_id:'muted',name:'Research'}],
+    autopilotOverviewContext:{scopeId:'all',channelId:'all'},session:{npub:'viewer'},isTowerPgMode:true,
+    channelNotificationPreferences:[{channel_id:'muted',mode:'mentions_only'}],isChannelMentionsOnly:()=>true,
+    _unreadThreadItems:{},_unreadChannels:{},inboxUnreadThreads:{thread:true},scopesMap:{}};
+  expect(getter.call(store)[0].isUnread).toBe(false);
+  store._unreadThreadItems={thread:true};
+  expect(getter.call(store)[0].isUnread).toBe(true);
+});
+
+it('does not list a muted channel for ordinary working activity in Unread & Active', () => {
+  const getter=Object.getOwnPropertyDescriptor(channelsManagerMixin,'sidebarUnreadChannels').get;
+  const channel={record_id:'muted',title:'Research',record_state:'active'};
+  const store={sidebarScopeChannelGroups:[{channels:[channel]}],sidebarActiveChannelIds:new Set(['muted']),
+    isChannelUnread:()=>false,isChannelMentionsOnly:()=>true};
+  expect(getter.call(store)).toEqual([]);
+  store.isChannelUnread=()=>true;
+  expect(getter.call(store)).toEqual([channel]);
+  store.isChannelUnread=()=>false;store.isChannelMentionsOnly=()=>false;
+  expect(getter.call(store)).toEqual([channel]);
+});

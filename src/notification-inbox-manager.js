@@ -162,7 +162,11 @@ export const notificationInboxMixin = {
     this.notificationInboxCategories = [...new Set(projectNotificationInbox(rows, state, { view }).map(item => item.category))].sort();
     this.notificationInboxItems = projected.map(item => ({ ...item, ageLabel: relativeTime(item.occurred_at), route: notificationTargetRoute(item) }));
     this.notificationInboxUnread = unreadCount(rows, state);
+    const priorChannelPreferences = JSON.stringify(this.channelNotificationPreferences);
     this.channelNotificationPreferences = state?.channel_preferences || [];
+    if (priorChannelPreferences !== JSON.stringify(this.channelNotificationPreferences)) {
+      void this.scheduleTowerPgUnreadProjectionRefresh?.();
+    }
     this.channelNotificationSupported = state?.channel_preferences_supported === true;
     this.channelNotificationReady = typeof state?.channel_preferences_supported === 'boolean';
     this.notificationInboxReady = Boolean(state?.ready);
@@ -181,6 +185,7 @@ export const notificationInboxMixin = {
     return Boolean(this.isTowerPgMode && channel && !isDmChannel(channel));
   },
   isChannelMentionsOnly(channelId) {
+    if (isDmChannel((this.channels || []).find(row => row.record_id === channelId) || {})) return false;
     return this.channelNotificationPreferences.some(row => row.channel_id === channelId && row.mode === 'mentions_only');
   },
   async refreshChannelNotificationPreferences() {

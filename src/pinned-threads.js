@@ -28,7 +28,9 @@ export const pinnedThreadsMixin = {
   },
   get pinnedThreads() {
     if (this.pinnedThreadsContext !== this.pinnedThreadsPartition) return [];
-    return this.pinnedThreadRows.map(row => ({ ...row, isUnread: !row.unavailable && (row.type === 'channel' ? this.isChannelUnread?.(row.id) === true : (row.persistedUnread ?? (this.isTowerPgMode
+    return this.pinnedThreadRows.map(row => ({ ...row, isUnread: !row.unavailable && (row.type === 'channel' ? this.isChannelUnread?.(row.id) === true : (this.isChannelMentionsOnly?.(row.channelId)
+      ? (row.persistedMentionUnread ?? Boolean((row.type === 'task' ? this._unreadTaskItems : row.type === 'document' ? this._unreadDocItems : this._unreadThreadItems)?.[row.id]))
+      : row.persistedUnread ?? (this.isTowerPgMode
       ? (!row.type || row.type === 'thread') && Boolean(this._unreadThreadItems?.[row.id] || this.inboxUnreadThreads?.[row.id])
       : Boolean(this._unreadChannels?.[row.channelId])))) }))
       .sort((a, b) => a.orderIndex != null && b.orderIndex != null ? a.orderIndex - b.orderIndex : legacyPinCompare(a, b));

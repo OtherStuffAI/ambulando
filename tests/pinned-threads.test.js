@@ -111,3 +111,14 @@ it('derives channel blue state from authoritative channel unread and follows rea
  expect(s.deckInboxTitle).toBe('Inbox: Other scope');s.autopilotOverviewContext={channelId:''};expect(s.deckInboxTitle).toBe('Inbox');
  s.currentViewerNpub='bob';expect(s.pinnedThreads).toEqual([]);
 });
+
+it('uses mention unread for muted pins while preserving underlying pin unread and restoring it on unmute', () => {
+  const s = store(); s.pinnedThreadsContext = s.pinnedThreadsPartition;
+  s.pinnedThreadRows = [{...pin,type:'thread',persistedUnread:true,persistedMentionUnread:false},
+    {...pin,id:'mention',type:'thread',persistedUnread:true,persistedMentionUnread:true}];
+  s.isChannelMentionsOnly = () => true;
+  expect(Object.fromEntries(s.pinnedThreads.map(row=>[row.id,row.isUnread]))).toEqual({thread:false,mention:true});
+  expect(s.pinnedThreadRows.every(row=>row.persistedUnread)).toBe(true);
+  s.isChannelMentionsOnly = () => false;
+  expect(s.pinnedThreads.every(row=>row.isUnread)).toBe(true);
+});

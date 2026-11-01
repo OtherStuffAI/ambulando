@@ -536,7 +536,7 @@ it('repairs an existing assignment projection without moving the cursor, receipt
   expect((await db.pg_resource_attention.get(`task:${task.id}`)).unread).toBe(0);
   expect((await db.sync_state.get(recordDeltaCursorKey(store))).value.cursor).toBe(cursor);
   expect(await db.resource_view_states.get(`task:${task.id}`)).toMatchObject(receipt);
-  await db.sync_state.delete(`${recordDeltaCursorKey(store)}:summary-backfill-assignment-v2`);
+  await db.sync_state.delete(`${recordDeltaCursorKey(store)}:summary-backfill-mentions-v3`);
   await db.tasks.update(task.id,{assigned_to_npub:'npub1draft',assigned_to_npubs:['npub1draft'],sync_status:'pending'});
   await rebuildPgRecordSummaries(store);
   expect((await db.tasks.get(task.id)).assigned_to_npubs).toEqual(['npub1draft']);
@@ -573,4 +573,31 @@ describe.each(['scope','channel'])('unversioned %s navigation freshness', family
     await expect(applyPgRecordChanges(store,page([foreign],'two'))).rejects.toThrow('Invalid Tower');
     expect((await table().get(base.id)).title).toBe('Original');
   });
+});
+
+it('filters muted channel attention from saved actor-specific preferences without rewriting underlying unread or cursors', async () => {
+  const { getPgAttentionProjection } = await import('../src/pg-record-delta.js');
+  const { notificationInboxContext } = await import('../src/notification-inbox-store.js');
+  const viewer = { ...store, currentPgActorId: 'viewer', currentViewerNpub: store.session.npub,
+    currentWorkspace: { ...store.currentWorkspace, pgMe: {actor:{actor_id:'viewer',npub:store.session.npub}} } };
+  const context = notificationInboxContext(viewer);
+  await db.sync_state.put({ key: recordDeltaCursorKey(viewer), value: { cursor: 'kept' } });
+  const row = (id, channel, mention = 0, viewed = 2) => ({ record_id: `thread:${id}`, resource_type: 'thread', resource_id: id,
+    channel_id: channel, unread: 1, activity_version: 10, attention_activity_version: 10, mention_activity_version: mention, viewed_activity_version: viewed });
+  const rows = [row('ordinary','muted'), row('mention','muted',7), row('read-mention','muted',2), row('other','other')];
+  await db.pg_resource_attention.bulkPut(rows);
+  await db.pg_attention_counts.bulkPut([{key:'section:chat',count:4},{key:'channel:muted',count:3},{key:'channel:other',count:1}]);
+  viewer.messages = rows.map(row => ({record_id:row.resource_id}));
+  await db.notification_inbox.put({key:context.key,channel_preferences:[{channel_id:'muted',mode:'mentions_only'}]});
+  const muted = await getPgAttentionProjection(viewer);
+  expect(muted.values['section:chat']).toBe(2);
+  expect(muted.values['channel:muted']).toBe(1);
+  expect(muted.visible.filter(row=>row.unread).map(row=>row.resource_id)).toEqual(['mention','other']);
+  expect(await db.pg_resource_attention.toArray()).toEqual(expect.arrayContaining(rows));
+  expect((await db.sync_state.get(recordDeltaCursorKey(viewer))).value.cursor).toBe('kept');
+  await db.notification_inbox.put({key:context.key,channel_preferences:[]});
+  expect((await getPgAttentionProjection(viewer)).values['section:chat']).toBe(4);
+  // A preference written for a different actor never filters this viewer.
+  await db.notification_inbox.put({key:context.key+'other',channel_preferences:[{channel_id:'muted',mode:'mentions_only'}]});
+  expect((await getPgAttentionProjection(viewer)).values['channel:muted']).toBe(3);
 });

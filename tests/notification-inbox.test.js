@@ -32,7 +32,7 @@ class FakeTower {
   remove(actorId, id) { const a = this.actor(actorId); a.items.delete(id); a.tombstones.push({ id, change_seq: ++a.seq }); }
   // Wire v1.1 visibility: a presentation filter per client app. Hiding never touches the shared item or its read state.
   visible(a, item, client) {
-    if ((item.category || 'mention') === 'chat_thread' && a.channelPreferences.get(item.target?.channel_id || 'c1')?.mode === 'mentions_only') return false;
+    if (['chat_thread', 'task_assignment'].includes(item.category) && a.channelPreferences.get(item.target?.channel_id || 'c1')?.mode === 'mentions_only') return false;
     if (!client) return true;
     if (item.hidden_from?.includes(client)) return false;
     const rule = a.rules.get(`flightdeck.core|${item.category || 'mention'}|${client}|inbox`);
@@ -615,12 +615,13 @@ describe('channel mentions-only preference synchronization', () => {
     const bob = device('bob', { actor: 'bob' }); await bob.db.open();
     for (const actor of ['alice', 'bob']) {
       server.emit(actor, 'ordinary', { category: 'chat_thread' });
+      server.emit(actor, 'assigned', { category: 'task_assignment' });
       server.emit(actor, 'tag', { category: 'mention' });
       server.emit(actor, 'dm', { category: 'dm' });
       server.emit(actor, 'other-channel', { category: 'chat_thread', target: { kind: 'thread', channel_id: 'c2' } });
     }
     await one.sync(); await two.sync(); await bob.sync();
-    expect(unreadCount(await rows(one), await state(one))).toBe(4);
+    expect(unreadCount(await rows(one), await state(one))).toBe(5);
     await one.transport('ws', 'channel-preferences/c1', { method: 'PUT', body: { mode: 'mentions_only', expected_row_version: 0 } });
     await one.sync(); await two.sync(); await bob.sync();
     for (const d of [one, two]) {
@@ -628,8 +629,9 @@ describe('channel mentions-only preference synchronization', () => {
       expect(unreadCount(await rows(d), await state(d))).toBe(3);
       expect((await state(d)).channel_preferences).toEqual([{ channel_id: 'c1', mode: 'mentions_only', row_version: 1 }]);
     }
-    expect(unreadCount(await rows(bob), await state(bob))).toBe(4);
+    expect(unreadCount(await rows(bob), await state(bob))).toBe(5);
     expect(server.actor('alice').items.get('ordinary').read).toBeUndefined();
+    expect(server.actor('alice').items.get('assigned').read).toBeUndefined();
     // Reopening a device materializes the persisted authority, not a device-only toggle.
     const reopened = device('reopened'); await reopened.db.open(); await reopened.sync();
     expect((await state(reopened)).channel_preferences[0].mode).toBe('mentions_only');
@@ -637,6 +639,6 @@ describe('channel mentions-only preference synchronization', () => {
     server.emit('alice', 'future', { category: 'chat_thread' });
     await one.sync(); await two.sync();
     expect((await view(one)).map(i => i.id)).toContain('future');
-    expect(unreadCount(await rows(one), await state(one))).toBe(5);
+    expect(unreadCount(await rows(one), await state(one))).toBe(6);
   });
 });

@@ -2,7 +2,7 @@ import { pinOrderSupportKey, mapThreadPin, threadPinContext, threadPinSupportKey
 import { mergePgAccessState } from './pg-access-state.js';
 import { markPgTargetArchived } from './pg-archive-state.js';
 import { mapScopeOrder } from './scope-order.js';
-import { personalAttentionVersion } from './personal-attention.js';
+import { personalAttentionVersion, directMentionAttentionVersion } from './personal-attention.js';
 import { canonicalClientId, checkpointRevision, DEVICE_CACHE_OWNER_KEY, assertDeviceLease, createDeviceCacheId, validateBoundedHandover } from './pg-device-checkpoints.js';
 import { publishContextAuthority, clearContextAuthority, mapContextRow } from './context-cache.js';
 import { resolvePgReaderActorId } from './pg-reader-identity.js';
@@ -10,6 +10,8 @@ import { inboundFeedReaderRow } from './translators/feed-reader.js';
 import { feedContextKey } from './feed/store.js';
 import { threadHistoryLineage } from './thread-history-coverage.js';
 import Dexie from 'dexie';
+import { notificationInboxContextOrNull } from './notification-inbox-store.js';
+import { isDmChannel } from './dm-scope.js';
 import { preserveHydratedDocumentContent } from './document-selection.js';
 import { getWorkspaceDb, reconcilePgMessageIdentity } from './db.js';
 import { sameLogicalValue } from './utils/state-helpers.js';
@@ -104,6 +106,7 @@ async function updateResourceAttention(db, resourceType, id, store, members, cac
   const view = cache ? cache.views.get(recordId) : await db.resource_view_states.get(recordId);
   const activity = Number(raw?.row?.activity_version || 0);
   let attentionVersion = 0;
+  let mentionVersion = 0;
   if (raw?.operation === 'upsert') {
     const comments = resourceType === 'thread' || raw.row.attention?.policy_version === 1 ? [] : await db.comments.where('[target_record_id+cache_active+cache_time+record_id]')
       .between([id, 1, Dexie.minKey, Dexie.minKey], [id, 1, '\uffff', Dexie.maxKey]).toArray();
@@ -111,15 +114,20 @@ async function updateResourceAttention(db, resourceType, id, store, members, cac
       ? await db.pg_record_rows.where('[family+parent_id]').equals(['task_assignment', id]).toArray() : [];
     const canonical = resourceType === 'task' ? { ...raw.row, assignments: assignments
       .filter(assignment => assignment.operation === 'upsert' && !assignment.row.deleted_at).map(assignment => assignment.row) } : raw.row;
+    const attentionOptions = {
+      resourceType, viewerActorId: resolvePgReaderActorId(store) || store.currentPgActorId,
+      viewerNpub: store.currentViewerNpub || store.session?.npub, workspaceMembers: members,
+    };
+    mentionVersion = directMentionAttentionVersion(canonical, view || {}, attentionOptions);
     attentionVersion = personalAttentionVersion(canonical, view || {}, {
-      resourceType, comments, viewerActorId: resolvePgReaderActorId(store) || store.currentPgActorId,
+      resourceType, comments, mentionsOnly: false, viewerActorId: resolvePgReaderActorId(store) || store.currentPgActorId,
       viewerNpub: store.currentViewerNpub || store.session?.npub, workspaceMembers: members,
     });
   }
   const unread = attentionVersion > Number(view?.viewed_activity_version || 0);
   const next = { record_id: recordId, resource_type: resourceType, resource_id: id,
     channel_id: raw?.channel_id || view?.channel_id || null, unread: unread ? 1 : 0,
-    attention_activity_version: attentionVersion, attention_policy_version: 1,
+    attention_activity_version: attentionVersion, mention_activity_version: mentionVersion, attention_policy_version: 1,
     activity_version: activity, viewed_activity_version: Number(view?.viewed_activity_version || 0) };
   const prior = cache ? cache.attention.get(recordId) : await db.pg_resource_attention.get(recordId);
   if (sameLogicalValue(prior, next)) return;
@@ -176,9 +184,34 @@ export async function getPgAttentionProjection(store) {
   const assetConflicts = conflicts.filter(isTowerWinsLocalAssetConflict);
   const recordConflicts = conflicts.filter(conflict => !isTowerWinsLocalAssetConflict(conflict));
   const values = Object.fromEntries(counts.map(r => [r.key, r.count]));
+  const context = notificationInboxContextOrNull(store);
+  const saved = context ? await db.notification_inbox.get(context.key) : null;
+  const muted = (saved?.channel_preferences || []).filter(row => row.mode === 'mentions_only')
+    .map(row => row.channel_id).filter(id => !isDmChannel((store.channels || []).find(row => row.record_id === id) || {}));
+  const filtered = new Map();
+  for (const channelId of muted) {
+    const rows = await db.pg_resource_attention.where('channel_id').equals(channelId).toArray();
+    for (const row of rows) {
+      let mentionVersion = row.mention_activity_version;
+      // Old caches are upgraded lazily until the bounded worker backfill reaches them.
+      if (mentionVersion === undefined) {
+        const family = row.resource_type === 'document' ? 'doc' : row.resource_type;
+        const raw = await db.pg_record_rows.get(`${family}:${row.resource_id}`);
+        mentionVersion = directMentionAttentionVersion(raw?.row || {}, row, {
+          resourceType: row.resource_type, viewerActorId: context.actorId,
+          viewerNpub: store.currentViewerNpub || store.session?.npub,
+        });
+      }
+      const unread = Number(mentionVersion || 0) > Number(row.viewed_activity_version || 0) ? 1 : 0;
+      filtered.set(row.record_id, { ...row, unread });
+      const delta = unread - Number(Boolean(row.unread));
+      const section = row.resource_type === 'thread' ? 'chat' : row.resource_type === 'task' ? 'tasks' : 'docs';
+      for (const key of [`section:${section}`, `channel:${channelId}`]) values[key] = Math.max(0, Number(values[key] || 0) + delta);
+    }
+  }
   return {
     values,
-    visible: visible.filter(Boolean),
+    visible: visible.filter(Boolean).map(row => filtered.get(row.record_id) || row),
     conflictCount: recordConflicts.length,
     conflicts: recordConflicts.slice(0, 20),
     avatarSyncConflictCount: assetConflicts.length,
@@ -563,7 +596,7 @@ async function applyRecordPage(store, page, options = {}) {
     // Startup accepts growth, rejects only row loss, and performs one owner
     // recount before v2 resumes. Recounting or rewriting this checkpoint in
     // each auxiliary transaction can starve foreground IndexedDB work.
-    return { applied, affectedChannels: [...affectedChannels].filter(Boolean), affectedResources: [...affectedResources.values()], localGeneration: Number(state.localGeneration || 0), cursor: page.next_cursor, retirementPending, hasMore: page.has_more, fullSnapshot: page.mode === 'snapshot', protocolVersion: 1, needsSummaryBackfill: Boolean(state.snapshotComplete && state.assignmentPolicyVersion !== 1 && page.mode === 'delta' && !page.has_more) };
+    return { applied, affectedChannels: [...affectedChannels].filter(Boolean), affectedResources: [...affectedResources.values()], localGeneration: Number(state.localGeneration || 0), cursor: page.next_cursor, retirementPending, hasMore: page.has_more, fullSnapshot: page.mode === 'snapshot', protocolVersion: 1, needsSummaryBackfill: Boolean(state.snapshotComplete && (state.assignmentPolicyVersion !== 1 || state.mentionProjectionVersion !== 1) && page.mode === 'delta' && !page.has_more) };
   });
 }
 
@@ -716,7 +749,7 @@ export async function resetPgRecordAuthority(store, { preserveViews = false, acc
     await db.sync_state.where('key').between(prefix, `${prefix}\uffff`, true, true).delete();
     if (!preserveViews) await clearContextAuthority(db);
     if (preserveViews) {
-      await db.sync_state.delete(`${cursorKey}:summary-backfill-assignment-v2`);
+      await db.sync_state.delete(`${cursorKey}:summary-backfill-mentions-v3`);
       await db.sync_state.put({ key: cursorKey, value: replacement });
       return { localGeneration };
     }
@@ -740,7 +773,7 @@ export async function resetPgRecordAuthority(store, { preserveViews = false, acc
     await db.pg_resource_attention.clear(); await db.pg_attention_counts.clear();
     await db.workspace_members.clear(); await db.groups.clear();
     await db.sync_state.put({ key: cursorKey, value: replacement });
-    await db.sync_state.delete(`${cursorKey}:summary-backfill-assignment-v2`);
+    await db.sync_state.delete(`${cursorKey}:summary-backfill-mentions-v3`);
     return { localGeneration };
   });
 }
@@ -811,7 +844,7 @@ export const SUMMARY_REBUILD_SLICE_MS = 1_500;
 export async function rebuildPgRecordSummaries(store, options = {}) {
   const { batchSize = 32 } = options;
   const sliceMs = Number(options.sliceMs) > 0 ? Number(options.sliceMs) : SUMMARY_REBUILD_SLICE_MS;
-  const db = getWorkspaceDb(), key = `${recordDeltaCursorKey(store)}:summary-backfill-assignment-v2`;
+  const db = getWorkspaceDb(), key = `${recordDeltaCursorKey(store)}:summary-backfill-mentions-v3`;
   let after = (await db.sync_state.get(key))?.value?.after || null;
   let processed = 0;
   const startedAt = Date.now();
@@ -841,7 +874,7 @@ export async function rebuildPgRecordSummaries(store, options = {}) {
       await db.sync_state.put({key,value:{after,complete:!rows.length}});
       if (!rows.length) {
         const state=await db.sync_state.get(recordDeltaCursorKey(store));
-        if(state) await db.sync_state.put({...state,value:{...state.value,summariesRebuilt:true,attentionPolicyVersion:1,assignmentPolicyVersion:1}});
+        if(state) await db.sync_state.put({...state,value:{...state.value,summariesRebuilt:true,attentionPolicyVersion:1,assignmentPolicyVersion:1,mentionProjectionVersion:1}});
       }
     });
     processed += count;

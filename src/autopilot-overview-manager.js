@@ -22,6 +22,19 @@ import {
 } from './thread-navigation.js';
 import { getChannelById } from './db.js';
 
+// A source-window cache may still carry ordinary unread while the shared
+// presentation map has filtered it. It must not reintroduce muted attention.
+function mutedThreadUnreadMap(store, map, messages) {
+  if (!store.channelNotificationPreferences?.some(row => row.mode === 'mentions_only')) return map;
+  const filtered = { ...map };
+  for (const message of messages || []) {
+    if (!store.isChannelMentionsOnly?.(message.channel_id)) continue;
+    const id = message.pg_thread_id || message.parent_message_id || message.record_id;
+    filtered[id] = store._unreadThreadItems?.[id] === true;
+  }
+  return filtered;
+}
+
 const UNSCOPED_SCOPE_ID = '__unscoped__';
 const ALL_SCOPE_ID = 'all';
 const ALL_CHANNEL_ID = 'all';
@@ -1734,7 +1747,7 @@ export const autopilotOverviewManagerMixin = {
       this.channels, messages, context.scopeId, context.channelId, this.scopesMap,
       this.groups, this.chatProfiles, this.addressBookPeople, this._wsKeyDisplayMap,
       sessionNpub, this._unreadChannels,
-      this._unreadThreadItems, this.inboxUnreadThreads, Boolean(this.isTowerPgMode),
+      this._unreadThreadItems, this.inboxUnreadThreads, this.channelNotificationPreferences, Boolean(this.isTowerPgMode),
     ], () => buildAutopilotOverviewThreads({
       channels: this.channels,
       messages,
@@ -1746,7 +1759,7 @@ export const autopilotOverviewManagerMixin = {
       getSenderName: this.getSenderName?.bind?.(this),
       sessionNpub,
       unreadChannelMap: this._unreadChannels || {},
-      unreadThreadMap: mergeUnreadMaps(this._unreadThreadItems, this.inboxUnreadThreads),
+      unreadThreadMap: mutedThreadUnreadMap(this, mergeUnreadMaps(this._unreadThreadItems, this.inboxUnreadThreads), messages),
       resourceViewStateMode: Boolean(this.isTowerPgMode),
     }));
   },
@@ -1758,7 +1771,7 @@ export const autopilotOverviewManagerMixin = {
     return memoizedProjection(this, 'recent-channels', [
       this.channels, messages, contextScopeId, this.scopesMap, this.groups,
       this.chatProfiles, this.addressBookPeople, this._wsKeyDisplayMap,
-      sessionNpub, this._unreadChannels, this._unreadThreadItems, this.recentChannelUnreadThreads,
+      sessionNpub, this._unreadChannels, this._unreadThreadItems, this.recentChannelUnreadThreads, this.channelNotificationPreferences,
       Boolean(this.isTowerPgMode),
     ], () => buildRecentChannels(buildAutopilotOverviewThreads({
       channels: this.channels,
@@ -1771,7 +1784,7 @@ export const autopilotOverviewManagerMixin = {
       getSenderName: this.getSenderName?.bind?.(this),
       sessionNpub,
       unreadChannelMap: this._unreadChannels || {},
-      unreadThreadMap: mergeUnreadMaps(this._unreadThreadItems, this.recentChannelUnreadThreads),
+      unreadThreadMap: mutedThreadUnreadMap(this, mergeUnreadMaps(this._unreadThreadItems, this.recentChannelUnreadThreads), messages),
       resourceViewStateMode: Boolean(this.isTowerPgMode),
     })));
   },
@@ -1830,8 +1843,9 @@ export const autopilotOverviewManagerMixin = {
     const documents = this.autopilotOverviewDocuments;
     const tasks = this.autopilotOverviewTasks;
     const workingResourceKeys = this.deckInboxWorkingResourceKeys;
-    return memoizedProjection(this, 'inbox', [threads, files, documents, tasks, workingResourceKeys], () => (
-      buildAutopilotOverviewInbox({ threads, files, documents, tasks, workingResourceKeys })
+    return memoizedProjection(this, 'inbox', [threads, files, documents, tasks, workingResourceKeys, this.channelNotificationPreferences], () => (
+      buildAutopilotOverviewInbox({ threads, files, documents, tasks, workingResourceKeys }).map(row =>
+        this.isChannelMentionsOnly?.(row.channelId || row.channel_id) && !row.isUnread ? { ...row, isWorking: false } : row)
     ));
   },
 

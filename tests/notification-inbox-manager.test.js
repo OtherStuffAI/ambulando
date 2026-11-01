@@ -190,3 +190,24 @@ describe('channel notification controls', () => {
     expect(s.channelNotificationPreferences).toEqual([]);
   });
 });
+
+it('refreshes unread attention for live saved preference changes on two clients, isolated from another actor', async () => {
+  const a=store(), b=store(), other=store();
+  other.currentWorkspace={...other.currentWorkspace,pgMe:{actor:{actor_id:'other',npub:'npub-a'}}};
+  for (const s of [a,b,other]) s.scheduleTowerPgUnreadProjectionRefresh=vi.fn(async()=>{});
+  const context=await seed(a,[],{channel_preferences:[],channel_preferences_supported:true});
+  for (const s of [a,b,other]) s.activateNotificationInbox();
+  await vi.waitFor(()=>expect(a.notificationInboxReady).toBe(true));
+  for (const s of [a,b,other]) s.scheduleTowerPgUnreadProjectionRefresh.mockClear();
+  await getWorkspaceDb().notification_inbox.update(context.key,{channel_preferences:[{channel_id:'research',mode:'mentions_only'}]});
+  await vi.waitFor(()=>expect(b.isChannelMentionsOnly('research')).toBe(true));
+  expect(a.isChannelMentionsOnly('research')).toBe(true);
+  expect(a.scheduleTowerPgUnreadProjectionRefresh).toHaveBeenCalledTimes(1);
+  expect(b.scheduleTowerPgUnreadProjectionRefresh).toHaveBeenCalledTimes(1);
+  expect(other.isChannelMentionsOnly('research')).toBe(false);
+  expect(other.scheduleTowerPgUnreadProjectionRefresh).not.toHaveBeenCalled();
+  await getWorkspaceDb().notification_inbox.update(context.key,{channel_preferences:[]});
+  await vi.waitFor(()=>expect(b.isChannelMentionsOnly('research')).toBe(false));
+  expect(b.scheduleTowerPgUnreadProjectionRefresh).toHaveBeenCalledTimes(2);
+  for(const s of [a,b,other]) s.disposeNotificationInbox();
+});
