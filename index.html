@@ -446,6 +446,8 @@
                   <div class="notification-inbox-actions">
                     <button type="button" class="btn-cancel btn-compact" x-show="!item.read" @click="$store.chat.markNotificationRead(item)">Mark read</button>
                     <button type="button" class="btn-cancel btn-compact" x-show="item.read" @click="$store.chat.markNotificationUnread(item)">Mark unread</button>
+                    <span role="status" x-show="item.taskState === 'done'">Task Done</span>
+                    <button type="button" class="btn-cancel btn-compact" x-show="$store.chat.canCompleteNotificationTask(item)" :disabled="$store.chat.notificationTaskBusyIds.includes($store.chat.notificationTaskId(item))" @click="$store.chat.completeNotificationTask(item)" aria-label="Mark task Done" x-text="$store.chat.notificationTaskBusyIds.includes($store.chat.notificationTaskId(item)) ? 'Saving…' : 'Done'"></button>
                     <button type="button" class="btn-cancel btn-compact" x-show="!item.archived" @click="$store.chat.archiveNotification(item)">Archive</button>
                     <button type="button" class="btn-cancel btn-compact" x-show="item.archived" @click="$store.chat.unarchiveNotification(item)">Restore</button>
                     <button type="button" class="btn-cancel btn-compact" @click="$store.chat.dismissNotification(item)">Dismiss</button>

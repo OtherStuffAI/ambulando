@@ -133,3 +133,19 @@ other devices rebuild existing entries/counts. No channel message read state is
 changed. Older Towers disable the control with an explicit unsupported message
 while retaining the existing inbox. Android can consume the same contract; its
 channel control is a separate follow-up.
+
+## Complete task notifications
+
+Task and task-comment targets offer **Done** in the web panel. This command loads
+only the target task through the sync service, reads its materialized Dexie row,
+and uses the existing task patch path (including Done's assignee clearing).
+It does not insert an off-channel task into the selected task collection.
+Task views and the notification's completion indicator observe persisted task
+state. Non-task, inaccessible, read-only and terminal targets cannot be completed.
+Pending saves block another completion; duplicate taps share a task-id guard.
+A rejected update rolls back task state and reports the error in the panel.
+Notification read, archive and dismiss remain independent and unchanged.
+
+The iPhone and Mac Notifications sheet offers the corresponding task-only swipe
+and context-menu action through its existing task-state queue. Android needs the
+same client action as a follow-up; no server contract change is required.

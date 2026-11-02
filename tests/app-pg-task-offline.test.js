@@ -707,7 +707,7 @@ describe('app PG task offline drafts', () => {
     expect(store.editingTask.record_id).toBe('task-classic-2');
   });
 
-  it('restores a review task when an awaited PG done-state write is rejected', async () => {
+  it.each([false, true])('restores a review task when an awaited PG done-state write is rejected (outside selected collection: %s)', async (outsideCollection) => {
     const wsDb = openWorkspaceDb('npub1pgworkspace-review-rollback');
     await wsDb.open();
     await Promise.all(wsDb.tables.map((table) => table.clear()));
@@ -745,13 +745,14 @@ describe('app PG task offline drafts', () => {
         pgBackendMode: true,
       }],
       backendUrl: 'https://tower.example',
-      tasks: [reviewTask],
+      tasks: outsideCollection ? [] : [reviewTask],
       editingTask: null,
     });
 
     await expect(store.applyTaskPatch(reviewTask.record_id, { state: 'done' }, {
       backgroundPg: false,
       rollbackOnFailure: true,
+      ...(outsideCollection ? { sourceTask: reviewTask } : {}),
     })).resolves.toBeNull();
 
     expect(updateTowerPgTaskFromLocalMock).toHaveBeenCalledWith(
@@ -760,7 +761,7 @@ describe('app PG task offline drafts', () => {
       reviewTask,
       { state: 'done' },
     );
-    expect(store.tasks[0]).toEqual(reviewTask);
+    expect(store.tasks).toEqual(outsideCollection ? [] : [reviewTask]);
     expect(await getTaskById(reviewTask.record_id)).toEqual(reviewTask);
     expect(store.error).toBe('Tower rejected the state update.');
   });

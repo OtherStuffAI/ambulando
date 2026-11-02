@@ -5616,6 +5616,13 @@
       "notes": [
         "Apply the same off-deck unread policy when using cached thread metadata, preserving unread active conversations and explicit read acknowledgements."
       ]
+    },
+    {
+      "buildNumber": 2701,
+      "label": "Complete tasks from notifications",
+      "notes": [
+        "Mark task notifications Done using the task’s existing completion action. Archive and Dismiss keep their separate notification behavior."
+      ]
     }
   ]
 }

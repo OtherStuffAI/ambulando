@@ -121,3 +121,26 @@ test('fixture: channel readers can mute notifications on desktop and phone; dire
   await page.evaluate(() => { const s = window.Alpine.store('chat'); s.channels[0].channel_type = 'dm'; });
   await expect(toggle).toBeHidden();
 });
+
+test('fixture: task-only Done is keyboard accessible and leaves Archive and Dismiss available', async ({ page }) => {
+  await seed(page, { width: 390, height: 760 });
+  await page.evaluate(() => {
+    const store = window.Alpine.store('chat');
+    store.notificationInboxItems[1].target = { kind: 'task', task_id: 'task-b' };
+    store.completeNotificationTask = async item => {
+      window.completedNotificationTask = store.notificationTaskId(item);
+      store.notificationInboxItems = store.notificationInboxItems.map(row => row.id === item.id ? { ...row, taskState: 'done' } : row);
+    };
+  });
+  await page.getByTestId('notification-inbox-button').click();
+  const rows = page.getByTestId('notification-inbox-item');
+  const done = page.getByRole('button', { name: 'Mark task Done', exact: true });
+  await expect(done).toHaveCount(1);
+  await done.focus();
+  await page.keyboard.press('Enter');
+  await expect.poll(() => page.evaluate(() => window.completedNotificationTask)).toBe('task-b');
+  await expect(rows.nth(1)).toContainText('Task Done');
+  await expect(rows.nth(1).getByRole('button', { name: 'Archive', exact: true })).toBeVisible();
+  await expect(rows.nth(1).getByRole('button', { name: 'Dismiss', exact: true })).toBeVisible();
+  await expect(rows).toHaveCount(4);
+});

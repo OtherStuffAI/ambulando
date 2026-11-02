@@ -1,6 +1,6 @@
 import { isDmChannel } from './dm-scope.js';
 import { liveQuery } from 'dexie';
-import { getWorkspaceDb } from './db.js';
+import { getTaskById, getWorkspaceDb } from './db.js';
 import { buildSectionUrl } from './route-helpers.js';
 import {
   notificationInboxContext, notificationInboxContextOrNull, projectNotificationInbox, queueNotificationBulk,
@@ -72,6 +72,7 @@ export const notificationInboxMixin = {
   notificationInboxActivatedAt: '',
   notificationInboxPending: 0,
   notificationInboxBusy: false,
+  notificationTaskBusyIds: [],
   notificationInboxContextKey: '',
   notificationInboxAnnouncement: '',
   notificationPrefsRows: [],
@@ -139,10 +140,12 @@ export const notificationInboxMixin = {
     const entry = { key: context.key };
     subscriptions.set(this, entry);
     const db = getWorkspaceDb();
-    entry.subscription = liveQuery(async () => ({
-      rows: await db.notification_items.where('context').equals(context.key).toArray(),
-      state: await db.notification_inbox.get(context.key),
-    })).subscribe({
+    entry.subscription = liveQuery(async () => {
+      const rows = await db.notification_items.where('context').equals(context.key).toArray();
+      const taskIds = [...new Set(rows.map(row => this.notificationTaskId(row)).filter(Boolean))];
+      const tasks = await db.tasks.bulkGet(taskIds);
+      return { rows, state: await db.notification_inbox.get(context.key), tasks: tasks.filter(Boolean) };
+    }).subscribe({
       next: latest => {
         if (subscriptions.get(this) !== entry) return;
         if (notificationInboxContextOrNull(this)?.key !== context.key) return;
@@ -154,13 +157,18 @@ export const notificationInboxMixin = {
     void this.requestTowerSyncFamily?.('notification-inbox').catch(() => {});
   },
 
-  projectNotificationInbox({ rows, state } = subscriptions.get(this)?.latest || {}) {
+  projectNotificationInbox({ rows, state, tasks = [] } = subscriptions.get(this)?.latest || {}) {
     if (!rows) return;
     const view = this.notificationInboxView;
     const projected = projectNotificationInbox(rows, state, { view, category: this.notificationInboxCategory });
     // Offer the categories present in the unfiltered view so a stale filter can always be cleared.
     this.notificationInboxCategories = [...new Set(projectNotificationInbox(rows, state, { view }).map(item => item.category))].sort();
-    this.notificationInboxItems = projected.map(item => ({ ...item, ageLabel: relativeTime(item.occurred_at), route: notificationTargetRoute(item) }));
+    const taskById = new Map(tasks.map(task => [task.record_id, task]));
+    this.notificationInboxItems = projected.map(item => {
+      const task = taskById.get(this.notificationTaskId(item));
+      return { ...item, ageLabel: relativeTime(item.occurred_at), route: notificationTargetRoute(item),
+        taskState: task?.state, taskReadOnly: task?.read_only, taskSyncStatus: task?.sync_status };
+    });
     this.notificationInboxUnread = unreadCount(rows, state);
     const priorChannelPreferences = JSON.stringify(this.channelNotificationPreferences);
     this.channelNotificationPreferences = state?.channel_preferences || [];
@@ -265,6 +273,48 @@ export const notificationInboxMixin = {
   dismissNotification: function (item) { return this.mutateNotification(item, { dismissed: true }, 'Notification dismissed'); },
   archiveNotification: function (item) { return this.mutateNotification(item, { archived: true }, 'Notification archived'); },
   unarchiveNotification: function (item) { return this.mutateNotification(item, { archived: false }, 'Notification restored to inbox'); },
+
+  notificationTaskId(item) {
+    const route = notificationTargetRoute(item);
+    return route?.section === 'tasks' ? route.params.taskid : '';
+  },
+  canCompleteNotificationTask(item) {
+    const id = this.notificationTaskId(item);
+    const task = (this.tasks || []).find(row => row.record_id === id);
+    return Boolean(id && this.session?.npub && !item.taskReadOnly && !task?.read_only
+      && !['done', 'archive', 'archived'].includes(item.taskState || task?.state));
+  },
+  async completeNotificationTask(item) {
+    const id = this.notificationTaskId(item);
+    if (!this.canCompleteNotificationTask(item) || this.notificationTaskBusyIds.includes(id)) return false;
+    const context = notificationInboxContextOrNull(this)?.key;
+    if (!context) return false;
+    this.notificationTaskBusyIds = [...this.notificationTaskBusyIds, id];
+    this.notificationInboxMessage = '';
+    try {
+      const local = await getTaskById(id);
+      if (local && ['pending', 'failed'].includes(local.sync_status)) throw new Error('This task has a pending save. Sync it before marking Done.');
+      // Read the actual task through its normal authorized adapter, not notification metadata.
+      const loaded = await this.requestTowerSyncFamily('task', id, { force: true });
+      if (loaded?.record_id !== id || loaded.record_state === 'deleted' || loaded.read_only) throw new Error('Could not load a writable task. Open it to check access.');
+      const task = await getTaskById(id);
+      if (notificationInboxContextOrNull(this)?.key !== context) return false;
+      if (!task || task.read_only) throw new Error('This task is unavailable or cannot be changed.');
+      if (['done', 'archive', 'archived'].includes(task.state)) return false;
+      if (task.sync_status === 'pending' || task.sync_status === 'failed') throw new Error('This task has a pending save. Sync it before marking Done.');
+      const updated = await this.applyTaskPatch(id, { state: 'done', assigned_to_npubs: [] }, {
+        rollbackOnFailure: true, intent: 'notification_done', sync: true, sourceTask: task,
+      });
+      if (!updated) throw new Error(this.error || 'Could not mark this task Done.');
+      this.notificationInboxAnnouncement = 'Task marked Done';
+      return true;
+    } catch (error) {
+      if (notificationInboxContextOrNull(this)?.key === context) this.notificationInboxMessage = error.message || 'Could not mark this task Done.';
+      return false;
+    } finally {
+      this.notificationTaskBusyIds = this.notificationTaskBusyIds.filter(value => value !== id);
+    }
+  },
 
   async markAllNotificationsRead() {
     try {

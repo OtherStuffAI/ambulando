@@ -4,6 +4,8 @@ import { notificationInboxMixin } from '../src/notification-inbox-manager.js';
 import { applyNotificationInboxOperation, notificationInboxContext, queueNotificationPatch } from '../src/notification-inbox-store.js';
 import { normalizeNotificationItem } from '../src/notification-inbox-wire.js';
 
+const loadTask = vi.fn();
+
 const key = 'notification-inbox-manager-test';
 const actorId = 'actor-a';
 const rawItem = (id, seq, extra = {}) => ({
@@ -17,7 +19,9 @@ function store() {
   const s = Object.defineProperties({}, Object.getOwnPropertyDescriptors(notificationInboxMixin));
   Object.assign(s, {
     session: { npub: 'npub-a' }, currentWorkspace: { workspaceId: 'workspace-a', directHttpsUrl: 'http://localhost:3100', pgMe: { actor: { actor_id: actorId, npub: 'npub-a' } } },
-    _workspaceSelectionGeneration: 0, workspaceDbKey: key, requestTowerSyncFamily: vi.fn(async () => {}), getTowerSyncService: () => null,
+    _workspaceSelectionGeneration: 0, workspaceDbKey: key, requestTowerSyncFamily: vi.fn(async family => {
+      if (family === 'task') { const task = await loadTask(); if (task?.record_id) await getWorkspaceDb().tasks.put(task); return task; }
+    }), getTowerSyncService: () => null,
     applyRouteFromLocation: vi.fn(async () => {}), currentWorkspaceSlug: 'acme',
   });
   return s;
@@ -210,4 +214,87 @@ it('refreshes unread attention for live saved preference changes on two clients,
   await vi.waitFor(()=>expect(b.isChannelMentionsOnly('research')).toBe(false));
   expect(b.scheduleTowerPgUnreadProjectionRefresh).toHaveBeenCalledTimes(2);
   for(const s of [a,b,other]) s.disposeNotificationInbox();
+});
+
+describe('notification task completion', () => {
+  const item = { id: 'notice', target: { kind: 'task_comment', task_id: 'task-a' } };
+  it('completes the actual task through the existing patch path without dismissing or archiving', async () => {
+    const s = store();
+    s.tasks = [{ record_id: 'other-channel-task', state: 'new' }];
+    loadTask.mockResolvedValue({ record_id: 'task-a', state: 'review' });
+    s.applyTaskPatch = vi.fn(async () => ({ record_id: 'task-a', state: 'done' }));
+    s.mutateNotification = vi.fn();
+    expect(await s.completeNotificationTask(item)).toBe(true);
+    expect(s.applyTaskPatch).toHaveBeenCalledWith('task-a', { state: 'done', assigned_to_npubs: [] }, expect.objectContaining({ rollbackOnFailure: true }));
+    expect(s.tasks.map(task => task.record_id)).toEqual(['other-channel-task']);
+    expect(s.mutateNotification).not.toHaveBeenCalled();
+    expect(s.notificationInboxAnnouncement).toBe('Task marked Done');
+  });
+  it('projects completed task state from Dexie even outside the selected task collection', async () => {
+    const s = store(); s.tasks = [];
+    const raw = rawItem('notice', 1);
+    raw.action.target = { kind: 'task', task_id: 'task-a' };
+    await seed(s, [raw]);
+    s.activateNotificationInbox();
+    await vi.waitFor(() => expect(s.notificationInboxItems).toHaveLength(1));
+    expect(s.canCompleteNotificationTask(s.notificationInboxItems[0])).toBe(true);
+    await getWorkspaceDb().tasks.put({ record_id: 'task-a', state: 'done' });
+    await vi.waitFor(() => expect(s.notificationInboxItems[0].taskState).toBe('done'));
+    expect(s.canCompleteNotificationTask(s.notificationInboxItems[0])).toBe(false);
+    expect(s.notificationInboxItems[0].archived).toBe(false);
+    expect(s.tasks).toEqual([]);
+    s.disposeNotificationInbox();
+  });
+  it('preserves a pending task save instead of hydrating over it or sending another completion', async () => {
+    const s = store(); s.tasks = []; s.applyTaskPatch = vi.fn();
+    await getWorkspaceDb().tasks.put({ record_id: 'task-a', state: 'review', sync_status: 'pending' });
+    expect(await s.completeNotificationTask(item)).toBe(false);
+    expect(s.requestTowerSyncFamily).not.toHaveBeenCalled();
+    expect(s.applyTaskPatch).not.toHaveBeenCalled();
+    expect(s.notificationInboxMessage).toContain('pending save');
+  });
+  it('rejects skipped, denied or deleted hydration results even when a cached task exists', async () => {
+    for (const loaded of [null, { archived: true }, { record_id: 'task-a', record_state: 'deleted' }]) {
+      const s = store(); s.tasks = []; s.applyTaskPatch = vi.fn();
+      await getWorkspaceDb().tasks.put({ record_id: 'task-a', state: 'review' });
+      loadTask.mockResolvedValueOnce(loaded);
+      expect(await s.completeNotificationTask(item)).toBe(false);
+      expect(s.applyTaskPatch).not.toHaveBeenCalled();
+    }
+  });
+  it('only offers completion for available writable nonterminal task targets', () => {
+    const s = store();
+    expect(s.canCompleteNotificationTask(item)).toBe(true);
+    for (const target of [{ kind: 'thread', channel_id: 'c' }, { kind: 'doc', doc_id: 'd' }, null]) {
+      expect(s.canCompleteNotificationTask({ target })).toBe(false);
+    }
+    expect(s.canCompleteNotificationTask({ ...item, unavailable: true })).toBe(false);
+    for (const fields of [{ state: 'done' }, { state: 'archive' }, { read_only: true }]) {
+      s.tasks = [{ record_id: 'task-a', ...fields }];
+      expect(s.canCompleteNotificationTask(item)).toBe(false);
+    }
+  });
+  it('blocks duplicate taps across notifications for the same task and reports failures without changing notification state', async () => {
+    const s = store(); s.tasks = [];
+    let finish;
+    loadTask.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    s.applyTaskPatch = vi.fn(async () => null);
+    s.error = 'Permission denied';
+    const first = s.completeNotificationTask(item);
+    await vi.waitFor(() => expect(finish).toBeTypeOf('function'));
+    expect(await s.completeNotificationTask({ ...item, id: 'second' })).toBe(false);
+    finish({ record_id: 'task-a', state: 'review' });
+    expect(await first).toBe(false);
+    expect(s.notificationInboxMessage).toBe('Permission denied');
+    expect(s.notificationTaskBusyIds).toEqual([]);
+    expect(s.notificationInboxAnnouncement).toBe('');
+  });
+  it('does not reopen terminal tasks or write after workspace changes during loading', async () => {
+    const s = store(); s.tasks = []; s.applyTaskPatch = vi.fn();
+    loadTask.mockResolvedValueOnce({ record_id: 'task-a', state: 'done' });
+    expect(await s.completeNotificationTask(item)).toBe(false);
+    loadTask.mockImplementationOnce(async () => { s.currentWorkspace = null; return { record_id: 'task-a', state: 'new' }; });
+    expect(await s.completeNotificationTask(item)).toBe(false);
+    expect(s.applyTaskPatch).not.toHaveBeenCalled();
+  });
 });

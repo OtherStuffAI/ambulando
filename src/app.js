@@ -6338,7 +6338,8 @@ export function initApp() {
     },
 
     async applyTaskPatch(taskId, patch = {}, options = {}) {
-      const task = this.tasks.find((entry) => entry.record_id === taskId);
+      const task = options.sourceTask?.record_id === taskId
+        ? options.sourceTask : this.tasks.find((entry) => entry.record_id === taskId);
       if (!task || !this.session?.npub) return null;
 
       const usePgBackgroundWrite = isTowerPgBackendMode()
