@@ -2,7 +2,7 @@ import { pinOrderSupportKey, mapThreadPin, threadPinContext, threadPinSupportKey
 import { mergePgAccessState } from './pg-access-state.js';
 import { markPgTargetArchived } from './pg-archive-state.js';
 import { mapScopeOrder } from './scope-order.js';
-import { personalAttentionVersion, directMentionAttentionVersion } from './personal-attention.js';
+import { personalAttentionVersion, directMentionAttentionVersion, isOffDeckResource } from './personal-attention.js';
 import { canonicalClientId, checkpointRevision, DEVICE_CACHE_OWNER_KEY, assertDeviceLease, createDeviceCacheId, validateBoundedHandover } from './pg-device-checkpoints.js';
 import { publishContextAuthority, clearContextAuthority, mapContextRow } from './context-cache.js';
 import { resolvePgReaderActorId } from './pg-reader-identity.js';
@@ -126,6 +126,7 @@ async function updateResourceAttention(db, resourceType, id, store, members, cac
   }
   const unread = attentionVersion > Number(view?.viewed_activity_version || 0);
   const next = { record_id: recordId, resource_type: resourceType, resource_id: id,
+    scope_id: raw?.row?.scope_id || view?.scope_id || null, attention_eligible: raw?.operation !== 'delete' && !isOffDeckResource(raw?.row || {}, resourceType),
     channel_id: raw?.channel_id || view?.channel_id || null, unread: unread ? 1 : 0,
     attention_activity_version: attentionVersion, mention_activity_version: mentionVersion, attention_policy_version: 1,
     activity_version: activity, viewed_activity_version: Number(view?.viewed_activity_version || 0) };
@@ -596,7 +597,7 @@ async function applyRecordPage(store, page, options = {}) {
     // Startup accepts growth, rejects only row loss, and performs one owner
     // recount before v2 resumes. Recounting or rewriting this checkpoint in
     // each auxiliary transaction can starve foreground IndexedDB work.
-    return { applied, affectedChannels: [...affectedChannels].filter(Boolean), affectedResources: [...affectedResources.values()], localGeneration: Number(state.localGeneration || 0), cursor: page.next_cursor, retirementPending, hasMore: page.has_more, fullSnapshot: page.mode === 'snapshot', protocolVersion: 1, needsSummaryBackfill: Boolean(state.snapshotComplete && (state.assignmentPolicyVersion !== 1 || state.mentionProjectionVersion !== 1) && page.mode === 'delta' && !page.has_more) };
+    return { applied, affectedChannels: [...affectedChannels].filter(Boolean), affectedResources: [...affectedResources.values()], localGeneration: Number(state.localGeneration || 0), cursor: page.next_cursor, retirementPending, hasMore: page.has_more, fullSnapshot: page.mode === 'snapshot', protocolVersion: 1, needsSummaryBackfill: Boolean(state.snapshotComplete && (state.assignmentPolicyVersion !== 1 || state.mentionProjectionVersion !== 1 || state.deckAttentionVersion !== 1) && page.mode === 'delta' && !page.has_more) };
   });
 }
 
@@ -749,7 +750,7 @@ export async function resetPgRecordAuthority(store, { preserveViews = false, acc
     await db.sync_state.where('key').between(prefix, `${prefix}\uffff`, true, true).delete();
     if (!preserveViews) await clearContextAuthority(db);
     if (preserveViews) {
-      await db.sync_state.delete(`${cursorKey}:summary-backfill-mentions-v3`);
+      await db.sync_state.delete(`${cursorKey}:summary-backfill-deck-v4`);
       await db.sync_state.put({ key: cursorKey, value: replacement });
       return { localGeneration };
     }
@@ -773,7 +774,7 @@ export async function resetPgRecordAuthority(store, { preserveViews = false, acc
     await db.pg_resource_attention.clear(); await db.pg_attention_counts.clear();
     await db.workspace_members.clear(); await db.groups.clear();
     await db.sync_state.put({ key: cursorKey, value: replacement });
-    await db.sync_state.delete(`${cursorKey}:summary-backfill-mentions-v3`);
+    await db.sync_state.delete(`${cursorKey}:summary-backfill-deck-v4`);
     return { localGeneration };
   });
 }
@@ -844,7 +845,7 @@ export const SUMMARY_REBUILD_SLICE_MS = 1_500;
 export async function rebuildPgRecordSummaries(store, options = {}) {
   const { batchSize = 32 } = options;
   const sliceMs = Number(options.sliceMs) > 0 ? Number(options.sliceMs) : SUMMARY_REBUILD_SLICE_MS;
-  const db = getWorkspaceDb(), key = `${recordDeltaCursorKey(store)}:summary-backfill-mentions-v3`;
+  const db = getWorkspaceDb(), key = `${recordDeltaCursorKey(store)}:summary-backfill-deck-v4`;
   let after = (await db.sync_state.get(key))?.value?.after || null;
   let processed = 0;
   const startedAt = Date.now();
@@ -874,7 +875,7 @@ export async function rebuildPgRecordSummaries(store, options = {}) {
       await db.sync_state.put({key,value:{after,complete:!rows.length}});
       if (!rows.length) {
         const state=await db.sync_state.get(recordDeltaCursorKey(store));
-        if(state) await db.sync_state.put({...state,value:{...state.value,summariesRebuilt:true,attentionPolicyVersion:1,assignmentPolicyVersion:1,mentionProjectionVersion:1}});
+        if(state) await db.sync_state.put({...state,value:{...state.value,summariesRebuilt:true,attentionPolicyVersion:1,assignmentPolicyVersion:1,mentionProjectionVersion:1,deckAttentionVersion:1}});
       }
     });
     processed += count;

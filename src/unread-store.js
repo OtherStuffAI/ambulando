@@ -1,4 +1,4 @@
-import { hasPersonalUnreadAttention } from './personal-attention.js';
+import { hasPersonalUnreadAttention, isOffDeckResource } from './personal-attention.js';
 /**
  * Unread indicators mixin for the Alpine chat store.
  *
@@ -122,7 +122,7 @@ export function collectUnreadViewResources(states = [], resourceTypes = []) {
     .filter((state) => (
       allowedTypes.has(String(state?.resource_type || '').trim())
       && String(state?.resource_id || '').trim()
-      && Number((state.attention_policy_version === 1 ? state.attention_activity_version : state.activity_version) || 0) > Number(state.viewed_activity_version || 0)
+      && Number((state.attention_eligible === false ? state.activity_version : state.attention_policy_version === 1 ? state.attention_activity_version : state.activity_version) || 0) > Number(state.viewed_activity_version || 0)
     ))
     .map((state) => ({
       resource_type: String(state.resource_type).trim(),
@@ -341,7 +341,7 @@ export function computeUnreadTaskMap(tasks, cursorMap, viewerNpub) {
 
   const result = {};
   for (const task of tasks) {
-    if (task.record_state === 'deleted') continue;
+    if (isOffDeckResource(task, 'task')) continue;
     const taskKey = `tasks:item:${task.record_id}`;
     const taskReadUntil = cursorMap[taskKey] || null;
     let effectiveReadUntil = pickEffectiveReadUntil(navReadUntil, taskReadUntil);
@@ -723,10 +723,13 @@ export const unreadStoreMixin = {
     const channels = {};
     const tasksById = new Map((this.tasks || []).map(row => [row.record_id, row]));
     const docsById = new Map((this.documents || []).map(row => [row.record_id, row]));
+    const threadsById = new Map([...(this.messages || []), ...(this.fileMessages || []), ...(this.recentChannelMessages || [])]
+      .filter(row => row.pg_record_type === 'thread' || row.pg_archived_at)
+      .map(row => [row.pg_thread_id || row.record_id, row]));
     const comments = this.autopilotOverviewComments || this.taskComments || [];
     for (const state of states) {
       const row = state.resource_type === 'task' ? tasksById.get(state.resource_id)
-        : state.resource_type === 'document' ? docsById.get(state.resource_id) : state;
+        : state.resource_type === 'document' ? docsById.get(state.resource_id) : threadsById.get(state.resource_id) || state;
       const options = { resourceType: state.resource_type,
         mentionsOnly: this.isChannelMentionsOnly?.(state.channel_id) === true,
         viewerActorId: this.currentPgActorId, viewerNpub: this.currentViewerNpub || this.session?.npub,
@@ -888,7 +891,7 @@ export const unreadStoreMixin = {
     }
 
     const assertCurrent = bulkViewWorkspaceGuard(this, context);
-    const states = await (this.getResourceViewStates || getResourceViewStates)();
+    const states = await (this.getResourceViewStates || getBulkReadResourceStates)();
     try { assertCurrent(); } catch (error) { return { ok: false, count: 0, error: error.message }; }
     const resources = collectChannelThreadViewResources(states, targetChannelId);
     if (resources.length === 0) {

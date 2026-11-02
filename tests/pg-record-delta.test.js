@@ -536,7 +536,7 @@ it('repairs an existing assignment projection without moving the cursor, receipt
   expect((await db.pg_resource_attention.get(`task:${task.id}`)).unread).toBe(0);
   expect((await db.sync_state.get(recordDeltaCursorKey(store))).value.cursor).toBe(cursor);
   expect(await db.resource_view_states.get(`task:${task.id}`)).toMatchObject(receipt);
-  await db.sync_state.delete(`${recordDeltaCursorKey(store)}:summary-backfill-mentions-v3`);
+  await db.sync_state.delete(`${recordDeltaCursorKey(store)}:summary-backfill-deck-v4`);
   await db.tasks.update(task.id,{assigned_to_npub:'npub1draft',assigned_to_npubs:['npub1draft'],sync_status:'pending'});
   await rebuildPgRecordSummaries(store);
   expect((await db.tasks.get(task.id)).assigned_to_npubs).toEqual(['npub1draft']);
@@ -600,4 +600,33 @@ it('filters muted channel attention from saved actor-specific preferences withou
   // A preference written for a different actor never filters this viewer.
   await db.notification_inbox.put({key:context.key+'other',channel_preferences:[{channel_id:'muted',mode:'mentions_only'}]});
   expect((await getPgAttentionProjection(viewer)).values['channel:muted']).toBe(3);
+});
+
+it('repairs off-deck counts, preserves unloaded on-deck unread and acknowledges hidden activity across reopen/sync', async () => {
+  const { getBulkReadResourceStates, upsertResourceViewState } = await import('../src/db.js');
+  const { collectScopeUnreadViewResources } = await import('../src/unread-store.js');
+  const c = fixture.canonical_upserts.changes.find(c => c.family === 'task');
+  const change = (id, state, version) => ({ ...c, id, version: String(version), row: { ...c.row, id, state,
+    scope_id: 'scope', activity_version: 8, assigned_to_npub: 'npub1viewer', attention: { policy_version: 1,
+      last_activity_actor_id: 'other', mention_activity_versions: { viewer: 7 } } } });
+  const reader = { ...store, currentPgActorId: 'viewer' };
+  await applyPgRecordChanges(reader, page([change('hidden', 'cancelled', 1), change('unloaded', 'review', 2)], 'first'));
+  expect((await db.pg_attention_counts.get('section:tasks')).count).toBe(1);
+  expect((await db.pg_resource_attention.get('task:hidden')).unread).toBe(0);
+  // Simulate a pre-upgrade projection and verify bounded repair changes counts, not read positions.
+  await db.pg_resource_attention.update('task:hidden', { unread: 1, attention_activity_version: 8 });
+  await db.pg_attention_counts.put({ key: 'section:tasks', count: 2 });
+  await db.pg_attention_counts.put({ key: `channel:${c.channel_id}`, count: 2 });
+  await rebuildPgRecordSummaries(reader);
+  expect((await db.pg_attention_counts.get('section:tasks')).count).toBe(1);
+  expect(await db.resource_view_states.count()).toBe(0);
+  const resources = collectScopeUnreadViewResources(await getBulkReadResourceStates(), ['task'], {
+    selectedScopeId: 'scope', scopesMap: new Map([['scope', { record_id: 'scope', level: 'product' }]]) });
+  expect(resources.map(row => row.resource_id).sort()).toEqual(['hidden', 'unloaded']);
+  for (const row of resources) await upsertResourceViewState({ ...row, record_id: `task:${row.resource_id}`, viewed_activity_version: row.activity_version });
+  db.close(); await db.open();
+  await applyPgRecordChanges(reader, page([change('hidden', 'ready', 3), change('unloaded', 'review', 4)], 'restored'));
+  expect((await db.pg_attention_counts.get('section:tasks')).count).toBe(0);
+  expect((await db.resource_view_states.get('task:hidden')).viewed_activity_version).toBe(8);
+  expect((await db.pg_record_rows.get('task:hidden')).row.attention.mention_activity_versions.viewer).toBe(7);
 });

@@ -125,3 +125,25 @@ it('consumes server mention-only view states without treating general attention 
   expect(hasPersonalUnreadAttention({}, { ...server, mention_activity_version: 6 }, options)).toBe(true);
   expect(hasPersonalUnreadAttention({}, { ...server, mention_activity_version: 6, viewed_activity_version: 6 }, options)).toBe(false);
 });
+
+it('excludes only explicit off-deck lifecycle, including mentioned comments, and preserves completed unread', () => {
+  for (const lifecycle of ['archive', 'archived', 'cancelled', 'canceled']) {
+    expect(hasPersonalUnreadAttention({ ...task(9, true, { viewer: 8 }), state: lifecycle }, state(2), options)).toBe(false);
+  }
+  for (const lifecycle of ['ready', 'review', 'done', 'complete', 'completed']) {
+    expect(hasPersonalUnreadAttention({ ...task(9, true, { viewer: 8 }), state: lifecycle }, state(2), options)).toBe(true);
+  }
+  expect(hasPersonalUnreadAttention({ ...doc(9, 8), archived_at: '2026-11-01' }, state(2, 'document'), options)).toBe(false);
+  expect(hasPersonalUnreadAttention({ activity_version: 9, pg_archived_at: '2026-11-01' }, state(2, 'thread'), options)).toBe(false);
+  expect(hasPersonalUnreadAttention({}, { ...state(2), activity_version: 9, attention_policy_version: 1, attention_activity_version: 8 }, options)).toBe(true);
+});
+
+it('uses explicit cached thread lifecycle in fallback badges without suppressing unloaded conversations', () => {
+  const store = { tasks: [], documents: [], messages: [{ record_id: 'hidden', pg_thread_id: 'hidden', pg_record_type: 'thread',
+    pg_archived_at: '2026-11-01', activity_version: 8 }], session: { npub: 'npub1viewer' } };
+  unreadStoreMixin.applyTowerPgResourceViewStates.call(store, ['hidden', 'unloaded'].map(id => ({
+    resource_type: 'thread', resource_id: id, channel_id: id, activity_version: 8, viewed_activity_version: 2,
+  })));
+  expect(store._unreadThreadItems).toEqual({ unloaded: true });
+  expect(store._unreadChannels).toEqual({ unloaded: true });
+});

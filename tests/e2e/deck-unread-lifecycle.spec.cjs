@@ -67,3 +67,53 @@ test('Deck keeps unread completed work across visits and reload until explicitly
   console.log('Deck unread browser evidence:', JSON.stringify({ visits: 2, reloads: 2, unreadBeforeRead: true,
     unreadAfterRead: dismissed.unread, cardsAfterRead: dismissed.cards.length, downloadsPreserved: true, unaffectedChannelCards: dismissed.other }));
 });
+
+test('off-deck attention stays neutral across reload and mark-all includes hidden and unloaded records', async ({ page, baseURL }) => {
+  const bundle = await build({ bundle: true, write: false, format: 'esm', logLevel: 'silent', loader: { '.html': 'text' },
+    define: { __FLIGHT_DECK_PG_APP_NPUB__: JSON.stringify('npub1test') },
+    stdin: { resolveDir: path.resolve(__dirname, '../..'), contents: `
+      export { openWorkspaceDb, getBulkReadResourceStates, upsertResourceViewState } from './src/db.js';
+      export { applyPgRecordChanges, getPgAttentionProjection } from './src/pg-record-delta.js';
+      export { collectScopeUnreadViewResources } from './src/unread-store.js';` } });
+  const origin = new URL(baseURL).origin;
+  await page.route('**/*', route => {
+    const url = new URL(route.request().url());
+    if (url.origin !== origin) return route.abort();
+    return route.fulfill({ contentType: url.pathname.endsWith('.js') ? 'text/javascript' : 'text/html',
+      body: url.pathname.endsWith('.js') ? bundle.outputFiles[0].text : '<title>Off-deck attention probe</title>' });
+  });
+  await page.goto(`${origin}/__offdeck`);
+  const key = `offdeck-${Date.now()}`;
+  const seed = await page.evaluate(async ({ fixture, key }) => {
+    const m = await import('/__offdeck.js'); const db = m.openWorkspaceDb(key); await db.open();
+    const base = fixture.canonical_upserts.changes.find(row => row.family === 'task');
+    const store = { workspaceId: base.workspace_id, backendUrl: 'http://127.0.0.1:3100', session: { npub: 'npub1viewer' },
+      currentWorkspace: { workspaceId: base.workspace_id }, currentPgActorId: 'viewer' };
+    const change = (id, state, version) => ({ ...base, id, version: String(version), row: { ...base.row, id, state,
+      scope_id: 'scope', activity_version: 9, assigned_to_npub: 'npub1viewer',
+      attention: { policy_version: 1, last_activity_actor_id: 'other', mention_activity_versions: { viewer: 8 } } } });
+    await m.applyPgRecordChanges(store, { ...fixture.one_message_delta, next_cursor: 'mixed',
+      changes: [change('hidden', 'cancelled', 100), change('unloaded', 'review', 101)] });
+    const mixed = await m.getPgAttentionProjection(store);
+    if (mixed.values['section:tasks'] !== 1) throw new Error('hidden task counted or unloaded unread lost');
+    await m.upsertResourceViewState({ resource_type: 'task', resource_id: 'unloaded', activity_version: 9, viewed_activity_version: 9 });
+    return { store, base };
+  }, { fixture, key });
+  await page.reload();
+  const result = await page.evaluate(async ({ fixture, key, seed }) => {
+    const m = await import('/__offdeck.js'); const db = m.openWorkspaceDb(key); await db.open();
+    const before = await m.getPgAttentionProjection(seed.store);
+    const resources = m.collectScopeUnreadViewResources(await m.getBulkReadResourceStates(), ['task'], {
+      selectedScopeId: 'scope', scopesMap: new Map([['scope', { record_id: 'scope', level: 'product' }]]) });
+    for (const row of resources) await m.upsertResourceViewState({ ...row, viewed_activity_version: row.activity_version });
+    const raw = await db.pg_record_rows.get('task:hidden');
+    await m.applyPgRecordChanges(seed.store, { ...fixture.one_message_delta, next_cursor: 'restored', changes: [
+      { ...seed.base, id: 'hidden', version: '102', row: { ...raw.row, state: 'ready' } },
+    ] });
+    const after = await m.getPgAttentionProjection(seed.store);
+    return { before: before.values['section:tasks'], selected: resources.map(row => row.resource_id),
+      after: after.values['section:tasks'], watermark: (await db.resource_view_states.get('task:hidden')).viewed_activity_version,
+      retained: (await db.pg_record_rows.get('task:hidden')).row.attention.mention_activity_versions.viewer };
+  }, { fixture, key, seed });
+  expect(result).toEqual({ before: 0, selected: ['hidden'], after: 0, watermark: 9, retained: 8 });
+});

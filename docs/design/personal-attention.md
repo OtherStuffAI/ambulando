@@ -120,3 +120,27 @@ attention from the retained projection. Existing caches receive a bounded
 sync cursors, drafts, pending writes and read positions. Pins use the same exact
 mention position. Ordinary Deck cards remain available without unread or working
 emphasis, and muted working activity does not create an Unread & Active entry.
+
+## Explicit off-deck lifecycle
+
+Archived/deleted records and tasks in `archive`, `archived`, `cancelled` or
+`canceled` state do not contribute personal attention, including comment mentions.
+Completed tasks keep the existing unread exception. This is an explicit lifecycle
+policy; an absent parent, a filtered card, paging and viewport position never prove
+that a record is off deck.
+
+Lifecycle changes do not synthesize read receipts. Restoring an item can restore
+retained attention when no explicit read occurred. Mark everything as read also
+acknowledges off-deck resource activity in its existing scope boundary, so restoring
+an acknowledged item stays read. The record-delta projection retains canonical scope
+and lifecycle eligibility for bulk selection even without a downloaded card or an
+existing view-state row. Channel thread bulk read uses the same complete local
+resource source. Existing caches receive bounded `summary-backfill-deck-v4` repair,
+with `deckAttentionVersion: 1`, preserving sync cursors, pending writes and read
+watermarks. Activity history and other readers' positions remain unchanged.
+
+The shared iPhone/Mac store applies the same lifecycle exclusion in its attention
+queries. Native mark-all selects persisted view states in its current scope/channel,
+independently of rendered cards, search and page limits. Regression tests cover
+hidden-only and mixed attention, missing active parents, cache reopen, stale sync,
+explicit acknowledgement and restoration. Android catch-up remains separate.

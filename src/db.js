@@ -513,7 +513,7 @@ export async function getBulkReadResourceStates() {
       rows.set(attention.record_id, {
         ...view,
         ...attention,
-        scope_id: view?.scope_id || null,
+        scope_id: attention.scope_id || view?.scope_id || null,
         channel_id: attention.channel_id || view?.channel_id || null,
         activity_version: Math.max(Number(view?.activity_version || 0), Number(attention.activity_version || 0)),
         viewed_activity_version: Math.max(Number(view?.viewed_activity_version || 0), Number(attention.viewed_activity_version || 0)),

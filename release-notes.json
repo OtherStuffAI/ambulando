@@ -5602,6 +5602,20 @@
       "notes": [
         "Mute except mentions now quiets ordinary channel unread dots, Inbox emphasis and active sidebar entries while keeping direct mentions visible. Unmuting restores unread attention without changing your read position."
       ]
+    },
+    {
+      "buildNumber": 2697,
+      "label": "Clear off-deck unread indicators",
+      "notes": [
+        "Archived and cancelled work no longer keeps channels flagged unread. Mark everything as read includes hidden activity, while active work outside the loaded page remains unread until acknowledged."
+      ]
+    },
+    {
+      "buildNumber": 2698,
+      "label": "Off-deck unread parity validation",
+      "notes": [
+        "Apply the same off-deck unread policy when using cached thread metadata, preserving unread active conversations and explicit read acknowledgements."
+      ]
     }
   ]
 }

@@ -3,6 +3,13 @@ import { isTaskActivityAuthoredByViewer, resolveTaskActivityViewer, latestTaskAc
 const number = value => Math.max(0, Number(value) || 0);
 const metadata = row => row?.pg_metadata || row?.metadata || {};
 
+// Explicit lifecycle only: absence from a page/filter is never evidence of off-deck.
+export function isOffDeckResource(row = {}, resourceType = row.pg_record_type) {
+  return Boolean(row.deleted_at || row.archived_at || row.pg_archived_at
+    || ['deleted', 'archived'].includes(row.record_state)
+    || resourceType === 'task' && ['archive', 'archived', 'cancelled', 'canceled'].includes(String(row.state || '').trim().toLowerCase()));
+}
+
 // Only structured identities are routing authority. Historical structured npubs
 // remain accepted when an actor ID is absent; visible body text is never parsed.
 export function mentionsViewer(mentions, viewer) {
@@ -30,7 +37,7 @@ export function isTaskAssignedToViewer(row, viewer) {
 // Exact mention position is separate from assignment and ordinary chat activity.
 // Muting changes presentation only; the original activity/read position survives.
 export function directMentionAttentionVersion(row = {}, state = {}, options = {}) {
-  if (row.deleted_at || row.archived_at || ['deleted', 'archived'].includes(row.record_state) || row.pg_record_type === 'file') return 0;
+  if (isOffDeckResource(row, options.resourceType || state.resource_type || row.pg_record_type) || row.pg_record_type === 'file') return 0;
   const viewer = resolveTaskActivityViewer({ ...options, viewState: state });
   const attention = row.attention || row.pg_attention;
   const type = options.resourceType || state.resource_type || row.pg_record_type;
@@ -47,7 +54,7 @@ export function directMentionAttentionVersion(row = {}, state = {}, options = {}
 export function personalAttentionVersion(row = {}, state = {}, options = {}) {
   const type = options.resourceType || state.resource_type || row.pg_record_type;
   const activity = number(row.activity_version || state.activity_version);
-  if (row.deleted_at || row.archived_at || ['deleted', 'archived'].includes(row.record_state) || row.pg_record_type === 'file') return 0;
+  if (isOffDeckResource(row, options.resourceType || state.resource_type || row.pg_record_type) || row.pg_record_type === 'file') return 0;
   if (options.mentionsOnly ?? state.channel_mentions_only === true) return directMentionAttentionVersion(row, state, options);
   if (type === 'thread') return activity;
   const viewer = resolveTaskActivityViewer({ ...options, viewState: state });

@@ -130,10 +130,9 @@ describe('computeUnreadTaskMap', () => {
       task('t3', T3, 'deleted'),
     ];
     const cursorMap = { 'tasks:nav': T2 };
-    // Only deleted is excluded; active and archived are included
+    // Explicit off-deck lifecycle is excluded; active work remains unread
     expect(computeUnreadTaskMap(tasks, cursorMap)).toEqual({
       t1: true,
-      t2: true,
     });
   });
 
