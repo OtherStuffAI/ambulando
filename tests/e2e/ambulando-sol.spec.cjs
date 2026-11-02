@@ -48,6 +48,30 @@ async function openFixture(page) {
   await expect(page.locator('div.chat-thread-panel')).toBeVisible();
 }
 
+for (const width of [320, 1440]) for (const theme of ['light', 'dark']) {
+  test(`Kanban cards use column status ${theme} ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await openFixture(page);
+    await page.evaluate(theme => {
+      const s = window.Alpine.store('chat');
+      window.Alpine.store('appearance').setTheme(theme);
+      s.closeThread({ syncRoute: false });
+      s.navigateTo('tasks', { syncRoute: false });
+      s.tasks = [{ ...s.tasks[0], scheduled_for: '2026-11-02', tags: 'release' }];
+      s.taskViewMode = 'kanban';
+    }, theme);
+    const card = page.locator('.kanban-card').filter({ hasText: 'Review connected frontend' });
+    await expect(card).toBeVisible();
+    await expect(card.locator('.task-status-badge')).toHaveCount(0);
+    await expect(card.locator('.badge-date')).toHaveText('2026-11-02');
+    await expect(card.locator('.task-card-tag')).toContainText('release');
+    await expect(page.locator('.kanban-column').filter({ has: card }).locator('.kanban-column-title')).toHaveText('In Progress');
+    await capture(page, `kanban-status-${theme}-${width}`);
+    await page.evaluate(() => { window.Alpine.store('chat').taskViewMode = 'list'; });
+    await expect(page.locator('.task-list-title')).toContainText('Review connected frontend');
+  });
+}
+
 test('Deck renders unread completed work and dismisses it through the real card control', async ({ page }) => {
   await openFixture(page);
   await page.evaluate(() => {
