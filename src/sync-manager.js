@@ -6,6 +6,7 @@ import { canLoadPgTarget } from './pg-archive-state.js';
 import { hydrateScopeOrder } from './scope-order.js';
 import { hydrateOrgData, readOrgDataPermissions } from './org-data/tower.js';
 import { resolveTowerPgWorkspaceContext } from './pg-read-hydrator.js';
+import { recordAgentActivityServerTime } from './agent-activity-clock.js';
 import { getTowerPgScopeAccess } from './api.js';
 import { disposeContextTreeView } from './context-tree-view.js';
 import { loadTowerPgContext, loadTowerPgContextReferences, readTowerPgContextDeletePreview } from './pg-read-hydrator.js';
@@ -3245,6 +3246,10 @@ export const syncManagerMixin = {
     }
 
     if (status === 'connected') {
+      if (message?.serverTime) {
+        recordAgentActivityServerTime(resolveTowerPgWorkspaceContext(this).baseUrl || this.backendUrl || '',
+          message.serverTime, { receivedAtEpochMs: message.serverTimeReceivedAt });
+      }
       const pgHydration = this.isEncryptedRecordSyncDisabled
         ? this.queueTowerPgSSEHydration([])
         : null;

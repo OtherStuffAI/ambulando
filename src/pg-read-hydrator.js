@@ -111,7 +111,8 @@ import {
   reconcileTowerPgSnapshot,
 } from './db.js';
 import { mapTowerResourceViewState } from './resource-view-state.js';
-import { isTerminalAgentActivity, mapPgAgentActivity, mapPgAgentActivityCommentary, mapPgAgentSessionHealth } from './agent-activity.js';
+import { isTerminalAgentActivity, mapPgAgentActivity, mapPgAgentActivityCommentary, mapPgAgentSessionHealth, mergeAgentActivityRecord } from './agent-activity.js';
+import { recordAgentActivityServerTime } from './agent-activity-clock.js';
 import { recordFamilyHash } from './translators/chat.js';
 import { recordFamilyHash as taskFamilyHash } from './translators/tasks.js';
 
@@ -2516,6 +2517,8 @@ export async function hydrateTowerPgChannelAgentActivities(store, channelId, dep
     afterCommentaryCursor: deps.afterCommentaryCursor,
     historyLimit: deps.historyLimit ?? 50,
   });
+  // A fresh response's server_time calibrates local lease expiry.
+  if (result?.server_time) recordAgentActivityServerTime(context.baseUrl, result.server_time);
   const activities = (Array.isArray(result?.agent_activities) ? result.agent_activities : [])
     .map(mapPgAgentActivity)
     .filter((activity) => activity?.record_id
@@ -3316,10 +3319,16 @@ export async function hydrateTowerPgEventUpdates(store, events = [], deps = {}) 
   // Save every received entry before coalescing replaceable current snapshots.
   if (commentaryUpdates.length) await mergeCommentary(commentaryUpdates);
   assertTowerPgWorkspaceCurrent(store, activityContext);
+  // Coalesce with the same order-independent merge used in storage, so a
+  // lease-only renewal or a lower-sequence terminal in one batch is kept.
   const latestAgentActivityUpdates = [...agentActivityUpdates.reduce((latest, update) => {
     const key = `${update.activity.activity_id || update.recordId}\u0000${update.activity.turn_id || ''}`;
     const current = latest.get(key);
-    if (!current || Number(update.activity.sequence) > Number(current.activity.sequence)) latest.set(key, update);
+    if (!current) latest.set(key, update);
+    else {
+      const activity = mergeAgentActivityRecord(current.activity, update.activity);
+      latest.set(key, { ...current, activity, terminal: isTerminalAgentActivity(activity) });
+    }
     return latest;
   }, new Map()).values()];
   const accessMaterializationChanged = groupsChanged || channelGrantChannels.size > 0;

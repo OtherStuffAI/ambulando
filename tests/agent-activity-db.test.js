@@ -39,6 +39,26 @@ describe('agent activity db', () => {
     expect((await getAgentActivitiesForChannel('channel-1'))[0].summary).toBe('Newer');
   });
 
+  it('accepts a lower-sequence terminal after a replayed heartbeat and never lets later work revive it', async () => {
+    await upsertAgentActivity(row({ sequence: 9, body: 'Replayed heartbeat' }));
+    expect(await upsertAgentActivity(row({ sequence: 5, state: 'completed', terminal_at: '2026-08-10T00:05:00Z' }))).toBe(true);
+    expect(await upsertAgentActivity(row({ sequence: 12, state: 'working', body: 'Late replay' }))).toBe(false);
+    await replacePgAgentActivitiesForChannel('channel-1', [row({ sequence: 13, state: 'working' })]);
+    expect((await getAgentActivitiesForChannel('channel-1'))[0]).toMatchObject({ state: 'completed', sequence: 5 });
+  });
+
+  it('moves the lease by lease order without moving canonical state', async () => {
+    await upsertAgentActivity(row({ sequence: 4, body: 'Reading', lease_epoch: 1, lease_sequence: 2,
+      lease_expires_at: '2026-11-04T02:14:00.000Z' }));
+    expect(await upsertAgentActivity(row({ sequence: 4, body: 'Reading', lease_epoch: 1, lease_sequence: 3,
+      lease_expires_at: '2026-11-04T02:15:00.000Z' }))).toBe(true);
+    expect(await upsertAgentActivity(row({ sequence: 4, lease_epoch: 1, lease_sequence: 1,
+      lease_expires_at: '2026-11-04T02:13:00.000Z' }))).toBe(false);
+    expect((await getAgentActivitiesForChannel('channel-1'))[0]).toMatchObject({
+      body: 'Reading', lease_sequence: 3, lease_expires_at: '2026-11-04T02:15:00.000Z',
+    });
+  });
+
   it('replaces reconnect hydration and supports terminal cleanup', async () => {
     await replacePgAgentActivitiesForChannel('channel-1', [row()]);
     expect(await getAgentActivitiesForChannel('channel-1')).toHaveLength(1);

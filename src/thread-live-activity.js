@@ -21,15 +21,15 @@ export function reconcileLiveThreadActivity(current, incoming, expected = {}) {
     !text(incoming.cursor)
   )
     return current;
-  if (!current) return { ...incoming, session_generation: generation, sequence };
+  const started = (startedAt) => ({ ...incoming, session_generation: generation, sequence,
+    started_at: text(startedAt || incoming.timestamp) });
+  if (!current) return started();
   const currentGeneration = Number(current.session_generation);
   if (generation < currentGeneration) return current;
-  if (generation > currentGeneration)
-    return { ...incoming, session_generation: generation, sequence };
+  if (generation > currentGeneration) return started();
   if (text(incoming.turn_id) !== text(current.turn_id)) return current;
-  return sequence > Number(current.sequence)
-    ? { ...incoming, session_generation: generation, sequence }
-    : current;
+  // A turn's start time is immutable; later events only move its content.
+  return sequence > Number(current.sequence) ? started(current.started_at) : current;
 }
 
 async function consumeSse(response, onActivity, signal) {
@@ -71,12 +71,14 @@ export class ThreadLiveActivityController {
     onChange = () => {},
     setTimer = setTimeout,
     clearTimer = clearTimeout,
+    now = () => Date.now(),
   } = {}) {
     this.createClient = createClient;
     this.graceMs = graceMs;
     this.onChange = onChange;
     this.setTimer = setTimer;
     this.clearTimer = clearTimer;
+    this.now = now;
     this.abort = null;
     this.client = null;
     this.context = null;
@@ -158,7 +160,7 @@ export class ThreadLiveActivityController {
     this.cursor = text(next.cursor || this.cursor || '0');
     if (this.graceTimer) this.clearTimer(this.graceTimer);
     this.graceTimer = null;
-    this.setOverlay({ ...next, reconnecting: false });
+    this.setOverlay({ ...next, reconnecting: false, received_at_ms: this.now() });
   }
 
   setOverlay(value) {
@@ -167,8 +169,15 @@ export class ThreadLiveActivityController {
   }
 }
 
+// The overlay carries no lease. Without a Tower row for the same turn it may
+// assert work only for one lease interval after its last received event.
+export const LIVE_THREAD_OVERLAY_LEASE_MS = 180_000;
+
 export function liveOverlayAsAgentActivity(overlay, context) {
   if (!overlay) return null;
+  const receivedMs = Number(overlay.received_at_ms);
+  const leaseExpiresAt = Number.isFinite(receivedMs) && receivedMs > 0
+    ? new Date(receivedMs + LIVE_THREAD_OVERLAY_LEASE_MS).toISOString() : '';
   return {
     record_id: `live:${overlay.routing_key}:${overlay.turn_id}`,
     activity_id: `live:${overlay.routing_key}:${overlay.turn_id}`,
@@ -177,14 +186,16 @@ export function liveOverlayAsAgentActivity(overlay, context) {
     thread_id: context.threadId,
     agent_npub: context.agentNpub,
     turn_id: overlay.turn_id,
-    state: overlay.lifecycle,
+    state: text(overlay.lifecycle).toLowerCase() === 'stopped' ? 'cancelled' : overlay.lifecycle,
     visibility: 'user_visible',
     sequence: overlay.sequence,
     body: overlay.commentary || overlay.activity_status,
     summary: overlay.commentary || overlay.activity_status,
     label: overlay.reconnecting ? 'Reconnecting…' : overlay.activity_status,
     updated_at: overlay.timestamp,
-    created_at: overlay.timestamp,
+    created_at: overlay.started_at || overlay.timestamp,
+    lease_expires_at: leaseExpiresAt,
+    expires_at: leaseExpiresAt,
     live_overlay: true,
     reconnecting: overlay.reconnecting,
     commentary_history: overlay.commentary
@@ -213,4 +224,39 @@ export function terminalLiveActivityHasDurableFinal(overlay, messages = []) {
           text(message?.metadata?.turn_id) === text(overlay.turn_id),
       ),
   );
+}
+
+// Tower is the liveness authority. When Tower has a row for the overlay's
+// turn, the overlay only contributes its newer public commentary; the Tower
+// record keeps its identity, created time, lease and retained history.
+export function boundLiveOverlayByTower(overlayRow, towerRow) {
+  if (!overlayRow) return towerRow || null;
+  if (!towerRow) return overlayRow;
+  const terminalTower = TERMINAL.has(text(towerRow.state).toLowerCase());
+  if (terminalTower) return towerRow;
+  const overlayTerminal = TERMINAL.has(text(overlayRow.state).toLowerCase());
+  const history = Array.isArray(towerRow.commentary_history) ? towerRow.commentary_history : [];
+  const commentary = text(overlayRow.commentary_history?.[0]?.body);
+  const overlayNewer = !(Date.parse(towerRow.updated_at || '') > Date.parse(overlayRow.updated_at || ''));
+  const addCommentary = commentary && overlayNewer && !history.some((item) => text(item.body) === commentary)
+    && text(towerRow.body) !== commentary;
+  return {
+    ...towerRow,
+    ...(overlayTerminal ? { state: overlayRow.state } : {}),
+    ...(addCommentary ? {
+      body: commentary,
+      summary: commentary,
+      commentary_history: [...history, {
+        history_key: `live:${towerRow.turn_id}:${overlayRow.sequence}`,
+        activity_id: towerRow.activity_id,
+        turn_id: towerRow.turn_id,
+        sequence: Number(towerRow.sequence) + 0.5,
+        body: commentary,
+        created_at: overlayRow.updated_at,
+        visibility: 'user_visible',
+      }],
+    } : {}),
+    live_overlay: true,
+    reconnecting: overlayRow.reconnecting,
+  };
 }

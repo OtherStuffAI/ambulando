@@ -1,4 +1,5 @@
 import {
+  boundLiveOverlayByTower,
   LIVE_THREAD_ACTIVITY_CAPABILITY,
   liveOverlayAsAgentActivity,
   ThreadLiveActivityController,
@@ -80,6 +81,7 @@ export const threadLiveActivityManagerMixin = {
     const key = JSON.stringify([connection.id, ...Object.values(context)]);
     if (this.liveThreadActivityContext?.key === key) return;
     this._threadLiveActivityController ??= new ThreadLiveActivityController({
+      now: () => this.getAgentActivityNowMs?.() ?? Date.now(),
       onChange: (overlay) => {
         this.liveThreadActivityOverlay = overlay;
         this.responseActivityTick = Number(this.responseActivityTick || 0) + 1;
@@ -158,14 +160,12 @@ export const threadLiveActivityManagerMixin = {
   mergeThreadLiveActivity(towerActivities = []) {
     const overlay = this.getLiveThreadActivityRow();
     if (!overlay) return towerActivities;
-    const live = { ...overlay, backend_url: overlay.backend_url || this.backendUrl || '' };
-    return [
-      ...towerActivities.filter((row) => !(
-        text(row.agent_npub) === text(live.agent_npub)
-        && text(row.thread_id) === text(live.thread_id)
-        && text(row.turn_id) === text(live.turn_id)
-      )),
-      live,
-    ].sort((left, right) => String(left.created_at || '').localeCompare(String(right.created_at || '')));
+    const sameTurn = (row) => text(row.agent_npub) === text(overlay.agent_npub)
+      && text(row.thread_id) === text(overlay.thread_id)
+      && text(row.turn_id) === text(overlay.turn_id);
+    const tower = towerActivities.find(sameTurn);
+    const live = boundLiveOverlayByTower({ ...overlay, backend_url: overlay.backend_url || this.backendUrl || '' }, tower);
+    return [...towerActivities.filter((row) => !sameTurn(row)), live]
+      .sort((left, right) => String(left.created_at || '').localeCompare(String(right.created_at || '')));
   },
 };

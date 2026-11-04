@@ -1,5 +1,6 @@
 import { canonicalProfileNpub, profileHex, mergeUsableProfile, usableProfileText } from './profile-identity.js';
 import { yieldToBrowser } from './utils/yield-to-browser.js';
+import { mergeAgentActivityRecord } from './agent-activity.js';
 import { clampBranchEffectiveMessageIds, threadHistoryLineage, mergeThreadHistoryIds, threadHistoryAuthority } from './thread-history-coverage.js';
 import Dexie from 'dexie';
 import { PIPELINE_VIEWER_STORES } from './pipeline-viewer-store.js';
@@ -2964,15 +2965,12 @@ export async function upsertAgentActivity(activity) {
   const db = wsDb();
   return db.transaction('rw', db.agent_activities, async () => {
     const current = await db.agent_activities.get(row.record_id);
-    const sameActivity = current && current.activity_id === row.activity_id;
-    const sameLifecycle = sameActivity && (
-      String(current.turn_id || '') === String(row.turn_id || '')
-      || (!current.turn_id && Boolean(row.turn_id))
-    );
-    if (current && (!sameLifecycle || Number(current.sequence) >= Number(row.sequence))) return false;
+    // State follows sequence, the lease follows its own order and terminal
+    // always wins, so replay order cannot revive or overwrite a lifecycle.
+    const merged = mergeAgentActivityRecord(current, row);
+    if (!merged || merged === current) return false;
     await db.agent_activities.put({
-      ...current,
-      ...row,
+      ...merged,
       created_at: current?.created_at || row.created_at || null,
     });
     return true;
@@ -3029,7 +3027,7 @@ export async function replacePgAgentActivitiesForChannel(channelId, activities =
         || (!current.turn_id && Boolean(row.turn_id))
       );
       if (!current || sameLifecycle) {
-        const next = Number(row.sequence) > Number(current?.sequence ?? -1) ? { ...current, ...row } : { ...current };
+        const next = current ? { ...mergeAgentActivityRecord(current, row) } : { ...row };
         if (/^\d+$/.test(String(row.commentary_cursor ?? ''))) {
           const priorCursor = /^\d+$/.test(String(current?.commentary_cursor ?? '')) ? current.commentary_cursor : '0';
           next.commentary_cursor = BigInt(row.commentary_cursor) > BigInt(priorCursor) ? row.commentary_cursor : priorCursor;

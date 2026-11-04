@@ -118,17 +118,51 @@ describe('retained run grouping', () => {
     expect(target.getVisibleAgentActivities()).toHaveLength(4);
     expect(target.activeThreadAgentActivities.map(row => row.activity_id)).toEqual(['1', '2']);
   });
-  it('shows quiet expiry neutrally and warns only the current panel after reconnect grace', () => {
+  it('shows a recently expired turn as stopped, independent of transport, then retires it', () => {
     const target = store();
-    target.applyAgentActivities([run('1'), run('2', { expires_at: '2000-01-01' })]);
+    const now = Date.now();
+    const deadline = new Date(now - 16_000).toISOString();
+    target.applyAgentActivities([run('1'), run('2', { lease_expires_at: deadline, expires_at: deadline,
+      updated_at: new Date(now - 60_000).toISOString(), body: 'Reading the repository' })]);
     const current = target.activeThreadAgentActivities.find(row => row.activity_id === '2');
-    expect(target.getAgentActivityHealth(current)).toEqual({ state: 'stale', message: 'Status unknown — reconnecting' });
+    expect(target.getAgentActivityHealth(current)).toEqual({ state: 'expired', message: 'Stopped responding' });
+    expect(target.getAgentActivityStatusLabel(current)).toMatch(/^Stopped responding · last update \S/);
+    expect(target.isCurrentAgentActivityWorking(current)).toBe(true);
+    expect(target.isAgentActivitySpinning(current)).toBe(false);
+    expect(target.getCurrentWorkingPreview(current)).toBe('What it said: Reading the repository');
     target.sseStatus = 'reconnecting';
-    target.agentActivityRecoveryStartedAt = Date.now() - 59_000;
-    expect(target.getAgentActivityHealth(current).message).toBe('Reconnecting');
-    target.agentActivityRecoveryStartedAt -= 2_000;
-    expect(target.getAgentActivityHealth(current).message).toBe('Connection lost—status unknown');
+    target.agentActivityRecoveryStartedAt = now - 61_000;
+    expect(target.getAgentActivityHealth(current).state).toBe('expired');
+    const old = new Date(now - 11 * 60_000).toISOString();
+    target.applyAgentActivities([run('1'), run('2', { lease_expires_at: old, expires_at: old })]);
+    expect(target.activeThreadAgentActivities.filter(row => target.isCurrentAgentActivityWorking(row))).toEqual([]);
     expect(target.activeThreadAgentActivities).toHaveLength(1);
+  });
+
+  it('holds a live lease through the grace period and labels transport loss separately', () => {
+    const target = store();
+    const now = Date.now();
+    const deadline = new Date(now - 5_000).toISOString();
+    const row = run('1', { lease_expires_at: deadline, expires_at: deadline, created_at: new Date(now).toISOString() });
+    target.applyAgentActivities([row]);
+    expect(target.getAgentActivityHealth(row).state).toBe('live');
+    target.sseStatus = 'reconnecting';
+    target.agentActivityRecoveryStartedAt = now - 59_000;
+    expect(target.getAgentActivityStatusLabel(row)).toBe('Working · reconnecting…');
+    target.agentActivityRecoveryStartedAt -= 2_000;
+    expect(target.getAgentActivityStatusLabel(row)).toBe('Working · connection lost · reconnecting…');
+  });
+
+  it('labels quiet, waiting and resumed live turns without changing liveness', () => {
+    const target = store();
+    const now = Date.now();
+    const quiet = run('1', { created_at: new Date(now - 7 * 60_000).toISOString(),
+      updated_at: new Date(now - 6 * 60_000).toISOString() });
+    expect(target.getAgentActivityStatusLabel(quiet)).toBe('Still working · no update for 6 min');
+    expect(target.getAgentActivityHealth(quiet).state).toBe('live');
+    const fresh = { created_at: new Date(now).toISOString() };
+    expect(target.getAgentActivityStatusLabel(run('2', { ...fresh, state: 'waiting' }))).toBe('Waiting for you');
+    expect(target.getAgentActivityStatusLabel(run('3', { ...fresh, lease_epoch: 2 }))).toBe('Working · resumed');
   });
 
   it('shows a queued message beneath the prior working message and promotes it in place', () => {
@@ -153,11 +187,12 @@ describe('retained run grouping', () => {
     ];
     target.applyAgentActivities(rows);
     const cards = () => target.activeThreadAgentActivities.filter(row => target.isCurrentAgentActivityWorking(row));
-    expect(cards().map(row => row.activity_id)).toEqual(['3', '4']);
+    // The long-expired accepted turn no longer holds the current slot.
+    expect(cards().map(row => row.activity_id)).toEqual(['4']);
     // Commentary arriving late must remain available without promoting the old turn.
     target.applyAgentActivities([{ ...rows[0], sequence: 999, updated_at: '2999-01-01',
       commentary_history: [{ activity_id: '1', turn_id: '1', sequence: 998, body: 'Earlier useful commentary' }] }, ...rows.slice(1)]);
-    expect(cards().map(row => row.activity_id)).toEqual(['3', '4']);
+    expect(cards().map(row => row.activity_id)).toEqual(['4']);
     target.openAgentActivityDetails();
     expect(target.agentActivityDetailsRows).toHaveLength(4);
     const earlier = target.agentActivityDetailsRows.find(row => row.activity_id === '1');
@@ -186,7 +221,8 @@ describe('retained run grouping', () => {
     const stale = run('1', { lease_health: 'stale', lease_expires_at: '2000-01-01' });
     target.applyAgentSessionHealth([{ record_id: 'health-1', session_id: stale.session_id, channel_id: stale.channel_id,
       agent_npub: stale.agent_npub, status: 'online', row_version: 1 }]);
-    expect(target.getAgentActivityStatusLabel(stale)).toBe('Status unknown — reconnecting');
+    expect(target.getAgentActivityStatusLabel(stale)).toMatch(/^Stopped responding/);
+    expect(target.isCurrentAgentActivityWorking(stale)).toBe(false);
     expect(target.getAgentSessionStatusLabel(stale)).toBe('Session online');
     target.applyAgentSessionHealth([{ record_id: 'health-1', session_id: stale.session_id, channel_id: stale.channel_id,
       agent_npub: stale.agent_npub, status: 'errored', error_summary: 'Runtime exited', row_version: 2 }]);
@@ -195,7 +231,7 @@ describe('retained run grouping', () => {
 
   it('keeps the working control live when mobile fallback sync is usable during SSE probes', () => {
     const target = store();
-    const current = run('1');
+    const current = run('1', { created_at: new Date().toISOString() });
     target.sseStatus = 'reconnecting';
     target.agentActivityRecoveryStartedAt = Date.now();
     target.towerReachabilityState = 'online';
@@ -205,7 +241,7 @@ describe('retained run grouping', () => {
 
     target.towerFallbackReachable = false;
     target.towerReachabilityState = 'reconnecting';
-    expect(target.getAgentActivityStatusLabel(current)).toBe('Reconnecting');
+    expect(target.getAgentActivityStatusLabel(current)).toBe('Working · reconnecting…');
   });
 
   it.each(['completed', 'failed', 'cancelled'])('preserves failures and hides other terminal %s activity from the live card slot', (state) => {
@@ -250,7 +286,8 @@ describe('menu-only activity details', () => {
     const row = activity({ thread_id: 'thread-a', expires_at: '2000-01-01' });
     target.agentActivities = [row];
     target.sseStatus = 'reconnecting';
-    expect(target.isCurrentAgentActivityWorking(row)).toBe(true);
+    // A long-expired lease is history, whatever the connection state.
+    expect(target.isCurrentAgentActivityWorking(row)).toBe(false);
     target.openAgentActivityDetails();
     expect(target.agentActivityDetailsRows).toHaveLength(1);
     row.expires_at = '2999-01-01';

@@ -5699,6 +5699,15 @@
       "notes": [
         "Document reading and editing now share the same comfortable text size, with consistent loose-list spacing and nested hanging indents."
       ]
+    },
+    {
+      "buildNumber": 2715,
+      "label": "Honest live agent activity",
+      "notes": [
+        "Agent working status now clears on its own when an agent stops renewing its lease, showing Stopped responding with the last update time instead of looking current.",
+        "Losing your connection now shows Working · reconnecting… while the agent's lease is still valid, separately from an agent that has stopped.",
+        "Earlier public commentary stays readable as history, and long quiet turns show Still working · no update for N min."
+      ]
     }
   ]
 }

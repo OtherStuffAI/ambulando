@@ -9,7 +9,8 @@ import { isTerminalTaskState } from './attention-feed.js';
 import { recordFamilyHash } from './translators/chat.js';
 import { formatStateLabel } from './translators/tasks.js';
 import {
-  isTerminalAgentActivity,
+  agentActivityClearAtMs,
+  isAgentActivityLeaseLive,
   selectVisibleAgentActivities,
 } from './agent-activity.js';
 import {
@@ -158,9 +159,7 @@ function addInboxActivityWorkingKeys(keys, activity = {}) {
 export function buildInboxWorkingResourceKeys(activities = [], { nowMs = Date.now() } = {}) {
   const keys = new Set();
   for (const activity of selectVisibleAgentActivities(Array.isArray(activities) ? activities : [], 'connected', nowMs)) {
-    if (isTerminalAgentActivity(activity)) continue;
-    const expiresAt = Date.parse(activity.expires_at || '');
-    if (!Number.isFinite(expiresAt) || expiresAt <= nowMs) continue;
+    if (!isAgentActivityLeaseLive(activity, nowMs)) continue;
     addInboxActivityWorkingKeys(keys, activity);
   }
   return keys;
@@ -169,9 +168,8 @@ export function buildInboxWorkingResourceKeys(activities = [], { nowMs = Date.no
 function soonestInboxWorkingExpiry(activities = [], nowMs = Date.now()) {
   let next = Infinity;
   for (const activity of selectVisibleAgentActivities(Array.isArray(activities) ? activities : [], 'connected', nowMs)) {
-    if (isTerminalAgentActivity(activity)) continue;
-    const expiresAt = Date.parse(activity.expires_at || '');
-    if (Number.isFinite(expiresAt) && expiresAt > nowMs) next = Math.min(next, expiresAt);
+    if (!isAgentActivityLeaseLive(activity, nowMs)) continue;
+    next = Math.min(next, agentActivityClearAtMs(activity));
   }
   return Number.isFinite(next) ? next : 0;
 }
@@ -1557,7 +1555,7 @@ export const autopilotOverviewManagerMixin = {
     }
     this.deckInboxWorkingExpireTimer = null;
     if (typeof window === 'undefined') return;
-    const now = Date.now();
+    const now = this.getAgentActivityNowMs?.() ?? Date.now();
     const expiresAt = soonestInboxWorkingExpiry(this.agentActivities, now);
     if (!expiresAt) return;
     const delay = Math.min(Math.max(0, expiresAt - now + 50), MAX_TIMEOUT_MS);
@@ -1853,7 +1851,7 @@ export const autopilotOverviewManagerMixin = {
     return memoizedProjection(this, 'inbox-working-keys', [
       this.agentActivities,
       this.deckInboxWorkingProjectionRevision,
-    ], () => buildInboxWorkingResourceKeys(this.agentActivities));
+    ], () => buildInboxWorkingResourceKeys(this.agentActivities, { nowMs: this.getAgentActivityNowMs?.() ?? Date.now() }));
   },
 
   get deckInboxCurrentContextKey() {

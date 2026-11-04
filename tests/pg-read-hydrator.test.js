@@ -46,6 +46,7 @@ import {
   resolveTowerPgWorkspaceContext,
   syncTowerPgWorkspace,
 } from '../src/pg-read-hydrator.js';
+import { agentActivityServerNow, resetAgentActivityServerTime } from '../src/agent-activity-clock.js';
 import {
   deleteWorkspaceDb,
   getMessagesByChannel,
@@ -2821,6 +2822,39 @@ describe('PG read hydrator', () => {
     expect(clearAgentActivity).not.toHaveBeenCalled();
     expect(getTowerPgAgentActivities).not.toHaveBeenCalled();
     expect(replacePgAgentActivitiesForChannel).not.toHaveBeenCalled();
+  });
+
+  it('keeps a lower-sequence terminal and a lease-only renewal when coalescing one SSE batch', async () => {
+    const upsertAgentActivity = vi.fn(async () => true);
+    const event = (patch) => ({
+      event_type: 'flightdeck_pg.agent_activity.snapshot', entity_type: 'agent_activity', entity_id: 'row-1',
+      payload: { agent_activity: {
+        id: 'row-1', activity_id: 'activity-1', turn_id: 'turn-1', channel_id: 'channel-1', thread_id: 'thread-1',
+        trigger_message_id: 'message-1', session_id: 'session-1', agent_npub: 'npub1agent', state: 'working',
+        visibility: 'user_visible', sequence: 2, lease_epoch: 1, lease_sequence: 1,
+        lease_expires_at: '2026-11-04T02:14:00.000Z', ...patch,
+      } },
+    });
+    await hydrateTowerPgEventUpdates(store(), [
+      event({ lease_sequence: 2, lease_expires_at: '2026-11-04T02:15:00.000Z' }), event({}),
+    ], { upsertAgentActivity });
+    expect(upsertAgentActivity).toHaveBeenLastCalledWith(expect.objectContaining({
+      sequence: 2, lease_sequence: 2, lease_expires_at: '2026-11-04T02:15:00.000Z',
+    }));
+    await hydrateTowerPgEventUpdates(store(), [event({ sequence: 9 }), event({ sequence: 4, state: 'completed' })], { upsertAgentActivity });
+    expect(upsertAgentActivity).toHaveBeenLastCalledWith(expect.objectContaining({ sequence: 4, state: 'completed' }));
+  });
+
+  it('calibrates the lease clock from a fresh agent-activity snapshot server_time', async () => {
+    resetAgentActivityServerTime();
+    const serverTime = new Date(Date.now() + 120_000).toISOString();
+    await hydrateTowerPgChannelAgentActivities(store(), 'channel-1', {
+      getTowerPgAgentActivities: vi.fn(async () => ({ agent_activities: [], server_time: serverTime })),
+      replacePgAgentActivitiesForChannel: vi.fn(async () => 0),
+      mergeAgentActivityCommentary: vi.fn(async () => 0),
+    });
+    expect(Math.abs(agentActivityServerNow('https://tower.example') - Date.parse(serverTime))).toBeLessThan(1_000);
+    resetAgentActivityServerTime();
   });
 
   it('materializes replayed session-health SSE by monotonic row version without touching activity state', async () => {

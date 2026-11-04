@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  AGENT_ACTIVITY_LEASE_GRACE_MS,
+  getAgentActivityLeaseState,
+  isAgentActivityInStoppedWindow,
+  mergeAgentActivityRecord,
   isVisibleAgentActivity,
   getAgentActivityHealth,
   mapPgAgentActivity,
@@ -9,6 +13,11 @@ import {
   selectVisibleAgentActivities,
   selectCurrentAgentActivities,
 } from '../src/agent-activity.js';
+import {
+  agentActivityServerNow,
+  recordAgentActivityServerTime,
+  resetAgentActivityServerTime,
+} from '../src/agent-activity-clock.js';
 
 function activity(overrides = {}) {
   return mapPgAgentActivity({
@@ -70,16 +79,18 @@ describe('agent activity lifecycle', () => {
   it.each(['connecting', 'reconnecting', 'disconnected', 'fallback-polling', 'connected'])('keeps received content during %s recovery before and after 60 seconds', (status) => {
     const row = activity();
     const startedAt = 10_000;
-    expect(getAgentActivityHealth(row, status, startedAt + 59_999, { startedAt }).message).toBe('Reconnecting');
-    expect(getAgentActivityHealth(row, status, startedAt + 60_000, { startedAt }).message).toBe('Connection lost—status unknown');
+    expect(getAgentActivityHealth(row, status, startedAt + 59_999, { startedAt }).message).toBe('reconnecting…');
+    expect(getAgentActivityHealth(row, status, startedAt + 60_000, { startedAt }).message).toBe('connection lost · reconnecting…');
     expect(selectVisibleAgentActivities([row], status, startedAt + 60_000)).toEqual([row]);
     expect(row.state).toBe('working');
   });
 
-  it('clears uncertainty only when recovery succeeds and leaves expired rows unknown', () => {
+  it('clears uncertainty only when recovery succeeds and reports expired rows as stopped', () => {
     expect(getAgentActivityHealth(activity(), 'connected', Date.now(), { startedAt: 0 }).state).toBe('live');
     const expired = activity({ expires_at: '2000-01-01T00:00:00.000Z' });
-    expect(getAgentActivityHealth(expired, 'connected').message).toBe('Status unknown — reconnecting');
+    expect(getAgentActivityHealth(expired, 'connected')).toEqual({ state: 'expired', message: 'Stopped responding' });
+    // Producer death outranks transport loss: an expired turn never reads as reconnecting work.
+    expect(getAgentActivityHealth(expired, 'reconnecting', Date.now(), { startedAt: 1 }).state).toBe('expired');
     expect(selectVisibleAgentActivities([expired])).toEqual([expired]);
   });
 
@@ -149,5 +160,81 @@ describe('current conversation failures', () => {
     const other = run(2, 'completed', { agent_npub: 'npub1other' });
     expect(selectCurrentAgentActivities([failed, other])).toHaveLength(2);
     expect(selectCurrentAgentActivities([run(1, 'failed', { thread_id: '' }), run(2, 'completed', { thread_id: '' })])).toHaveLength(2);
+  });
+});
+
+describe('lease expiry and order-independent merge', () => {
+  const deadline = Date.parse('2026-11-04T02:14:00.000Z');
+  const leased = (overrides = {}) => activity({ lease_expires_at: '2026-11-04T02:14:00.000Z',
+    expires_at: '2026-11-04T02:14:00.000Z', lease_health: 'live', ...overrides });
+
+  it('stays live through the client grace and expires exactly at deadline plus grace', () => {
+    expect(getAgentActivityLeaseState(leased(), deadline + AGENT_ACTIVITY_LEASE_GRACE_MS - 1)).toBe('live');
+    expect(getAgentActivityLeaseState(leased(), deadline + AGENT_ACTIVITY_LEASE_GRACE_MS)).toBe('expired');
+    expect(getAgentActivityLeaseState(leased({ lease_expires_at: '', expires_at: '' }), deadline)).toBe('expired');
+    expect(getAgentActivityLeaseState(leased({ expired_at: '2026-11-04T02:14:01.000Z' }), deadline - 60_000)).toBe('expired');
+    expect(getAgentActivityLeaseState(leased({ state: 'completed' }), deadline + 3_600_000)).toBe('terminal');
+  });
+
+  it('keeps an expired turn in the stopped window for ten minutes after it clears', () => {
+    const clearAt = deadline + AGENT_ACTIVITY_LEASE_GRACE_MS;
+    expect(isAgentActivityInStoppedWindow(leased(), clearAt)).toBe(true);
+    expect(isAgentActivityInStoppedWindow(leased(), clearAt + 10 * 60_000 - 1)).toBe(true);
+    expect(isAgentActivityInStoppedWindow(leased(), clearAt + 10 * 60_000)).toBe(false);
+    const [current] = selectCurrentAgentActivities([leased()], clearAt + 10 * 60_000);
+    expect(current.history_only).toBe(true);
+  });
+
+  it('converges to one result for every delivery order of state, lease, expiry and terminal events', () => {
+    const events = [
+      leased({ sequence: 2, body: 'Reading the repository', lease_epoch: 1, lease_sequence: 1 }),
+      leased({ sequence: 2, body: 'Reading the repository', lease_epoch: 1, lease_sequence: 4,
+        lease_expires_at: '2026-11-04T02:17:00.000Z', expires_at: '2026-11-04T02:17:00.000Z' }),
+      leased({ sequence: 3, body: 'Running tests', lease_epoch: 1, lease_sequence: 2,
+        lease_expires_at: '2026-11-04T02:15:00.000Z', expires_at: '2026-11-04T02:15:00.000Z' }),
+      // An expiry for an earlier deadline cannot override the later renewal.
+      leased({ sequence: 2, lease_epoch: 1, lease_sequence: 1, expired_at: '2026-11-04T02:14:05.000Z' }),
+    ];
+    const permutations = (items) => items.length <= 1 ? [items]
+      : items.flatMap((item, index) => permutations(items.filter((_, other) => other !== index)).map((rest) => [item, ...rest]));
+    const results = permutations(events).map((order) => order.reduce((current, next) => mergeAgentActivityRecord(current, next), null));
+    for (const result of results) {
+      expect(result).toMatchObject({ sequence: 3, body: 'Running tests', lease_sequence: 4,
+        lease_expires_at: '2026-11-04T02:17:00.000Z', expired_at: '' });
+    }
+    const withTerminal = permutations([...events.slice(0, 3), leased({ sequence: 1, state: 'completed' })])
+      .map((order) => order.reduce((current, next) => mergeAgentActivityRecord(current, next), null));
+    for (const result of withTerminal) expect(result.state).toBe('completed');
+  });
+
+  it('keeps an expiry that follows the winning renewal and requires a new epoch to resume', () => {
+    const renewed = leased({ lease_epoch: 1, lease_sequence: 4 });
+    const expired = mergeAgentActivityRecord(renewed, leased({ lease_epoch: 1, lease_sequence: 4,
+      expired_at: '2026-11-04T02:14:10.000Z' }));
+    expect(getAgentActivityLeaseState(expired, deadline - 1)).toBe('expired');
+    expect(mergeAgentActivityRecord(expired, leased({ lease_epoch: 1, lease_sequence: 3 }))).toBe(expired);
+    const resumed = mergeAgentActivityRecord(expired, leased({ lease_epoch: 2, lease_sequence: 0,
+      lease_expires_at: '2026-11-04T02:20:00.000Z', expires_at: '2026-11-04T02:20:00.000Z' }));
+    expect(resumed).toMatchObject({ expired_at: '', lease_epoch: 2 });
+    expect(getAgentActivityLeaseState(resumed, deadline + 60_000)).toBe('live');
+  });
+
+  it('calibrates lease time from a fresh server_time and ignores later wall-clock jumps', () => {
+    resetAgentActivityServerTime();
+    const tower = 'https://tower.example/';
+    expect(agentActivityServerNow(tower, 123)).toBe(123);
+    const localNow = Date.now();
+    recordAgentActivityServerTime(tower, new Date(localNow + 5 * 60_000).toISOString(), { receivedAtEpochMs: localNow });
+    const skewed = agentActivityServerNow('https://tower.example');
+    expect(Math.abs(skewed - (localNow + 5 * 60_000))).toBeLessThan(1_000);
+    const realNow = Date.now;
+    try {
+      Date.now = () => realNow() + 3_600_000;
+      expect(Math.abs(agentActivityServerNow(tower) - skewed)).toBeLessThan(1_000);
+    } finally {
+      Date.now = realNow;
+      resetAgentActivityServerTime();
+    }
+    expect(recordAgentActivityServerTime(tower, 'not a time')).toBe(false);
   });
 });

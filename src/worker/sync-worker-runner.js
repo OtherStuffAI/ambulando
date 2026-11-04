@@ -519,6 +519,8 @@ function handleConnected(event) {
     requestedCursor: sseLastPgCursor,
     receivedCursor: sseLastReceivedPgCursor,
     acknowledgedCursor: sseLastPgCursor,
+    // Fresh connection time only; replayed event timestamps are not now.
+    ...(data?.server_time ? { serverTime: String(data.server_time), serverTimeReceivedAt: Date.now() } : {}),
   });
 }
 

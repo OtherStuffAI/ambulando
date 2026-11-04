@@ -87,7 +87,16 @@ import {
   canonicalAgentMentionsFromSelection,
   filterMentionsToCurrentWorkspaceActors,
 } from './agent-direct-chat.js';
-import { getAgentActivityHealth, isTerminalAgentActivity, selectCurrentAgentActivities, selectVisibleAgentActivities } from './agent-activity.js';
+import {
+  AGENT_ACTIVITY_QUIET_MS,
+  getAgentActivityHealth,
+  getAgentActivityLeaseState,
+  isAgentActivityInStoppedWindow,
+  isTerminalAgentActivity,
+  selectCurrentAgentActivities,
+  selectVisibleAgentActivities,
+} from './agent-activity.js';
+import { agentActivityServerNow } from './agent-activity-clock.js';
 import {
   buildHangCallInvitation,
   createHangRoomUrl,
@@ -1226,9 +1235,10 @@ export const chatMessageManagerMixin = {
   },
   updateResponseActivityTimer() {
     if (this.canvasChatEmbedded && !this.canvasChatVisible) return;
+    this.installAgentActivityForegroundRefresh();
     const hasActiveActivities = this.activeThreadResponseActivities.length > 0
       || this.getVisibleChannelResponseActivities().length > 0
-      || this.getVisibleAgentActivities().some((activity) => !isTerminalAgentActivity(activity));
+      || this.hasTickingAgentActivity();
     if (!hasActiveActivities) {
       if (this.responseActivityTimer && typeof window !== 'undefined') {
         window.clearInterval(this.responseActivityTimer);
@@ -1239,10 +1249,32 @@ export const chatMessageManagerMixin = {
     if (this.responseActivityTimer || typeof window === 'undefined') return;
     this.responseActivityTimer = window.setInterval(() => {
       this.responseActivityTick = Number(this.responseActivityTick || 0) + 1;
-      if (this.activeThreadResponseActivities.length === 0 && this.getVisibleChannelResponseActivities().length === 0 && !this.getVisibleAgentActivities().some((activity) => !isTerminalAgentActivity(activity))) {
+      if (this.activeThreadResponseActivities.length === 0 && this.getVisibleChannelResponseActivities().length === 0 && !this.hasTickingAgentActivity()) {
         this.updateResponseActivityTimer();
       }
     }, 900);
+  },
+  // Only lifecycles that can still change presentation keep the tick alive:
+  // live leases, and expired ones until their stopped window closes.
+  hasTickingAgentActivity() {
+    return this.getVisibleAgentActivities().some((activity) => !activity.history_only
+      && !isTerminalAgentActivity(activity) && this.isCurrentAgentActivityWorking(activity));
+  },
+  // Background tabs throttle intervals. Re-evaluate leases before the first
+  // visible frame so a turn that expired meanwhile never flashes as working.
+  installAgentActivityForegroundRefresh() {
+    if (this._agentActivityForegroundRefresh || typeof document === 'undefined') return;
+    this._agentActivityForegroundRefresh = () => {
+      if (document.visibilityState !== 'visible') return;
+      this.responseActivityTick = Number(this.responseActivityTick || 0) + 1;
+      this.updateResponseActivityTimer();
+    };
+    document.addEventListener('visibilitychange', this._agentActivityForegroundRefresh);
+  },
+  getAgentActivityNowMs() {
+    void this.responseActivityTick;
+    const clockKey = resolveTowerPgWorkspaceContext(this).baseUrl || this.backendUrl || '';
+    return agentActivityServerNow(clockKey);
   },
   getVisibleChannelResponseActivities() {
     const now = Date.now();
@@ -1256,14 +1288,14 @@ export const chatMessageManagerMixin = {
       && (!activity.backend_url || !this.backendUrl || activity.backend_url.replace(/\/$/, '') === this.backendUrl.replace(/\/$/, ''))))
       .sort((left, right) => String(left.created_at || '').localeCompare(String(right.created_at || ''))
         || String(left.activity_id || '').localeCompare(String(right.activity_id || '')));
-    return selectCurrentAgentActivities(this.mergeThreadLiveActivity?.(towerActivities) || towerActivities)
+    return selectCurrentAgentActivities(this.mergeThreadLiveActivity?.(towerActivities) || towerActivities, this.getAgentActivityNowMs())
       .sort((left, right) => String(left.created_at || '').localeCompare(String(right.created_at || '')));
   },
   getAgentActivityHealth(activity = {}) {
     void this.responseActivityTick;
     const fallbackIsUsable = this.towerFallbackReachable === true
       && this.towerReachabilityState === 'online';
-    return getAgentActivityHealth(activity, fallbackIsUsable ? 'fallback-polling' : this.sseStatus, Date.now(), {
+    return getAgentActivityHealth(activity, fallbackIsUsable ? 'fallback-polling' : this.sseStatus, this.getAgentActivityNowMs(), {
       startedAt: fallbackIsUsable ? 0 : this.agentActivityRecoveryStartedAt,
       error: this.agentActivityRecoveryError,
     });
@@ -1291,14 +1323,27 @@ export const chatMessageManagerMixin = {
     const senderName = this.getSenderName(activity.agent_npub);
     if (isTerminalAgentActivity(activity)) return `${senderName} ${activity.state}`;
     const health = this.getAgentActivityHealth(activity);
-    if (health.state !== 'live') return `${senderName} · ${health.message}`;
+    if (health.state !== 'live') return `${senderName} · ${this.getAgentActivityStatusLabel(activity)}`;
     const tick = Number(this.responseActivityTick || 0);
     const label = activity.label || RESPONSE_ACTIVITY_WORDS[Math.floor(tick / RESPONSE_ACTIVITY_SUFFIXES.length) % RESPONSE_ACTIVITY_WORDS.length];
     return `${senderName} is ${label}${RESPONSE_ACTIVITY_SUFFIXES[tick % RESPONSE_ACTIVITY_SUFFIXES.length]}`;
   },
   getAgentActivityStatusLabel(activity = {}) {
     const health = this.getAgentActivityHealth(activity);
-    if (health.state === 'stale' || health.state === 'degraded' || health.state === 'error') return health.message;
+    if (health.state === 'expired') {
+      const lastUpdate = this.formatAgentActivityLastUpdate(activity);
+      return lastUpdate ? `Stopped responding · last update ${lastUpdate}` : 'Stopped responding';
+    }
+    const base = this.getAgentActivityBaseStatusLabel(activity);
+    if (health.state === 'degraded' || health.state === 'error') return `${base} · ${health.message}`;
+    if (activity.state === 'working' && Number(activity.lease_epoch) > 1) return `${base} · resumed`;
+    if (activity.state === 'working') {
+      const quietMinutes = this.getAgentActivityQuietMinutes(activity);
+      if (quietMinutes > 0) return `Still working · no update for ${quietMinutes} min`;
+    }
+    return base;
+  },
+  getAgentActivityBaseStatusLabel(activity = {}) {
     if (activity.state === 'queued') {
       const agentName = this.getSenderName(activity.agent_npub) || 'the agent';
       return activity.queue_position ? `Queued behind ${agentName}’s current turn · position ${activity.queue_position}`
@@ -1307,8 +1352,38 @@ export const chatMessageManagerMixin = {
     if (activity.state === 'accepted') return 'Message received';
     if (activity.state === 'failed') return activity.body || activity.summary || 'Failed';
     if (activity.state === 'cancelled') return activity.body || activity.summary || 'Cancelled';
-    if (activity.state === 'working' || activity.state === 'waiting') return 'Working';
+    if (activity.state === 'waiting') return 'Waiting for you';
+    if (activity.state === 'working') return 'Working';
     return activity.label || activity.state || 'Activity';
+  },
+  // Latest producer-reported time: state change, heartbeat or commentary.
+  formatAgentActivityLastUpdate(activity = {}) {
+    const times = [activity.created_at, activity.updated_at, activity.last_heartbeat_at,
+      ...this.getAgentActivityCommentaryHistory(activity).map((item) => item.created_at)]
+      .map((value) => Date.parse(value || '')).filter(Number.isFinite);
+    if (!times.length) return '';
+    return new Date(Math.max(...times)).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  },
+  getAgentActivityQuietMinutes(activity = {}) {
+    // Any producer write counts as an update; heartbeats alone do not.
+    const commentaryTimes = [activity.created_at, activity.updated_at,
+      ...this.getAgentActivityCommentaryHistory(activity).map((item) => item.created_at)]
+      .map((value) => Date.parse(value || '')).filter(Number.isFinite);
+    if (!commentaryTimes.length) return 0;
+    const quietMs = this.getAgentActivityNowMs() - Math.max(...commentaryTimes);
+    return quietMs >= AGENT_ACTIVITY_QUIET_MS ? Math.floor(quietMs / 60_000) : 0;
+  },
+  isAgentActivitySpinning(activity = {}) {
+    return (activity.state === 'working' || activity.state === 'waiting')
+      && this.getAgentActivityHealth(activity).state !== 'expired';
+  },
+  isAgentActivityExpired(activity = {}) {
+    return this.getAgentActivityHealth(activity).state === 'expired';
+  },
+  getCurrentWorkingPreview(activity = {}) {
+    const body = activity.body || activity.summary || '';
+    if (!body) return '';
+    return this.isAgentActivityExpired(activity) ? `What it said: ${body}` : body;
   },
   getAgentSessionHealth(activity = {}) {
     const sessions = Array.isArray(this.agentSessionHealth) ? this.agentSessionHealth : [];
@@ -1377,11 +1452,13 @@ export const chatMessageManagerMixin = {
   },
   isCurrentAgentActivityWorking(activity = {}) {
     void this.responseActivityTick;
+    if (activity.history_only) return false;
     if (activity.state === 'failed') return true;
     if (isTerminalAgentActivity(activity)) return false;
-    if (activity.state === 'queued') {
-      const expiresAt = Date.parse(activity.lease_expires_at || activity.expires_at || '');
-      if (activity.lease_health === 'stale' || (Number.isFinite(expiresAt) && expiresAt <= Date.now())) return false;
+    const nowMs = this.getAgentActivityNowMs();
+    if (getAgentActivityLeaseState(activity, nowMs) === 'expired') {
+      // Expired work is shown as stopped, never as working, and only briefly.
+      return activity.state !== 'queued' && isAgentActivityInStoppedWindow(activity, nowMs);
     }
     const session = this.getAgentSessionHealth(activity);
     if (!session) return true;

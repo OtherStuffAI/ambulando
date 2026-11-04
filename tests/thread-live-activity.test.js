@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
+  boundLiveOverlayByTower,
   LIVE_THREAD_ACTIVITY_CAPABILITY,
+  LIVE_THREAD_OVERLAY_LEASE_MS,
   liveOverlayAsAgentActivity,
   reconcileLiveThreadActivity,
   ThreadLiveActivityController,
@@ -71,5 +73,30 @@ describe('thread live activity reconciliation', () => {
     expect(controller.overlay).toBeNull();
     expect(onChange).toHaveBeenLastCalledWith(null);
     expect(LIVE_THREAD_ACTIVITY_CAPABILITY).toBe('flightdeck.live-thread-activity.v1');
+  });
+
+  it('keeps the turn start immutable and bounds an overlay-only row by one lease interval', () => {
+    const first = reconcileLiveThreadActivity(null, event());
+    const later = reconcileLiveThreadActivity(first, event({ sequence: 2, cursor: '2', timestamp: '2026-09-24T00:05:00Z' }));
+    expect(later.started_at).toBe('2026-09-24T00:00:00Z');
+    const receivedAt = Date.parse('2026-09-24T00:05:00Z');
+    const row = liveOverlayAsAgentActivity({ ...later, received_at_ms: receivedAt }, { workspaceId: 'w', channelId: 'c', threadId: 't', agentNpub: 'a' });
+    expect(row.created_at).toBe('2026-09-24T00:00:00Z');
+    expect(Date.parse(row.lease_expires_at)).toBe(receivedAt + LIVE_THREAD_OVERLAY_LEASE_MS);
+    expect(liveOverlayAsAgentActivity({ ...later, lifecycle: 'stopped' }, {}).state).toBe('cancelled');
+  });
+
+  it('lets the Tower row of the same turn own identity, lease and history', () => {
+    const overlay = liveOverlayAsAgentActivity({ ...event({ commentary: 'Running tests', timestamp: '2026-09-24T00:02:00Z' }),
+      received_at_ms: Date.parse('2026-09-24T00:02:00Z') }, { workspaceId: 'w', channelId: 'c', threadId: 't', agentNpub: 'a' });
+    const tower = { record_id: 'row-1', activity_id: 'activity-1', turn_id: 'turn-1', state: 'working', sequence: 4,
+      body: 'Reading', created_at: '2026-09-24T00:00:00Z', updated_at: '2026-09-24T00:01:00Z',
+      lease_expires_at: '2026-09-24T00:01:30Z', commentary_history: [{ activity_id: 'activity-1', turn_id: 'turn-1', sequence: 4, body: 'Reading' }] };
+    const bounded = boundLiveOverlayByTower(overlay, tower);
+    expect(bounded).toMatchObject({ record_id: 'row-1', created_at: '2026-09-24T00:00:00Z',
+      lease_expires_at: '2026-09-24T00:01:30Z', body: 'Running tests', live_overlay: true });
+    expect(bounded.commentary_history.map((item) => item.body)).toEqual(['Reading', 'Running tests']);
+    expect(boundLiveOverlayByTower(overlay, { ...tower, state: 'completed' })).toEqual({ ...tower, state: 'completed' });
+    expect(boundLiveOverlayByTower(overlay, { ...tower, updated_at: '2026-09-24T00:03:00Z' }).body).toBe('Reading');
   });
 });

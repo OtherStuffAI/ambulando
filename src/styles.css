@@ -10446,10 +10446,12 @@ html.wingman-iphone-webview .chat-channel-tab-scroll * {
 .agent-activity-thread .thread-response-activity-body { flex:1; min-width:0; }
 .agent-activity-thread .agent-activity-toggle { padding:0; }
 .agent-activity-stale,
+.agent-activity-expired,
 .agent-activity-degraded { border-color:var(--border); background:var(--muted); }
 .agent-activity-finished { border-color:var(--border); background:transparent; color:var(--text-muted); }
 .agent-activity-error { border-color:var(--border); background:var(--muted); }
 .agent-activity-stale .agent-activity-pulse,
+.agent-activity-expired .agent-activity-pulse,
 .agent-activity-degraded .agent-activity-pulse { background:var(--warning); }
 .agent-activity-error .agent-activity-pulse { background:var(--destructive); }
 .agent-activity-health { display:flex; align-items:center; gap:0.5rem; padding:0.25rem 0.7rem 0.55rem 1.6rem; color:var(--warning); font-size:0.76rem; line-height:1.35; }
@@ -23919,6 +23921,7 @@ button.task-desc-toggle:focus-visible {
 .agent-activity-current p { margin:4px 0 0; white-space:pre-wrap; overflow-wrap:anywhere; }
 .agent-session-status { display:block; margin-top:3px; color:var(--text-muted); font-size:0.75rem; }
 .agent-activity-stale .agent-activity-title,
+.agent-activity-expired .agent-activity-title,
 .agent-activity-error .agent-activity-title { color:var(--warning); }
 .agent-activity-dialog { width:min(680px, calc(100vw - 32px)); max-height:80vh; padding:20px; border:1px solid var(--border); border-radius:var(--radius-panel); background:var(--bg, white); color:var(--text); }
 .agent-activity-dialog::backdrop { background:var(--secondary); }

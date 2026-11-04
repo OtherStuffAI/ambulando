@@ -49,7 +49,8 @@ for (const width of [1120, 390]) {
       })));
     });
     const cards = page.locator('.agent-activity-thread:visible');
-    await expect(cards).toHaveCount(2);
+    // The long-expired accepted turn is history; only live queued work remains.
+    await expect(cards).toHaveCount(1);
     await expect(cards.filter({ hasText: 'Queued behind' })).toHaveCount(1);
     await expect(page.locator('.current-working-count:visible')).toHaveCount(0);
     await page.evaluate(() => {
@@ -66,7 +67,7 @@ for (const width of [1120, 390]) {
     await dialog.locator('.agent-activity-retained').filter({ hasText: 'Earlier useful commentary' }).locator('summary').click();
     await expect(dialog.getByText('Earlier useful commentary', { exact: true })).toBeVisible();
     await dialog.getByRole('button', { name: 'Close working history' }).click();
-    await expect(cards).toHaveCount(2);
+    await expect(cards).toHaveCount(1);
     await page.evaluate(() => {
       const row = window.Alpine.store('chat').agentActivities[3];
       Object.assign(row, { state: 'working', sequence: 2, body: 'Current useful commentary', queue_position: null });
