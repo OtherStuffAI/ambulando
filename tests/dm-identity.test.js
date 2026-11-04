@@ -10,5 +10,7 @@ it('requires authoritative exact participants despite stale names, metadata and 
   expect(findExistingDmChannel([{ ...current, record_state: 'archived' }], ['me', 'current'])).toBeNull();
   expect(resolveChannelParticipants({ ...old, participant_npubs: [] }, () => ['current'])).toEqual([]);
   const options = { sessionNpub: 'me', getSenderName: () => 'Same name' };
-  expect(resolveChannelLabel(old, options)).not.toBe(resolveChannelLabel(current, options));
+  expect(resolveChannelLabel(old, options)).toBe('Same name');
+  expect(resolveChannelLabel(current, options)).toBe('Same name');
+  expect(findExistingDmChannel([old, current], ['me', 'current'])).toBe(current);
 });

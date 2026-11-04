@@ -5637,6 +5637,13 @@
       "notes": [
         "DM labels and recipient choices show their recorded identity. Conversations and permission retries use only exact participant npubs, without historical names, descriptions or bot-key fallback."
       ]
+    },
+    {
+      "buildNumber": 2706,
+      "label": "Names in direct messages",
+      "notes": [
+        "DM cards, headers and recipient choices display human names without added npub labels. Exact-participant matching and routing remain enforced."
+      ]
     }
   ]
 }

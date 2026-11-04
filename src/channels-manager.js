@@ -3762,7 +3762,7 @@ export const channelsManagerMixin = {
         .map((npub) => ({
           npub,
           label: npub === this.session?.npub ? `${this.getExactSenderName?.(npub) || npub} (Note to self)` : this.getExactSenderName?.(npub) || npub,
-          subtitle: npub,
+          subtitle: '',
           avatarUrl: this.getSenderAvatar?.(npub) || '',
         }));
     }

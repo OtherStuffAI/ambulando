@@ -14,7 +14,7 @@ function resolveParticipantName(npub, getSenderName) {
   if (typeof getSenderName !== 'function') return compactNpub(npub);
   const label = String(getSenderName(npub) || '').trim();
   if (!label || label === npub) return compactNpub(npub);
-  return `${label} (${compactNpub(npub)})`;
+  return label;
 }
 
 export function resolveChannelParticipants(channel) {

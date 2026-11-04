@@ -888,7 +888,7 @@ describe('autopilot overview manager', () => {
       getSenderName: (npub) => (npub === 'npub1lycg5qvjtrp3qjf5f7zl382j9x6nrjz9sdhenvyxq8c3808qxmus6gq266' ? 'Agent B' : npub),
     });
 
-    expect(rows[0].channelLabel).toBe('Agent B (npub1lycg5...6gq266)');
+    expect(rows[0].channelLabel).toBe('Agent B');
   });
 
   it('opens an overview thread directly after selecting its channel', async () => {

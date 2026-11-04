@@ -1248,7 +1248,8 @@ describe('channels-manager pure utilities', () => {
 
   it('offers the signed-in user for Note to self even if the directory page omits them', () => {
     const store = applyChannelMixin({ session: { npub: 'me' }, newChannelDmNpub: '', pgWorkspaceMembers: [{ npub: 'other' }], getExactSenderName: npub => npub === 'me' ? 'Operator' : 'Other' });
-    expect(store.newChannelDmSuggestions[0]).toMatchObject({ npub: 'me', label: 'Operator (Note to self)' });
+    expect(store.newChannelDmSuggestions[0]).toMatchObject({ npub: 'me', label: 'Operator (Note to self)', subtitle: '' });
+    expect(store.newChannelDmSuggestions[1]).toMatchObject({ npub: 'other', label: 'Other', subtitle: '' });
   });
 
   it('opens DM creation from the DM-area New control on Home', async () => {

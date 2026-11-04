@@ -33,7 +33,7 @@ describe('channel labels', () => {
       },
     );
 
-    expect(label).toBe('Alice (npub_a)');
+    expect(label).toBe('Alice');
   });
 
   it('uses the other participant name for PG DM channels even when the stored title has an npub', () => {
@@ -52,7 +52,7 @@ describe('channel labels', () => {
       },
     );
 
-    expect(label).toBe(`Alice Example (${otherNpub.slice(0, 10)}...${otherNpub.slice(-6)})`);
+    expect(label).toBe('Alice Example');
   });
 
   it('treats channels in the DM scope as DMs', () => {
@@ -70,7 +70,7 @@ describe('channel labels', () => {
       },
     );
 
-    expect(label).toBe('Bob (npub_bob)');
+    expect(label).toBe('Bob');
   });
 
   it('can derive DM participants from the channel description', () => {
