@@ -1,3 +1,4 @@
+import { channelMoveMixin } from './channel-move-ui.js';
 /**
  * Channel and group management methods extracted from app.js.
  *
@@ -2004,7 +2005,7 @@ export const channelsManagerMixin = {
   },
 
   openChannelSettings(channelId = null) {
-    if (this.channelRenameSaving || this.channelDeleteSubmitting) return;
+    if (this.channelRenameSaving || this.channelDeleteSubmitting || this.channelMoveBusy) return;
     const normalizedChannelId = String(channelId || '').trim();
     if (normalizedChannelId) this.selectedChannelId = normalizedChannelId;
     const selectedChannel = this.selectedChannel || this.channels?.find((channel) => channel?.record_id === this.selectedChannelId);
@@ -2023,6 +2024,7 @@ export const channelsManagerMixin = {
     const orderedScopeChannels = sortChannelsByScopePosition((this.channels || []).filter((candidate) =>
       String(candidate?.scope_id || '').trim() === String(selectedChannel.scope_id || '').trim()
     ));
+    channelMoveMixin.resetChannelMove.call(this);
     this.channelSettingsPosition = String(Math.max(1, orderedScopeChannels.findIndex((candidate) => candidate.record_id === selectedChannel.record_id) + 1));
     this.channelPositionSaving = false;
     this.channelDeleteSubmitting = false;
@@ -2034,7 +2036,8 @@ export const channelsManagerMixin = {
   },
 
   closeChannelSettings() {
-    if (this.channelRenameSaving || this.channelDeleteSubmitting) return;
+    if (this.channelRenameSaving || this.channelDeleteSubmitting || this.channelMoveBusy) return;
+    channelMoveMixin.resetChannelMove.call(this);
     this.cancelChannelGrantRecovery();
     this.closeChannelScopePicker();
     this.channelDeleteConfirmArmed = false;
@@ -4645,3 +4648,5 @@ export const channelsManagerMixin = {
     }
   },
 };
+
+Object.defineProperties(channelsManagerMixin, Object.getOwnPropertyDescriptors(channelMoveMixin));

@@ -10474,7 +10474,7 @@
             </section>
 
             <!-- Channel scope -->
-            <div class="channel-scope-field" @click.stop>
+            <div class="channel-scope-field" x-show="!$store.chat.isTowerPgMode" @click.stop>
               <label class="task-field-label">Scope</label>
               <div class="scope-picker-wrapper">
                 <template x-if="$store.chat.selectedChannel?.scope_id">
@@ -10512,6 +10512,41 @@
                 </div>
               </div>
             </div>
+
+            <section class="channel-metadata-panel" x-show="$store.chat.canMoveSettingsChannel" data-testid="channel-move-panel">
+              <label class="task-field-label" for="channel-move-destination">Move to scope</label>
+              <p class="groups-subtitle">Move this channel and its contents together. Review access before confirming.</p>
+              <select id="channel-move-destination" class="new-channel-input" x-model="$store.chat.channelMoveDestinationId" @change="$store.chat.invalidateChannelMovePreview()" :disabled="$store.chat.channelMoveBusy || !!$store.chat.channelMoveRequest">
+                <option value="">Choose destination scope</option>
+                <template x-for="scope in $store.chat.channelMoveDestinations" :key="scope.id"><option :value="scope.id" x-text="scope.label"></option></template>
+              </select>
+              <p class="groups-subtitle" x-show="!$store.chat.channelMoveDestinations.length">No eligible destination scopes. You need Manage access to the destination.</p>
+              <button type="button" class="btn-secondary" @click="$store.chat.previewSettingsChannelMove()" :disabled="$store.chat.channelMoveBusy || !$store.chat.channelMoveDestinationId || !!$store.chat.channelMoveRequest">Preview move</button>
+              <template x-if="$store.chat.channelMovePreview">
+                <div data-testid="channel-move-preview">
+                  <p><span x-text="$store.chat.getScopeBreadcrumb($store.chat.channelMovePreview.source_scope_id)"></span> → <span x-text="$store.chat.getScopeBreadcrumb($store.chat.channelMovePreview.destination_scope_id)"></span></p>
+                  <template x-for="kind in ['gained', 'lost', 'retained']" :key="kind">
+                    <div>
+                      <strong x-text="({gained:'Gained inherited access',lost:'Lost inherited access',retained:'Unchanged access'})[kind]"></strong>
+                      <p x-show="!($store.chat.channelMovePreview.access_changes[kind] || []).length">None reported by Tower.</p>
+                      <template x-for="(row, index) in ($store.chat.channelMovePreview.access_changes[kind] || [])" :key="index"><p x-text="$store.chat.channelMoveAccessLabel(row)"></p></template>
+                    </div>
+                  </template>
+                  <p x-text="'Direct channel grants preserved (' + $store.chat.channelMovePreview.access_changes.direct_grant_count + ').'"></p>
+                  <template x-for="kind in ['source_scope_access', 'destination_scope_access']" :key="kind">
+                    <div>
+                      <strong x-text="kind === 'source_scope_access' ? 'Source scope discovery and management' : 'Destination scope discovery and management'"></strong>
+                      <p x-show="!($store.chat.channelMovePreview.access_changes[kind] || []).length">None reported by Tower.</p>
+                      <template x-for="(row, index) in ($store.chat.channelMovePreview.access_changes[kind] || [])" :key="index"><p x-text="$store.chat.channelMoveAccessLabel(row)"></p></template>
+                    </div>
+                  </template>
+                  <template x-for="(warning, index) in ($store.chat.channelMovePreview.warnings || [])" :key="index"><p role="note" x-text="warning"></p></template>
+                  <button type="button" class="btn-confirm" @click="$store.chat.confirmSettingsChannelMove()" :disabled="$store.chat.channelMoveBusy" x-text="$store.chat.channelMoveBusy ? 'Moving…' : ($store.chat.channelMoveRequest ? 'Retry same move' : 'Confirm move to scope')"></button>
+                </div>
+              </template>
+              <p role="alert" class="channel-access-error" x-show="$store.chat.channelMoveError" x-text="$store.chat.channelMoveError"></p>
+              <p role="status" class="settings-success" x-show="$store.chat.channelMoveNotice" x-text="$store.chat.channelMoveNotice"></p>
+            </section>
 
             <section class="channel-metadata-panel" x-show="$store.chat.isTowerPgMode && $store.chat.canReorderSelectedChannel" data-testid="channel-position-panel">
               <label class="task-field-label" for="channel-position-input">Move to position</label>

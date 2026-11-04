@@ -1,3 +1,4 @@
+import { materializeChannelScope } from './channel-move-materialization.js';
 import { pinOrderSupportKey, mapThreadPin, threadPinContext, threadPinSupportKey } from './thread-pin-store.js';
 import { mergePgAccessState } from './pg-access-state.js';
 import { markPgTargetArchived } from './pg-archive-state.js';
@@ -426,6 +427,12 @@ async function applyRecordPage(store, page, options = {}) {
         }
         resolvedConflictKeys.add(raw.key);
         return;
+      }
+      if (raw.family === 'channel' && prior?.sync_status === 'synced' && prior.updated_at && raw.row?.updated_at
+        && Date.parse(prior.updated_at) > Date.parse(raw.row.updated_at)) return;
+      if (raw.family === 'channel' && raw.operation === 'upsert' && raw.row?.scope_id
+        && prior && prior.scope_id !== raw.row.scope_id) {
+        await materializeChannelScope(db, raw.id, raw.row.scope_id);
       }
       const clientRecordId = raw.row?.metadata?.client_record_id;
       if (clientRecordId && clientRecordId !== localId) {

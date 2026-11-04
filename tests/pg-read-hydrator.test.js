@@ -1558,6 +1558,15 @@ describe('PG read hydrator', () => {
     expect(getTowerPgChannelMessages).not.toHaveBeenCalled();
   });
 
+  it('routes channel moves through the canonical journal instead of list-only refresh', async () => {
+    const refreshChannels = vi.fn(async () => []);
+    const result = await hydrateTowerPgEventUpdates(store({ refreshChannels }), [
+      { event_type: 'channel.moved', entity_type: 'channel', channel_id: 'channel-1', payload: { destination_scope_id: 'new-scope' } },
+    ]);
+    expect(refreshChannels).not.toHaveBeenCalled();
+    expect(result.fallbackEvents).toBe(1);
+  });
+
   it('reconciles channel reorder SSE events through one authoritative channel refresh', async () => {
     const refreshChannels = vi.fn(async () => []);
     const target = store({ refreshChannels });

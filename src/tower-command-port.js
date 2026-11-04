@@ -1,3 +1,4 @@
+import { materializeChannelMove } from './channel-move-materialization.js';
 import { prepareThreadPinCommand } from './thread-pin-sync.js';
 import { markPgTargetArchived } from './pg-archive-state.js';
 import { captureScopeOrderSession } from './scope-order.js';
@@ -60,7 +61,7 @@ export const TOWER_WORKSPACE_COMMAND_CONTRACT = Object.freeze({
     'thread.branch', 'thread-pin.put',
     'file.create', 'file.update', 'file-folder.create', 'audio-note.create',
     'scope-order.put', 'scope.create', 'scope.update', 'scope.delete',
-    'channel.create', 'channel.update', 'channel.delete',
+    'channel.create', 'channel.update', 'channel.delete', 'channel.move-preview', 'channel.move',
     'workroom.create', 'workroom.start', 'workroom.archive', 'workroom-approval.decide',
     'reaction.create', 'reaction.delete',
     'wapp.create', 'wapp.update', 'wapp.delete',
@@ -181,6 +182,8 @@ export function prepareTowerWorkspaceCommand(store, name, input = {}) {
     'workroom.create': 'createTowerPgWorkroom',
     'workroom.start': 'startTowerPgWorkroom',
     'workroom.archive': 'archiveTowerPgWorkroom',
+    'channel.move-preview': 'previewTowerPgChannelMove',
+    'channel.move': 'moveTowerPgChannel',
     'channel.update': 'updateTowerPgChannel',
     'channel.create': 'createTowerPgScopeChannel',
     'channel.delete': 'deleteTowerPgChannel',
@@ -295,6 +298,7 @@ export function prepareTowerWorkspaceCommand(store, name, input = {}) {
       'channel.update': () => previousChannel ? upsertChannel(toRaw(previousChannel)) : undefined,
       'channel.delete': () => previousChannel ? upsertChannel(toRaw(previousChannel)) : undefined,
     }[name];
+    const moveDbKey = name === 'channel.move' && hasWorkspaceDb() ? getCurrentWorkspaceDbKey() : null;
     const removalDbKey = name === 'workspace-member.remove' && hasWorkspaceDb() ? getCurrentWorkspaceDbKey() : null;
     return {
       entityKey: `${name}:${String(input.entityId || input.clientMutationId || '')}`,
@@ -302,6 +306,13 @@ export function prepareTowerWorkspaceCommand(store, name, input = {}) {
       execute: async () => {
         scopeOrderSession?.assertCurrent();
         const result = await api[typedApiCommandName](...args);
+        if (moveDbKey) {
+          if (result?.channel?.id !== args[1] || result.channel.workspace_id !== args[0]
+            || result.channel.scope_id !== args[2]?.destination_scope_id) throw new Error('Invalid Tower move acknowledgement. Retry the same move.');
+          const db = createWorkspaceDb(moveDbKey);
+          try { await materializeChannelMove(db, result.channel, mapPgChannelToLocal, owner); }
+          finally { db.close(); }
+        }
         if (removalDbKey && result?.removed === true) {
           // Commit the acknowledged membership change before the service's
           // post-request disposal check. Navigation may have replaced it while

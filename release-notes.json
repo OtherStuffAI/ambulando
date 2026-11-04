@@ -5665,6 +5665,33 @@
       "notes": [
         "Accepted member removal is saved before navigation replaces the workspace sync service, keeping retired identities out of cached selectors when you return."
       ]
+    },
+    {
+      "buildNumber": 2710,
+      "label": "Move channels between scopes",
+      "notes": [
+        "Channel settings now previews a move to another managed scope, shows Tower’s access changes and preserved direct grants, and requires confirmation before moving the channel and its contents."
+      ]
+    },
+    {
+      "buildNumber": 2711,
+      "label": "Protect channel move confirmation",
+      "notes": [
+        "Default and archived channels stay protected when choosing Move to scope, and connection changes require a fresh access preview."
+      ]
+    },
+    {
+      "buildNumber": 2712,
+      "label": "Keep cached channel content together",
+      "notes": [
+        "Moving a channel also updates cached voice notes, daily notes and notification destinations while preserving unfinished drafts and pending writes."
+      ]
+    },
+    {
+      "buildNumber": 2713,
+      "label": "Channel move cache validation",
+      "notes": [],
+      "noUserVisibleChanges": true
     }
   ]
 }

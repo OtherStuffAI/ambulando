@@ -1191,6 +1191,17 @@ export async function updateTowerPgChannel(workspaceId, channelId, body, { baseU
   return json(resp, { requestUrl, method: 'PATCH', prefix: 'Tower PG API' });
 }
 
+async function channelMoveRequest(workspaceId, channelId, action, body, { baseUrl = _baseUrl, appNpub = FLIGHT_DECK_PG_APP_NPUB } = {}) {
+  if (!workspaceId || !channelId) throw new Error('Tower workspace and channel are required');
+  const requestPath = `/api/v4/flightdeck-pg/workspaces/${encodeURIComponent(workspaceId)}/channels/${encodeURIComponent(channelId)}/${action}`;
+  const requestUrl = resolveTowerPgUrl(requestPath, baseUrl);
+  const resp = await signedTowerPgFetch(requestPath, { method: 'POST', body, baseUrl, appNpub, authTimeoutMs: INTERACTIVE_AUTH_HEADER_TIMEOUT_MS });
+  return json(resp, { requestUrl, method: 'POST', prefix: 'Tower PG API' });
+}
+
+export const previewTowerPgChannelMove = (workspaceId, channelId, body, options) => channelMoveRequest(workspaceId, channelId, 'move-preview', body, options);
+export const moveTowerPgChannel = (workspaceId, channelId, body, options) => channelMoveRequest(workspaceId, channelId, 'move', body, options);
+
 export async function reorderTowerPgChannel(workspaceId, channelId, position, { baseUrl = _baseUrl, appNpub = FLIGHT_DECK_PG_APP_NPUB } = {}) {
   const encodedWorkspaceId = encodeURIComponent(String(workspaceId || '').trim());
   const encodedChannelId = encodeURIComponent(String(channelId || '').trim());

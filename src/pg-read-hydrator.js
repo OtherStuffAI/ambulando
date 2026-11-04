@@ -509,6 +509,8 @@ export function mapPgScopeToLocal(scope, { workspaceOwnerNpub } = {}) {
     updated_at: updatedAt,
     pg_backend: true,
     pg_record_type: 'scope',
+    pg_default_channel_id: trimText(scope?.default_channel_id),
+    archived_at: scope?.archived_at ? isoTimestamp(scope.archived_at) : null,
     pg_kind: trimText(scope?.kind),
     pg_workspace_id: trimText(scope?.workspace_id),
     ...(typeof scope?.can_manage === 'boolean' ? { pg_can_manage: scope.can_manage } : {}),
@@ -551,6 +553,7 @@ export function mapPgChannelToLocal(channel, { workspaceOwnerNpub } = {}) {
     updated_at: updatedAt,
     pg_backend: true,
     pg_record_type: 'channel',
+    archived_at: channel?.archived_at ? isoTimestamp(channel.archived_at) : null,
     pg_kind: trimText(channel?.kind),
     pg_workspace_id: trimText(channel?.workspace_id),
     ...(typeof channel?.can_read === 'boolean' ? { can_read: channel.can_read } : {}),
@@ -3183,7 +3186,7 @@ export async function hydrateTowerPgEventUpdates(store, events = [], deps = {}) 
 
     // Private preferences have their own actor-bound read family in TowerSyncService.
     if (entityType === 'private_preference' || entityType === 'notification_item') continue; // own actor-bound families
-    if (['scope_order','thread_pin','personal_pin'].includes(entityType) || (['scope', 'channel'].includes(entityType) && trimText(event?.operation) === 'archived')) {
+    if (trimText(event?.event_type) === 'channel.moved' || ['scope_order','thread_pin','personal_pin'].includes(entityType) || (['scope', 'channel'].includes(entityType) && trimText(event?.operation) === 'archived')) {
       // These hints reconcile through the canonical journal only; no list or
       // content hydration is needed for a private preference or tombstone.
       fallbackEvents += 1;

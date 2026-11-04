@@ -29,6 +29,8 @@ export const createTowerPgScopeChannel = (store, workspaceId, scopeId, body = {}
   return issueTypedApi(store, 'channel.create', [workspaceId, scopeId, commandBody, options], commandBody.client_record_id);
 };
 export const deleteTowerPgChannel = (store, ...args) => issueTypedApi(store, 'channel.delete', args, args[1]);
+export const previewTowerPgChannelMove = (store, ...args) => issueTypedApi(store, 'channel.move-preview', args, args[1], crypto.randomUUID());
+export const moveTowerPgChannel = (store, ...args) => issueTypedApi(store, 'channel.move', args, args[1], args[2]?.mutation_id);
 export const reorderTowerPgChannel = (store, ...args) => issueTypedApi(store, 'channel.reorder', args, args[1], crypto.randomUUID());
 export const createTowerPgChannelGrant = (store, ...args) => issueTypedApi(store, 'channel-grant.create', args, `${args[1]}:${args[2]?.principal_id || ''}`);
 export const updateTowerPgChannelGrant = (store, ...args) => issueTypedApi(store, 'channel-grant.update', args, `${args[1]}:${args[2]}:${args[3]}`);
