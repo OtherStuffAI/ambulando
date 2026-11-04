@@ -5692,6 +5692,13 @@
       "label": "Channel move cache validation",
       "notes": [],
       "noUserVisibleChanges": true
+    },
+    {
+      "buildNumber": 2714,
+      "label": "Consistent document reading and lists",
+      "notes": [
+        "Document reading and editing now share the same comfortable text size, with consistent loose-list spacing and nested hanging indents."
+      ]
     }
   ]
 }

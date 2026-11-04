@@ -11883,7 +11883,9 @@ html.wingman-iphone-webview .chat-channel-tab-scroll * {
 
 .doc-block-rendered {
   color: var(--text);
-  line-height: 1.65;
+  font-size: 1rem;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
 }
 
 .doc-block-rendered h1 {
@@ -11930,9 +11932,33 @@ html.wingman-iphone-webview .chat-channel-tab-scroll * {
   padding: 0;
 }
 
+/* Outside markers share the first text baseline, including loose li > p.
+   One explicit indent keeps nested lists and wrapped lines aligned in both modes. */
 .doc-block-rendered ul,
 .doc-block-rendered ol {
-  margin: 0 0 0.75rem 1.25rem;
+  margin: 0 0 0.75rem;
+  padding-inline-start: 1.5em;
+  list-style-position: outside;
+}
+
+.doc-block-rendered li {
+  font-size: inherit;
+  line-height: inherit;
+  color: inherit;
+  margin-block: 0.25rem;
+}
+
+.doc-block-rendered li > p:first-child {
+  margin-top: 0;
+}
+
+.doc-block-rendered li > p:last-child {
+  margin-bottom: 0;
+}
+
+.doc-block-rendered li > ul,
+.doc-block-rendered li > ol {
+  margin-block: 0.25rem 0;
 }
 
 .doc-block-rendered blockquote {
