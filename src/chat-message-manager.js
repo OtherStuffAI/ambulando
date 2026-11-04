@@ -60,7 +60,7 @@ import { UNSCOPED_TASK_BOARD_ID } from './task-board-state.js';
 import { defaultRecordSignature, sameListBySignature } from './utils/state-helpers.js';
 import { getRecordWriteFieldsForStore } from './preferred-write-group.js';
 import { isTowerPgBackendMode } from './backend-mode.js';
-import { DM_SCOPE_ID, buildDmChannelDescription, findExistingDmChannel } from './dm-scope.js';
+import { DM_SCOPE_ID, buildDmChannelDescription, findExistingDmChannel, isDmChannel, normalizeDmParticipants } from './dm-scope.js';
 import {
   createTowerPgMessageFromLocal,
   branchTowerPgThreadFromMessage,
@@ -245,34 +245,15 @@ function scheduleUiNextTick(callback) {
   queueMicrotask(callback);
 }
 
-function channelDescriptor(channel = {}) {
-  return [
-    channel.title,
-    channel.name,
-    channel.description,
-  ].map((value) => String(value || '').trim()).filter(Boolean).join(' ');
-}
-
-function resolveAgentDmTargetNpub(channel, botNpub, memberNpub) {
-  const explicit = String(botNpub || '').trim();
-  if (explicit) return explicit;
-  const senderNpub = String(memberNpub || '').trim();
-  const descriptor = channelDescriptor(channel);
-  const candidates = descriptor.match(/\bnpub1[023456789acdefghjklmnpqrstuvwxyz]+\b/gi) || [];
-  return candidates.find((npub) => npub !== senderNpub) || '';
+function resolveAgentDmTargetNpub(channel, _botNpub, memberNpub) {
+  const viewer = String(memberNpub || '').trim();
+  const participants = normalizeDmParticipants(channel?.participant_npubs);
+  if (!isDmChannel(channel) || participants.length !== 2 || !participants.includes(viewer)) return '';
+  return participants.find(npub => npub !== viewer) || '';
 }
 
 function isAgentDmChannel(channel, targetNpub, memberNpub) {
-  const target = String(targetNpub || '').trim();
-  const senderNpub = String(memberNpub || '').trim();
-  if (!channel || !target || !senderNpub) return false;
-  const channelType = String(channel.channel_type || channel.kind || '').trim();
-  const participants = Array.isArray(channel.participant_npubs)
-    ? channel.participant_npubs.map((npub) => String(npub || '').trim())
-    : [];
-  if (participants.includes(target) && participants.includes(senderNpub)) return true;
-  const descriptor = channelDescriptor(channel);
-  return descriptor.includes(target) && (channelType === 'dm' || /^DM:/i.test(descriptor));
+  return Boolean(targetNpub) && resolveAgentDmTargetNpub(channel, null, memberNpub) === targetNpub;
 }
 
 async function ensureTowerPgAgentDmAccess(store, channel) {
@@ -283,7 +264,11 @@ async function ensureTowerPgAgentDmAccess(store, channel) {
     return false;
   }
   try {
-    await store.ensureTowerPgDmChannel(targetNpub);
+    const repaired = await store.ensureTowerPgDmChannel(targetNpub);
+    if (repaired?.record_id !== channel.record_id) {
+      store.error = 'DM access resolved to a different channel. Refresh and open the exact conversation before retrying.';
+      return false;
+    }
     return true;
   } catch (error) {
     store.error = error?.message || 'Failed to prepare agent DM';

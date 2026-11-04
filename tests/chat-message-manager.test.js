@@ -2662,12 +2662,12 @@ describe('sendMessage', () => {
     }
   });
 
-  it('repairs stale agent DM access and retries once with the same client request id', async () => {
+  it.each([[true, true], [false, true], [true, false]])('repairs only authoritative exact DM access, ignoring stale bot/title (participants=%s, same channel=%s)', async (authoritative, sameChannel) => {
     const workspaceDbKey = 'chat-message-manager-send-agent-dm-title-pg';
     openWorkspaceDb(workspaceDbKey);
     await clearRuntimeData();
     isTowerPgBackendMode.mockReturnValue(true);
-    const ensureTowerPgDmChannel = vi.fn().mockResolvedValue({ record_id: 'dm-agent' });
+    const ensureTowerPgDmChannel = vi.fn().mockResolvedValue({ record_id: sameChannel ? 'dm-agent' : 'different-dm' });
     const permissionError = Object.assign(new Error('DM grant is stale'), {
       status: 403,
       code: 'permission_denied',
@@ -2692,6 +2692,7 @@ describe('sendMessage', () => {
           record_id: 'dm-agent',
           owner_npub: 'npub1owner',
           title: 'DM: npub1bot',
+          participant_npubs: authoritative ? ['npub1viewer', 'npub1current'] : [],
           channel_type: 'dm',
         }],
         messageInput: 'hello bot',
@@ -2700,7 +2701,16 @@ describe('sendMessage', () => {
 
       await fn();
 
-      expect(ensureTowerPgDmChannel).toHaveBeenCalledWith('npub1bot');
+      if (!authoritative) {
+        expect(ensureTowerPgDmChannel).not.toHaveBeenCalled();
+        expect(createTowerPgMessageFromLocal).toHaveBeenCalledTimes(1);
+        return;
+      }
+      expect(ensureTowerPgDmChannel).toHaveBeenCalledWith('npub1current');
+      if (!sameChannel) {
+        expect(createTowerPgMessageFromLocal).toHaveBeenCalledTimes(1);
+        return;
+      }
       expect(createTowerPgMessageFromLocal).toHaveBeenCalledTimes(2);
       const firstAttempt = createTowerPgMessageFromLocal.mock.calls[0][1];
       const retry = createTowerPgMessageFromLocal.mock.calls[1][1];

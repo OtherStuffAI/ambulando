@@ -1247,7 +1247,7 @@ describe('channels-manager pure utilities', () => {
   });
 
   it('offers the signed-in user for Note to self even if the directory page omits them', () => {
-    const store = applyChannelMixin({ session: { npub: 'me' }, newChannelDmNpub: '', pgWorkspaceMembers: [{ npub: 'other' }], getSenderName: npub => npub === 'me' ? 'Operator' : 'Other' });
+    const store = applyChannelMixin({ session: { npub: 'me' }, newChannelDmNpub: '', pgWorkspaceMembers: [{ npub: 'other' }], getExactSenderName: npub => npub === 'me' ? 'Operator' : 'Other' });
     expect(store.newChannelDmSuggestions[0]).toMatchObject({ npub: 'me', label: 'Operator (Note to self)' });
   });
 
@@ -1400,7 +1400,7 @@ describe('channels-manager pure utilities', () => {
         record_id: 'dm-existing',
         title: 'DM: Alice',
         channel_type: 'dm',
-        participant_npubs: [],
+        participant_npubs: ['npub1bob', 'npub1alice'],
         description: buildDmChannelDescription(['npub1bob', 'npub1alice']),
         scope_id: DM_SCOPE_ID,
       }],
@@ -1452,6 +1452,34 @@ describe('channels-manager pure utilities', () => {
       access_level: 'manage',
     }, { baseUrl: 'https://tower.example', appNpub: 'flightdeck-app' });
     expect(store.selectChannel).toHaveBeenCalledWith('dm-existing', { syncRoute: false });
+  });
+
+  it('creates an exact-current-key DM beside an old cached channel and rejects mismatched responses', async () => {
+    isTowerPgBackendMode.mockReturnValue(true);
+    const makeStore = () => createPgGrantStore({
+      channels: [{ record_id: 'old', kind: 'dm', participant_npubs: ['npub1manager', 'old'], description: 'dm:npub1bot|npub1manager' }],
+      scopes: [{ record_id: 'scope-dms', title: 'DMs', pg_kind: 'dm', record_state: 'active' }],
+      selectedBoardId: 'scope-dms', selectedBoardScope: { record_id: 'scope-dms', pg_kind: 'dm' }, newChannelDmNpub: 'npub1bot',
+      selectChannel: vi.fn(), closeNewChannelModal: vi.fn(),
+    });
+    createTowerPgScopeChannel.mockResolvedValueOnce({ channel: {
+      id: 'new', workspace_id: 'workspace-1', scope_id: 'scope-dms', kind: 'dm',
+      participant_npubs: ['npub1manager', 'npub1bot'],
+    } });
+    const store = makeStore();
+    await store.createDmChannel();
+    expect(createTowerPgScopeChannel).toHaveBeenCalledWith('workspace-1', 'scope-dms', expect.objectContaining({
+      participant_npubs: ['npub1manager', 'npub1bot'],
+    }), expect.anything());
+    expect(store.selectChannel).toHaveBeenCalledWith('new', { syncRoute: false });
+    expect(store.channels.find(c => c.record_id === 'old').participant_npubs).toEqual(['npub1manager', 'old']);
+    createTowerPgScopeChannel.mockResolvedValueOnce({ channel: {
+      id: 'wrong', workspace_id: 'workspace-1', scope_id: 'scope-dms', kind: 'dm', participant_npubs: ['npub1manager', 'old'],
+    } });
+    const rejected = makeStore();
+    await rejected.createDmChannel();
+    expect(rejected.selectChannel).not.toHaveBeenCalled();
+    expect(rejected.error).toContain('missing or different participants');
   });
 
   it('describes Tower PG permission denials in access-level language', () => {

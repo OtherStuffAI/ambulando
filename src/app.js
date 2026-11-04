@@ -5296,28 +5296,21 @@ export function initApp() {
       return resolveChannelLabel(channel, {
         sessionNpub: this.session?.npub || null,
         getParticipants: (candidate) => this.getChannelParticipants(candidate),
-        getSenderName: (npub) => this.getSenderName(npub),
+        getSenderName: (npub) => this.getExactSenderName(npub),
       });
     },
 
     getChannelParticipants(channel) {
       if (!channel) return [];
-      const direct = Array.isArray(channel.participant_npubs)
-        ? channel.participant_npubs.filter(Boolean)
-        : [];
+      if (isDmChannel(channel)) return resolveChannelParticipants(channel);
+      const direct = Array.isArray(channel.participant_npubs) ? channel.participant_npubs.filter(Boolean) : [];
       if (direct.length > 1) return [...new Set(direct)];
-
       const derived = new Set(direct);
       for (const groupId of channel.group_ids ?? []) {
-        const group = this.groups.find((candidate) =>
-          candidate.group_npub === groupId || candidate.group_id === groupId
-        );
-        for (const member of group?.member_npubs ?? []) {
-          derived.add(member);
-        }
+        const group = this.groups.find(candidate => candidate.group_npub === groupId || candidate.group_id === groupId);
+        for (const member of group?.member_npubs ?? []) derived.add(member);
       }
-      const resolved = resolveChannelParticipants(channel, () => [...derived]);
-      return resolved.length > 0 ? resolved : [...derived];
+      return [...derived];
     },
 
     // rememberPeople, resolveChatProfile — in peopleProfilesManagerMixin

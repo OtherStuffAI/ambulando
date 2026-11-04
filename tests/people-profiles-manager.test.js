@@ -582,3 +582,14 @@ describe('computed getters', () => {
     expect(store.getFlowApproverSubtitle('group:g1')).toBe('1 members');
   });
 });
+
+it('DM name lookup cannot alias a different key or use its cached profile', () => {
+  const store = createStore({
+    _wsKeyDisplayMap: { old: 'current' },
+    pgWorkspaceMembers: [{ npub: 'current', display_name: 'Current agent' }],
+    chatProfiles: { current: { name: 'Current profile' } },
+    addressBookPeople: [{ npub: 'old', label: 'Old label' }],
+  });
+  expect(store.getExactSenderName('old')).toBe('Old label');
+  expect(store.getExactSenderName('current')).toBe('Current agent');
+});

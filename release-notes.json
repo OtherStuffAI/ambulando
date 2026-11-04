@@ -5623,6 +5623,20 @@
       "notes": [
         "Mark task notifications Done using the task’s existing completion action. Archive and Dismiss keep their separate notification behavior."
       ]
+    },
+    {
+      "buildNumber": 2702,
+      "label": "Exact-identity direct messages",
+      "notes": [
+        "Direct messages reuse only exact recorded participant keys. Missing identities are shown explicitly, and recipient labels expose the npub without historical-key fallback."
+      ]
+    },
+    {
+      "buildNumber": 2705,
+      "label": "Exact DM recipients and safe retries",
+      "notes": [
+        "DM labels and recipient choices show their recorded identity. Conversations and permission retries use only exact participant npubs, without historical names, descriptions or bot-key fallback."
+      ]
     }
   ]
 }

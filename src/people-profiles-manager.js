@@ -391,6 +391,14 @@ export const peopleProfilesManagerMixin = {
     return this.chatProfiles[npub] || (npub === rawNpub ? null : this.chatProfiles[rawNpub]);
   },
 
+  // DM recipients are exact identities; delegated signing-key display aliases do not apply.
+  getExactSenderName(rawNpub) {
+    const npub = canonicalProfileNpub(rawNpub);
+    const member = this.pgWorkspaceMembers?.find(member => canonicalProfileNpub(member.npub) === npub);
+    return usableProfileText(member?.display_name, this.chatProfiles?.[npub]?.name, this.getCachedPerson(npub)?.label)
+      || this.getShortNpub(npub);
+  },
+
   getSenderName(rawNpub) {
     if (!rawNpub) return 'Unknown';
     const npub = this.resolveDisplayNpub(rawNpub);

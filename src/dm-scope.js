@@ -92,11 +92,9 @@ export function findExistingDmChannel(channels = [], participants = []) {
   if (!targetKey) return null;
   return (Array.isArray(channels) ? channels : [])
     .find((channel) =>
-      channel?.record_state !== 'deleted'
+      !['deleted', 'archived'].includes(channel?.record_state)
+      && !channel?.archived_at && !channel?.deleted_at
       && isDmChannel(channel)
-      && (
-        dmParticipantKey(channel.participant_npubs) === targetKey
-        || parseDmChannelDescription(channel.description) === targetKey
-      ),
+      && dmParticipantKey(channel.participant_npubs) === targetKey,
     ) || null;
 }

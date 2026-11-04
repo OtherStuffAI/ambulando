@@ -33,7 +33,7 @@ describe('channel labels', () => {
       },
     );
 
-    expect(label).toBe('Alice');
+    expect(label).toBe('Alice (npub_a)');
   });
 
   it('uses the other participant name for PG DM channels even when the stored title has an npub', () => {
@@ -52,7 +52,7 @@ describe('channel labels', () => {
       },
     );
 
-    expect(label).toBe('Alice Example');
+    expect(label).toBe(`Alice Example (${otherNpub.slice(0, 10)}...${otherNpub.slice(-6)})`);
   });
 
   it('treats channels in the DM scope as DMs', () => {
@@ -70,7 +70,7 @@ describe('channel labels', () => {
       },
     );
 
-    expect(label).toBe('Bob');
+    expect(label).toBe('Bob (npub_bob)');
   });
 
   it('can derive DM participants from the channel description', () => {
@@ -88,7 +88,7 @@ describe('channel labels', () => {
       },
     );
 
-    expect(label).toBe('Charlie');
+    expect(label).toBe('Direct message · identity unavailable');
   });
 
   it('resolves raw npub DM titles through the profile cache fallback', () => {
@@ -106,7 +106,7 @@ describe('channel labels', () => {
       },
     );
 
-    expect(label).toBe('Dave');
+    expect(label).toBe('Direct message · identity unavailable');
   });
 
   it('resolves bare raw npub DM titles through the profile cache fallback', () => {
@@ -126,8 +126,8 @@ describe('channel labels', () => {
       },
     );
 
-    expect(label).toBe('Frank');
-    expect(resolveChannelParticipants(channel)).toEqual([otherNpub]);
+    expect(label).toBe('Direct message · identity unavailable');
+    expect(resolveChannelParticipants(channel)).toEqual([]);
   });
 
   it('compacts raw npub DM labels when no profile name is cached', () => {
