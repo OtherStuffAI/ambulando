@@ -71,14 +71,12 @@ export class ThreadLiveActivityController {
     onChange = () => {},
     setTimer = setTimeout,
     clearTimer = clearTimeout,
-    now = () => Date.now(),
   } = {}) {
     this.createClient = createClient;
     this.graceMs = graceMs;
     this.onChange = onChange;
     this.setTimer = setTimer;
     this.clearTimer = clearTimer;
-    this.now = now;
     this.abort = null;
     this.client = null;
     this.context = null;
@@ -160,7 +158,7 @@ export class ThreadLiveActivityController {
     this.cursor = text(next.cursor || this.cursor || '0');
     if (this.graceTimer) this.clearTimer(this.graceTimer);
     this.graceTimer = null;
-    this.setOverlay({ ...next, reconnecting: false, received_at_ms: this.now() });
+    this.setOverlay({ ...next, reconnecting: false });
   }
 
   setOverlay(value) {
@@ -169,15 +167,8 @@ export class ThreadLiveActivityController {
   }
 }
 
-// The overlay carries no lease. Without a Tower row for the same turn it may
-// assert work only for one lease interval after its last received event.
-export const LIVE_THREAD_OVERLAY_LEASE_MS = 180_000;
-
 export function liveOverlayAsAgentActivity(overlay, context) {
   if (!overlay) return null;
-  const receivedMs = Number(overlay.received_at_ms);
-  const leaseExpiresAt = Number.isFinite(receivedMs) && receivedMs > 0
-    ? new Date(receivedMs + LIVE_THREAD_OVERLAY_LEASE_MS).toISOString() : '';
   return {
     record_id: `live:${overlay.routing_key}:${overlay.turn_id}`,
     activity_id: `live:${overlay.routing_key}:${overlay.turn_id}`,
@@ -194,8 +185,6 @@ export function liveOverlayAsAgentActivity(overlay, context) {
     label: overlay.reconnecting ? 'Reconnecting…' : overlay.activity_status,
     updated_at: overlay.timestamp,
     created_at: overlay.started_at || overlay.timestamp,
-    lease_expires_at: leaseExpiresAt,
-    expires_at: leaseExpiresAt,
     live_overlay: true,
     reconnecting: overlay.reconnecting,
     commentary_history: overlay.commentary
@@ -226,12 +215,14 @@ export function terminalLiveActivityHasDurableFinal(overlay, messages = []) {
   );
 }
 
-// Tower is the liveness authority. When Tower has a row for the overlay's
-// turn, the overlay only contributes its newer public commentary; the Tower
-// record keeps its identity, created time, lease and retained history.
+// Tower is the liveness authority. The overlay carries no lease, so it never
+// asserts work on its own: without a Tower row for its turn it contributes
+// nothing. With one, it only adds newer public commentary or a terminal state;
+// the Tower record keeps its identity, created time, lease and history, so an
+// expired Tower lease cannot be shadowed.
 export function boundLiveOverlayByTower(overlayRow, towerRow) {
-  if (!overlayRow) return towerRow || null;
-  if (!towerRow) return overlayRow;
+  if (!towerRow) return null;
+  if (!overlayRow) return towerRow;
   const terminalTower = TERMINAL.has(text(towerRow.state).toLowerCase());
   if (terminalTower) return towerRow;
   const overlayTerminal = TERMINAL.has(text(overlayRow.state).toLowerCase());

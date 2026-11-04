@@ -81,7 +81,6 @@ export const threadLiveActivityManagerMixin = {
     const key = JSON.stringify([connection.id, ...Object.values(context)]);
     if (this.liveThreadActivityContext?.key === key) return;
     this._threadLiveActivityController ??= new ThreadLiveActivityController({
-      now: () => this.getAgentActivityNowMs?.() ?? Date.now(),
       onChange: (overlay) => {
         this.liveThreadActivityOverlay = overlay;
         this.responseActivityTick = Number(this.responseActivityTick || 0) + 1;
@@ -164,6 +163,7 @@ export const threadLiveActivityManagerMixin = {
       && text(row.thread_id) === text(overlay.thread_id)
       && text(row.turn_id) === text(overlay.turn_id);
     const tower = towerActivities.find(sameTurn);
+    if (!tower) return towerActivities;
     const live = boundLiveOverlayByTower({ ...overlay, backend_url: overlay.backend_url || this.backendUrl || '' }, tower);
     return [...towerActivities.filter((row) => !sameTurn(row)), live]
       .sort((left, right) => String(left.created_at || '').localeCompare(String(right.created_at || '')));

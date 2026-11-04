@@ -2,12 +2,12 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   boundLiveOverlayByTower,
   LIVE_THREAD_ACTIVITY_CAPABILITY,
-  LIVE_THREAD_OVERLAY_LEASE_MS,
   liveOverlayAsAgentActivity,
   reconcileLiveThreadActivity,
   ThreadLiveActivityController,
   terminalLiveActivityHasDurableFinal,
 } from '../src/thread-live-activity.js';
+import { getAgentActivityLeaseState } from '../src/agent-activity.js';
 
 const event = (patch = {}) => ({
   routing_key: 'route-1',
@@ -75,20 +75,20 @@ describe('thread live activity reconciliation', () => {
     expect(LIVE_THREAD_ACTIVITY_CAPABILITY).toBe('flightdeck.live-thread-activity.v1');
   });
 
-  it('keeps the turn start immutable and bounds an overlay-only row by one lease interval', () => {
+  it('keeps the turn start immutable and never asserts work without a Tower row', () => {
     const first = reconcileLiveThreadActivity(null, event());
     const later = reconcileLiveThreadActivity(first, event({ sequence: 2, cursor: '2', timestamp: '2026-09-24T00:05:00Z' }));
     expect(later.started_at).toBe('2026-09-24T00:00:00Z');
-    const receivedAt = Date.parse('2026-09-24T00:05:00Z');
-    const row = liveOverlayAsAgentActivity({ ...later, received_at_ms: receivedAt }, { workspaceId: 'w', channelId: 'c', threadId: 't', agentNpub: 'a' });
+    const row = liveOverlayAsAgentActivity(later, { workspaceId: 'w', channelId: 'c', threadId: 't', agentNpub: 'a' });
     expect(row.created_at).toBe('2026-09-24T00:00:00Z');
-    expect(Date.parse(row.lease_expires_at)).toBe(receivedAt + LIVE_THREAD_OVERLAY_LEASE_MS);
+    expect(row.lease_expires_at).toBeUndefined();
+    expect(boundLiveOverlayByTower(row, null)).toBeNull();
     expect(liveOverlayAsAgentActivity({ ...later, lifecycle: 'stopped' }, {}).state).toBe('cancelled');
   });
 
   it('lets the Tower row of the same turn own identity, lease and history', () => {
-    const overlay = liveOverlayAsAgentActivity({ ...event({ commentary: 'Running tests', timestamp: '2026-09-24T00:02:00Z' }),
-      received_at_ms: Date.parse('2026-09-24T00:02:00Z') }, { workspaceId: 'w', channelId: 'c', threadId: 't', agentNpub: 'a' });
+    const overlay = liveOverlayAsAgentActivity(event({ commentary: 'Running tests', timestamp: '2026-09-24T00:02:00Z' }),
+      { workspaceId: 'w', channelId: 'c', threadId: 't', agentNpub: 'a' });
     const tower = { record_id: 'row-1', activity_id: 'activity-1', turn_id: 'turn-1', state: 'working', sequence: 4,
       body: 'Reading', created_at: '2026-09-24T00:00:00Z', updated_at: '2026-09-24T00:01:00Z',
       lease_expires_at: '2026-09-24T00:01:30Z', commentary_history: [{ activity_id: 'activity-1', turn_id: 'turn-1', sequence: 4, body: 'Reading' }] };
@@ -98,5 +98,9 @@ describe('thread live activity reconciliation', () => {
     expect(bounded.commentary_history.map((item) => item.body)).toEqual(['Reading', 'Running tests']);
     expect(boundLiveOverlayByTower(overlay, { ...tower, state: 'completed' })).toEqual({ ...tower, state: 'completed' });
     expect(boundLiveOverlayByTower(overlay, { ...tower, updated_at: '2026-09-24T00:03:00Z' }).body).toBe('Reading');
+    // Fresh overlay commentary cannot shadow an expired Tower lease.
+    const expired = boundLiveOverlayByTower(overlay, { ...tower, lease_expires_at: '2000-01-01T00:00:00Z' });
+    expect(expired.lease_expires_at).toBe('2000-01-01T00:00:00Z');
+    expect(getAgentActivityLeaseState(expired, Date.now())).toBe('expired');
   });
 });

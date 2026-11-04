@@ -5708,6 +5708,14 @@
         "Losing your connection now shows Working · reconnecting… while the agent's lease is still valid, separately from an agent that has stopped.",
         "Earlier public commentary stays readable as history, and long quiet turns show Still working · no update for N min."
       ]
+    },
+    {
+      "buildNumber": 2716,
+      "label": "Live activity after sleep and direct connections",
+      "notes": [
+        "Agent working status is re-checked when you return to the app, so a turn that stopped while your device slept no longer appears current.",
+        "A directly connected Autopilot now only adds commentary to Tower's status and never shows an agent as working on its own."
+      ]
     }
   ]
 }

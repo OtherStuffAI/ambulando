@@ -192,8 +192,8 @@ describe('lease expiry and order-independent merge', () => {
         lease_expires_at: '2026-11-04T02:17:00.000Z', expires_at: '2026-11-04T02:17:00.000Z' }),
       leased({ sequence: 3, body: 'Running tests', lease_epoch: 1, lease_sequence: 2,
         lease_expires_at: '2026-11-04T02:15:00.000Z', expires_at: '2026-11-04T02:15:00.000Z' }),
-      // An expiry for an earlier deadline cannot override the later renewal.
-      leased({ sequence: 2, lease_epoch: 1, lease_sequence: 1, expired_at: '2026-11-04T02:14:05.000Z' }),
+      // An expiry from an earlier epoch is cleared by the resumed epoch.
+      leased({ sequence: 2, lease_epoch: 0, lease_sequence: 9, expired_at: '2026-11-04T02:10:05.000Z' }),
     ];
     const permutations = (items) => items.length <= 1 ? [items]
       : items.flatMap((item, index) => permutations(items.filter((_, other) => other !== index)).map((rest) => [item, ...rest]));
@@ -207,19 +207,21 @@ describe('lease expiry and order-independent merge', () => {
     for (const result of withTerminal) expect(result.state).toBe('completed');
   });
 
-  it('keeps an expiry that follows the winning renewal and requires a new epoch to resume', () => {
+  it('keeps an epoch expiry against later same-epoch events and requires a new epoch to resume', () => {
     const renewed = leased({ lease_epoch: 1, lease_sequence: 4 });
     const expired = mergeAgentActivityRecord(renewed, leased({ lease_epoch: 1, lease_sequence: 4,
       expired_at: '2026-11-04T02:14:10.000Z' }));
     expect(getAgentActivityLeaseState(expired, deadline - 1)).toBe('expired');
     expect(mergeAgentActivityRecord(expired, leased({ lease_epoch: 1, lease_sequence: 3 }))).toBe(expired);
+    expect(mergeAgentActivityRecord(expired, leased({ lease_epoch: 1, lease_sequence: 5, sequence: 7 })).expired_at)
+      .toBe('2026-11-04T02:14:10.000Z');
     const resumed = mergeAgentActivityRecord(expired, leased({ lease_epoch: 2, lease_sequence: 0,
       lease_expires_at: '2026-11-04T02:20:00.000Z', expires_at: '2026-11-04T02:20:00.000Z' }));
     expect(resumed).toMatchObject({ expired_at: '', lease_epoch: 2 });
     expect(getAgentActivityLeaseState(resumed, deadline + 60_000)).toBe('live');
   });
 
-  it('calibrates lease time from a fresh server_time and ignores later wall-clock jumps', () => {
+  it('calibrates from a fresh server_time; a clock set back cannot extend a lease, sleep cannot freeze one', () => {
     resetAgentActivityServerTime();
     const tower = 'https://tower.example/';
     expect(agentActivityServerNow(tower, 123)).toBe(123);
@@ -229,12 +231,21 @@ describe('lease expiry and order-independent merge', () => {
     expect(Math.abs(skewed - (localNow + 5 * 60_000))).toBeLessThan(1_000);
     const realNow = Date.now;
     try {
-      Date.now = () => realNow() + 3_600_000;
+      // Wall clock set back an hour: monotonic elapsed still applies.
+      Date.now = () => realNow() - 3_600_000;
       expect(Math.abs(agentActivityServerNow(tower) - skewed)).toBeLessThan(1_000);
+      // Ten minutes of OS sleep with a frozen monotonic clock: wall elapsed applies.
+      Date.now = () => realNow() + 10 * 60_000;
+      expect(agentActivityServerNow(tower) - skewed).toBeGreaterThan(10 * 60_000 - 1_000);
     } finally {
       Date.now = realNow;
       resetAgentActivityServerTime();
     }
     expect(recordAgentActivityServerTime(tower, 'not a time')).toBe(false);
+  });
+
+  it('treats lease_health as a hint: a stale hint with a valid future deadline stays live', () => {
+    expect(getAgentActivityLeaseState(leased({ lease_health: 'stale' }), deadline - 1)).toBe('live');
+    expect(getAgentActivityLeaseState(leased({ lease_health: 'live' }), deadline + AGENT_ACTIVITY_LEASE_GRACE_MS)).toBe('expired');
   });
 });

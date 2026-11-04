@@ -9,7 +9,6 @@ const AGENT_ACTIVITY_STOPPED_WINDOW_MS = 10 * 60_000;
 // Presentational only: a live turn without commentary for this long shows a
 // "no update" hint. It never ends or expires the turn.
 export const AGENT_ACTIVITY_QUIET_MS = 5 * 60_000;
-const EXPIRED_LEASE_HEALTH = new Set(['stale', 'expired']);
 
 function text(value) {
   return String(value ?? '').trim();
@@ -133,11 +132,11 @@ export function agentActivityClearAtMs(activity = {}) {
 
 // terminal | live | expired. History never implies liveness: a row without a
 // usable deadline, a server-confirmed expiry, or a passed deadline+grace is
-// expired. nowMs is server-calibrated time.
+// expired. lease_health is a serialization-time hint and is not consulted.
+// nowMs is server-calibrated time.
 export function getAgentActivityLeaseState(activity = {}, nowMs = Date.now()) {
   if (isTerminalAgentActivity(activity)) return 'terminal';
   if (text(activity.expired_at)) return 'expired';
-  if (EXPIRED_LEASE_HEALTH.has(text(activity.lease_health).toLowerCase())) return 'expired';
   const clearAt = agentActivityClearAtMs(activity);
   if (!Number.isFinite(clearAt) || nowMs >= clearAt) return 'expired';
   return 'live';
@@ -208,7 +207,7 @@ const LEASE_FIELDS = ['lease_expires_at', 'expires_at', 'lease_epoch', 'lease_se
 // Order-independent merge for one lifecycle: state and commentary follow the
 // canonical sequence; the lease follows (lease_epoch, lease_sequence), which v1
 // rows lack, so their lease follows sequence; terminal always wins; an expiry
-// survives only events that do not prove a later deadline in its epoch.
+// set for an epoch survives that epoch's events and a higher epoch clears it.
 export function mergeAgentActivityRecord(current, incoming) {
   if (!incoming?.record_id) return current || null;
   if (!current?.record_id) return incoming;
@@ -220,18 +219,16 @@ export function mergeAgentActivityRecord(current, incoming) {
     : (Number(incoming.sequence) > Number(current.sequence) ? incoming : current);
   // A terminal lifecycle's lease is irrelevant; later lease events cannot touch it.
   const lease = isTerminalAgentActivity(base) ? base : (leaseOrder(incoming, current) > 0 ? incoming : current);
-  const leaseDeadline = agentActivityLeaseDeadlineMs(lease);
   const expiry = [current, incoming]
     .filter((row) => text(row.expired_at) && (row.lease_epoch ?? 1) === (lease.lease_epoch ?? 1))
     .map((row) => text(row.expired_at))
-    .find((expiredAt) => !Number.isFinite(leaseDeadline) || Date.parse(expiredAt) >= leaseDeadline) || '';
+    .sort()[0] || '';
   if (base === current && lease === current && expiry === text(current.expired_at)) return current;
   const merged = { ...current, ...base };
   for (const field of LEASE_FIELDS) {
     if (Object.hasOwn(lease, field)) merged[field] = lease[field];
   }
   merged.expired_at = expiry;
-  if (expiry) merged.lease_health = 'expired';
   merged.created_at = current.created_at || incoming.created_at || '';
   return merged;
 }

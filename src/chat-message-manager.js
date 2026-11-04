@@ -1260,16 +1260,19 @@ export const chatMessageManagerMixin = {
     return this.getVisibleAgentActivities().some((activity) => !activity.history_only
       && !isTerminalAgentActivity(activity) && this.isCurrentAgentActivityWorking(activity));
   },
-  // Background tabs throttle intervals. Re-evaluate leases before the first
-  // visible frame so a turn that expired meanwhile never flashes as working.
+  // Background tabs throttle intervals and sleep can pause clocks. Re-evaluate
+  // leases before the first visible frame so a turn that expired meanwhile never
+  // flashes as working, then recalibrate from a fresh Tower snapshot.
   installAgentActivityForegroundRefresh() {
     if (this._agentActivityForegroundRefresh || typeof document === 'undefined') return;
     this._agentActivityForegroundRefresh = () => {
       if (document.visibilityState !== 'visible') return;
       this.responseActivityTick = Number(this.responseActivityTick || 0) + 1;
       this.updateResponseActivityTimer();
+      if (this.isTowerPgMode) void this.recoverVisibleAgentActivities?.()?.catch?.(() => {});
     };
     document.addEventListener('visibilitychange', this._agentActivityForegroundRefresh);
+    if (typeof window !== 'undefined') window.addEventListener('pageshow', this._agentActivityForegroundRefresh);
   },
   getAgentActivityNowMs() {
     void this.responseActivityTick;
