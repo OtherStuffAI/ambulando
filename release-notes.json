@@ -5716,6 +5716,12 @@
         "Agent working status is re-checked when you return to the app, so a turn that stopped while your device slept no longer appears current.",
         "A directly connected Autopilot now only adds commentary to Tower's status and never shows an agent as working on its own."
       ]
+    },
+    {
+      "buildNumber": 2717,
+      "label": "Managed activation of live activity release",
+      "notes": [],
+      "noUserVisibleChanges": true
     }
   ]
 }
