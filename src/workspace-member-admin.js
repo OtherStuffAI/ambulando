@@ -1,6 +1,7 @@
 import { getTowerPgWorkspaceMemberAccess, previewTowerPgWorkspaceMemberRemoval } from './api.js';
 import { removeTowerPgWorkspaceMember, setTowerPgWorkspaceAgentManager } from './tower-command-intents.js';
 import { resolveTowerPgWorkspaceContext } from './pg-workspace-context.js';
+import { createWorkspaceDb, getCurrentWorkspaceDbKey, hasWorkspaceDb, materializeWorkspaceMemberRemoval } from './db.js';
 
 function contextKey(context) {
   return JSON.stringify([context.workspaceId, context.baseUrl, context.appNpub, context.generation, context.sessionNpub]);
@@ -77,6 +78,10 @@ export const workspaceMemberAdminMixin = {
       if (contextKey(resolveTowerPgWorkspaceContext(this)) === key) this.pgMemberAdminError = error?.message || 'Unable to inspect member access';
     } finally { this.pgMemberAdminBusy = false; }
   },
+  async openPgMemberRemoval(member) {
+    await this.openPgMemberAdmin(member);
+    if (this.pgMemberAdmin?.actor?.npub === member.npub) await this.previewPgMemberRemoval();
+  },
   async previewPgMemberRemoval() {
     if (this.pgMemberAdminBusy || !this.pgMemberAdminVisible || !this.pgMemberAdmin?.access?.can_administer) return;
     const selected = this.pgMemberAdmin;
@@ -95,25 +100,41 @@ export const workspaceMemberAdminMixin = {
   async confirmPgMemberRemoval() {
     const selected = this.pgMemberAdmin;
     const preview = selected?.preview;
-    if (this.pgMemberAdminBusy || !this.pgMemberAdminVisible || !preview?.confirmation_token || preview.blocked_reason || this.pgMemberAdminConfirmNpub !== selected.actor.npub) return;
+    if (this.pgMemberAdminBusy || !this.pgMemberAdminVisible || !selected?.access?.can_administer || !preview?.confirmation_token || preview.blocked_reason || this.pgMemberAdminConfirmNpub !== selected.actor.npub) return;
     const context = resolveTowerPgWorkspaceContext(this);
+    // A dedicated handle survives navigation closing the active workspace DB
+    // while Tower is processing the command. Never select a new workspace here.
+    const db = hasWorkspaceDb() ? createWorkspaceDb(getCurrentWorkspaceDbKey()) : null;
     this.pgMemberAdminBusy = true;
     this.pgMemberAdminError = '';
+    let accepted = false;
     try {
-      await removeTowerPgWorkspaceMember(this, context.workspaceId, selected.actor.id, { confirmation_token: preview.confirmation_token, confirm_npub: selected.actor.npub }, context);
-      if (!this.pgMemberAdminVisible) return;
-      // Refresh directory/group materialization; historical authors and records remain intact.
-      await Promise.all([this.refreshTowerPgWorkspaceMembers?.({ reason: 'mutation', force: true }), this.refreshGroups?.({ force: true, minIntervalMs: 0 })]);
+      const result = await removeTowerPgWorkspaceMember(this, context.workspaceId, selected.actor.id, { confirmation_token: preview.confirmation_token, confirm_npub: selected.actor.npub }, context);
+      accepted = true;
+      if (this.pgMemberAdminVisible) {
+        this.pgWorkspaceMembers = (this.pgWorkspaceMembers || []).filter(member => member.npub !== selected.actor.npub && (member.actor_id || member.id) !== selected.actor.id);
+        if (this.newChannelDmNpub === selected.actor.npub) this.newChannelDmNpub = '';
+        this.refreshActiveMentionResults?.();
+      }
+      if (!result?.localMemberRemovalMaterialized) await materializeWorkspaceMemberRemoval(db, context.workspaceId, selected.actor);
       if (!this.pgMemberAdminVisible) return;
       this.pgMemberAdmin = null;
       this.pgWorkspaceMemberAddNotice = 'Workspace access removed. Historical messages, authorship and audit history are preserved.';
+      // The acknowledged removal is already durable locally. Directory failure
+      // is a refresh failure, never a failed removal or permission to retry it.
+      const refreshed = await Promise.allSettled([this.refreshTowerPgWorkspaceMembers?.({ reason: 'mutation', force: true }), this.refreshGroups?.({ reason: 'mutation', force: true, minIntervalMs: 0 })]);
+      if (contextKey(resolveTowerPgWorkspaceContext(this)) === selected.contextKey && refreshed.some(result => result.status === 'rejected')) {
+        this.pgWorkspaceMemberAddNotice += ' Some access details could not refresh; reconnect to update them.';
+      }
     } catch (error) {
       if (this.pgMemberAdminVisible) {
-        this.pgMemberAdminError = error?.message || 'Removal failed. Preview again before retrying.';
+        this.pgMemberAdminError = accepted || error?.memberRemovalAccepted
+          ? 'Tower removed this membership, but this device could not save the updated directory. Reconnect and refresh before selecting recipients. Do not repeat removal.'
+          : error?.message || 'Removal failed. Preview again before retrying.';
         this.pgMemberAdmin = { ...selected, preview: null };
         this.pgMemberAdminConfirmNpub = '';
       }
-    } finally { this.pgMemberAdminBusy = false; }
+    } finally { db?.close(); this.pgMemberAdminBusy = false; }
   },
   async setPgMemberAgentManager(enabled) {
     const selected = this.pgMemberAdmin;

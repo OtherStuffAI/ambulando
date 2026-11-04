@@ -50,7 +50,8 @@ for (const width of [1280, 390]) {
     await assign.click();
     await expect(panel.getByRole('button', { name: 'Revoke agent-manager role' })).toBeVisible();
     expect(writes).toEqual([{ action: 'agent-manager', body: { enabled: true, confirm_npub: actor.npub } }]);
-    await panel.getByRole('button', { name: 'Preview removal' }).click();
+    await panel.getByRole('button', { name: 'Close', exact: true }).click();
+    await row.getByRole('button', { name: 'Remove Canonical Orion from workspace', exact: true }).click();
     const remove = panel.getByRole('button', { name: 'Confirm remove from workspace' });
     await expect(panel).toContainText('Historical messages and authorship are preserved.');
     await expect(panel).toContainText('Agents');
@@ -61,9 +62,28 @@ for (const width of [1280, 390]) {
     await technicalDetails.locator('summary').click();
     await expect(technicalDetails.getByText('channel-a', { exact: true })).toBeVisible();
     await expect(remove).toBeDisabled();
+    await page.evaluate(() => {
+      const s = Alpine.store('chat');
+      // The accepted command must update selection even if reconciliation is
+      // offline. Keep historical sources in place to catch accidental fallback.
+      s.refreshTowerPgWorkspaceMembers = async () => { throw new Error('synthetic offline'); };
+      s.mentionQuery = 'agent:'; s.mentionActive = true;
+      s.newChannelDmNpub = '';
+      s.refreshActiveMentionResults();
+    });
     await panel.getByLabel('Type this member’s full npub to confirm removal').fill(actor.npub);
     await remove.click();
     await expect(panel).toBeHidden();
+    await expect(row).toHaveCount(0);
+    expect(await page.evaluate(npub => {
+      const s = Alpine.store('chat');
+      return {
+        member: s.pgWorkspaceMembers.some(row => row.npub === npub),
+        dm: s.newChannelDmSuggestions.some(row => row.npub === npub),
+        mention: s.getMentionPeople().some(row => row.npub === npub || row.id === npub),
+        notice: s.pgWorkspaceMemberAddNotice,
+      };
+    }, actor.npub)).toEqual({ member: false, dm: false, mention: false, notice: expect.stringContaining('could not refresh') });
     expect(writes[1]).toEqual({ action: 'remove', body: { confirmation_token: 'synthetic-token', confirm_npub: actor.npub } });
   });
 }

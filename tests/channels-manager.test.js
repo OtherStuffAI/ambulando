@@ -1252,6 +1252,16 @@ describe('channels-manager pure utilities', () => {
     expect(store.newChannelDmSuggestions[1]).toMatchObject({ npub: 'other', label: 'Other', subtitle: '' });
   });
 
+  it('rejects a retired recipient in direct shortcuts and existing DM repair without deleting the conversation', async () => {
+    const existing = { record_id: 'old-dm', channel_type: 'dm', participant_npubs: ['npub1manager', 'npub1retired'] };
+    const store = createPgGrantStore({ channels: [existing], pgWorkspaceMembers: [], newChannelDmNpub: '' });
+    expect(store.newChannelDmSuggestions.some(row => row.npub === 'npub1retired')).toBe(false);
+    await expect(store.ensureTowerPgDmChannel('npub1retired')).rejects.toMatchObject({ code: 'dm_participant_not_member' });
+    expect(createTowerPgChannelGrant).not.toHaveBeenCalled();
+    expect(createTowerPgScopeChannel).not.toHaveBeenCalled();
+    expect(store.channels).toEqual([existing]);
+  });
+
   it('opens DM creation from the DM-area New control on Home', async () => {
     const store = applyChannelMixin({
       selectedBoardId: DM_SCOPE_ID,
@@ -1438,6 +1448,7 @@ describe('channels-manager pure utilities', () => {
       selectedBoardId: 'scope-dms',
       selectedBoardScope: { record_id: 'scope-dms', title: 'DMs', pg_kind: 'dm' },
       newChannelDmNpub: 'npub1bot',
+      pgWorkspaceMembers: [{ actor_id: 'actor-bot', npub: 'npub1bot' }],
       selectChannel: vi.fn(),
       closeNewChannelModal: vi.fn(),
       refreshTowerPgWorkspaceMembers: vi.fn().mockResolvedValue([]),
@@ -1461,6 +1472,7 @@ describe('channels-manager pure utilities', () => {
       channels: [{ record_id: 'old', kind: 'dm', participant_npubs: ['npub1manager', 'old'], description: 'dm:npub1bot|npub1manager' }],
       scopes: [{ record_id: 'scope-dms', title: 'DMs', pg_kind: 'dm', record_state: 'active' }],
       selectedBoardId: 'scope-dms', selectedBoardScope: { record_id: 'scope-dms', pg_kind: 'dm' }, newChannelDmNpub: 'npub1bot',
+      pgWorkspaceMembers: [{ actor_id: 'actor-bot', npub: 'npub1bot' }],
       selectChannel: vi.fn(), closeNewChannelModal: vi.fn(),
     });
     createTowerPgScopeChannel.mockResolvedValueOnce({ channel: {
@@ -1544,6 +1556,7 @@ describe('channels-manager pure utilities', () => {
       selectedBoardId: 'scope-dms',
       selectedBoardScope: { record_id: 'scope-dms', title: 'DMs', pg_kind: 'dm' },
       newChannelDmNpub: 'npub1bot',
+      pgWorkspaceMembers: [{ actor_id: 'actor-bot', npub: 'npub1bot' }],
       selectChannel: vi.fn(),
       closeNewChannelModal: vi.fn(),
       refreshTowerPgWorkspaceMembers: vi.fn().mockResolvedValue([]),

@@ -2662,6 +2662,26 @@ describe('sendMessage', () => {
     }
   });
 
+  it('keeps an existing DM and draft but blocks sending to a removed workspace identity', async () => {
+    const workspaceDbKey = 'chat-message-manager-removed-dm-member';
+    openWorkspaceDb(workspaceDbKey);
+    await clearRuntimeData();
+    isTowerPgBackendMode.mockReturnValue(true);
+    const channel = { record_id: 'retained-dm', owner_npub: 'npub1owner', channel_type: 'dm', participant_npubs: ['npub1viewer', 'npub1retired'] };
+    try {
+      const { fn, store } = bindMethod('sendMessage', {
+        session: { npub: 'npub1viewer' }, workspaceOwnerNpub: 'npub1owner',
+        selectedChannelId: channel.record_id, channels: [channel], pgWorkspaceMembers: [],
+        messageInput: 'retain my draft', ensureTowerPgDmChannel: vi.fn(),
+      });
+      await fn();
+      expect(createTowerPgMessageFromLocal).not.toHaveBeenCalled();
+      expect(store.error).toContain('no longer in this workspace');
+      expect(store.messageInput).toBe('retain my draft');
+      expect(store.channels).toEqual([channel]);
+    } finally { await deleteWorkspaceDb(workspaceDbKey); }
+  });
+
   it.each([[true, true], [false, true], [true, false]])('repairs only authoritative exact DM access, ignoring stale bot/title (participants=%s, same channel=%s)', async (authoritative, sameChannel) => {
     const workspaceDbKey = 'chat-message-manager-send-agent-dm-title-pg';
     openWorkspaceDb(workspaceDbKey);

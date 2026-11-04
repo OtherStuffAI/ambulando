@@ -6,6 +6,10 @@ import { prepareFeedCommand } from './feed/tower.js';
 import {
   addPendingWrite,
   getWorkspaceDb,
+  createWorkspaceDb,
+  getCurrentWorkspaceDbKey,
+  hasWorkspaceDb,
+  materializeWorkspaceMemberRemoval,
   replaceCommentRecord,
   replaceDocumentRecord,
   replaceMessageRecord,
@@ -291,10 +295,25 @@ export function prepareTowerWorkspaceCommand(store, name, input = {}) {
       'channel.update': () => previousChannel ? upsertChannel(toRaw(previousChannel)) : undefined,
       'channel.delete': () => previousChannel ? upsertChannel(toRaw(previousChannel)) : undefined,
     }[name];
+    const removalDbKey = name === 'workspace-member.remove' && hasWorkspaceDb() ? getCurrentWorkspaceDbKey() : null;
     return {
       entityKey: `${name}:${String(input.entityId || input.clientMutationId || '')}`,
       optimistic,
-      execute: () => { scopeOrderSession?.assertCurrent(); return api[typedApiCommandName](...args); },
+      execute: async () => {
+        scopeOrderSession?.assertCurrent();
+        const result = await api[typedApiCommandName](...args);
+        if (removalDbKey && result?.removed === true) {
+          // Commit the acknowledged membership change before the service's
+          // post-request disposal check. Navigation may have replaced it while
+          // Tower was processing; the original workspace must still retire it.
+          const db = createWorkspaceDb(removalDbKey);
+          try { await materializeWorkspaceMemberRemoval(db, args[0], { id: args[1], npub: args[2]?.confirm_npub }); }
+          catch (error) { error.memberRemovalAccepted = true; throw error; }
+          finally { db.close(); }
+          return { ...result, localMemberRemovalMaterialized: true };
+        }
+        return result;
+      },
       reconcile: reconcile || ((result) => reconcileTypedCommand(name, result, { owner, args })),
       fail,
     };

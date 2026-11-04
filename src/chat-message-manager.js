@@ -256,6 +256,13 @@ function isAgentDmChannel(channel, targetNpub, memberNpub) {
   return Boolean(targetNpub) && resolveAgentDmTargetNpub(channel, null, memberNpub) === targetNpub;
 }
 
+function unavailableDmRecipientMessage(store, channel) {
+  const recipient = resolveAgentDmTargetNpub(channel, store.botNpub, store.session?.npub);
+  return recipient && Array.isArray(store.pgWorkspaceMembers) && !store.pgWorkspaceMembers.some(member => member.npub === recipient)
+    ? 'This identity is no longer in this workspace. The conversation is kept for history; choose a current member before sending a DM.'
+    : '';
+}
+
 async function ensureTowerPgAgentDmAccess(store, channel) {
   const targetNpub = resolveAgentDmTargetNpub(channel, store.botNpub, store.session?.npub);
   if (!isAgentDmChannel(channel, targetNpub, store.session?.npub)) return true;
@@ -293,6 +300,8 @@ async function createTowerPgMessageWithLazyDmRepair(store, localRow, channel, op
   };
   const createMessage = () => {
     assertSource();
+    const unavailable = unavailableDmRecipientMessage(store, channel);
+    if (unavailable) throw new Error(unavailable);
     return Object.keys(options).length > 0
     ? createTowerPgMessageFromLocal(store, localRow, options)
     : createTowerPgMessageFromLocal(store, localRow);
@@ -2562,6 +2571,10 @@ export const chatMessageManagerMixin = {
       return;
     }
 
+    if (pgMode && unavailableDmRecipientMessage(this, channel)) {
+      this.error = unavailableDmRecipientMessage(this, channel);
+      return false;
+    }
     const sourceDraftKey = this.getChatComposerDraftKey(composer);
     if (isThreadCreate && !hasBodyOverride) this.saveChatComposerDraft(composer);
     const preserveAudio = notice => retainChatSendAudio(this, sourceDraftKey, drafts, notice);
@@ -2836,6 +2849,10 @@ export const chatMessageManagerMixin = {
       return;
     }
 
+    if (pgMode && unavailableDmRecipientMessage(this, channel)) {
+      this.error = unavailableDmRecipientMessage(this, channel);
+      return false;
+    }
     const msgId = String(options?.clientRequestId || '').trim() || crypto.randomUUID();
     const now = new Date().toISOString();
     const rawBody = hasBodyOverride ? bodyOverride : this.threadInput.trim();

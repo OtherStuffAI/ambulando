@@ -583,6 +583,15 @@ async function ensureTowerPgDmChannel(store, targetNpub) {
   const { workspaceId, workspaceOwnerNpub, baseUrl, appNpub } = resolveTowerPgWorkspaceContext(store);
   if (!workspaceId || !baseUrl) throw new Error('Flight Deck PG workspace is not connected.');
 
+  // Covers the new-DM picker, profile/agent shortcuts, existing-DM repair and
+  // send preparation. Cached conversations remain readable but are not proof
+  // that their former participant still belongs to this workspace.
+  if (cleanTargetNpub !== memberNpub && !(store.pgWorkspaceMembers || []).some(member => member.npub === cleanTargetNpub)) {
+    const error = new Error('This identity is no longer in this workspace. Ask the owner to add the exact npub before starting or sending a DM.');
+    error.code = 'dm_participant_not_member';
+    throw error;
+  }
+
   const existing = findExistingDmChannel(store.channels || [], [memberNpub, cleanTargetNpub]);
   if (existing?.record_id) {
     if (memberNpub === cleanTargetNpub) return existing;

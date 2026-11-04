@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createWorkspaceDb, openWorkspaceDb, closeWorkspaceDb } from '../src/db.js';
+import { createWorkspaceDb, openWorkspaceDb, closeWorkspaceDb, materializeWorkspaceMemberRemoval, workspaceMemberRemovalsKey } from '../src/db.js';
 import { MEMBERSHIP_FULL_REFRESH_MS as DAY, readMembershipDirectory } from '../src/membership-freshness.js';
 
 let db;
@@ -14,6 +14,25 @@ function fixture() {
 }
 
 describe('durable membership full reconciliation', () => {
+  it('fences a request started before accepted removal, invalidates cache, and permits later authoritative re-enrolment', async () => {
+    const { read, load } = fixture();
+    await load();
+    let finish;
+    read.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    const stale = load({ reason: 'live' });
+    await vi.waitFor(() => expect(finish).toBeTypeOf('function'));
+    await materializeWorkspaceMemberRemoval(db, 'w', { id: 'a', npub: 'npub1a' });
+    expect((await db.sync_state.toArray()).filter(row => row.key.startsWith('membership-directory:'))).toHaveLength(0);
+    finish({ members: [{ actor: { id: 'a', npub: 'npub1a' } }] });
+    expect(await stale).toEqual({ members: [] });
+    expect(await load()).toEqual({ members: [], directory_cache_hit: true });
+    read.mockRejectedValueOnce(new Error('offline'));
+    await expect(load({ reason: 'manual' })).rejects.toThrow('offline');
+    expect(Object.keys((await db.sync_state.get(workspaceMemberRemovalsKey('w'))).value)).toEqual(['a']);
+    read.mockResolvedValueOnce({ members: [{ actor: { id: 'a', npub: 'npub1a' } }] });
+    expect((await load({ reason: 'live' })).members).toHaveLength(1);
+    expect((await db.sync_state.get(workspaceMemberRemovalsKey('w'))).value).toEqual({});
+  });
   it('hydrates cold cache, coalesces callers, survives reopening and becomes due at exactly 24h', async () => {
     const { read, options, load } = fixture();
     await Promise.all([load(), load(), load()]);

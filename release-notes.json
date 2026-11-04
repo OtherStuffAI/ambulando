@@ -5644,6 +5644,27 @@
       "notes": [
         "DM cards, headers and recipient choices display human names without added npub labels. Exact-participant matching and routing remain enforced."
       ]
+    },
+    {
+      "buildNumber": 2707,
+      "label": "Remove obsolete workspace identities",
+      "notes": [
+        "Workspace owners can find Remove from workspace beside each member, preview access changes and confirm the exact npub. Removed identities leave DM and mention choices, including cached choices, while historical conversations remain."
+      ]
+    },
+    {
+      "buildNumber": 2708,
+      "label": "Keep member removal saved during navigation",
+      "notes": [
+        "Accepted workspace member removal remains saved in its original workspace even if you switch workspaces while Tower is processing it."
+      ]
+    },
+    {
+      "buildNumber": 2709,
+      "label": "Save acknowledged member removal",
+      "notes": [
+        "Accepted member removal is saved before navigation replaces the workspace sync service, keeping retired identities out of cached selectors when you return."
+      ]
     }
   ]
 }

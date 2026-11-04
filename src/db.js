@@ -1892,10 +1892,38 @@ async function reconcileAuthoritativeRows(table, rows, keyField) {
 }
 
 export async function getWorkspaceMembers(workspaceId) {
-  const rows = workspaceId
-    ? await wsDb().workspace_members.where('workspace_id').equals(workspaceId).toArray()
-    : await wsDb().workspace_members.toArray();
-  return rows.filter((row) => row.record_state !== 'deleted');
+  const db = wsDb();
+  return db.transaction('r', db.workspace_members, db.sync_state, async () => {
+    const rows = workspaceId
+      ? await db.workspace_members.where('workspace_id').equals(workspaceId).toArray()
+      : await db.workspace_members.toArray();
+    const removals = new Map(await Promise.all([...new Set(rows.map(row => row.workspace_id))].map(async id =>
+      [id, (await db.sync_state.get(workspaceMemberRemovalsKey(id)))?.value || {}])));
+    return rows.filter(row => row.record_state !== 'deleted'
+      && !Object.values(removals.get(row.workspace_id) || {}).some(removed => removed.npub === row.npub || removed.actor_id === row.actor_id));
+  });
+}
+
+export const workspaceMemberRemovalsKey = workspaceId => `workspace-member-removals:${workspaceId}`;
+
+// Only call after Tower accepts removal. Keep attribution and all record tables
+// intact. The local fence also covers late reference-directory/worker upserts.
+export async function materializeWorkspaceMemberRemoval(db, workspaceId, actor) {
+  if (!db || !workspaceId || !actor?.id || !actor?.npub) throw new Error('Workspace member removal cannot be saved on this device.');
+  await db.transaction('rw', db.workspace_members, db.sync_state, async () => {
+    const key = workspaceMemberRemovalsKey(workspaceId);
+    const value = (await db.sync_state.get(key))?.value || {};
+    await db.sync_state.put({ key, value: { ...value, [actor.id]: { actor_id: actor.id, npub: actor.npub, revision: crypto.randomUUID() } } });
+    const rows = await db.workspace_members.where('workspace_id').equals(workspaceId).toArray();
+    await db.workspace_members.bulkDelete(rows.filter(row => row.actor_id === actor.id || row.npub === actor.npub).map(row => row.actor_id));
+    // Invalidate only this workspace's member snapshots. Offline reads use the
+    // persisted roster; an old transport snapshot must never resurrect a member.
+    const snapshots = await db.sync_state.where('key').startsWith('membership-directory:').toArray();
+    for (const snapshot of snapshots) {
+      const [, , id, family] = JSON.parse(snapshot.key.slice('membership-directory:'.length));
+      if (id === workspaceId && family === 'members') await db.sync_state.delete(snapshot.key);
+    }
+  });
 }
 
 export async function replaceWorkspaceMembers(workspaceId, members = []) {

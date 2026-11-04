@@ -53,6 +53,7 @@ import {
 } from './api.js';
 import {
   getWorkspaceDb,
+  getWorkspaceMembers,
   replaceAudioNotesForOwner,
   replaceChannelsForOwner,
   replaceDailyNotesForOwner,
@@ -435,7 +436,7 @@ async function resolveActorNpubByActorIdWithFallback(store = {}, deps = {}, cont
       appNpub: context.appNpub,
     });
     const members = membersResult?.directory_cache_hit
-      ? await getWorkspaceDb().workspace_members.where('workspace_id').equals(context.workspaceId).toArray()
+      ? await getWorkspaceMembers(context.workspaceId)
       : (Array.isArray(membersResult?.members) ? membersResult.members : []);
     const refreshed = new Map(
       members

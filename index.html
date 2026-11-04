@@ -9925,6 +9925,7 @@
                       </template>
                     </div>
                     <button type="button" class="btn-secondary btn-compact" @click="$store.chat.openPgMemberAdmin(member)" :disabled="$store.chat.pgMemberAdminBusy">Inspect access</button>
+                    <button type="button" class="btn-secondary btn-compact" x-show="$store.chat.canAdminWorkspace" @click="$store.chat.openPgMemberRemoval(member)" :disabled="$store.chat.pgMemberAdminBusy" :aria-label="`Remove ${$store.chat.getPgWorkspaceMemberLabel(member)} from workspace`">Remove from workspace</button>
                     <button type="button" class="btn-secondary btn-compact access-row-action"
                       x-show="$store.chat.pgWorkspaceMemberProfileEditingActorId !== (member.actor_id || member.id) && $store.chat.canEditPgWorkspaceMemberProfile(member)"
                       :aria-label="`Rename ${$store.chat.getPgWorkspaceMemberLabel(member)}`"
@@ -9955,7 +9956,7 @@
                         <button type="button" class="btn-primary" @click="$store.chat.setPgMemberAgentManager(!$store.chat.pgMemberAdmin.access.agent_manager)" :disabled="$store.chat.pgMemberAdminBusy || !$store.chat.pgMemberAdminRoleConfirmed || $store.chat.pgMemberAdminConfirmNpub !== $store.chat.pgMemberAdmin.actor.npub" x-text="$store.chat.pgMemberAdmin.access.agent_manager ? 'Revoke agent-manager role' : 'Assign agent-manager role'"></button>
                       </div>
                       <h4>Remove from workspace</h4>
-                      <p>Preview the affected access before confirming. Historical records and authorship remain; other workspaces are unaffected.</p>
+                      <p>Preview the affected access before confirming. This removes workspace membership, not the global identity. Historical records and authorship remain; other workspaces are unaffected. Existing conversations stay in history; this identity will no longer be offered for DMs or person/agent mentions.</p>
                       <button type="button" class="btn-secondary" @click="$store.chat.previewPgMemberRemoval()" :disabled="$store.chat.pgMemberAdminBusy">Preview removal</button>
                       <template x-if="$store.chat.pgMemberAdmin.preview">
                         <div>

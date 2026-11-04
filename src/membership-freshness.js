@@ -1,4 +1,4 @@
-import { getWorkspaceDb, hasWorkspaceDb } from './db.js';
+import { getWorkspaceDb, hasWorkspaceDb, workspaceMemberRemovalsKey } from './db.js';
 
 export const MEMBERSHIP_FULL_REFRESH_MS = 24 * 60 * 60 * 1000;
 const runs = new Map();
@@ -44,16 +44,44 @@ export async function readMembershipDirectory({ workspaceId, baseUrl, appNpub, f
       throw retry.error;
     }
     try {
-      const result = await read();
+      const removalsKey = workspaceMemberRemovalsKey(workspaceId);
+      const before = db && family === 'members' ? (await db.sync_state.get(removalsKey))?.value || {} : {};
+      let result = await read();
       if (!Array.isArray(result?.[family]) || result.has_more === true || result.next_cursor || result.complete === false
         || result[family].some(row => !row || (family === 'members' ? !(row.actor?.npub || row.npub) || !(row.actor?.id || row.actor?.actor_id || row.actor_id || row.id) : !(row.id || row.group_id)))) {
         throw new Error(`Workspace ${family} directory is incomplete`);
       }
       // Retain the captured database handle: an old request cannot write to the
       // workspace selected while it was on the network. Closed handles fail safe.
-      if (db) await db.sync_state.put({ key, value: {
-        result, fullReconciledAt: reason === 'live' ? cached?.fullReconciledAt || 0 : now(),
-      } });
+      if (db) await db.transaction('rw', db.sync_state, db.workspace_members, async () => {
+        if (family === 'members') {
+          const current = (await db.sync_state.get(removalsKey))?.value || {};
+          const remaining = { ...current };
+          for (const [id, removed] of Object.entries(current)) {
+            // A complete request begun after the acknowledged removal can
+            // prove explicit re-enrolment. Older requests and worker sidecars
+            // cannot restore selection eligibility.
+            if (before[id]?.revision === removed.revision && result.members.some(row => {
+              const actor = row.actor || row;
+              return (actor.id || actor.actor_id) === id && actor.npub === removed.npub;
+            })) delete remaining[id];
+          }
+          result = { ...result, members: result.members.filter(row => {
+            const actor = row.actor || row;
+            return !Object.values(remaining).some(removed => removed.npub === actor.npub || removed.actor_id === (actor.id || actor.actor_id));
+          }) };
+          if (Object.keys(current).length) {
+            // Remove stale rows before clearing fences so live queries cannot
+            // expose an old sidecar between this read and materialization.
+            const old = await db.workspace_members.where('workspace_id').equals(workspaceId).toArray();
+            await db.workspace_members.bulkDelete(old.filter(row => Object.values(current).some(removed => removed.npub === row.npub || removed.actor_id === row.actor_id)).map(row => row.actor_id));
+            await db.sync_state.put({ key: removalsKey, value: remaining });
+          }
+        }
+        await db.sync_state.put({ key, value: {
+          result, fullReconciledAt: reason === 'live' ? cached?.fullReconciledAt || 0 : now(),
+        } });
+      });
       retries.delete(runKey);
       return result;
     } catch (error) {

@@ -1,5 +1,30 @@
 # Workspace member administration
 
+Manage Workspace → Groups & Members → Members exposes **Remove from workspace**
+beside each member for workspace administrators. It opens the existing exact
+identity access inspection and Tower removal preview; only Tower's returned
+`can_administer` enables the operation (currently the canonical owner). Self and
+owner protection remain Tower preview decisions. The full npub must match before
+confirmation; names and avatars never substitute identity.
+
+After Tower accepts removal, the browser atomically retires that member from its
+persisted directory and invalidates the workspace's cached member snapshots.
+Local removal fences in `sync_state` hide delayed worker/reference-directory
+upserts, including after reload offline. A complete directory request begun
+after removal can prove explicit re-enrolment and clear the exact fence. The
+existing live query updates open DM and mention choices without UI polling.
+Failed commands do not retire members; failed follow-up reads cannot undo an
+accepted removal or imply it should be repeated. A device-storage failure after
+acceptance is reported separately and requires reconnect/refresh.
+
+Existing conversations and attribution remain available wherever the remaining
+reader has access. Direct/agent DM shortcuts and grant repair reject recipients
+absent from the current workspace roster. New messages and replies to an old
+two-person DM are blocked before clearing their drafts, and rechecked at the
+write boundary; historical channels and messages are not deleted. Note to self
+remains available. Tower still authorizes every actual write. This does not
+delete a global identity, reset record cursors or alter another workspace.
+
 Settings → Groups & Members → Members → Inspect access opens an online Tower
 authority inspection for the selected actor. It shows the canonical Tower
 `display_name` and full `npub`, followed by effective workspace, scope and channel
