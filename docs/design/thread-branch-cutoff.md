@@ -27,6 +27,18 @@ inherited membership. Message rows outside membership can stay cached for other
 conversations; they must not become inherited content merely by sharing a
 presentation parent key.
 
+History-page coverage retains the IDs whose child ownership was observed on
+earlier pages. Replaying an ancestor-prefix page must not discard already loaded
+child replies because their message values are absent from that page. This
+ownership metadata is bound to the same lineage as membership and continuation;
+it is discarded when lineage changes and does not trust unbound legacy coverage.
+
+The presentation window derives inherited and read-only status from canonical
+ownership relative to the viewed thread. Parent sync and other branch reads
+share cached message rows, so their contextual flags cannot establish editability
+in the current conversation. Opening the parent restores its own-message actions
+without changing stored messages or granting new permissions.
+
 Regression coverage lives in `tests/inbox-thread-history.test.js`, with real
 Dexie hydration, database reopen, 3-of-5 inheritance, later parent replies,
 nested branches selected from inherited and own messages, and legacy broad

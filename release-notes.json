@@ -5722,6 +5722,13 @@
       "label": "Managed activation of live activity release",
       "notes": [],
       "noUserVisibleChanges": true
+    },
+    {
+      "buildNumber": 2718,
+      "label": "Consistent branch history",
+      "notes": [
+        "Inherited messages stay read-only when parent conversations refresh, and reopening paged branch history retains replies already loaded in the branch."
+      ]
     }
   ]
 }

@@ -2408,9 +2408,19 @@ async function materializeThreadHistoryPage(store, page) {
       return !revoked(record) && (!record || Number(record.row?.row_version || record.row?.version || 0) <= Number(row.version || 0));
     });
     const tombstones = new Set(rows.filter((row, index) => revoked(authority[index]) || row.record_state === 'deleted').map(row => row.record_id));
+    // Ownership observed on earlier pages remains valid when a prefix page is
+    // replayed. Membership alone cannot distinguish child replies from a broad
+    // legacy ancestor transcript, and absent page rows must not erase replies.
+    const ownedMessageIds = new Set(priorCoverage?.ownedMessageIds || []);
+    for (const row of current) {
+      const owner = row.pg_owning_thread_id || row.pg_thread_id;
+      if (owner === threadId) ownedMessageIds.add(row.record_id);
+      else ownedMessageIds.delete(row.record_id);
+    }
+    for (const id of tombstones) ownedMessageIds.delete(id);
     const ids = clampBranchEffectiveMessageIds(
       mergeThreadHistoryIds(known.filter(id => !tombstones.has(id)), current.filter(row => row.record_state !== 'deleted').map(row => row.record_id), !page.cursor),
-      current,
+      [...[...ownedMessageIds].map(record_id => ({ record_id, pg_owning_thread_id: threadId })), ...current],
       thread,
     );
     // Only the expected forward edge may move continuation. Replayed first or
@@ -2420,7 +2430,9 @@ async function materializeThreadHistoryPage(store, page) {
     const nextCursor = advances ? page.nextCursor : priorCoverage.nextCursor;
     assertTowerPgWorkspaceCurrent(store, context);
     await replacePgMessagesForChannel(page.channelId, [...current, { ...thread, pg_effective_message_ids: ids }].map(row => tagPgSnapshotRead(row, authorityState)));
-    await db.sync_state.put({ key, value: { lineage, version: thread.version, nextCursor, messageIds: ids, loadedAt: Date.now(), activityVersion: thread.activity_version, authority: pgAuthorityToken(authorityState) } });
+    await db.sync_state.put({ key, value: { lineage, version: thread.version, nextCursor, messageIds: ids,
+      ownedMessageIds: ids.filter(id => ownedMessageIds.has(id)),
+      loadedAt: Date.now(), activityVersion: thread.activity_version, authority: pgAuthorityToken(authorityState) } });
     return { nextCursor, count: rows.length };
   });
 }

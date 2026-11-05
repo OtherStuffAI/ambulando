@@ -82,6 +82,25 @@ describe('real Inbox thread history path', () => {
     expect(s.threadHasLocalContent).toBe(false);
   });
 
+  it('keeps inherited history read-only after parent sync and restores own-message actions in the parent', async () => {
+    openWorkspaceDb(key); await seed('ancestor', 4);
+    const db = getWorkspaceDb(); const s = store();
+    const thread = { ...rawThread('branch'), source_message_id: null, parent_thread_id: 'ancestor', branch_point_message_id: 'ancestor-2' };
+    await hydrateTowerPgSyncBundle(s, { thread_history_page: { channelId: 'channel-a', thread,
+      messages: [1, 2].map(n => ({ ...rawMessage('ancestor', n), inherited: true, read_only: true, effective_thread_id: 'branch' })), nextCursor: null } });
+    // A parent's normal sync replaces the same canonical message row.
+    await db.chat_messages.put(mapPgMessageToLocal(rawMessage('ancestor', 1)));
+    db.close(); await db.open(); openWorkspaceDb(key);
+    const child = await getThreadMessagePresentationWindow('channel-a', 'branch');
+    expect(child.filter(row => row.pg_record_type === 'message')).toEqual([
+      expect.objectContaining({ record_id: 'ancestor-1', pg_inherited: true, read_only: true, pg_owning_thread_id: 'ancestor' }),
+      expect.objectContaining({ record_id: 'ancestor-2', pg_inherited: true, read_only: true, pg_owning_thread_id: 'ancestor' }),
+    ]);
+    const parent = await getThreadMessagePresentationWindow('channel-a', 'ancestor');
+    expect(parent.find(row => row.record_id === 'ancestor-2')).toMatchObject({ pg_inherited: false, read_only: false });
+    expect(await db.chat_messages.get('ancestor-1')).toMatchObject({ pg_inherited: false, read_only: false });
+  });
+
   it('publishes the latest local rows with stalled/offline refresh and retains matching content only', async () => {
     openWorkspaceDb(key); await seed('thread-a', 12); await seed('thread-b', 2);
     const s = store();
@@ -219,6 +238,20 @@ describe('real Inbox thread history path', () => {
     }
     await hydrateTowerPgSyncBundle(s, { thread_history_page: page });
     expect((await db.chat_messages.get('branch')).pg_effective_message_ids).toEqual(ids);
+  });
+
+  it('retains paginated child replies when replaying a branch prefix page', async () => {
+    openWorkspaceDb(key);
+    const db = getWorkspaceDb(); const s = store();
+    const thread = { ...rawThread('branch'), source_message_id: null, parent_thread_id: 'ancestor', branch_point_message_id: 'ancestor-2' };
+    const prefix = { channelId: 'channel-a', thread, cursor: null, nextCursor: 'child-page',
+      messages: [1, 2].map(n => ({ ...rawMessage('ancestor', n), inherited: true, effective_thread_id: 'branch' })) };
+    await hydrateTowerPgSyncBundle(s, { thread_history_page: prefix });
+    await hydrateTowerPgSyncBundle(s, { thread_history_page: { channelId: 'channel-a', thread,
+      cursor: 'child-page', nextCursor: null, messages: [rawMessage('branch', 3), rawMessage('branch', 4)] } });
+    await hydrateTowerPgSyncBundle(s, { thread_history_page: prefix });
+    expect((await db.chat_messages.get('branch')).pg_effective_message_ids).toEqual(['ancestor-1', 'ancestor-2', 'branch-3', 'branch-4']);
+    expect((await db.sync_state.get('thread-history-page:branch')).value.nextCursor).toBeNull();
   });
 
   it('clamps broad branch-history pages to the selected branch point', async () => {

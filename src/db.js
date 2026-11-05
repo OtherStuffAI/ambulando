@@ -1405,7 +1405,13 @@ export async function getThreadMessagePresentationWindow(channelId, rootId, opti
     const owningThreadId = row.pg_owning_thread_id || row.pg_thread_id;
     if (owningThreadId && owningThreadId !== threadId && !clampedEffectiveIds.includes(row.record_id)) continue;
     if (!row || row.channel_id !== channelId || row.record_state === 'deleted' || row.record_id === rootId || row.pg_record_type === 'thread') continue;
-    rows.set(row.record_id, { ...row, parent_message_id: rootId });
+    // Inheritance is relative to the viewed transcript. A canonical parent
+    // refresh can replace the shared row's effective-history flags.
+    const inherited = Boolean(owningThreadId && owningThreadId !== threadId);
+    rows.set(row.record_id, { ...row, parent_message_id: rootId,
+      pg_effective_thread_id: threadId, pg_inherited: inherited,
+      read_only: inherited || (row.read_only === true && row.pg_inherited !== true),
+    });
   }
   const parentAuthority = authority.at(-1);
   const visibleParent = parent && !revoked(parentAuthority) ? parent : null;
