@@ -804,3 +804,24 @@ code, pre { font-family:var(--font-code); }
 .doc-merge-conflict button[aria-pressed="true"] { outline: 2px solid currentColor; }
 .doc-review-confirm { display: flex; gap: .5rem; margin-block: 1rem; align-items: start; }
 @media (max-width: 640px) { .doc-review-copies { grid-template-columns: minmax(0, 1fr); } }
+
+/* New web signup uses the shared Ambulando palette and passage mark. */
+.new-user-onboarding { max-width: 720px; width: min(720px, 100%); max-height: calc(100dvh - 2rem); overflow-y: auto; padding: clamp(20px, 4vw, 42px); }
+.new-user-brand { display:flex; align-items:center; gap:12px; margin-bottom:24px; }
+.new-user-brand img { width:64px; height:64px; object-fit:contain; }
+.new-user-brand p { margin:0; font-size:26px; font-weight:600; }
+.new-user-brand small { display:block; font-size:12px; font-weight:400; }
+.new-user-eyebrow { font-size:11px; letter-spacing:.12em; color:var(--muted-foreground); }
+.new-user-fields { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin:24px 0; }
+.new-user-fields label { display:flex; flex-direction:column; gap:8px; }
+.new-user-fields input { width:100%; min-width:0; }
+.new-user-recovery, .new-user-unavailable { background:var(--muted); padding:16px; border-radius:var(--radius-panel); margin:20px 0; }
+.new-user-recovery label { display:block; margin-top:12px; }
+.new-user-consent { display:block; margin:18px 0; }
+.new-user-offer { display:flex; justify-content:space-between; gap:20px; padding:20px 0; border-block:1px solid var(--border); margin:20px 0; }
+.new-user-offer strong { font-size:22px; }
+.new-user-offer p { margin:8px 0 0; font-size:13px; }
+.new-user-progress { padding-left:24px; line-height:2; }
+.new-user-reference { font-size:11px; overflow-wrap:anywhere; margin:24px 0 12px; color:var(--muted-foreground); }
+.new-user-alternate { background:transparent; color:var(--foreground); text-decoration:underline; padding-inline:0; }
+@media (max-width:520px) { .new-user-fields { grid-template-columns:1fr; } .new-user-onboarding { max-height:100dvh; border-radius:0; } }

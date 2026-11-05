@@ -140,3 +140,5 @@ export const setTowerPgAttachmentBlossom = (store, ...args) => issue(store, 'att
 
 export const putTowerPgScopeOrder = (store, ...args) => issueTypedApi(store, 'scope-order.put', args, args[1]?.mutation_id);
 export const putPersonalThreadPin = (store, input) => issue(store, 'thread-pin.put', input, input.body.mutation_id);
+
+export const ensureTowerPgGeneral = (store, workspaceId, options) => issueTypedApi(store, 'general.ensure', [workspaceId, options], workspaceId);

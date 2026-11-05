@@ -1,3 +1,4 @@
+import { newUserOnboardingMixin } from './new-user-onboarding.js';
 import { convertPasteToTextAttachment, forgetTextPasteUndo, guardInlineTyping, undoTextPasteConversion, updateComposerCounter } from './text-attachment-composer.js';
 import { discardPersistedTextDrafts, persistTextDraft, restorePersistedTextDrafts } from './text-attachment-drafts.js';
 import { textAttachmentMarker } from './text-attachments.js';
@@ -10733,6 +10734,7 @@ export function initApp() {
     nstackManagerMixin,
     workspaceSelfIndexManagerMixin,
     onboardingAnnouncementsManagerMixin,
+    newUserOnboardingMixin,
     channelsManagerMixin,
     workspaceMemberAdminMixin,
     scopesManagerMixin,

@@ -5729,6 +5729,21 @@
       "notes": [
         "Inherited messages stay read-only when parent conversations refresh, and reopening paged branch history retains replies already loaded in the branch."
       ]
+    },
+    {
+      "buildNumber": 2719,
+      "label": "A shared beginning on the web",
+      "notes": [
+        "New web users can save identity recovery, create one hosted workspace, and buy one cloud agent through Stripe Checkout when the configured services are ready.",
+        "Saved payment and setup progress resumes without buying again. Your agent joins General and a private conversation with you after its connection and access are verified."
+      ]
+    },
+    {
+      "buildNumber": 2720,
+      "label": "Resume your saved beginning",
+      "notes": [
+        "Returning from Stripe now automatically resumes the same saved identity and order. A verified agent connection opens the workspace only after all setup checks pass."
+      ]
     }
   ]
 }

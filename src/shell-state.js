@@ -674,7 +674,7 @@ export function createShellState(options = {}) {
         }
       }
       this.updateWorkspaceBootstrapPrompt();
-      if (this.session?.npub && (!this.backendUrl || (!this.selectedWorkspaceKey && !this.showWorkspaceBootstrapModal))) {
+      if (this.session?.npub && !this.newUserOnboardingOpen && (!this.backendUrl || (!this.selectedWorkspaceKey && !this.showWorkspaceBootstrapModal))) {
         this.openConnectModal();
       }
       this.pendingInviteToken = null;
@@ -710,7 +710,7 @@ export function createShellState(options = {}) {
           await this.selectWorkspace(this.selectedWorkspaceKey || this.currentWorkspaceOwnerNpub, { refresh: false });
         }
         this.updateWorkspaceBootstrapPrompt();
-        if (this.session?.npub && (!this.backendUrl || (!this.selectedWorkspaceKey && !this.showWorkspaceBootstrapModal))) {
+        if (this.session?.npub && !this.newUserOnboardingOpen && (!this.backendUrl || (!this.selectedWorkspaceKey && !this.showWorkspaceBootstrapModal))) {
           this.openConnectModal();
         }
         if ((!isTowerPgBackendMode() || this.session?.npub) && this.selectedWorkspaceKey) {
@@ -1349,7 +1349,7 @@ export function createShellState(options = {}) {
           this.currentWorkspaceOwnerNpub = this.knownWorkspaces[0].workspaceOwnerNpub;
         }
         this.updateWorkspaceBootstrapPrompt();
-        if (!this.backendUrl || (!this.selectedWorkspaceKey && !this.showWorkspaceBootstrapModal)) {
+        if (!await this.resumeNewUserOnboarding?.() && (!this.backendUrl || (!this.selectedWorkspaceKey && !this.showWorkspaceBootstrapModal))) {
           this.openConnectModal();
         }
       } catch (error) {
@@ -1405,7 +1405,7 @@ export function createShellState(options = {}) {
           await this.bootstrapSelectedWorkspace({ runAccessPrune: true });
         }
         this.updateWorkspaceBootstrapPrompt();
-        if (!this.backendUrl || (!this.selectedWorkspaceKey && !this.showWorkspaceBootstrapModal)) {
+        if (!await this.resumeNewUserOnboarding?.() && (!this.backendUrl || (!this.selectedWorkspaceKey && !this.showWorkspaceBootstrapModal))) {
           this.openConnectModal();
         }
         this.ensureBackgroundSync(true);
@@ -1425,6 +1425,11 @@ export function createShellState(options = {}) {
         detachLoggedOutWorkspace(this);
         await clearAutoLogin();
       }
+      this.closeNewUserOnboarding?.({ connectExisting: false });
+      this.newUserOrder = null;
+      this.newUserConfig = null;
+      this.newUserRecoverySaved = false;
+      this.newUserTermsAccepted = false;
       this.session = null;
       this.ownerNpub = '';
       this.channels = [];

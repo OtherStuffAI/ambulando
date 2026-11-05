@@ -94,7 +94,12 @@ for (const file of tracked) {
   const text = contents.toString('utf8');
   // The public hosting domain is explicit product copy, not an operator endpoint.
   // Permit only this exact domain in the onboarding and policy sources.
-  const publicHostingFiles = new Set(['index.html', 'src/hosting-legal-content.json', 'docs/design/nstack-hosting-onboarding.md']);
+  const publicHostingFiles = new Set([
+    'index.html', 'src/hosting-legal-content.json', 'docs/design/nstack-hosting-onboarding.md',
+    'docs/design/new-user-web-onboarding.md', 'server/agent-cloud.js', 'server/agent-onboarding.js',
+    'src/new-user-onboarding.js', 'tests/agent-onboarding.test.js',
+    'tests/e2e/fixtures/agent-onboarding-boundary.cjs', 'tests/tower-command-general.test.js',
+  ]);
   for (const marker of prohibitedMarkers) {
     const markerText = marker.label === 'private upstream domain' && publicHostingFiles.has(file)
       ? text.replace(/(?<![a-z0-9.-])nstack\.otherstuff\.ai(?![a-z0-9-]|\.[a-z0-9])/gi, 'public-hosting-domain') : text;

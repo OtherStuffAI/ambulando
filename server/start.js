@@ -1,7 +1,14 @@
+import { loadOnboardingEnv } from './onboarding-env.js';
+import { openOnboardingStore } from './onboarding-store.js';
+import { createAgentStripe } from './agent-stripe.js';
+import { createAgentCloud } from './agent-cloud.js';
+import { createAgentOnboarding, AGENT_ONBOARDING_PATH } from './agent-onboarding.js';
 import { readFile } from 'node:fs/promises';
 import { resolve, extname, sep } from 'node:path';
 import { createHostedSignupHandler, SIGNUP_PATH, SITE_NPUB, towerSignupUrl } from './hosted-signup.js';
 import { createHostedSiteBroker } from './hosted-site-broker.js';
+
+loadOnboardingEnv();
 
 const dist = resolve(import.meta.dir, '../dist');
 const types = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json; charset=utf-8', '.txt': 'text/plain; charset=utf-8', '.md': 'text/markdown; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.webp': 'image/webp', '.ico': 'image/x-icon', '.woff2': 'font/woff2' };
@@ -27,6 +34,21 @@ async function readiness() {
   } catch { return { ready: false, error: 'site_broker_unavailable' }; }
 }
 
+let agentOnboarding = null;
+if (process.env.AMBULANDO_PUBLIC_ORIGIN && process.env.AMBULANDO_ONBOARDING_DB && process.env.WMCLOUD_ONBOARDING_URL) {
+  try {
+    const store = openOnboardingStore(process.env.AMBULANDO_ONBOARDING_DB);
+    const stripe = createAgentStripe({ secretKey: process.env.STRIPE_SECRET_KEY, priceId: process.env.STRIPE_AGENT_PRICE_ID, webhookSecret: process.env.STRIPE_WEBHOOK_SECRET });
+    const cloud = createAgentCloud({ origin: process.env.WMCLOUD_ONBOARDING_URL, secretFile: process.env.WMCLOUD_ONBOARDING_SECRET_FILE, secret: process.env.WMCLOUD_ONBOARDING_SECRET });
+    agentOnboarding = createAgentOnboarding({ store, stripe, cloud, signup, signupReady: async () => (await readiness()).ready,
+      origin: process.env.AMBULANDO_PUBLIC_ORIGIN, towerUrl: process.env.FLIGHT_DECK_TOWER_PUBLIC_BASE_URL });
+    // Durable paid outbox is recovered at startup and on a bounded interval.
+    let recovering = false;
+    const recover = async () => { if (recovering) return; recovering = true; try { await agentOnboarding.resume(); } finally { recovering = false; } };
+    void recover(); setInterval(() => void recover(), 30000).unref();
+  } catch { console.error('Cloud agent onboarding configuration is invalid; checkout is disabled.'); }
+}
+
 function cacheControl(pathname) {
   if (pathname.startsWith('/assets/')) return 'public, max-age=31536000, immutable';
   if (pathname === '/version.json') return 'no-store';
@@ -36,6 +58,10 @@ function cacheControl(pathname) {
 
 Bun.serve({ hostname: '0.0.0.0', port: Number(process.env.PORT || 8093), async fetch(request) {
   const url = new URL(request.url);
+  if (url.pathname.startsWith(AGENT_ONBOARDING_PATH)) {
+    if (agentOnboarding) return agentOnboarding.handle(request);
+    return Response.json({ ready: false, error: 'onboarding_not_configured', code: 'onboarding_not_configured' }, { status: url.pathname.endsWith('/config') ? 200 : 503, headers: { 'cache-control': 'no-store' } });
+  }
   if (url.pathname === '/healthz' || (url.pathname === '/api/hosted/config' && request.method === 'GET')) {
     const state = await readiness();
     return Response.json(url.pathname === '/healthz'

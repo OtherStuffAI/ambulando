@@ -61,7 +61,7 @@ export const TOWER_WORKSPACE_COMMAND_CONTRACT = Object.freeze({
     'thread.branch', 'thread-pin.put',
     'file.create', 'file.update', 'file-folder.create', 'audio-note.create',
     'scope-order.put', 'scope.create', 'scope.update', 'scope.delete',
-    'channel.create', 'channel.update', 'channel.delete', 'channel.move-preview', 'channel.move',
+    'general.ensure', 'channel.create', 'channel.update', 'channel.delete', 'channel.move-preview', 'channel.move',
     'workroom.create', 'workroom.start', 'workroom.archive', 'workroom-approval.decide',
     'reaction.create', 'reaction.delete',
     'wapp.create', 'wapp.update', 'wapp.delete',
@@ -186,6 +186,7 @@ export function prepareTowerWorkspaceCommand(store, name, input = {}) {
     'channel.move': 'moveTowerPgChannel',
     'channel.update': 'updateTowerPgChannel',
     'channel.create': 'createTowerPgScopeChannel',
+    'general.ensure': 'ensureTowerPgGeneral',
     'channel.delete': 'deleteTowerPgChannel',
     'channel.reorder': 'reorderTowerPgChannel',
     'scope-access.put': 'putTowerPgScopeAccess',
@@ -262,6 +263,11 @@ export function prepareTowerWorkspaceCommand(store, name, input = {}) {
       'channel.delete': () => previousChannel ? upsertChannel(cloneableRow(previousChannel, { record_state: 'deleted', sync_status: 'pending' })) : undefined,
     }[name];
     const reconcile = {
+      'general.ensure': async (result) => {
+        await upsertScope(mapPgScopeToLocal(result.scope, { workspaceOwnerNpub: owner }));
+        await upsertChannel(mapPgChannelToLocal(result.channel, { workspaceOwnerNpub: owner }));
+        return result;
+      },
       'scope-order.put': async (result) => { await scopeOrderSession.materialize(result.scope_order); return result; },
       'scope.create': async (result) => {
         const row = mapPgScopeToLocal(result?.scope || result, { workspaceOwnerNpub: owner });

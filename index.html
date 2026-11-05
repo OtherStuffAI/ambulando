@@ -670,7 +670,7 @@
         </div>
       </div>
       <div class="auth-actions">
-        <button class="auth-option" type="button" :disabled="$store.chat.isLoggingIn" @click="$store.chat.login('ephemeral')">
+        <button class="auth-option" type="button" :disabled="$store.chat.isLoggingIn" @click="$store.chat.beginNewUserSignup()">
           <span x-show="!$store.chat.isLoggingIn">Sign Up</span>
           <span x-show="$store.chat.isLoggingIn">Signing in...</span>
         </button>
@@ -697,6 +697,51 @@
       </details>
       <p class="auth-error" x-show="$store.chat.loginError" x-text="$store.chat.loginError"></p>
     </section>
+
+    <div class="modal-overlay modal-overlay-opaque" x-show="$store.chat.newUserOnboardingOpen && $store.chat.isLoggedIn" x-cloak>
+      <section class="modal new-user-onboarding" role="dialog" aria-modal="true" aria-labelledby="new-user-title" x-sol-dialog>
+        <div class="new-user-brand"><img src="/ambulando/passage-app.png" alt="" /><p>Ambulando<small>Solvitur Ambulando</small></p></div>
+        <p class="new-user-eyebrow">YOUR WORKSPACE · YOUR IDENTITY · YOUR AGENT</p>
+        <h2 id="new-user-title" x-text="$store.chat.newUserOrder?.paid ? 'A few steps to your new home.' : 'Make room for what’s next.'"></h2>
+        <p>One workspace on public nStack, your cloud agent, and a place to start.</p>
+        <p class="auth-error" role="alert" x-show="$store.chat.newUserError" x-text="$store.chat.newUserError"></p>
+        <p role="status" aria-live="polite" x-show="$store.chat.newUserBusy">Checking your saved progress…</p>
+        <div x-show="!$store.chat.newUserOrder?.workspace">
+          <div class="new-user-fields">
+            <label>Workspace name<input x-model="$store.chat.newUserWorkspaceName" maxlength="80" autocomplete="organization" :disabled="$store.chat.newUserBusy || !!$store.chat.newUserOrder?.workspaceStarted" /></label>
+            <label>Agent name<input x-model="$store.chat.newUserAgentName" maxlength="40" autocomplete="off" :disabled="$store.chat.newUserBusy || !!$store.chat.newUserOrder?.workspaceStarted" /></label>
+          </div>
+          <div class="new-user-recovery" x-show="$store.chat.session?.method === 'ephemeral'">
+            <h3>Your work stays yours.</h3><p>Save your identity recovery file somewhere private before continuing. You’ll need it if this browser’s data is lost.</p>
+            <button type="button" @click="$store.chat.saveNewUserRecovery()">Save recovery file</button>
+            <label><input type="checkbox" x-model="$store.chat.newUserRecoverySaved" /> I have saved my recovery file securely.</label>
+          </div>
+          <p>Hosting includes one USD $5 welcome credit per customer, expiring after 30 days. Storage costs USD $5 per decimal GB per 720 hours; paid credits do not expire. Agent payment is separate.</p>
+          <label class="new-user-consent"><input type="checkbox" x-model="$store.chat.newUserTermsAccepted" /> I accept the <a href="/legal/terms.html" target="_blank" rel="noopener">hosting terms</a> and have read the <a href="/legal/privacy.html" target="_blank" rel="noopener">privacy policy</a> (draft).</label>
+          <button type="button" @click="$store.chat.prepareNewUserWorkspace()" :disabled="$store.chat.newUserBusy || !$store.chat.newUserConfig?.ready || !$store.chat.newUserTermsAccepted || ($store.chat.session?.method === 'ephemeral' && !$store.chat.newUserRecoverySaved)">Create my workspace →</button>
+        </div>
+        <div x-show="$store.chat.newUserOrder?.workspace && !$store.chat.newUserOrder?.paid">
+          <h3 x-text="'A partner called ' + $store.chat.newUserAgentName + '.'"></h3>
+          <div class="new-user-offer"><div><strong>One cloud agent</strong><p x-text="$store.chat.newUserWorkspaceName + ' · nstack.otherstuff.ai'"></p></div><div><strong x-text="$store.chat.newUserPriceLabel"></strong><p>One-time payment</p></div></div>
+          <p>Your agent gets a private conversation with you. General includes everyone in your workspace. Only you may command your agent unless you approve more people separately.</p>
+          <p>No usage credit is included in this purchase. Agent use is billed separately by the cloud service.</p>
+          <p x-show="$store.chat.newUserOrder?.offer?.livemode === false">Stripe sandbox · no real payment.</p>
+          <p x-show="$store.chat.newUserOrder?.status === 'pending'">Payment is still awaiting confirmation. We will check the original checkout before offering another payment.</p>
+          <button type="button" @click="$store.chat.checkoutNewUserAgent()" :disabled="$store.chat.newUserBusy || !$store.chat.newUserConfig?.ready || $store.chat.newUserOrder?.status === 'pending'">Continue to Stripe Checkout →</button>
+          <button type="button" @click="$store.chat.refreshNewUserOrder(false)" :disabled="$store.chat.newUserBusy">Check payment</button>
+          <p>Your workspace stays saved if you cancel Checkout. A return from Stripe does not confirm payment.</p>
+        </div>
+        <div x-show="$store.chat.newUserOrder?.paid">
+          <p><strong>Payment confirmed.</strong> Setup retries reuse your original payment, workspace, and agent.</p>
+          <ol class="new-user-progress"><li>Payment confirmed</li><li x-text="$store.chat.newUserOrder?.agent ? 'Agent identity ready' : 'Preparing your agent identity…'"></li><li>Approve the connection with your identity</li><li>Verify General and your private conversation</li></ol>
+          <p role="status" x-show="$store.chat.newUserOrder?.attention" x-text="$store.chat.newUserOrder?.attention"></p>
+          <button type="button" @click="$store.chat.refreshNewUserOrder(true)" :disabled="$store.chat.newUserBusy" x-text="$store.chat.newUserOrder?.agent ? 'Connect my agent and open workspace →' : 'Retry setup — no new payment'"></button>
+        </div>
+        <div class="new-user-unavailable" x-show="$store.chat.newUserConfig && !$store.chat.newUserConfig.ready"><p>Cloud agent signup is temporarily unavailable. Your saved progress is safe. Please try again later or connect an existing workspace.</p><button type="button" @click="$store.chat.openNewUserOnboarding()" :disabled="$store.chat.newUserBusy">Check availability</button></div>
+        <p class="new-user-reference" x-show="$store.chat.newUserOrder" x-text="'Order reference: ' + ($store.chat.newUserOrder?.id || '')"></p>
+        <button class="new-user-alternate" type="button" @click="$store.chat.closeNewUserOnboarding()" :disabled="$store.chat.newUserBusy">Connect an existing workspace or another server</button>
+      </section>
+    </div>
 
     <p class="hero-hint" x-show="!$store.chat.isLoggedIn">Sign in to open your workspace and conversations.</p>
 

@@ -3064,3 +3064,10 @@ export async function createTowerPgFileVersion(workspaceId, fileId, body, { base
   const path = `/api/v4/flightdeck-pg/workspaces/${encodeURIComponent(workspaceId)}/files/${encodeURIComponent(fileId)}/versions`;
   return json(await signedTowerPgFetch(path, { method: 'POST', body, baseUrl, appNpub, signal, useWorkspaceKey: false }), { requestUrl: resolveTowerPgUrl(path, baseUrl), method: 'POST', prefix: 'Tower PG API' });
 }
+
+export async function ensureTowerPgGeneral(workspaceId, { baseUrl = _baseUrl, appNpub = FLIGHT_DECK_PG_APP_NPUB } = {}) {
+  const requestPath = `/api/v4/flightdeck-pg/workspaces/${encodeURIComponent(workspaceId)}/general/ensure`;
+  const requestUrl = resolveTowerPgUrl(requestPath, baseUrl);
+  const resp = await signedTowerPgFetch(requestPath, { method: 'POST', body: {}, baseUrl, appNpub });
+  return json(resp, { requestUrl, method: 'POST', prefix: 'Tower PG API' });
+}
