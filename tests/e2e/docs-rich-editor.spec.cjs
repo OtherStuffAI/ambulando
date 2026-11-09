@@ -53,6 +53,7 @@ async function seedSelectedDocument(page, options = {}) {
     store.storageImageUrlCache = seedOptions.withStorageImage
       ? { 'image-object-123': 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==' }
       : {};
+    store.docEditorRichFeatureEnabled = true;
     store.navSection = 'docs';
     store.documents = [document];
     store.directories = [];
@@ -61,6 +62,7 @@ async function seedSelectedDocument(page, options = {}) {
     store.selectedDocId = document.record_id;
     store.selectedDocType = 'document';
     store.loadDocEditorFromSelection();
+    await store.docDraftRestorePromise;
 
     if (seedOptions.enterEdit !== false) {
       store.acquireSelectedDocCheckout = async () => true;
@@ -593,3 +595,59 @@ for (const failed of [false, true]) test(`late rich paste ${failed ? 'failure' :
   }, failed);
   expect(result).toEqual({ unchanged: true, synchronized: 0, autosaved: 0, errorUnchanged: true, pending: 0 });
 });
+
+for (const mode of ['read', 'edit']) {
+  test(`selection comment popup captures table header/body and paragraph in ${mode} mode without changing content`, async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 820 });
+    await page.route('**/*', route => ['127.0.0.1', 'localhost'].includes(new URL(route.request().url()).hostname) ? route.continue() : route.abort());
+    await page.goto('/');
+    await seedSelectedDocument(page, { enterEdit: mode === 'edit' });
+    if (mode === 'edit') await expect(page.locator('.doc-rich-editor .ProseMirror')).toBeVisible();
+    await page.evaluate(({ mode }) => {
+      const store = window.Alpine.store('chat');
+      const markdown = '| **Header** | Other |\n| --- | --- |\n| A [linked](https://example.com) cell | B |\n\nOrdinary **paragraph** text.';
+      if (mode === 'read') {
+        store.docEditorContent = markdown;
+        store.docEditorBlocks = [
+          { id: 'table', raw: markdown.split('\n\n')[0], start_line: 1, end_line: 3 },
+          { id: 'paragraph', raw: 'Ordinary **paragraph** text.', start_line: 5, end_line: 5 },
+        ];
+      } else {
+        const editor = window.Alpine.raw(store.docRichEditorAdapter).editor;
+        editor.commands.setContent({ type: 'doc', content: [
+          { type: 'table', content: [
+            { type: 'tableRow', content: [{ type: 'tableHeader', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Header', marks: [{ type: 'bold' }] }] }] }] },
+            { type: 'tableRow', content: [{ type: 'tableCell', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'linked', marks: [{ type: 'link', attrs: { href: 'https://example.com' } }] }] }] }] },
+          ] },
+          { type: 'paragraph', content: [{ type: 'text', text: 'paragraph', marks: [{ type: 'italic' }] }] },
+        ] });
+        editor.commands.focus();
+      }
+      store.docCommentFilter = 'resolved';
+    }, { mode });
+    const surface = page.locator('.doc-preview-surface');
+    for (const [selector, quote] of [['th strong', 'Header'], ['td a', 'linked'], [mode === 'edit' ? '.ProseMirror > p em' : '.doc-block-rendered > p strong', 'paragraph']]) {
+      await expect(surface.locator(selector)).toBeVisible();
+      const before = await surface.evaluate((surface, selector) => {
+        const node = surface.querySelector(selector).firstChild;
+        const range = document.createRange(); range.selectNodeContents(node);
+        const selection = window.getSelection(); selection.removeAllRanges(); selection.addRange(range);
+        const store = window.Alpine.store('chat');
+        return { html: surface.innerHTML, content: store.docEditorContent, editor: store.docEditorMode === 'rich' ? window.Alpine.raw(store.docRichEditorAdapter).editor.getJSON() : null };
+      }, selector);
+      const action = page.getByRole('button', { name: 'Comment on selected text', exact: true });
+      await expect(action).toBeVisible();
+      const target = await action.boundingBox(); expect(target.width).toBe(44); expect(target.height).toBe(44);
+      await action.dispatchEvent('pointerdown', { pointerType: 'touch', bubbles: true, cancelable: true });
+      await action.click();
+      await expect(page.locator('.doc-thread-anchor-quote-pending')).toHaveText(quote);
+      expect(await page.evaluate(() => window.Alpine.store('chat').docCommentFilter)).toBe('open');
+      const after = await page.evaluate(() => {
+        const store = window.Alpine.store('chat');
+        return { content: store.docEditorContent, editor: store.docEditorMode === 'rich' ? window.Alpine.raw(store.docRichEditorAdapter).editor.getJSON() : null };
+      });
+      expect(after.content).toBe(before.content); expect(after.editor).toEqual(before.editor);
+      await page.evaluate(() => window.Alpine.store('chat').closeDocCommentModal());
+    }
+  });
+}

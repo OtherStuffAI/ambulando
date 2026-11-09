@@ -1,3 +1,4 @@
+import { captureDocumentDomSelection, captureDocumentPreviewSelection, documentCommentSelection } from './docs/comment-selection.js';
 import { CanvasReferenceCatalog, canvasChatSuggestions, parseCanvasChatReference } from './canvas/chat-references.js';
 import { hydrateCanvasList } from './canvas/sync-service.js';
 import { canvasContext, canvasPartition } from './canvas/projection.js';
@@ -989,6 +990,7 @@ export const docsManagerMixin = {
     } else {
       this.selectedDocCommentId = null;
     }
+    this.docCommentFilter = 'open';
     this.docCommentsVisible = Boolean(this.selectedDocCommentId || options.showComments);
     this.docMobilePane = this.docCommentsVisible ? 'comments' : 'document';
     this.navSection = 'docs';
@@ -2600,10 +2602,47 @@ export const docsManagerMixin = {
     return current?.record_id || commentId || null;
   },
 
-  getRootDocComments() {
+  getRootDocComments(filter = this.docCommentFilter || 'open') {
     return this.docComments
-      .filter((comment) => !comment.parent_comment_id && comment.record_state !== 'deleted')
+      .filter((comment) => !comment.parent_comment_id && comment.record_state !== 'deleted'
+        && (filter === 'all' || (comment.comment_status === 'resolved' ? 'resolved' : 'open') === filter))
       .sort((a, b) => this.compareDocCommentsByAnchor(a, b));
+  },
+
+  setDocCommentFilter(filter) {
+    this.docCommentFilter = filter === 'resolved' ? 'resolved' : 'open';
+    this.closeDocCommentThread({ syncRoute: false });
+    this.syncRoute();
+    this.scheduleDocCommentConnectorUpdate();
+  },
+
+  docSelectionComments(surface) {
+    let overlay;
+    const store = this;
+    return {
+      init() {
+        overlay = documentCommentSelection(surface, {
+          capture: selection => store.docEditorMode === 'rich'
+            ? captureDocumentDomSelection(store.docRichEditorAdapter?.editor, selection)
+            : captureDocumentPreviewSelection(surface, store.docEditorBlocks, selection),
+          activate: anchor => store.startDocSelectionComment(anchor),
+        });
+      },
+      destroy() { overlay?.destroy(); },
+    };
+  },
+
+  startDocSelectionComment(anchor) {
+    if (!anchor?.anchor_quote) return;
+    if (this.newDocCommentBody?.trim()) { this.error = 'Post or cancel your current comment before choosing another passage.'; return; }
+    this.docCommentFilter = 'open';
+    this.closeDocCommentThread({ syncRoute: false });
+    this.applyPendingRichDocCommentAnchor(anchor);
+    this.docCommentAnchorBlockId = anchor.anchor_block_id || null;
+    this.docCommentsVisible = true;
+    this.docMobilePane = 'comments';
+    this.showDocCommentModal = false;
+    requestAnimationFrame(() => document.querySelector('[data-doc-new-comment-input]')?.focus({ preventScroll: true }));
   },
 
   getDocCommentReplies(commentId) {
@@ -2811,7 +2850,7 @@ export const docsManagerMixin = {
     const startLine = Number(block?.start_line);
     if (!Number.isFinite(startLine) && !block?.id) return [];
     return this.docComments
-      .filter((comment) => !comment.parent_comment_id && commentBelongsToDocBlock(comment, block))
+      .filter((comment) => !comment.parent_comment_id && comment.record_state !== 'deleted' && comment.comment_status !== 'resolved' && commentBelongsToDocBlock(comment, block))
       .sort((a, b) => this.compareDocCommentsByAnchor(a, b));
   },
 
@@ -2838,6 +2877,7 @@ export const docsManagerMixin = {
     const rootId = this.getDocCommentThreadId(commentId);
     if (!rootId) return;
     const root = this.getDocCommentById(rootId);
+    this.docCommentFilter = root?.comment_status === 'resolved' ? 'resolved' : 'open';
     this.docCommentsVisible = true;
     this.docMobilePane = 'comments';
     this.selectedDocCommentId = rootId;
@@ -2859,6 +2899,7 @@ export const docsManagerMixin = {
   },
 
   openDocCommentModal(block) {
+    this.docCommentFilter = 'open';
     if (!this.selectedDocId || !block) return;
     this.docCommentsVisible = true;
     this.docMobilePane = 'comments';
@@ -2883,6 +2924,7 @@ export const docsManagerMixin = {
   },
 
   startDocCommentPlacement() {
+    this.docCommentFilter = 'open';
     const hasRichSelection = this.capturePendingRichDocCommentAnchor();
     this.docCommentsVisible = true;
     this.docMobilePane = 'comments';
@@ -3192,6 +3234,8 @@ export const docsManagerMixin = {
     const status = nextStatus === 'resolved' ? 'resolved' : 'open';
     if ((comment.comment_status || 'open') === status) return;
     if (isTowerPgBackendMode()) {
+      const workspace = this.getSelectedDocWorkspaceId();
+      const documentId = this.selectedDocId;
       const updated = {
         ...comment,
         comment_status: status,
@@ -3203,15 +3247,11 @@ export const docsManagerMixin = {
         version: (comment.version ?? 1) + 1,
         updated_at: new Date().toISOString(),
       };
-      await upsertComment(updated);
-      this.docComments = this.docComments.map((candidate) =>
-        candidate.record_id === comment.record_id ? updated : candidate
-      );
-      this.syncRoute();
-      this.scheduleDocCommentConnectorUpdate();
       try {
         const accepted = await updateTowerPgDocCommentFromLocal(this, updated);
+        if (this.getSelectedDocWorkspaceId() !== workspace || this.selectedDocId !== documentId) return;
         await replaceCommentRecord(comment.record_id, accepted);
+        if (this.selectedDocCommentId === comment.record_id) this.closeDocCommentThread({ syncRoute: false });
         this.docComments = this.docComments.map((candidate) =>
           candidate.record_id === comment.record_id ? accepted : candidate
         );
@@ -3249,6 +3289,7 @@ export const docsManagerMixin = {
       record_family_hash: envelope.record_family_hash,
       envelope,
     });
+    if (this.selectedDocCommentId === comment.record_id) this.closeDocCommentThread({ syncRoute: false });
     await this.flushAndBackgroundSync();
   },
 

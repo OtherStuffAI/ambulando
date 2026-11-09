@@ -1311,6 +1311,7 @@ export function initApp() {
     docEditingTitle: false,
     docComments: [],
     docCommentsVisible: false,
+    docCommentFilter: 'open',
     showDocCommentModal: false,
     docSelectedBlockId: null,
     docCommentAnchorLine: null,

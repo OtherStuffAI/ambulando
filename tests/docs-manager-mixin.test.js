@@ -4567,6 +4567,47 @@ describe('docsManagerMixin canonical row normalization', () => {
     });
   });
 
+  it('hides only resolved roots and preserves replies and active block counts', () => {
+    const store = createStore({ docCommentFilter: 'open', docComments: [
+      { record_id: 'active', anchor_line_number: 5, comment_status: 'open' },
+      { record_id: 'resolved', anchor_line_number: 5, comment_status: 'resolved' },
+      { record_id: 'reply', parent_comment_id: 'resolved', body: 'Kept reply' },
+    ] });
+    expect(store.getRootDocComments().map(row => row.record_id)).toEqual(['active']);
+    expect(store.getRootDocComments('resolved').map(row => row.record_id)).toEqual(['resolved']);
+    expect(store.getDocCommentReplies('resolved')).toHaveLength(1);
+    expect(store.getDocCommentsForBlock({ start_line: 5, end_line: 5 })).toHaveLength(1);
+    expect(store.getRootDocComments('all')).toHaveLength(2);
+  });
+
+  it('keeps the active thread on a denied status write and retains a newer draft after delayed acceptance', async () => {
+    const wsDb = openWorkspaceDb('pg-doc-comment-status-race'); await wsDb.open();
+    isTowerPgBackendModeMock.mockReturnValue(true);
+    const root = { record_id: 'old', target_record_id: 'doc-1', body: 'old thread', version: 1, comment_status: 'open' };
+    const store = createStore({
+      currentWorkspace: { workspaceId: 'workspace-1', workspaceOwnerNpub: 'npub1pgworkspace', directHttpsUrl: 'https://tower.example', appNpub: 'flightdeck_pg' },
+      documents: [{ record_id: 'doc-1', pg_backend: true, record_state: 'active' }], selectedDocId: 'doc-1', selectedDocType: 'document',
+      docComments: [root], selectedDocCommentId: 'old', scheduleDocCommentConnectorUpdate: vi.fn(),
+    });
+    updateTowerPgDocCommentMock.mockRejectedValueOnce(new Error('stale row version'));
+    await store.setDocCommentStatus('old', 'resolved');
+    expect(store.getRootDocComments()).toEqual([root]);
+    expect(store.selectedDocCommentId).toBe('old');
+    let accept;
+    updateTowerPgDocCommentMock.mockImplementationOnce(() => new Promise(resolve => { accept = resolve; }));
+    const pending = store.setDocCommentStatus('old', 'resolved');
+    await vi.waitFor(() => expect(accept).toBeTypeOf('function'));
+    store.selectedDocCommentId = 'new'; store.newDocCommentReplyBody = 'new reply draft';
+    store.docCommentAnchorQuote = 'new selection';
+    accept({ comment: { id: 'old', workspace_id: 'workspace-1', doc_id: 'doc-1', body: 'old thread', metadata: { comment_status: 'resolved' }, row_version: 2 } });
+    await pending;
+    expect(store.selectedDocCommentId).toBe('new');
+    expect(store.newDocCommentReplyBody).toBe('new reply draft');
+    expect(store.docCommentAnchorQuote).toBe('new selection');
+    expect(store.getRootDocComments()).toHaveLength(0);
+    expect(store.getRootDocComments('resolved')).toHaveLength(1);
+  });
+
   it('removes PG document comment threads through Tower', async () => {
     const wsDb = openWorkspaceDb('pg-doc-comment-delete');
     await wsDb.open();

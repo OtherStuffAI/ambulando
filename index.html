@@ -5755,7 +5755,7 @@
                     >
                       <path :d="$store.chat.docCommentConnector.path"></path>
                     </svg>
-                    <div class="doc-preview-surface">
+                    <div class="doc-preview-surface" x-data="$store.chat.docSelectionComments($el)">
                       <div role="status" aria-live="polite" x-cloak x-show="!$store.chat.isSelectedDocContentReadyForEditor() || ['loading', 'error'].includes($store.chat.docRichEditorLoadState)">
                         <p x-text="$store.chat.docRichEditorLoadError || (!$store.chat.isSelectedDocContentReadyForEditor() ? ($store.chat.selectedDocument?.content_storage_status === 'error' ? 'Preview only — complete document unavailable. Reconnect and retry to edit.' : 'Preview only — loading complete document…') : 'Preparing editing…')"></p>
                         <button type="button" class="btn-secondary" x-show="$store.chat.docRichEditorLoadState === 'error' || !$store.chat.isSelectedDocContentReadyForEditor()" :disabled="$store.chat.docRichEditorLoadState !== 'error' && ($store.chat.docEditDraftDirty || $store.chat.docLocalDraft)" @click="$store.chat.retrySelectedDocLoading()">Try again</button>
@@ -5781,6 +5781,7 @@
                         <template x-for="(block, index) in $store.chat.docEditorBlocks" :key="block.id || index">
                           <div
                             class="doc-block-row"
+                            :data-doc-selection-block="index"
                             :class="{
                               'doc-block-row-selected': $store.chat.blockHasSelectedDocComment(block),
                               'doc-block-row-anchor-selected': $store.chat.blockIsSelectedForComment(block, index)
@@ -5876,6 +5877,9 @@
                             <small x-text="$store.chat.getRootDocComments().length === 1 ? '1 thread' : `${$store.chat.getRootDocComments().length} threads`"></small>
                           </div>
                           <div class="doc-comment-thread-actions">
+                            <select aria-label="Comment threads" :value="$store.chat.docCommentFilter" @change="$store.chat.setDocCommentFilter($event.target.value)">
+                              <option value="open">Active</option><option value="resolved">Resolved</option>
+                            </select>
                             <button
                               type="button"
                               class="doc-thread-icon-btn"

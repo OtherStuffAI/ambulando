@@ -5744,6 +5744,14 @@
       "notes": [
         "Returning from Stripe now automatically resumes the same saved identity and order. A verified agent connection opens the workspace only after all setup checks pass."
       ]
+    },
+    {
+      "buildNumber": 2722,
+      "label": "Document selection comments and resolved threads",
+      "notes": [
+        "Comment on selected paragraph or table text while reading or editing.",
+        "Resolved comment threads stay out of Active and remain available in Resolved for reopening."
+      ]
     }
   ]
 }
