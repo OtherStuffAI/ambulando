@@ -3773,7 +3773,7 @@ export const channelsManagerMixin = {
         .slice(0, 8)
         .map((npub) => ({
           npub,
-          label: npub === this.session?.npub ? `${this.getExactSenderName?.(npub) || npub} (Note to self)` : this.getExactSenderName?.(npub) || npub,
+          label: npub === this.session?.npub ? `${this.getExactSenderName?.(npub) || 'Unknown person'} (Note to self)` : this.getExactSenderName?.(npub) || 'Unknown person',
           subtitle: '',
           avatarUrl: this.getSenderAvatar?.(npub) || '',
         }));

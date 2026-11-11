@@ -59,7 +59,7 @@ describe('channel labels', () => {
     const label = resolveChannelLabel(
       {
         record_id: 'channel-4',
-        title: 'Saved title that should not win',
+        title: 'DM',
         scope_id: '__dm__',
         participant_npubs: ['npub_me', 'npub_bob'],
       },
@@ -130,7 +130,7 @@ describe('channel labels', () => {
     expect(resolveChannelParticipants(channel)).toEqual([]);
   });
 
-  it('compacts raw npub DM labels when no profile name is cached', () => {
+  it('uses a neutral label when no profile name is cached', () => {
     const otherNpub = 'npub1erin00000000000000000000000000000000000000000000000000000000';
     const label = resolveChannelLabel(
       {
@@ -146,6 +146,25 @@ describe('channel labels', () => {
       },
     );
 
-    expect(label).toBe('npub1erin0...000000');
+    expect(label).toBe('Unknown person');
+  });
+});
+
+describe('DM display boundaries', () => {
+  it('preserves a custom name and never mutates persisted generated titles', () => {
+    const channel = { channel_type: 'dm', title: 'Release planning', participant_npubs: ['me', 'peer'] };
+    expect(resolveChannelLabel(channel, { sessionNpub: 'me', getSenderName: () => 'Alice' })).toBe('Release planning');
+    channel.title = 'DM: npub1old…key';
+    expect(resolveChannelLabel(channel, { sessionNpub: 'me', getSenderName: () => 'npub1old…key' })).toBe('Unknown person');
+    expect(channel.title).toBe('DM: npub1old…key');
+  });
+  it('tracks missing, late and updated names without changing participant identity', () => {
+    const channel = { kind: 'dm', title: 'DM', participant_npubs: ['me', 'peer'] };
+    let name = '';
+    const options = { sessionNpub: 'me', getSenderName: () => name };
+    expect(resolveChannelLabel(channel, options)).toBe('Unknown person');
+    name = 'Alice'; expect(resolveChannelLabel(channel, options)).toBe('Alice');
+    name = 'Updated Alice'; expect(resolveChannelLabel(channel, options)).toBe('Updated Alice');
+    expect(channel.participant_npubs).toEqual(['me', 'peer']);
   });
 });

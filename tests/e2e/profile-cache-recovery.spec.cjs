@@ -44,7 +44,7 @@ test('signed kind-0 replaces rendered chat npubs and survives offline reload', a
   }
   await mount();
   await expect(page.locator('.chat-thread-panel')).toBeVisible();
-  await expect(page.locator('#npub-name')).toContainText('npub');
+  await expect(page.locator('#npub-name')).toHaveText('Unknown person');
   await expect.poll(() => page.workers().some(worker => worker.url().includes('profile-worker-'))).toBe(true);
   const worker = page.workers().find(worker => worker.url().includes('profile-worker-'));
   await expect.poll(() => worker.evaluate(() => self.fixtureRequests)).toBeGreaterThan(0);

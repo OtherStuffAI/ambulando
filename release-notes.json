@@ -5752,6 +5752,20 @@
         "Comment on selected paragraph or table text while reading or editing.",
         "Resolved comment threads stay out of Active and remain available in Resolved for reopening."
       ]
+    },
+    {
+      "buildNumber": 2723,
+      "label": "Names in direct messages",
+      "notes": [
+        "Direct message labels use cached profile names and update as profiles load or change. Missing profiles show a neutral label instead of a public key. Custom conversation names are preserved."
+      ]
+    },
+    {
+      "buildNumber": 2724,
+      "label": "Live cached profile labels",
+      "notes": [
+        "Direct message and sender names also follow cached profile updates from other browser tabs while keeping exact recipient identities separate from delegated signing keys."
+      ]
     }
   ]
 }

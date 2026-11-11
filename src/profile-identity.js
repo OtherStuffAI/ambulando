@@ -35,3 +35,10 @@ export function mergeUsableProfile(previous = {}, incoming = {}) {
   if (picture) merged.picture = picture;
   return merged;
 }
+
+// Display labels may contain legacy full or shortened public keys. Identifiers
+// remain available to routing and explicit technical/key views.
+export function readableIdentityLabel(...values) {
+  return values.map(value => typeof value === 'string' ? value.trim() : '')
+    .find(value => value && !/(?:nostr:)?npub1[0-9a-z]+|\b[0-9a-f]{64}\b/i.test(value)) || null;
+}

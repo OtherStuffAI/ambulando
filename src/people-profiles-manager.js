@@ -10,7 +10,7 @@ import {
   getCachedProfile,
   upsertAddressBookPerson,
 } from './db.js';
-import { canonicalProfileNpub, usableProfileText } from './profile-identity.js';
+import { canonicalProfileNpub, usableProfileText, readableIdentityLabel } from './profile-identity.js';
 import { fetchProfileByNpub } from './profiles.js';
 import { fetchWorkspaceKeyMappings } from './api.js';
 
@@ -261,8 +261,8 @@ export const peopleProfilesManagerMixin = {
   // --- profile resolution ---
 
   resolveChatProfile(rawNpub, options = {}) {
-    // Resolve ws_key_npub → real user npub for profile lookup
-    const npub = this.resolveDisplayNpub(rawNpub);
+    // DM recipients use their exact identity, never a delegated display alias.
+    const npub = options.exact ? canonicalProfileNpub(rawNpub) : this.resolveDisplayNpub(rawNpub);
     const current = this.chatProfiles[npub] || null;
     const force = options?.force === true;
     const requirePicture = options?.requirePicture === true;
@@ -290,6 +290,10 @@ export const peopleProfilesManagerMixin = {
           profileRefreshedAt: loading ? existing.profileRefreshedAt : Date.now(),
         },
       };
+      // Keep the reactive address-book projection aligned with hydrated metadata.
+      // Later liveQuery deliveries (including other tabs) can replace this label.
+      const name = resolveProfileName(profile);
+      if (name) mergeAddressBookPersonLocal(this, { npub, label: name, source: 'profile' });
     };
     apply(null, true);
     // Hydrate independently of relay latency. A delayed hydration cannot replace
@@ -379,11 +383,9 @@ export const peopleProfilesManagerMixin = {
 
   getCachedPersonForSender(rawNpub) {
     const npub = this.resolveDisplayNpub(rawNpub);
-    for (const candidate of uniqueNpubCandidates(rawNpub, npub)) {
-      const person = this.getCachedPerson(candidate);
-      if (person) return person;
-    }
-    return null;
+    // A delegated alias and its original key are different people. Exact DM
+    // lookups use getCachedPerson directly; aliased attribution uses the mapped person.
+    return this.getCachedPerson(npub);
   },
 
   getProfileForSender(rawNpub) {
@@ -395,19 +397,21 @@ export const peopleProfilesManagerMixin = {
   getExactSenderName(rawNpub) {
     const npub = canonicalProfileNpub(rawNpub);
     const member = this.pgWorkspaceMembers?.find(member => canonicalProfileNpub(member.npub) === npub);
-    return usableProfileText(member?.display_name, this.chatProfiles?.[npub]?.name, this.getCachedPerson(npub)?.label)
-      || this.getShortNpub(npub);
+    const profile = this.chatProfiles?.[npub];
+    const name = readableIdentityLabel(this.getCachedPerson(npub)?.label, profile?.display_name, profile?.name, member?.display_name);
+    if (isFullNpubCandidate(npub)) this.resolveChatProfile(npub, { exact: true });
+    return name || 'Unknown person';
   },
 
   getSenderName(rawNpub) {
-    if (!rawNpub) return 'Unknown';
+    if (!rawNpub) return 'Unknown person';
     const npub = this.resolveDisplayNpub(rawNpub);
     const rawNpubCandidate = String(rawNpub || '').trim();
     const cached = this.getCachedPersonForSender(rawNpub);
     const member = this.pgWorkspaceMembers?.find(member => canonicalProfileNpub(member.npub) === npub);
-    const memberName = usableProfileText(member?.display_name);
-    const profileName = memberName || this.getProfileForSender(rawNpub)?.name;
-    if (profileName || cached?.label) return profileName || cached.label;
+    const profile = this.getProfileForSender(rawNpub);
+    const profileName = readableIdentityLabel(cached?.label, profile?.display_name, profile?.name, member?.display_name);
+    if (profileName) return profileName;
 
     if (isFullNpubCandidate(rawNpubCandidate) && rawNpubCandidate !== npub) {
       this.resolveChatProfile(rawNpubCandidate);
@@ -417,7 +421,7 @@ export const peopleProfilesManagerMixin = {
       this.resolveChatProfile(npub);
     }
 
-    return this.getShortNpub(npub);
+    return 'Unknown person';
   },
 
   getSenderIdentity(rawNpub) {
@@ -425,9 +429,8 @@ export const peopleProfilesManagerMixin = {
     const npub = this.resolveDisplayNpub(rawNpub);
     const profile = this.getProfileForSender(rawNpub);
     const cached = this.getCachedPersonForSender(rawNpub);
-    if (profile?.nip05) return profile.nip05;
-    if (cached?.nip05) return cached.nip05;
-    if (profile?.name || cached?.label) return this.getShortNpub(npub);
+    if (readableIdentityLabel(profile?.nip05)) return profile.nip05;
+    if (readableIdentityLabel(cached?.nip05)) return cached.nip05;
     return '';
   },
 
@@ -483,9 +486,7 @@ export const peopleProfilesManagerMixin = {
     if (!rawNpub) return '';
     const npub = this.resolveDisplayNpub(rawNpub);
     const cached = this.getCachedPerson(npub);
-    return this.chatProfiles[npub]?.nip05
-      || cached?.nip05
-      || this.getCompactNpub(npub);
+    return readableIdentityLabel(this.chatProfiles[npub]?.nip05, cached?.nip05) || '';
   },
 
   get identityCardProfile() {
@@ -655,7 +656,7 @@ export const peopleProfilesManagerMixin = {
           npub: person.npub,
           actorId: member?.actor_id || member?.id || '',
           kind: member?.kind || member?.actor_kind || 'human',
-          label: member?.display_name || this.getSenderName(person.npub),
+          label: readableIdentityLabel(member?.display_name) || this.getSenderName(person.npub),
           subtitle: this.getSenderSecondaryLabel(person.npub),
           avatarUrl: member?.picture || member?.avatar_url || member?.image || this.getSenderAvatar(person.npub),
         };
@@ -758,7 +759,7 @@ export const peopleProfilesManagerMixin = {
           npub,
           actorId: member?.actor_id || member?.id || '',
           kind: member?.kind || member?.actor_kind || 'human',
-          label: member?.display_name || this.getSenderName(npub),
+          label: readableIdentityLabel(member?.display_name) || this.getSenderName(npub),
           avatarUrl: member?.picture || member?.avatar_url || member?.image || this.getSenderAvatar(npub),
         };
       });
@@ -786,7 +787,7 @@ export const peopleProfilesManagerMixin = {
           npub: part,
           actorId: member?.actor_id || member?.id || '',
           kind: member?.kind || member?.actor_kind || 'human',
-          label: member?.display_name || this.getSenderName(part),
+          label: readableIdentityLabel(member?.display_name) || this.getSenderName(part),
           avatarUrl: member?.picture || member?.avatar_url || member?.image || this.getSenderAvatar(part),
         });
         existing.add(part);

@@ -25,11 +25,11 @@ describe('profile hydration and UI invalidation', () => {
     expect(s.getSenderAvatar(npub)).toBe('https://example.com/retained.png');
   });
 
-  it('keeps explicit workspace names ahead of public metadata and falls back on sparse member rows', () => {
+  it('prefers public kind 0 names and falls back on workspace names', () => {
     const s = store();
     s.pgWorkspaceMembers = [{ npub, display_name: 'Workspace name' }];
     s.chatProfiles[npub] = { name: 'Public name' };
-    expect(s.getSenderName(npub)).toBe('Workspace name');
+    expect(s.getSenderName(npub)).toBe('Public name');
     s.pgWorkspaceMembers = [{ npub, display_name: '' }];
     expect(s.getSenderName(npub)).toBe('Public name');
   });
@@ -78,4 +78,39 @@ describe('profile hydration and UI invalidation', () => {
     await s.resolveChatProfile(npub);
     expect(s.getSenderName(npub)).toBe('Recovered');
   });
+});
+
+it('hydrates exact DM identity despite a delegated alias and reacts to late kind 0 updates', async () => {
+  const s = store();
+  const alias = nip19.npubEncode('2'.repeat(64));
+  s._wsKeyDisplayMap = { [npub]: alias };
+  s.chatProfiles[alias] = { name: 'Different identity' };
+  getCachedProfile.mockResolvedValue({ display_name: 'Cached person', name: 'handle' });
+  const relay = deferred(); fetchProfileByNpub.mockReturnValue(relay.promise);
+  expect(s.getExactSenderName(npub)).toBe('Unknown person');
+  await vi.waitFor(() => expect(s.getExactSenderName(npub)).toBe('Cached person'));
+  relay.resolve({ display_name: 'Updated person', name: 'updated-handle' });
+  await vi.waitFor(() => expect(s.getExactSenderName(npub)).toBe('Updated person'));
+  expect(s._wsKeyDisplayMap[npub]).toBe(alias);
+  expect(s.getSenderName(npub)).toBe('Different identity');
+});
+it('rejects persisted key labels while accepting a later usable name', () => {
+  const s = store(); s.resolveChatProfile = vi.fn();
+  s.pgWorkspaceMembers = [{ npub, display_name: npub }];
+  s.addressBookPeople = [{ npub, label: 'npub1old…key' }];
+  s.chatProfiles[npub] = { name: 'f'.repeat(64) };
+  expect(s.getSenderName(npub)).toBe('Unknown person');
+  expect(s.getExactSenderName(npub)).toBe('Unknown person');
+  s.addressBookPeople = [{ npub, label: 'Recovered name' }];
+  expect(s.getExactSenderName(npub)).toBe('Recovered name');
+});
+
+it('updates DM and sender labels when another tab replaces the cached name', () => {
+  const s = store(); s.resolveChatProfile = vi.fn();
+  s.chatProfiles[npub] = { name: 'Earlier name' };
+  s.addressBookPeople = [{ npub, label: 'Earlier name' }];
+  expect(s.getExactSenderName(npub)).toBe('Earlier name');
+  s.addressBookPeople = [{ npub, label: 'Updated in another tab' }];
+  expect(s.getExactSenderName(npub)).toBe('Updated in another tab');
+  expect(s.getSenderName(npub)).toBe('Updated in another tab');
 });

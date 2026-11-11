@@ -593,7 +593,7 @@
                 <select aria-label="Report channel" x-model="$store.chat.diagnosticsSettings.channelId" :disabled="$store.chat.diagnosticsBusy">
                   <option value="">Choose a channel</option>
                   <template x-for="channel in $store.chat.diagnosticsChannelOptions" :key="channel.record_id">
-                    <option :value="channel.record_id" x-text="channel.name || channel.title || 'Channel'"></option>
+                    <option :value="channel.record_id" x-text="$store.chat.getChannelLabel(channel)"></option>
                   </template>
                 </select>
               </label>
@@ -1080,7 +1080,7 @@
                         <label class="connect-channel-card">
                           <input type="checkbox" x-model="channel.selected" />
                           <span>
-                            <strong x-text="channel.name"></strong>
+                            <strong x-text="$store.chat.getChannelLabel(channel)"></strong>
                             <small>Channel</small>
                           </span>
                         </label>
@@ -9994,7 +9994,7 @@
                     <p>Permissions below are evaluated by Tower for this exact identity. A missing permission is shown as denied.</p>
                     <details open><summary>Workspace permissions</summary><ul><template x-for="entry in ($store.chat.pgMemberAdmin.access.coverage?.workspace || [])" :key="entry.permission"><li><span x-text="$store.chat.getPgMemberAdminPermissionLabel(entry.permission)"></span>: <strong x-text="entry.allowed ? 'Allowed' : 'Denied'"></strong><details><summary>Permission code</summary><code x-text="entry.permission"></code></details></li></template></ul></details>
                     <details><summary x-text="`Scopes (${$store.chat.pgMemberAdmin.access.coverage?.scopes?.length || 0})`"></summary><template x-for="scope in ($store.chat.pgMemberAdmin.access.coverage?.scopes || [])" :key="scope.id"><div><h4 x-text="scope.name || 'Unnamed scope'"></h4><details><summary>Scope ID</summary><code x-text="scope.id"></code></details><ul><template x-for="entry in scope.permissions" :key="entry.permission"><li><span x-text="$store.chat.getPgMemberAdminPermissionLabel(entry.permission)"></span>: <strong x-text="entry.allowed ? 'Allowed' : 'Denied'"></strong><details><summary>Permission code</summary><code x-text="entry.permission"></code></details></li></template></ul></div></template></details>
-                    <details><summary x-text="`Channels (${$store.chat.pgMemberAdmin.access.coverage?.channels?.length || 0})`"></summary><template x-for="channel in ($store.chat.pgMemberAdmin.access.coverage?.channels || [])" :key="channel.id"><div><h4 x-text="channel.name || 'Unnamed channel'"></h4><details><summary>Channel ID</summary><code x-text="channel.id"></code></details><ul><template x-for="entry in channel.permissions" :key="entry.permission"><li><span x-text="$store.chat.getPgMemberAdminPermissionLabel(entry.permission)"></span>: <strong x-text="entry.allowed ? 'Allowed' : 'Denied'"></strong><details><summary>Permission code</summary><code x-text="entry.permission"></code></details></li></template></ul></div></template></details>
+                    <details><summary x-text="`Channels (${$store.chat.pgMemberAdmin.access.coverage?.channels?.length || 0})`"></summary><template x-for="channel in ($store.chat.pgMemberAdmin.access.coverage?.channels || [])" :key="channel.id"><div><h4 x-text="$store.chat.getChannelLabel(channel)"></h4><details><summary>Channel ID</summary><code x-text="channel.id"></code></details><ul><template x-for="entry in channel.permissions" :key="entry.permission"><li><span x-text="$store.chat.getPgMemberAdminPermissionLabel(entry.permission)"></span>: <strong x-text="entry.allowed ? 'Allowed' : 'Denied'"></strong><details><summary>Permission code</summary><code x-text="entry.permission"></code></details></li></template></ul></div></template></details>
                     <p x-show="!$store.chat.pgMemberAdmin.access.can_administer">Only the workspace owner can administer this role and remove members.</p>
                     <div x-show="$store.chat.pgMemberAdmin.access.can_administer">
                       <div x-show="['human', 'agent'].includes($store.chat.pgMemberAdmin.actor.kind) && !$store.chat.pgMemberAdmin.preview">

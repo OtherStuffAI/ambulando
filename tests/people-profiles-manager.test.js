@@ -69,30 +69,30 @@ describe('profile resolution', () => {
     expect(fn('npub1a')).toBe('Cached Alice');
   });
 
-  it('getSenderName returns short npub as last fallback', () => {
+  it('getSenderName returns a neutral last fallback', () => {
     const { fn } = bindMethod('getSenderName');
-    expect(fn('npub1abcdefgh')).toBe('npub1abc');
+    expect(fn('npub1abcdefgh')).toBe('Unknown person');
   });
 
   it('getSenderName queues profile resolution for full npub fallbacks', () => {
     const resolveChatProfile = vi.fn();
     const { fn } = bindMethod('getSenderName', { resolveChatProfile });
     const npub = 'npub1alice0000000000000000000000000000000000000000000000000000000';
-    expect(fn(npub)).toBe('npub1ali');
+    expect(fn(npub)).toBe('Unknown person');
     expect(resolveChatProfile).toHaveBeenCalledWith(npub);
   });
 
   it('getSenderName does not queue profile resolution for compact npub fallbacks', () => {
     const resolveChatProfile = vi.fn();
     const { fn } = bindMethod('getSenderName', { resolveChatProfile });
-    expect(fn('npub1alic...000000')).toBe('npub1ali');
+    expect(fn('npub1alic...000000')).toBe('Unknown person');
     expect(resolveChatProfile).not.toHaveBeenCalled();
   });
 
   it('getSenderName returns Unknown for empty', () => {
     const { fn } = bindMethod('getSenderName');
-    expect(fn('')).toBe('Unknown');
-    expect(fn(null)).toBe('Unknown');
+    expect(fn('')).toBe('Unknown person');
+    expect(fn(null)).toBe('Unknown person');
   });
 
   it('getSenderIdentity returns nip05 when available', () => {
@@ -102,11 +102,11 @@ describe('profile resolution', () => {
     expect(fn('npub1a')).toBe('alice@example.com');
   });
 
-  it('getSenderIdentity returns short npub when name exists but no nip05', () => {
+  it('getSenderIdentity returns empty when no nip05 exists', () => {
     const { fn } = bindMethod('getSenderIdentity', {
       chatProfiles: { npub1a: { name: 'Alice', nip05: null } },
     });
-    expect(fn('npub1a')).toBe('npub1a'.slice(0, 8));
+    expect(fn('npub1a')).toBe('');
   });
 
   it('getSenderIdentity returns empty for unknown', () => {
@@ -114,7 +114,7 @@ describe('profile resolution', () => {
     expect(fn('npub1unknown')).toBe('');
   });
 
-  it('getSenderSecondaryLabel prefers nip05 and otherwise compacts npubs', () => {
+  it('getSenderSecondaryLabel prefers nip05 and otherwise stays empty', () => {
     const { store } = bindMethod('getSenderSecondaryLabel', {
       addressBookPeople: [{
         npub: 'npub1aliceabcdefghijklmnop',
@@ -123,7 +123,7 @@ describe('profile resolution', () => {
       }],
     });
     expect(store.getSenderSecondaryLabel('npub1aliceabcdefghijklmnop')).toBe('alice@example.com');
-    expect(store.getSenderSecondaryLabel('npub1bobabcdefghijklmnop')).toBe('npub1b...mnop');
+    expect(store.getSenderSecondaryLabel('npub1bobabcdefghijklmnop')).toBe('');
   });
 
   it('getSenderAvatar returns profile picture', () => {
@@ -363,14 +363,14 @@ describe('findPeopleSuggestions', () => {
     expect(results[0].npub).toBe('npub1alice');
   });
 
-  it('uses compact cached identity text in people suggestion subtitles', () => {
+  it('omits key-only people suggestion subtitles', () => {
     const { fn } = bindMethod('findPeopleSuggestions', {
       addressBookPeople: [
         { npub: 'npub1aliceabcdefghijklmnop', label: 'Alice' },
       ],
     });
     const [result] = fn('alice');
-    expect(result.subtitle).toBe('npub1a...mnop');
+    expect(result.subtitle).toBe('');
   });
 
   it('excludes specified npubs', () => {
@@ -576,8 +576,8 @@ describe('computed getters', () => {
     });
 
     expect(store.getFlowApproverLabel('npub1alice')).toBe('Alice');
-    expect(store.getFlowApproverSubtitle('npub1alice')).toBe('npub1alice');
-    expect(store.getFlowApproverSubtitle('npub1aliceabcdefghijklmnop')).toBe('npub1a...mnop');
+    expect(store.getFlowApproverSubtitle('npub1alice')).toBe('');
+    expect(store.getFlowApproverSubtitle('npub1aliceabcdefghijklmnop')).toBe('');
     expect(store.getFlowApproverLabel('group:g1')).toBe('Approvers');
     expect(store.getFlowApproverSubtitle('group:g1')).toBe('1 members');
   });
@@ -591,5 +591,5 @@ it('DM name lookup cannot alias a different key or use its cached profile', () =
     addressBookPeople: [{ npub: 'old', label: 'Old label' }],
   });
   expect(store.getExactSenderName('old')).toBe('Old label');
-  expect(store.getExactSenderName('current')).toBe('Current agent');
+  expect(store.getExactSenderName('current')).toBe('Current profile');
 });

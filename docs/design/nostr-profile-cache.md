@@ -35,8 +35,10 @@ Workspace switches reset workspace-key display aliases and advance a generation.
 Delayed alias reads, profile hydration and relay callbacks cannot update the new
 workspace's UI. Public kind-0 data may still be saved in the existing shared public
 cache. No workspace records, cursors or membership are copied across workspaces.
-Sparse member payloads retain good stored fields; an explicit workspace actor name
-has display precedence. The address book is already shared between workspaces in
+Sparse member payloads retain good stored fields. Normal identity labels prefer
+a usable cached kind-0 name, then a usable workspace actor name. Key-only labels
+(including shortened legacy keys) are not person names; missing profiles display
+"Unknown person". Technical profile/key views retain explicit identifiers. The address book is already shared between workspaces in
 one origin; this change does not widen that boundary.
 
 ## Existing sharing and native boundary
@@ -67,3 +69,21 @@ failed refresh retention and workspace-generation fencing. The browser fixture
 `profile-cache-recovery.spec.cjs` runs the built UI and real profile worker with
 intercepted relay events and IndexedDB, then reloads with the real network offline.
 These fixtures do not establish real-user relay availability or Tower authorization.
+
+## Direct-message labels
+
+DM labels use exact participant identities, without delegated signing-key aliases.
+The shared channel label resolver supplies context headers, tabs, navigation and
+browser titles. It starts the existing bounded profile lookup, reads cached names
+immediately, and observes replacements of profile/address-book state. Generated
+`DM:` titles and key-only legacy titles never become visible identity labels;
+missing participant metadata shows "Direct message · identity unavailable".
+Custom readable channel titles stay intact. This is display-only: no channel
+record, participant list, access grant or routing identity changes.
+
+`channel-labels.test.js` and `profile-ui-recovery.test.js` cover
+neutral fallbacks, custom and legacy titles,
+exact identity lookup and reactive names. The signed worker/offline recovery test
+continues to validate durable kind-0 hydration separately. Android parity remains
+a follow-up: audit its header, composer, sidebar, pickers, cached profiles and
+late-update observation against the same display-only contract.

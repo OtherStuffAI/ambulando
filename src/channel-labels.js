@@ -3,18 +3,10 @@ import {
   normalizeDmParticipants,
 } from './dm-scope.js';
 
-function compactNpub(value = '') {
-  const text = String(value || '').trim();
-  if (text.length <= 16) return text;
-  return `${text.slice(0, 10)}...${text.slice(-6)}`;
-}
+import { readableIdentityLabel } from './profile-identity.js';
 
 function resolveParticipantName(npub, getSenderName) {
-  if (!npub) return '';
-  if (typeof getSenderName !== 'function') return compactNpub(npub);
-  const label = String(getSenderName(npub) || '').trim();
-  if (!label || label === npub) return compactNpub(npub);
-  return label;
+  return readableIdentityLabel(getSenderName?.(npub)) || 'Unknown person';
 }
 
 export function resolveChannelParticipants(channel) {
@@ -26,7 +18,7 @@ export function resolveChannelLabel(channel, { sessionNpub, getParticipants, get
 
   const title = String(channel.title || channel.name || '').trim();
   const isDirectMessage = isDmChannel(channel);
-  if (title && !isDirectMessage) return title;
+  if (title && (!isDirectMessage || (!/^dm(?::|$)/i.test(title) && readableIdentityLabel(title)))) return title;
 
   const participants = resolveChannelParticipants(channel, getParticipants, title);
   const viewerNpub = String(sessionNpub || '').trim();
