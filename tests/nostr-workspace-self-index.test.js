@@ -1,4 +1,9 @@
 import { describe, expect, it } from 'vitest';
+import { finalizeEvent, getPublicKey, nip19 } from 'nostr-tools';
+const testKey = new Uint8Array(32); testKey[31] = 1;
+const realSign = (event) => finalizeEvent(event, testKey);
+let publishedEvent;
+const readback = async () => [publishedEvent];
 import {
   WORKSPACE_SELF_INDEX_KIND,
   WORKSPACE_SELF_INDEX_PROTOCOL,
@@ -13,7 +18,7 @@ import {
   workspaceSelfIndexRelayUrls,
 } from '../src/nostr-workspace-self-index.js';
 
-const userPubkeyHex = 'a'.repeat(64);
+const userPubkeyHex = getPublicKey(testKey);
 const appPubkeyHex = flightDeckSelfIndexAppPubkeyHex();
 
 const workspace = {
@@ -105,10 +110,12 @@ describe('Nostr kind 33356 workspace self-index', () => {
       encryptForNpub: async (_npub, plaintext) => `enc:${plaintext}`,
       signEvent: async (event) => {
         signedTemplate = event;
-        return { ...event, id: 'event-1', sig: 'sig' };
+        return realSign(event);
       },
       poolFactory: () => ({
-        publish(relays) {
+        querySync: readback,
+        publish(relays, event) {
+          publishedEvent = event;
           relaysSeen = relays;
           return relays.map(() => Promise.resolve('ok'));
         },
@@ -138,7 +145,7 @@ describe('Nostr kind 33356 workspace self-index', () => {
   });
 
   it('rebroadcasts a previously signed self-index event without rebuilding content', async () => {
-    const signedEvent = {
+    const signedEvent = realSign({
       kind: 33356,
       pubkey: userPubkeyHex,
       created_at: 1780710000,
@@ -151,14 +158,16 @@ describe('Nostr kind 33356 workspace self-index', () => {
       content: 'encrypted',
       id: 'event-existing',
       sig: 'sig-existing',
-    };
+    });
     let eventSeen = null;
     const result = await broadcastWorkspaceSelfIndexEvent({
       event: signedEvent,
       workspace,
       relayUrls: ['wss://relay.test'],
       poolFactory: () => ({
+        querySync: readback,
         publish(_relays, event) {
+          publishedEvent = event;
           eventSeen = event;
           return [Promise.resolve('ok')];
         },
@@ -215,10 +224,12 @@ describe('Nostr kind 33356 workspace self-index', () => {
       encryptForNpub: async (_npub, plaintext) => `enc:${plaintext}`,
       signEvent: async (event) => {
         signedTemplate = event;
-        return { ...event, id: 'event-tombstone', sig: 'sig' };
+        return realSign(event);
       },
       poolFactory: () => ({
-        publish(relays) {
+        querySync: readback,
+        publish(relays, event) {
+          publishedEvent = event;
           return relays.map(() => Promise.resolve('ok'));
         },
         destroy() {},
@@ -226,117 +237,60 @@ describe('Nostr kind 33356 workspace self-index', () => {
       now: new Date('2026-06-08T00:00:00.000Z'),
     });
 
-    expect(result.event.id).toBe('event-tombstone');
+    expect(result.event.id).toMatch(/^[a-f0-9]{64}$/);
     expect(signedTemplate.tags.find((tag) => tag[0] === 'd')?.[1]).toBe(activeDTag);
     const encryptedPayload = JSON.parse(signedTemplate.content.slice(4));
     expect(encryptedPayload.state.deleted).toBe(true);
     expect(JSON.stringify(signedTemplate.tags)).not.toContain('tower.example');
   });
 
-  it('lets the newest tombstone suppress stale active events from other relays', async () => {
-    const activePayload = {
-      type: 'flightdeck_workspace_self_index',
-      version: 1,
-      state: { deleted: false },
-      workspace: workspace.pgDescriptor,
-    };
-    const deletedPayload = {
-      ...activePayload,
-      state: { deleted: true },
-    };
-    const baseEvent = {
-      kind: 33356,
-      pubkey: userPubkeyHex,
-      tags: [
-        ['p', userPubkeyHex],
-        ['app_pub', appPubkeyHex],
-        ['protocol', 'workspace-self-index'],
-      ],
-    };
-    const events = [
-      { ...baseEvent, id: 'older', created_at: 1, content: `enc:${JSON.stringify(activePayload)}` },
-      { ...baseEvent, id: 'newer', created_at: 2, content: `enc:${JSON.stringify(activePayload)}` },
-      { ...baseEvent, id: 'deleted', created_at: 3, content: `enc:${JSON.stringify(deletedPayload)}` },
-    ];
-
-    const queryCalls = [];
-    const result = await queryWorkspaceSelfIndexCandidates({
-      userPubkeyHex,
-      appPubkeyHex,
+  async function compatibleEvent({ host = 'tower.example', id = '11111111-1111-4111-8111-111111111111', deleted = false, time = 1, app = appPubkeyHex, content = null } = {}) {
+    const npub = nip19.npubEncode(userPubkeyHex);
+    const locator = { type: 'wingman_workspace_locator', version: 1, tower_base_url: `https://${host}`,
+      tower_service_npub: npub, workspace_service_npub: npub, workspace_owner_npub: npub,
+      workspace_id: id, app_npub: npub, label: host };
+    const payload = { type: 'flightdeck_workspace_self_index', version: 1, user_npub: npub,
+      app: { app_npub: nip19.npubEncode(app), app_pubkey: app, namespace: 'flightdeck_pg' },
+      workspace: locator, state: { deleted } };
+    const unsigned = await buildUnsignedWorkspaceSelfIndexEvent({ workspace: locator, userPubkeyHex,
+      appPubkeyHex: app, content: content ?? `enc:${JSON.stringify(payload)}`, createdAt: time });
+    return realSign(unsigned);
+  }
+  async function candidates(events) {
+    const calls = [];
+    const result = await queryWorkspaceSelfIndexCandidates({ userPubkeyHex,
       decryptFromNpub: async (_npub, ciphertext) => ciphertext.slice(4),
-      poolFactory: () => ({
-        querySync: async (relays, filter) => {
-          queryCalls.push({ relays, filter });
-          return events;
-        },
-        destroy() {},
-      }),
-    });
-
-    expect(queryCalls).toHaveLength(2);
-    expect(queryCalls[0].relays).toEqual([
-      'wss://proxy.nostr-relay.app/8c5723f2601334234e1922d2e842d6bbf209283b07120b3f1d38660915f13793',
-    ]);
-    expect(queryCalls[0].filter).toMatchObject({
-      kinds: [33356],
-      authors: [userPubkeyHex],
-      '#p': [userPubkeyHex],
-      '#app_pub': [appPubkeyHex],
-    });
-    expect(queryCalls[0].filter).not.toHaveProperty('#protocol');
-    expect(queryCalls[1]).toMatchObject({
-      relays: ['wss://relay.primal.net'],
-      filter: {
-        kinds: [33356],
-        authors: [userPubkeyHex],
-        '#p': [userPubkeyHex],
-      },
-    });
-    expect(queryCalls[1].filter).not.toHaveProperty('#app_pub');
-    expect(queryCalls[1].filter).not.toHaveProperty('#protocol');
-    expect(result.candidates).toHaveLength(0);
-
-    const tombstone = await decryptWorkspaceSelfIndexEvent({
-      event: events[2],
-      userPubkeyHex,
-      appPubkeyHex,
-      decryptFromNpub: async (_npub, ciphertext) => ciphertext.slice(4),
-    });
-    expect(tombstone.deleted).toBe(true);
-    expect(tombstone.identityKey).toContain('workspace-1');
+      poolFactory: () => ({ querySync: async (_relays, filter) => { calls.push(filter); return events; }, destroy() {} }) });
+    for (const filter of calls) expect(filter).not.toHaveProperty('#app_pub');
+    return result;
+  }
+  it('accepts foreign app indexes on two Towers without an app filter', async () => {
+    const a = await compatibleEvent();
+    const b = await compatibleEvent({ host: 'second.example', id: '22222222-2222-4222-8222-222222222222', app: userPubkeyHex });
+    const result = await candidates([null,{},a,b]);
+    expect(result.candidates.map((c) => c.locator.tower_base_url).sort()).toEqual(['https://second.example','https://tower.example']);
+  });
+  it('suppresses stale active events with newest tombstones and allows explicit newer recovery', async () => {
+    const active = await compatibleEvent();
+    const deleted = await compatibleEvent({ deleted: true, time: 2 });
+    expect((await candidates([active,deleted])).candidates).toHaveLength(0);
+    expect((await candidates([active,deleted])).tombstones).toHaveLength(1);
+    expect((await candidates([active,deleted,await compatibleEvent({time:3})])).candidates).toHaveLength(1);
+  });
+  it('does not resurrect an older locator when its signed replacement cannot decrypt', async () => {
+    expect((await candidates([await compatibleEvent(),await compatibleEvent({time:2,content:'invalid'})])).candidates).toHaveLength(0);
+  });
+  it('ignores tampered signatures without suppressing a valid address', async () => {
+    const event = await compatibleEvent();
+    expect((await candidates([event,{...event,created_at:99}])).candidates).toHaveLength(1);
+    await expect(decryptWorkspaceSelfIndexEvent({ event:{...event,content:'tampered'},userPubkeyHex })).rejects.toThrow('signature');
+  });
+  it('does not revive an older address after a newer malformed routing-tag replacement', async () => {
+    const old = await compatibleEvent();
+    for (const extra of [[['p', userPubkeyHex]], [['d', 'second-invalid-address']]]) {
+      const malformed = realSign({ ...old, created_at: 3, tags: [...old.tags, ...extra] });
+      expect((await candidates([old, malformed])).candidates).toHaveLength(0);
+    }
   });
 
-  it('accepts a newer active event when it supersedes an older tombstone', async () => {
-    const activePayload = {
-      type: 'flightdeck_workspace_self_index',
-      version: 1,
-      state: { deleted: false },
-      workspace: workspace.pgDescriptor,
-    };
-    const deletedPayload = { ...activePayload, state: { deleted: true } };
-    const baseEvent = {
-      kind: 33356,
-      pubkey: userPubkeyHex,
-      tags: [
-        ['p', userPubkeyHex],
-        ['app_pub', appPubkeyHex],
-        ['protocol', 'workspace-self-index'],
-      ],
-    };
-    const result = await queryWorkspaceSelfIndexCandidates({
-      userPubkeyHex,
-      appPubkeyHex,
-      decryptFromNpub: async (_npub, ciphertext) => ciphertext.slice(4),
-      poolFactory: () => ({
-        querySync: async () => [
-          { ...baseEvent, id: 'deleted', created_at: 1, content: `enc:${JSON.stringify(deletedPayload)}` },
-          { ...baseEvent, id: 'active', created_at: 2, content: `enc:${JSON.stringify(activePayload)}` },
-        ],
-        destroy() {},
-      }),
-    });
-
-    expect(result.candidates).toHaveLength(1);
-    expect(result.candidates[0].event.id).toBe('active');
-  });
 });

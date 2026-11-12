@@ -1,7 +1,7 @@
 # Kind 33356 Flight Deck Workspace Self-Index
 
-Status: design draft
-Last updated: 2026-06-07
+Status: implemented cross-app reader
+Last updated: 2026-11-12
 
 ## Purpose
 
@@ -70,11 +70,28 @@ identity, but opaque.
 Suggested hash input:
 
 ```text
-v1:<user_pubkey_hex>:<app_pubkey_hex>:<tower_service_pubkey_hex>:<workspace_id>
+v1:<user_pubkey_hex>:<app_pubkey_hex>:<tower_service_npub>:<workspace_id>
 ```
 
 Clients do not need to know `d` in advance. On login they can query by author,
-kind, `#p`, `#app_pub`, and `#protocol`.
+kind and `#p`, without `#app_pub`. Originating app namespaces differ across
+Deets, Alexandria, In Dialogue, Shrapnel and other compatible clients; filtering
+by the consuming app hides those indexes. Validate the singleton `app_pub` tag
+against the decrypted originating app identity and deterministic address locally.
+The locator app identity remains separate and is used for Tower membership.
+
+Readers verify signatures locally, reduce to the newest signed event per `d`
+(with lowest event ID breaking equal-time ties), and only then decrypt. A newer
+unreadable replacement or tombstone never falls back to an older active locator.
+Both flat workspace locator identities and nested `workspace.identity` are accepted.
+Every candidate requires a fresh authenticated `/me` with matching workspace,
+Tower, service, owner and locator-app identities. A failed candidate does not hide
+other Towers. Discovery never automatically selects a Tower or workspace.
+Verified Towers appear in the existing connection picker; choosing one uses its
+full authenticated paginated workspace list, including unindexed workspaces.
+Existing local connections and cached content retain their original partitions.
+Publication succeeds only after a relay ACK and exact signed-event readback;
+otherwise the existing connection remains usable with publication pending.
 
 ## Encrypted Payload
 

@@ -1,4 +1,4 @@
-import { SimplePool } from 'nostr-tools';
+import { SimplePool, verifyEvent } from 'nostr-tools';
 import { APP_NPUB, FLIGHT_DECK_PG_APP_NPUB } from './app-identity.js';
 import {
   decodeNpub,
@@ -23,6 +23,11 @@ const DEFAULT_RELAYS = [
 const RELAYS_WITH_UNINDEXED_APP_PUB_FILTERS = new Set([
   'wss://relay.primal.net',
 ]);
+
+// nostr-tools caches verification on a symbol; copied/mutated event objects must be verified anew.
+function validEvent(event) {
+  try { return verifyEvent(JSON.parse(JSON.stringify(event))); } catch { return false; }
+}
 
 function trimText(value) {
   return String(value ?? '').trim();
@@ -383,7 +388,7 @@ export async function broadcastWorkspaceSelfIndexEvent({
   now = new Date(),
   payload = null,
 } = {}) {
-  if (!event || Number(event.kind) !== WORKSPACE_SELF_INDEX_KIND) {
+  if (!event || !validEvent(event) || Number(event.kind) !== WORKSPACE_SELF_INDEX_KIND) {
     throw new Error('A signed kind 33356 workspace self-index event is required.');
   }
   assertNoCleartextLeaks(event);
@@ -399,6 +404,11 @@ export async function broadcastWorkspaceSelfIndexEvent({
       else failedRelays.push({ relay, error: result.reason?.message || String(result.reason || 'publish failed') });
     });
     if (acceptedRelays.length === 0) throw new Error('No relay accepted the workspace self-index event.');
+    const readback = await pool.querySync(acceptedRelays, { ids: [event.id], limit: 1 }, { maxWait: 2500 });
+    if (!(readback || []).some((received) => received.id === event.id && validEvent(received)
+      && received.content === event.content && received.sig === event.sig)) {
+      throw new Error('Workspace index publication pending: exact signed event readback missing.');
+    }
     return {
       event,
       payload,
@@ -425,12 +435,13 @@ export async function queryWorkspaceSelfIndexEvents({
     kinds: [WORKSPACE_SELF_INDEX_KIND],
     authors: [pubkeyHex],
     '#p': [pubkeyHex],
-    '#app_pub': [appPubkeyHex],
-    limit: 100,
+    limit: 1000,
   };
   const pool = poolFactory();
   try {
-    return await queryWithRelayCompatibleFilters(pool, relays, filter, { maxWait });
+    const events = await queryWithRelayCompatibleFilters(pool, relays, filter, { maxWait });
+    if (events.length >= 1000) throw new Error('Workspace index query incomplete; narrow relay history or retry.');
+    return events;
   } finally {
     if (typeof pool.destroy === 'function') pool.destroy();
     else if (typeof pool.close === 'function') pool.close(relays);
@@ -455,19 +466,43 @@ export async function decryptWorkspaceSelfIndexEvent({
 } = {}) {
   const pubkeyHex = normalizeNostrPubkeyHex(userPubkeyHex || decodeNpub(userNpub));
   if (event.kind !== WORKSPACE_SELF_INDEX_KIND) throw new Error('Unsupported workspace self-index kind.');
-  if (event.pubkey && event.pubkey !== pubkeyHex) throw new Error('Workspace self-index author mismatch.');
+  if (!validEvent(event)) throw new Error('Invalid workspace index signature.');
+  if (event.created_at > Math.floor(Date.now() / 1000) + 300) throw new Error('Future workspace index.');
+  if (event.pubkey !== pubkeyHex) throw new Error('Workspace self-index author mismatch.');
+  for (const key of ['d', 'p', 'app_pub', 'protocol', 'v']) {
+    const tags = event.tags.filter((tag) => tag[0] === key);
+    if (tags.length !== 1 || tags[0].length !== 2) throw new Error('Ambiguous workspace index tags.');
+  }
+  if (tagValue(event, 'v') !== '1') throw new Error('Unsupported index version.');
   if (tagValue(event, 'p') !== pubkeyHex) throw new Error('Workspace self-index recipient mismatch.');
-  if (tagValue(event, 'app_pub') !== appPubkeyHex) throw new Error('Workspace self-index app mismatch.');
+  const originatingApp = normalizeNostrPubkeyHex(tagValue(event, 'app_pub'));
   if (tagValue(event, 'protocol') !== WORKSPACE_SELF_INDEX_PROTOCOL) throw new Error('Workspace self-index protocol mismatch.');
 
   const senderNpub = userNpub || await pubkeyToNpub(pubkeyHex);
   const plaintext = await decryptFromNpub(senderNpub, event.content || '');
   const payload = JSON.parse(plaintext);
-  if (payload?.type !== WORKSPACE_SELF_INDEX_PAYLOAD_TYPE || Number(payload.version || 0) !== 1) {
+  if (payload?.type !== WORKSPACE_SELF_INDEX_PAYLOAD_TYPE || payload.version !== 1) {
     throw new Error('Invalid workspace self-index payload.');
   }
+  if (payload.user_npub !== senderNpub || payload.app?.namespace !== 'flightdeck_pg'
+    || normalizeNostrPubkeyHex(payload.app?.app_npub) !== originatingApp
+    || payload.app?.app_pubkey !== originatingApp || typeof payload.state?.deleted !== 'boolean') {
+    throw new Error('Workspace self-index payload identity mismatch.');
+  }
+  if (payload.workspace?.type !== 'wingman_workspace_locator' || payload.workspace.version !== 1) {
+    throw new Error('Unsupported workspace locator.');
+  }
   const locator = buildWorkspaceSelfIndexLocator(payload.workspace);
-  const identityKey = workspaceSelfIndexIdentityKey(locator, appPubkeyHex);
+  const origin = new URL(locator.tower_base_url);
+  if (origin.protocol !== 'https:' || origin.username || origin.password || origin.search || origin.hash
+    || origin.pathname !== '/' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(locator.workspace_id)) {
+    throw new Error('Unsafe workspace index locator.');
+  }
+  for (const value of [locator.tower_service_npub, locator.workspace_service_npub, locator.workspace_owner_npub, locator.app_npub]) normalizeNostrPubkeyHex(value);
+  const expectedAddress = await workspaceSelfIndexDTag({ userPubkeyHex: pubkeyHex,
+    appPubkeyHex: originatingApp, towerServiceNpub: locator.tower_service_npub, workspaceId: locator.workspace_id });
+  if (tagValue(event, 'd') !== expectedAddress) throw new Error('Workspace index address mismatch.');
+  const identityKey = tagValue(event, 'd');
   if (payload.state?.deleted) {
     return { event, payload, locator, deleted: true, identityKey };
   }
@@ -496,7 +531,15 @@ export async function queryWorkspaceSelfIndexCandidates({
   });
   const decrypted = [];
   const rejected = [];
-  for (const event of events || []) {
+  const latest = new Map();
+  for (const event of [...events].sort((a, b) => Number(b?.created_at || 0) - Number(a?.created_at || 0) || String(a?.id || '').localeCompare(String(b?.id || '')))) {
+    if (!validEvent(event) || event.pubkey !== normalizeNostrPubkeyHex(userPubkeyHex || decodeNpub(userNpub))
+      || event.kind !== 33356 || event.created_at > Math.floor(Date.now() / 1000) + 300) continue;
+    const addresses = event.tags.filter((tag) => tag[0] === 'd');
+    if (addresses.length === 0 || addresses[0].length < 2 || latest.has(addresses[0][1])) continue;
+    latest.set(addresses[0][1], event);
+  }
+  for (const event of latest.values()) {
     try {
       const candidate = await decryptWorkspaceSelfIndexEvent({
         event,

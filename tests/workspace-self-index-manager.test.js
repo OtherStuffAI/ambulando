@@ -277,16 +277,12 @@ describe('workspace self-index manager', () => {
       actor: { npub: 'npub1user' },
       membership: { role: 'member' },
     }, {
-      select: true,
+      select: false,
       publishSelfIndex: false,
     });
     expect(summary.verified).toBe(1);
-    expect(store.selectedWorkspaceKey).toBe(workspace.workspaceKey);
-    expect(store.currentWorkspaceOwnerNpub).toBe(workspace.workspaceOwnerNpub);
-    expect(store.selectWorkspace).toHaveBeenCalledWith(workspace.workspaceKey, {
-      pgVerified: true,
-      refresh: false,
-    });
+    expect(store.selectedWorkspaceKey).not.toBe(workspace.workspaceKey);
+    expect(store.selectWorkspace).not.toHaveBeenCalled();
     expect(store.knownWorkspaces[0]).toMatchObject({
       pgSelfIndexStatus: 'verified',
       pgSelfIndexEventId: 'event-1',
@@ -367,4 +363,14 @@ describe('workspace self-index manager', () => {
     expect(store.pgWorkspaceSelfIndexError).toContain('Found 1 workspace index event');
     expect(store.rememberVerifiedPgWorkspace).not.toHaveBeenCalled();
   });
+  it('keeps foreign tombstones scoped to their originating app address', async () => {
+    const forgotten = vi.fn();
+    const store = await bindStore({ knownWorkspaces: [], rememberPgWorkspaceForgottenThisLoad: forgotten });
+    const summary = await store.discoverPgWorkspaceSelfIndex({ candidates: [], tombstones: [{
+      locator: descriptor, payload: { app: { app_pubkey: 'foreign-app' }, state: { deleted: true } }, event: { created_at: 2 },
+    }] });
+    expect(forgotten).not.toHaveBeenCalled();
+    expect(summary.forgotten).toBe(0);
+  });
+
 });

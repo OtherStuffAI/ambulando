@@ -233,6 +233,9 @@ export const workspaceSelfIndexManagerMixin = {
       }
 
       for (const tombstone of discovered.tombstones || []) {
+        // A foreign app can retire only its own address, already reduced by the reader.
+        // It must not forget this client's saved connection or suppress another app's active index.
+        if (tombstone.payload?.app?.app_pubkey !== flightDeckSelfIndexAppPubkeyHex(APP_NPUB)) continue;
         this.rememberPgWorkspaceForgottenThisLoad?.(tombstone.locator, {
           forgottenAt: tombstone.payload?.state?.deleted_at
             || tombstone.payload?.updated_at
@@ -254,7 +257,9 @@ export const workspaceSelfIndexManagerMixin = {
           const { descriptor, me } = await this.verifyPgDescriptor(locator, {
             baseUrl: locator.tower_base_url,
           });
-          const shouldSelectWorkspace = !this.selectedWorkspaceKey;
+          this.addKnownHost?.({ url: locator.tower_base_url, label: descriptor.label || locator.tower_base_url,
+            serviceNpub: locator.tower_service_npub });
+          const shouldSelectWorkspace = false; // Discovery never chooses a Tower or workspace for the user.
           const workspace = await this.rememberVerifiedPgWorkspace(descriptor, me, {
             select: shouldSelectWorkspace,
             publishSelfIndex: false,
