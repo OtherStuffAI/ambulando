@@ -1,3 +1,4 @@
+import { filterDeckAttention } from './attention-types.js';
 import { resolveTowerPgWorkspaceContext } from './pg-workspace-context.js';
 import { standaloneDeckFiles } from './personal-attention.js';
 import {
@@ -1861,8 +1862,8 @@ export const autopilotOverviewManagerMixin = {
 
   get filteredAutopilotOverviewInbox() {
     const inbox = this.autopilotOverviewInbox;
-    return memoizedProjection(this, 'filtered-inbox', [inbox, this.deckInboxSearchQuery, this.deckInboxType], () => (
-      filterAutopilotOverviewInbox(inbox, this.deckInboxSearchQuery, this.deckInboxType || 'all')
+    return memoizedProjection(this, 'filtered-inbox', [inbox, this.deckInboxSearchQuery, this.deckInboxType, this.getAttentionTypesValue?.()], () => (
+      filterDeckAttention(filterAutopilotOverviewInbox(inbox, this.deckInboxSearchQuery, this.deckInboxType || 'all'), this.getAttentionTypesValue?.())
     ));
   },
 

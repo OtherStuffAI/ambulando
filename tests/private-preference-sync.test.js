@@ -66,3 +66,48 @@ it('adopts legacy only for its claimed actor/workspace and rejects cross-actor a
  one.store.readLegacyNostrViewer=()=> 'https://legacy.example/';await one.sync();await two.sync();expect((await two.db.private_preferences.get(preferenceStorageKey(two.context))).row.value).toBe('https://legacy.example/');
  await expect(applyPrivatePreferenceOperation({context:one.context,action:'read',row:{workspace_id:'workspace',actor_id:'bob',preference_key:'ambulando.nostr-viewer',value:'x',row_version:100}},one.db)).rejects.toThrow('Invalid private');
 });
+it('syncs attention types separately, preserves unknown fields and rejects stale offline toggles', async () => {
+ const [one,two,bob]=devices;
+ const { ATTENTION_TYPES_KEY } = await import('../src/private-preference-store.js');
+ const { toggleAttentionType } = await import('../src/attention-types.js');
+ const ctx=d=>({...d.context,preferenceKey:ATTENTION_TYPES_KEY});
+ const state=d=>d.db.private_preferences.get(preferenceStorageKey(ctx(d)));
+ await Promise.all(devices.map(d=>d.sync()));
+ await queuePrivatePreference(one.db,ctx(one),JSON.stringify({version:1,disabled:['future-kind'],extra:{retain:true}}));await one.sync();await two.sync();
+ offline.add('two');
+ await queuePrivatePreference(two.db,ctx(two),v=>toggleAttentionType(v,'task',false));
+ const pending=(await state(two)).pending;
+ await expect(two.sync()).rejects.toThrow('offline');expect((await state(two)).pending).toEqual(pending);
+ await queuePrivatePreference(one.db,ctx(one),v=>toggleAttentionType(v,'chat',false));await one.sync();
+ offline.delete('two');await two.sync();
+ expect((await state(two)).pending).toEqual([]);
+ expect(JSON.parse((await state(two)).row.value)).toEqual({version:1,disabled:['future-kind','chat'],extra:{retain:true}});
+ expect((await state(bob)).row).toBeNull();
+ expect((await two.db.private_preferences.get(preferenceStorageKey(two.context))).row).toBeNull();
+});
+it('retries an uncertain accepted attention write with the identical mutation and body', async () => {
+ const [one]=devices;
+ const { ATTENTION_TYPES_KEY }=await import('../src/private-preference-store.js');
+ const context={...one.context,preferenceKey:ATTENTION_TYPES_KEY};await one.sync();
+ await queuePrivatePreference(one.db,context,'{"version":1,"disabled":["task"]}');
+ const key=preferenceStorageKey(context),body=(await one.db.private_preferences.get(key)).pending[0];
+ // Simulate an accepted response lost after the authority committed it.
+ const row={workspace_id:context.workspaceId,actor_id:context.actorId,preference_key:ATTENTION_TYPES_KEY,value:body.value,row_version:1};
+ const partition=JSON.stringify([context.workspaceId,context.actorId,ATTENTION_TYPES_KEY]);server.set(partition,row);
+ receipts.set(`${partition}:${body.mutation_id}`,{identity:{workspace_id:context.workspaceId},preference:row});
+ await one.sync();const saved=await one.db.private_preferences.get(key);
+ expect(saved.pending).toEqual([]);expect(saved.row).toEqual(row);expect(server.get(partition).row_version).toBe(1);
+});
+it('keeps sequential offline switches together and resets attention on authoritative absence', async () => {
+ const [one]=devices;const {ATTENTION_TYPES_KEY}=await import('../src/private-preference-store.js');
+ const {toggleAttentionType}=await import('../src/attention-types.js');const context={...one.context,preferenceKey:ATTENTION_TYPES_KEY};
+ await one.sync();offline.add('one');
+ await Promise.all(['task','chat','document'].map(type=>queuePrivatePreference(one.db,context,value=>toggleAttentionType(value,type,false))));
+ const queued=await one.db.private_preferences.get(preferenceStorageKey(context));
+ expect(JSON.parse(queued.pending.at(-1).value).disabled.sort()).toEqual(['chat','document','task']);
+ expect(queued.pending.map(op=>op.expected_row_version)).toEqual([0,1,2]);
+ await expect(one.sync()).rejects.toThrow('offline');expect((await one.db.private_preferences.get(preferenceStorageKey(context))).pending).toEqual(queued.pending);
+ offline.delete('one');await one.sync();expect((await one.db.private_preferences.get(preferenceStorageKey(context))).pending).toEqual([]);
+ server.delete(JSON.stringify([context.workspaceId,context.actorId,ATTENTION_TYPES_KEY]));await one.sync();
+ expect((await one.db.private_preferences.get(preferenceStorageKey(context))).row).toBeNull();
+});

@@ -5766,6 +5766,13 @@
       "notes": [
         "Direct message and sender names also follow cached profile updates from other browser tabs while keeping exact recipient identities separate from delegated signing keys."
       ]
+    },
+    {
+      "buildNumber": 2728,
+      "label": "Synced attention types",
+      "notes": [
+        "Choose Chats, Documents, Tasks, Files and Other in Settings for Unread and Mentions across devices. Hidden items stay unread; Deck keeps ordinary read activity and explicit type navigation."
+      ]
     }
   ]
 }

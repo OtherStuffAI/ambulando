@@ -419,7 +419,7 @@
               </div>
             </header>
             <div class="notification-inbox-filters" role="group" aria-label="Notification filters">
-              <template x-for="view in [['inbox','All'],['unread','Unread'],['archived','Archived']]" :key="view[0]">
+              <template x-for="view in [['inbox','All'],['unread','Unread'],['mentions','Mentions'],['archived','Archived']]" :key="view[0]">
                 <button type="button" class="notification-inbox-filter" :class="{ active: $store.chat.notificationInboxView === view[0] }" :aria-pressed="String($store.chat.notificationInboxView === view[0])" :data-testid="'notification-inbox-view-' + view[0]" @click="$store.chat.setNotificationInboxView(view[0])" x-text="view[1]"></button>
               </template>
               <select class="notification-inbox-category" aria-label="Filter by category" data-testid="notification-inbox-category" x-show="$store.chat.notificationInboxCategories.length > 1" @change="$store.chat.setNotificationInboxCategory($event.target.value)">
@@ -8504,6 +8504,18 @@
                 <option value="edit">Edit</option>
               </select>
               <p id="document-opening-mode-help" class="settings-field-help">Choose how existing documents open. Saved for your user on this browser across workspaces. You can still switch View and Edit in a document.</p>
+              <fieldset data-testid="attention-type-settings">
+                <legend>Unread and Mentions record types</legend>
+                <p class="settings-field-help">Choose which types need your attention. Hidden items stay unread. These choices sync privately across devices for this workspace.</p>
+                <template x-for="type in $store.chat.attentionTypes" :key="type">
+                  <label class="settings-field-label settings-checkbox-row">
+                    <input type="checkbox" role="switch" :data-testid="'attention-type-' + type" :checked="$store.chat.isAttentionTypeEnabled(type)" :disabled="!$store.chat.attentionTypesReady" @change="$store.chat.setAttentionType(type, $event.target.checked)" />
+                    <span x-text="({chat:'Chats', document:'Documents', task:'Tasks', file:'Files', other:'Other'})[type]"></span>
+                  </label>
+                </template>
+                <p role="status" x-text="$store.chat.attentionTypesStatus"></p>
+                <p role="alert" x-show="$store.chat.attentionTypesError" x-text="$store.chat.attentionTypesError"></p>
+              </fieldset>
               <form @submit.prevent="$store.chat.saveNostrViewer()">
                 <label class="settings-field-label" for="nostr-viewer-base-url">Nostr viewer base URL</label>
                 <input id="nostr-viewer-base-url" type="text" inputmode="url" x-model="$store.chat.nostrViewerDraft" placeholder="https://njump.me/" aria-describedby="nostr-viewer-help nostr-viewer-error" :aria-invalid="Boolean($store.chat.nostrViewerError)" />

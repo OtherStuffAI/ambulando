@@ -1,3 +1,4 @@
+import { attentionTypesMixin } from './attention-types.js';
 import { newUserOnboardingMixin } from './new-user-onboarding.js';
 import { convertPasteToTextAttachment, forgetTextPasteUndo, guardInlineTyping, undoTextPasteConversion, updateComposerCounter } from './text-attachment-composer.js';
 import { discardPersistedTextDrafts, persistTextDraft, restorePersistedTextDrafts } from './text-attachment-drafts.js';
@@ -10754,6 +10755,7 @@ export function initApp() {
     threadLiveActivityManagerMixin,
     notificationsManagerMixin,
     notificationInboxMixin,
+    attentionTypesMixin,
     subscribedReaderMixin,
     nostrNotificationsMixin,
     messageActivityMixin,

@@ -448,10 +448,10 @@ export const unreadStoreMixin = {
   inboxReadBusy: false,
   inboxReadNotice: '',
 
-  get unreadChat() { return this._unreadChat; },
-  get unreadTasks() { return this._unreadTasks; },
-  get unreadDocs() { return this._unreadDocs; },
-  get unreadDeck() { return this._unreadChat || this._unreadTasks || this._unreadDocs; },
+  get unreadChat() { return this._unreadChat && this.isAttentionTypeEnabled?.('chat') !== false; },
+  get unreadTasks() { return this._unreadTasks && this.isAttentionTypeEnabled?.('task') !== false; },
+  get unreadDocs() { return this._unreadDocs && this.isAttentionTypeEnabled?.('document') !== false; },
+  get unreadDeck() { return (this._unreadChat && this.isAttentionTypeEnabled?.('chat') !== false) || (this._unreadTasks && this.isAttentionTypeEnabled?.('task') !== false) || (this._unreadDocs && this.isAttentionTypeEnabled?.('document') !== false); },
 
   async captureSelectedChannelUnreadSnapshot(channelId) {
     const viewerNpub = this.session?.npub;
@@ -471,7 +471,7 @@ export const unreadStoreMixin = {
   },
 
   isChannelUnread(channelId) {
-    return this._unreadChannels[channelId] === true;
+    return this._unreadChannels[channelId] === true && this.isAttentionTypeEnabled?.('chat') !== false;
   },
 
   isThreadUnread(threadId) {
@@ -902,7 +902,7 @@ export const unreadStoreMixin = {
   },
 
   async markInboxResourcesRead(resourceTypes = [], { allScopes = false } = {}) {
-    const types = [...new Set((Array.isArray(resourceTypes) ? resourceTypes : []).filter((type) => ['thread', 'task', 'document'].includes(type)))];
+    const types = [...new Set((Array.isArray(resourceTypes) ? resourceTypes : []).filter((type) => ['thread', 'task', 'document'].includes(type) && this.isAttentionTypeEnabled?.(type === 'thread' ? 'chat' : type) !== false && this.isDeckInboxTypeVisible?.(type === 'thread' ? 'chat' : type) !== false))];
     if (types.length === 0) return { ok: true, count: 0, empty: true };
 
     if (!usesTowerResourceViewState(this)) {
@@ -922,7 +922,7 @@ export const unreadStoreMixin = {
     const assertCurrent = bulkViewWorkspaceGuard(this, context);
     const states = await (this.getResourceViewStates || getBulkReadResourceStates)();
     try { assertCurrent(); } catch (error) { return { ok: false, count: 0, error: error.message }; }
-    const resources = collectScopeUnreadViewResources(states, types, {
+    let resources = collectScopeUnreadViewResources(states, types, {
       selectedScopeId: allScopes ? '' : this.pgContextScopeId,
       scopesMap: this.scopesMap,
       channels: this.channels,
@@ -930,6 +930,10 @@ export const unreadStoreMixin = {
       tasks: this.tasks,
       documents: this.documents,
     });
+    if (Array.isArray(this.visibleAutopilotOverviewInbox)) {
+      const visible = new Set(this.visibleAutopilotOverviewInbox.map(row => `${row.inboxKind === 'chat' ? 'thread' : row.inboxKind}:${row.recordId || row.id}`));
+      resources = resources.filter(row => visible.has(`${row.resource_type}:${row.resource_id}`));
+    }
     if (resources.length === 0) {
       this.applyTowerPgResourceViewStates(states);
       return { ok: true, count: 0, empty: true };

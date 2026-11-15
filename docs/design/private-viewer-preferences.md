@@ -42,3 +42,19 @@ Dexie/store convergence tests with explicitly simulated transport, and a
 Playwright two-context flow with simulated HTTP responses and real signing,
 production service, worker, IndexedDB and live projection. A simulated browser
 pass does not establish hosted authenticated cross-device activation.
+
+The same private-preference sync family also loads `ambulando.attention-types`.
+Its scalar value is JSON `{"version":1,"disabled":["task"]}` with known types
+`chat`, `document`, `task`, `file`, `other`. Missing, invalid or future schemas
+show all types; unsupported saved formats cannot be overwritten by this client.
+Toggles preserve unknown object fields and unknown disabled entries. New record
+kinds remain allowed; unclassified notification targets use `other`.
+
+Settings observes this separately keyed row through Dexie liveQuery. Unread and
+Mentions bell views and unread badges use the selection. Mixed Deck filters only
+unread disabled kinds, preserving ordinary read activity and its independent
+explicit type controls. No filter writes a read receipt. Bulk bell reads enqueue
+only observed visible enabled rows; Deck bulk reads intersect enabled types,
+explicit type controls and the displayed page. Hidden and unpaged items keep
+their original read state. Each key synchronizes independently through the
+existing owner so one key's transport failure does not prevent another's sync.

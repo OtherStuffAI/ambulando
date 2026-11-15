@@ -1030,6 +1030,7 @@ export const syncManagerMixin = {
       if (isCurrent()) {
         await synchronizeThreadPins(this);
         await this.activateNostrViewer?.();
+        this.activateAttentionTypes?.();
         this.activateNotificationInbox?.();
         await synchronizePrivatePreferences(this).catch(() => {});
         void synchronizeNotificationInbox(this).catch(() => {}); // cold start must not delay startup
@@ -3246,6 +3247,7 @@ export const syncManagerMixin = {
     }
 
     if (status === 'connected') {
+      void this.requestTowerSyncFamily?.('private-preferences').catch(() => {});
       if (message?.serverTime) {
         recordAgentActivityServerTime(resolveTowerPgWorkspaceContext(this).baseUrl || this.backendUrl || '',
           message.serverTime, { receivedAtEpochMs: message.serverTimeReceivedAt });
@@ -3572,7 +3574,10 @@ export const syncManagerMixin = {
       this.visibilityHandler = (event) => {
         if (document.hidden) return;
         this.ensureBackgroundSync(true);
-        if (!isBrowserOffline()) void this.refreshTowerPgResourceViewStates?.({ readOnly: true });
+        if (!isBrowserOffline()) {
+          void this.refreshTowerPgResourceViewStates?.({ readOnly: true });
+          void this.requestTowerSyncFamily?.('private-preferences').catch(() => {});
+        }
         if (event?.type === 'online') {
           this.markTowerReachabilityRecovered?.('browser-online', { refresh: false });
           void this.reconnectSelectedDocDraft?.().catch((error) => {

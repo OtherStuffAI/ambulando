@@ -8,9 +8,11 @@ export function privatePreferenceContext(store) {
   return { baseUrl, appNpub, workspaceId, actorId, generation, key: JSON.stringify([baseUrl, appNpub, workspaceId, actorId]) };
 }
 export const NOSTR_VIEWER_KEY = 'ambulando.nostr-viewer';
-export const preferenceStorageKey = context => `${context.key}:${NOSTR_VIEWER_KEY}`;
+export const ATTENTION_TYPES_KEY = 'ambulando.attention-types';
+export const PRIVATE_PREFERENCE_KEYS = [NOSTR_VIEWER_KEY, ATTENTION_TYPES_KEY];
+export const preferenceStorageKey = context => `${context.key}:${context.preferenceKey || NOSTR_VIEWER_KEY}`;
 export function mapPrivatePreference(row, context) {
-  if (!row || row.workspace_id !== context.workspaceId || row.actor_id !== context.actorId || row.preference_key !== NOSTR_VIEWER_KEY
+  if (!row || row.workspace_id !== context.workspaceId || row.actor_id !== context.actorId || row.preference_key !== (context.preferenceKey || NOSTR_VIEWER_KEY)
     || typeof row.value !== 'string' || !Number.isSafeInteger(row.row_version) || row.row_version < 1) throw new Error('Invalid private preference response');
   return row;
 }
@@ -22,7 +24,8 @@ export async function applyPrivatePreferenceOperation(input, db = getWorkspaceDb
     if (input.action === 'read') {
       const row = input.row === null ? null : mapPrivatePreference(input.row, context);
       if (row && (!state.row || row.row_version >= state.row.row_version)) state.row = row;
-      // Absence never erases a previously acknowledged value.
+      // An authoritative absence resets attention defaults; legacy viewer retention stays compatible.
+      if (row === null && context.preferenceKey === ATTENTION_TYPES_KEY) state.row = null;
       state.ready = true;
     } else if (input.action === 'ack') {
       const row = mapPrivatePreference(input.row, context);
@@ -48,7 +51,7 @@ export async function queuePrivatePreference(db, context, value) {
     const state = await db.private_preferences.get(key);
     if (!state?.ready) throw new Error('Connect to Tower before saving this preference for the first time.');
     const last = state.pending.at(-1);
-    state.pending.push({ value, expected_row_version: last ? last.expected_row_version + 1 : state.row?.row_version || 0, mutation_id: crypto.randomUUID() });
+    state.pending.push({ value: typeof value === 'function' ? value(last?.value ?? state.row?.value ?? '') : value, expected_row_version: last ? last.expected_row_version + 1 : state.row?.row_version || 0, mutation_id: crypto.randomUUID() });
     state.error = '';
     await db.private_preferences.put(state);
   });

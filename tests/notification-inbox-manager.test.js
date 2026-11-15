@@ -298,3 +298,20 @@ describe('notification task completion', () => {
     expect(s.applyTaskPatch).not.toHaveBeenCalled();
   });
 });
+it('filters Unread and Mentions with matching badges while bulk read preserves hidden rows',async()=>{
+ const s=store();s.getAttentionTypesValue=()=>'{"version":1,"disabled":["task"]}';
+ const hidden=rawItem('hidden',2);hidden.action.target={kind:'task',task_id:'task-hidden'};
+ const read=rawItem('read',3,{read:true});
+ const context=await seed(s,[rawItem('chat',1),hidden,read]);
+ s.activateNotificationInbox();await vi.waitFor(()=>expect(s.notificationInboxItems).toHaveLength(3));
+ expect(s.notificationInboxUnread).toBe(1);
+ await s.setNotificationInboxView('mentions');expect(s.notificationInboxItems.map(i=>i.id)).toEqual(['read','chat']);
+ await s.setNotificationInboxView('unread');expect(s.notificationInboxItems.map(i=>i.id)).toEqual(['chat']);
+ await s.markAllNotificationsRead();
+ const db=getWorkspaceDb();const state=await db.notification_inbox.get(context.key);
+ expect(state.pending.map(op=>op.item_id)).toEqual(['chat']);
+ expect((await db.notification_items.get(`${context.key}|hidden`)).read).toBe(false);
+ await vi.waitFor(()=>expect(s.notificationInboxItems).toHaveLength(0));
+ s.getAttentionTypesValue=()=>'';s.projectNotificationInbox();expect(s.notificationInboxItems.map(i=>i.id)).toEqual(['hidden']);
+ s.disposeNotificationInbox();
+});

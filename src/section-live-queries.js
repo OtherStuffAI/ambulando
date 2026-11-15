@@ -1313,6 +1313,7 @@ export const sectionLiveQueryMixin = {
     if (!this.canvasChatEmbedded) {
       this.syncPinnedThreadsContext?.(this.pinnedThreadsPartition);
       void this.activateNostrViewer?.();
+      this.activateAttentionTypes?.();
       void this.activateNotificationInbox?.();
       void this.activateFeeds?.();
     }
@@ -1377,6 +1378,7 @@ export const sectionLiveQueryMixin = {
   stopWorkspaceLiveQueries() {
     this.stopPinnedThreads?.();
     this.disposeNostrViewer?.();
+    this.disposeAttentionTypes?.();
     this.disposeNotificationInbox?.();
     disposeContextTreeView(this);
     disposePipelineViewer(this);
@@ -1390,6 +1392,7 @@ export const sectionLiveQueryMixin = {
   stopAllLiveQueries() {
     this.stopPinnedThreads?.();
     this.disposeNostrViewer?.();
+    this.disposeAttentionTypes?.();
     this.disposeNotificationInbox?.();
     disposeContextTreeView(this);
     disposePipelineViewer(this);

@@ -292,3 +292,12 @@ describe('bulk read failure isolation', () => {
     expect(store._unreadThreadItems).toEqual({ stale: true, other: true });
   });
 });
+
+it('limits bulk read to visible enabled Deck rows, leaving hidden and unpaged resources unread', async () => {
+ const {store,writes}=towerStore([state('thread','chat'),state('task','hidden'),state('document','visible'),state('document','unpaged')]);
+ store.isAttentionTypeEnabled=type=>type!=='task';
+ store.visibleAutopilotOverviewInbox=[{inboxKind:'document',recordId:'visible'}];
+ expect(await store.markInboxResourcesRead(['thread','task','document'])).toEqual({ok:true,count:1});
+ expect(writes.map(row=>row.resource_id)).toEqual(['visible']);
+ expect(store._unreadChat).toBe(true);expect(store._unreadTasks).toBe(true);expect(store._unreadDocs).toBe(true);
+});

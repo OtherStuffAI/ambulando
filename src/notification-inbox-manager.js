@@ -1,10 +1,11 @@
+import { attentionTypeEnabled, notificationAttentionType } from './attention-types.js';
 import { isDmChannel } from './dm-scope.js';
 import { liveQuery } from 'dexie';
 import { getTaskById, getWorkspaceDb } from './db.js';
 import { buildSectionUrl } from './route-helpers.js';
 import {
-  notificationInboxContext, notificationInboxContextOrNull, projectNotificationInbox, queueNotificationBulk,
-  queueNotificationPatch, unreadCount,
+  notificationInboxContext, notificationInboxContextOrNull, projectNotificationInbox,
+  queueNotificationPatch,
 } from './notification-inbox-store.js';
 import { hydrateArchivedNotifications } from './notification-inbox-sync.js';
 import { NotificationRulesConflictError, buildCategoryRows, fetchNotificationPreferences, saveInboxRule, saveChannelNotificationPreference } from './notification-rules.js';
@@ -160,7 +161,8 @@ export const notificationInboxMixin = {
   projectNotificationInbox({ rows, state, tasks = [] } = subscriptions.get(this)?.latest || {}) {
     if (!rows) return;
     const view = this.notificationInboxView;
-    const projected = projectNotificationInbox(rows, state, { view, category: this.notificationInboxCategory });
+    const allowed = row => attentionTypeEnabled(this.getAttentionTypesValue?.(), notificationAttentionType(row));
+    const projected = projectNotificationInbox(rows, state, { view: view === 'mentions' ? 'inbox' : view, category: this.notificationInboxCategory }).filter(row => (view !== 'mentions' || row.category === 'mention') && (!['unread', 'mentions'].includes(view) || allowed(row)));
     // Offer the categories present in the unfiltered view so a stale filter can always be cleared.
     this.notificationInboxCategories = [...new Set(projectNotificationInbox(rows, state, { view }).map(item => item.category))].sort();
     const taskById = new Map(tasks.map(task => [task.record_id, task]));
@@ -169,7 +171,7 @@ export const notificationInboxMixin = {
       return { ...item, ageLabel: relativeTime(item.occurred_at), route: notificationTargetRoute(item),
         taskState: task?.state, taskReadOnly: task?.read_only, taskSyncStatus: task?.sync_status };
     });
-    this.notificationInboxUnread = unreadCount(rows, state);
+    this.notificationInboxUnread = projectNotificationInbox(rows, state, { view: 'unread' }).filter(allowed).length;
     const priorChannelPreferences = JSON.stringify(this.channelNotificationPreferences);
     this.channelNotificationPreferences = state?.channel_preferences || [];
     if (priorChannelPreferences !== JSON.stringify(this.channelNotificationPreferences)) {
@@ -242,7 +244,7 @@ export const notificationInboxMixin = {
   },
 
   async setNotificationInboxView(view) {
-    if (!['inbox', 'unread', 'archived'].includes(view)) return;
+    if (!['inbox', 'unread', 'mentions', 'archived'].includes(view)) return;
     this.notificationInboxView = view;
     this.notificationInboxCategory = '';
     this.projectNotificationInbox();
@@ -319,7 +321,12 @@ export const notificationInboxMixin = {
   async markAllNotificationsRead() {
     try {
       const context = notificationInboxContext(this);
-      await queueNotificationBulk(getWorkspaceDb(), context, 'mark_read', { category: this.notificationInboxCategory, view: this.notificationInboxView === 'unread' ? 'unread' : undefined });
+      const db = getWorkspaceDb();
+      // Explicit observed rows keep hidden types and records beyond this view unread.
+      for (const item of this.notificationInboxItems.filter(item => !item.read && attentionTypeEnabled(this.getAttentionTypesValue?.(), notificationAttentionType(item)))) {
+        if (notificationInboxContextOrNull(this)?.key !== context.key) throw new Error('Workspace changed while marking notifications read.');
+        await queueNotificationPatch(db, context, item.id, { read: true }, item);
+      }
       this.notificationInboxAnnouncement = 'Notifications marked read';
       void this.requestTowerSyncFamily?.('notification-inbox').catch(() => {});
     } catch (error) { this.notificationInboxMessage = error.message; }
