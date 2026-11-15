@@ -162,7 +162,8 @@ export const notificationInboxMixin = {
     if (!rows) return;
     const view = this.notificationInboxView;
     const allowed = row => attentionTypeEnabled(this.getAttentionTypesValue?.(), notificationAttentionType(row));
-    const projected = projectNotificationInbox(rows, state, { view: view === 'mentions' ? 'inbox' : view, category: this.notificationInboxCategory }).filter(row => (view !== 'mentions' || row.category === 'mention') && (!['unread', 'mentions'].includes(view) || allowed(row)));
+    const isMention = row => ['mention', 'comment_tag'].includes(row.category);
+    const projected = projectNotificationInbox(rows, state, { view: view === 'mentions' ? 'inbox' : view, category: this.notificationInboxCategory }).filter(row => (view !== 'mentions' || isMention(row)) && (!(view === 'unread' || isMention(row)) || allowed(row)));
     // Offer the categories present in the unfiltered view so a stale filter can always be cleared.
     this.notificationInboxCategories = [...new Set(projectNotificationInbox(rows, state, { view }).map(item => item.category))].sort();
     const taskById = new Map(tasks.map(task => [task.record_id, task]));

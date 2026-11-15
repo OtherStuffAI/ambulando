@@ -51,7 +51,8 @@ Toggles preserve unknown object fields and unknown disabled entries. New record
 kinds remain allowed; unclassified notification targets use `other`.
 
 Settings observes this separately keyed row through Dexie liveQuery. Unread and
-Mentions bell views and unread badges use the selection. Mixed Deck filters only
+Mentions bell views and unread badges use the selection. Mention and comment-tag
+notifications also honor it in All. Mixed Deck filters only
 unread disabled kinds, preserving ordinary read activity and its independent
 explicit type controls. No filter writes a read receipt. Bulk bell reads enqueue
 only observed visible enabled rows; Deck bulk reads intersect enabled types,

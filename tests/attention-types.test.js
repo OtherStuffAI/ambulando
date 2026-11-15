@@ -11,7 +11,7 @@ it('supports every combination without mutating Deck records or hiding neutral a
  expect(filterDeckAttention([{inboxKind:'future',isUnread:true}],'{"version":1,"disabled":["future"]}')).toHaveLength(1);
 });
 it('defaults missing, invalid and future schemas to visible and preserves extensions on toggles', () => {
- for(const value of ['',null,'bad','{}','{"version":2,"disabled":["chat"]}','{"version":1,"disabled":[null]}']) expect(attentionTypeEnabled(value,'chat')).toBe(true);
+ for(const value of ['',null,'bad','{}','{"version":"1","disabled":["chat"]}','{"version":2,"disabled":["chat"]}','{"version":1,"disabled":[null]}']) expect(attentionTypeEnabled(value,'chat')).toBe(true);
  const original='{"version":1,"disabled":["future","task"],"extension":{"keep":true}}';
  expect(JSON.parse(toggleAttentionType(original,'task',true))).toEqual({version:1,disabled:['future'],extension:{keep:true}});
  expect(()=>toggleAttentionType('{"version":2,"disabled":[]}','chat',false)).toThrow('unsupported');
