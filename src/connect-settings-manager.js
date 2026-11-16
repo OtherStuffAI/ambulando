@@ -1,5 +1,7 @@
+import { parseWorkspaceConnection, connectionOrigin, challengeWorkspaceConnection } from './nstack-workspace-connection.js';
+import { createNip98AuthHeader } from './auth/nostr.js';
 import { requireRegisteredAmbulandoApp } from './nstack-agent-discovery.js';
-import { towerFetch as fetch, connectTowerBridge, getTowerTransport, getTowerTransportPreference, saveTowerTransportPreference } from './tower-transport.js';
+import { towerFetch as fetch, connectTowerBridge, getTowerTransport, getTowerTransportPreference, saveTowerTransportPreference, stageTowerBridge } from './tower-transport.js';
 /**
  * Connection, settings, and agent-connect methods extracted from app.js.
  *
@@ -888,6 +890,7 @@ export const connectSettingsManagerMixin = {
     this.connectHostedNotice = '';
     this.connectHostBusy = false;
     this.connectManualUrl = '';
+    this.connectWorkspacePreview = null;
     this.connectWorkspaces = [];
     this.connectWorkspacesBusy = false;
     this.connectWorkspacesError = null;
@@ -1209,9 +1212,74 @@ export const connectSettingsManagerMixin = {
     }
   },
 
+  async scanWorkspaceQr(file) {
+    try {
+      if (!globalThis.BarcodeDetector) throw Error('QR image scanning requires a browser with BarcodeDetector support. Paste the connection text instead.');
+      const image = await createImageBitmap(file);
+      let codes;
+      try { codes = await new BarcodeDetector({ formats: ['qr_code'] }).detect(image); }
+      finally { image.close(); }
+      if (codes.length !== 1) throw Error('Choose an image containing exactly one workspace QR code.');
+      this.connectManualUrl = codes[0].rawValue;
+      await this.connectByo();
+    } catch (error) { this.connectHostError = error.message; }
+  },
+
+  async confirmWorkspaceConnection() {
+    const preview = this.connectWorkspacePreview;
+    if (!preview || !this.session?.npub) { this.connectHostError = 'Sign in and preview the connection first'; return; }
+    const signer = this.session.npub;
+    this.connectHostBusy = true;
+    this.connectHostError = null;
+    let rollback;
+    try {
+      // Reparse the original bytes at confirmation; Alpine state is not a trust boundary.
+      const payload = parseWorkspaceConnection(preview.envelope);
+      const mode = preview.mode;
+      const origin = connectionOrigin(payload, mode);
+      for (const known of [...(this.knownHosts || []), ...(this.knownWorkspaces || [])]) {
+        const knownOrigin = known.directHttpsUrl || known.url;
+        const pin = known.towerServiceNpub || known.serviceNpub;
+        if (knownOrigin && normalizeBackendUrl(knownOrigin) === origin && pin && pin !== payload.service_npub) throw Error('Existing Tower identity pin differs from this QR');
+        if (known.workspaceId === payload.workspace_id && pin === payload.service_npub && known.workspaceServiceNpub && known.workspaceServiceNpub !== payload.workspace_service_npub) throw Error('Existing workspace authority pin differs from this QR');
+      }
+      if (mode === 'https' && getTowerTransport(origin).mode === 'fips') throw Error('This server already uses FIPS. Use its existing connection or explicitly change transport in settings.');
+      if (mode === 'fips') {
+        const connection = await connectTowerBridge(origin, origin, payload.service_npub);
+        rollback = stageTowerBridge(origin, connection);
+      }
+      await challengeWorkspaceConnection(payload, origin, { auth: createNip98AuthHeader, fetch });
+      if (this.session?.npub !== signer) throw Error('Sign-in identity changed; preview again');
+      const raw = await getTowerPgWorkspaceDescriptor(payload.workspace_id, { baseUrl: origin, appNpub: null });
+      const candidate = parsePgWorkspaceDescriptor({ ...raw, tower_base_url: origin });
+      if (candidate.workspaceId !== payload.workspace_id || candidate.towerServiceNpub !== payload.service_npub
+          || candidate.workspaceServiceNpub !== payload.workspace_service_npub) throw Error('Workspace descriptor identity mismatch');
+      const { descriptor, me } = await this.verifyPgDescriptor({ ...raw, tower_base_url: origin, links: {} }, { baseUrl: origin, verifyRegistration: true });
+      if (descriptor.towerBaseUrl !== origin) throw Error('Workspace descriptor endpoint mismatch');
+      if (this.session?.npub !== signer) throw Error('Sign-in identity changed; preview again');
+      const workspace = await this.rememberVerifiedPgWorkspace(descriptor, me, { clearLocalForget: true, select: false,
+        connectionMetadata: mode === 'fips' ? { fipsEndpoint: origin, peerNpub: payload.transports.fips.peer_npub } : {} });
+      if (mode === 'fips') await saveTowerTransportPreference(origin, { mode, endpoint: origin, serviceNpub: payload.service_npub });
+      rollback = null;
+      this.connectWorkspacePreview = null;
+      this.showConnectModal = false;
+      await this.selectWorkspace(workspace.workspaceKey, { pgVerified: true });
+    } catch (error) { this.connectHostError = pgErrorMessage(error); }
+    finally { if (rollback) await rollback(); this.connectHostBusy = false; }
+  },
+
   async connectByo() {
     const input = String(this.connectManualUrl || '').trim();
     if (!input) return;
+    if (input.startsWith('nstack:workspace:')) {
+      try {
+        const raw = String(this.connectManualUrl || '');
+        const payload = parseWorkspaceConnection(raw);
+        this.connectWorkspacePreview = { envelope: raw, payload, mode: payload.policy.preferred };
+        this.connectHostError = null;
+      } catch (error) { this.connectWorkspacePreview = null; this.connectHostError = error.message; }
+      return;
+    }
     // If it looks like a URL, treat as host URL
     if (/^https?:\/\//i.test(input)) {
       return this.connectToHost(input, '');

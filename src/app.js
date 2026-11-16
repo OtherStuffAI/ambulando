@@ -678,6 +678,7 @@ export function initApp() {
     connectHostError: null,
     connectHostBusy: false,
     connectManualUrl: '',
+    connectWorkspacePreview: null,
     connectWorkspaces: [],
     connectWorkspacesBusy: false,
     connectWorkspacesError: null,

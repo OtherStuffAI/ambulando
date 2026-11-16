@@ -18,7 +18,7 @@ export function normalizeFipsEndpoint(value) {
   let validNode = false;
   try { validNode = nip19.decode(node).type === 'npub'; } catch { /* invalid pairing */ }
   if (endpoint.protocol !== 'http:' || !endpoint.hostname.endsWith('.fips') || !validNode
-    || !endpoint.port || endpoint.username || endpoint.password || endpoint.search || endpoint.hash
+    || endpoint.username || endpoint.password || endpoint.search || endpoint.hash
     || endpoint.pathname !== '/') {
     throw transportError('Use one exact http://<node-npub>.fips:<port>/ Tower endpoint.');
   }
@@ -264,5 +264,19 @@ export function normalizeTowerConnectionResponse(payload) {
     ...(result.descriptor ? { descriptor: locator(result.descriptor) } : {}),
     ...(Array.isArray(result.workspaces) ? { workspaces: result.workspaces.map(locator) } : {}),
     ...(result.service?.base_url ? { service: { ...result.service, base_url: resolveTowerLogicalUrl(result.service.base_url) } } : {}),
+  };
+}
+
+// Temporary route for a confirmed connection attempt. Restore any prior handle
+// on failure; never silently reinterpret an existing request's transport.
+export function stageTowerBridge(origin, connection) {
+  origin = logicalOrigin(origin);
+  const previous = connections.get(origin);
+  connections.set(origin, connection);
+  return async () => {
+    if (connections.get(origin) === connection) {
+      if (previous) connections.set(origin, previous); else connections.delete(origin);
+    }
+    await connection.handle?.disconnect?.();
   };
 }

@@ -1,3 +1,4 @@
+import { getTowerTransport, normalizeFipsEndpoint, towerFetch } from './tower-transport.js';
 import { sha256 } from '@noble/hashes/sha2.js';
 import { bytesToHex } from '@noble/hashes/utils.js';
 import { createNip98AuthHeader } from './auth/nostr.js';
@@ -68,7 +69,16 @@ export function chooseWorkspaceAutopilot(connections, { connectionId = '', addre
 export async function requireRegisteredAmbulandoApp(origin, ownerNpub, options = {}) {
   const appNpub = options.appNpub || FLIGHT_DECK_PG_APP_NPUB;
   try { if (nip19.decode(appNpub).type !== 'npub') throw new Error(); } catch { fail('ambulando_app_missing', 'The selected workspace has no valid registered app identity. Ask its owner for a valid workspace locator.'); }
-  const payload = await nstackJson(`${nstackHttpsOrigin(origin)}/api/v4/flightdeck-pg/workspaces/${encodeURIComponent(options.workspaceId)}/app-registration`, options);
+  const transport = getTowerTransport(origin);
+  let registrationOrigin = origin;
+  if (transport.mode === 'fips') {
+    if (transport.error || transport.transport !== 'native' || !transport.handle
+      || (options.towerNpub && transport.serviceNpub !== options.towerNpub)) fail('fips_unavailable', 'The selected FIPS transport is unavailable or belongs to another Tower. No HTTPS fallback was attempted.');
+    registrationOrigin = normalizeFipsEndpoint(transport.endpoint);
+  } else { registrationOrigin = nstackHttpsOrigin(origin); }
+  const payload = await nstackJson(`${registrationOrigin}/api/v4/flightdeck-pg/workspaces/${encodeURIComponent(options.workspaceId)}/app-registration`, {
+    ...options, fetchImpl: transport.mode === 'fips' ? towerFetch : (options.fetchImpl || towerFetch),
+  });
   const descriptor = payload?.registration;
   if (options.towerNpub && payload?.identity?.tower_service_npub !== options.towerNpub) fail('registration_mismatch', 'The registration belongs to a different Tower identity. Refresh the nStack connection before retrying.');
   if (payload?.identity?.workspace_id !== options.workspaceId || payload?.identity?.workspace_owner_npub !== ownerNpub || payload?.identity?.app_npub !== appNpub) fail('registration_mismatch', 'The registered app does not match the selected workspace identity. Refresh workspace discovery and select again.');

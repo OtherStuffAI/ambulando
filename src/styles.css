@@ -1542,6 +1542,8 @@ button:disabled {
 .connect-host-url { font-size:0.82rem; color:var(--muted-foreground); }
 .connect-host-description { font-size:0.84rem; color:var(--muted-foreground); margin:0.15rem 0 0; }
 .connect-manual-form { display:flex; flex-direction:column; gap:0.5rem; margin-bottom:1rem; }
+.connect-workspace-qr-preview code { display:block; overflow-wrap:anywhere; white-space:normal; font-size:0.8rem; }
+.connect-workspace-qr-preview select { width:100%; padding:0.55rem 0.75rem; color:var(--text); border:1px solid var(--border); border-radius:var(--radius-control); background:var(--card); }
 .connect-manual-form label span { display:block; font-size:0.84rem; font-weight:600; margin-bottom:0.25rem; color:var(--foreground); }
 .connect-manual-form input { width:100%; padding:0.55rem 0.75rem; border:1px solid var(--border); border-radius:var(--radius-control); font-size:0.92rem; color:var(--text); }
 .connect-token-fallback { margin:0.75rem 0; text-align:center; }

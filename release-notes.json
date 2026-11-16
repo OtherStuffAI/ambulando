@@ -5773,6 +5773,14 @@
       "notes": [
         "Choose Chats, Documents, Tasks, Files and Other in Settings for Unread and Mentions across devices. Hidden items stay unread; Deck keeps ordinary read activity and explicit type navigation."
       ]
+    },
+    {
+      "buildNumber": 2730,
+      "label": "Signed workspace QR connections",
+      "notes": [
+        "Scan a workspace QR image or paste its connection text, preview the exact workspace and transport, then verify access using your own identity.",
+        "FIPS connections pin the advertised peer and fail without switching to HTTPS."
+      ]
     }
   ]
 }

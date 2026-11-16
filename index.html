@@ -923,14 +923,33 @@
               </div>
               <form class="connect-manual-form" @submit.prevent="$store.chat.connectByo()">
                 <label>
-                  <span x-text="$store.chat.isTowerPgMode ? 'NStack server URL or workspace descriptor' : 'NStack server URL or connection key'"></span>
-                  <input type="text" x-model="$store.chat.connectManualUrl" :placeholder="$store.chat.isTowerPgMode ? 'URL or workspace descriptor JSON' : 'URL or connection token'" :disabled="$store.chat.connectHostBusy" />
+                  <span x-text="$store.chat.isTowerPgMode ? 'NStack server URL, workspace QR text or descriptor' : 'NStack server URL or connection key'"></span>
+                  <input type="text" x-model="$store.chat.connectManualUrl" @input="$store.chat.connectWorkspacePreview = null" :placeholder="$store.chat.isTowerPgMode ? 'URL, nstack:workspace:v3:… or descriptor JSON' : 'URL or connection token'" :disabled="$store.chat.connectHostBusy" />
                 </label>
                 <button class="auth-option" type="submit" :disabled="$store.chat.connectHostBusy || !$store.chat.connectManualUrl.trim()">
                   <span x-show="!$store.chat.connectHostBusy">Connect</span>
                   <span x-show="$store.chat.connectHostBusy">Connecting...</span>
                 </button>
               </form>
+              <label>Scan workspace QR image
+                <input type="file" accept="image/*" :disabled="$store.chat.connectHostBusy" @change="if ($event.target.files[0]) $store.chat.scanWorkspaceQr($event.target.files[0])" />
+              </label>
+              <template x-if="$store.chat.connectWorkspacePreview">
+                <div class="connect-manual-form connect-workspace-qr-preview">
+                  <p>Confirm this workspace only if you trust the QR source. Your signed-in identity must already have access.</p>
+                  <strong x-text="$store.chat.connectWorkspacePreview.payload.name || 'NStack workspace'"></strong>
+                  <code x-text="$store.chat.connectWorkspacePreview.payload.workspace_id"></code>
+                  <code x-text="$store.chat.connectWorkspacePreview.payload.service_npub"></code>
+                  <code x-text="$store.chat.connectWorkspacePreview.payload.workspace_service_npub"></code>
+                  <select x-model="$store.chat.connectWorkspacePreview.mode" :disabled="$store.chat.connectHostBusy">
+                    <option value="https" :disabled="!$store.chat.connectWorkspacePreview.payload.transports.https">HTTPS</option>
+                    <option value="fips" :disabled="!$store.chat.connectWorkspacePreview.payload.transports.fips">FIPS</option>
+                  </select>
+                  <code x-text="JSON.stringify($store.chat.connectWorkspacePreview.payload.transports[$store.chat.connectWorkspacePreview.mode])"></code>
+                  <button type="button" class="auth-option" :disabled="$store.chat.connectHostBusy" @click="$store.chat.confirmWorkspaceConnection()">Confirm and verify workspace</button>
+                  <button type="button" :disabled="$store.chat.connectHostBusy" @click="$store.chat.connectWorkspacePreview = null">Cancel</button>
+                </div>
+              </template>
               <p class="auth-error" x-show="$store.chat.connectHostError" x-text="$store.chat.connectHostError"></p>
             </details>
             </div>

@@ -37,6 +37,10 @@ beforeEach(async () => {
 afterEach(() => { importTowerTransports([]); vi.unstubAllGlobals(); });
 
 describe('paired Tower transport', () => {
+  it('accepts the contract default HTTP port 80 without inventing a different endpoint', () => {
+    expect(normalizeFipsEndpoint(`http://${peerNpub}.fips:80`)).toBe(`http://${peerNpub}.fips`);
+  });
+
   it('rejects late pairing across suspension and retains the FIPS selection without public fallback', async () => {
     const native = bridge();
     let resolveHealth;
