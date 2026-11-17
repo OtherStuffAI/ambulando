@@ -179,8 +179,8 @@ describe('Inbox bulk read', () => {
   it('renders an accessible family menu and derives task icons from board-column colour while unread treatment uses information tokens', () => {
     const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
     const styles = readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8');
-    expect(html).toContain('aria-label="Inbox read actions"');
-    expect(html).toContain('role="menu" aria-label="Mark Inbox as read"');
+    expect(html).toContain('aria-label="Inbox options"');
+    expect(html).toContain('role="menu" aria-label="Inbox options"');
     expect(html).toContain("runInboxReadAction(['thread', 'task', 'document'], 'Inbox items')");
     expect(html).toContain('role="status" aria-live="polite"');
     expect(html.match(/--task-status-color': \$store\.chat\.resolveTaskBoardColumnColor\((?:item|task)\)/g)).toHaveLength(2);

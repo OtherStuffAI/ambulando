@@ -59,10 +59,10 @@ for (const width of [320,375,390,430,900,1440]) {
         await expect(page.locator('[data-deck-column="inbox"] .attention-card').first()).toContainText('Review mobile implementation');
         await search.fill('');
         await search.press('Enter');
-        await page.getByRole('button',{name:'Inbox read actions',exact:true}).click();
-        await expect(page.getByRole('menu',{name:'Mark Inbox as read'})).toBeVisible();
+        await page.getByRole('button',{name:'Inbox options',exact:true}).click();
+        await expect(page.getByRole('menu',{name:'Inbox options'})).toBeVisible();
         await page.keyboard.press('Escape');
-        await expect(page.getByRole('menu',{name:'Mark Inbox as read'})).toBeHidden();
+        await expect(page.getByRole('menu',{name:'Inbox options'})).toBeHidden();
         await page.getByRole('button',{name:'Show Feed',exact:true}).click();
         await expect(page.getByRole('button',{name:'Show Feed',exact:true})).toHaveAttribute('aria-current','page');
         await page.getByRole('button',{name:'Show Inbox',exact:true}).click();

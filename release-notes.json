@@ -5781,6 +5781,13 @@
         "Scan a workspace QR image or paste its connection text, preview the exact workspace and transport, then verify access using your own identity.",
         "FIPS connections pin the advertised peer and fail without switching to HTTPS."
       ]
+    },
+    {
+      "buildNumber": 2731,
+      "label": "Channel options from Deck",
+      "notes": [
+        "Open the current channel’s existing options from the Deck Inbox three-dot menu, alongside the mark-as-read actions."
+      ]
     }
   ]
 }
