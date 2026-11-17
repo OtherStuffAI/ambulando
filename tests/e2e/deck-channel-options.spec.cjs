@@ -60,9 +60,16 @@ for (const width of [390, 1440]) {
     await page.locator('#deck-inbox-search').click();
     await expect(menu).toBeHidden();
     await trigger.click();
-    await options.press('Tab');
-    // Normal Tab navigation can leave the menu and dismiss it.
-    for (let i = 0; i < 5; i++) await page.keyboard.press('Tab');
+    // Assert focus transitions before dismissal instead of racing the deferred
+    // focusout handler with an arbitrary burst of Tab presses.
+    await expect(options).toBeFocused();
+    for (const label of ['Mark all tasks as read', 'Mark all docs as read', 'Mark all chats as read', 'Mark everything as read']) {
+      await page.keyboard.press('Tab');
+      await expect(page.getByRole('menuitem', { name: label, exact: true })).toBeFocused();
+      await expect(menu).toBeVisible();
+    }
+    await page.keyboard.press('Tab');
+    await expect.poll(() => page.evaluate(() => !!document.activeElement?.closest('.inbox-read-menu'))).toBe(false);
     await expect(menu).toBeHidden();
 
     // No selected channel, all scopes, and inaccessible channels offer no channel action.
