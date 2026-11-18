@@ -63,7 +63,7 @@ test('Deck Create canvas opens and submits through Tower, then settings opens an
   await page.route(`**/api/v4/flightdeck-pg/workspaces/${workspaceId}/canvases/**`, handleCanvasRoute);
 
   await page.goto('/__canvas-deck-seed.html');
-  await page.evaluate(async ({ workspaceId, identity }) => {
+  const ownerNpub = await page.evaluate(async ({ workspaceId, identity }) => {
     const { signLoginEvent, pubkeyToNpub } = await import('/__canvas-deck-auth.js');
     const event = await signLoginEvent('ephemeral');
     const npub = await pubkeyToNpub(event.pubkey);
@@ -104,10 +104,22 @@ test('Deck Create canvas opens and submits through Tower, then settings opens an
       tx.onabort = () => reject(tx.error);
     });
     db.close();
+    return npub;
   }, { workspaceId, identity });
 
   await page.goto('/');
-  await page.waitForFunction(id => window.Alpine?.store?.('chat')?.currentWorkspace?.workspaceId === id, workspaceId);
+  await page.waitForFunction(() => window.Alpine?.store?.('chat')?.routeSyncPaused === false);
+  // This isolated modal fixture supplies its synthetic verified workspace;
+  // production startup deliberately refuses to mount unverified saved metadata.
+  await page.evaluate(async ({ ownerNpub, workspaceId, identity }) => {
+    const s = window.Alpine.store('chat');
+    s.session = { npub: ownerNpub };
+    const workspace = s.knownWorkspaces.find(row => row.workspaceId === workspaceId);
+    workspace.pgMe = { actor: { actor_id: 'actor-reader', npub: ownerNpub }, identity };
+    s.refreshWorkspaceSettings = async () => {};
+    await s.selectWorkspace(workspace.workspaceKey, { pgVerified: true, openWorkspaceHome: false });
+  }, { ownerNpub, workspaceId, identity });
+  await page.waitForFunction(() => Boolean(window.Alpine.store('chat').canvasPartition));
   await page.evaluate(() => {
     const store = window.Alpine.store('chat');
     store.closeThread({ syncRoute: false });

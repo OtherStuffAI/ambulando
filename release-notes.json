@@ -5795,6 +5795,12 @@
       "notes": [
         "Web mention pickers load people and channel access together, so eligible people appear as contacts finish loading without closing and reopening the thread."
       ]
+    },
+    {
+      "buildNumber": 2734,
+      "label": "Reconciled web release history",
+      "notes": [],
+      "noUserVisibleChanges": true
     }
   ]
 }
