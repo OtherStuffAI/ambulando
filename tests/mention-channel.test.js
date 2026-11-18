@@ -31,6 +31,75 @@ async function createStore() {
 }
 
 describe('channel mention lookup', () => {
+  it('does not admit a scope default recipient into a restricted channel', async () => {
+    const store = await createStore();
+    store.pgBackendMode = true;
+    store.selectedChannelId = 'restricted';
+    store.channels = [{ record_id: 'restricted', scope_id: 'scope-a' }];
+    store.scopes = [{ record_id: 'scope-a', group_ids: ['scope-owners'],
+      default_channel_grants: [{ principal_type: 'actor', principal_id: 'fixture-person', permissions: ['channel.read'] }] }];
+    store.pgWorkspaceMembers = [{ actor_id: 'fixture-person', npub: 'npub1fixtureperson', display_name: 'Morgan' }];
+    store.groups = [{ group_id: 'scope-owners', member_npubs: ['npub1fixtureperson'] }];
+    store.channelGrantsChannelId = 'restricted';
+    store.channelGrants = [];
+    expect(store.searchMentions('Morgan', { visibleOnly: true })).toEqual([]);
+  });
+  it('updates an open person picker when channel group grants hydrate', async () => {
+    const store = reactive(await createStore());
+    store.pgBackendMode = true;
+    store.selectedChannelId = 'cold-channel';
+    store.channels = [{ record_id: 'cold-channel', scope_id: 'scope-a' }];
+    store.scopes = [{ record_id: 'scope-a', group_ids: ['unrelated-scope-group'] }];
+    store.channelGrantsChannelId = 'cold-channel';
+    store.channelGrants = [];
+    store.pgWorkspaceMembers = [{ actor_id: 'fixture-person', npub: 'npub1fixtureperson' }];
+    store.groups = [];
+    store.getSenderName = npub => store.chatProfiles[npub]?.name || npub;
+    store.mentionQuery = 'Morgan';
+    store._mentionTargetEl = { dataset: { channelVisibleMentions: 'true' } };
+    store.mentionActive = true;
+    const runner = store.initMentionPeopleReactivity(effect);
+    try {
+      await Promise.resolve();
+      expect(store.mentionResults).toEqual([]);
+      store.groups = [{ group_id: 'readers', member_npubs: ['npub1fixtureperson', 'npub1retired'] }];
+      store.channelGrants = [{ principal_type: 'group', principal_id: 'readers', permissions: ['channel.read'] }];
+      store.chatProfiles = { npub1fixtureperson: { name: 'Morgan' } };
+      await Promise.resolve();
+      expect(store.mentionResults).toEqual([expect.objectContaining({ id: 'npub1fixtureperson', type: 'person', label: 'Morgan' })]);
+      store.selectedChannelId = 'elsewhere';
+      store.channels = [...store.channels, { record_id: 'elsewhere', scope_id: 'scope-b' }];
+      store.selectedBoardId = 'scope-a';
+      await Promise.resolve();
+      expect(store.mentionResults).toEqual([]);
+      store.selectedChannelId = 'cold-channel';
+      await Promise.resolve();
+      expect(store.mentionResults.map(row => row.id)).toEqual(['npub1fixtureperson']);
+      store.channelGrants = [];
+      await Promise.resolve();
+      expect(store.mentionResults).toEqual([]);
+      store.channelGrants = [{ principal_type: 'group', principal_id: 'readers', permissions: ['channel.read'] }];
+      await Promise.resolve();
+      expect(store.mentionResults.map(row => row.id)).toEqual(['npub1fixtureperson']);
+      store.pgWorkspaceMembers = [];
+      await Promise.resolve();
+      expect(store.mentionResults).toEqual([]);
+    } finally { stop(runner); }
+  });
+
+  it('uses embedded channel grants before the first grant request completes', async () => {
+    const store = reactive(await createStore());
+    store.pgBackendMode = true;
+    store.selectedChannelId = 'cold-channel';
+    store.channels = [{ record_id: 'cold-channel', channel_grants: [
+      { principal_type: 'actor', principal_id: 'fixture-person', permissions: ['channel.read'] },
+    ] }];
+    store.pgWorkspaceMembers = [{ actor_id: 'fixture-person', npub: 'npub1fixtureperson', display_name: 'Morgan' }];
+    store.channelGrants = [];
+    store.channelGrantsChannelId = null;
+    expect(store.searchMentions('Morgan', { visibleOnly: true }).map(row => row.id)).toEqual(['npub1fixtureperson']);
+  });
+
   it('updates an already open picker on late local membership, labels, grants and channel switches', async () => {
     const store = reactive(await createStore());
     store.pgBackendMode = true;

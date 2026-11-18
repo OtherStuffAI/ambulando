@@ -5,6 +5,13 @@ person and agent identities. Actor sidecars resolve record attribution; they
 must not substitute for workspace membership. Channel visibility still comes
 from the existing participant, group and grant rules.
 
+Opening a channel/composer starts independent member, group and selected-channel
+grant reads. A warm roster alone cannot resolve a person's visibility through a
+group grant. Reads share the existing directory freshness policy and selected
+channel/workspace fences; no polling is added. Scope owner groups alone never
+establish channel access. Failed reads retain cached data, and local source
+updates refresh the open picker without reopening the thread.
+
 Load cached members before local channel selection can open a composer. Keep
 the workspace member subscription active independently of remote directory
 requests. A failed or explicitly incomplete directory read cannot replace the

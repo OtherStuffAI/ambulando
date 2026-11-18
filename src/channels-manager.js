@@ -1005,7 +1005,8 @@ const channelGrantReads = new WeakMap();
 
 function channelGrantReadContext(store) {
   const { workspaceId, baseUrl, appNpub } = resolveTowerPgWorkspaceContext(store);
-  return JSON.stringify([workspaceId, baseUrl, appNpub, store.selectedChannelId]);
+  return JSON.stringify([workspaceId, baseUrl, appNpub, store.selectedChannelId,
+    store.currentWorkspaceKey, store._workspaceSelectionGeneration, store.channelSelectionGeneration]);
 }
 
 function transientChannelGrantError(error) {
@@ -1217,16 +1218,28 @@ export const channelsManagerMixin = {
 
   ensureChatMentionRoster() {
     const context = resolveTowerPgWorkspaceContext(this);
-    const key = JSON.stringify([context.workspaceId, context.baseUrl, context.appNpub]);
+    const key = JSON.stringify([context.workspaceId, context.baseUrl, context.appNpub,
+      this.selectedChannelId, this._workspaceSelectionGeneration, this.channelSelectionGeneration]);
     const previous = mentionRosterRequests.get(this);
     if (previous?.key === key && previous.workspace === this.currentWorkspace && (previous.promise || Date.now() - previous.loadedAt < 30_000)) {
       return previous.promise || Promise.resolve();
     }
     const request = { key, workspace: this.currentWorkspace, loadedAt: 0, promise: null };
-    request.promise = this.refreshTowerPgWorkspaceMembers({ limit: 200 })
-      .then(() => { request.loadedAt = Date.now(); })
-      .catch(error => {
-        flightDeckLog('warn', 'chat', 'mention roster refresh failed', { error: error?.message || String(error) });
+    // People and visibility data hydrate independently. A warm member cache
+    // alone cannot resolve a person's channel grant, particularly group grants.
+    // Reuse the existing fenced readers and directory freshness policy.
+    request.promise = Promise.allSettled([
+      this.refreshTowerPgWorkspaceMembers({ limit: 200 }),
+      this.refreshGroups?.() ?? Promise.resolve(),
+      this.refreshChannelGrants?.() ?? Promise.resolve(),
+    ])
+      .then(results => {
+        request.loadedAt = Date.now();
+        for (const result of results) {
+          if (result.status === 'rejected') flightDeckLog('warn', 'chat', 'mention directory refresh failed', {
+            error: result.reason?.message || String(result.reason),
+          });
+        }
       })
       .finally(() => { request.promise = null; });
     mentionRosterRequests.set(this, request);
@@ -2236,7 +2249,7 @@ export const channelsManagerMixin = {
     channelGrantRecovery.set(this, recovery);
   },
 
-  async cacheSelectedChannelGrants(channelId, grants = []) {
+  async cacheSelectedChannelGrants(channelId, grants = [], isCurrent = () => true) {
     const cleanChannelId = String(channelId || '').trim();
     if (!cleanChannelId) return;
     const channel = (this.channels || []).find((candidate) => candidate?.record_id === cleanChannelId);
@@ -2252,6 +2265,7 @@ export const channelsManagerMixin = {
         error: cacheError?.message || String(cacheError),
       });
     }
+    if (!isCurrent()) return;
     this.channels = (this.channels || []).map((candidate) =>
       candidate?.record_id === cleanChannelId ? nextChannel : candidate
     );
@@ -2276,7 +2290,9 @@ export const channelsManagerMixin = {
       this.cancelChannelGrantRecovery();
       this.channelGrants = Array.isArray(result?.grants) ? result.grants : [];
       this.channelGrantsChannelId = channelId;
-      await this.cacheSelectedChannelGrants(channelId, this.channelGrants);
+      await this.cacheSelectedChannelGrants(channelId, this.channelGrants,
+        () => context === channelGrantReadContext(this));
+      if (context !== channelGrantReadContext(this)) return [];
       await this.materializeSelectedDmParticipantsFromChannelGrants();
       return this.channelGrants;
     } catch (error) {

@@ -8851,8 +8851,9 @@ export function initApp() {
           ...(Array.isArray(this.currentWorkspaceGroups) ? this.currentWorkspaceGroups : []),
           ...(Array.isArray(this.groups) ? this.groups : []),
         ],
-        channelGrants: typeof this.getSelectedChannelGrantRows === 'function'
-          ? this.getSelectedChannelGrantRows(channelId)
+        // Scope defaults are creation suggestions, not access to this channel.
+        channelGrants: typeof this.getSelectedDirectChannelGrantRows === 'function'
+          ? this.getSelectedDirectChannelGrantRows(channelId)
           : (this.channelGrantRows || this.channelGrants || []),
         workspaceMembers: this.pgWorkspaceMembers,
         sessionNpub: this.session?.npub,

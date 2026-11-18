@@ -5788,6 +5788,13 @@
       "notes": [
         "Open the current channel’s existing options from the Deck Inbox three-dot menu, alongside the mark-as-read actions."
       ]
+    },
+    {
+      "buildNumber": 2732,
+      "label": "Web mentions while contacts load",
+      "notes": [
+        "Web mention pickers load people and channel access together, so eligible people appear as contacts finish loading without closing and reopening the thread."
+      ]
     }
   ]
 }

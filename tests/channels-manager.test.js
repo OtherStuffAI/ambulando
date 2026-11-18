@@ -204,6 +204,32 @@ function createPgGrantStore(overrides = {}) {
   });
 }
 
+describe('composer contact hydration', () => {
+  it('starts independent people, group and channel reads and coalesces the same selection', async () => {
+    let finishMembers;
+    const members = new Promise(resolve => { finishMembers = resolve; });
+    const store = createPgGrantStore({
+      refreshTowerPgWorkspaceMembers: vi.fn(() => members),
+      refreshGroups: vi.fn().mockRejectedValue(new Error('offline groups')),
+      refreshChannelGrants: vi.fn().mockResolvedValue([]),
+    });
+    const first = store.ensureChatMentionRoster();
+    expect(store.ensureChatMentionRoster()).toBe(first);
+    expect(store.refreshGroups).toHaveBeenCalledTimes(1);
+    expect(store.refreshChannelGrants).toHaveBeenCalledTimes(1);
+    finishMembers([]);
+    await first;
+    await store.ensureChatMentionRoster();
+    expect(store.refreshTowerPgWorkspaceMembers).toHaveBeenCalledTimes(1);
+    store.selectedChannelId = 'channel-2';
+    await store.ensureChatMentionRoster();
+    expect(store.refreshChannelGrants).toHaveBeenCalledTimes(2);
+    store._workspaceSelectionGeneration = 2;
+    await store.ensureChatMentionRoster();
+    expect(store.refreshChannelGrants).toHaveBeenCalledTimes(3);
+  });
+});
+
 describe('channels-manager pure utilities', () => {
   it('does not call retired trigger diagnostics during ordinary group refresh', () => {
     expect(channelsManagerSource).not.toContain('refreshAgentChat' + 'TriggerDiagnostics');
@@ -3405,6 +3431,30 @@ describe('channel grants transient recovery', () => {
 
 
 describe('channel grants request context ownership', () => {
+  it('does not republish old channels after a workspace switch during cache persistence', async () => {
+    const store = createPgGrantStore({ channels: [{ record_id: 'channel-1', title: 'Old' }] });
+    let finish;
+    upsertChannel.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    getTowerPgChannelGrants.mockResolvedValueOnce({ grants: [{ principal_id: 'old' }] });
+    const pending = store.refreshChannelGrants();
+    await vi.waitFor(() => expect(finish).toBeTypeOf('function'));
+    store.currentWorkspace = { ...store.currentWorkspace, workspaceId: 'workspace-2' };
+    store.channels = [{ record_id: 'channel-1', title: 'New workspace' }];
+    finish();
+    await pending;
+    expect(store.channels).toEqual([{ record_id: 'channel-1', title: 'New workspace' }]);
+  });
+  it('rejects an old read after leaving and returning to the same channel', async () => {
+    const store = createPgGrantStore({ channelSelectionGeneration: 1 });
+    let finish;
+    getTowerPgChannelGrants.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    const pending = store.refreshChannelGrants();
+    store.channelSelectionGeneration = 3;
+    finish({ grants: [{ principal_id: 'obsolete-selection' }] });
+    await pending;
+    expect(store.channelGrants.some(row => row.principal_id === 'obsolete-selection')).toBe(false);
+  });
+
   it.each(['channel', 'workspace'])('starts a replacement %s read while the old request is in flight', async (change) => {
     const store = createPgGrantStore();
     let finishOld, finishNew;
