@@ -3869,3 +3869,76 @@ it('places simple connection labels and explicit read-only retry on the Settings
   expect(store.ensureBackgroundSync).toHaveBeenCalledWith(true);
   expect(store.refreshTowerPgResourceViewStates).toHaveBeenCalledWith({ readOnly: true });
 });
+
+describe('app data refresh', () => {
+  function refreshStore(overrides = {}) {
+    return {
+      currentWorkspaceKey: 'workspace-a', selectedChannelId: 'channel-a', activeThreadId: 'thread-a',
+      isTowerPgMode: true, appDataRefreshing: false, syncing: false,
+      performTowerPgFullSync: vi.fn(async () => {}),
+      requestTowerSyncFamily: vi.fn(async () => {}),
+      refreshTowerPgWorkspaceMembers: vi.fn(async () => {}), refreshGroups: vi.fn(async () => {}),
+      refreshChannelGrants: vi.fn(async () => {}),
+      ...overrides,
+    };
+  }
+  it('forces workspace, mention authority and current conversation reads without navigation', async () => {
+    const store = refreshStore({ threadInput: 'unsaved reply', messageFileDrafts: [{ file: 'pending' }] });
+    await syncManagerMixin.refreshAppData.call(store);
+    expect(store.performTowerPgFullSync).toHaveBeenCalledWith({ manual: true });
+    expect(store.refreshTowerPgWorkspaceMembers).toHaveBeenCalledWith({ reason: 'manual', limit: 200 });
+    expect(store.refreshGroups).toHaveBeenCalledWith({ reason: 'manual', force: true, minIntervalMs: 0 });
+    expect(store.refreshChannelGrants).toHaveBeenCalledOnce();
+    expect(store.requestTowerSyncFamily.mock.calls).toEqual([
+      ['channel-messages', 'channel-a', { force: true }],
+      ['thread-history', 'channel-a:thread-a', { channelId: 'channel-a', threadId: 'thread-a', force: true }],
+    ]);
+    expect(store.threadInput).toBe('unsaved reply');
+    expect(store.messageFileDrafts).toEqual([{ file: 'pending' }]);
+    expect(store.currentWorkspaceKey).toBe('workspace-a');
+    expect(store.activeThreadId).toBe('thread-a');
+    expect(store.appDataRefreshNotice).toBe('App data refreshed.');
+  });
+  it('blocks when a document or task draft cannot be preserved', async () => {
+    for (const dirty of [
+      { docEditDraftDirty: true, preserveWikiNavigationDraft: vi.fn(async () => false) },
+      { showTaskDetail: true, taskDraftDirty: true, persistTaskLocalDraft: vi.fn(async () => false) },
+    ]) {
+      const store = refreshStore(dirty);
+      await syncManagerMixin.refreshAppData.call(store);
+      expect(store.performTowerPgFullSync).not.toHaveBeenCalled();
+      expect(store.error).toContain('Refresh could not finish:');
+      expect(store.appDataRefreshing).toBe(false);
+    }
+  });
+  it('prevents repeated refreshes, exposes failures and allows an explicit retry', async () => {
+    let rejectRead;
+    const store = refreshStore({ performTowerPgFullSync: vi.fn(() => new Promise((_, reject) => { rejectRead = reject; })) });
+    const first = syncManagerMixin.refreshAppData.call(store);
+    await syncManagerMixin.refreshAppData.call(store);
+    expect(store.performTowerPgFullSync).toHaveBeenCalledOnce();
+    rejectRead(new Error('Offline'));
+    await first;
+    expect(store.error).toContain('Offline');
+    expect(store.appDataRefreshing).toBe(false);
+    store.performTowerPgFullSync.mockResolvedValueOnce({});
+    await syncManagerMixin.refreshAppData.call(store);
+    expect(store.appDataRefreshNotice).toBe('App data refreshed.');
+  });
+  it('does not target a new workspace after switching during refresh', async () => {
+    const store = refreshStore();
+    store.performTowerPgFullSync = async () => { store.currentWorkspaceKey = 'workspace-b'; };
+    await syncManagerMixin.refreshAppData.call(store);
+    expect(store.requestTowerSyncFamily).not.toHaveBeenCalled();
+    expect(store.refreshGroups).not.toHaveBeenCalled();
+    expect(store.error).toContain('Workspace changed');
+  });
+  it('uses the existing full-sync path for a legacy workspace and skips an active sync', async () => {
+    const store = refreshStore({ isTowerPgMode: false, performSync: vi.fn(async () => {}) });
+    await syncManagerMixin.refreshAppData.call(store);
+    expect(store.performSync).toHaveBeenCalledWith({ silent: false, forceFull: true, manual: true });
+    store.syncing = true;
+    await syncManagerMixin.refreshAppData.call(store);
+    expect(store.performSync).toHaveBeenCalledOnce();
+  });
+});

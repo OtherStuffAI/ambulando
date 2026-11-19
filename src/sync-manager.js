@@ -4214,6 +4214,55 @@ export const syncManagerMixin = {
     return result;
   },
 
+  async refreshAppData() {
+    if (this.appDataRefreshing || this.syncing) return;
+    this.appDataRefreshing = true;
+    this.appDataRefreshNotice = 'Refreshing app data…';
+    const workspaceKey = this.currentWorkspaceKey;
+    const generation = this._workspaceSelectionGeneration;
+    const ensureWorkspace = () => {
+      if (workspaceKey !== this.currentWorkspaceKey || generation !== this._workspaceSelectionGeneration) {
+        throw new Error('Workspace changed. Refresh again in the selected workspace.');
+      }
+    };
+    const channelId = this.deckThreadChannelId || this.selectedChannelId;
+    const threadId = this.deckThreadTowerId || this.activeThreadId;
+    try {
+      // Keep editors and composers mounted. Reloading would discard forms,
+      // uploads and other drafts which are intentionally only held in memory.
+      if (this.docEditDraftDirty && !await this.preserveWikiNavigationDraft()) {
+        throw new Error(this.error || 'Save your document draft before refreshing.');
+      }
+      if (this.showTaskDetail && this.taskDraftDirty && !await this.persistTaskLocalDraft()) {
+        throw new Error('Save your task draft before refreshing.');
+      }
+      ensureWorkspace();
+      if (this.isTowerPgMode) {
+        await this.performTowerPgFullSync({ manual: true });
+        ensureWorkspace();
+        await Promise.all([
+          this.refreshTowerPgWorkspaceMembers({ reason: 'manual', limit: 200 }),
+          this.refreshGroups({ reason: 'manual', force: true, minIntervalMs: 0 }),
+          this.refreshChannelGrants(),
+        ]);
+        ensureWorkspace();
+        if (channelId) await this.requestTowerSyncFamily('channel-messages', channelId, { force: true });
+        ensureWorkspace();
+        if (channelId && threadId) await this.requestTowerSyncFamily('thread-history', `${channelId}:${threadId}`, {
+          channelId, threadId, force: true,
+        });
+      } else {
+        await this.performSync({ silent: false, forceFull: true, manual: true });
+      }
+      this.appDataRefreshNotice = 'App data refreshed.';
+    } catch (error) {
+      this.error = `Refresh could not finish: ${error?.message || 'Check your connection and try again.'}`;
+      this.appDataRefreshNotice = `${this.error} Your open work is retained.`;
+    } finally {
+      this.appDataRefreshing = false;
+    }
+  },
+
   async syncNow() {
     this.showAvatarMenu = false;
     try {

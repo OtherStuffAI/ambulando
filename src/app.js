@@ -1595,6 +1595,8 @@ export function initApp() {
     selectedChannelUnreadCutoff: null,
     selectedChannelUnreadChannelId: null,
     syncing: false,
+    appDataRefreshing: false,
+    appDataRefreshNotice: '',
     isLoggingIn: false,
     error: null,
     showAudioRecorderModal: false,

@@ -395,6 +395,7 @@
         <span class="sol-theme-label" x-text="$store.appearance.resolved === 'dark' ? 'Dark' : 'Light'"></span>
       </button>
       <div class="session-controls" x-show="$store.chat.isLoggedIn">
+        <button type="button" class="app-refresh-button app-refresh-desktop" @click="$store.chat.refreshAppData()" :disabled="$store.chat.appDataRefreshing || $store.chat.syncing" :aria-busy="String($store.chat.appDataRefreshing)" aria-label="Refresh app data" title="Refresh app data without closing your work"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 7v5h-5M20 12a8 8 0 1 0-2.3 5.7M20 7l-3-3"/></svg><span>Refresh data</span></button>
 
         <div class="notification-inbox-control" x-show="$store.chat.isTowerPgMode" x-cloak>
           <button
@@ -634,6 +635,8 @@
     </header>
     <div class="startup-sync-progress-panel" role="status" x-show="$store.chat.retainedDownloadNotice" x-cloak x-text="$store.chat.retainedDownloadNotice"></div>
 
+    <div class="app-refresh-notice" role="status" x-show="$store.chat.appDataRefreshNotice && !$store.chat.activeThreadId && !$store.chat.deckThreadComposerOpen" x-cloak x-text="$store.chat.appDataRefreshNotice"></div>
+
     <div class="mobile-scope-switcher" :class="{ 'mobile-context-focused': $store.chat.appHeaderHidden }" x-show="$store.chat.isLoggedIn && !$store.chat.mobileNavOpen" x-cloak>
       <div class="mobile-scope-context-controls">
         <button type="button" class="mobile-menu-btn mobile-context-menu" x-show="$store.chat.appHeaderHidden"
@@ -653,6 +656,7 @@
         <span class="mobile-context-name" :title="$store.chat.focusScopeTitle" :aria-label="'Current scope: ' + $store.chat.focusScopeTitle" x-text="$store.chat.focusScopeTitle"></span>
         <span class="mobile-context-divider" aria-hidden="true">|</span>
         <span class="mobile-context-name" :title="$store.chat.mobileHeaderChannelTitle" :aria-label="'Current channel: ' + $store.chat.mobileHeaderChannelTitle" x-text="$store.chat.mobileHeaderChannelTitle"></span>
+        <button type="button" class="app-refresh-button app-refresh-mobile" @click="$store.chat.refreshAppData()" :disabled="$store.chat.appDataRefreshing || $store.chat.syncing" :aria-busy="String($store.chat.appDataRefreshing)" aria-label="Refresh app data" title="Refresh app data without closing your work"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 7v5h-5M20 12a8 8 0 1 0-2.3 5.7M20 7l-3-3"/></svg><span>Refresh data</span></button>
         <button type="button" class="chat-channel-header-icon-btn mobile-context-fullscreen" @click="$store.chat.toggleAppHeaderHidden(); $nextTick(() => requestAnimationFrame(() => document.querySelector('.mobile-context-fullscreen')?.focus()))" :title="$store.chat.appHeaderHidden ? 'Show header' : 'Full screen'" :aria-label="$store.chat.appHeaderHidden ? 'Show header' : 'Full screen'" :aria-pressed="String($store.chat.appHeaderHidden)">
           <svg x-show="!$store.chat.appHeaderHidden" aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
           <svg x-show="$store.chat.appHeaderHidden" aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="14" y1="10" x2="21" y2="3"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
@@ -4659,6 +4663,7 @@
                   </form>
                 </div>
                 <div class="thread-header-actions">
+                  <button type="button" class="app-refresh-button app-refresh-thread" @click="$store.chat.refreshAppData()" :disabled="$store.chat.appDataRefreshing || $store.chat.syncing" :aria-busy="String($store.chat.appDataRefreshing)" aria-label="Refresh app data" title="Refresh app data without closing your work"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 7v5h-5M20 12a8 8 0 1 0-2.3 5.7M20 7l-3-3"/></svg></button>
                   <div class="thread-sequence-controls" x-show="!$store.chat.deckThreadComposerOpen && $store.chat.navSection === 'status' && $store.chat.deckThreadNavigationRows.length > 1" x-cloak role="group" aria-label="Navigate visible chats">
                     <button type="button" class="thread-resize-btn" title="Newer chat (Left Arrow)" aria-label="Open newer visible chat" :disabled="!$store.chat.canNavigateDeckThread('newer')" @click="$store.chat.navigateDeckThread('newer')">←</button>
                     <button type="button" class="thread-resize-btn" title="Older chat (Right Arrow)" aria-label="Open older visible chat" :disabled="!$store.chat.canNavigateDeckThread('older')" @click="$store.chat.navigateDeckThread('older')">→</button>
@@ -4685,6 +4690,7 @@
                   <button class="thread-close-btn" @click="$store.chat.deckThreadComposerOpen ? $store.chat.closeDeckThreadComposer() : $store.chat.closeVisibleThread()" type="button" :aria-label="$store.chat.deckThreadComposerOpen ? 'Cancel new thread' : 'Close thread'">&times;</button>
                 </div>
               </div>
+              <div class="app-refresh-notice" role="status" x-show="$store.chat.appDataRefreshNotice" x-cloak x-text="$store.chat.appDataRefreshNotice"></div>
               <div class="thread-create-empty" x-show="$store.chat.deckThreadComposerOpen" x-cloak>
                 <p>Your first message starts this thread in <strong x-text="'#' + ($store.chat.getChannelLabel($store.chat.activeThreadChannel) || 'channel')"></strong>.</p>
               </div>

@@ -290,3 +290,30 @@ or coarse pointers. `tests/e2e/composer-icons.spec.cjs` exercises responsive
 geometry, keyboard menu/send callbacks and pending/edit labels using synthetic
 records in the production template; authenticated Tower delivery and physical
 phone behavior remain separate smoke checks.
+
+## Refresh app data
+
+Refresh data lives in the desktop session toolbar and the phone context row,
+which remains reachable when the branding header is hidden. The thread dialog
+also exposes the same icon action because its modal surface covers the shell.
+Native buttons provide keyboard activation, an accessible name, a tooltip and
+busy/disabled feedback; phone targets are 44px.
+
+The action reuses manual workspace synchronization, explicitly refreshes the
+member/group directories and selected channel grants, then forces the visible
+channel and thread reads. It keeps the page, current route, authentication,
+editors, composers and pending attachments mounted. Dirty document and task
+editors use their existing local-draft checkpoints first; a failed checkpoint
+stops refresh. Workspace-generation checks prevent subsequent conversation
+reads from following a workspace switch. A failed read leaves open work in place
+and allows an explicit retry; repeated activation while busy does nothing.
+The existing service-worker Update now control remains responsible for adopting
+a coherent new application release. Data refresh does not clear caches, log out,
+reload the page or install a release.
+
+Focused sync tests cover dispatch, safeguards, failure/retry, coalescing and
+workspace switching. The Refresh data browser cases in `ambulando-sol.spec.cjs`
+exercise production controls and synchronization with synthetic read responses;
+they verify conversation changes, retained drafts/attachments/selection, keyboard
+activation and narrow geometry. They do not establish real signed-in Tower
+freshness, permissions or delivery.

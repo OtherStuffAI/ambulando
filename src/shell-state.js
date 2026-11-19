@@ -102,6 +102,8 @@ export const SHELL_STATE_KEYS = Object.freeze([
 
   // Sync status indicators
   'syncStatus',
+  'appDataRefreshing',
+  'appDataRefreshNotice',
   'syncSession',
   'syncFamilyProgress',
   'sseStatus',
@@ -404,6 +406,8 @@ export function createShellState(options = {}) {
 
     // ── Sync status indicators ────────────────────────────────
     syncStatus: 'synced',
+    appDataRefreshing: false,
+    appDataRefreshNotice: '',
     syncSession: {
       state: 'synced',
       phase: 'idle',

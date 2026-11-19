@@ -1074,3 +1074,94 @@ for (const width of [1440, 390]) {
     });
   }
 }
+
+for (const width of [320, 390, 1440]) for (const theme of ['light', 'dark']) {
+  test(`Refresh data preserves open work and selection at ${width}px ${theme}`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await openFixture(page);
+    await page.evaluate(() => {
+      const s = window.Alpine.store('chat');
+      s.isTowerPgMode = true;
+      s.ensureBackgroundSync = () => {};
+      s.ensureTowerPgControlPlaneHydrated = async () => {};
+      s.retryDeferredTowerPgSSEHydrations = () => {};
+      s.openSyncProgressModal = () => {};
+      s.refreshTowerPgWorkspaceMembers = async () => {};
+      s.refreshGroups = async () => {};
+      s.refreshChannelGrants = async () => {};
+      s.requestTowerSyncFamily = async (family) => {
+        window.refreshReads = [...(window.refreshReads || []), family];
+        await new Promise(resolve => setTimeout(resolve, 100));
+        if (family === 'thread-history') s.messages = s.messages.map(row => row.record_id === 'sol-reply' ? { ...row, body: 'Fresh conversation data received' } : row);
+        return { applied: 1 };
+      };
+      s.messageFileDrafts = [{ draft_id: 'keep-upload', filename: 'unsent.txt', status: 'pending' }];
+      s.docEditorTitle = 'Unsaved document title';
+      s.taskDraft = { title: 'Unsaved task title' };
+      window.refreshSnapshot = { workspace: s.currentWorkspaceKey, channel: s.selectedChannelId, thread: s.activeThreadId, href: location.href };
+    });
+    await page.evaluate(theme => window.Alpine.store('appearance').setTheme(theme), theme);
+    const composer = page.locator('div.chat-thread-panel [data-chat-composer="thread"]');
+    await composer.fill('Keep this unsent reply');
+    const button = page.locator('div.chat-thread-panel').getByRole('button', { name: 'Refresh app data', exact: true });
+    await expect(button).toHaveCount(1);
+    await expect(button).toHaveAttribute('title', 'Refresh app data without closing your work');
+    const bounds = await button.boundingBox();
+    expect(bounds.x).toBeGreaterThanOrEqual(0);
+    expect(bounds.x + bounds.width).toBeLessThanOrEqual(width);
+    if (width < 768) { expect(bounds.width).toBeGreaterThanOrEqual(44); expect(bounds.height).toBeGreaterThanOrEqual(44); }
+    await button.focus();
+    await page.keyboard.press('Enter');
+    await expect(button).toBeDisabled();
+    await page.evaluate(() => window.Alpine.store('chat').refreshAppData());
+    await expect(page.getByRole('status').filter({ hasText: 'App data refreshed.' })).toBeVisible();
+    await expect(page.locator('div.chat-thread-panel')).toContainText('Fresh conversation data received');
+    await expect(composer).toHaveText('Keep this unsent reply');
+    expect(await page.evaluate(() => {
+      const s = window.Alpine.store('chat');
+      return { workspace: s.currentWorkspaceKey, channel: s.selectedChannelId, thread: s.activeThreadId, href: location.href };
+    })).toEqual(await page.evaluate(() => window.refreshSnapshot));
+    expect(await page.evaluate(() => ({ draft: window.Alpine.store('chat').messageFileDrafts[0].draft_id, doc: window.Alpine.store('chat').docEditorTitle, task: window.Alpine.store('chat').taskDraft.title }))).toEqual({ draft: 'keep-upload', doc: 'Unsaved document title', task: 'Unsaved task title' });
+    expect(await page.evaluate(() => window.refreshReads)).toEqual(['workspace-bootstrap', 'channel-messages', 'thread-history']);
+    // A failed manual read retains the editor, then Space explicitly retries.
+    await page.evaluate(() => {
+      const s = window.Alpine.store('chat');
+      window.refreshReader = s.requestTowerSyncFamily;
+      s.requestTowerSyncFamily = async () => { throw new Error('Fixture offline'); };
+    });
+    await button.click();
+    await expect(page.getByRole('alert').filter({ hasText: 'Refresh could not finish: Fixture offline' })).toBeVisible();
+    await expect(composer).toHaveText('Keep this unsent reply');
+    await page.evaluate(() => { window.Alpine.store('chat').requestTowerSyncFamily = window.refreshReader; });
+    await button.focus();
+    await page.keyboard.press('Space');
+    await expect(page.getByRole('status').filter({ hasText: 'App data refreshed.' })).toBeVisible();
+    await expect(button).toBeEnabled();
+    if (width < 768) {
+      await page.evaluate(() => { window.Alpine.store('chat').appHeaderHidden = true; });
+      await expect(button).toBeVisible();
+      expect((await button.boundingBox()).x + (await button.boundingBox()).width).toBeLessThanOrEqual(width);
+    }
+    await capture(page, `refresh-data-${width}-${theme}-thread`);
+    await page.evaluate(theme => {
+      window.Alpine.store('appearance').setTheme(theme);
+      const s = window.Alpine.store('chat');
+      s.closeThread({ syncRoute: false });
+      s.appHeaderHidden = false;
+    }, theme);
+    const shellButton = page.locator('.app-refresh-desktop:visible, .app-refresh-mobile:visible');
+    await expect(shellButton).toHaveCount(1);
+    await expect(shellButton).toBeVisible();
+    await shellButton.click();
+    await expect(shellButton).toBeEnabled();
+    expect((await shellButton.boundingBox()).x + (await shellButton.boundingBox()).width).toBeLessThanOrEqual(width);
+    if (width < 768) {
+      await page.evaluate(() => { window.Alpine.store('chat').appHeaderHidden = true; });
+      await expect(shellButton).toBeVisible();
+      await shellButton.focus();
+      await page.keyboard.press('Space');
+      await expect(shellButton).toBeEnabled();
+    }
+    await capture(page, `refresh-data-${width}-${theme}-shell`);
+  });
+}

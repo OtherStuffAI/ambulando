@@ -5801,6 +5801,13 @@
       "label": "Reconciled web release history",
       "notes": [],
       "noUserVisibleChanges": true
+    },
+    {
+      "buildNumber": 2735,
+      "label": "Refresh app data",
+      "notes": [
+        "Use Refresh data in the app toolbar to fetch current workspace and conversation data while keeping your location and open work."
+      ]
     }
   ]
 }

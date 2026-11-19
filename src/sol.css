@@ -825,3 +825,18 @@ code, pre { font-family:var(--font-code); }
 .new-user-reference { font-size:11px; overflow-wrap:anywhere; margin:24px 0 12px; color:var(--muted-foreground); }
 .new-user-alternate { background:transparent; color:var(--foreground); text-decoration:underline; padding-inline:0; }
 @media (max-width:520px) { .new-user-fields { grid-template-columns:1fr; } .new-user-onboarding { max-height:100dvh; border-radius:0; } }
+
+/* Data refresh keeps open editors mounted, including in focused phone mode. */
+.app-refresh-button { display:inline-flex; align-items:center; justify-content:center; gap:6px; padding:6px 10px; color:var(--foreground); background:var(--card); border:1px solid var(--border); flex-shrink:0; }
+.app-refresh-button:hover:not(:disabled) { background:var(--accent); }
+.app-refresh-mobile { display:none; }
+.app-refresh-notice { flex-shrink:0; padding:2px 12px; font-size:12px; color:var(--muted-foreground); background:var(--background); }
+@media (max-width:768px) {
+  .app-refresh-desktop { display:none; }
+  .app-refresh-mobile { display:inline-flex; min-width:44px; min-height:44px; padding:8px; }
+  .app-refresh-mobile span { display:none; }
+  .mobile-scope-context-controls { grid-template-columns:44px minmax(0,1fr) auto minmax(0,1fr) 44px 44px; }
+  .mobile-context-focused .mobile-scope-context-controls { grid-template-columns:44px 44px minmax(0,1fr) auto minmax(0,1fr) 44px 44px; }
+}
+
+.app-refresh-thread { min-width:36px; }
