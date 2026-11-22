@@ -74,6 +74,8 @@ test('phone Apps and stable route adopt existing private Files without creating 
   await page.getByRole('button', { name: 'Trust and open', exact: true }).click();
   await expect(frame.getByRole('button', { name: 'Metrics', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Close artefact', exact: true }).click();
+  // Reload the browser receipt independently of the synthetic extension login.
+  await page.evaluate(() => localStorage.removeItem('nostr_secure_auth_recovery_v1'));
   await page.reload(); await seed();
   await page.getByRole('button', { name: 'Open Daily Metrics', exact: true }).click();
   await expect(frame.getByRole('button', { name: 'Metrics', exact: true })).toBeVisible();
