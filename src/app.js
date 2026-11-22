@@ -10797,7 +10797,7 @@ export function initApp() {
   }
   if (typeof Alpine.directive === 'function') {
     registerCanvasBoard(Alpine, { controllerFor: id => Alpine.store('chat').artefactBoardController(id), actionFor: () => ({ action: 'save', label: 'Save', disabled: !Alpine.store('chat').artefact.board?.dirty || Alpine.store('chat').artefact.board?.save_state === 'saving' }), runAction: (_naplet, action) => Alpine.store('chat').artefactBoardAction(action) });
-    registerCanvasHtml(Alpine, { name: 'artefact-html', assetStore: () => Alpine.store('chat').artefactAssetStore() });
+    registerCanvasHtml(Alpine, { name: 'artefact-html', assetStore: () => Alpine.store('chat').artefactAssetStore(), dataHost: () => Alpine.store('chat').artefactDataHost() });
   }
   Alpine.store('chat', storeObj);
   Alpine.store('chat')?.installCanvasChatLifecycle?.();

@@ -15,7 +15,7 @@ function nonce() {
  * window only. An unload before the next generated document means the artefact
  * navigated itself: the frame is replaced and receives nothing further.
  */
-export function registerCanvasHtml(Alpine, { assetStore, name = 'canvas-html' }) {
+export function registerCanvasHtml(Alpine, { assetStore, dataHost = () => null, name = 'canvas-html' }) {
   Alpine.directive(name, (iframe, { expression }, { evaluateLater, effect, cleanup }) => {
     const evaluate = evaluateLater(expression);
     let signature = '', token = 0, state = 'idle', assets = [], documentNonce = '';
@@ -40,6 +40,7 @@ export function registerCanvasHtml(Alpine, { assetStore, name = 'canvas-html' })
         void deliver(token);
       } else if (event.data.type === `${CANVAS_HTML_ASSET_MESSAGE}:unload` && state !== 'blocked') {
         state = 'blocked'; token += 1; documentNonce = '';
+        dataHost()?.stop();
         iframe.dataset.navigationBlocked = 'true';
         iframe.srcdoc = BLOCKED_DOCUMENT;
       }
@@ -59,11 +60,14 @@ export function registerCanvasHtml(Alpine, { assetStore, name = 'canvas-html' })
       documentNonce = nonce();
       delete iframe.dataset.navigationBlocked;
       delete iframe.dataset.assetsDelivered;
-      iframe.srcdoc = buildCanvasHtmlDocument(content.html, { nonce: documentNonce, hostOrigin: location.origin });
+      const host = dataHost();
+      host?.attach(iframe, documentNonce);
+      iframe.srcdoc = buildCanvasHtmlDocument(content.html, { nonce: documentNonce, hostOrigin: location.origin, nappletSession: host ? documentNonce : '' });
     }));
     cleanup(() => {
       token += 1; state = 'idle'; documentNonce = '';
       removeEventListener('message', onMessage);
+      dataHost()?.detach();
     });
   });
 }

@@ -32,7 +32,7 @@ it('persists a File pin through the existing CAS outbox and renders revocation n
   expect((await readThreadPinProjection(db, context, 'test')).rows[0].unavailable).toBe(true);
 });
 
-vi.mock('../src/api.js', async importOriginal => ({ ...await importOriginal(), getTowerPgFile: vi.fn(), getTowerPgFileVersions: vi.fn(), getTowerPgFileVersionObjectBytes: vi.fn(), prepareTowerPgStorageObject: vi.fn(), uploadStorageObject: vi.fn(), completeStorageObject: vi.fn(), createTowerPgFileVersion: vi.fn() }));
+vi.mock('../src/api.js', async importOriginal => ({ ...await importOriginal(), getTowerPgChannel: vi.fn(), createTowerPgChannelFile: vi.fn(), getTowerPgFile: vi.fn(), getTowerPgFileVersions: vi.fn(), getTowerPgFileVersionObjectBytes: vi.fn(), prepareTowerPgStorageObject: vi.fn(), uploadStorageObject: vi.fn(), completeStorageObject: vi.fn(), createTowerPgFileVersion: vi.fn() }));
 import * as api from '../src/api.js';
 import { artefactsMixin } from '../src/artefacts.js';
 const workspace = '20000000-0000-4000-8000-000000000071', file = '60000000-0000-4000-8000-000000000001', version = '60000000-0000-4000-8000-000000000002';
@@ -67,4 +67,28 @@ it('retains HTML source and captured base after a stale save', async () => {
   expect(api.createTowerPgFileVersion).toHaveBeenCalledWith(workspace, file, expect.objectContaining({ base_version_id: version }), expect.anything());
   expect(store.artefact).toMatchObject({ source: '<h1>My edit</h1>', dirty: true, base: version });
   expect(store.artefact.error).toContain('newer version');
+});
+
+it('creates an empty tracker under the current verified self channel with separate code/data Files', async () => {
+  vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, text: async () => '<h1>Reviewed bundle</h1>' })));
+  store.ensureTowerPgDmChannel = vi.fn(async () => ({ record_id: 'self-channel' }));
+  api.getTowerPgChannel.mockResolvedValue({ channel: { id: 'self-channel', workspace_id: workspace, kind: 'dm', participant_npubs: ['alice'] } });
+  api.prepareTowerPgStorageObject.mockResolvedValue({ object_id: 'private-upload', is_public: false });
+  api.createTowerPgChannelFile.mockResolvedValueOnce({ file: { id: file } }).mockResolvedValueOnce({ file: { id: version, workspace_id: workspace, display_name: 'Daily tracker.html', content_type: 'text/html' } });
+  store.openArtefact = vi.fn(async () => true);
+  await store.createDailyTracker();
+  expect(store.ensureTowerPgDmChannel).toHaveBeenCalledWith('alice');
+  const uploaded = api.uploadStorageObject.mock.calls[0][1];
+  expect(JSON.parse(new TextDecoder().decode(uploaded))).toEqual({ format: 'daily-tracker-v1', metrics: [], days: {} });
+  expect(api.createTowerPgChannelFile.mock.calls[1][2].metadata.napplet.bindings.tracker.file_id).toBe(file);
+  expect(api.createTowerPgChannelFile.mock.calls.every(call => call[1] === 'self-channel')).toBe(true);
+  expect(store.openArtefact).toHaveBeenCalled();
+});
+it('does not upload tracker data when the self channel belongs to another viewer', async () => {
+  vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, text: async () => '<h1>Reviewed bundle</h1>' })));
+  store.ensureTowerPgDmChannel = vi.fn(async () => ({ record_id: 'self-channel' }));
+  api.getTowerPgChannel.mockResolvedValue({ channel: { id: 'self-channel', workspace_id: workspace, kind: 'dm', participant_npubs: ['someone-else'] } });
+  await store.createDailyTracker();
+  expect(api.uploadStorageObject).not.toHaveBeenCalled();
+  expect(store.error).toContain('verified private self');
 });

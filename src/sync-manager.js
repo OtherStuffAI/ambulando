@@ -3363,6 +3363,7 @@ export const syncManagerMixin = {
           if (this.orgDataOpen) await this.syncOrgData?.();
           else await this.loadOrgDataInstallations?.({ force: true });
         }
+        if (events.some(e => ['file','workspace_member','group','channel_grant','scope_access'].includes(e?.entity_type))) await this.reauthorizeArtefactData?.();
         const replayBurst = events.length > PG_SSE_TARGETED_EVENT_LIMIT;
         const targetedOnlyEvents = replayBurst
           ? events.filter((event) => PG_SSE_TARGETED_ONLY_ENTITY_TYPES.has(String(event?.entity_type || '').trim()))
@@ -3647,6 +3648,7 @@ export const syncManagerMixin = {
         }
         await (this.requestTowerSyncFamily?.('workspace-bootstrap') ?? this.runTowerPgWorkspaceSync());
         if (this.towerUsageOpen) await this.refreshHostingBilling?.();
+        await this.reauthorizeArtefactData?.();
         if (this.orgDataOpen) await this.syncOrgData?.();
         else await this.loadOrgDataInstallations?.();
         this.markTowerReachabilityRecovered?.('background-sync-success', {

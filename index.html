@@ -5189,6 +5189,7 @@
                 <select class="docs-search-input" aria-label="Artefact type" x-show="$store.chat.isTowerPgMode" x-model="$store.chat.artefactTypeFilter"><option value="all">All types</option><option value="document">Documents</option><option value="excalidraw">Whiteboards</option><option value="html">Interactive HTML</option></select>
                 <button type="button" class="btn-secondary" x-show="$store.chat.isTowerPgMode" :disabled="$store.chat.artefactCreating" @click="$store.chat.createChannelArtefact('excalidraw')">+ Whiteboard</button>
                 <button type="button" class="btn-secondary" x-show="$store.chat.isTowerPgMode" :disabled="$store.chat.artefactCreating" @click="$store.chat.createChannelArtefact('html')">+ Interactive HTML</button>
+                <button type="button" class="btn-secondary" x-show="$store.chat.isTowerPgMode" :disabled="$store.chat.artefactCreating" @click="$store.chat.createDailyTracker()">+ Daily tracker</button>
                 <input class="docs-search-input" type="text" :placeholder="$store.chat.isTowerPgMode ? 'Search artefacts' : 'Search docs and folders'" x-model="$store.chat.docFilter" />
                 <button type="button" class="btn-secondary docs-mobile-toolbar-only" @click="$store.chat.openAllDocuments()">All documents</button>
                 <button

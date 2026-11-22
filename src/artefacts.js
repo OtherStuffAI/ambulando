@@ -1,4 +1,7 @@
-import { getTowerPgFile, getTowerPgFileVersions, getTowerPgFileVersionObjectBytes, createTowerPgChannelFile, createTowerPgFileVersion, prepareTowerPgStorageObject, uploadStorageObject, completeStorageObject } from './api.js';
+import { loadTrackerBundle } from './napplets/tracker-bundle.js';
+import { FileNappletData, parseFileNapplet, TRACKER_MODEL } from './napplets/file-data.js';
+import { FileNappletFrame } from './napplets/file-frame.js';
+import { getTowerPgChannel, getTowerPgFile, getTowerPgFileVersions, getTowerPgFileVersionObjectBytes, createTowerPgChannelFile, createTowerPgFileVersion, prepareTowerPgStorageObject, uploadStorageObject, completeStorageObject } from './api.js';
 import { upsertDocument } from './db.js';
 import { mapPgFileToLocalDocument } from './pg-read-hydrator.js';
 import { canvasContext, canvasPartition } from './canvas/projection.js';
@@ -20,8 +23,15 @@ const digest = async bytes => [...new Uint8Array(await crypto.subtle.digest('SHA
 export const artefactsMixin = {
   artefactTypeFilter: 'all', artefact: empty(), artefactCreating: false,
   artefactType, artefactLabel,
+  artefactDataHost() { return sessions.get(this)?.dataHost || null; },
+  async reauthorizeArtefactData() { await sessions.get(this)?.dataHost?.check(); },
   artefactSession() { return sessions.get(this); },
   toggleArtefactSource() {
+    const session = sessions.get(this);
+    if (session?.nappletBusy || session?.nappletDirty && !window.confirm('Discard unsaved tracker changes?')) return;
+    if (session) session.nappletDirty = false;
+    session?.dataHost?.stop();
+    if (session) session.dataHost = null;
     this.artefact.editing = !this.artefact.editing;
     if (!this.artefact.editing && this.artefact.html) {
       this.artefact.html = { ...this.artefact.html, html: this.artefact.source, digest: `draft:${Date.now()}` };
@@ -49,7 +59,7 @@ export const artefactsMixin = {
     activeStore = this;
     if (!unloadInstalled && typeof addEventListener === 'function') {
       unloadInstalled = true;
-      addEventListener('beforeunload', event => { if (activeStore?.artefact?.dirty || activeStore?.artefact?.board?.dirty) { event.preventDefault(); event.returnValue = ''; } });
+      addEventListener('beforeunload', event => { if (activeStore?.artefact?.dirty || activeStore?.artefact?.board?.dirty || sessions.get(activeStore)?.nappletDirty || sessions.get(activeStore)?.nappletBusy) { event.preventDefault(); event.returnValue = ''; } });
       addEventListener('pagehide', () => { void activeStore?.closeArtefact({ force: true, preserve: false }); });
     }
     const context = canvasContext(this), id = row.record_id;
@@ -62,6 +72,7 @@ export const artefactsMixin = {
       const [payload, history] = await Promise.all([getTowerPgFile(context.workspaceId, id, options), getTowerPgFileVersions(context.workspaceId, id, options)]);
       if (!this.artefactCurrent(session)) return false;
       const file = payload.file;
+      session.fileMetadata = file?.metadata || {};
       if (file?.id !== id || file.workspace_id !== context.workspaceId) throw new Error('Invalid artefact response.');
       const versions = history.versions || [], latest = versions.find(v => v.id === history.current_version_id);
       if (!latest) throw new Error('This artefact has no readable saved version.');
@@ -88,6 +99,9 @@ export const artefactsMixin = {
     }
     if (!force && (this.artefact.dirty || this.artefact.board?.dirty) && !window.confirm('Close this artefact? Unsaved drafts stay on this device.')) return false;
     if (preserve) await this.persistArtefactHtmlDraft();
+    if (!force && session?.nappletBusy) return false;
+    if (!force && session?.nappletDirty && !window.confirm('Discard unsaved tracker changes?')) return false;
+    session?.dataHost?.stop();
     session?.board?.stop(); session?.runtime?.stop(); session?.assets?.clear();
     sessions.delete(this); if (activeStore === this) activeStore = null; this.artefact = empty();
     document.querySelector('#artefact-dialog')?.close();
@@ -99,6 +113,16 @@ export const artefactsMixin = {
     try {
       const content = await new ArtifactCatalog(session.context).preview({ id: session.id, kind: 'html', currentVersionId: versionId });
       if (!this.artefactCurrent(session)) return;
+      session.dataHost?.stop(); session.dataHost = null;
+      const binding = parseFileNapplet(content.html, session.fileMetadata);
+      if (binding) {
+        if (versionId !== this.artefact.base || !window.confirm('Allow this reviewed napplet to read and save its bound private tracker File? Only run code you trust with this data. Web HTML can navigate its own frame; NStack access rules still apply.')) throw new Error('Napplet data access was not enabled. Reopen the latest version to allow it.');
+        const data = new FileNappletData(session.context, session.id, binding, { current: () => this.artefactCurrent(session) });
+        data.codeVersion = versionId;
+        await data.authority();
+        if (!this.artefactCurrent(session)) { data.stop(); return; }
+        session.dataHost = new FileNappletFrame(data, { onDirty: dirty => { session.nappletDirty = dirty; }, onBusy: busy => { session.nappletBusy = busy; }, onRevoke: () => { void this.revokeArtefact(session); } });
+      }
       session.assets.retain(content.assets);
       this.artefact.html = content; this.artefact.source = content.html; this.artefact.dirty = false;
       this.artefact.viewing = versionId === this.artefact.base ? '' : versionId;
@@ -118,6 +142,8 @@ export const artefactsMixin = {
   async viewArtefactVersion(id) {
     if (!id) return;
     const session = sessions.get(this);
+    if (session?.nappletBusy || session?.nappletDirty && !window.confirm('Discard unsaved tracker changes?')) return;
+    session?.dataHost?.stop(); if (session) session.nappletDirty = false;
     if (session?.board) await session.board.viewVersion(id);
     else {
       if (this.artefact.dirty && !window.confirm('Discard unsaved HTML changes to view this version?')) return;
@@ -148,6 +174,37 @@ export const artefactsMixin = {
       await session.runtime.db.sync_state.delete(htmlDraftKey(session));
       await this.openArtefact({ record_id: session.id, title: draft.title, pg_record_type: 'file', content_type: 'text/html' });
     } catch (error) { if (this.artefactCurrent(session)) { if ([401, 403, 404].includes(error.status)) return this.revokeArtefact(session); this.artefact.status = 'ready'; this.artefact.error = error.status === 409 ? 'A newer version was saved. Your source is kept here. Copy it before loading the latest version and reconciling your changes.' : error.message; } }
+  },
+  async createDailyTracker() {
+    if (this.artefactCreating) return;
+    if (!window.confirm('Create your daily tracker in your private Note to self conversation? The empty tracker and its code will be saved as separate NStack Files. Normal NStack administration rules apply.')) return;
+    this.artefactCreating = true;
+    const context = canvasContext(this), current = () => canvasPartition(canvasContext(this)) === canvasPartition(context);
+    const options = { baseUrl: context.baseUrl, appNpub: context.appNpub };
+    let dataFileId = '';
+    try {
+      const source = await loadTrackerBundle(); if (!current()) return;
+      const channel = await this.ensureTowerPgDmChannel(context.viewer); if (!current()) return;
+      if (!channel?.record_id) throw new Error('Your private self conversation is unavailable.');
+      const remote = (await getTowerPgChannel(context.workspaceId, channel.record_id, options)).channel; if (!current()) return;
+      if (remote?.workspace_id !== context.workspaceId || remote.id !== channel.record_id || remote.kind !== 'dm' || remote.participant_npubs?.length !== 1 || remote.participant_npubs[0] !== context.viewer || remote.archived_at) throw new Error('A verified private self conversation is required.');
+      const dataBytes = new TextEncoder().encode(JSON.stringify(TRACKER_MODEL.empty()));
+      const prepared = await prepareTowerPgStorageObject(context.workspaceId, buildStoragePrepareBody({ ownerNpub: context.viewer, contentType: 'application/json', sizeBytes: dataBytes.length, fileName: 'daily-tracker.json' }), options);
+      if (!current()) return;
+      if (prepared.is_public) throw new Error('Private storage required.');
+      await uploadStorageObject(prepared, dataBytes, 'application/json', options); if (!current()) return;
+      await completeStorageObject(prepared.object_id, { size_bytes: dataBytes.length, sha256_hex: await digest(dataBytes) }, options); if (!current()) return;
+      const data = await createTowerPgChannelFile(context.workspaceId, channel.record_id, { storage_object_id: prepared.object_id, display_name: 'Daily tracker data.json' }, options);
+      dataFileId = data.file?.id; if (!current()) return;
+      if (!dataFileId) throw new Error('Data File creation was not confirmed.');
+      const objectId = await this.uploadArtefactHtml(context, source, 'Daily tracker.html'); if (!current()) return;
+      const code = await createTowerPgChannelFile(context.workspaceId, channel.record_id, { storage_object_id: objectId, display_name: 'Daily tracker.html', metadata: { html_artifact: true, artefact: { schema_version: 1, type: 'html', format_version: 1, editor_id: 'builtin.html' }, napplet: { version: 1, app_id: 'daily-tracker', bindings: { tracker: { file_id: dataFileId } } } } }, options);
+      if (!current()) return;
+      const row = mapPgFileToLocalDocument(code.file, { workspaceOwnerNpub: this.activeWorkspaceOwnerNpub });
+      await upsertDocument(row); if (!current()) return;
+      await this.openArtefact(row);
+    } catch (error) { if (current()) this.error = `${error.message || 'Tracker creation failed.'}${dataFileId ? ' The empty data File was saved in Note to self; keep it for recovery.' : ''}`; }
+    finally { this.artefactCreating = false; }
   },
   async createChannelArtefact(kind) {
     if (this.artefactCreating) return;

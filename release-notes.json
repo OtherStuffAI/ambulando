@@ -5823,6 +5823,32 @@
       "notes": [
         "Flush the whiteboard editor and preserve HTML source drafts before switching workspace, keeping each draft with its original authority and saved revision."
       ]
+    },
+    {
+      "buildNumber": 2738,
+      "label": "Private daily tracker napplet",
+      "notes": [
+        "Create a daily tracker from Artefacts with yes/no and numeric metrics, earlier-day edits and history. Code and private data are saved as separate NStack Files.",
+        "The File napplet host keeps signing inside Ambulando, checks private conversation access and protects saves against concurrent edits."
+      ]
+    },
+    {
+      "buildNumber": 2739,
+      "label": "Daily tracker access-check hardening",
+      "notes": [],
+      "noUserVisibleChanges": true
+    },
+    {
+      "buildNumber": 2740,
+      "label": "Daily tracker package source verification",
+      "notes": [],
+      "noUserVisibleChanges": true
+    },
+    {
+      "buildNumber": 2741,
+      "label": "Consistent daily tracker template loading",
+      "notes": [],
+      "noUserVisibleChanges": true
     }
   ]
 }

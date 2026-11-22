@@ -1368,23 +1368,23 @@ export async function getTowerPgScopeTasks(workspaceId, scopeId, { baseUrl = _ba
   return json(resp, { requestUrl, method: 'GET', prefix: 'Tower PG API' });
 }
 
-export async function getTowerPgFile(workspaceId, fileId, { baseUrl = _baseUrl, appNpub = FLIGHT_DECK_PG_APP_NPUB } = {}) {
+export async function getTowerPgFile(workspaceId, fileId, { baseUrl = _baseUrl, appNpub = FLIGHT_DECK_PG_APP_NPUB, signal } = {}) {
   const encodedWorkspaceId = encodeURIComponent(String(workspaceId || '').trim());
   const encodedFileId = encodeURIComponent(String(fileId || '').trim());
   if (!encodedWorkspaceId || !encodedFileId) throw new Error('Tower PG workspace and file ids are required');
   const requestPath = `/api/v4/flightdeck-pg/workspaces/${encodedWorkspaceId}/files/${encodedFileId}`;
   const requestUrl = resolveTowerPgUrl(requestPath, baseUrl);
-  const resp = await signedTowerPgFetch(requestPath, { baseUrl, appNpub });
+  const resp = await signedTowerPgFetch(requestPath, { baseUrl, appNpub, signal });
   return json(resp, { requestUrl, method: 'GET', prefix: 'Tower PG API' });
 }
 
-export async function getTowerPgChannel(workspaceId, channelId, { baseUrl = _baseUrl, appNpub = FLIGHT_DECK_PG_APP_NPUB } = {}) {
+export async function getTowerPgChannel(workspaceId, channelId, { baseUrl = _baseUrl, appNpub = FLIGHT_DECK_PG_APP_NPUB, signal } = {}) {
   const encodedWorkspaceId = encodeURIComponent(String(workspaceId || '').trim());
   const encodedChannelId = encodeURIComponent(String(channelId || '').trim());
   if (!encodedWorkspaceId || !encodedChannelId) throw new Error('Tower PG workspace and channel ids are required');
   const requestPath = `/api/v4/flightdeck-pg/workspaces/${encodedWorkspaceId}/channels/${encodedChannelId}`;
   const requestUrl = resolveTowerPgUrl(requestPath, baseUrl);
-  const resp = await signedTowerPgFetch(requestPath, { baseUrl, appNpub });
+  const resp = await signedTowerPgFetch(requestPath, { baseUrl, appNpub, signal });
   return json(resp, { requestUrl, method: 'GET', prefix: 'Tower PG API' });
 }
 

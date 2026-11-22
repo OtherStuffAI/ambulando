@@ -75,9 +75,10 @@ export function splitCanvasHtmlDocument(html) {
   };
 }
 
-export function buildCanvasHtmlDocument(html, { nonce = '', hostOrigin = '' } = {}) {
+export function buildCanvasHtmlDocument(html, { nonce = '', hostOrigin = '', nappletSession = '' } = {}) {
   const parts = splitCanvasHtmlDocument(html);
-  const bridge = nonce && hostOrigin ? assetBridge({ nonce, hostOrigin }) : '';
+  const bridge = (nonce && hostOrigin ? assetBridge({ nonce, hostOrigin }) : '')
+    + (nappletSession ? `<script>window.nappletSession=${scriptLiteral(nappletSession)};<\/script>` : '');
   // Policy, guard and bridge precede all artifact head content; the default
   // style comes first so the artifact's own styles take precedence.
   return `<!doctype html><html${parts.htmlAttributes}><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${CANVAS_HTML_CSP}"><meta name="referrer" content="no-referrer"><meta name="viewport" content="width=device-width,initial-scale=1"><style>html,body{margin:0;min-height:100%;font:14px system-ui;color:#172235;background:#fff}*{box-sizing:border-box}</style>${htmlGuard}${bridge}${parts.head}</head><body${parts.bodyAttributes}>${parts.body}</body></html>`;
