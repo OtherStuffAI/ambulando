@@ -37,15 +37,14 @@ test('phone Apps and stable route adopt existing private Files without creating 
     const {openWorkspaceDb}=await import('/src/db.js'); await openWorkspaceDb('metrics-test').open();
     const s = window.Alpine.store('chat'); s.stopBackgroundSync(); s.ensureBackgroundSync = () => {}; s.scheduleBackgroundSync = () => {}; s.startWorkspaceLiveQueries = () => {};
     s.showConnectModal = false; s.showWorkspaceBootstrapModal = false; s.session = { npub: 'viewer' }; s.currentViewerNpub = 'viewer';
-    s.knownWorkspaces = [{ workspaceKey: 'metrics-test', workspaceId: workspace, directHttpsUrl: location.origin, workspaceOwnerNpub: 'owner' }]; s.selectedWorkspaceKey = 'metrics-test'; s.pgBackendMode = true; s.isTowerPgMode = true; s.currentPgActorId = 'actor'; s.navSection = 'status';
+    s.knownWorkspaces = [{ workspaceKey: 'metrics-test', workspaceId: workspace, directHttpsUrl: location.origin, workspaceOwnerNpub: 'owner' }]; s.selectedWorkspaceKey = 'metrics-test'; s.pgBackendMode = true; s.isTowerPgMode = true; s.backendUrl = location.origin; s.currentPgActorId = 'actor'; s.navSection = 'status';
     s.ensureTowerPgDmChannel = async () => ({ record_id: channel });
     const pubkey = '1'.repeat(64); localStorage.setItem('nostr_secure_auth_recovery_v1', JSON.stringify({ method: 'extension', pubkey, createdAt: Date.now(), expiresAt: Date.now() + 600000 }));
     window.nostr = { getPublicKey: async () => pubkey, signEvent: async event => ({ ...event, pubkey, id: '2'.repeat(64), sig: '3'.repeat(128) }) };
   }, { workspace: id(20), channel: id(30) });
   };
   await seed();
-  const openMetrics = async () => { const stack = page.getByRole('button', { name: 'Open Apps stack', exact: true }); if (await stack.isVisible()) await stack.click(); await page.getByRole('button', { name: 'Open Daily Metrics', exact: true }).click(); };
-  await expect(page.getByRole('button', { name: 'Open Daily Metrics', exact: true })).toBeVisible();
+  const openMetrics = async () => { await page.getByRole('button', { name: 'Open Apps stack', exact: true }).click(); await page.getByRole('button', { name: 'Open Daily Metrics', exact: true }).click(); };
   await openMetrics();
   await expect(page.getByRole('button', { name: 'Set up Daily Metrics', exact: true })).toBeVisible();
   expect(writes).toBe(0);
