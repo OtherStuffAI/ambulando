@@ -5849,6 +5849,20 @@
       "label": "Consistent daily tracker template loading",
       "notes": [],
       "noUserVisibleChanges": true
+    },
+    {
+      "buildNumber": 2742,
+      "label": "Daily Metrics in Apps",
+      "notes": [
+        "Open Daily Metrics directly from Apps or its stable app link. Existing private tracker Files are reused, with a chooser when several trackers exist and explicit setup for a new tracker."
+      ]
+    },
+    {
+      "buildNumber": 2743,
+      "label": "Daily Metrics direct app links",
+      "notes": [
+        "Daily Metrics app links open directly in the active workspace shell and remain usable when the app window is reloaded."
+      ]
     }
   ]
 }

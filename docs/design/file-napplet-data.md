@@ -94,3 +94,25 @@ bun scripts/package-daily-tracker.mjs <output.html>
 Browser first-run packaging uses the same function. The command prints bytes
 and SHA-256 for cross-host verification. Tests use synthetic records; authenticated
 human persistence and installed native verification remain separate evidence.
+
+## Apps entry and stable route
+
+Daily Metrics is a built-in, default-visible Apps entry with app ID
+`daily-tracker` and placement ID `napplet:daily-tracker`. Existing placement
+preferences control its visibility and order. The explicit app route is
+`/flight-deck?workspaceid=<workspace UUID>&napplet=daily-tracker`; it resolves
+for the authenticated viewer, without placing private File IDs or values in
+launcher metadata. A hidden launcher does not disable the explicit route.
+
+Opening checks the viewer's verified self-DM and lists active Files. Metadata
+`napplet.app_id`, rather than filename, identifies existing instances. One is
+adopted, several require a chooser, and none offers explicit setup. Failed or
+incomplete discovery cannot provision a replacement. Full listing pages fail
+closed and direct the viewer to existing Files. Setup rechecks discovery before
+using the existing empty HTML/JSON provisioning path. There is no server-side
+singleton primitive: simultaneous first-time setup on separate devices remains
+subject to the multiple-instance chooser on subsequent opens.
+
+App mode uses the same sandbox, reviewed-code confirmation, File bridge and
+lifecycle checks, with source/history controls hidden. Legacy File links retain
+the ordinary inspection and revision experience. No tracker migration occurs.

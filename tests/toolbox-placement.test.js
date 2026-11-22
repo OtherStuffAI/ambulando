@@ -187,3 +187,14 @@ it('retains WApps while suppressing installations until their current context is
   expect(s.openOrgData).toHaveBeenCalledWith({ opener: null, view: 'bundle:register' });
   for (const id of removedIds) expect(s.toolboxApps.some(row => row.placementId === id)).toBe(false);
 });
+
+it('shows Daily Metrics before provisioning and applies existing hide and position controls', async () => {
+  const s = store(); s.isTowerPgMode = true; s.openDailyMetrics = vi.fn();
+  const entry = s.toolboxApps.find(app => app.placementId === 'napplet:daily-tracker');
+  expect(entry).toMatchObject({ title: 'Daily Metrics', app_id: 'daily-tracker', appType: 'Napplet' });
+  s.openApp(entry); expect(s.openDailyMetrics).toHaveBeenCalledOnce();
+  await s.setAppPlacement(entry, false);
+  expect(s.visibleApps.some(app => app.placementId === entry.placementId)).toBe(false);
+  expect(s.toolboxApps.some(app => app.placementId === entry.placementId)).toBe(true);
+  expect(parseRouteLocation('https://local.invalid/flight-deck?workspaceid=workspace&napplet=daily-tracker').params).toMatchObject({ workspaceid: 'workspace', napplet: 'daily-tracker' });
+});

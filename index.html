@@ -5189,7 +5189,6 @@
                 <select class="docs-search-input" aria-label="Artefact type" x-show="$store.chat.isTowerPgMode" x-model="$store.chat.artefactTypeFilter"><option value="all">All types</option><option value="document">Documents</option><option value="excalidraw">Whiteboards</option><option value="html">Interactive HTML</option></select>
                 <button type="button" class="btn-secondary" x-show="$store.chat.isTowerPgMode" :disabled="$store.chat.artefactCreating" @click="$store.chat.createChannelArtefact('excalidraw')">+ Whiteboard</button>
                 <button type="button" class="btn-secondary" x-show="$store.chat.isTowerPgMode" :disabled="$store.chat.artefactCreating" @click="$store.chat.createChannelArtefact('html')">+ Interactive HTML</button>
-                <button type="button" class="btn-secondary" x-show="$store.chat.isTowerPgMode" :disabled="$store.chat.artefactCreating" @click="$store.chat.createDailyTracker()">+ Daily tracker</button>
                 <input class="docs-search-input" type="text" :placeholder="$store.chat.isTowerPgMode ? 'Search artefacts' : 'Search docs and folders'" x-model="$store.chat.docFilter" />
                 <button type="button" class="btn-secondary docs-mobile-toolbar-only" @click="$store.chat.openAllDocuments()">All documents</button>
                 <button
@@ -6500,36 +6499,7 @@
             </div>
           </div>
 
-          <dialog id="artefact-dialog" class="artefact-dialog" @cancel.prevent="$store.chat.closeArtefact()" x-effect="if ($store.chat.artefact.id && !$store.chat.artefactCurrent($store.chat.artefactSession())) $store.chat.closeArtefact({ force: true, preserve: false })">
-            <header class="artefact-toolbar"><strong x-text="$store.chat.artefact.title"></strong>
-              <span x-show="!$store.chat.artefact.can_write && $store.chat.artefact.status === 'ready'">Read-only</span>
-              <span x-text="$store.chat.artefact.kind === 'excalidraw' ? ($store.chat.artefact.board.save_state || 'Loading…') : $store.chat.artefact.status"></span>
-              <button type="button" @click="$store.chat.togglePersonalPin({ record_id: $store.chat.artefact.id }, 'file')" x-text="$store.chat.isPersonalPinned('file', $store.chat.artefact.id) ? 'Unpin' : 'Pin'"></button>
-              <button type="button" @click="$store.chat.copyArtefactLink()">Copy link</button>
-              <button type="button" @click="$store.chat.closeArtefact()" aria-label="Close artefact">Close</button>
-            </header>
-            <p role="alert" x-show="$store.chat.artefact.error || $store.chat.artefact.board.error" x-text="$store.chat.artefact.error || $store.chat.artefact.board.error"></p>
-            <div class="artefact-toolbar" x-show="$store.chat.artefact.kind === 'excalidraw'">
-              <button type="button" :disabled="!$store.chat.artefact.board.dirty || !$store.chat.artefact.board.can_write" @click="$store.chat.artefactBoardAction('save')">Save whiteboard</button>
-              <button type="button" x-show="$store.chat.artefact.board.newer_available" @click="$store.chat.artefactBoardAction('merge')">Merge latest</button>
-              <button type="button" @click="$store.chat.artefactBoardAction('latest')">Latest</button>
-              <button type="button" x-show="$store.chat.artefact.board.viewing_version_id && $store.chat.artefact.board.can_write" @click="$store.chat.artefactBoardAction('restore')">Restore as draft</button>
-              <select aria-label="Whiteboard revision" @change="$store.chat.viewArtefactVersion($event.target.value)"><option value="">Versions…</option><template x-for="version in $store.chat.artefact.versions" :key="version.id"><option :value="version.id" x-text="'Version ' + version.version_number"></option></template></select>
-            </div>
-            <template x-if="$store.chat.artefact.kind === 'excalidraw' && $store.chat.artefact.board.status === 'ready'">
-              <iframe class="artefact-frame" title="Whiteboard editor" src="/canvas-board.html" x-canvas-board="{id: 'direct-artefact', source: {id: $store.chat.artefact.id}}"></iframe>
-            </template>
-            <div class="artefact-toolbar" x-show="$store.chat.artefact.kind === 'html' && $store.chat.artefact.status !== 'loading'">
-              <button type="button" x-show="$store.chat.artefact.can_write" @click="$store.chat.toggleArtefactSource()" x-text="$store.chat.artefact.editing ? 'Preview' : 'Edit source'"></button>
-              <button type="button" x-show="$store.chat.artefact.can_write" :disabled="!$store.chat.artefact.dirty || $store.chat.artefact.status === 'saving'" @click="$store.chat.saveArtefactHtml()">Save new version</button>
-              <button type="button" x-show="$store.chat.artefact.viewing && $store.chat.artefact.can_write" @click="$store.chat.artefact.editing = true; $store.chat.artefact.dirty = true">Restore as draft</button>
-              <select aria-label="HTML revision" @change="$store.chat.viewArtefactVersion($event.target.value)"><option value="">Versions…</option><template x-for="version in $store.chat.artefact.versions" :key="version.id"><option :value="version.id" x-text="'Version ' + version.version_number"></option></template></select>
-            </div>
-            <textarea class="artefact-source" aria-label="HTML source" spellcheck="false" x-show="$store.chat.artefact.kind === 'html' && $store.chat.artefact.editing" x-model="$store.chat.artefact.source" @input="$store.chat.artefact.dirty = true; $store.chat.persistArtefactHtmlDraft()"></textarea>
-            <template x-if="$store.chat.artefact.kind === 'html' && $store.chat.artefact.html && !$store.chat.artefact.editing">
-              <iframe class="artefact-frame" title="Interactive HTML artefact" sandbox="allow-scripts" credentialless referrerpolicy="no-referrer" x-artefact-html="$store.chat.artefact.html"></iframe>
-            </template>
-          </dialog>
+
 
           <div class="doc-modal-backdrop" x-show="$store.chat.newDocModalType" x-cloak>
             <div class="doc-modal-card new-doc-modal">
@@ -12148,6 +12118,43 @@
     <iframe :title="$store.chat.messageActivityDisplayTitle + ' dashboard'" sandbox="allow-scripts" referrerpolicy="no-referrer" :src="$store.chat.messageActivitySrc || 'about:blank'"></iframe>
   </dialog>
   <div hidden x-effect="const context = $store.chat.orgDataInstallationsContextKey; const section = $store.chat.navSection; queueMicrotask(() => { if (context === $store.chat.orgDataInstallationsContextKey) $store.chat.loadOrgDataInstallations(); })"></div>
+          <dialog id="daily-metrics-dialog" class="artefact-dialog" @cancel.prevent="$store.chat.closeDailyMetrics()" x-effect="if ($store.chat.dailyMetrics.status !== 'closed' && $store.chat.dailyMetrics.partition !== $store.chat.dailyMetricsPartition()) $store.chat.closeDailyMetrics()">
+            <header class="artefact-toolbar"><strong>Daily Metrics</strong><button type="button" @click="$store.chat.closeDailyMetrics()">Close</button></header>
+            <p x-show="$store.chat.dailyMetrics.status === 'loading'">Checking your private tracker…</p>
+            <p role="alert" x-text="$store.chat.dailyMetrics.error"></p>
+            <div x-show="$store.chat.dailyMetrics.status === 'setup'"><p>Set up an empty private tracker in your Note to self conversation.</p><button type="button" :disabled="$store.chat.artefactCreating" @click="$store.chat.setupDailyMetrics()">Set up Daily Metrics</button></div>
+            <div x-show="$store.chat.dailyMetrics.status === 'choose'"><p>Choose an existing tracker. Your records will be preserved.</p><template x-for="(file, index) in $store.chat.dailyMetrics.candidates" :key="file.id"><button type="button" @click="$store.chat.openDailyMetricsFile(file)" x-text="(file.display_name || 'Daily Metrics').replace(/\.html?$/i, '') + ' · Tracker ' + (index + 1)"></button></template></div>
+          </dialog>
+          <dialog id="artefact-dialog" class="artefact-dialog" @cancel.prevent="$store.chat.closeArtefact()" x-effect="if ($store.chat.artefact.id && !$store.chat.artefactCurrent($store.chat.artefactSession())) $store.chat.closeArtefact({ force: true, preserve: false })">
+            <header class="artefact-toolbar"><strong x-text="$store.chat.artefact.title"></strong>
+              <span x-show="!$store.chat.artefact.can_write && $store.chat.artefact.status === 'ready'">Read-only</span>
+              <span x-text="$store.chat.artefact.kind === 'excalidraw' ? ($store.chat.artefact.board.save_state || 'Loading…') : $store.chat.artefact.status"></span>
+              <button type="button" @click="$store.chat.togglePersonalPin({ record_id: $store.chat.artefact.id }, 'file')" x-text="$store.chat.isPersonalPinned('file', $store.chat.artefact.id) ? 'Unpin' : 'Pin'"></button>
+              <button type="button" @click="$store.chat.copyArtefactLink()">Copy link</button>
+              <button type="button" @click="$store.chat.closeArtefact()" aria-label="Close artefact">Close</button>
+            </header>
+            <p role="alert" x-show="$store.chat.artefact.error || $store.chat.artefact.board.error" x-text="$store.chat.artefact.error || $store.chat.artefact.board.error"></p>
+            <div class="artefact-toolbar" x-show="$store.chat.artefact.kind === 'excalidraw'">
+              <button type="button" :disabled="!$store.chat.artefact.board.dirty || !$store.chat.artefact.board.can_write" @click="$store.chat.artefactBoardAction('save')">Save whiteboard</button>
+              <button type="button" x-show="$store.chat.artefact.board.newer_available" @click="$store.chat.artefactBoardAction('merge')">Merge latest</button>
+              <button type="button" @click="$store.chat.artefactBoardAction('latest')">Latest</button>
+              <button type="button" x-show="$store.chat.artefact.board.viewing_version_id && $store.chat.artefact.board.can_write" @click="$store.chat.artefactBoardAction('restore')">Restore as draft</button>
+              <select aria-label="Whiteboard revision" @change="$store.chat.viewArtefactVersion($event.target.value)"><option value="">Versions…</option><template x-for="version in $store.chat.artefact.versions" :key="version.id"><option :value="version.id" x-text="'Version ' + version.version_number"></option></template></select>
+            </div>
+            <template x-if="$store.chat.artefact.kind === 'excalidraw' && $store.chat.artefact.board.status === 'ready'">
+              <iframe class="artefact-frame" title="Whiteboard editor" src="/canvas-board.html" x-canvas-board="{id: 'direct-artefact', source: {id: $store.chat.artefact.id}}"></iframe>
+            </template>
+            <div class="artefact-toolbar" x-show="!$store.chat.artefact.appMode && $store.chat.artefact.kind === 'html' && $store.chat.artefact.status !== 'loading'">
+              <button type="button" x-show="$store.chat.artefact.can_write" @click="$store.chat.toggleArtefactSource()" x-text="$store.chat.artefact.editing ? 'Preview' : 'Edit source'"></button>
+              <button type="button" x-show="$store.chat.artefact.can_write" :disabled="!$store.chat.artefact.dirty || $store.chat.artefact.status === 'saving'" @click="$store.chat.saveArtefactHtml()">Save new version</button>
+              <button type="button" x-show="$store.chat.artefact.viewing && $store.chat.artefact.can_write" @click="$store.chat.artefact.editing = true; $store.chat.artefact.dirty = true">Restore as draft</button>
+              <select aria-label="HTML revision" @change="$store.chat.viewArtefactVersion($event.target.value)"><option value="">Versions…</option><template x-for="version in $store.chat.artefact.versions" :key="version.id"><option :value="version.id" x-text="'Version ' + version.version_number"></option></template></select>
+            </div>
+            <textarea class="artefact-source" aria-label="HTML source" spellcheck="false" x-show="$store.chat.artefact.kind === 'html' && $store.chat.artefact.editing" x-model="$store.chat.artefact.source" @input="$store.chat.artefact.dirty = true; $store.chat.persistArtefactHtmlDraft()"></textarea>
+            <template x-if="$store.chat.artefact.kind === 'html' && $store.chat.artefact.html && !$store.chat.artefact.editing">
+              <iframe class="artefact-frame" title="Interactive HTML artefact" sandbox="allow-scripts" credentialless referrerpolicy="no-referrer" x-artefact-html="$store.chat.artefact.html"></iframe>
+            </template>
+          </dialog>
   <dialog id="org-data-modal" class="message-activity-modal" :class="{ 'thread-full': $store.chat.orgDataFull }" aria-labelledby="org-data-title" data-testid="org-data-modal"
     x-effect="if ($store.chat.orgDataOpen && $store.chat.orgDataOpenedContext !== $store.chat.orgDataContextKey) $store.chat.closeOrgData(true)"
     @keydown.escape="$store.chat.handleOrgDataEscape($event)" @cancel.prevent="$store.chat.handleOrgDataEscape($event)" @close="!$el.open && $store.chat.orgDataOpen && $store.chat.closeOrgData()"

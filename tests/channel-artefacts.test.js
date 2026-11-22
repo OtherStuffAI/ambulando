@@ -32,7 +32,7 @@ it('persists a File pin through the existing CAS outbox and renders revocation n
   expect((await readThreadPinProjection(db, context, 'test')).rows[0].unavailable).toBe(true);
 });
 
-vi.mock('../src/api.js', async importOriginal => ({ ...await importOriginal(), getTowerPgChannel: vi.fn(), createTowerPgChannelFile: vi.fn(), getTowerPgFile: vi.fn(), getTowerPgFileVersions: vi.fn(), getTowerPgFileVersionObjectBytes: vi.fn(), prepareTowerPgStorageObject: vi.fn(), uploadStorageObject: vi.fn(), completeStorageObject: vi.fn(), createTowerPgFileVersion: vi.fn() }));
+vi.mock('../src/api.js', async importOriginal => ({ ...await importOriginal(), getTowerPgChannel: vi.fn(), getTowerPgChannelFiles: vi.fn(), createTowerPgChannelFile: vi.fn(), getTowerPgFile: vi.fn(), getTowerPgFileVersions: vi.fn(), getTowerPgFileVersionObjectBytes: vi.fn(), prepareTowerPgStorageObject: vi.fn(), uploadStorageObject: vi.fn(), completeStorageObject: vi.fn(), createTowerPgFileVersion: vi.fn() }));
 import * as api from '../src/api.js';
 import { artefactsMixin } from '../src/artefacts.js';
 const workspace = '20000000-0000-4000-8000-000000000071', file = '60000000-0000-4000-8000-000000000001', version = '60000000-0000-4000-8000-000000000002';
@@ -91,4 +91,65 @@ it('does not upload tracker data when the self channel belongs to another viewer
   await store.createDailyTracker();
   expect(api.uploadStorageObject).not.toHaveBeenCalled();
   expect(store.error).toContain('verified private self');
+});
+
+
+async function discover(files = []) {
+  store.isTowerPgMode = true;
+  store.ensureTowerPgDmChannel = vi.fn(async () => ({ record_id: 'self' }));
+  api.getTowerPgChannel.mockResolvedValue({ channel: { id: 'self', workspace_id: workspace, kind: 'dm', participant_npubs: ['alice'] } });
+  api.getTowerPgChannelFiles.mockResolvedValue({ files });
+  store.openArtefact = vi.fn(async () => true);
+  await store.openDailyMetrics();
+}
+it('discovers a renamed existing tracker by metadata and reuses its File without provisioning', async () => {
+  const existing = { id: file, workspace_id: workspace, display_name: 'Renamed.html', metadata: { napplet: { app_id: 'daily-tracker' } } };
+  await discover([existing]);
+  expect(store.openArtefact).toHaveBeenCalledWith(expect.objectContaining({ record_id: file }), { appMode: true });
+  expect(api.createTowerPgChannelFile).not.toHaveBeenCalled();
+  await store.openDailyMetrics();
+  expect(store.openArtefact).toHaveBeenCalledTimes(2);
+});
+it('offers setup only for a successful empty list and rechecks before creating', async () => {
+  await discover([]);
+  expect(store.dailyMetrics.status).toBe('setup');
+  store.createDailyTracker = vi.fn();
+  api.getTowerPgChannelFiles.mockResolvedValue({ files: [{ id: file, metadata: { napplet: { app_id: 'daily-tracker' } } }] });
+  await store.setupDailyMetrics();
+  expect(store.createDailyTracker).not.toHaveBeenCalled();
+  expect(store.openArtefact).toHaveBeenCalledTimes(1);
+});
+it('requires a chooser for multiple instances without silently picking or provisioning', async () => {
+  await discover([file, version].map(id => ({ id, metadata: { napplet: { app_id: 'daily-tracker' } } })));
+  expect(store.dailyMetrics.status).toBe('choose');
+  expect(store.openArtefact).not.toHaveBeenCalled();
+  await store.openDailyMetricsFile(store.dailyMetrics.candidates[1]);
+  expect(store.openArtefact).toHaveBeenCalledWith(expect.objectContaining({ record_id: version }), { appMode: true });
+});
+it('fails closed for wrong viewer, denied discovery and incomplete lists', async () => {
+  await discover([]);
+  for (const payload of [{ files: Array.from({ length: 200 }, () => ({})) }, { files: [], has_more: true }, { files: [], partial: true }, {}]) {
+    api.getTowerPgChannelFiles.mockResolvedValue(payload);
+    await store.openDailyMetrics();
+    expect(store.dailyMetrics.status).toBe('error');
+  }
+  api.getTowerPgChannelFiles.mockRejectedValue(Object.assign(Error('Denied'), { status: 403 }));
+  await store.openDailyMetrics();
+  expect(store.dailyMetrics.status).toBe('error');
+  api.getTowerPgChannel.mockResolvedValue({ channel: { id: 'self', workspace_id: workspace, kind: 'dm', participant_npubs: ['other'] } });
+  await store.openDailyMetrics();
+  expect(store.dailyMetrics.status).toBe('error');
+  expect(store.openArtefact).not.toHaveBeenCalled();
+  expect(api.createTowerPgChannelFile).not.toHaveBeenCalled();
+});
+it('does not reopen setup when discovery finishes after close', async () => {
+  await discover([]);
+  let resolve;
+  api.getTowerPgChannelFiles.mockImplementation(() => new Promise(done => { resolve = done; }));
+  const pending = store.openDailyMetrics();
+  await vi.waitFor(() => expect(resolve).toBeTypeOf('function'));
+  store.closeDailyMetrics();
+  resolve({ files: [] });
+  await pending;
+  expect(store.dailyMetrics.status).toBe('closed');
 });
