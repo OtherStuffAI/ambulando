@@ -2,8 +2,8 @@
 
 Daily tracker runs as client HTML inside Ambulando. NStack owns the HTML File,
 its immutable versions, the separate JSON data File and all durable entries.
-There is no tracker server or browser-storage system of record. The existing
-Docs/Artefacts action creates an empty instance in the authenticated viewer's
+There is no tracker server or browser-storage system of record. Apps → Daily Metrics
+offers explicit setup of an empty instance in the authenticated viewer's
 Note to self conversation. Existing File pins and links reopen it without a canvas.
 The code and data are separate Files; sharing source bytes does not grant data access.
 
@@ -116,3 +116,31 @@ subject to the multiple-instance chooser on subsequent opens.
 App mode uses the same sandbox, reviewed-code confirmation, File bridge and
 lifecycle checks, with source/history controls hidden. Legacy File links retain
 the ordinary inspection and revision experience. No tracker migration occurs.
+
+## Remembered approval on web
+
+The first open shows a host-owned “Trust and open” screen before mounting the
+frame. Approval is remembered only on this browser profile, without sync. A
+visible “Forget approval” action closes the app through existing pending-save
+and dirty-draft guards and removes consent, without deleting tracker data.
+Unavailable receipt storage permits an explicit one-session approval and shows
+that it could not be remembered. Failed removal is reported and blocks reuse
+in the current session; clear site data if browser storage cannot be cleared.
+
+Policy v1 scopes a receipt to the normalized backend URL, available Tower and
+workspace service identities, app namespace, workspace, viewer, and code File.
+Its fingerprint includes the SHA-256 of actual immutable HTML bytes verified
+against File-version metadata, validated manifest version/app ID, exact tracker
+binding File ID, format, privacy, sorted read/save operations, and fresh effective
+write access. The current parser accepts only the documented single binding;
+unsupported manifests are rejected before receipt lookup. Code version IDs,
+filenames and data versions/values are excluded. Same-byte code revisions and
+ordinary answers therefore retain approval; changed code, bindings or effective
+permissions require consent again or fail authorization. One receipt per code
+File replaces previous consent when approved details change.
+
+Storage keys and values contain only policy version and SHA-256 fingerprints,
+never data, credentials or signing material. Malformed/denied storage never
+auto-approves. Authority is checked before lookup and again before mounting,
+including when consent has been left open. Existing periodic and per-operation
+checks remain mandatory: remembered approval grants no Tower authority.

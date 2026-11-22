@@ -5863,6 +5863,13 @@
       "notes": [
         "Daily Metrics app links open directly in the active workspace shell and remain usable when the app window is reloaded."
       ]
+    },
+    {
+      "buildNumber": 2744,
+      "label": "Remember napplet approval on this browser",
+      "notes": [
+        "Approve a trusted napplet once on this browser and reopen it without repeated prompts. Changed code or linked File access asks again; Forget approval is available in app controls."
+      ]
     }
   ]
 }

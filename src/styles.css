@@ -25703,6 +25703,9 @@ button.task-desc-toggle:focus-visible {
 .artefact-dialog::backdrop { background: #10182799; }
 .artefact-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; padding: .65rem; }
 .artefact-toolbar strong { margin-right: auto; }
+.napplet-consent { padding: 1rem; max-width: 48rem; line-height: 1.6; overflow-y: auto; }
+.napplet-consent p { margin: 0 0 1rem; }
+.napplet-consent button { font: inherit; padding: .5rem .8rem; }
 .artefact-toolbar button, .artefact-toolbar select { font: inherit; padding: .4rem .65rem; }
 .artefact-frame, .artefact-source { width: 100%; flex: 1; min-height: 0; border: 0; }
 .artefact-source { box-sizing: border-box; padding: 1rem; font: 14px/1.5 ui-monospace, monospace; resize: none; }

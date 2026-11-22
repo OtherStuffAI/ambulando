@@ -153,3 +153,52 @@ it('does not reopen setup when discovery finishes after close', async () => {
   await pending;
   expect(store.dailyMetrics.status).toBe('closed');
 });
+
+async function nappletFixture() {
+  const { readFile } = await import('node:fs/promises');
+  const { packageTrackerBundle } = await import('../src/napplets/tracker-bundle.js');
+  const parts = await Promise.all(['index.html', 'style.css', 'model.js', 'app.js'].map(name => readFile(new URL(`../public/napplets/daily-tracker/v1/${name}`, import.meta.url), 'utf8')));
+  let html = packageTrackerBundle({ html: parts[0], style: parts[1], model: parts[2], app: parts[3] });
+  let target = '60000000-0000-4000-8000-000000000003', writable = true;
+  const values = new Map();
+  vi.stubGlobal('localStorage', { getItem: key => values.get(key) ?? null, setItem: (key, value) => values.set(key, value), removeItem: key => values.delete(key) });
+  api.getTowerPgFile.mockImplementation(async (_workspace, id) => ({ file: { id, workspace_id: workspace, channel_id: 'self', current_version_id: version, can_write: writable, display_name: 'Tracker', ...(id === file ? { metadata: { napplet: { version: 1, app_id: 'daily-tracker', bindings: { tracker: { file_id: target } } } } } : {}) } }));
+  api.getTowerPgChannel.mockResolvedValue({ channel: { id: 'self', workspace_id: workspace, kind: 'dm', participant_npubs: ['alice'] } });
+  api.getTowerPgFileVersions.mockImplementation(async () => {
+    const bytes = new TextEncoder().encode(html), sha = Buffer.from(await crypto.subtle.digest('SHA-256', bytes)).toString('hex');
+    return { current_version_id: version, versions: [{ id: version, file_id: file, content_type: 'text/html', size_bytes: bytes.length, sha256_hex: sha }] };
+  });
+  api.getTowerPgFileVersionObjectBytes.mockImplementation(async () => ({ bytes: new TextEncoder().encode(html) }));
+  const open = () => store.openArtefact({ record_id: file, pg_record_type: 'file', title: 'Tracker.html' });
+  return { open, values, code: () => { html += '\n<!-- changed -->'; }, binding: () => { target = '60000000-0000-4000-8000-000000000004'; }, access: () => { writable = false; } };
+}
+it('does not run before explicit consent and checks authority on each remembered open', async () => {
+  const f = await nappletFixture(); await f.open();
+  expect(store.artefact.consent).toBe(true); expect(store.artefact.html).toBe(null); expect(store.artefactDataHost()).toBe(null); expect(f.values.size).toBe(0);
+  await store.enableArtefactNapplet(); expect(store.artefactDataHost()).toBeTruthy(); expect(f.values.size).toBe(1);
+  await store.closeArtefact(); api.getTowerPgChannel.mockClear(); await f.open();
+  expect(store.artefact.consent).toBe(false); expect(store.artefactDataHost()).toBeTruthy(); expect(api.getTowerPgChannel).toHaveBeenCalledTimes(2);
+});
+it.each(['code', 'binding', 'access'])('requires renewed consent for changed %s', async change => {
+  const f = await nappletFixture(); await f.open(); await store.enableArtefactNapplet(); await store.closeArtefact();
+  f[change](); await f.open(); expect(store.artefact.consent).toBe(true); expect(store.artefactDataHost()).toBe(null);
+});
+it('cancel creates no receipt; live access failure after consent was displayed cannot save approval', async () => {
+  const f = await nappletFixture(); await f.open(); await store.closeArtefact(); expect(f.values.size).toBe(0);
+  await f.open(); api.getTowerPgChannel.mockRejectedValue(Object.assign(Error('denied'), { status: 403 })); await store.enableArtefactNapplet();
+  expect(store.artefact.html).toBe(null); expect(store.artefactDataHost()).toBe(null); expect(f.values.size).toBe(0);
+});
+it('revoke respects pending writes and cancelled drafts, removes approval only after closing', async () => {
+  const f = await nappletFixture(); await f.open(); await store.enableArtefactNapplet();
+  const session = store.artefactSession(); session.nappletBusy = true; await store.forgetArtefactApproval(); expect(f.values.size).toBe(1);
+  session.nappletBusy = false; session.nappletDirty = true; window.confirm = () => false;
+  await store.forgetArtefactApproval(); expect(f.values.size).toBe(1); expect(store.artefactDataHost()).toBeTruthy();
+  window.confirm = () => true; await store.forgetArtefactApproval(); expect(f.values.size).toBe(0);
+  await f.open(); expect(store.artefact.consent).toBe(true);
+});
+it('denied storage allows only explicit session consent and explains persistence failure', async () => {
+  const f = await nappletFixture(); vi.stubGlobal('localStorage', { getItem() { throw Error('denied'); }, setItem() { throw Error('quota'); } });
+  await f.open(); expect(store.artefact.consent).toBe(true); await store.enableArtefactNapplet();
+  expect(store.artefactDataHost()).toBeTruthy(); expect(store.artefact.approvalNotice).toContain('could not be saved');
+  await store.closeArtefact(); await f.open(); expect(store.artefact.consent).toBe(true);
+});

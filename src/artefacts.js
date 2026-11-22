@@ -1,6 +1,7 @@
 import { loadTrackerBundle } from './napplets/tracker-bundle.js';
 import { FileNappletData, parseFileNapplet, TRACKER_MODEL } from './napplets/file-data.js';
 import { FileNappletFrame } from './napplets/file-frame.js';
+import { nappletReceipt, hasNappletApproval, rememberNappletApproval, forgetNappletApproval } from './napplets/trust.js';
 import { getTowerPgChannel, getTowerPgChannelFiles, getTowerPgFile, getTowerPgFileVersions, getTowerPgFileVersionObjectBytes, createTowerPgChannelFile, createTowerPgFileVersion, prepareTowerPgStorageObject, uploadStorageObject, completeStorageObject } from './api.js';
 import { upsertDocument } from './db.js';
 import { mapPgFileToLocalDocument } from './pg-read-hydrator.js';
@@ -16,7 +17,7 @@ const sessions = new WeakMap();
 let unloadInstalled = false;
 let activeStore = null;
 const text = value => String(value ?? '').trim();
-const empty = () => ({ id: '', title: '', kind: '', status: 'loading', error: '', can_write: false, html: null, source: '', editing: false, dirty: false, base: '', versions: [], viewing: '', board: { versions: [] } });
+const empty = () => ({ id: '', title: '', kind: '', consent: false, napplet: false, approvalNotice: '', status: 'loading', error: '', can_write: false, html: null, source: '', editing: false, dirty: false, base: '', versions: [], viewing: '', board: { versions: [] } });
 const htmlDraftKey = session => `artefact-html-draft:${session.partition}:${session.id}`;
 const digest = async bytes => [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))].map(b => b.toString(16).padStart(2, '0')).join('');
 
@@ -31,6 +32,8 @@ export const artefactsMixin = {
     const session = sessions.get(this);
     if (session?.nappletBusy || session?.nappletDirty && !window.confirm('Discard unsaved tracker changes?')) return;
     if (session) session.nappletDirty = false;
+    session?.pendingConsent?.data.stop(); if (session) session.pendingConsent = null;
+    this.artefact.consent = false;
     session?.dataHost?.stop();
     if (session) session.dataHost = null;
     this.artefact.editing = !this.artefact.editing;
@@ -103,6 +106,7 @@ export const artefactsMixin = {
     if (preserve) await this.persistArtefactHtmlDraft();
     if (!force && session?.nappletBusy) return false;
     if (!force && session?.nappletDirty && !window.confirm('Discard unsaved tracker changes?')) return false;
+    session?.pendingConsent?.data.stop();
     session?.dataHost?.stop();
     session?.board?.stop(); session?.runtime?.stop(); session?.assets?.clear();
     sessions.delete(this); if (activeStore === this) activeStore = null; this.artefact = empty();
@@ -119,18 +123,55 @@ export const artefactsMixin = {
       session.dataHost?.stop(); session.dataHost = null;
       const binding = parseFileNapplet(content.html, session.fileMetadata);
       if (this.artefact.appMode && !binding) throw new Error('This File is not a valid Daily Metrics app.');
+      this.artefact.consent = false; this.artefact.approvalNotice = ''; this.artefact.napplet = false;
+      session.pendingConsent?.data.stop(); session.pendingConsent = null;
       if (binding) {
-        if (versionId !== this.artefact.base || !window.confirm('Allow this reviewed napplet to read and save its bound private tracker File? Only run code you trust with this data. Web HTML can navigate its own frame; NStack access rules still apply.')) throw new Error('Napplet data access was not enabled. Reopen the latest version to allow it.');
+        if (versionId !== this.artefact.base) throw new Error('Reopen the latest version to approve this napplet.');
         const data = new FileNappletData(session.context, session.id, binding, { current: () => this.artefactCurrent(session) });
         data.codeVersion = versionId;
-        await data.authority();
-        if (!this.artefactCurrent(session)) { data.stop(); return; }
-        session.dataHost = new FileNappletFrame(data, { onDirty: dirty => { session.nappletDirty = dirty; }, onBusy: busy => { session.nappletBusy = busy; }, onRevoke: () => { void this.revokeArtefact(session); } });
+        try {
+          const access = await data.authority();
+          const receipt = await nappletReceipt(session.context, session.id, content.digest, binding, access.canWrite);
+          if (!this.artefactCurrent(session)) { data.stop(); return; }
+          session.pendingConsent = { data, content, receipt, canWrite: access.canWrite };
+          this.artefact.html = null;
+          if (!hasNappletApproval(receipt)) { this.artefact.consent = true; return; }
+          await this.enableArtefactNapplet(false);
+        } catch (error) { data.stop(); throw error; }
+        return;
       }
       session.assets.retain(content.assets);
       this.artefact.html = content; this.artefact.source = content.html; this.artefact.dirty = false;
       this.artefact.viewing = versionId === this.artefact.base ? '' : versionId;
     } catch (error) { if (this.artefactCurrent(session)) { if ([401, 403, 404].includes(error.status)) return this.revokeArtefact(session); this.artefact.html = null; this.artefact.error = error.message; } }
+  },
+  async enableArtefactNapplet(explicit = true) {
+    const session = sessions.get(this), pending = session?.pendingConsent;
+    if (!pending || !this.artefactCurrent(session) || session.approving) return;
+    session.approving = true;
+    try {
+      // Consent can sit open while permissions/code change. Recheck before running.
+      const access = await pending.data.authority();
+      if (!this.artefactCurrent(session)) { pending.data.stop(); return; }
+      if (access.canWrite !== pending.canWrite) throw new Error('Tracker access changed. Close and reopen to review approval.');
+      const remembered = explicit ? rememberNappletApproval(pending.receipt) : hasNappletApproval(pending.receipt);
+      if (!explicit && !remembered) { this.artefact.consent = true; return; }
+      session.receipt = pending.receipt;
+      session.dataHost = new FileNappletFrame(pending.data, { onDirty: dirty => { session.nappletDirty = dirty; }, onBusy: busy => { session.nappletBusy = busy; }, onRevoke: () => { void this.revokeArtefact(session); } });
+      session.assets.retain(pending.content.assets);
+      Object.assign(this.artefact, { consent: false, napplet: true, approvalNotice: remembered ? 'Approval remembered on this browser. Access is checked each time.' : 'Approval could not be saved on this browser. You will be asked again next time.', html: pending.content, source: pending.content.html, dirty: false, viewing: '', error: '' });
+      session.pendingConsent = null;
+    } catch (error) {
+      pending.data.stop(); session.pendingConsent = null;
+      if (this.artefactCurrent(session)) { this.artefact.consent = false; this.artefact.html = null; this.artefact.error = error.message; }
+    } finally { session.approving = false; }
+  },
+  async forgetArtefactApproval() {
+    const session = sessions.get(this);
+    if (!session?.receipt || !this.artefactCurrent(session)) return;
+    // Closing retains the existing pending-save and dirty-draft decisions.
+    if (!await this.closeArtefact()) return;
+    if (!forgetNappletApproval(session.receipt)) this.error = 'Approval was forgotten for this session, but browser storage could not be cleared. Clear this site’s browser data before reopening to remove saved approval.';
   },
   async artefactBoardAction(action) {
     const session = sessions.get(this);

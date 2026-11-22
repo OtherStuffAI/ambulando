@@ -11,7 +11,7 @@ test('phone Apps and stable route adopt existing private Files without creating 
   let denied = false, multiple = false, empty = true, writes = 0;
   const code = { id: id(1), workspace_id: id(20), channel_id: id(30), current_version_id: id(2), display_name: 'Previously renamed.html', content_type: 'text/html', can_write: true, metadata: { html_artifact: true, napplet: { version: 1, app_id: 'daily-tracker', bindings: { tracker: { file_id: id(3) } } } } };
   const model = { format: 'daily-tracker-v1', metrics: [{ id: id(6), label: 'Neutral saved metric', type: 'number', unit: '', archived: false }], days: { '2026-01-01': { [id(6)]: 0 } } };
-  const data = JSON.stringify(model);
+  let codeHtml = html, canWrite = true;
   const sha = text => require('node:crypto').createHash('sha256').update(text).digest('hex');
   await page.route('**/*', async route => {
     const url = new URL(route.request().url());
@@ -23,14 +23,15 @@ test('phone Apps and stable route adopt existing private Files without creating 
     if (p.endsWith(`/channels/${id(30)}/files`)) return route.fulfill({ json: { files: empty ? [] : multiple ? [code, { ...code, id: id(9) }] : [code] } });
     if (p.endsWith(`/channels/${id(30)}`)) return route.fulfill({ json: { channel: { id: id(30), workspace_id: id(20), kind: 'dm', participant_npubs: ['viewer'] } } });
     const isCode = p.includes(`/files/${id(1)}`);
-    const body = isCode ? html : data, version = isCode ? id(2) : id(4);
+    const body = isCode ? codeHtml : JSON.stringify(model), version = isCode ? code.current_version_id : id(4);
     if (p.endsWith('/object')) return route.fulfill({ contentType: isCode ? 'text/html' : 'application/json', body });
     if (p.endsWith('/versions')) return route.fulfill({ json: { current_version_id: version, versions: [{ id: version, file_id: isCode ? id(1) : id(3), version_number: 1, content_type: isCode ? 'text/html' : 'application/json', size_bytes: Buffer.byteLength(body), sha256_hex: sha(body) }] } });
-    if (p.includes('/files/')) return route.fulfill({ json: { file: isCode ? code : { id: id(3), workspace_id: id(20), channel_id: id(30), current_version_id: id(4), can_write: true } } });
+    if (p.includes('/files/')) return route.fulfill({ json: { file: isCode ? code : { id: id(3), workspace_id: id(20), channel_id: id(30), current_version_id: id(4), can_write: canWrite } } });
     return route.fulfill({ status: 503, json: {} });
   });
   page.on('dialog', dialog => dialog.accept());
   await page.goto('/flight-deck');
+  const seed = async () => {
   await page.waitForFunction(() => window.Alpine?.store('chat')?.routeSyncPaused === false);
   await page.evaluate(async ({ workspace, channel }) => {
     const {openWorkspaceDb}=await import('/src/db.js'); await openWorkspaceDb('metrics-test').open();
@@ -41,6 +42,8 @@ test('phone Apps and stable route adopt existing private Files without creating 
     const pubkey = '1'.repeat(64); localStorage.setItem('nostr_secure_auth_recovery_v1', JSON.stringify({ method: 'extension', pubkey, createdAt: Date.now(), expiresAt: Date.now() + 600000 }));
     window.nostr = { getPublicKey: async () => pubkey, signEvent: async event => ({ ...event, pubkey, id: '2'.repeat(64), sig: '3'.repeat(128) }) };
   }, { workspace: id(20), channel: id(30) });
+  };
+  await seed();
   await expect(page.getByRole('button', { name: 'Open Daily Metrics', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Open Daily Metrics', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Set up Daily Metrics', exact: true })).toBeVisible();
@@ -48,7 +51,10 @@ test('phone Apps and stable route adopt existing private Files without creating 
   await page.locator('#daily-metrics-dialog').getByRole('button', { name: 'Close', exact: true }).click(); empty = false;
   await page.getByRole('button', { name: 'Open Daily Metrics', exact: true }).click();
   await page.waitForFunction(() => window.Alpine.store('chat').dailyMetrics.status !== 'loading');
-  await page.waitForFunction(() => { const a=window.Alpine.store('chat').artefact; return a.html || a.error; });
+  await page.waitForFunction(() => { const a=window.Alpine.store('chat').artefact; return a.html || a.error || a.consent; });
+  await expect(page.getByRole('button', { name: 'Trust and open', exact: true })).toBeVisible();
+  await expect(page.locator('#artefact-dialog iframe')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Trust and open', exact: true }).click();
   const frame = page.frameLocator('#artefact-dialog iframe');
   await expect(frame.getByRole('button', { name: 'Metrics', exact: true })).toBeVisible({timeout:12000});
   await expect(page.getByRole('button', { name: 'Edit source', exact: true })).toBeHidden();
@@ -59,7 +65,40 @@ test('phone Apps and stable route adopt existing private Files without creating 
   await page.evaluate(workspace => { history.replaceState({}, '', `/flight-deck?workspaceid=${workspace}&napplet=daily-tracker`); return window.Alpine.store('chat').applyRouteFromLocation(); }, id(20));
   await expect(frame.getByRole('button', { name: 'Metrics', exact: true })).toBeVisible();
   await expect(page).toHaveURL(/napplet=daily-tracker/);
+  await expect(page.getByRole('button', { name: 'Trust and open', exact: true })).toBeHidden();
+  await expect(page.getByRole('button', { name: 'Forget approval', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Forget approval', exact: true }).click();
+  await page.getByRole('button', { name: 'Open Daily Metrics', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Trust and open', exact: true })).toBeVisible();
+  await expect(page.locator('#artefact-dialog iframe')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Trust and open', exact: true }).click();
+  await expect(frame.getByRole('button', { name: 'Metrics', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Close artefact', exact: true }).click();
+  await page.reload(); await seed();
+  await page.getByRole('button', { name: 'Open Daily Metrics', exact: true }).click();
+  await expect(frame.getByRole('button', { name: 'Metrics', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Trust and open', exact: true })).toBeHidden();
   expect(writes).toBe(0);
+  await page.getByRole('button', { name: 'Close artefact', exact: true }).click();
+  // Ordinary saved values and same-byte code revisions retain consent.
+  model.days['2026-01-01'][id(6)] = 7; code.current_version_id = id(12);
+  await page.getByRole('button', { name: 'Open Daily Metrics', exact: true }).click();
+  await expect(frame.getByRole('button', { name: 'Metrics', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Trust and open', exact: true })).toBeHidden();
+  await frame.getByLabel('Day', { exact: true }).fill('2026-01-01');
+  await expect(frame.getByRole('spinbutton')).toHaveValue('7');
+  await page.getByRole('button', { name: 'Close artefact', exact: true }).click();
+  codeHtml += '\n<!-- new reviewed code -->';
+  await page.getByRole('button', { name: 'Open Daily Metrics', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Trust and open', exact: true })).toBeVisible();
+  await expect(page.locator('#artefact-dialog iframe')).toHaveCount(0);
+  await page.screenshot({ path: 'tmp/docs/handoffs/napplet-trust-phone-consent.png' });
+  await page.getByRole('button', { name: 'Trust and open', exact: true }).click();
+  await expect(frame.getByRole('button', { name: 'Metrics', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Close artefact', exact: true }).click(); canWrite = false;
+  await page.getByRole('button', { name: 'Open Daily Metrics', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Trust and open', exact: true })).toBeVisible();
+  await expect(page.locator('#artefact-dialog iframe')).toHaveCount(0);
   await page.getByRole('button', { name: 'Close artefact', exact: true }).click(); multiple = true;
   await page.getByRole('button', { name: 'Open Daily Metrics', exact: true }).click();
   await expect(page.getByText('Choose an existing tracker. Your records will be preserved.')).toBeVisible();

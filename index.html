@@ -12133,6 +12133,15 @@
               <button type="button" @click="$store.chat.copyArtefactLink()">Copy link</button>
               <button type="button" @click="$store.chat.closeArtefact()" aria-label="Close artefact">Close</button>
             </header>
+            <div class="artefact-toolbar" x-show="$store.chat.artefact.napplet">
+              <span x-text="$store.chat.artefact.approvalNotice"></span>
+              <button type="button" @click="$store.chat.forgetArtefactApproval()">Forget approval</button>
+            </div>
+            <section class="napplet-consent" x-show="$store.chat.artefact.consent" aria-label="Napplet approval">
+              <p>Run this napplet? Its reviewed code can read and replace the linked daily tracker File in your self-conversation. NStack administrators may also have access. Only run code you trust. Web HTML can navigate its own frame.</p>
+              <p>Approval is remembered on this browser for this code and linked File access. You can forget it in the app controls. Access is checked every time.</p>
+              <button type="button" @click="$store.chat.enableArtefactNapplet()">Trust and open</button>
+            </section>
             <p role="alert" x-show="$store.chat.artefact.error || $store.chat.artefact.board.error" x-text="$store.chat.artefact.error || $store.chat.artefact.board.error"></p>
             <div class="artefact-toolbar" x-show="$store.chat.artefact.kind === 'excalidraw'">
               <button type="button" :disabled="!$store.chat.artefact.board.dirty || !$store.chat.artefact.board.can_write" @click="$store.chat.artefactBoardAction('save')">Save whiteboard</button>
