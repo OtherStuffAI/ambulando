@@ -37,3 +37,14 @@ export function forgetNappletApproval(receipt) {
     return globalThis.localStorage.getItem(receipt.key) === null;
   } catch { return false; }
 }
+
+// Separate discriminated receipt; never widens the Daily Metrics binding parser.
+export async function workspaceReportReceipt(context, codeFileId, digest, binding, codeAccess) {
+  if (binding?.appId !== 'workspace-report' || binding.workspaceId !== context.workspaceId || typeof codeAccess !== 'boolean' || !/^[a-f0-9]{64}$/.test(digest)) throw Error('Invalid report approval identity.');
+  const required = [context.baseUrl, context.appNpub, context.workspaceId, context.viewer, codeFileId];
+  if (required.some(v => typeof v !== 'string' || !v.trim())) throw Error('Incomplete report approval identity.');
+  const backend = new URL(context.baseUrl);
+  if (!['http:', 'https:'].includes(backend.protocol) || backend.username || backend.password) throw Error('Invalid report backend.');
+  const identity = [backend.href.replace(/\/$/, ''), context.tower || '', context.service || '', context.appNpub, context.workspaceId, context.viewer];
+  return Object.freeze({ key: PREFIX + await sha([...identity, codeFileId]), fingerprint: await sha({version:1, identity, codeFileId, digest, appId:'workspace-report', manifestVersion:1, bindings:[{name:'report',workspaceId:binding.workspaceId,format:'workspace-report-v1',privacy:'viewer',operations:['read']}], codeAccess, canWrite:false}) });
+}

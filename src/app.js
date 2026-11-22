@@ -1,3 +1,4 @@
+import { workspaceReportMixin } from './napplets/workspace-report-app.js';
 import { artefactsMixin } from './artefacts.js';
 import { artefactType } from './artefact-registry.js';
 import { registerCanvasBoard } from './canvas/board-naplet.js';
@@ -10764,6 +10765,7 @@ export function initApp() {
     autopilotOverviewManagerMixin,
     pinnedThreadsMixin,
     artefactsMixin,
+    workspaceReportMixin,
     canvasManagerMixin,
     canvasChatEmbedMixin,
     agentSpaceManagerMixin,

@@ -12118,6 +12118,14 @@
     <iframe :title="$store.chat.messageActivityDisplayTitle + ' dashboard'" sandbox="allow-scripts" referrerpolicy="no-referrer" :src="$store.chat.messageActivitySrc || 'about:blank'"></iframe>
   </dialog>
   <div hidden x-effect="const context = $store.chat.orgDataInstallationsContextKey; const section = $store.chat.navSection; queueMicrotask(() => { if (context === $store.chat.orgDataInstallationsContextKey) $store.chat.loadOrgDataInstallations(); })"></div>
+          <dialog id="workspace-report-dialog" class="artefact-dialog" @cancel.prevent="$store.chat.closeWorkspaceReport()" x-effect="if ($store.chat.workspaceReport.status !== 'closed' && $store.chat.workspaceReport.partition !== $store.chat.workspaceReportPartition()) $store.chat.closeWorkspaceReport()">
+            <header><h2>Workspace Report</h2><button type="button" aria-label="Close Workspace Report" @click="$store.chat.closeWorkspaceReport()">×</button></header>
+            <p x-show="$store.chat.workspaceReport.status === 'loading'">Checking your private report app…</p>
+            <p role="alert" x-text="$store.chat.workspaceReport.error"></p>
+            <div x-show="$store.chat.workspaceReport.status === 'setup'"><p>Save Workspace Report as a private HTML File in your Note to self conversation. It reads only the workspace aggregates you can access. No report data File is created.</p><button type="button" :disabled="$store.chat.artefactCreating" @click="$store.chat.setupWorkspaceReport()">Set up Workspace Report</button></div>
+            <div x-show="$store.chat.workspaceReport.status === 'choose'"><p>Choose an existing report app.</p><template x-for="(file, index) in $store.chat.workspaceReport.candidates" :key="file.id"><button type="button" @click="$store.chat.openWorkspaceReportFile(file)" x-text="(file.display_name || 'Workspace Report').replace(/\.html?$/i, '') + ' · Report ' + (index + 1)"></button></template></div>
+            <button type="button" x-show="$store.chat.workspaceReport.status === 'error'" @click="$store.chat.openWorkspaceReport()">Try again</button>
+          </dialog>
           <dialog id="daily-metrics-dialog" class="artefact-dialog" @cancel.prevent="$store.chat.closeDailyMetrics()" x-effect="if ($store.chat.dailyMetrics.status !== 'closed' && $store.chat.dailyMetrics.partition !== $store.chat.dailyMetricsPartition()) $store.chat.closeDailyMetrics()">
             <header class="artefact-toolbar"><strong>Daily Metrics</strong><button type="button" @click="$store.chat.closeDailyMetrics()">Close</button></header>
             <p x-show="$store.chat.dailyMetrics.status === 'loading'">Checking your private tracker…</p>
@@ -12125,10 +12133,10 @@
             <div x-show="$store.chat.dailyMetrics.status === 'setup'"><p>Set up an empty private tracker in your Note to self conversation.</p><button type="button" :disabled="$store.chat.artefactCreating" @click="$store.chat.setupDailyMetrics()">Set up Daily Metrics</button></div>
             <div x-show="$store.chat.dailyMetrics.status === 'choose'"><p>Choose an existing tracker. Your records will be preserved.</p><template x-for="(file, index) in $store.chat.dailyMetrics.candidates" :key="file.id"><button type="button" @click="$store.chat.openDailyMetricsFile(file)" x-text="(file.display_name || 'Daily Metrics').replace(/\.html?$/i, '') + ' · Tracker ' + (index + 1)"></button></template></div>
           </dialog>
-          <dialog id="artefact-dialog" class="artefact-dialog" @cancel.prevent="$store.chat.closeArtefact()" x-effect="if ($store.chat.artefact.id && !$store.chat.artefactCurrent($store.chat.artefactSession())) $store.chat.closeArtefact({ force: true, preserve: false })">
+          <dialog id="artefact-dialog" class="artefact-dialog" :class="{ 'workspace-report-host': $store.chat.artefact.appId === 'workspace-report' }" @cancel.prevent="$store.chat.closeArtefact()" x-effect="if ($store.chat.artefact.id && !$store.chat.artefactCurrent($store.chat.artefactSession())) $store.chat.closeArtefact({ force: true, preserve: false })">
             <header class="artefact-toolbar"><strong x-text="$store.chat.artefact.title"></strong>
               <span x-show="!$store.chat.artefact.can_write && $store.chat.artefact.status === 'ready'">Read-only</span>
-              <span x-text="$store.chat.artefact.kind === 'excalidraw' ? ($store.chat.artefact.board.save_state || 'Loading…') : $store.chat.artefact.status"></span>
+              <span x-show="!$store.chat.artefact.report" x-text="$store.chat.artefact.kind === 'excalidraw' ? ($store.chat.artefact.board.save_state || 'Loading…') : $store.chat.artefact.status"></span>
               <button type="button" @click="$store.chat.togglePersonalPin({ record_id: $store.chat.artefact.id }, 'file')" x-text="$store.chat.isPersonalPinned('file', $store.chat.artefact.id) ? 'Unpin' : 'Pin'"></button>
               <button type="button" @click="$store.chat.copyArtefactLink()">Copy link</button>
               <button type="button" @click="$store.chat.closeArtefact()" aria-label="Close artefact">Close</button>
@@ -12142,7 +12150,8 @@
               <button type="button" :disabled="$store.chat.artefact.updating" @click="$store.chat.updateDailyMetricsApp()">Update app</button>
             </div>
             <section class="napplet-consent" x-show="$store.chat.artefact.consent" aria-label="Napplet approval">
-              <p>Run this napplet? Its reviewed code can read and replace the linked daily tracker File in your self-conversation. NStack administrators may also have access. Only run code you trust. Web HTML can navigate its own frame.</p>
+              <p x-show="!$store.chat.artefact.report">Run this napplet? Its reviewed code can read and replace the linked daily tracker File in your self-conversation. NStack administrators may also have access. Only run code you trust. Web HTML can navigate its own frame.</p>
+              <p x-show="$store.chat.artefact.report">Run Workspace Report? Its reviewed code can read authorized project-channel activity and current task, document and File counts. It cannot write workspace data. Only run code you trust. Web HTML can navigate its own frame.</p>
               <p>Approval is remembered on this browser for this code and linked File access. You can forget it in the app controls. Access is checked every time.</p>
               <button type="button" @click="$store.chat.enableArtefactNapplet()">Trust and open</button>
             </section>

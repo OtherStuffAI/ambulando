@@ -1,3 +1,4 @@
+import { queryWorkspaceReport } from './napplets/workspace-report-query.js';
 import { synchronizePrivatePreferences } from './private-preference-sync.js';
 import { synchronizeNotificationInbox } from './notification-inbox-sync.js';
 import { synchronizeThreadPins } from './thread-pin-sync.js';
@@ -397,6 +398,7 @@ export const syncManagerMixin = {
         'org-data-permissions': { trackFreshness: false, load: (_key, options) => readOrgDataPermissions(this, options) },
         'org-data-installations': { trackFreshness: false, load: (_key, options) => hydrateOrgData(this, { ...options, catalogue: true }) },
         'org-data': { trackFreshness: false, load: (_key, options) => hydrateOrgData(this, options) },
+        'workspace-report': { trackFreshness: false, load: (_key, options) => queryWorkspaceReport(this, options.range, options) },
         'message-activity': {
           trackFreshness: false,
           load: (_requestKey, options) => hydrateMessageActivity(this, options.range, options),

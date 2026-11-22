@@ -32,7 +32,7 @@ test('phone Apps and stable route adopt existing private Files without creating 
   page.on('dialog', dialog => dialog.accept());
   await page.goto('/flight-deck');
   const seed = async () => {
-  await page.waitForFunction(() => window.Alpine?.store('chat')?.routeSyncPaused === false);
+  await page.waitForFunction(() => window.Alpine?.store('chat')?.routeSyncPaused === false, undefined, { timeout: 15000 });
   await page.evaluate(async ({ workspace, channel }) => {
     const {openWorkspaceDb}=await import('/src/db.js'); await openWorkspaceDb('metrics-test').open();
     const s = window.Alpine.store('chat'); s.stopBackgroundSync(); s.ensureBackgroundSync = () => {}; s.scheduleBackgroundSync = () => {}; s.startWorkspaceLiveQueries = () => {};
@@ -44,12 +44,13 @@ test('phone Apps and stable route adopt existing private Files without creating 
   }, { workspace: id(20), channel: id(30) });
   };
   await seed();
+  const openMetrics = async () => { const stack = page.getByRole('button', { name: 'Open Apps stack', exact: true }); if (await stack.isVisible()) await stack.click(); await page.getByRole('button', { name: 'Open Daily Metrics', exact: true }).click(); };
   await expect(page.getByRole('button', { name: 'Open Daily Metrics', exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Open Daily Metrics', exact: true }).click();
+  await openMetrics();
   await expect(page.getByRole('button', { name: 'Set up Daily Metrics', exact: true })).toBeVisible();
   expect(writes).toBe(0);
   await page.locator('#daily-metrics-dialog').getByRole('button', { name: 'Close', exact: true }).click(); empty = false;
-  await page.getByRole('button', { name: 'Open Daily Metrics', exact: true }).click();
+  await openMetrics();
   await page.waitForFunction(() => window.Alpine.store('chat').dailyMetrics.status !== 'loading');
   await page.waitForFunction(() => { const a=window.Alpine.store('chat').artefact; return a.html || a.error || a.consent; });
   await expect(page.getByRole('button', { name: 'Trust and open', exact: true })).toBeVisible();
@@ -68,7 +69,7 @@ test('phone Apps and stable route adopt existing private Files without creating 
   await expect(page.getByRole('button', { name: 'Trust and open', exact: true })).toBeHidden();
   await expect(page.getByRole('button', { name: 'Forget approval', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Forget approval', exact: true }).click();
-  await page.getByRole('button', { name: 'Open Daily Metrics', exact: true }).click();
+  await openMetrics();
   await expect(page.getByRole('button', { name: 'Trust and open', exact: true })).toBeVisible();
   await expect(page.locator('#artefact-dialog iframe')).toHaveCount(0);
   await page.getByRole('button', { name: 'Trust and open', exact: true }).click();
@@ -77,37 +78,37 @@ test('phone Apps and stable route adopt existing private Files without creating 
   // Reload the browser receipt independently of the synthetic extension login.
   await page.evaluate(() => localStorage.removeItem('nostr_secure_auth_recovery_v1'));
   await page.reload(); await seed();
-  await page.getByRole('button', { name: 'Open Daily Metrics', exact: true }).click();
+  await openMetrics();
   await expect(frame.getByRole('button', { name: 'Metrics', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Trust and open', exact: true })).toBeHidden();
   expect(writes).toBe(0);
   await page.getByRole('button', { name: 'Close artefact', exact: true }).click();
   // Ordinary saved values and same-byte code revisions retain consent.
   model.days['2026-01-01'][id(6)] = 7; code.current_version_id = id(12);
-  await page.getByRole('button', { name: 'Open Daily Metrics', exact: true }).click();
+  await openMetrics();
   await expect(frame.getByRole('button', { name: 'Metrics', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Trust and open', exact: true })).toBeHidden();
   await frame.getByLabel('Day', { exact: true }).fill('2026-01-01');
   await expect(frame.getByRole('spinbutton')).toHaveValue('7');
   await page.getByRole('button', { name: 'Close artefact', exact: true }).click();
   codeHtml += '\n<!-- new reviewed code -->';
-  await page.getByRole('button', { name: 'Open Daily Metrics', exact: true }).click();
+  await openMetrics();
   await expect(page.getByRole('button', { name: 'Trust and open', exact: true })).toBeVisible();
   await expect(page.locator('#artefact-dialog iframe')).toHaveCount(0);
   await page.screenshot({ path: 'tmp/docs/handoffs/napplet-trust-phone-consent.png' });
   await page.getByRole('button', { name: 'Trust and open', exact: true }).click();
   await expect(frame.getByRole('button', { name: 'Metrics', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Close artefact', exact: true }).click(); canWrite = false;
-  await page.getByRole('button', { name: 'Open Daily Metrics', exact: true }).click();
+  await openMetrics();
   await expect(page.getByRole('button', { name: 'Trust and open', exact: true })).toBeVisible();
   await expect(page.locator('#artefact-dialog iframe')).toHaveCount(0);
   await page.getByRole('button', { name: 'Close artefact', exact: true }).click(); multiple = true;
-  await page.getByRole('button', { name: 'Open Daily Metrics', exact: true }).click();
+  await openMetrics();
   await expect(page.getByText('Choose an existing tracker. Your records will be preserved.')).toBeVisible();
   await expect(page.getByRole('button', {name:'Previously renamed · Tracker 1',exact:true})).toBeVisible();
   await expect(page.locator('#daily-metrics-dialog')).not.toContainText(id(1));
   await page.locator('#daily-metrics-dialog').getByRole('button', { name: 'Close', exact: true }).click(); multiple = false; denied = true;
-  await page.getByRole('button', { name: 'Open Daily Metrics', exact: true }).click();
+  await openMetrics();
   await expect(page.locator('#daily-metrics-dialog [role=alert]')).not.toBeEmpty();
   await expect(page.getByRole('button', { name: 'Set up Daily Metrics', exact: true })).toBeHidden();
   expect(writes).toBe(0);

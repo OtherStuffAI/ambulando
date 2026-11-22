@@ -1,3 +1,5 @@
+import { parseWorkspaceReport, WorkspaceReportData, WorkspaceReportFrame } from './napplets/workspace-report.js';
+import { workspaceReportReceipt } from './napplets/trust.js';
 import { canUpdateTracker, updateTrackerCode } from './napplets/tracker-update.js';
 import { loadTrackerBundle } from './napplets/tracker-bundle.js';
 import { FileNappletData, parseFileNapplet, TRACKER_MODEL } from './napplets/file-data.js';
@@ -54,11 +56,11 @@ export const artefactsMixin = {
     await this.closeArtefact({ force: true, preserve: false });
     this.error = 'Artefact access is no longer available.';
   },
-  async copyArtefactLink() { if (this.artefact.appMode) { const url = new URL('/flight-deck', location.origin); url.searchParams.set('workspaceid', canvasContext(this).workspaceId); url.searchParams.set('napplet', 'daily-tracker'); await navigator.clipboard.writeText(url.href); return; } const url = new URL(location.href); url.searchParams.set('artefactid', this.artefact.id); url.searchParams.set('workspaceid', canvasContext(this).workspaceId); await navigator.clipboard.writeText(url.href); },
+  async copyArtefactLink() { if (this.artefact.appMode) { const url = new URL('/flight-deck', location.origin); url.searchParams.set('workspaceid', canvasContext(this).workspaceId); url.searchParams.set('napplet', this.artefact.appId || 'daily-tracker'); await navigator.clipboard.writeText(url.href); return; } const url = new URL(location.href); url.searchParams.set('artefactid', this.artefact.id); url.searchParams.set('workspaceid', canvasContext(this).workspaceId); await navigator.clipboard.writeText(url.href); },
   artefactBoardController(id) { const session = sessions.get(this); return session?.id === id ? session.board : null; },
   artefactAssetStore() { return sessions.get(this)?.assets || null; },
   artefactCurrent(session) { return Boolean(session) && sessions.get(this) === session && session.partition === canvasPartition(canvasContext(this)); },
-  async openArtefact(row, { appMode = false } = {}) {
+  async openArtefact(row, { appMode = false, appId = 'daily-tracker' } = {}) {
     if (!row || !artefactType(row) || artefactType(row) === 'document') return false;
     if (!await this.closeArtefact()) return false;
     activeStore = this;
@@ -70,7 +72,7 @@ export const artefactsMixin = {
     const context = canvasContext(this), id = row.record_id;
     const session = { id, context, partition: canvasPartition(context), runtime: new CanvasBoardRuntime(context), assets: new CanvasHtmlAssetStore(context) };
     sessions.set(this, session);
-    this.artefact = { ...empty(), id, kind: artefactType(row), appMode, title: appMode ? 'Daily Metrics' : row.title || 'Artefact' };
+    this.artefact = { ...empty(), id, kind: artefactType(row), appMode, appId, title: appMode ? (appId === 'workspace-report' ? 'Workspace Report' : 'Daily Metrics') : row.title || 'Artefact' };
     if (appMode) this.syncRoute?.(true);
     (this.$nextTick || globalThis.Alpine?.nextTick || queueMicrotask)(() => document.querySelector('#artefact-dialog')?.showModal());
     try {
@@ -83,7 +85,7 @@ export const artefactsMixin = {
       if (file?.id !== id || file.workspace_id !== context.workspaceId) throw new Error('Invalid artefact response.');
       const versions = history.versions || [], latest = versions.find(v => v.id === history.current_version_id);
       if (!latest) throw new Error('This artefact has no readable saved version.');
-      this.artefact = { ...this.artefact, title: appMode ? 'Daily Metrics' : file.display_name, can_write: file.can_write === true || payload.can_write === true, base: latest.id, versions, status: 'ready' };
+      this.artefact = { ...this.artefact, title: appMode ? (appId === 'workspace-report' ? 'Workspace Report' : 'Daily Metrics') : file.display_name, can_write: file.can_write === true || payload.can_write === true, base: latest.id, versions, status: 'ready' };
       if (this.artefact.kind === 'excalidraw') {
         session.board = new BoardController(session.runtime, id, { confirmDiscard: message => window.confirm(message), onState: (_id, state) => { if (this.artefactCurrent(session)) this.artefact.board = state; } });
         await session.board.loadVersions();
@@ -123,21 +125,24 @@ export const artefactsMixin = {
       const content = await new ArtifactCatalog(session.context).preview({ id: session.id, kind: 'html', currentVersionId: versionId });
       if (!this.artefactCurrent(session)) return;
       session.dataHost?.stop(); session.dataHost = null;
-      const binding = parseFileNapplet(content.html, session.fileMetadata);
-      if (this.artefact.appMode && !binding) throw new Error('This File is not a valid Daily Metrics app.');
+      const reportBinding = parseWorkspaceReport(content.html, session.fileMetadata);
+      const binding = reportBinding || parseFileNapplet(content.html, session.fileMetadata);
+      if (this.artefact.appMode && (!binding || binding.appId !== this.artefact.appId)) throw new Error('This File is not a valid app.');
       this.artefact.consent = false; this.artefact.approvalNotice = ''; this.artefact.napplet = false; this.artefact.updateAvailable = false;
       session.pendingConsent?.data.stop(); session.pendingConsent = null;
       if (binding) {
         if (versionId !== this.artefact.base) throw new Error('Reopen the latest version to approve this napplet.');
-        const data = new FileNappletData(session.context, session.id, binding, { current: () => this.artefactCurrent(session) });
+        const Data = reportBinding ? WorkspaceReportData : FileNappletData;
+        const data = new Data(session.context, session.id, binding, { current: () => this.artefactCurrent(session), query: (range, signal) => { const service = this.getTowerSyncService(); if (!service) throw new Error('Workspace Report service unavailable.'); return service.ensureLoaded('workspace-report', `${session.partition}:${range}`, { force: true, range, signal }); } });
         data.codeVersion = versionId;
         try {
           const access = await data.authority();
-          const receipt = await nappletReceipt(session.context, session.id, content.digest, binding, access.canWrite);
+          const receipt = reportBinding ? await workspaceReportReceipt(session.context, session.id, content.digest, binding, access.codeAccess) : await nappletReceipt(session.context, session.id, content.digest, binding, access.canWrite);
           if (!this.artefactCurrent(session)) { data.stop(); return; }
-          session.pendingConsent = { data, content, receipt, canWrite: access.canWrite };
+          session.pendingConsent = { data, content, receipt, canWrite: access.canWrite, report: Boolean(reportBinding) };
+          this.artefact.report = Boolean(reportBinding);
           session.trackerBinding = binding;
-          this.artefact.updateAvailable = canUpdateTracker(content) && session.codeCanWrite;
+          this.artefact.updateAvailable = !reportBinding && canUpdateTracker(content) && session.codeCanWrite;
           this.artefact.html = null;
           if (!hasNappletApproval(receipt)) { this.artefact.consent = true; return; }
           await this.enableArtefactNapplet(false);
@@ -162,7 +167,8 @@ export const artefactsMixin = {
       if (!explicit && !remembered) { this.artefact.consent = true; return; }
       pending.data.grant(pending.canWrite);
       session.receipt = pending.receipt;
-      session.dataHost = new FileNappletFrame(pending.data, { onDirty: dirty => { session.nappletDirty = dirty; }, onBusy: busy => { session.nappletBusy = busy; }, onRevoke: () => { void this.revokeArtefact(session); } });
+      const Frame = pending.report ? WorkspaceReportFrame : FileNappletFrame;
+      session.dataHost = new Frame(pending.data, { onDirty: dirty => { session.nappletDirty = dirty; }, onBusy: busy => { session.nappletBusy = busy; }, onRevoke: () => { if (pending.report && this.artefactCurrent(session)) { this.artefact.html = null; this.artefact.error = 'Report access or counts are unavailable. Close and reopen Workspace Report to retry.'; } else void this.revokeArtefact(session); } });
       session.assets.retain(pending.content.assets);
       Object.assign(this.artefact, { consent: false, napplet: true, approvalNotice: remembered ? 'Approval remembered on this browser. Access is checked each time.' : 'Approval could not be saved on this browser. You will be asked again next time.', html: pending.content, source: pending.content.html, dirty: false, viewing: '', error: '' });
       session.pendingConsent = null;

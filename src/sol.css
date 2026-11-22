@@ -840,3 +840,11 @@ code, pre { font-family:var(--font-code); }
 }
 
 .app-refresh-thread { min-width:36px; }
+
+/* Keep the report's host controls compact on phones while its dashboard scrolls. */
+.workspace-report-host > header.artefact-toolbar { display:flex; flex-wrap:nowrap; gap:8px; align-items:center; padding:10px 12px; }
+.workspace-report-host > header.artefact-toolbar strong { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.workspace-report-host > header.artefact-toolbar button { padding:8px; min-height:40px; font-size:12px; }
+.workspace-report-host > .artefact-toolbar:not(header) { font-size:11px; padding:6px 12px; gap:8px; }
+.workspace-report-host > .artefact-toolbar:not(header) button { font-size:11px; padding:6px 8px; }
+@media(max-width:430px) { .workspace-report-host > header.artefact-toolbar > button:first-of-type { display:none; } }

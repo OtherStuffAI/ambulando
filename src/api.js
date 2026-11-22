@@ -422,6 +422,13 @@ function combineTowerRequestSignals(...signals) {
   return controller.signal;
 }
 
+export async function getTowerPgWorkspaceReport(workspaceId, range, { baseUrl = _baseUrl, appNpub = FLIGHT_DECK_PG_APP_NPUB, signal } = {}) {
+  if (!workspaceId || !['7d', '30d', '90d', 'all'].includes(range)) throw new Error('Invalid workspace report request');
+  const path = `/api/v4/flightdeck-pg/workspaces/${encodeURIComponent(workspaceId)}/workspace-report?range=${range}&top_n=10`;
+  const resp = await signedTowerPgFetch(path, { baseUrl, appNpub, signal });
+  return json(resp, { requestUrl: resolveTowerPgUrl(path, baseUrl), method: 'GET', prefix: 'Tower PG API' });
+}
+
 export async function getTowerPgMessageActivity(workspaceId, range, { baseUrl = _baseUrl, appNpub = FLIGHT_DECK_PG_APP_NPUB, signal } = {}) {
   if (!workspaceId || !['7d', '30d', 'all'].includes(range)) throw new Error('Invalid message activity request');
   const path = `/api/v4/flightdeck-pg/workspaces/${encodeURIComponent(workspaceId)}/message-activity?range=${range}`;

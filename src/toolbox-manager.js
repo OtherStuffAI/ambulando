@@ -93,7 +93,7 @@ export const toolboxMixin = {
     const wapps = this.visiblePersonalWapps || [];
     const seen = new Set();
     return [
-      ...(this.isTowerPgMode ? [{ placementId: 'napplet:daily-tracker', app_id: 'daily-tracker', title: 'Daily Metrics', description: 'Your private daily metrics', appType: 'Napplet' }] : []),
+      ...(this.isTowerPgMode ? [{ placementId: 'napplet:workspace-report', app_id: 'workspace-report', title: 'Workspace Report', description: 'Authorized activity and current work', appType: 'Napplet' }, { placementId: 'napplet:daily-tracker', app_id: 'daily-tracker', title: 'Daily Metrics', description: 'Your private daily metrics', appType: 'Napplet' }] : []),
       ...wapps.filter(wapp => {
         if (!wapp.record_id || seen.has(wapp.record_id)) return false;
         seen.add(wapp.record_id); return true;
@@ -156,7 +156,8 @@ export const toolboxMixin = {
       const opener = this.visibleApps.length > 1 && active?.closest('[data-testid="apps-stack"]')
         ? document.querySelector('[data-testid="apps-stack"] .wapps-stack-hitbox') : active;
       this.closePersonalWappsOverlay();
-      if (entry.placementId === 'napplet:daily-tracker') this.openDailyMetrics();
+      if (entry.placementId === 'napplet:workspace-report') this.openWorkspaceReport();
+      else if (entry.placementId === 'napplet:daily-tracker') this.openDailyMetrics();
       else if (entry.orgDataView) this.openOrgData({ opener, view: entry.orgDataView });
       else if (entry.placementId === 'napplet:tower-usage') this.openTowerUsage({ opener });
       else this.openMessageActivity({ opener });

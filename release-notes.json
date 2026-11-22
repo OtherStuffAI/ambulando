@@ -5897,6 +5897,13 @@
       "label": "Validate Daily Metrics update guards",
       "notes": [],
       "noUserVisibleChanges": true
+    },
+    {
+      "buildNumber": 2749,
+      "label": "Workspace Report in Apps",
+      "notes": [
+        "Open Workspace Report from Apps for authorized channel activity, active conversations and current task, document and File counts. Its private File app uses read-only access, clear coverage and date filters."
+      ]
     }
   ]
 }
