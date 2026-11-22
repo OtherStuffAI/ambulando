@@ -350,7 +350,7 @@ describe('Chat channel rendering hooks', () => {
     expect(globalBar).toContain('mobile-section-switcher-btn-active');
     expect(styles).toMatch(/\.mobile-section-switcher\s*\{[\s\S]*display:\s*none;/);
     expect(globalBar.match(/class="mobile-section-switcher-btn"/g)).toHaveLength(8);
-    for (const section of ['Deck', 'Chat', 'Tasks', 'Docs', 'Files', 'Agents', 'Context', 'Toolbox']) {
+    for (const section of ['Deck', 'Chat', 'Tasks', 'Artefacts', 'Files', 'Agents', 'Context', 'Toolbox']) {
       expect(globalBar).toContain(`aria-label="${section}" title="${section}"`);
     }
     expect(globalBar.match(/class="mobile-section-switcher-btn"[\s\S]*?<svg aria-hidden="true"/g)).toHaveLength(8);

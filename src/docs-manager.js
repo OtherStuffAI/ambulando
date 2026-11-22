@@ -931,6 +931,8 @@ export const docsManagerMixin = {
   },
 
   openDoc(recordId, options = {}) {
+    const artefactRow = this.documents?.find(row => row.record_id === recordId);
+    if (artefactRow?.pg_record_type === 'file' && this.artefactType?.(artefactRow)) return this.openArtefact(artefactRow);
     if (this.rememberPgRecoveryDestination?.('doc', recordId)) return false;
     this.commentVisibleCount = this.commentPageSize || 80;
     const nextRecordId = String(recordId || '').trim();

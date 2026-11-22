@@ -1457,11 +1457,11 @@
             </span>
             <span class="sidebar-label">Tasks</span>
           </button></li>
-          <li :class="{ active: $store.chat.navSection === 'docs' }"><button type="button" class="sol-nav-button" aria-label="Docs" @click="$store.chat.navigateTo('docs')">
+          <li :class="{ active: $store.chat.navSection === 'docs' }"><button type="button" class="sol-nav-button" aria-label="Artefacts" @click="$store.chat.navigateTo('docs')">
             <span class="sidebar-icon" aria-hidden="true">
               <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="/ambulando/icons.svg#file-text" /></svg>
             </span>
-            <span class="sidebar-label">Docs</span>
+            <span class="sidebar-label">Artefacts</span>
           </button></li>
           <li :class="{ active: $store.chat.navSection === 'files' }"><button type="button" class="sol-nav-button" aria-label="Files" @click="$store.chat.navigateTo('files')">
             <span class="sidebar-icon" aria-hidden="true">
@@ -1776,7 +1776,7 @@
                 </button>
                 <button type="button" class="expanded-sidebar-section-switcher-btn" :class="{ 'expanded-sidebar-section-switcher-btn-active': $store.chat.navSection === 'docs' }" :aria-current="$store.chat.navSection === 'docs' ? 'page' : null" @click="$store.chat.navigateTo('docs')">
                   <span class="expanded-sidebar-section-icon" aria-hidden="true"><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="/ambulando/icons.svg#file-text" /></svg></span>
-                  <span>Docs</span>
+                  <span>Artefacts</span>
                 </button>
                 <button type="button" class="view-lock-button"
                   x-cloak x-show="$store.chat.canLockCurrentView && $store.chat.navSection === 'docs'"
@@ -1991,7 +1991,7 @@
                 <button type="button" class="mobile-section-switcher-btn"
                   :class="{ 'mobile-section-switcher-btn-active': $store.chat.navSection === 'docs' }"
                   :aria-current="$store.chat.navSection === 'docs' ? 'page' : null"
-                  aria-label="Docs" title="Docs"
+                  aria-label="Artefacts" title="Artefacts"
                   @click="$store.chat.navigateTo('docs')">
                   <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="/ambulando/icons.svg#file-text" /></svg>
                 </button>
@@ -5163,7 +5163,7 @@
 
             <div class="docs-header" x-show="!$store.chat.docsEditorOpen" x-data="{ docsControlsOpen: false }">
               <div class="docs-title-block">
-                <h2>Docs</h2>
+                <h2>Artefacts</h2>
                 <p class="docs-subtitle" x-text="'Viewing: ' + $store.chat.selectedBoardLabel"></p>
                 <button type="button" class="btn-secondary" @click="$store.chat.openAllDocuments()">All documents</button>
                 <p class="docs-subtitle" x-text="`${$store.chat.filteredDocBrowserItems.length} of ${$store.chat.currentFolderContents.length}`"></p>
@@ -5186,7 +5186,10 @@
               </div>
 
               <div class="docs-toolbar" :class="{ 'docs-toolbar-mobile-open': docsControlsOpen }">
-                <input class="docs-search-input" type="text" :placeholder="$store.chat.isTowerPgMode ? 'Search docs' : 'Search docs and folders'" x-model="$store.chat.docFilter" />
+                <select class="docs-search-input" aria-label="Artefact type" x-show="$store.chat.isTowerPgMode" x-model="$store.chat.artefactTypeFilter"><option value="all">All types</option><option value="document">Documents</option><option value="excalidraw">Whiteboards</option><option value="html">Interactive HTML</option></select>
+                <button type="button" class="btn-secondary" x-show="$store.chat.isTowerPgMode" :disabled="$store.chat.artefactCreating" @click="$store.chat.createChannelArtefact('excalidraw')">+ Whiteboard</button>
+                <button type="button" class="btn-secondary" x-show="$store.chat.isTowerPgMode" :disabled="$store.chat.artefactCreating" @click="$store.chat.createChannelArtefact('html')">+ Interactive HTML</button>
+                <input class="docs-search-input" type="text" :placeholder="$store.chat.isTowerPgMode ? 'Search artefacts' : 'Search docs and folders'" x-model="$store.chat.docFilter" />
                 <button type="button" class="btn-secondary docs-mobile-toolbar-only" @click="$store.chat.openAllDocuments()">All documents</button>
                 <button
                   type="button"
@@ -5359,9 +5362,9 @@
                         'doc-item-selected': $store.chat.isDocSelected(row.item.record_id),
                         'doc-item-drop-active': $store.chat.docBrowserDropTarget === `folder:${row.item.record_id}`
                       }"
-                      :draggable="!$store.chat.docSelectionMode"
+                      :draggable="!$store.chat.docSelectionMode && row.type !== 'file'"
                       @click="$store.chat.handleDocBrowserRowClick(row.type, row.item.record_id)"
-                      @dragstart="!$store.chat.docSelectionMode && $store.chat.handleDocItemDragStart($event, row.type, row.item.record_id)"
+                      @dragstart="row.type !== 'file' && !$store.chat.docSelectionMode && $store.chat.handleDocItemDragStart($event, row.type, row.item.record_id)"
                       @dragend="!$store.chat.docSelectionMode && $store.chat.handleDocItemDragEnd($event)"
                       @dragover.prevent="!$store.chat.docSelectionMode && row.type === 'directory' && $store.chat.handleDocItemDragOver($event, row.item.record_id, `folder:${row.item.record_id}`)"
                       @dragleave="!$store.chat.docSelectionMode && row.type === 'directory' && $store.chat.handleDocItemDragLeave($event, `folder:${row.item.record_id}`)"
@@ -5389,6 +5392,8 @@
                             </svg>
                           </template>
                         </span>
+                        <small x-show="row.type === 'file'" x-text="$store.chat.artefactLabel(row.item)"></small>
+                        <button type="button" class="btn-secondary" x-show="row.type === 'file'" @click.stop="$store.chat.togglePersonalPin(row.item, 'file')" x-text="$store.chat.isPersonalPinned('file', row.item.record_id) ? 'Unpin' : 'Pin'"></button>
                         <span class="doc-item-title" x-text="row.item.title || (row.type === 'directory' ? 'Untitled folder' : 'Untitled document')"></span>
                         <div class="doc-item-meta">
                           <button
@@ -5401,7 +5406,7 @@
                           <button
                             type="button"
                             class="doc-scope-pill-btn"
-                            x-show="row.item.scope_id && !$store.chat.hasSameScopeAssignment(row.item, $store.chat.getDirectoryDefaultScopeAssignment($store.chat.currentFolder))"
+                            x-show="row.type !== 'file' && row.item.scope_id && !$store.chat.hasSameScopeAssignment(row.item, $store.chat.getDirectoryDefaultScopeAssignment($store.chat.currentFolder))"
                             @click.stop="$store.chat.openDocScopeModal({ type: row.type, item: row.item })"
                           >
                             <span
@@ -5446,7 +5451,7 @@
                 </div>
 
                 <div class="docs-empty-panel" x-show="($store.chat.sortedDocBrowserItems || []).length === 0">
-                  <h2>Docs</h2>
+                  <h2>Artefacts</h2>
                 <p class="docs-subtitle" x-text="'Viewing: ' + $store.chat.selectedBoardLabel"></p>
                 <button type="button" class="btn-secondary" @click="$store.chat.openAllDocuments()">All documents</button>
                   <p x-text="$store.chat.isTowerPgMode ? 'No documents here yet.' : 'No documents or folders here yet.'"></p>
@@ -6493,6 +6498,37 @@
               </div>
             </div>
           </div>
+
+          <dialog id="artefact-dialog" class="artefact-dialog" @cancel.prevent="$store.chat.closeArtefact()" x-effect="if ($store.chat.artefact.id && !$store.chat.artefactCurrent($store.chat.artefactSession())) $store.chat.closeArtefact({ force: true, preserve: false })">
+            <header class="artefact-toolbar"><strong x-text="$store.chat.artefact.title"></strong>
+              <span x-show="!$store.chat.artefact.can_write && $store.chat.artefact.status === 'ready'">Read-only</span>
+              <span x-text="$store.chat.artefact.kind === 'excalidraw' ? ($store.chat.artefact.board.save_state || 'Loading…') : $store.chat.artefact.status"></span>
+              <button type="button" @click="$store.chat.togglePersonalPin({ record_id: $store.chat.artefact.id }, 'file')" x-text="$store.chat.isPersonalPinned('file', $store.chat.artefact.id) ? 'Unpin' : 'Pin'"></button>
+              <button type="button" @click="$store.chat.copyArtefactLink()">Copy link</button>
+              <button type="button" @click="$store.chat.closeArtefact()" aria-label="Close artefact">Close</button>
+            </header>
+            <p role="alert" x-show="$store.chat.artefact.error || $store.chat.artefact.board.error" x-text="$store.chat.artefact.error || $store.chat.artefact.board.error"></p>
+            <div class="artefact-toolbar" x-show="$store.chat.artefact.kind === 'excalidraw'">
+              <button type="button" :disabled="!$store.chat.artefact.board.dirty || !$store.chat.artefact.board.can_write" @click="$store.chat.artefactBoardAction('save')">Save whiteboard</button>
+              <button type="button" x-show="$store.chat.artefact.board.newer_available" @click="$store.chat.artefactBoardAction('merge')">Merge latest</button>
+              <button type="button" @click="$store.chat.artefactBoardAction('latest')">Latest</button>
+              <button type="button" x-show="$store.chat.artefact.board.viewing_version_id && $store.chat.artefact.board.can_write" @click="$store.chat.artefactBoardAction('restore')">Restore as draft</button>
+              <select aria-label="Whiteboard revision" @change="$store.chat.viewArtefactVersion($event.target.value)"><option value="">Versions…</option><template x-for="version in $store.chat.artefact.versions" :key="version.id"><option :value="version.id" x-text="'Version ' + version.version_number"></option></template></select>
+            </div>
+            <template x-if="$store.chat.artefact.kind === 'excalidraw' && $store.chat.artefact.board.status === 'ready'">
+              <iframe class="artefact-frame" title="Whiteboard editor" src="/canvas-board.html" x-canvas-board="{id: 'direct-artefact', source: {id: $store.chat.artefact.id}}"></iframe>
+            </template>
+            <div class="artefact-toolbar" x-show="$store.chat.artefact.kind === 'html' && $store.chat.artefact.status !== 'loading'">
+              <button type="button" x-show="$store.chat.artefact.can_write" @click="$store.chat.toggleArtefactSource()" x-text="$store.chat.artefact.editing ? 'Preview' : 'Edit source'"></button>
+              <button type="button" x-show="$store.chat.artefact.can_write" :disabled="!$store.chat.artefact.dirty || $store.chat.artefact.status === 'saving'" @click="$store.chat.saveArtefactHtml()">Save new version</button>
+              <button type="button" x-show="$store.chat.artefact.viewing && $store.chat.artefact.can_write" @click="$store.chat.artefact.editing = true; $store.chat.artefact.dirty = true">Restore as draft</button>
+              <select aria-label="HTML revision" @change="$store.chat.viewArtefactVersion($event.target.value)"><option value="">Versions…</option><template x-for="version in $store.chat.artefact.versions" :key="version.id"><option :value="version.id" x-text="'Version ' + version.version_number"></option></template></select>
+            </div>
+            <textarea class="artefact-source" aria-label="HTML source" spellcheck="false" x-show="$store.chat.artefact.kind === 'html' && $store.chat.artefact.editing" x-model="$store.chat.artefact.source" @input="$store.chat.artefact.dirty = true; $store.chat.persistArtefactHtmlDraft()"></textarea>
+            <template x-if="$store.chat.artefact.kind === 'html' && $store.chat.artefact.html && !$store.chat.artefact.editing">
+              <iframe class="artefact-frame" title="Interactive HTML artefact" sandbox="allow-scripts" credentialless referrerpolicy="no-referrer" x-artefact-html="$store.chat.artefact.html"></iframe>
+            </template>
+          </dialog>
 
           <div class="doc-modal-backdrop" x-show="$store.chat.newDocModalType" x-cloak>
             <div class="doc-modal-card new-doc-modal">

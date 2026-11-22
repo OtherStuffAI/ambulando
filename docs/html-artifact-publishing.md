@@ -35,7 +35,7 @@ Publish a new version of the same artefact:
 
 ```bash
 bun scripts/publish-html-artifact.mjs path/to/artefact \
-  --tower https://tower.example --workspace <workspace-id> --file <html-file-id>
+  --tower https://tower.example --workspace <workspace-id> --file <html-file-id> --base <read-version-id>
 ```
 
 Always pass `--file` for updates. Without it, a new, unrelated File is created.
@@ -44,7 +44,7 @@ their version until a canvas manager chooses "Follow latest". Images whose bytes
 are unchanged reuse their previous File version; changed images become new
 versions of the same image File. If someone else publishes between your read and
 write, Tower rejects the stale `base_version_id`. The helper reports this, and
-you can re-run to publish on top.
+retain your source, read the latest version separately and reconcile before publishing with its captured base. Updates require `--base` from the source read before authoring.
 
 `--json` suppresses progress output. `WINGMAN_TOWER_URL` can replace `--tower`.
 

@@ -1,3 +1,7 @@
+import { artefactsMixin } from './artefacts.js';
+import { artefactType } from './artefact-registry.js';
+import { registerCanvasBoard } from './canvas/board-naplet.js';
+import { registerCanvasHtml } from './canvas/html-naplet.js';
 import { attentionTypesMixin } from './attention-types.js';
 import { newUserOnboardingMixin } from './new-user-onboarding.js';
 import { convertPasteToTextAttachment, forgetTextPasteUndo, guardInlineTyping, undoTextPasteConversion, updateComposerCounter } from './text-attachment-composer.js';
@@ -405,6 +409,9 @@ function documentRecordSignature(document = {}) {
     String(document?.content_sha256_hex || ''),
     String(document?.content_storage_status || ''),
     String(document?.content_storage_error || ''),
+    String(document?.content_storage_content_type || ''),
+    JSON.stringify(document?.pg_file_metadata || {}),
+    String(document?.pg_current_version_id || ''),
   ].join('|');
 }
 
@@ -1964,12 +1971,12 @@ export function initApp() {
         const threadId = String(this.pgContextSelectedThreadId || '').trim();
         const docs = this.scopeFilteredDocs.documents
           .filter((item) => {
-            if (item.record_state === 'deleted') return false;
+            if (item.record_state === 'deleted' || !artefactType(item)) return false;
             if (channelId && String(item.pg_channel_id || '').trim() !== channelId) return false;
             if (threadId && String(item.pg_thread_id || '').trim() !== threadId) return false;
             return true;
           })
-          .map((item) => ({ type: 'document', item }))
+          .map((item) => ({ type: item.pg_record_type === 'file' ? 'file' : 'document', item }))
           .sort((a, b) => String(a.item.title || '').localeCompare(String(b.item.title || '')));
         return docs;
       }
@@ -1989,8 +1996,9 @@ export function initApp() {
     get filteredDocBrowserItems() {
       const query = String(this.docFilter || '').trim().toLowerCase();
       if (this.isTowerPgMode) {
-        if (!query) return this.currentFolderContents;
-        return this.currentFolderContents.filter((row) =>
+        const rows = this.currentFolderContents.filter(row => this.artefactTypeFilter === 'all' || artefactType(row.item) === this.artefactTypeFilter);
+        if (!query) return rows;
+        return rows.filter((row) =>
           String(row.item?.title || '').toLowerCase().includes(query)
           || String(row.item?.content || '').toLowerCase().includes(query)
         );
@@ -2962,6 +2970,7 @@ export function initApp() {
           this.persistSelectedBoardId(this.selectedBoardId);
         }
 
+        if (route.params.artefactid) void this.handleMentionNavigate('file', route.params.artefactid);
         if (this.navSection === 'chat') {
           const visibleChannels = Array.isArray(this.scopeFilteredChannels) ? this.scopeFilteredChannels : [];
           const isVisibleChannel = (channelId) => visibleChannels.some((channel) => channel.record_id === channelId);
@@ -8362,6 +8371,7 @@ export function initApp() {
     // --- docs ---
 
     selectDocItem(type, recordId) {
+      if (type === 'file') return this.openArtefact(this.documents.find(row => row.record_id === recordId));
       if (type === 'document') this.setDocSelectionMode(false);
       if (type === 'directory') {
         this.navigateToFolder(recordId);
@@ -9504,7 +9514,8 @@ export function initApp() {
           this.navSection = 'files';
           if (row.pg_channel_id) this.selectPgChannelContext?.(row.pg_channel_id, { preserveDetail: true });
           this.startWorkspaceLiveQueries();
-          void this.openFilePreview(row);
+          if (artefactType(row) && artefactType(row) !== 'document') void this.openArtefact(row);
+          else void this.openFilePreview(row);
           this.syncRoute();
         } else if (linkType === 'doc') {
           this.openDoc(recordId, { ...documentLinkViewState(options.commentId), draftPreserved: true, captureOrigin: false, originRoute });
@@ -10752,6 +10763,7 @@ export function initApp() {
     filesManagerMixin,
     autopilotOverviewManagerMixin,
     pinnedThreadsMixin,
+    artefactsMixin,
     canvasManagerMixin,
     canvasChatEmbedMixin,
     agentSpaceManagerMixin,
@@ -10782,6 +10794,10 @@ export function initApp() {
 
   if (typeof window !== 'undefined') {
     window.Alpine = Alpine;
+  }
+  if (typeof Alpine.directive === 'function') {
+    registerCanvasBoard(Alpine, { controllerFor: id => Alpine.store('chat').artefactBoardController(id), actionFor: () => ({ action: 'save', label: 'Save', disabled: !Alpine.store('chat').artefact.board?.dirty || Alpine.store('chat').artefact.board?.save_state === 'saving' }), runAction: (_naplet, action) => Alpine.store('chat').artefactBoardAction(action) });
+    registerCanvasHtml(Alpine, { name: 'artefact-html', assetStore: () => Alpine.store('chat').artefactAssetStore() });
   }
   Alpine.store('chat', storeObj);
   Alpine.store('chat')?.installCanvasChatLifecycle?.();

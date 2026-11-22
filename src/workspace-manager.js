@@ -1438,6 +1438,15 @@ export const workspaceManagerMixin = {
     this.workspaceSelectionError = '';
     const previousWorkspaceKey = this.currentWorkspaceKey;
     const nextWorkspaceKey = workspace.workspaceKey || workspace.workspaceOwnerNpub;
+    if (previousWorkspaceKey !== nextWorkspaceKey && this.artefact?.id) {
+      try {
+        if (!await this.closeArtefact({ force: true })) return;
+      } catch (error) {
+        this.workspaceSelectionError = `Could not preserve the artefact draft: ${error.message}`;
+        return;
+      }
+      if (this._workspaceSelectionRequest !== selectionGeneration) return;
+    }
     if (previousWorkspaceKey !== nextWorkspaceKey && this.chatImagePreviewModal?.objectId) this.closeChatImagePreview?.({ restoreFocus: false });
     const shouldOpenWorkspaceHome = Boolean(options.openWorkspaceHome);
     const loadedWorkspaceKey = String(this.localWorkspaceCoreLoadedForKey || '').trim();

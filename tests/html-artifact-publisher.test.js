@@ -183,7 +183,7 @@ console.log(JSON.stringify({ authorization: 'Nostr fake:' + i('--method') + ':' 
       expect(first.code, first.stderr).toBe(0);
       const created = JSON.parse(first.stdout);
       const htmlFile = files.get(created.file_id);
-      expect(htmlFile.metadata).toEqual({ html_artifact: true });
+      expect(htmlFile.metadata).toEqual({ html_artifact: true, artefact: { schema_version: 1, type: 'html', format_version: 1, editor_id: 'builtin.html' } });
       expect(created).toMatchObject({ version_number: 1, channel_id: channel, naplet: { access: 'ready' } });
       expect(calls.find(call => call.path.endsWith('/naplets')).body.source).toEqual({ type: 'html', id: created.file_id });
       const manifest = readManifest(objects.get(htmlFile.versions[0].object).bytes.toString('utf8'));
@@ -201,7 +201,7 @@ console.log(JSON.stringify({ authorization: 'Nostr fake:' + i('--method') + ':' 
 
       // Update: unchanged hero is reused, changed badge gets a new version of the same image File.
       await writeFile(path.join(dir, 'badge.png'), png(9));
-      const second = await publish(dir, ['--file', created.file_id]);
+      const second = await publish(dir, ['--file', created.file_id, '--base', created.version_id]);
       expect(second.code, second.stderr).toBe(0);
       const updated = JSON.parse(second.stdout);
       expect(updated).toMatchObject({ file_id: created.file_id, version_number: 2, channel_id: channel });
@@ -219,16 +219,29 @@ console.log(JSON.stringify({ authorization: 'Nostr fake:' + i('--method') + ':' 
       const created = JSON.parse((await publish(dir, ['--channel', channel])).stdout);
       raceNext = true;
       await writeFile(path.join(dir, 'index.html'), '<p>v2</p>');
-      const result = await publish(dir, ['--file', created.file_id]);
+      const result = await publish(dir, ['--file', created.file_id, '--base', created.version_id]);
       expect(result.code).toBe(1);
       expect(result.stderr).toMatch(/stale base_version_id/);
       expect(files.get(created.file_id).versions).toHaveLength(2);
     });
 
+    it('preserves immutable image references when revising canonical saved HTML source', async () => {
+      const dir = await folder({ 'index.html': '<h1>Original</h1><img src="hero.png">', 'hero.png': png(7) });
+      const created = JSON.parse((await publish(dir, ['--channel', channel])).stdout);
+      const file = files.get(created.file_id);
+      const saved = objects.get(file.versions[0].object).bytes.toString('utf8');
+      const sourceOnly = await folder({ 'index.html': saved.replace('Original', 'Revised') });
+      const updated = await publish(sourceOnly, ['--file', created.file_id, '--base', created.version_id]);
+      expect(updated.code, updated.stderr).toBe(0);
+      const revised = objects.get(file.versions[1].object).bytes.toString('utf8');
+      expect(revised).toContain('Revised');
+      expect(readManifest(revised)).toEqual(readManifest(saved));
+    });
+
     it('refuses a --channel that differs from the existing File', async () => {
       const dir = await folder({ 'index.html': '<p>x</p>' });
       const created = JSON.parse((await publish(dir, ['--channel', channel])).stdout);
-      const result = await publish(dir, ['--file', created.file_id, '--channel', randomUUID()]);
+      const result = await publish(dir, ['--file', created.file_id, '--base', created.version_id, '--channel', randomUUID()]);
       expect(result.code).toBe(1);
       expect(result.stderr).toMatch(/--channel does not match/);
     });

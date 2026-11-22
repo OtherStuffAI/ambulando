@@ -136,7 +136,7 @@ export const pinnedThreadsMixin = {
       await this.selectDeckChannel(thread.id);
       return partition === this.pinnedThreadsPartition;
     }
-    if (type !== 'thread') return this.handleMentionNavigate(type === 'document' ? 'doc' : 'task', thread.id);
+    if (type !== 'thread') return this.handleMentionNavigate(type === 'file' ? 'file' : type === 'document' ? 'doc' : 'task', thread.id);
     return this.openAutopilotOverviewThread(thread);
   },
 };

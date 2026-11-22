@@ -177,7 +177,7 @@ describe('board runtime: Files and immutable versions through signed typed route
     const board = await runtime.createBoard({ channelId: uuid(50), title: 'Roadmap' });
     expect(api.prepareTowerPgStorageObject).toHaveBeenCalledWith('workspace', expect.objectContaining({ content_type: BOARD_CONTENT_TYPE, owner_npub: context.viewer, file_name: 'Roadmap.excalidraw' }), expect.objectContaining({ baseUrl: 'https://tower.example', appNpub: 'app' }));
     expect(api.prepareTowerPgStorageObject.mock.calls[0][1].is_public).toBeUndefined();
-    expect(api.createTowerPgChannelFile).toHaveBeenCalledWith('workspace', uuid(50), expect.objectContaining({ display_name: 'Roadmap.excalidraw', metadata: { kind: 'excalidraw_board', title: 'Roadmap' } }), expect.anything());
+    expect(api.createTowerPgChannelFile).toHaveBeenCalledWith('workspace', uuid(50), expect.objectContaining({ display_name: 'Roadmap.excalidraw', metadata: { kind: 'excalidraw_board', title: 'Roadmap', artefact: { schema_version: 1, type: 'excalidraw', format_version: 1, editor_id: 'builtin.excalidraw' } } }), expect.anything());
     const first = tower.meta(board.file_id);
     const { version } = await runtime.saveVersion({ fileId: board.file_id, baseVersionId: first.current_version_id, scene: scene([rect('a')]), summary: 'add box' });
     expect(version.version_number).toBe(2);

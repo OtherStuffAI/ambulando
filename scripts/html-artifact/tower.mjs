@@ -68,6 +68,13 @@ export function towerClient({ baseUrl, workspaceId, sign, fetchImpl = fetch }) {
   }
   return {
     request,
+    async readVersionBytes(fileId, versionId) {
+      const url = `${origin}${ws}/files/${encodeURIComponent(fileId)}/versions/${encodeURIComponent(versionId)}/object`;
+      const { authorization } = await sign(url, 'GET', null);
+      const response = await fetchImpl(url, { headers: { Authorization: authorization } });
+      if (!response.ok) throw new TowerError(response.status, 'version_unavailable', 'Exact source version unavailable');
+      return Buffer.from(await response.arrayBuffer());
+    },
     async uploadObject({ bytes, contentType, fileName }) {
       const prepared = await request('POST', `${ws}/storage/prepare`, { file_name: fileName, content_type: contentType, size_bytes: bytes.byteLength });
       await request('PUT', `/api/v4/storage/${encodeURIComponent(prepared.object_id)}`, { base64_data: Buffer.from(bytes).toString('base64') });

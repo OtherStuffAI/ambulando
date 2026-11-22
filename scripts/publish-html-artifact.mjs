@@ -10,7 +10,7 @@ const USAGE = `Publish a local HTML artefact folder to a private Flight Deck Fil
 
   bun scripts/publish-html-artifact.mjs <folder> --dry-run [--out <dir>] [--smoke]
   bun scripts/publish-html-artifact.mjs <folder> --tower <origin> --workspace <id> --channel <id>
-      [--file <html-file-id>] [--title <name>] [--canvas <canvas-id>] [--smoke] [--json]
+      [--file <html-file-id> --base <read-version-id>] [--title <name>] [--canvas <canvas-id>] [--smoke] [--json]
 
   <folder>          Folder containing index.html (override with --entry <path>)
   --dry-run         Package and validate only; never contacts Tower
@@ -21,6 +21,7 @@ const USAGE = `Publish a local HTML artefact folder to a private Flight Deck Fil
   --channel         Channel that owns the HTML File and its private image Files
   --file            Existing HTML File id: publish a new version of this artefact.
                     Omit to create a new File; reuse the printed file_id for updates.
+  --base            Exact HTML version read before authoring; required with --file
   --title           Display name for a new HTML File (default: the document <title>)
   --canvas          Also add a naplet that follows the latest version
   --signer-cli      Capability broker CLI (default: $WINGMAN_CAPABILITY_CLI or
@@ -116,6 +117,7 @@ async function main() {
   const workspaceId = options.workspace;
   let channelId = options.channel;
   if (!tower || !uuid.test(String(workspaceId || ''))) throw new Error('--tower and --workspace are required (use --dry-run to package only)');
+  if (options.file && !uuid.test(String(options.base || ''))) throw new Error('--base must name the version read before editing an existing HTML File');
   if (options.file && !uuid.test(options.file)) throw new Error('--file must be a File UUID');
   if (options.canvas && !uuid.test(options.canvas)) throw new Error('--canvas must be a Canvas UUID');
   const client = towerClient({ baseUrl: tower, workspaceId, sign: brokerSigner({ cli: options['signer-cli'] || defaultSignerCli() }) });
@@ -130,20 +132,27 @@ async function main() {
   const previousByName = new Map((existing?.manifest || []).map(row => [row.name, row]));
   const entries = [];
   for (const asset of packaged.assets) entries.push(await publishAsset(client, asset, previousByName.get(asset.name), channelId, options.title || packaged.title, options));
+  // Source obtained from an exact File read already names immutable sibling
+  // assets. Keep those references when there is no replacement local image;
+  // never save sandbox blob URLs or silently erase the source manifest.
+  const replacedNames = new Set(entries.map(entry => entry.name));
+  for (const entry of packaged.sourceManifest || []) if (!replacedNames.has(entry.name)) entries.push(entry);
+  if (entries.length > 64) throw new Error('An artefact supports at most 64 immutable image references');
+  for (const entry of entries) if (!uuid.test(String(entry.file_id)) || !uuid.test(String(entry.version_id)) || !/^[0-9a-f]{64}$/.test(String(entry.sha256))) throw new Error('Invalid immutable image reference in source manifest');
   const html = withManifest(packaged.html, entries);
   const htmlBytes = Buffer.from(html);
   const objectId = await client.uploadObject({ bytes: htmlBytes, contentType: 'text/html', fileName: 'index.html' });
   let fileId, version;
   if (options.file) {
     try {
-      const result = await client.createVersion(options.file, { base_version_id: existing.currentVersionId, storage_object_id: objectId });
+      const result = await client.createVersion(options.file, { base_version_id: options.base, storage_object_id: objectId });
       fileId = options.file; version = result.version;
     } catch (error) {
-      if (error instanceof TowerError && error.status === 409) throw new Error('Another version was published while this one was being prepared (stale base_version_id). Re-run to publish on top of the latest version.');
+      if (error instanceof TowerError && error.status === 409) throw new Error('Another version was published while this one was being prepared (stale base_version_id). Read the latest version, reconcile your source, then publish with that captured base.');
       throw error;
     }
   } else {
-    const created = await client.createFile(channelId, { storage_object_id: objectId, display_name: (options.title || packaged.title).slice(0, 200), metadata: { html_artifact: true } });
+    const created = await client.createFile(channelId, { storage_object_id: objectId, display_name: (options.title || packaged.title).slice(0, 200), metadata: { html_artifact: true, artefact: { schema_version: 1, type: 'html', format_version: 1, editor_id: 'builtin.html' } } });
     fileId = created.file.id;
     const versions = await client.listVersions(fileId);
     version = versions.versions.find(row => row.id === versions.current_version_id);
@@ -156,7 +165,7 @@ async function main() {
   const summary = {
     file_id: fileId, version_id: version?.id, version_number: version?.version_number, channel_id: channelId,
     assets: entries, naplet,
-    update_command: `bun scripts/publish-html-artifact.mjs ${JSON.stringify(options._[0])} --tower ${tower} --workspace ${workspaceId} --file ${fileId}`,
+    update_command: `bun scripts/publish-html-artifact.mjs ${JSON.stringify(options._[0])} --tower ${tower} --workspace ${workspaceId} --file ${fileId} --base ${version?.id}`,
   };
   log(options, `Published version ${version?.version_number} of File ${fileId}`);
   console.log(JSON.stringify(summary, null, 2));

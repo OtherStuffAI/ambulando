@@ -43,7 +43,7 @@ describe('mobile views outside the drawer', () => {
       ['status', 'Deck'],
       ['chat', 'Chat'],
       ['tasks', 'Tasks'],
-      ['docs', 'Docs'],
+      ['docs', 'Artefacts'],
       ['files', 'Files'],
       ['agents', 'Agents'],
       ['context', 'Context'],

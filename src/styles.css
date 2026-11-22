@@ -25696,3 +25696,14 @@ button.task-desc-toggle:focus-visible {
   .settings-details { flex: 0 0 auto; overflow: visible; }
   .settings-details > .settings-tab-content { overflow: visible; }
 }
+
+/* Direct channel artefacts retain the same editor instance while open. */
+.artefact-dialog { width: min(96vw, 1600px); height: 94dvh; max-width: none; max-height: 96dvh; padding: 0; border: 1px solid #788398; border-radius: 12px; background: var(--surface, #fff); color: var(--text-primary, #18202f); }
+.artefact-dialog[open] { display: flex; flex-direction: column; }
+.artefact-dialog::backdrop { background: #10182799; }
+.artefact-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; padding: .65rem; }
+.artefact-toolbar strong { margin-right: auto; }
+.artefact-toolbar button, .artefact-toolbar select { font: inherit; padding: .4rem .65rem; }
+.artefact-frame, .artefact-source { width: 100%; flex: 1; min-height: 0; border: 0; }
+.artefact-source { box-sizing: border-box; padding: 1rem; font: 14px/1.5 ui-monospace, monospace; resize: none; }
+@media (max-width: 640px) { .artefact-dialog { width: 100vw; height: 100dvh; max-height: 100dvh; margin: 0; border-radius: 0; } }

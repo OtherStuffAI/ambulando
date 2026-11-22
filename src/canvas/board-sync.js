@@ -152,7 +152,7 @@ export class CanvasBoardRuntime {
     const payload = await this.api.createTowerPgChannelFile(this.context.workspaceId, channelId, {
       storage_object_id: upload.objectId,
       display_name: boardFileName(name),
-      metadata: { kind: 'excalidraw_board', title: name },
+      metadata: { kind: 'excalidraw_board', title: name, artefact: { schema_version: 1, type: 'excalidraw', format_version: 1, editor_id: 'builtin.excalidraw' } },
       ...(text(summary) ? { summary: text(summary).slice(0, BOARD_LIMITS.summary) } : {}),
     }, this.options());
     const fileId = uuid(payload?.file?.id);

@@ -94,6 +94,7 @@ export async function packageArtifactFolder(folder, { entry = 'index.html' } = {
   if (entryResolved.error) throw new ArtifactPackageError([`entry ${entryResolved.error}`]);
   const entryPath = entryResolved.path;
   let html = await readFile(entryPath, 'utf8');
+  const sourceManifest = readManifest(html);
   const assets = new Map(); // relative path -> asset
   const names = new Set();
   const warnOnce = new Set();
@@ -251,7 +252,7 @@ export async function packageArtifactFolder(folder, { entry = 'index.html' } = {
   if (sizeWithManifest > LIMITS.htmlBytes) errors.push(`packaged HTML is ${sizeWithManifest} bytes; the limit is ${LIMITS.htmlBytes}. Move inline images to files`);
   if (errors.length) throw new ArtifactPackageError(errors);
   const title = decodeEntities(/<title\b[^>]*>([\s\S]*?)<\/title>/i.exec(html)?.[1]?.trim() || '') || path.basename(root);
-  return { html, title, assets: list, warnings, entry: entryResolved.relative };
+  return { html, title, assets: list, sourceManifest, warnings, entry: entryResolved.relative };
 }
 
 /** Insert (or replace) the exact asset manifest Tower validates. */

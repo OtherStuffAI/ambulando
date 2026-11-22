@@ -90,6 +90,7 @@ export function parseRouteLocation(href) {
       threadid: url.searchParams.get('threadid') || null,
       folderid: url.searchParams.get('folderid') || null,
       docid: url.searchParams.get('docid') || null,
+      artefactid: url.searchParams.get('artefactid') || null,
       docsview: url.searchParams.get('docsview') || null,
       versioning: url.searchParams.get('versioning') || null,
       commentid: url.searchParams.get('commentid') || null,

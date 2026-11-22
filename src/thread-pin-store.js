@@ -12,7 +12,7 @@ export function threadPinContext(store) {
 export function mapThreadPin(row, context) {
   const type = row?.resource_type || 'thread', id = row?.resource_id || row?.thread_id;
   if (!row?.id || row.workspace_id !== context.workspaceId || row.actor_id !== context.actorId
-    || !['thread','task','document','channel'].includes(type) || !id || typeof row.pinned !== 'boolean' || !Number.isSafeInteger(row.row_version) || row.row_version < 1) throw new Error('Invalid personal thread pin');
+    || !['thread','task','document','channel','file'].includes(type) || !id || typeof row.pinned !== 'boolean' || !Number.isSafeInteger(row.row_version) || row.row_version < 1) throw new Error('Invalid personal thread pin');
   return { ...row, resource_type: type, resource_id: id, key: row.id, record_id: row.id, context: context.key, sync_status: 'synced' };
 }
 export const pinOrderSupportKey = context => `pin-order-support:${context.key}`;
@@ -57,13 +57,14 @@ export async function readThreadPinProjection(db, context, partition) {
       return { ...pin, channelId: pin.id, title: unavailable ? 'Channel unavailable' : channel.title || channel.name || 'Untitled channel',
         activityAt: unavailable ? '' : channel.updated_at || '', unavailable: Boolean(unavailable) };
     }
-    const family = pin.type === 'document' ? 'doc' : 'task';
-    const table = pin.type === 'document' ? db.documents : db.tasks;
+    const family = pin.type === 'file' ? 'file' : pin.type === 'document' ? 'doc' : 'task';
+    const table = ['document','file'].includes(pin.type) ? db.documents : db.tasks;
     const [resource, authority, attention] = await Promise.all([table.get(pin.id), db.pg_record_rows.get(`${family}:${pin.id}`), db.pg_resource_attention.get(`${pin.type}:${pin.id}`)]);
     const channelId = resource?.pg_channel_id || resource?.channel_id || pin.channelId;
     const [channel, archived] = await Promise.all([db.channels.get(channelId || ''), db.pg_archived_targets.bulkGet([`channel:${channelId || ''}`, `scope:${resource?.scope_id || resource?.pg_scope_id || ''}`])]);
     const unavailable = !resource || !channel || archived.some(Boolean) || authority?.operation === 'delete' || authority?.row?.deleted_at
       || (pin.type === 'document' && resource.pg_record_type === 'file')
+      || (pin.type === 'file' && resource.pg_record_type !== 'file')
       || [resource,channel].some(r => ['deleted','archived'].includes(r.record_state) || ['stale','access-lost'].includes(r.pg_access_status) || r.can_read === false || r.readable === false);
     return { ...pin, channelId, title: unavailable ? `${pin.type === 'task' ? 'Task' : 'Document'} unavailable` : resource.title || `Untitled ${pin.type}`,
       activityAt: unavailable ? '' : resource.updated_at || '', unavailable: Boolean(unavailable), persistedMentionUnread: attention ? Number(attention.mention_activity_version || 0) > Number(attention.viewed_activity_version || 0) : null, persistedUnread: attention ? Boolean(attention.unread) : false };
@@ -74,7 +75,7 @@ export async function readThreadPinProjection(db, context, partition) {
 }
 export async function queueThreadPin(db, context, thread, pinned, resourceType = thread?.type || 'thread') {
   const targetKey = `${resourceType}:${thread?.id}`;
-  if (!['thread','task','document','channel'].includes(resourceType) || !thread?.id || (pinned && resourceType === 'thread' && !thread.channelId)) throw new Error('Thread unavailable.');
+  if (!['thread','task','document','channel','file'].includes(resourceType) || !thread?.id || (pinned && resourceType === 'thread' && !thread.channelId)) throw new Error('Thread unavailable.');
   return db.transaction('rw', db.thread_pins, db.thread_pin_outbox, db.sync_state, async () => {
     const row = await db.thread_pins.where('[context+resource_type+resource_id]').equals([context.key, resourceType, thread.id]).first();
     const queued = await db.thread_pin_outbox.where('[context+targetKey]').equals([context.key, targetKey]).sortBy('seq');
