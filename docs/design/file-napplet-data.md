@@ -147,3 +147,7 @@ checks remain mandatory: remembered approval grants no Tower authority. The host
 pins effective write access at grant time and requires an exact match on every
 authorization, including prepublication and result delivery. A read-only grant
 cannot gain write access when server permissions broaden; reopen for fresh consent.
+
+The data File response’s top-level `can_write` boolean takes precedence over
+embedded `file.can_write`, including explicit false. Embedded access is used only
+when the top-level field is absent; a present nonboolean rejects authorization.

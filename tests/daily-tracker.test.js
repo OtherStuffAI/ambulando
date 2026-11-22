@@ -1,5 +1,6 @@
 import { expect, it, vi } from 'vitest';
 import { FileNappletData, TRACKER_MODEL as M, parseFileNapplet, validFileNappletRequest } from '../src/napplets/file-data.js';
+import { nappletReceipt } from '../src/napplets/trust.js';
 import { FileNappletFrame } from '../src/napplets/file-frame.js';
 import { packageTrackerBundle } from '../src/napplets/tracker-bundle.js';
 import { readFile } from 'node:fs/promises';
@@ -94,4 +95,29 @@ it('closes on foreground or periodic access broadening before any frame read',as
  vi.stubGlobal('addEventListener',()=>{});vi.stubGlobal('removeEventListener',()=>{});
  const onRevoke=vi.fn(),host=new FileNappletFrame(data,{onRevoke});
  try{host.attach({contentWindow:{}},'readonly');f.access(true);await host.check();expect(onRevoke).toHaveBeenCalledOnce();expect(data.stopped).toBe(true);}finally{host.stop();vi.unstubAllGlobals();}
+});
+
+it('keeps top-level false authority readonly despite embedded true, including consent and publication',async()=>{
+ const f=await fixture(),original=f.api.getTowerPgFile.getMockImplementation();
+ f.api.getTowerPgFile.mockImplementation(async(...args)=>({...await original(...args),can_write:false}));
+ const data=f.create(),access=await data.authority();expect(access.file.can_write).toBe(true);expect(access.canWrite).toBe(false);
+ const context={baseUrl:'https://tower.example',appNpub:'app',workspaceId:id(20),viewer:'viewer'};
+ const receipt=canWrite=>nappletReceipt(context,id(40),'a'.repeat(64),data.binding,canWrite);
+ expect(await receipt(access.canWrite)).toEqual(await receipt(false));
+ expect((await receipt(access.canWrite)).fingerprint).not.toBe((await receipt(true)).fingerprint);
+ data.grant(access.canWrite);const first=await data.read();expect(first.canWrite).toBe(false);
+ await expect(data.save(first.baseVersionId,value())).rejects.toMatchObject({status:403});
+ expect(f.api.prepareTowerPgStorageObject).not.toHaveBeenCalled();expect(f.api.createTowerPgFileVersion).not.toHaveBeenCalled();expect(f.model()).toEqual(value());
+});
+it('uses explicit top-level booleans, falls back only when absent, and rejects malformed authority',async()=>{
+ const f=await fixture(),original=f.api.getTowerPgFile.getMockImplementation();
+ f.access(false);f.api.getTowerPgFile.mockImplementation(async(...args)=>({...await original(...args),can_write:true}));
+ expect((await f.create().authority()).canWrite).toBe(true);
+ f.api.getTowerPgFile.mockImplementation(original);expect((await f.create().authority()).canWrite).toBe(false);
+ f.access(true);expect((await f.create().authority()).canWrite).toBe(true);
+ for(const malformed of [undefined,null,0,1,'false','true',{},[]]){
+  f.api.getTowerPgFile.mockImplementation(async(...args)=>({...await original(...args),can_write:malformed}));
+  await expect(f.create().read()).rejects.toThrow('Invalid File write authority');
+ }
+ expect(f.api.getTowerPgFileVersionObjectBytes).not.toHaveBeenCalled();expect(f.api.createTowerPgFileVersion).not.toHaveBeenCalled();
 });

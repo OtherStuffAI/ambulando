@@ -5877,6 +5877,13 @@
       "notes": [
         "Changed tracker access closes an open napplet and requires fresh approval, including when read-only access becomes writable."
       ]
+    },
+    {
+      "buildNumber": 2746,
+      "label": "Honor read-only napplet File authority",
+      "notes": [
+        "Tracker access respects explicit read-only File permissions even when embedded metadata reports write access. Invalid permission responses fail closed."
+      ]
     }
   ]
 }

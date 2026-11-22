@@ -55,7 +55,9 @@ export class FileNappletData {
     const result=await this.api.getTowerPgChannel(c.workspaceId,data.file.channel_id,o);this.assert();
     const channel=result.channel;
     if(channel?.id!==data.file.channel_id||channel.workspace_id!==c.workspaceId||channel.kind!=='dm'||channel.participant_npubs?.length!==1||channel.participant_npubs[0]!==c.viewer||channel.archived_at)throw new Error('Tracker data must be in your private self conversation.');
-    const canWrite=data.file.can_write===true||data.can_write===true;
+    const hasTopLevelAccess=Object.hasOwn(data,'can_write');
+    if(hasTopLevelAccess&&typeof data.can_write!=='boolean')throw new Error('Invalid File write authority.');
+    const canWrite=hasTopLevelAccess?data.can_write:data.file.can_write===true;
     if(this.approvedCanWrite!==undefined&&canWrite!==this.approvedCanWrite){throw Object.assign(new Error('Tracker access changed. Reopen to review approval.'),{status:403});}
     return {file:data.file,canWrite};
   }
