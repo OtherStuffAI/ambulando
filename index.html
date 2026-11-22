@@ -12137,6 +12137,10 @@
               <span x-text="$store.chat.artefact.approvalNotice"></span>
               <button type="button" @click="$store.chat.forgetArtefactApproval()">Forget approval</button>
             </div>
+            <div class="artefact-toolbar" x-show="$store.chat.artefact.updateAvailable || $store.chat.artefact.updating">
+              <span x-text="$store.chat.artefact.updating ? 'Updating app code…' : 'Improved Daily Metrics controls are available. Saved data stays in place.'"></span>
+              <button type="button" :disabled="$store.chat.artefact.updating" @click="$store.chat.updateDailyMetricsApp()">Update app</button>
+            </div>
             <section class="napplet-consent" x-show="$store.chat.artefact.consent" aria-label="Napplet approval">
               <p>Run this napplet? Its reviewed code can read and replace the linked daily tracker File in your self-conversation. NStack administrators may also have access. Only run code you trust. Web HTML can navigate its own frame.</p>
               <p>Approval is remembered on this browser for this code and linked File access. You can forget it in the app controls. Access is checked every time.</p>

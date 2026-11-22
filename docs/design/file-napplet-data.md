@@ -151,3 +151,39 @@ cannot gain write access when server permissions broaden; reopen for fresh conse
 The data File response’s top-level `can_write` boolean takes precedence over
 embedded `file.can_write`, including explicit false. Embedded access is used only
 when the top-level field is absent; a present nonboolean rejects authorization.
+
+## Explicit built-in code update
+
+Existing instances keep their own code File: changing the packaged template does
+not change an existing app. The host offers **Update app** only for the verified
+original built-in HTML (14,824 bytes, SHA-256
+`192779e50335a83d90076fb17954059e466ccfecea25c5eb5b14d68e8dfa91cd`)
+and a valid v1 tracker binding. Names and manifests alone do not identify a
+built-in; customized or unrecognized code is never replaced. Keeping the old
+version is supported.
+
+The user explicitly confirms the update. Pending saves block it; dirty drafts
+require a separate discard confirmation. The host stops the old frame before
+loading replacement code and blocks voluntary close/source/history changes while
+publishing. It checks the current code File version, exact original bytes,
+code write access, unchanged binding and private self-conversation authority
+before upload and again before publication. Data access is reauthorized through
+the existing bridge, including read-only data access. The operation is bounded
+to 45 seconds and the current viewer/workspace context.
+
+Only a new version of the same code File is created, using the original
+`base_version_id` CAS. It does not update File metadata or the bound JSON File:
+its ID, bytes, versions, metric order, archives and answers remain untouched.
+The host verifies the exact acknowledged code version and bytes before reopening.
+A conflict or uncertain acknowledgement requires close/reopen to inspect current
+code; there is no blind retry or replacement instance. Changed code digest then
+requires explicit **Trust and open** under the unchanged receipt policy. Approval
+is remembered for subsequent opens of those bytes. Native hosts may mirror this
+host action using the same frozen bundle and gate; no shared registry or data
+migration is involved.
+
+The form keeps boolean selection and numeric/label typing on existing DOM nodes;
+explicit saves, date/view changes and confirmed reloads retain the existing
+model and bridge behavior. Boolean false, numeric zero and unanswered remain
+distinct. Numeric inputs request a decimal keyboard; views, date navigation and
+save actions remain disabled for invalid numeric drafts or pending operations.

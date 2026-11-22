@@ -154,23 +154,26 @@ it('does not reopen setup when discovery finishes after close', async () => {
   expect(store.dailyMetrics.status).toBe('closed');
 });
 
-async function nappletFixture() {
+async function nappletFixture({ original = false } = {}) {
+  await openWorkspaceDb('channel-artefact-pin-test').open();
   const { readFile } = await import('node:fs/promises');
   const { packageTrackerBundle } = await import('../src/napplets/tracker-bundle.js');
   const parts = await Promise.all(['index.html', 'style.css', 'model.js', 'app.js'].map(name => readFile(new URL(`../public/napplets/daily-tracker/v1/${name}`, import.meta.url), 'utf8')));
   let html = packageTrackerBundle({ html: parts[0], style: parts[1], model: parts[2], app: parts[3] });
+  if (original) html = await readFile(new URL('./fixtures/daily-tracker-original.html', import.meta.url), 'utf8');
+  let head = version;
   let target = '60000000-0000-4000-8000-000000000003', writable = true;
   const values = new Map();
   vi.stubGlobal('localStorage', { getItem: key => values.get(key) ?? null, setItem: (key, value) => values.set(key, value), removeItem: key => values.delete(key) });
-  api.getTowerPgFile.mockImplementation(async (_workspace, id) => ({ file: { id, workspace_id: workspace, channel_id: 'self', current_version_id: version, can_write: writable, display_name: 'Tracker', ...(id === file ? { metadata: { napplet: { version: 1, app_id: 'daily-tracker', bindings: { tracker: { file_id: target } } } } } : {}) } }));
+  api.getTowerPgFile.mockImplementation(async (_workspace, id) => ({ file: { id, workspace_id: workspace, channel_id: 'self', current_version_id: head, can_write: writable, display_name: 'Tracker', ...(id === file ? { metadata: { napplet: { version: 1, app_id: 'daily-tracker', bindings: { tracker: { file_id: target } } } } } : {}) } }));
   api.getTowerPgChannel.mockResolvedValue({ channel: { id: 'self', workspace_id: workspace, kind: 'dm', participant_npubs: ['alice'] } });
   api.getTowerPgFileVersions.mockImplementation(async () => {
     const bytes = new TextEncoder().encode(html), sha = Buffer.from(await crypto.subtle.digest('SHA-256', bytes)).toString('hex');
-    return { current_version_id: version, versions: [{ id: version, file_id: file, content_type: 'text/html', size_bytes: bytes.length, sha256_hex: sha }] };
+    return { current_version_id: head, versions: [{ id: head, file_id: file, content_type: 'text/html', size_bytes: bytes.length, sha256_hex: sha }] };
   });
   api.getTowerPgFileVersionObjectBytes.mockImplementation(async () => ({ bytes: new TextEncoder().encode(html) }));
-  const open = () => store.openArtefact({ record_id: file, pg_record_type: 'file', title: 'Tracker.html' });
-  return { open, values, code: () => { html += '\n<!-- changed -->'; }, binding: () => { target = '60000000-0000-4000-8000-000000000004'; }, access: () => { writable = false; } };
+  const open = () => store.openArtefact({ record_id: file, pg_record_type: 'file', title: 'Tracker.html' }, { appMode: true });
+  return { open, values, publish: bytes => { html = new TextDecoder().decode(bytes); head = '60000000-0000-4000-8000-000000000009'; return {version:{id:head}}; }, code: () => { html += '\n<!-- changed -->'; }, binding: () => { target = '60000000-0000-4000-8000-000000000004'; }, access: () => { writable = false; } };
 }
 it('does not run before explicit consent and checks authority on each remembered open', async () => {
   const f = await nappletFixture(); await f.open();
@@ -201,4 +204,31 @@ it('denied storage allows only explicit session consent and explains persistence
   await f.open(); expect(store.artefact.consent).toBe(true); await store.enableArtefactNapplet();
   expect(store.artefactDataHost()).toBeTruthy(); expect(store.artefact.approvalNotice).toContain('could not be saved');
   await store.closeArtefact(); await f.open(); expect(store.artefact.consent).toBe(true);
+});
+
+it('updates only an explicit recognized tracker, keeps File/binding and requires new consent once', async () => {
+  const f = await nappletFixture({original:true}); await f.open(); await store.enableArtefactNapplet();
+  expect(store.artefact.updateAvailable).toBe(true);
+  const parts = await Promise.all(['index.html','style.css','model.js','app.js'].map(n => import('node:fs/promises').then(fs=>fs.readFile(new URL(`../public/napplets/daily-tracker/v1/${n}`,import.meta.url),'utf8'))));
+  vi.stubGlobal('fetch', vi.fn(async url => ({ok:true,text:async()=>parts[['index.html','style.css','model.js','app.js'].findIndex(n=>url.includes(n))]})));
+  api.prepareTowerPgStorageObject.mockResolvedValue({object_id:'code-upload',is_public:false});
+  let uploaded;api.uploadStorageObject.mockImplementation(async (_p,b)=>{uploaded=b;});
+  api.createTowerPgFileVersion.mockImplementation(async (_w,id,body)=>{expect(id).toBe(file);expect(body.base_version_id).toBe(version);return f.publish(uploaded);});
+  const session=store.artefactSession();session.nappletBusy=true;await store.updateDailyMetricsApp();expect(api.createTowerPgFileVersion).not.toHaveBeenCalled();
+  session.nappletBusy=false;session.nappletDirty=true;window.confirm=()=>false;
+  await store.updateDailyMetricsApp();expect(store.artefactDataHost()).toBeTruthy();expect(api.createTowerPgFileVersion).not.toHaveBeenCalled();
+  window.confirm=()=>true;await store.updateDailyMetricsApp();
+  expect(api.createTowerPgFileVersion).toHaveBeenCalledOnce();expect(api.createTowerPgChannelFile).not.toHaveBeenCalled();
+  expect(store.artefact.id).toBe(file);expect(store.artefact.updateAvailable).toBe(false);expect(store.artefact.consent).toBe(true);expect(store.artefactDataHost()).toBe(null);
+  await store.enableArtefactNapplet();await store.closeArtefact();await f.open();expect(store.artefact.consent).toBe(false);expect(store.artefactDataHost()).toBeTruthy();
+});
+it('does not offer replacement for custom code and blocks close/source/history during app update',async()=>{
+ const f=await nappletFixture();f.code();await f.open();expect(store.artefact.updateAvailable).toBe(false);await store.updateDailyMetricsApp();expect(api.createTowerPgFileVersion).not.toHaveBeenCalled();
+ store.artefact.updating=true;expect(await store.closeArtefact()).toBe(false);store.toggleArtefactSource();expect(store.artefact.editing).toBe(false);await store.viewArtefactVersion(version);expect(store.artefact.consent).toBe(true);
+});
+
+it('does not offer a built-in update when top-level code authority explicitly denies writes',async()=>{
+ const f=await nappletFixture({original:true}),getFile=api.getTowerPgFile.getMockImplementation();
+ api.getTowerPgFile.mockImplementation(async(...args)=>({...await getFile(...args),...(args[1]===file?{can_write:false}:{})}));
+ await f.open();expect(store.artefact.updateAvailable).toBe(false);await store.updateDailyMetricsApp();expect(api.createTowerPgFileVersion).not.toHaveBeenCalled();
 });

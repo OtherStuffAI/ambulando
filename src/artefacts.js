@@ -1,3 +1,4 @@
+import { canUpdateTracker, updateTrackerCode } from './napplets/tracker-update.js';
 import { loadTrackerBundle } from './napplets/tracker-bundle.js';
 import { FileNappletData, parseFileNapplet, TRACKER_MODEL } from './napplets/file-data.js';
 import { FileNappletFrame } from './napplets/file-frame.js';
@@ -17,7 +18,7 @@ const sessions = new WeakMap();
 let unloadInstalled = false;
 let activeStore = null;
 const text = value => String(value ?? '').trim();
-const empty = () => ({ id: '', title: '', kind: '', consent: false, napplet: false, approvalNotice: '', status: 'loading', error: '', can_write: false, html: null, source: '', editing: false, dirty: false, base: '', versions: [], viewing: '', board: { versions: [] } });
+const empty = () => ({ id: '', title: '', kind: '', consent: false, napplet: false, approvalNotice: '', updateAvailable: false, updating: false, status: 'loading', error: '', can_write: false, html: null, source: '', editing: false, dirty: false, base: '', versions: [], viewing: '', board: { versions: [] } });
 const htmlDraftKey = session => `artefact-html-draft:${session.partition}:${session.id}`;
 const digest = async bytes => [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))].map(b => b.toString(16).padStart(2, '0')).join('');
 
@@ -30,7 +31,7 @@ export const artefactsMixin = {
   artefactSession() { return sessions.get(this); },
   toggleArtefactSource() {
     const session = sessions.get(this);
-    if (session?.nappletBusy || session?.nappletDirty && !window.confirm('Discard unsaved tracker changes?')) return;
+    if (this.artefact.updating || session?.nappletBusy || session?.nappletDirty && !window.confirm('Discard unsaved tracker changes?')) return;
     if (session) session.nappletDirty = false;
     session?.pendingConsent?.data.stop(); if (session) session.pendingConsent = null;
     this.artefact.consent = false;
@@ -63,7 +64,7 @@ export const artefactsMixin = {
     activeStore = this;
     if (!unloadInstalled && typeof addEventListener === 'function') {
       unloadInstalled = true;
-      addEventListener('beforeunload', event => { if (activeStore?.artefact?.dirty || activeStore?.artefact?.board?.dirty || sessions.get(activeStore)?.nappletDirty || sessions.get(activeStore)?.nappletBusy) { event.preventDefault(); event.returnValue = ''; } });
+      addEventListener('beforeunload', event => { if (activeStore?.artefact?.updating || activeStore?.artefact?.dirty || activeStore?.artefact?.board?.dirty || sessions.get(activeStore)?.nappletDirty || sessions.get(activeStore)?.nappletBusy) { event.preventDefault(); event.returnValue = ''; } });
       addEventListener('pagehide', () => { void activeStore?.closeArtefact({ force: true, preserve: false }); });
     }
     const context = canvasContext(this), id = row.record_id;
@@ -78,6 +79,7 @@ export const artefactsMixin = {
       if (!this.artefactCurrent(session)) return false;
       const file = payload.file;
       session.fileMetadata = file?.metadata || {};
+      session.codeCanWrite = Object.hasOwn(payload, 'can_write') ? payload.can_write === true : file?.can_write === true;
       if (file?.id !== id || file.workspace_id !== context.workspaceId) throw new Error('Invalid artefact response.');
       const versions = history.versions || [], latest = versions.find(v => v.id === history.current_version_id);
       if (!latest) throw new Error('This artefact has no readable saved version.');
@@ -104,7 +106,7 @@ export const artefactsMixin = {
     }
     if (!force && (this.artefact.dirty || this.artefact.board?.dirty) && !window.confirm('Close this artefact? Unsaved drafts stay on this device.')) return false;
     if (preserve) await this.persistArtefactHtmlDraft();
-    if (!force && session?.nappletBusy) return false;
+    if (!force && (session?.nappletBusy || this.artefact.updating)) return false;
     if (!force && session?.nappletDirty && !window.confirm('Discard unsaved tracker changes?')) return false;
     session?.pendingConsent?.data.stop();
     session?.dataHost?.stop();
@@ -123,7 +125,7 @@ export const artefactsMixin = {
       session.dataHost?.stop(); session.dataHost = null;
       const binding = parseFileNapplet(content.html, session.fileMetadata);
       if (this.artefact.appMode && !binding) throw new Error('This File is not a valid Daily Metrics app.');
-      this.artefact.consent = false; this.artefact.approvalNotice = ''; this.artefact.napplet = false;
+      this.artefact.consent = false; this.artefact.approvalNotice = ''; this.artefact.napplet = false; this.artefact.updateAvailable = false;
       session.pendingConsent?.data.stop(); session.pendingConsent = null;
       if (binding) {
         if (versionId !== this.artefact.base) throw new Error('Reopen the latest version to approve this napplet.');
@@ -134,6 +136,8 @@ export const artefactsMixin = {
           const receipt = await nappletReceipt(session.context, session.id, content.digest, binding, access.canWrite);
           if (!this.artefactCurrent(session)) { data.stop(); return; }
           session.pendingConsent = { data, content, receipt, canWrite: access.canWrite };
+          session.trackerBinding = binding;
+          this.artefact.updateAvailable = canUpdateTracker(content) && session.codeCanWrite;
           this.artefact.html = null;
           if (!hasNappletApproval(receipt)) { this.artefact.consent = true; return; }
           await this.enableArtefactNapplet(false);
@@ -167,6 +171,28 @@ export const artefactsMixin = {
       if (this.artefactCurrent(session)) { this.artefact.consent = false; this.artefact.html = null; this.artefact.error = error.message; }
     } finally { session.approving = false; }
   },
+  async updateDailyMetricsApp() {
+    const session = sessions.get(this), draft = this.artefact;
+    if (!session || !this.artefactCurrent(session) || !draft.updateAvailable || draft.updating || draft.editing || draft.dirty || session.nappletBusy || session.approving) return;
+    if (session.nappletDirty && !window.confirm('Discard unsaved tracker changes before updating the app?')) return;
+    if (!window.confirm('Update Daily Metrics controls? Your saved metrics and history stay in the same data File. You will be asked to trust the updated code before it runs.')) return;
+    this.artefact.updating = true; this.artefact.error = '';
+    session.nappletDirty = false;
+    session.dataHost?.stop(); session.dataHost = null;
+    session.pendingConsent?.data.stop(); session.pendingConsent = null;
+    this.artefact.html = null; this.artefact.napplet = false; this.artefact.consent = false;
+    try {
+      await updateTrackerCode({ context: session.context, codeFileId: session.id, baseVersionId: draft.base, binding: session.trackerBinding, loadSource: signal => loadTrackerBundle({ signal }), current: () => this.artefactCurrent(session) });
+      if (!this.artefactCurrent(session)) return;
+      this.artefact.updating = false;
+      await this.openArtefact({ record_id: session.id, pg_record_type: 'file', title: draft.title, content_type: 'text/html' }, { appMode: draft.appMode });
+    } catch (error) {
+      if (this.artefactCurrent(session)) {
+        this.artefact.updateAvailable = false;
+        this.artefact.error = error.status === 409 ? 'App code changed on another device. Close and reopen to review it. Your saved tracker data was not changed.' : 'App update could not be confirmed. Close and reopen to check the saved code. Your saved tracker data was not changed.';
+      }
+    } finally { if (this.artefactCurrent(session)) this.artefact.updating = false; }
+  },
   async forgetArtefactApproval() {
     const session = sessions.get(this);
     if (!session?.receipt || !this.artefactCurrent(session)) return;
@@ -188,7 +214,7 @@ export const artefactsMixin = {
   async viewArtefactVersion(id) {
     if (!id) return;
     const session = sessions.get(this);
-    if (session?.nappletBusy || session?.nappletDirty && !window.confirm('Discard unsaved tracker changes?')) return;
+    if (this.artefact.updating || session?.nappletBusy || session?.nappletDirty && !window.confirm('Discard unsaved tracker changes?')) return;
     session?.dataHost?.stop(); if (session) session.nappletDirty = false;
     if (session?.board) await session.board.viewVersion(id);
     else {

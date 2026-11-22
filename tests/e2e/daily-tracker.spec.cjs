@@ -1,5 +1,6 @@
 const {test,expect}=require('playwright/test');
-test.setTimeout(45000);
+test.setTimeout(90000);
+test.use({hasTouch:true,actionTimeout:15000});
 const fs=require('node:fs');
 const path=require('node:path');
 const root=path.resolve(__dirname,'../../public/napplets/daily-tracker/v1');
@@ -22,21 +23,61 @@ test('phone check-in saves false/zero, edits earlier days, reopens and retains s
  },parts);
  const f=page.frameLocator('#tracker-test');
  await expect(f.getByRole('button',{name:'Save to NStack'})).toBeDisabled();
- await f.getByRole('button',{name:'No',exact:true}).click();await f.getByRole('spinbutton').fill('0');
- await f.getByRole('button',{name:'Save to NStack'}).click();await expect(f.getByRole('status')).toContainText('Saved in NStack');
+ for(const width of [320,390,430,1280]){
+  await page.setViewportSize({width,height:844});
+  await f.getByRole('button',{name:'No',exact:true}).tap();
+  await expect(f.getByRole('button',{name:'No',exact:true})).toHaveAttribute('aria-pressed','true');
+  // Taps must retain the exact node and keyboard focus, not rebuild the form.
+  const no=await f.getByRole('button',{name:'No',exact:true}).elementHandle();
+  await no.evaluate(el=>{window.retainedNo=el;});
+  await no.press('Space');
+  expect(await no.evaluate(el=>el===window.retainedNo&&el.isConnected&&document.activeElement===el)).toBe(true);
+  await f.getByRole('spinbutton').fill('72.4');
+  expect(await f.locator('html').evaluate(el=>el.scrollWidth<=el.clientWidth)).toBe(true);
+  const small=await f.locator('button,input,select').evaluateAll(nodes=>nodes.filter(n=>n.getClientRects().length&&!n.disabled).map(n=>({text:n.textContent||n.id,width:n.getBoundingClientRect().width,height:n.getBoundingClientRect().height})).filter(r=>r.width<40||r.height<44));
+  expect(small).toEqual([]);
+  await page.screenshot({animations:'disabled',path:`tmp/docs/handoffs/tracker-ui-checkin-${width}.png`});
+  await f.getByRole('button',{name:'Metrics',exact:true}).tap();
+  await f.getByLabel('Label',{exact:true}).first().fill('Ate well');
+  expect(await f.locator('html').evaluate(el=>el.scrollWidth<=el.clientWidth)).toBe(true);
+  await page.screenshot({animations:'disabled',path:`tmp/docs/handoffs/tracker-ui-metrics-${width}.png`});
+  await f.getByRole('button',{name:'Check in',exact:true}).tap();
+ }
+ await page.setViewportSize({width:390,height:844});
+ const number=f.getByRole('spinbutton');await expect(number).toHaveAttribute('inputmode','decimal');
+ await number.fill('');await number.evaluate(el=>{
+  window.keptInput=el;window.measurements={input:[],render:[],long:[]};
+  try{new PerformanceObserver(list=>window.measurements.long.push(...list.getEntries().map(e=>e.duration))).observe({type:'longtask',buffered:false});}catch{}
+  let start;el.addEventListener('keydown',()=>{start=performance.now();});
+  el.addEventListener('input',()=>{window.measurements.input.push(performance.now()-start);const keyStart=start;requestAnimationFrame(()=>window.measurements.render.push(performance.now()-keyStart));});
+ });
+ await number.pressSequentially('72.40',{delay:12});await expect(number).toHaveValue('72.40');
+ expect(await number.evaluate(el=>el===window.keptInput&&document.activeElement===el)).toBe(true);
+ await f.getByRole('button',{name:'No',exact:true}).tap();
+ await f.getByRole('button',{name:'Yes',exact:true}).evaluate(el=>{
+  el.addEventListener('pointerdown',()=>{window.tapStart=performance.now();});
+  el.addEventListener('click',()=>requestAnimationFrame(()=>window.measurements.tapRender=performance.now()-window.tapStart));
+ });
+ await f.getByRole('button',{name:'Yes',exact:true}).tap();
+ await expect(f.getByRole('button',{name:'Yes',exact:true})).toHaveAttribute('aria-pressed','true');
+ await expect.poll(()=>number.evaluate(()=>window.measurements.tapRender)).toBeGreaterThan(0);
+ const measured=await number.evaluate(()=>window.measurements);console.log('TRACKER_PHONE_PERF',JSON.stringify(measured));
+ expect(measured.input).toHaveLength(5);expect(measured.long).toEqual([]);expect(Math.max(...measured.input)).toBeLessThan(50);expect(Math.max(...measured.render)).toBeLessThan(200);
+ await f.getByRole('button',{name:'No',exact:true}).tap();await number.fill('0');
+ await f.getByRole('button',{name:'Save to NStack'}).tap();await expect(f.getByRole('status')).toContainText('Saved in NStack');
  await page.evaluate(()=>window.mountTracker());await expect(f.getByRole('spinbutton')).toHaveValue('0');await expect(f.getByRole('button',{name:'No',exact:true})).toHaveAttribute('aria-pressed','true');
- await f.getByLabel('Day',{exact:true}).fill('2026-01-01');await f.getByRole('spinbutton').fill('70');await f.getByRole('button',{name:'Save to NStack'}).click();await expect(f.getByRole('status')).toContainText('Saved in NStack');
- await f.getByRole('button',{name:'History',exact:true}).click();await f.getByRole('button',{name:'2026-01-01 · 1 answered'}).click();await expect(f.getByRole('spinbutton')).toHaveValue('70');
- await f.getByRole('spinbutton').fill('71');await page.evaluate(()=>window.trackerFixture.version++);await f.getByRole('button',{name:'Save to NStack'}).click();await expect(f.getByRole('status')).toContainText('Another device');await expect(f.getByRole('spinbutton')).toHaveValue('71');
- await f.getByRole('button',{name:'Reload saved'}).click();await f.getByRole('button',{name:'Discard edits and reload'}).click();await expect(f.getByRole('spinbutton')).toHaveValue('70');
- await f.getByRole('spinbutton').fill('');await f.getByRole('spinbutton').pressSequentially('e');await expect(f.getByRole('button',{name:'Save to NStack'})).toBeDisabled();await expect(f.getByRole('button',{name:'Metrics',exact:true})).toBeDisabled();await f.getByRole('button',{name:'Clear answer'}).click();
- await f.getByRole('button',{name:'Metrics',exact:true}).click();
- await f.getByLabel('Metric label',{exact:true}).fill('Custom neutral metric');await f.getByRole('button',{name:'Add metric',exact:true}).click();
+ await f.getByLabel('Day',{exact:true}).fill('2026-01-01');await f.getByRole('spinbutton').fill('70');await f.getByRole('button',{name:'Save to NStack'}).tap();await expect(f.getByRole('status')).toContainText('Saved in NStack');
+ await f.getByRole('button',{name:'History',exact:true}).tap();await f.getByRole('button',{name:'2026-01-01 · 1 answered'}).tap();await expect(f.getByRole('spinbutton')).toHaveValue('70');
+ await f.getByRole('spinbutton').fill('71');await page.evaluate(()=>window.trackerFixture.version++);await f.getByRole('button',{name:'Save to NStack'}).tap();await expect(f.getByRole('status')).toContainText('Another device');await expect(f.getByRole('spinbutton')).toHaveValue('71');
+ await f.getByRole('button',{name:'Reload saved'}).tap();await f.getByRole('button',{name:'Discard edits and reload'}).tap();await expect(f.getByRole('spinbutton')).toHaveValue('70');
+ await f.getByRole('spinbutton').fill('');await f.getByRole('spinbutton').pressSequentially('e');await expect(f.getByRole('button',{name:'Save to NStack'})).toBeDisabled();await expect(f.getByRole('button',{name:'Metrics',exact:true})).toBeDisabled();await f.getByRole('button',{name:'Clear answer'}).focus();await expect.poll(()=>page.locator('#tracker-test').evaluate(el=>el.inert)).toBe(false);await f.getByRole('button',{name:'Clear answer'}).press('Enter');
+ await f.getByRole('button',{name:'Metrics',exact:true}).tap();
+ await f.getByLabel('Metric label',{exact:true}).fill('Custom neutral metric');await f.getByRole('button',{name:'Add metric',exact:true}).tap();
  await expect(f.getByLabel('Label',{exact:true})).toHaveCount(3);
- await f.getByLabel('Label',{exact:true}).first().fill('Renamed metric');await f.getByRole('button',{name:'↓ Move down',exact:true}).first().click();
+ await f.getByLabel('Label',{exact:true}).first().fill('Renamed metric');await f.getByRole('button',{name:'↓ Move down',exact:true}).first().tap();
  await expect(f.getByLabel('Label',{exact:true}).nth(1)).toHaveValue('Renamed metric');
- await f.getByRole('button',{name:'Archive',exact:true}).first().click();await expect(f.getByRole('button',{name:'Restore',exact:true})).toHaveCount(1);
- await f.getByRole('button',{name:'Save to NStack'}).click();await expect(f.getByRole('status')).toContainText('Saved in NStack');
- await page.screenshot({path:'tmp/docs/handoffs/daily-tracker-phone.png'});
+ await f.getByRole('button',{name:'Archive',exact:true}).first().tap();await expect(f.getByRole('button',{name:'Restore',exact:true})).toHaveCount(1);
+ await f.getByRole('button',{name:'Save to NStack'}).tap();await expect(f.getByRole('status')).toContainText('Saved in NStack');
+ await page.screenshot({animations:'disabled',path:'tmp/docs/handoffs/daily-tracker-phone.png'});
  await page.evaluate(()=>{window.trackerFixture.denied=true;window.dispatchEvent(new Event('focus'));});await expect(f.getByText('Access unavailable')).toBeVisible();
 });

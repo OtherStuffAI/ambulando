@@ -9,7 +9,7 @@
     return requestId;
   };
   const notice = (message, error = false) => { $('status').textContent = message; $('status').className = error ? 'error' : ''; };
-  const mark = () => { reloadConfirmed=false;$('reload').textContent='Reload saved';dirty = true; send('dirty',{dirty:true}); $('save').disabled = !canWrite || busy; notice('Unsaved changes'); };
+  const mark = () => { reloadConfirmed=false;$('reload').textContent='Reload saved';dirty = true; send('dirty',{dirty:true}); $('save').disabled = !canWrite || busy || invalidNumber; notice('Unsaved changes'); };
   const el = (tag, text, parentNode, attributes = {}) => {
     const node = document.createElement(tag); if (text !== undefined) node.textContent = text;
     for (const [k,v] of Object.entries(attributes)) node.setAttribute(k,v);
@@ -27,7 +27,7 @@
     for (const tab of ['checkin','manage','history']) $(tab).setAttribute('aria-pressed',String(mode===tab));
     $('save').disabled = !dirty || !canWrite || busy || invalidNumber;
     for (const tab of ['checkin','manage','history']) $(tab).disabled = busy || invalidNumber;
-    $('date').disabled = busy || invalidNumber; $('today').disabled = busy || invalidNumber;
+    for (const id of ['date','today','previous','next']) $(id).disabled = busy || invalidNumber;
     $('reload').disabled = busy;
     if (mode === 'history') {
       el('h2','Saved days and current edits',root);
@@ -55,7 +55,7 @@
         const down=button('↓ Move down',row,()=>{[model.metrics[index+1],model.metrics[index]]=[m,model.metrics[index+1]];mark();render();});down.disabled ||= index===model.metrics.length-1;
         button(m.archived?'Restore':'Archive',row,()=>{m.archived=!m.archived;mark();render();});
       });
-      const add=el('div',undefined,root,{class:'metric'});el('h2','Add a metric',add);
+      const add=el('div',undefined,root,{class:'metric add-metric'});el('h2','Add a metric',add);
       const label=el('label','Metric label',add), input=el('input',undefined,label,{maxlength:'120',placeholder:'For example, ate well'});
       const typeLabel=el('label','Answer type',add), select=el('select',undefined,typeLabel);
       el('option','Yes / No',select,{value:'boolean'});el('option','Number',select,{value:'number'});
@@ -68,17 +68,18 @@
     for(const m of visible){
       const card=el('div',undefined,root,{class:'metric'});el('h2',`${m.label}${m.unit?' · '+m.unit:''}${m.archived?' (archived)':''}`,card);
       if(m.type==='boolean'){
-        const row=el('div',undefined,card,{class:'answers'});
-        for(const [label,value] of [['Yes',true],['No',false],['Unanswered',undefined]])button(label,row,()=>{setAnswer(m.id,value);render();},{'aria-pressed':String(value===undefined?!Object.hasOwn(values,m.id):values[m.id]===value)});
+        const row=el('div',undefined,card,{class:'answers',role:'group','aria-label':m.label});
+        for(const [label,value] of [['Yes',true],['No',false],['Unanswered',undefined]])button(label,row,()=>{setAnswer(m.id,value);for(const b of row.children)b.setAttribute('aria-pressed',String(b.textContent===label));},{class:value===undefined?'clear':'','aria-pressed':String(value===undefined?!Object.hasOwn(values,m.id):values[m.id]===value)});
       }else{
-        const label=el('label',m.unit?`Value (${m.unit})`:'Value',card), input=el('input',undefined,label,{type:'number',step:'any',placeholder:'Unanswered',value:Object.hasOwn(values,m.id)?String(values[m.id]):''});
-        input.disabled=busy||!canWrite;input.oninput=()=>{invalidNumber=input.validity.badInput; $('save').disabled=invalidNumber||busy||!dirty||!canWrite; for(const id of ['checkin','manage','history','date','today'])$(id).disabled=invalidNumber||busy; if(invalidNumber){notice('Enter a valid number.',true);return;}const value=input.value===''?undefined:Number(input.value);if(value!==undefined&&!Number.isFinite(value))return;setAnswer(m.id,value);};
-        button('Clear answer',card,()=>{invalidNumber=false;setAnswer(m.id,undefined);render();});
+        const label=el('label',m.unit?`Value (${m.unit})`:'Value',card), input=el('input',undefined,label,{type:'number',inputmode:'decimal',step:'any',placeholder:'Unanswered',value:Object.hasOwn(values,m.id)?String(values[m.id]):''});
+        input.disabled=busy||!canWrite;input.oninput=()=>{invalidNumber=input.validity.badInput; $('save').disabled=invalidNumber||busy||!dirty||!canWrite; for(const id of ['checkin','manage','history','date','today','previous','next'])$(id).disabled=invalidNumber||busy; if(invalidNumber){notice('Enter a valid number.',true);return;}const value=input.value===''?undefined:Number(input.value);if(value!==undefined&&!Number.isFinite(value))return;setAnswer(m.id,value);};
+        button('Clear answer',card,()=>{invalidNumber=false;input.value='';setAnswer(m.id,undefined);for(const id of ['checkin','manage','history','date','today','previous','next'])$(id).disabled=busy;},{class:'number-clear'});
       }
     }
   }
   function requestRead(){if(busy)return;if(dirty&&!reloadConfirmed){reloadConfirmed=true;$('reload').textContent='Discard edits and reload';notice('Reloading will discard your unsaved edits. Click Discard edits and reload to continue.',true);return;}reloadConfirmed=false;$('reload').textContent='Reload saved';busy=true;pending=send('read',{binding:'tracker'});notice('Loading private tracker…');render();}
   $('date').value=M.localDate();$('date').onchange=()=>{if(!M.validDate($('date').value)){$('date').value=M.localDate();}render();};
+  for(const [id,offset] of [['previous',-1],['next',1]])$(id).onclick=()=>{const d=new Date($('date').value+'T12:00:00');d.setDate(d.getDate()+offset);const next=M.localDate(d);if(M.validDate(next)){$('date').value=next;render();}};
   $('today').onclick=()=>{$('date').value=M.localDate();render();};
   for(const tab of ['checkin','manage','history'])$(tab).onclick=()=>{mode=tab;render();};
   $('reload').onclick=requestRead;

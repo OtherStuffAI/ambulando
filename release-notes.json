@@ -5884,6 +5884,19 @@
       "notes": [
         "Tracker access respects explicit read-only File permissions even when embedded metadata reports write access. Invalid permission responses fail closed."
       ]
+    },
+    {
+      "buildNumber": 2747,
+      "label": "Clearer Daily Metrics controls",
+      "notes": [
+        "Daily Metrics has larger Yes/No controls, decimal entry and a responsive layout with reachable save actions. Existing built-in trackers offer an explicit Update app action that keeps saved metrics and history in place."
+      ]
+    },
+    {
+      "buildNumber": 2748,
+      "label": "Validate Daily Metrics update guards",
+      "notes": [],
+      "noUserVisibleChanges": true
     }
   ]
 }
