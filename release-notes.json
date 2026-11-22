@@ -5870,6 +5870,13 @@
       "notes": [
         "Approve a trusted napplet once on this browser and reopen it without repeated prompts. Changed code or linked File access asks again; Forget approval is available in app controls."
       ]
+    },
+    {
+      "buildNumber": 2745,
+      "label": "Keep napplet access within approved consent",
+      "notes": [
+        "Changed tracker access closes an open napplet and requires fresh approval, including when read-only access becomes writable."
+      ]
     }
   ]
 }

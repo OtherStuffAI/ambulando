@@ -156,6 +156,7 @@ export const artefactsMixin = {
       if (access.canWrite !== pending.canWrite) throw new Error('Tracker access changed. Close and reopen to review approval.');
       const remembered = explicit ? rememberNappletApproval(pending.receipt) : hasNappletApproval(pending.receipt);
       if (!explicit && !remembered) { this.artefact.consent = true; return; }
+      pending.data.grant(pending.canWrite);
       session.receipt = pending.receipt;
       session.dataHost = new FileNappletFrame(pending.data, { onDirty: dirty => { session.nappletDirty = dirty; }, onBusy: busy => { session.nappletBusy = busy; }, onRevoke: () => { void this.revokeArtefact(session); } });
       session.assets.retain(pending.content.assets);

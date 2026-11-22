@@ -35,6 +35,11 @@ export class FileNappletData {
   constructor(context, codeFileId, binding, { transport=api, current=()=>true }={}) {
     this.context=Object.freeze({...context});this.codeFileId=codeFileId;this.binding=binding;this.api=transport;this.current=current;this.codeVersion='';this.controller=new AbortController();this.stopped=false;this.base='';this.value=null;
   }
+  grant(canWrite){
+    this.assert();
+    if(typeof canWrite!=='boolean'||this.approvedCanWrite!==undefined)throw new Error('Invalid napplet grant.');
+    Object.defineProperty(this,'approvedCanWrite',{value:canWrite});
+  }
   options(){return {baseUrl:this.context.baseUrl,appNpub:this.context.appNpub,signal:this.controller.signal};}
   assert(){if(this.stopped||!this.current())throw new Error('Napplet context changed.');}
   stop(){this.stopped=true;this.controller.abort();this.value=null;this.base='';}
@@ -50,7 +55,9 @@ export class FileNappletData {
     const result=await this.api.getTowerPgChannel(c.workspaceId,data.file.channel_id,o);this.assert();
     const channel=result.channel;
     if(channel?.id!==data.file.channel_id||channel.workspace_id!==c.workspaceId||channel.kind!=='dm'||channel.participant_npubs?.length!==1||channel.participant_npubs[0]!==c.viewer||channel.archived_at)throw new Error('Tracker data must be in your private self conversation.');
-    return {file:data.file,canWrite:data.file.can_write===true||data.can_write===true};
+    const canWrite=data.file.can_write===true||data.can_write===true;
+    if(this.approvedCanWrite!==undefined&&canWrite!==this.approvedCanWrite){throw Object.assign(new Error('Tracker access changed. Reopen to review approval.'),{status:403});}
+    return {file:data.file,canWrite};
   }
   async read({expectedVersion='',expectedValue=null}={}){
     const access=await this.authority(),c=this.context,o=this.options();
@@ -61,6 +68,7 @@ export class FileNappletData {
     if(object.contentType!=='application/json'||object.bytes.byteLength!==version.size_bytes||await digest(object.bytes)!==version.sha256_hex)throw new Error('Tracker integrity check failed.');this.assert();
     const value=TRACKER_MODEL.validate(JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(object.bytes)));
     if (expectedVersion && (version.id!==expectedVersion || JSON.stringify(value)!==JSON.stringify(expectedValue))) throw Object.assign(new Error('The tracker changed after saving. Reload to review.'),{status:409});
+    await this.authority();
     this.base=version.id;this.value=value;return {baseVersionId:this.base,value,canWrite:access.canWrite,privacy:'self-channel'};
   }
   async save(base,value){

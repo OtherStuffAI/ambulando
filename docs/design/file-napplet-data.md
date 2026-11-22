@@ -69,7 +69,7 @@ local base. The user explicitly reloads to discard and reconcile a draft.
 
 Periodic 30-second and foreground checks reauthorize an open host. Existing sync
 invalidation/fallback paths also request authorization checks. Pending checks
-make the frame inert; ordinary success preserves its DOM and draft. Narrowed
+make the frame inert; ordinary success preserves its DOM and draft. Changed
 write access, denied/error checks, context changes, close, pagehide and navigation
 tear down the frame/bridge. Late results cannot deliver into a new context.
 Voluntary close and source/history changes ask to discard a dirty tracker;
@@ -143,4 +143,7 @@ Storage keys and values contain only policy version and SHA-256 fingerprints,
 never data, credentials or signing material. Malformed/denied storage never
 auto-approves. Authority is checked before lookup and again before mounting,
 including when consent has been left open. Existing periodic and per-operation
-checks remain mandatory: remembered approval grants no Tower authority.
+checks remain mandatory: remembered approval grants no Tower authority. The host
+pins effective write access at grant time and requires an exact match on every
+authorization, including prepublication and result delivery. A read-only grant
+cannot gain write access when server permissions broaden; reopen for fresh consent.
