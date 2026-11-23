@@ -18,12 +18,12 @@ export function hasNappletApproval(receipt) {
   try {
     if (revoked.has(receipt.key)) return false;
     const stored = JSON.parse(globalThis.localStorage.getItem(receipt.key));
-    return stored?.version === 1 && stored.fingerprint === receipt.fingerprint && Object.keys(stored).sort().join(',') === 'fingerprint,version';
+    return stored?.version === (receipt.version || 1) && stored.fingerprint === receipt.fingerprint && Object.keys(stored).sort().join(',') === 'fingerprint,version';
   } catch { return false; }
 }
 export function rememberNappletApproval(receipt) {
   try {
-    const value = JSON.stringify({ version: 1, fingerprint: receipt.fingerprint });
+    const value = JSON.stringify({ version: receipt.version || 1, fingerprint: receipt.fingerprint });
     globalThis.localStorage.setItem(receipt.key, value);
     if (globalThis.localStorage.getItem(receipt.key) !== value) return false;
     revoked.delete(receipt.key);

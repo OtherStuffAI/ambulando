@@ -883,7 +883,11 @@ export function createShellState(options = {}) {
         url.searchParams.set('napplet', 'workspace-report');
         if (this.currentWorkspace?.workspaceId) url.searchParams.set('workspaceid', this.currentWorkspace.workspaceId);
       }
-      if (this.artefact?.appMode || this.dailyMetrics?.status !== 'closed' && this.dailyMetrics?.status) {
+      if (this.artefact?.generic && this.artefact.id) {
+        url.searchParams.set('nappletFile', this.artefact.id);
+        if (this.currentWorkspace?.workspaceId) url.searchParams.set('workspaceid', this.currentWorkspace.workspaceId);
+      }
+      if (!this.artefact?.generic && (this.artefact?.appMode || this.dailyMetrics?.status !== 'closed' && this.dailyMetrics?.status)) {
         url.searchParams.set('napplet', this.artefact?.appMode ? this.artefact.appId || 'daily-tracker' : 'daily-tracker');
         if (this.currentWorkspace?.workspaceId) url.searchParams.set('workspaceid', this.currentWorkspace.workspaceId);
       }
@@ -1145,6 +1149,7 @@ export function createShellState(options = {}) {
           this.pipelineViewerRoute=this.pipelineViewerOpen?{service:route.params.service,signer:route.params.signer,run:route.params.run,definition:route.params.definition}:{};
           if (this.selectedWorkspaceAgentId && !this.pipelineViewerOpen) await this.loadSelectedAgentSpaceView?.();
         }
+        if (route.params.nappletFile && (!route.params.workspaceid || route.params.workspaceid === this.currentWorkspace?.workspaceId)) await this.openGenericNapplet(route.params.nappletFile);
         if (route.params.napplet === 'workspace-report' && (!route.params.workspaceid || route.params.workspaceid === this.currentWorkspace?.workspaceId)) await this.openWorkspaceReport();
         if (route.params.napplet === 'daily-tracker' && (!route.params.workspaceid || route.params.workspaceid === this.currentWorkspace?.workspaceId)) await this.openDailyMetrics();
         else if (route.params.artefactid) await this.handleMentionNavigate('file', route.params.artefactid);

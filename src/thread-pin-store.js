@@ -67,6 +67,7 @@ export async function readThreadPinProjection(db, context, partition) {
       || (pin.type === 'file' && resource.pg_record_type !== 'file')
       || [resource,channel].some(r => ['deleted','archived'].includes(r.record_state) || ['stale','access-lost'].includes(r.pg_access_status) || r.can_read === false || r.readable === false);
     return { ...pin, channelId, title: unavailable ? `${pin.type === 'task' ? 'Task' : 'Document'} unavailable` : resource.title || `Untitled ${pin.type}`,
+      napplet: pin.type === 'file' && !unavailable ? (await db.sync_state.get(`napplet-projection:${context.key}:${pin.id}`))?.value || null : null,
       activityAt: unavailable ? '' : resource.updated_at || '', unavailable: Boolean(unavailable), persistedMentionUnread: attention ? Number(attention.mention_activity_version || 0) > Number(attention.viewed_activity_version || 0) : null, persistedUnread: attention ? Boolean(attention.unread) : false };
   }));
   const supported = (await db.sync_state.get(threadPinSupportKey(context)))?.value === true;

@@ -1,3 +1,4 @@
+import { readNappletTarget } from './napplets/generic-reads.js';
 import { queryWorkspaceReport } from './napplets/workspace-report-query.js';
 import { synchronizePrivatePreferences } from './private-preference-sync.js';
 import { synchronizeNotificationInbox } from './notification-inbox-sync.js';
@@ -398,6 +399,7 @@ export const syncManagerMixin = {
         'org-data-permissions': { trackFreshness: false, load: (_key, options) => readOrgDataPermissions(this, options) },
         'org-data-installations': { trackFreshness: false, load: (_key, options) => hydrateOrgData(this, { ...options, catalogue: true }) },
         'org-data': { trackFreshness: false, load: (_key, options) => hydrateOrgData(this, options) },
+        'napplet-read': { trackFreshness: false, load: (key, options) => readNappletTarget(this, key, options) },
         'workspace-report': { trackFreshness: false, load: (_key, options) => queryWorkspaceReport(this, options.range, options) },
         'message-activity': {
           trackFreshness: false,

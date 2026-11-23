@@ -1,8 +1,10 @@
+import { genericAppsMixin } from './napplets/generic-apps.js';
 import { saveAppPlacement } from './db.js';
 
 // Authorized installed napplets and personal WApps use the supported home stack.
 // Missing preferences migrate implicitly to shown without rewriting registrations.
 export const toolboxMixin = {
+  ...genericAppsMixin,
   appPlacementPreferences: {},
   appPlacementSaving: false,
   appPlacementError: '',
@@ -91,8 +93,10 @@ export const toolboxMixin = {
 
   get toolboxApps() {
     const wapps = this.visiblePersonalWapps || [];
+    const fileApps = (this.pinnedThreads || []).filter(pin => pin.type === 'file' && pin.napplet).map(pin => ({ placementId: 'napplet:file:' + pin.id, codeFileId: pin.id, title: pin.napplet.title, iconText: pin.napplet.icon, app_id: pin.napplet.appId, description: 'NStack File napplet', appType: 'Napplet' }));
     const seen = new Set();
     return [
+      ...fileApps,
       ...(this.isTowerPgMode ? [{ placementId: 'napplet:workspace-report', app_id: 'workspace-report', title: 'Workspace Report', description: 'Authorized activity and current work', appType: 'Napplet' }, { placementId: 'napplet:daily-tracker', app_id: 'daily-tracker', title: 'Daily Metrics', description: 'Your private daily metrics', appType: 'Napplet' }] : []),
       ...wapps.filter(wapp => {
         if (!wapp.record_id || seen.has(wapp.record_id)) return false;
@@ -101,7 +105,7 @@ export const toolboxMixin = {
       ...(this.orgDataInstallationContext && this.orgDataInstallationContext === this.orgDataInstallationsContextKey ? (this.orgDataInstallations || []) : []).map(b => ({ placementId: 'napplet:bundle-' + b.key, title: b.title, description: 'Installed static napplet · version ' + b.version, appType: 'Napplet', orgDataView: 'bundle:' + b.key })),
     ].map((app, index) => {
       const placement = this.appPlacement(app);
-      return { ...app, ...(app.appType === 'Napplet' ? { icon_url: placement.iconUrl || '', title: String(placement.displayTitle || '').trim() || app.title } : {}), launcherPosition: placement.position ?? index + 1 };
+      return { ...app, ...(app.appType === 'Napplet' ? { icon_url: app.codeFileId ? '' : placement.iconUrl || '', title: String(placement.displayTitle || '').trim() || app.title } : {}), launcherPosition: placement.position ?? index + 1 };
     }).sort((a, b) => a.launcherPosition - b.launcherPosition);
   },
 
@@ -156,7 +160,8 @@ export const toolboxMixin = {
       const opener = this.visibleApps.length > 1 && active?.closest('[data-testid="apps-stack"]')
         ? document.querySelector('[data-testid="apps-stack"] .wapps-stack-hitbox') : active;
       this.closePersonalWappsOverlay();
-      if (entry.placementId === 'napplet:workspace-report') this.openWorkspaceReport();
+      if (entry.codeFileId) this.openGenericNapplet(entry.codeFileId);
+      else if (entry.placementId === 'napplet:workspace-report') this.openWorkspaceReport();
       else if (entry.placementId === 'napplet:daily-tracker') this.openDailyMetrics();
       else if (entry.orgDataView) this.openOrgData({ opener, view: entry.orgDataView });
       else if (entry.placementId === 'napplet:tower-usage') this.openTowerUsage({ opener });

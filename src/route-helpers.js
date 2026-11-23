@@ -91,6 +91,7 @@ export function parseRouteLocation(href) {
       folderid: url.searchParams.get('folderid') || null,
       docid: url.searchParams.get('docid') || null,
       napplet: url.searchParams.get('napplet') || null,
+      nappletFile: url.searchParams.get('nappletFile') || null,
       artefactid: url.searchParams.get('artefactid') || null,
       docsview: url.searchParams.get('docsview') || null,
       versioning: url.searchParams.get('versioning') || null,

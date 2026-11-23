@@ -1,7 +1,6 @@
-import '../../public/napplets/workspace-report/v1/model.js';
 import * as api from '../api.js';
-import { assertIdentity } from '../canvas/projection.js';
-export const REPORT_MODEL = globalThis.WorkspaceReportModel;
+import { REPORT_MODEL } from './aggregate-capability.js';
+export { REPORT_MODEL, normalizeWorkspaceReport } from './aggregate-capability.js';
 const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
 const exact = (o, keys) => o && typeof o === 'object' && !Array.isArray(o) && Object.keys(o).sort().join(',') === [...keys].sort().join(',');
 export function parseWorkspaceReport(html, metadata) {
@@ -15,12 +14,6 @@ export function parseWorkspaceReport(html, metadata) {
 export function validWorkspaceReportRequest(event,frame,session) {
   const d=event?.data;
   return Boolean(frame && event.source===frame && event.origin==='null' && exact(d,['type','version','session','requestId','operation','binding','range']) && d.type==='wingman-napplet-data' && d.version===1 && d.session===session && typeof d.requestId==='string' && /^[A-Za-z0-9_-]{1,64}$/.test(d.requestId) && d.operation==='read' && d.binding==='report' && REPORT_MODEL.ranges.includes(d.range));
-}
-export function normalizeWorkspaceReport(payload,context,range) {
-  assertIdentity(payload,context);
-  const { identity, ...value }=payload;
-  if(value.range!==range || value.channels?.length!==Math.min(10,value.ranking?.total_channels))throw Error('Workspace Report range or ranking mismatch.');
-  return REPORT_MODEL.validate(value);
 }
 export class WorkspaceReportData {
   constructor(context,codeFileId,binding,{transport=api,current=()=>true,query}={}){this.query=query;this.context=Object.freeze({...context});this.codeFileId=codeFileId;this.binding=binding;this.api=transport;this.current=current;this.stopped=false;this.controller=new AbortController();this.codeVersion='';}

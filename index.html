@@ -2165,6 +2165,7 @@
                 <div>
                   <h1 id="toolbox-heading">Toolbox</h1>
                   <p>Manage WApps and napplets in your Apps stack.</p>
+                  <button type="button" class="btn-secondary" @click="$store.chat.openAddNapplet()">Add napplet</button>
                 </div>
                 <button type="button" class="btn-primary btn-compact" @click="$store.chat.openPersonalWappEditor()">Add WApp</button>
               </div>
@@ -2185,6 +2186,8 @@
                       <button type="button" class="icon-btn" @click="$store.chat.moveToolboxApp(wapp, 'up')" :disabled="index === 0" :aria-label="'Move ' + wapp.title + ' up'">↑</button>
                       <button type="button" class="icon-btn" @click="$store.chat.moveToolboxApp(wapp, 'down')" :disabled="index === $store.chat.toolboxApps.length - 1" :aria-label="'Move ' + wapp.title + ' down'">↓</button>
                       <button type="button" class="btn-secondary btn-compact" @click="$store.chat.openToolboxAppEditor(wapp)">Edit</button>
+                      <button type="button" class="btn-secondary btn-compact" x-show="wapp.codeFileId" @click="$store.chat.openGenericNapplet(wapp.codeFileId)">Open</button>
+                      <button type="button" class="btn-danger btn-compact" x-show="wapp.codeFileId" @click="$store.chat.uninstallNapplet(wapp)">Uninstall bookmark</button>
                       <button type="button" class="btn-danger btn-compact" x-show="wapp.appType === 'WApp'" @click="$store.chat.archivePersonalWapp(wapp)">Archive</button>
                     </span>
                   </div>
@@ -2395,7 +2398,7 @@
                         <template x-if="app.appType === 'WApp' || app.icon_url">
                           <img :src="$store.chat.getPersonalWappIconUrl(app)" alt="" @load="$store.chat.handlePersonalWappIconLoad($event)" @error="$store.chat.handlePersonalWappIconError($event)" />
                         </template>
-                        <span :hidden="app.appType === 'WApp' || !!app.icon_url" x-text="app.appType === 'Napplet' ? '◴' : $store.chat.getInitials(app.title)"></span>
+                        <span :hidden="app.appType === 'WApp' || !!app.icon_url" x-text="app.iconText || (app.appType === 'Napplet' ? '◴' : $store.chat.getInitials(app.title))"></span>
                       </span>
                       <span class="launcher-pill-copy"><strong x-text="app.title"></strong><small x-text="app.description || app.appType"></small></span>
                     </button>
@@ -12133,6 +12136,17 @@
             <div x-show="$store.chat.dailyMetrics.status === 'setup'"><p>Set up an empty private tracker in your Note to self conversation.</p><button type="button" :disabled="$store.chat.artefactCreating" @click="$store.chat.setupDailyMetrics()">Set up Daily Metrics</button></div>
             <div x-show="$store.chat.dailyMetrics.status === 'choose'"><p>Choose an existing tracker. Your records will be preserved.</p><template x-for="(file, index) in $store.chat.dailyMetrics.candidates" :key="file.id"><button type="button" @click="$store.chat.openDailyMetricsFile(file)" x-text="(file.display_name || 'Daily Metrics').replace(/\.html?$/i, '') + ' · Tracker ' + (index + 1)"></button></template></div>
           </dialog>
+          <dialog id="add-napplet-dialog" class="artefact-dialog" aria-labelledby="add-napplet-title" @cancel.prevent="$store.chat.closeAddNapplet()">
+            <header class="artefact-toolbar"><strong id="add-napplet-title">Add napplet</strong><button type="button" @click="$store.chat.closeAddNapplet()" :disabled="$store.chat.nappletInstall.busy">Close</button></header>
+            <form class="napplet-consent" @submit.prevent="$store.chat.installNapplet()">
+              <p>Install an existing NStack code File as an Apps bookmark. Its data File must already be linked. Uninstall removes the bookmark and keeps both Files.</p>
+              <label>Recent synchronized napplet Files<select aria-label="Choose existing napplet File" @change="$store.chat.nappletInstall.input = $event.target.value"><option value="">Choose a File…</option><template x-for="file in $store.chat.nappletFileChoices()" :key="file.record_id"><option :value="file.record_id" x-text="file.title"></option></template></select></label>
+              <p>This picker shows Files synchronized on this device. You can also paste a File link from this workspace.</p>
+              <label>File link (or File ID)<input aria-label="Napplet File link or ID" x-model="$store.chat.nappletInstall.input" required autocomplete="off"></label>
+              <p role="alert" x-show="$store.chat.nappletInstall.error" x-text="$store.chat.nappletInstall.error"></p>
+              <button type="submit" :disabled="$store.chat.nappletInstall.busy" x-text="$store.chat.nappletInstall.busy ? 'Verifying…' : 'Install bookmark'"></button>
+            </form>
+          </dialog>
           <dialog id="artefact-dialog" class="artefact-dialog" :class="{ 'workspace-report-host': $store.chat.artefact.appId === 'workspace-report' }" @cancel.prevent="$store.chat.closeArtefact()" x-effect="if ($store.chat.artefact.id && !$store.chat.artefactCurrent($store.chat.artefactSession())) $store.chat.closeArtefact({ force: true, preserve: false })">
             <header class="artefact-toolbar"><strong x-text="$store.chat.artefact.title"></strong>
               <span x-show="!$store.chat.artefact.can_write && $store.chat.artefact.status === 'ready'">Read-only</span>
@@ -12144,14 +12158,17 @@
             <div class="artefact-toolbar" x-show="$store.chat.artefact.napplet">
               <span x-text="$store.chat.artefact.approvalNotice"></span>
               <button type="button" @click="$store.chat.forgetArtefactApproval()">Forget approval</button>
+              <button type="button" x-show="$store.chat.artefact.generic" @click="$store.chat.checkNappletUpdate()">Check for update</button>
             </div>
             <div class="artefact-toolbar" x-show="$store.chat.artefact.updateAvailable || $store.chat.artefact.updating">
               <span x-text="$store.chat.artefact.updating ? 'Updating app code…' : 'Improved Daily Metrics controls are available. Saved data stays in place.'"></span>
               <button type="button" :disabled="$store.chat.artefact.updating" @click="$store.chat.updateDailyMetricsApp()">Update app</button>
             </div>
             <section class="napplet-consent" x-show="$store.chat.artefact.consent" aria-label="Napplet approval">
-              <p x-show="!$store.chat.artefact.report">Run this napplet? Its reviewed code can read and replace the linked daily tracker File in your self-conversation. NStack administrators may also have access. Only run code you trust. Web HTML can navigate its own frame.</p>
-              <p x-show="$store.chat.artefact.report">Run Workspace Report? Its reviewed code can read authorized project-channel activity and current task, document and File counts. It cannot write workspace data. Only run code you trust. Web HTML can navigate its own frame.</p>
+              <p x-show="!$store.chat.artefact.generic && !$store.chat.artefact.report">Run this napplet? Its reviewed code can read and replace the linked daily tracker File in your self-conversation. NStack administrators may also have access. Only run code you trust. Web HTML can navigate its own frame.</p>
+              <p x-show="!$store.chat.artefact.generic && $store.chat.artefact.report">Run Workspace Report? Its reviewed code can read authorized project-channel activity and current task, document and File counts. It cannot write workspace data. Only run code you trust. Web HTML can navigate its own frame.</p>
+              <p x-show="$store.chat.artefact.generic" x-text="$store.chat.artefact.permissionText"></p>
+              <p x-show="$store.chat.artefact.generic">Only run code you trust. NStack administrators may also have access. Web HTML can navigate its own frame.</p>
               <p>Approval is remembered on this browser for this code and linked File access. You can forget it in the app controls. Access is checked every time.</p>
               <button type="button" @click="$store.chat.enableArtefactNapplet()">Trust and open</button>
             </section>
