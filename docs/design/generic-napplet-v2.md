@@ -1,5 +1,13 @@
 # Generic File napplet protocol v2
 
+Status: existing File-backed implementation reference, not the full agreed product
+contract. [The agreed contract](napplet-contract.md) supersedes this document
+for intended behaviour. In particular, digest-triggered consent, explicit update
+checks and pin-only removal below describe current limitations, not requirements
+for the next runtime. Collections are not implemented by this File protocol.
+See [implementation gaps](napplet-contract-gaps.md). Do not change the deployed wire
+format or migrate existing data merely by reinterpreting this document.
+
 This protocol grants capabilities by ID and version, never by app ID. v1 remains
 unchanged. Code and data are existing NStack Files. Installation is a personal
 File pin; uninstall removes only that pin. Every launch verifies current code

@@ -1,5 +1,12 @@
 # File napplet data bridge
 
+Status: existing v1 tracker implementation and data-preservation reference.
+[The agreed napplet contract](napplet-contract.md) governs future common runtime
+behaviour. The multiple-instance chooser, code-digest re-consent and manual
+built-in update below describe legacy behaviour, not the target contract.
+Preserve these Files and history until an explicit compatible migration exists;
+they are not named collection storage. See [implementation gaps](napplet-contract-gaps.md).
+
 Daily tracker runs as client HTML inside Ambulando. NStack owns the HTML File,
 its immutable versions, the separate JSON data File and all durable entries.
 There is no tracker server or browser-storage system of record. Apps → Daily Metrics

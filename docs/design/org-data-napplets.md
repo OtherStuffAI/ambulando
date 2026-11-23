@@ -1,5 +1,11 @@
 # Organisation data napplets
 
+Status: existing organisation-data implementation reference. The canonical
+[agreed napplet contract](napplet-contract.md) defines the common product target.
+These typed workspace records and installation controls do not establish general
+personal/team JSON collections or the agreed per-napplet audience lifecycle.
+See [implementation gaps](napplet-contract-gaps.md); namespacing never grants access.
+
 The default Organisation Data Catalogue, People, Organisation chart and Holiday
 viewer share Tower's workspace-scoped `org_data` records. The catalogue creates
 simple typed definitions/relationships and generates record tables and forms.

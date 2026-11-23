@@ -1,5 +1,12 @@
 # File napplet authoring
 
+Status: instructions for the existing File-backed runtime. The canonical
+[agreed napplet contract](design/napplet-contract.md) defines the intended common
+runtime. The manual installation, changed-code approval and unpin-only removal
+below remain implementation limitations; they are not the agreed lifecycle.
+Named collections, bot delivery to a private Apps audience and scoped personal
+capabilities require further work; see [gaps](design/napplet-contract-gaps.md).
+
 A v2 napplet is a self-contained HTML File with the manifest described in
 [the portable protocol](design/generic-napplet-v2.md). Its code File metadata
 binds one capability to an existing resource. Use ordinary NStack File upload

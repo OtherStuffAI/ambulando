@@ -151,6 +151,9 @@ publishing the source or creating a replacement repository, follow the
 
 ## Further reading
 
+- [Agreed common napplet contract](docs/design/napplet-contract.md) and
+  [implementation gaps](docs/design/napplet-contract-gaps.md)
+
 - [Release notes workflow](docs/release-notes.md)
 - [Context editing and authority](docs/design/context-tree-editing.md)
 - [File previews and storage routing](docs/design/file-previews.md)
