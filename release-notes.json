@@ -5918,6 +5918,13 @@
       "notes": [
         "Open generic File napplets with the live NStack File access response while preserving explicit read-only permissions."
       ]
+    },
+    {
+      "buildNumber": 2752,
+      "label": "Reliable generic napplet JSON saves",
+      "notes": [
+        "Reject sparse or extended arrays before saving generic napplet data, and preserve valid app titles containing closing script text during access checks."
+      ]
     }
   ]
 }

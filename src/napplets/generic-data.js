@@ -16,7 +16,7 @@ export class GenericNappletData {
     const codeChannel=(await this.api.getTowerPgChannel(c.workspaceId,f.channel_id,o)).channel;this.assert();
     if(codeChannel?.id!==f.channel_id||codeChannel.workspace_id!==c.workspaceId||codeChannel.archived_at||codeChannel.deleted_at)throw Error('Code channel unavailable.');
     // Parse metadata against approved manifest, without executing or reading code again.
-    const fresh=parseGenericNapplet('<script id="wingman-napplet-manifest">'+canonical(b.manifest)+'</script>',f.metadata);
+    const fresh=parseGenericNapplet('<script id="wingman-napplet-manifest">'+canonical(b.manifest).replaceAll('<','\\u003c')+'</script>',f.metadata);
     if(canonical(fresh.resources)!==canonical(b.resources))throw Error('Napplet binding changed. Reopen.');
     let file,canWrite=false;
     if(b.capability==='private-json-file'){

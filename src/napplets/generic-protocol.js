@@ -21,6 +21,13 @@ export function validateJson(value) {
     if(typeof v==='number'){if(!Number.isFinite(v)||Object.is(v,-0)||Math.abs(v)>Number.MAX_SAFE_INTEGER)fail();return;}
     if(typeof v==='string'){if(!scalar(v)||utf8(v)>65536)fail();return;}
     if(!v||typeof v!=='object'||(!Array.isArray(v)&&Object.getPrototypeOf(v)!==Object.prototype&&Object.getPrototypeOf(v)!==null))fail();
+    if(Array.isArray(v)){
+      // Structured-clone can carry sparse/extended arrays that JSON cannot.
+      // Bound length before key enumeration or canonical serialization.
+      if(v.length>50000)fail();
+      const keys=Object.keys(v);
+      if(keys.length!==v.length||keys.some((key,index)=>key!==String(index)))fail();
+    }
     for(const k of Object.keys(v)){if(unsafe.has(k)||!scalar(k)||utf8(k)>65536)fail();visit(v[k],depth+1);}
   };
   if(!value||typeof value!=='object'||Array.isArray(value))fail();visit(value,1);
