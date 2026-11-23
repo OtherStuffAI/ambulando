@@ -1,7 +1,7 @@
 (() => {
   'use strict';
   const root=document.getElementById('storage'),groups=document.getElementById('storage-groups');
-  const labels={postgres:'PostgreSQL · logical workspace estimate',object_storage:'S3 / object storage · retained metadata',rows:'Retained rows',row_json_bytes:'Logical row bytes',metadata_json_bytes:'Metadata bytes (subset)',history_rows:'History rows (subset)',history_row_json_bytes:'History bytes (subset)',tables_measured:'Tables measured',physical_bytes:'Physical database bytes',objects:'Retained completed objects',bytes:'Retained object bytes',pending_objects:'Pending objects',provider_actual_bytes:'Provider-measured bytes'};
+  const labels={postgres:'PostgreSQL · workspace estimate',object_storage:'S3 / object storage · retained metadata',rows:'Retained rows',column_bytes:'Stored column bytes',metadata_column_bytes:'Metadata column bytes (subset)',history_column_bytes:'History column bytes (subset)',row_json_bytes:'Serialized row bytes',metadata_json_bytes:'Serialized metadata bytes (subset)',history_rows:'History rows (subset)',history_row_json_bytes:'Serialized history bytes (subset)',tables_measured:'Tables measured',physical_bytes:'Physical database bytes',objects:'Retained completed objects',bytes:'Retained object bytes',pending_objects:'Pending objects',provider_actual_bytes:'Provider-measured bytes'};
   const label=id=>labels[id]||id.replaceAll('_',' ').replaceAll('-',' ');
   const stamp=s=>s?new Date(s).toLocaleString(undefined,{timeZone:'UTC',dateStyle:'medium',timeStyle:'short'})+' UTC':'Unavailable';
   function clear(){root.hidden=true;groups.replaceChildren();document.getElementById('storage-caveats').replaceChildren();document.getElementById('storage-asof').textContent='';}

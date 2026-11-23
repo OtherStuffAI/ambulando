@@ -1,6 +1,7 @@
 import {it,expect,vi} from 'vitest';
 import {JSDOM} from 'jsdom';
 import fixture from './fixtures/napplets/workspace-report-storage-v1.json';
+import columns from './fixtures/napplets/workspace-storage-columns-v1.json';
 import {REPORT_MODEL,normalizeWorkspaceReport} from '../src/napplets/aggregate-capability.js';
 import {GenericNappletData} from '../src/napplets/generic-data.js';
 import {parseGenericNapplet,genericReceipt,validGenericRequest} from '../src/napplets/generic-protocol.js';
@@ -8,6 +9,26 @@ import {genericWorkspaceReportBundle} from '../scripts/package-generic-workspace
 const copy=()=>structuredClone(fixture.value),html=m=>`<script id="wingman-napplet-manifest">${JSON.stringify(m)}</script>`;
 const context={baseUrl:'https://tower.example',appNpub:'app',workspaceId:fixture.value.workspace_id,viewer:'alice',tower:'tower',service:'service'},file='00000000-0000-4000-8000-000000000002';
 const binding=parseGenericNapplet(html(fixture.manifest),fixture.metadata);
+it('accepts the stored-column backend example unchanged and renders its measurement semantics',async()=>{
+ const value=copy();value.storage=structuredClone(columns);
+ expect(REPORT_MODEL.validateWithStorage(value).storage).toEqual(columns);
+ const source=await genericWorkspaceReportBundle({storage:true});
+ const dom=new JSDOM(source,{runScripts:'dangerously',beforeParse(w){w.TextEncoder=TextEncoder;}});
+ try{
+  dom.window.WorkspaceStorageView.render(value.storage);
+  const root=dom.window.document.querySelector('#storage'),cards=[...root.querySelectorAll('article')];
+  for(const [label,amount,method] of [['Stored column bytes','12,000 bytes','stored-column-size'],['Metadata column bytes (subset)','1,000 bytes','stored-column-size-subset'],['History column bytes (subset)','0 bytes','stored-column-size-subset']]){
+   const card=cards.find(card=>card.querySelector('p').textContent===label);
+   expect(card.querySelector('strong').textContent).toBe(amount);
+   expect(card.querySelector('small').textContent).toBe(`estimated · ${method}`);
+  }
+  expect(root.querySelector('h3').textContent).toBe('PostgreSQL · workspace estimate');
+  expect(root.textContent).not.toContain('Serialized');
+  expect([...root.querySelectorAll('#storage-caveats li')].map(li=>li.textContent)).toEqual(columns.caveats);
+  const physical=cards.find(card=>card.querySelector('p').textContent==='Physical database bytes');
+  expect(physical.querySelector('strong').textContent).toBe('Unavailable');
+ }finally{dom.window.close();}
+});
 it('keeps legacy exact, validates generic future metrics and distinguishes unavailable from zero',()=>{
  const v=copy();expect(()=>REPORT_MODEL.validate(v)).toThrow();
  v.storage.groups.push({id:'future_group',metrics:[{id:'future_metric',method:'new-method',unit:'bytes',value:0,status:'actual'}]});

@@ -160,6 +160,17 @@ in the generic capability registry/parser, GenericNappletSync and a separate
 WorkspaceReportDocument storage-validation path; do not broaden its legacy
 exact-key validator. Native activation and device verification remain separate.
 
+`workspace-storage-columns-v1.json` is the newer backend synthetic example,
+copied unchanged. Its `column_bytes` uses `stored-column-size` for individual
+stored PostgreSQL fields, including compressed and external datum sizes.
+`metadata_column_bytes` and `history_column_bytes` use
+`stored-column-size-subset` and are included in the total, not added to it.
+This is a workspace estimate excluding tuple/alignment, page, index and TOAST
+container overhead, WAL, free space and backups. The older JSON-size examples
+remain historical compatibility vectors. Metric methods and backend caveats
+render verbatim as text; unknown IDs retain safe fallback labels. These metric
+changes require a cartridge revision, not a new host capability or build.
+
 Prepare the portable candidate without publishing:
 
 ```bash
