@@ -46,6 +46,7 @@ export function decodeJson(source) {
 }
 export const capabilities = Object.freeze({
   'private-json-file@1': Object.freeze({operations:['read','save'],resource:'file_id',privacy:'self-channel'}),
+  'workspace-aggregate@2': Object.freeze({operations:['read'],resource:'workspace_id',privacy:'viewer-channels'}),
   'workspace-aggregate@1': Object.freeze({operations:['read'],resource:'workspace_id',privacy:'viewer-channels'}),
 });
 export function parseGenericNapplet(html,metadata) {
@@ -57,7 +58,7 @@ export function parseGenericNapplet(html,metadata) {
   const names=Object.keys(m.bindings||{}),name=names[0],b=m.bindings?.[name];
   if(names.length!==1||!/^[a-z][a-z0-9_]{0,31}$/.test(name)||!exact(b,['capability','version','operations']))fail();
   const spec=capabilities[`${b.capability}@${b.version}`];
-  if(typeof b.capability!=='string'||!spec||b.version!==1||!(JSON.stringify(b.operations)===JSON.stringify(spec.operations)||b.capability==='private-json-file'&&JSON.stringify(b.operations)==='["read"]'))fail();
+  if(typeof b.capability!=='string'||!spec||!Number.isInteger(b.version)||!(JSON.stringify(b.operations)===JSON.stringify(spec.operations)||b.capability==='private-json-file'&&JSON.stringify(b.operations)==='["read"]'))fail();
   if(!exact(n,['version','app_id','bindings'])||n.version!==2||n.app_id!==m.app_id||!exact(n.bindings,[name])||!exact(n.bindings[name],[spec.resource])||!UUID.test(n.bindings[name][spec.resource]))fail();
   return Object.freeze({manifest:JSON.parse(canonical(m)),resources:JSON.parse(canonical(n.bindings)),name,capability:b.capability,version:b.version,appId:m.app_id,title:m.title,icon:m.icon,fileId:n.bindings[name].file_id,workspaceId:n.bindings[name].workspace_id});
 }

@@ -8,3 +8,13 @@ function snapshot(){return {identity:{workspace_id:workspace,app_npub:'app',towe
 it('returns only a complete validated ephemeral snapshot from the fixed service read',async()=>{const read=vi.fn(async()=>snapshot());const value=await queryWorkspaceReport({context:c},'all',{}, {read});expect(value.inventory.channels).toBe(0);expect(value.identity).toBeUndefined();expect(read.mock.calls[0].slice(0,2)).toEqual([workspace,'all']);});
 it('refuses identity mismatch, incomplete data and missing top10 rows',async()=>{for(const mutate of [v=>{v.identity.workspace_service_npub='other';},v=>{v.complete=false;},v=>{v.ranking.total_channels=1;v.ranking.has_more=true;v.inventory.channels=1;}]){const v=snapshot();mutate(v);await expect(queryWorkspaceReport({context:c},'all',{}, {read:async()=>v})).rejects.toThrow();}});
 it('rejects late delivery after viewer context changes and honors both abort owners',async()=>{let finish;const store={context:c};const promise=queryWorkspaceReport(store,'all',{}, {read:()=>new Promise(r=>{finish=r;})});store.context={...c,viewer:'bob'};finish(snapshot());await expect(promise).rejects.toThrow('context changed');for(const serviceAbort of [false,true]){const abort=new AbortController();abort.abort();const read=vi.fn();const s={context:c,...(serviceAbort?{_towerSyncService:{readAbortController:abort,assertActive(){}}}:{})};await expect(queryWorkspaceReport(s,'all',serviceAbort?{}:{signal:abort.signal},{read})).rejects.toThrow();expect(read).not.toHaveBeenCalled();}});
+it('opts in only for storage owner and refuses missing/late/mismatched extension',async()=>{
+ const fixture=(await import('./fixtures/napplets/workspace-report-storage-v1.json')).default;
+ const value={...structuredClone(fixture.value),identity:snapshot().identity};
+ const read=vi.fn(async()=>value);
+ expect((await queryWorkspaceReport({context:c},'all',{storage:true},{read})).storage).toEqual(fixture.value.storage);
+ expect(read.mock.calls[0][2].storage).toBe(true);
+ await expect(queryWorkspaceReport({context:c},'all',{}, {read})).rejects.toThrow();
+ delete value.storage;await expect(queryWorkspaceReport({context:c},'all',{storage:true},{read})).rejects.toThrow();
+ read.mockRejectedValue(Object.assign(Error('denied'),{status:403}));await expect(queryWorkspaceReport({context:c},'all',{storage:true},{read})).rejects.toMatchObject({status:403});
+});

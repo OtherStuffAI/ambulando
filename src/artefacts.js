@@ -205,7 +205,7 @@ export const artefactsMixin = {
       if (binding) {
         if (versionId !== this.artefact.base) throw new Error('Reopen the latest version to approve this napplet.');
         const Data = genericBinding ? GenericNappletData : reportBinding ? WorkspaceReportData : FileNappletData;
-        const data = new Data(session.context, session.id, binding, { transport: genericBinding ? (session.transport || nappletTransport(this)) : undefined, current: () => this.artefactCurrent(session), query: (range, signal) => { const service = this.getTowerSyncService(); if (!service) throw new Error('Workspace Report service unavailable.'); return service.ensureLoaded('workspace-report', `${session.partition}:${range}`, { force: true, range, signal }); } });
+        const data = new Data(session.context, session.id, binding, { transport: genericBinding ? (session.transport || nappletTransport(this)) : undefined, current: () => this.artefactCurrent(session), query: (range, signal, { storage = false } = {}) => { const service = this.getTowerSyncService(); if (!service) throw new Error('Workspace Report service unavailable.'); return service.ensureLoaded('workspace-report', `${session.partition}:${range}:${storage}`, { force: true, range, signal, storage }); } });
         data.codeVersion = versionId;
         try {
           const access = await data.authority();
@@ -213,7 +213,7 @@ export const artefactsMixin = {
           if (!this.artefactCurrent(session)) { data.stop(); return; }
           session.pendingConsent = { data, content, receipt, canWrite: access.canWrite, report: Boolean(reportBinding), generic: Boolean(genericBinding) };
           this.artefact.report = Boolean(reportBinding) || genericBinding?.capability === 'workspace-aggregate';
-          this.artefact.permissionText = genericBinding ? (genericBinding.capability === 'private-json-file' ? `Run this code with ${access.canWrite ? 'read and save (replace contents)' : 'read-only'} access to “${String(access.file?.display_name || 'Private app data').slice(0,80)}”?` : `Run this code with read-only authorized workspace totals for “${String(this.currentWorkspace?.name || this.currentWorkspace?.title || 'this workspace').slice(0,80)}”?`) : '';
+          this.artefact.permissionText = genericBinding ? (genericBinding.capability === 'private-json-file' ? `Run this code with ${access.canWrite ? 'read and save (replace contents)' : 'read-only'} access to “${String(access.file?.display_name || 'Private app data').slice(0,80)}”?` : genericBinding.version === 2 ? `Read workspace activity plus workspace-wide storage totals for “${String(this.currentWorkspace?.name || this.currentWorkspace?.title || 'this workspace').slice(0,80)}”, including retained data from private scopes? No message or file content. Requires workspace management permission.` : `Run this code with read-only authorized workspace totals for “${String(this.currentWorkspace?.name || this.currentWorkspace?.title || 'this workspace').slice(0,80)}”?`) : '';
           session.trackerBinding = binding;
           this.artefact.updateAvailable = !genericBinding && !reportBinding && canUpdateTracker(content) && session.codeCanWrite;
           this.artefact.html = null;

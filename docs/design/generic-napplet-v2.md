@@ -113,3 +113,67 @@ are excluded. Stored value exactly `{version:2,fingerprint}`. New bytes/bindings
 effective grant prompt once; unchanged launch rechecks authority without prompt.
 v1 keys/fingerprints are never interpreted as v2 grants. Code File current head
 is immutable for each mounted run; explicit Check for update reopens same File.
+
+## Administrative workspace aggregate extension
+
+`workspace-aggregate@2` uses the same exact binding keys, workspace resource and
+read/range request as `@1`. It requests current workspace storage as well as the
+existing activity report. It requires a host update; existing hosts reject the
+unsupported version. The approved manifest version is included in the receipt,
+so this expanded access needs approval. File identity, metadata bindings, ACL,
+comments and retained versions are preserved when publishing a code revision.
+
+Only `@2` requests `storage=workspace` on the fixed report route with `top_n=10`.
+The query remains owned by TowerSyncService and partitioned by backend, app,
+workspace and viewer, with separate storage/activity query keys. No cartridge
+URL, SQL, network or workspace override is accepted. `@1` and the legacy v1
+report retain their exact response validator and omit the storage query.
+
+The root format remains `workspace-report-v1` with an additional required
+`storage` object. Validate the original report after removing only `storage`,
+then the extension. Storage has exact keys `format,workspace_id,scope,as_of,
+activity_range_applies,groups,provider_measured_at,last_object_completed_at,caveats`.
+Format is `workspace-storage-v1`, scope `current-workspace`, workspace/as_of
+match the report, and activity_range_applies is false. Optional measurement
+stamps are null or UTC millisecond timestamps no later than the snapshot.
+
+Groups have exact `id,metrics`; metrics have exact `id,value,unit,method,status`.
+IDs and methods match `[a-z][a-z0-9_-]{0,63}`. Limit eight groups and 32 metrics
+per group, unique IDs within each containing array. Units are `bytes|count`;
+status `estimated|actual|unavailable`. Available values are nonnegative safe
+integers; unavailable values must be null. Negative zero is rejected. Caveats
+are at most 16 strings of 1024 UTF-16 units, without controls/unpaired surrogates.
+The complete projected report is at most 64 KiB UTF-8. Unknown metric IDs remain
+valid within these bounds; hosts do not maintain a metric inventory allowlist.
+
+NStack requires effective `workspace.manage` in the current workspace/app, even
+if a code File is readable. Storage covers current retained rows and object
+metadata independent of activity dates, including archived/deleted retained
+history. Logical PostgreSQL estimates exclude physical shared overhead; object
+metadata is deduplicated and does not confirm provider usage. Unavailable is
+never rendered as zero. Source validation does not prove API activation.
+
+Synthetic shared vectors: `tests/fixtures/napplets/workspace-storage-v1.json`
+(backend extension copied unchanged) and `workspace-report-storage-v1.json`
+(manifest, File metadata and complete sample report). Swift matching work belongs
+in the generic capability registry/parser, GenericNappletSync and a separate
+WorkspaceReportDocument storage-validation path; do not broaden its legacy
+exact-key validator. Native activation and device verification remain separate.
+
+Prepare the portable candidate without publishing:
+
+```bash
+bun scripts/package-generic-workspace-report.mjs <candidate.html> --storage
+```
+
+The authoring helper keeps the existing generic app ID and summary binding.
+Publish a revision of the existing File only after review and API activation,
+using a freshly verified base version for CAS. A stale base must stop the update;
+do not create a replacement File or widen its audience.
+
+For `@2` only, HTTP 403 during a read becomes the exact error code `forbidden`
+with message `Workspace management permission required.`. Other unavailable
+reads keep the existing neutral error. No server error body is exposed. The
+cartridge clears previous activity/storage before requesting or displaying an
+error. Authority revocation tears down the private frame. Exact shared errors
+are in `tests/fixtures/napplets/workspace-storage-errors-v1.json`.

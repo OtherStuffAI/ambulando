@@ -36,7 +36,9 @@ export class GenericNappletData {
     const access=await this.authority(),c=this.context,b=this.binding,o=this.options();
     if(b.capability==='workspace-aggregate'){
       if(typeof this.query!=='function'||!REPORT_MODEL.ranges.includes(range))throw Error('Aggregate unavailable.');
-      const value=REPORT_MODEL.validate(await this.query(range,this.controller.signal));
+      const storage=b.version===2;
+      const raw=await this.query(range,this.controller.signal,{storage});
+      const value=storage?REPORT_MODEL.validateWithStorage(raw):REPORT_MODEL.validate(raw);
       if(value.workspace_id!==c.workspaceId||value.range!==range||value.channels.length!==Math.min(10,value.ranking.total_channels))throw Error('Aggregate scope mismatch.');
       this.assert();await this.authority();return {value,canWrite:false,privacy:'viewer-channels'};
     }

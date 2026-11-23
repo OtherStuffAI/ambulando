@@ -35,6 +35,29 @@
     if (count(t.total) !== sum(Object.values(t.by_state)) || count(t.completed) !== t.by_state.done || count(t.archived) !== sum([t.by_state.archive,t.by_state.archived]) || count(t.open) !== t.total - t.completed - t.archived) fail();
     return JSON.parse(JSON.stringify(v));
   }
+  // Administrative extension is opt-in; validate() remains the strict legacy contract.
+  function validateWithStorage(value) {
+    if(!value || !Object.hasOwn(value,'storage'))fail();
+    const {storage,...base}=value;
+    validate(base);
+    const safeId=s=>typeof s==='string' && /^[a-z][a-z0-9_-]{0,63}$/.test(s);
+    if (!exact(storage,['format','workspace_id','scope','as_of','activity_range_applies','groups','provider_measured_at','last_object_completed_at','caveats']) || storage.format!=='workspace-storage-v1' || storage.workspace_id!==base.workspace_id || storage.scope!=='current-workspace' || storage.as_of!==base.as_of || storage.activity_range_applies!==false) fail();
+    for (const stamp of [storage.provider_measured_at,storage.last_object_completed_at]) if(stamp!==null && date(stamp)>date(base.as_of)) fail();
+    if(!Array.isArray(storage.groups)||storage.groups.length>8)fail();
+    const groups=new Set();
+    for(const g of storage.groups){
+      if(!exact(g,['id','metrics'])||!safeId(g.id)||groups.has(g.id)||!Array.isArray(g.metrics)||g.metrics.length>32)fail();
+      groups.add(g.id);const ids=new Set();
+      for(const m of g.metrics){
+        if(!exact(m,['id','value','unit','method','status'])||!safeId(m.id)||ids.has(m.id)||!safeId(m.method)||!['bytes','count'].includes(m.unit)||!['estimated','actual','unavailable'].includes(m.status))fail();
+        ids.add(m.id);
+        if(m.status==='unavailable'){if(m.value!==null)fail();}else{count(m.value);if(Object.is(m.value,-0))fail();}
+      }
+    }
+    if(!Array.isArray(storage.caveats)||storage.caveats.length>16||storage.caveats.some(s=>typeof s!=='string'||s.length>1024||/[\p{Cc}\p{Cs}]/u.test(s)))fail();
+    const result=JSON.stringify(value);if(new TextEncoder().encode(result).length>65536)fail();
+    return JSON.parse(result);
+  }
   function ranking(value) { return [...value.channels].sort((a,b)=>b.messages-a.messages || (a.channel_id < b.channel_id ? -1 : a.channel_id > b.channel_id ? 1 : 0)); }
-  globalThis.WorkspaceReportModel = Object.freeze({ validate, ranking, ranges, states });
+  globalThis.WorkspaceReportModel = Object.freeze({ validate, validateWithStorage, ranking, ranges, states });
 })();

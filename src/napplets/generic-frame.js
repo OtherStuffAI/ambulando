@@ -16,13 +16,14 @@ export class GenericNappletFrame {
         let result=d.operation==='read'?await this.data.read(d.range):await this.data.save(d.baseVersionId,d.value);
         if(s.checkRequested&&this.data.binding.capability==='workspace-aggregate'){s.checkRequested=false;result=await this.data.read(d.range);if(s.checkRequested){revoke();return;}}
         await this.data.authority();s.checkRequested=false;
+        if(d.operation==='read'&&this.data.binding.capability==='workspace-aggregate'&&this.data.binding.version===2)s.last={requestId:d.requestId,range:d.range};
         reply({status:'ready',...result});
       }catch(error){
         if(!current())return;
-        try{await this.data.authority();reply({status:'error',code:error.status===409?'conflict':'unavailable',message:error.status===409?'A newer version exists.':'Operation could not be confirmed.'});}catch{revoke();}
+        try{await this.data.authority();const forbidden=this.data.binding.capability==='workspace-aggregate'&&this.data.binding.version===2&&error.status===403;reply({status:'error',code:forbidden?'forbidden':error.status===409?'conflict':'unavailable',message:forbidden?'Workspace management permission required.':error.status===409?'A newer version exists.':'Operation could not be confirmed.'});}catch{revoke();}
       }finally{clearTimeout(timer);if(current()){s.busy=false;this.onBusy(false);}}
     };
-    s.check=async()=>{if(!current()||s.checking)return;if(s.busy){s.checkRequested=true;return;}s.checking=true;frame.inert=true;const timer=setTimeout(revoke,45000);try{await this.data.authority();}catch{revoke();}finally{clearTimeout(timer);s.checking=false;if(current()){frame.inert=false;const next=s.queued;s.queued=null;if(next)void s.listener(next);}}};
+    s.check=async()=>{if(!current()||s.checking)return;if(s.busy){s.checkRequested=true;return;}s.checking=true;frame.inert=true;const timer=setTimeout(revoke,45000);try{if(s.last){const result=await this.data.read(s.last.range);await this.data.authority();if(current()&&!s.queued)frame.contentWindow?.postMessage({type:'wingman-napplet-result',version:2,session,requestId:s.last.requestId,status:'ready',...result},'*');}else await this.data.authority();}catch{revoke();}finally{clearTimeout(timer);s.checking=false;if(current()){frame.inert=false;const next=s.queued;s.queued=null;if(next)void s.listener(next);}}};
     s.visibility=()=>{if(document.visibilityState==='visible')void s.check();};
     addEventListener('message',s.listener);addEventListener('focus',s.check);addEventListener('visibilitychange',s.visibility);s.timer=setInterval(s.check,30000);
   }

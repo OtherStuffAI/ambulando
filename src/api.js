@@ -422,9 +422,9 @@ function combineTowerRequestSignals(...signals) {
   return controller.signal;
 }
 
-export async function getTowerPgWorkspaceReport(workspaceId, range, { baseUrl = _baseUrl, appNpub = FLIGHT_DECK_PG_APP_NPUB, signal } = {}) {
-  if (!workspaceId || !['7d', '30d', '90d', 'all'].includes(range)) throw new Error('Invalid workspace report request');
-  const path = `/api/v4/flightdeck-pg/workspaces/${encodeURIComponent(workspaceId)}/workspace-report?range=${range}&top_n=10`;
+export async function getTowerPgWorkspaceReport(workspaceId, range, { baseUrl = _baseUrl, appNpub = FLIGHT_DECK_PG_APP_NPUB, signal, storage = false } = {}) {
+  if (typeof storage !== 'boolean' || !workspaceId || !['7d', '30d', '90d', 'all'].includes(range)) throw new Error('Invalid workspace report request');
+  const path = `/api/v4/flightdeck-pg/workspaces/${encodeURIComponent(workspaceId)}/workspace-report?range=${range}&top_n=10${storage ? '&storage=workspace' : ''}`;
   const resp = await signedTowerPgFetch(path, { baseUrl, appNpub, signal });
   return json(resp, { requestUrl: resolveTowerPgUrl(path, baseUrl), method: 'GET', prefix: 'Tower PG API' });
 }

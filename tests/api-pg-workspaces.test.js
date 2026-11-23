@@ -54,6 +54,20 @@ describe('Tower PG API helpers', () => {
     vi.restoreAllMocks();
   });
 
+  it('keeps report default URL exact and signs fixed opt-in storage query without arbitrary parameters', async () => {
+    const api=await import('../src/api.js');
+    const {createNip98AuthHeader}=await import('../src/auth/nostr.js');
+    for(const storage of [false,true]){
+      await api.getTowerPgWorkspaceReport('workspace','7d',{baseUrl:'https://tower.example',appNpub:'app',storage});
+      const expected=`https://tower.example/api/v4/flightdeck-pg/workspaces/workspace/workspace-report?range=7d&top_n=10${storage?'&storage=workspace':''}`;
+      expect(globalThis.fetch.mock.calls.at(-1)[0]).toBe(expected);
+      expect(createNip98AuthHeader.mock.calls.at(-1).slice(0,2)).toEqual([expected,'GET']);
+    }
+    const calls=globalThis.fetch.mock.calls.length;
+    await expect(api.getTowerPgWorkspaceReport('workspace','7d',{storage:'other-workspace'})).rejects.toThrow();
+    expect(globalThis.fetch).toHaveBeenCalledTimes(calls);
+  });
+
   it('signs the exact context unlink URL and DELETE JSON version payload', async () => {
     const { createNip98AuthHeader } = await import('../src/auth/nostr.js');
     const api = await import('../src/api.js');

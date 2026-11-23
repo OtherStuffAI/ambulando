@@ -5933,6 +5933,13 @@
         "Adds a common napplet runtime with scoped collections, separate app and data sharing, compatible automatic updates and keep/delete removal. Requires connected NStack runtime support; personal signer capabilities remain unavailable.",
         "Adds controlled channel starters and styles, editable web System Flow, and selected latest-version imports that preserve original source, assets and provenance. Native flow editing remains unsupported."
       ]
+    },
+    {
+      "buildNumber": 2754,
+      "label": "Administrative workspace storage reports",
+      "notes": [
+        "Adds a reusable read-only workspace aggregate capability for administrative PostgreSQL and retained object-storage summaries. Existing reports remain compatible; storage requires connected NStack API support and an approved updated cartridge."
+      ]
     }
   ]
 }
