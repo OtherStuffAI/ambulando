@@ -8,7 +8,7 @@ export async function genericWorkspaceReportBundle() {
   const [html,style,model,app] = await Promise.all(['index.html','style.css','model.js','app.js'].map(name=>readFile(new URL(name,root),'utf8')));
   const manifest={version:2,app_id:'workspace-report-generic',title:'Workspace Report',icon:'📊',bindings:{summary:{capability:'workspace-aggregate',version:1,operations:['read']}}};
   const source=html.replace(/(<script[^>]*id="wingman-napplet-manifest"[^>]*>)[\s\S]*?(<\/script>)/,()=>`<script id="wingman-napplet-manifest" type="application/json">${JSON.stringify(manifest)}</script>`);
-  return packageWorkspaceReport({html:source,style,model,app:app.replace('version:1,session','version:2,session').replace("binding:'report'","binding:'summary'").replace('d.version!==1','d.version!==2')});
+  return packageWorkspaceReport({html:source,style:style+'\n@media(max-width:400px){.cards{grid-template-columns:repeat(2,minmax(0,1fr))}.cards article:first-child{grid-column:1/-1}.cards strong{white-space:nowrap;overflow-wrap:normal}.cards article:not(:first-child) strong{font-size:24px}}',model,app:app.replace('version:1,session','version:2,session').replace("binding:'report'","binding:'summary'").replace('d.version!==1','d.version!==2')});
 }
 if(process.argv[1]&&resolve(process.argv[1])===resolve(new URL(import.meta.url).pathname)){
   const output=process.argv[2];if(!output)throw Error('Usage: bun scripts/package-generic-workspace-report.mjs <output.html>');
