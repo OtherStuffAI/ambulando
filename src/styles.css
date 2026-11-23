@@ -25710,3 +25710,17 @@ button.task-desc-toggle:focus-visible {
 .artefact-frame, .artefact-source { width: 100%; flex: 1; min-height: 0; border: 0; }
 .artefact-source { box-sizing: border-box; padding: 1rem; font: 14px/1.5 ui-monospace, monospace; resize: none; }
 @media (max-width: 640px) { .artefact-dialog { width: 100vw; height: 100dvh; max-height: 100dvh; margin: 0; border-radius: 0; } }
+
+.system-flow-editor { overflow: auto; padding: 1rem; min-height: 0; }
+.system-flow-diagram { overflow: auto; min-height: 300px; color: var(--foreground); }
+.system-flow-fields { display: flex; flex-wrap: wrap; gap: 1rem; }
+.system-flow-fields label { display: grid; gap: .25rem; flex: 1 1 180px; }
+.system-flow-editor fieldset { border: 0; padding: .5rem 0; }
+.system-flow-editor input, .system-flow-editor select, .system-flow-editor textarea { font: inherit; color: var(--foreground); background: var(--background); max-width: 100%; }
+
+#napplet-runtime-dialog > p { margin: .5rem 1rem; }
+#napplet-runtime-dialog .napplet-consent { box-sizing: border-box; width: 100%; flex-shrink: 0; max-height: 45dvh; }
+#napplet-runtime-dialog .napplet-consent pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+#napplet-runtime-dialog .napplet-consent label { display: block; }
+#napplet-runtime-dialog .napplet-consent :is(textarea, input, select) { box-sizing: border-box; width: 100%; max-width: 100%; }
+#napplet-runtime-dialog .napplet-consent button { margin: .25rem; }

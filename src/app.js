@@ -2400,6 +2400,7 @@ export function initApp() {
       this.initMentionPeopleReactivity();
       this.initDiagnosticsLifecycle();
       this.initOrgDataInstallations();
+      this.initNappletRuntime();
       this.initDocEditLeaseLifecycle?.();
       this.initReadAloud();
       if (typeof window !== 'undefined' && !this.chatImagePreviewCleanupHandler) {
@@ -10799,6 +10800,7 @@ export function initApp() {
   }
   if (typeof Alpine.directive === 'function') {
     registerCanvasBoard(Alpine, { controllerFor: id => Alpine.store('chat').artefactBoardController(id), actionFor: () => ({ action: 'save', label: 'Save', disabled: !Alpine.store('chat').artefact.board?.dirty || Alpine.store('chat').artefact.board?.save_state === 'saving' }), runAction: (_naplet, action) => Alpine.store('chat').artefactBoardAction(action) });
+    registerCanvasHtml(Alpine, { name: 'runtime-html', assetStore: () => null, dataHost: () => Alpine.store('chat').runtimeDataHost() });
     registerCanvasHtml(Alpine, { name: 'artefact-html', assetStore: () => Alpine.store('chat').artefactAssetStore(), dataHost: () => Alpine.store('chat').artefactDataHost() });
   }
   Alpine.store('chat', storeObj);

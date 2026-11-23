@@ -9,7 +9,7 @@ it('classifies legacy rich Files while keeping ordinary documents and excluding 
   expect(artefactType({ pg_record_type: 'file', title: 'Plan.excalidraw' })).toBe('excalidraw');
   expect(artefactType({ pg_record_type: 'file', pg_file_metadata: { html_artifact: true } })).toBe('html');
   expect(artefactType({ pg_record_type: 'file', title: 'photo.png' })).toBe(null);
-  expect(ARTEFACT_TYPES.map(type => type.id)).toEqual(['document', 'excalidraw', 'html']);
+  expect(ARTEFACT_TYPES.map(type => type.id)).toEqual(['document', 'excalidraw', 'html', 'system-flow']);
 });
 
 it('retains type metadata and MIME on channel File materialization', () => {

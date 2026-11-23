@@ -2186,6 +2186,9 @@
                       <button type="button" class="icon-btn" @click="$store.chat.moveToolboxApp(wapp, 'up')" :disabled="index === 0" :aria-label="'Move ' + wapp.title + ' up'">↑</button>
                       <button type="button" class="icon-btn" @click="$store.chat.moveToolboxApp(wapp, 'down')" :disabled="index === $store.chat.toolboxApps.length - 1" :aria-label="'Move ' + wapp.title + ' down'">↓</button>
                       <button type="button" class="btn-secondary btn-compact" @click="$store.chat.openToolboxAppEditor(wapp)">Edit</button>
+                      <button type="button" class="btn-secondary btn-compact" x-show="wapp.nappletId" @click="$store.chat.openRuntimeNapplet(wapp.nappletId)">Open and manage</button>
+                      <button type="button" class="btn-secondary btn-compact" x-show="wapp.nappletId" @click="$store.chat.removeRuntimeNapplet(wapp, 'keep')">Remove and keep data</button>
+                      <button type="button" class="btn-danger btn-compact" x-show="wapp.nappletId" @click="$store.chat.removeRuntimeNapplet(wapp, 'delete')">Remove and delete data</button>
                       <button type="button" class="btn-secondary btn-compact" x-show="wapp.codeFileId" @click="$store.chat.openGenericNapplet(wapp.codeFileId)">Open</button>
                       <button type="button" class="btn-danger btn-compact" x-show="wapp.codeFileId" @click="$store.chat.uninstallNapplet(wapp)">Uninstall bookmark</button>
                       <button type="button" class="btn-danger btn-compact" x-show="wapp.appType === 'WApp'" @click="$store.chat.archivePersonalWapp(wapp)">Archive</button>
@@ -5189,9 +5192,12 @@
               </div>
 
               <div class="docs-toolbar" :class="{ 'docs-toolbar-mobile-open': docsControlsOpen }">
-                <select class="docs-search-input" aria-label="Artefact type" x-show="$store.chat.isTowerPgMode" x-model="$store.chat.artefactTypeFilter"><option value="all">All types</option><option value="document">Documents</option><option value="excalidraw">Whiteboards</option><option value="html">Interactive HTML</option></select>
+                <select class="docs-search-input" aria-label="Artefact type" x-show="$store.chat.isTowerPgMode" x-model="$store.chat.artefactTypeFilter"><option value="all">All types</option><option value="document">Documents</option><option value="excalidraw">Whiteboards</option><option value="html">Interactive HTML</option><option value="system-flow">System Flow</option></select>
                 <button type="button" class="btn-secondary" x-show="$store.chat.isTowerPgMode" :disabled="$store.chat.artefactCreating" @click="$store.chat.createChannelArtefact('excalidraw')">+ Whiteboard</button>
                 <button type="button" class="btn-secondary" x-show="$store.chat.isTowerPgMode" :disabled="$store.chat.artefactCreating" @click="$store.chat.createChannelArtefact('html')">+ Interactive HTML</button>
+                <select class="docs-search-input" aria-label="Starter template" x-show="$store.chat.isTowerPgMode" x-model="$store.chat.artefactStarter"><template x-for="starter in $store.chat.artefactTemplates" :key="starter.type + ':' + starter.id"><option :value="starter.type + ':' + starter.id" x-text="starter.label"></option></template></select>
+                <select class="docs-search-input" aria-label="Artefact style" x-show="$store.chat.isTowerPgMode" x-model="$store.chat.artefactStyle"><template x-for="style in $store.chat.artefactStyles" :key="style.id"><option :value="style.id" x-text="style.label"></option></template></select>
+                <button type="button" class="btn-secondary" x-show="$store.chat.isTowerPgMode" :disabled="$store.chat.artefactCreating" @click="$store.chat.createSelectedArtefact()">Create from template</button>
                 <input class="docs-search-input" type="text" :placeholder="$store.chat.isTowerPgMode ? 'Search artefacts' : 'Search docs and folders'" x-model="$store.chat.docFilter" />
                 <button type="button" class="btn-secondary docs-mobile-toolbar-only" @click="$store.chat.openAllDocuments()">All documents</button>
                 <button
@@ -12136,6 +12142,39 @@
             <div x-show="$store.chat.dailyMetrics.status === 'setup'"><p>Set up an empty private tracker in your Note to self conversation.</p><button type="button" :disabled="$store.chat.artefactCreating" @click="$store.chat.setupDailyMetrics()">Set up Daily Metrics</button></div>
             <div x-show="$store.chat.dailyMetrics.status === 'choose'"><p>Choose an existing tracker. Your records will be preserved.</p><template x-for="(file, index) in $store.chat.dailyMetrics.candidates" :key="file.id"><button type="button" @click="$store.chat.openDailyMetricsFile(file)" x-text="(file.display_name || 'Daily Metrics').replace(/\.html?$/i, '') + ' · Tracker ' + (index + 1)"></button></template></div>
           </dialog>
+          <dialog id="napplet-runtime-dialog" class="artefact-dialog" aria-labelledby="napplet-runtime-title" @cancel.prevent="$store.chat.closeRuntimeNapplet()">
+            <header class="artefact-toolbar"><strong id="napplet-runtime-title" x-text="$store.chat.runtimeApp.title"></strong><button type="button" @click="$store.chat.closeRuntimeNapplet()">Close</button></header>
+            <p role="status" x-show="$store.chat.runtimeApp.status === 'loading'">Verifying the published napplet…</p>
+            <p role="alert" x-show="$store.chat.runtimeApp.error" x-text="$store.chat.runtimeApp.error"></p>
+            <section class="napplet-consent" x-show="$store.chat.runtimeApp.consent" aria-label="Napplet collection approval">
+              <p>This published code requests the following access. Only run publishers you trust. Sharing the app does not share your data. Web HTML can navigate its own frame.</p>
+              <pre x-text="$store.chat.runtimeApp.permissionText"></pre>
+              <button type="button" @click="$store.chat.enableRuntimeNapplet()">Approve and open</button>
+              <button type="button" @click="$store.chat.openRuntimeNapplet($store.chat.runtimeApp.id, {previous:true})">Keep previously approved version</button>
+              <button type="button" @click="$store.chat.closeRuntimeNapplet()">Decline</button>
+            </section>
+            <p role="status" x-text="$store.chat.runtimeApp.notice"></p>
+            <details class="napplet-consent" x-show="$store.chat.runtimeApp.status === 'ready' && !$store.chat.runtimeApp.consent">
+              <summary>Access and data</summary>
+              <p>Online only. Audience controls opening the app; collection access is separate. Personal host capabilities are never shared through these controls.</p>
+              <label>User and agent audience npubs<textarea aria-label="Napplet audience" x-model="$store.chat.runtimeApp.audience"></textarea></label>
+              <button type="button" @click="$store.chat.shareRuntimeAudience()">Save app audience</button>
+              <p>Collection creation starts private to you. Team data is shared only with explicitly entered identities.</p>
+              <template x-for="declaration in $store.chat.runtimeCollectionDeclarations" :key="declaration.name"><button type="button" @click="$store.chat.createRuntimeCollection(declaration.name)" x-text="'Create ' + declaration.scope + ' collection: ' + declaration.name"></button></template>
+              <label>Collection<select aria-label="Napplet collection" x-model="$store.chat.runtimeApp.selectedCollection" @change="const c = $store.chat.runtimeApp.collections.find(c => c.id === $event.target.value); $store.chat.runtimeApp.dataReaders = (c?.read_npubs || []).join('\n'); $store.chat.runtimeApp.dataWriters = (c?.write_npubs || []).join('\n')"><option value="">Choose a collection…</option><template x-for="collection in $store.chat.runtimeApp.collections" :key="collection.id"><option :value="collection.id" x-text="collection.name + ' · ' + collection.scope + ' · ' + collection.owner_npub"></option></template></select></label>
+              <label>Data readers (user or agent npubs)<textarea aria-label="Collection readers" x-model="$store.chat.runtimeApp.dataReaders"></textarea></label>
+              <label>Data writers (user or agent npubs)<textarea aria-label="Collection writers" x-model="$store.chat.runtimeApp.dataWriters"></textarea></label>
+              <button type="button" @click="$store.chat.shareRuntimeData()">Replace collection grants</button>
+              <button type="button" @click="$store.chat.selectRuntimeCollection()">Use selected collection for app</button>
+              <details><summary>Import preserved legacy JSON data</summary><p>Import a complete compatible snapshot into your selected personal collection. This adds a record; it never rewrites or removes your original File or its history.</p><label>Legacy data File ID<input aria-label="Legacy data File ID" x-model="$store.chat.runtimeApp.migrationFile"></label><button type="button" @click="$store.chat.reviewRuntimeMigration()">Review legacy snapshot</button><p x-text="$store.chat.runtimeApp.migrationPreview"></p><button type="button" x-show="$store.chat.runtimeApp.migrationPreview" @click="$store.chat.importRuntimeMigration()">Import compatible snapshot</button></details>
+              <button type="button" @click="$store.chat.forgetRuntimeApproval()">Revoke personal approval and close</button>
+              <p x-show="$store.chat.runtimeApp.pending">The publisher has an update requesting new access. Your current version remains available until the expansion is approved.</p>
+              <pre x-show="$store.chat.runtimeApp.pending" x-text="$store.chat.runtimeApp.pendingDetails"></pre>
+              <button type="button" x-show="$store.chat.runtimeApp.pending" @click="$store.chat.approveRuntimeUpdate()">Review expanded-access update</button>
+            </details>
+            <template x-if="$store.chat.runtimeApp.html"><iframe class="artefact-frame" title="Napplet" sandbox="allow-scripts" referrerpolicy="no-referrer" x-runtime-html="$store.chat.runtimeApp.html"></iframe></template>
+          </dialog>
+
           <dialog id="add-napplet-dialog" class="artefact-dialog" aria-labelledby="add-napplet-title" @cancel.prevent="$store.chat.closeAddNapplet()">
             <header class="artefact-toolbar"><strong id="add-napplet-title">Add napplet</strong><button type="button" @click="$store.chat.closeAddNapplet()" :disabled="$store.chat.nappletInstall.busy">Close</button></header>
             <form class="napplet-consent" @submit.prevent="$store.chat.installNapplet()">
@@ -12144,7 +12183,7 @@
               <p>This picker shows Files synchronized on this device. You can also paste a File link from this workspace.</p>
               <label>File link (or File ID)<input aria-label="Napplet File link or ID" x-model="$store.chat.nappletInstall.input" required autocomplete="off"></label>
               <p role="alert" x-show="$store.chat.nappletInstall.error" x-text="$store.chat.nappletInstall.error"></p>
-              <button type="submit" :disabled="$store.chat.nappletInstall.busy" x-text="$store.chat.nappletInstall.busy ? 'Verifying…' : 'Install bookmark'"></button>
+              <button type="submit" :disabled="$store.chat.nappletInstall.busy" x-text="$store.chat.nappletInstall.busy ? 'Verifying…' : 'Install bookmark'"></button><label>Registered publisher npub (v3 installation)<input aria-label="Napplet publisher npub" x-model="$store.chat.runtimePublisher" placeholder="Your npub, or the publishing agent’s npub"></label><button type="button" :disabled="$store.chat.nappletInstall.busy || $store.chat.runtimeApiStatus !== 'ready'" @click="$store.chat.installRuntimeFile()">Install v3 napplet privately</button><p x-show="$store.chat.runtimeApiStatus !== 'ready'">Collection runtime is unavailable on this connection. Existing File bookmarks remain available.</p><p>V3 installation requires workspace app management authority. Bots with explicit delegation can publish directly into Apps for the requester.</p>
             </form>
           </dialog>
           <dialog id="artefact-dialog" class="artefact-dialog" :class="{ 'workspace-report-host': $store.chat.artefact.appId === 'workspace-report' }" @cancel.prevent="$store.chat.closeArtefact()" x-effect="if ($store.chat.artefact.id && !$store.chat.artefactCurrent($store.chat.artefactSession())) $store.chat.closeArtefact({ force: true, preserve: false })">
@@ -12183,6 +12222,37 @@
             <template x-if="$store.chat.artefact.kind === 'excalidraw' && $store.chat.artefact.board.status === 'ready'">
               <iframe class="artefact-frame" title="Whiteboard editor" src="/canvas-board.html" x-canvas-board="{id: 'direct-artefact', source: {id: $store.chat.artefact.id}}"></iframe>
             </template>
+            <template x-if="$store.chat.artefact.kind === 'system-flow' && $store.chat.artefact.flow">
+              <section class="system-flow-editor" aria-label="System Flow editor">
+                <p>Web flow editor · Typed nodes and relationships remain editable. Linked whiteboard scenes are retained; use the legacy editor for scene editing and feedback.</p>
+                <p x-show="$store.chat.artefact.legacyUrl"><a :href="$store.chat.artefact.legacyUrl" target="_blank" rel="noopener noreferrer">Open original and earlier history</a></p>
+                <div class="artefact-toolbar">
+                  <label>Diagram <select x-model="$store.chat.artefact.diagram" @change="$store.chat.artefact.node = ''; $store.chat.artefact.edge = ''"><template x-for="diagram in $store.chat.flowDiagrams()" :key="diagram.id"><option :value="diagram.id" x-text="diagram.title"></option></template></select></label>
+                  <button type="button" :disabled="!$store.chat.artefact.can_write || !$store.chat.artefact.dirty || !!$store.chat.artefact.viewing || $store.chat.artefact.status !== 'ready'" @click="$store.chat.saveArtefactFlow()">Save flow version</button>
+                  <select aria-label="Flow revision" @change="$store.chat.viewArtefactVersion($event.target.value)"><option value="">Versions…</option><template x-for="version in $store.chat.artefact.versions" :key="version.id"><option :value="version.id" x-text="'Version ' + version.version_number"></option></template></select>
+                </div>
+                <div class="system-flow-diagram" x-html="$store.chat.flowSvg()"></div>
+                <fieldset :disabled="!$store.chat.artefact.can_write || !!$store.chat.artefact.viewing || $store.chat.artefact.status !== 'ready'">
+                  <label>Node <select aria-label="Flow node" x-model="$store.chat.artefact.node"><option value="">Choose node</option><template x-for="node in $store.chat.flowNodes()" :key="node.id"><option :value="node.id" x-text="node.data.label"></option></template></select></label>
+                  <template x-if="$store.chat.flowNode()"><div class="system-flow-fields">
+                    <label>Label <input aria-label="Node label" :value="$store.chat.flowNode().data.label" @change="$store.chat.editFlowItem('nodes', $store.chat.artefact.node, {data: {label: $event.target.value}})"></label>
+                    <label>Owner <input aria-label="Node owner" :value="$store.chat.flowNode().data.owner || ''" @change="$store.chat.editFlowItem('nodes', $store.chat.artefact.node, {data: {owner: $event.target.value}})"></label>
+                    <label>Description <textarea aria-label="Node description" :value="$store.chat.flowNode().data.description || ''" @change="$store.chat.editFlowItem('nodes', $store.chat.artefact.node, {data: {description: $event.target.value}})"></textarea></label>
+                    <label>Kind <select aria-label="Node kind" :value="$store.chat.flowNode().data.kind" @change="$store.chat.editFlowItem('nodes', $store.chat.artefact.node, {data: {kind: $event.target.value}})"><template x-for="kind in ['view','action','state','decision','exception','system','component','whiteboard']" :key="kind"><option :value="kind" x-text="kind"></option></template></select></label>
+                    <label>X <input type="number" :value="$store.chat.flowNode().position.x" @change="$store.chat.editFlowItem('nodes', $store.chat.artefact.node, {position: {x: Number($event.target.value)}})"></label>
+                    <label>Y <input type="number" :value="$store.chat.flowNode().position.y" @change="$store.chat.editFlowItem('nodes', $store.chat.artefact.node, {position: {y: Number($event.target.value)}})"></label>
+                  </div></template>
+                  <label>Relationship <select aria-label="Flow relationship" x-model="$store.chat.artefact.edge"><option value="">Choose relationship</option><template x-for="edge in $store.chat.flowEdges()" :key="edge.id"><option :value="edge.id" x-text="edge.label || edge.source + ' → ' + edge.target"></option></template></select></label>
+                  <template x-if="$store.chat.flowEdge()"><div class="system-flow-fields">
+                    <label>Label <input aria-label="Relationship label" :value="$store.chat.flowEdge().label || ''" @change="$store.chat.editFlowItem('edges', $store.chat.artefact.edge, {label: $event.target.value})"></label>
+                    <label>Source <select aria-label="Relationship source" :value="$store.chat.flowEdge().source" @change="$store.chat.editFlowItem('edges', $store.chat.artefact.edge, {source: $event.target.value})"><template x-for="node in $store.chat.flowNodes()" :key="node.id"><option :value="node.id" x-text="node.data.label"></option></template></select></label>
+                    <label>Target <select aria-label="Relationship target" :value="$store.chat.flowEdge().target" @change="$store.chat.editFlowItem('edges', $store.chat.artefact.edge, {target: $event.target.value})"><template x-for="node in $store.chat.flowNodes()" :key="node.id"><option :value="node.id" x-text="node.data.label"></option></template></select></label>
+                  </div></template>
+                  <details><summary>Editable flow.json source</summary><textarea class="artefact-source" aria-label="System Flow JSON" spellcheck="false" x-model="$store.chat.artefact.source" @input="$store.chat.artefact.dirty = true; $store.chat.persistArtefactHtmlDraft()"></textarea><button type="button" @click="$store.chat.applyFlowSource()">Apply validated JSON</button></details>
+                </fieldset>
+              </section>
+            </template>
+            <div x-show="$store.chat.artefact.kind === 'html' && $store.chat.artefact.legacyUrl" class="artefact-toolbar"><a :href="$store.chat.artefact.legacyUrl" target="_blank" rel="noopener noreferrer">Open legacy original and history</a><template x-for="limitation in $store.chat.artefact.limitations" :key="limitation"><span x-text="limitation"></span></template></div>
             <div class="artefact-toolbar" x-show="!$store.chat.artefact.appMode && $store.chat.artefact.kind === 'html' && $store.chat.artefact.status !== 'loading'">
               <button type="button" x-show="$store.chat.artefact.can_write" @click="$store.chat.toggleArtefactSource()" x-text="$store.chat.artefact.editing ? 'Preview' : 'Edit source'"></button>
               <button type="button" x-show="$store.chat.artefact.can_write" :disabled="!$store.chat.artefact.dirty || $store.chat.artefact.status === 'saving'" @click="$store.chat.saveArtefactHtml()">Save new version</button>

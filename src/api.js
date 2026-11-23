@@ -2966,6 +2966,25 @@ export async function getTowerPgStorageUsage(workspaceId, { baseUrl = _baseUrl, 
   return json(resp, { requestUrl, method: 'GET', prefix: 'Tower PG API' });
 }
 
+export async function nappletBundleRequest(workspaceId, nappletId, {baseUrl = _baseUrl, appNpub = FLIGHT_DECK_PG_APP_NPUB, signal} = {}) {
+  if (!/^[a-z][a-z0-9_-]{0,63}$/.test(nappletId)) throw new Error('Invalid napplet identity');
+  const path = `/api/v4/flightdeck-pg/workspaces/${encodeURIComponent(workspaceId)}/apps/${encodeURIComponent(appNpub)}/napplets/${encodeURIComponent(nappletId)}/bundle`;
+  const response = await signedTowerPgFetch(path, {baseUrl,appNpub,signal,useWorkspaceKey:false});
+  if (!response.ok) await json(response, {requestUrl:resolveTowerPgUrl(path,baseUrl),method:'GET',prefix:'Napplet bundle'});
+  if (Number(response.headers.get('content-length')) > 2097152) throw new Error('Napplet bundle exceeds 2 MiB');
+  const bytes = await response.arrayBuffer();
+  if (bytes.byteLength > 2097152 || String(response.headers.get('content-type')||'').split(';')[0].trim() !== 'application/octet-stream') throw new Error('Invalid napplet bundle response');
+  return {bytes,contentType:'text/html'};
+}
+
+// Napplet namespaces are routing only; NStack authorizes the logged-in actor.
+export async function nappletRequest(workspaceId, suffix = '', { baseUrl = _baseUrl, appNpub = FLIGHT_DECK_PG_APP_NPUB, signal, method = 'GET', body } = {}) {
+  if (!workspaceId || !appNpub || typeof suffix !== 'string' || suffix.includes('..') || suffix.startsWith('/')) throw new Error('Invalid napplet route');
+  const path = `/api/v4/flightdeck-pg/workspaces/${encodeURIComponent(workspaceId)}/apps/${encodeURIComponent(appNpub)}/napplets${suffix ? (suffix.startsWith('?') ? '' : '/') + suffix : ''}`;
+  const resp = await signedTowerPgFetch(path, { baseUrl, appNpub, signal, method, useWorkspaceKey: false, ...(body === undefined ? {} : { body }) });
+  return json(resp, { requestUrl: resolveTowerPgUrl(path, baseUrl), method, prefix: 'Napplet runtime' });
+}
+
 export async function orgDataRequest(workspaceId, suffix, { baseUrl = _baseUrl, appNpub = FLIGHT_DECK_PG_APP_NPUB, signal, method = 'GET', body } = {}) {
   const path = `/api/v4/flightdeck-pg/workspaces/${encodeURIComponent(workspaceId)}/org-data/${suffix}`;
   const resp = await signedTowerPgFetch(path, { baseUrl, appNpub, signal, method, useWorkspaceKey: false, ...(body === undefined ? {} : { body }) });

@@ -19,18 +19,22 @@ import { ArtifactCatalog } from './canvas/artifact-picker.js';
 import { CanvasHtmlAssetStore } from './canvas/html-assets.js';
 import { buildStoragePrepareBody } from './storage-payloads.js';
 import { artefactType, artefactLabel } from './artefact-registry.js';
+import { FLOW_CONTENT_TYPE, FLOW_MAX_BYTES, readSystemFlow, flowDiagrams, updateFlowEntity, renderFlowSvg } from './system-flow.js';
+import { ARTEFACT_TEMPLATES, ARTEFACT_STYLES, templateDescriptor, templateSource } from './artefact-templates.js';
 
 const sessions = new WeakMap();
 let unloadInstalled = false;
 let activeStore = null;
 const text = value => String(value ?? '').trim();
-const empty = () => ({ id: '', title: '', kind: '', consent: false, napplet: false, approvalNotice: '', updateAvailable: false, updating: false, status: 'loading', error: '', can_write: false, html: null, source: '', editing: false, dirty: false, base: '', versions: [], viewing: '', board: { versions: [] } });
+const empty = () => ({ id: '', title: '', kind: '', consent: false, napplet: false, approvalNotice: '', updateAvailable: false, updating: false, status: 'loading', error: '', can_write: false, html: null, source: '', editing: false, dirty: false, base: '', versions: [], viewing: '', limitations: [], flow: null, diagram: '', node: '', edge: '', legacyUrl: '', board: { versions: [] } });
 const htmlDraftKey = session => `artefact-html-draft:${session.partition}:${session.id}`;
 const digest = async bytes => [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))].map(b => b.toString(16).padStart(2, '0')).join('');
 
 export const artefactsMixin = {
   dailyMetrics: { status: 'closed', candidates: [], error: '', partition: '' },
   artefactTypeFilter: 'all', artefact: empty(), artefactCreating: false,
+  artefactTemplates: ARTEFACT_TEMPLATES, artefactStyles: Object.entries(ARTEFACT_STYLES).map(([id, s]) => ({ id, label: s.label })), artefactStarter: 'document:brief', artefactStyle: 'default',
+  createSelectedArtefact() { const [kind, template] = this.artefactStarter.split(':'); return this.createChannelArtefact(kind, template, this.artefactStyle); },
   artefactType, artefactLabel,
   artefactDataHost() { return sessions.get(this)?.dataHost || null; },
   async reauthorizeArtefactData() { await sessions.get(this)?.dataHost?.check(); },
@@ -50,7 +54,7 @@ export const artefactsMixin = {
   },
   async persistArtefactHtmlDraft() {
     const session = sessions.get(this);
-    if (!session || this.artefact.kind !== 'html' || !this.artefact.dirty || !this.artefact.can_write) return;
+    if (!session || !['html', 'system-flow'].includes(this.artefact.kind) || !this.artefact.dirty || !this.artefact.can_write) return;
     await session.runtime.db.sync_state.put({ key: htmlDraftKey(session), source: this.artefact.source, base: this.artefact.base });
   },
   async revokeArtefact(session) {
@@ -86,6 +90,8 @@ export const artefactsMixin = {
       if (!this.artefactCurrent(session)) return false;
       const file = payload.file;
       session.fileMetadata = file?.metadata || {};
+      this.artefact.limitations = Array.isArray(session.fileMetadata.migration?.limitations) ? session.fileMetadata.migration.limitations.filter(v => typeof v === 'string') : [];
+      this.artefact.legacyUrl = /^https?:\/\//.test(session.fileMetadata.migration?.source_url || '') ? session.fileMetadata.migration.source_url : '';
       if (file?.metadata?.napplet?.version === 2 && !session.transport) session.transport = nappletTransport(this);
       session.codeCanWrite = Object.hasOwn(payload, 'can_write') ? payload.can_write === true : file?.can_write === true;
       if (file?.id !== id || file.workspace_id !== context.workspaceId || file.archived_at || file.deleted_at) throw new Error('Invalid artefact response.');
@@ -97,10 +103,12 @@ export const artefactsMixin = {
         await session.board.loadVersions();
         await session.board.sync({ can_write: this.artefact.can_write, current_version_id: latest.id, current_version_number: latest.version_number, sha256: latest.sha256_hex, title: file.display_name });
       } else {
-        await this.loadArtefactHtml(latest.id);
+        if (this.artefact.kind === 'system-flow') await this.loadArtefactFlow(latest.id);
+        else await this.loadArtefactHtml(latest.id);
         const draft = await session.runtime.db.sync_state.get(htmlDraftKey(session));
         if (!appMode && this.artefactCurrent(session) && draft && this.artefact.can_write) {
           Object.assign(this.artefact, { source: draft.source, base: draft.base, dirty: true, editing: true });
+          if (this.artefact.kind === 'system-flow') this.artefact.flow = readSystemFlow(draft.source);
         }
       }
       return true;
@@ -123,6 +131,61 @@ export const artefactsMixin = {
     document.querySelector('#artefact-dialog')?.close();
     this.syncRoute?.(true);
     return true;
+  },
+  flowDiagrams() { return flowDiagrams(this.artefact.flow); },
+  flowDiagram() { return this.flowDiagrams().find(d => d.id === this.artefact.diagram) || this.flowDiagrams()[0]; },
+  flowNodes() { return this.flowDiagram()?.nodes || []; },
+  flowEdges() { return this.flowDiagram()?.edges || []; },
+  flowNode() { return this.flowNodes().find(n => n.id === this.artefact.node); },
+  flowEdge() { return this.flowEdges().find(n => n.id === this.artefact.edge); },
+  flowSvg() { return this.artefact.flow ? renderFlowSvg(this.artefact.flow, this.artefact.diagram) : ''; },
+  applyFlowSource() {
+    if (!this.artefact.can_write || this.artefact.viewing) return;
+    try {
+      const next = readSystemFlow(this.artefact.source);
+      // Scene editing is outside this first editor. Reject replacements rather than dropping content.
+      if (JSON.stringify(next.scenes) !== JSON.stringify(this.artefact.flow?.scenes) || JSON.stringify(next.whiteboards) !== JSON.stringify(this.artefact.flow?.whiteboards)) throw Error('Linked whiteboard edits require the legacy editor. Retain all original scenes.');
+      this.artefact.flow = next; this.artefact.dirty = true; this.artefact.error = '';
+      void this.persistArtefactHtmlDraft();
+    } catch (error) { this.artefact.error = error.message; }
+  },
+  editFlowItem(entity, id, patch) {
+    if (!this.artefact.can_write || this.artefact.viewing || this.artefact.status !== 'ready') return;
+    try {
+      const flow = updateFlowEntity(this.artefact.flow, this.artefact.diagram, entity, id, patch);
+      this.artefact.flow = flow; this.artefact.source = JSON.stringify(flow, null, 2); this.artefact.dirty = true; this.artefact.error = '';
+      void this.persistArtefactHtmlDraft();
+    } catch (error) { this.artefact.error = error.message; }
+  },
+  async loadArtefactFlow(versionId) {
+    const session = sessions.get(this);
+    if (!session || !this.artefactCurrent(session)) return;
+    this.artefact.status = 'loading';
+    try {
+      const version = this.artefact.versions.find(v => v.id === versionId);
+      if (!version || version.content_type !== FLOW_CONTENT_TYPE || version.size_bytes > FLOW_MAX_BYTES) throw Error('Invalid System Flow version.');
+      const result = await getTowerPgFileVersionObjectBytes(session.context.workspaceId, session.id, versionId, { baseUrl: session.context.baseUrl, appNpub: session.context.appNpub });
+      if (!this.artefactCurrent(session)) return;
+      if (result.bytes.byteLength !== version.size_bytes || await digest(result.bytes) !== version.sha256_hex) throw Error('System Flow integrity check failed.');
+      if (!this.artefactCurrent(session)) return;
+      const source = new TextDecoder('utf-8', { fatal: true }).decode(result.bytes), flow = readSystemFlow(source);
+      Object.assign(this.artefact, { source, flow, diagram: flow.rootDiagramId || 'root', node: '', edge: '', dirty: false, viewing: versionId === this.artefact.base ? '' : versionId, status: 'ready' });
+    } catch (error) { if (this.artefactCurrent(session)) { if ([401,403,404].includes(error.status)) return this.revokeArtefact(session); this.artefact.error = error.message; this.artefact.flow = null; } }
+  },
+  async saveArtefactFlow() {
+    const session = sessions.get(this), draft = { ...this.artefact };
+    if (!session || !this.artefactCurrent(session) || !draft.can_write || !draft.dirty || draft.viewing || draft.status !== 'ready') return;
+    this.artefact.status = 'saving'; this.artefact.error = '';
+    try {
+      const flow = readSystemFlow(draft.source);
+      if (JSON.stringify(flow.scenes) !== JSON.stringify(draft.flow.scenes) || JSON.stringify(flow.whiteboards) !== JSON.stringify(draft.flow.whiteboards)) throw Error('Linked scenes must remain unchanged in this editor.');
+      const objectId = await this.uploadArtefactSource(session.context, draft.source, draft.title, FLOW_CONTENT_TYPE, FLOW_MAX_BYTES);
+      if (!this.artefactCurrent(session)) return;
+      await createTowerPgFileVersion(session.context.workspaceId, session.id, { base_version_id: draft.base, storage_object_id: objectId, client_mutation_id: crypto.randomUUID() }, { baseUrl: session.context.baseUrl, appNpub: session.context.appNpub });
+      if (!this.artefactCurrent(session)) return;
+      this.artefact.dirty = false; await session.runtime.db.sync_state.delete(htmlDraftKey(session));
+      await this.openArtefact({ record_id: session.id, pg_record_type: 'file', content_type: FLOW_CONTENT_TYPE, pg_file_metadata: session.fileMetadata });
+    } catch (error) { if (this.artefactCurrent(session)) { if ([401,403,404].includes(error.status)) return this.revokeArtefact(session); this.artefact.status = 'ready'; this.artefact.error = error.status === 409 ? 'A newer version was saved. Your flow draft is retained; reconcile before saving again.' : error.message; } }
   },
   async loadArtefactHtml(versionId) {
     const session = sessions.get(this);
@@ -235,17 +298,20 @@ export const artefactsMixin = {
     if (session?.board) await session.board.viewVersion(id);
     else {
       if (this.artefact.dirty && !window.confirm('Discard unsaved HTML changes to view this version?')) return;
-      this.artefact.editing = false; await this.loadArtefactHtml(id);
+      this.artefact.editing = false;
+      if (this.artefact.kind === 'system-flow') await this.loadArtefactFlow(id);
+      else await this.loadArtefactHtml(id);
       await session?.runtime.db.sync_state.delete(htmlDraftKey(session));
     }
   },
-  async uploadArtefactHtml(context, source, title) {
+  uploadArtefactHtml(context, source, title) { return this.uploadArtefactSource(context, source, title, 'text/html', 2 * 1024 * 1024); },
+  async uploadArtefactSource(context, source, title, contentType, maxBytes) {
     const bytes = new TextEncoder().encode(source);
-    if (!bytes.length || bytes.length > 2 * 1024 * 1024) throw new Error('HTML must contain 1 byte to 2 MiB.');
+    if (!bytes.length || bytes.length > maxBytes) throw new Error('Artefact source exceeds the supported size.');
     const options = { baseUrl: context.baseUrl, appNpub: context.appNpub };
-    const prepared = await prepareTowerPgStorageObject(context.workspaceId, buildStoragePrepareBody({ ownerNpub: context.viewer, contentType: 'text/html', sizeBytes: bytes.length, fileName: title.endsWith('.html') ? title : `${title}.html` }), options);
+    const prepared = await prepareTowerPgStorageObject(context.workspaceId, buildStoragePrepareBody({ ownerNpub: context.viewer, contentType, sizeBytes: bytes.length, fileName: contentType === 'text/html' ? (title.endsWith('.html') ? title : `${title}.html`) : 'flow.json' }), options);
     if (prepared.is_public) throw new Error('Private storage required.');
-    await uploadStorageObject(prepared, bytes, 'text/html', options);
+    await uploadStorageObject(prepared, bytes, contentType, options);
     await completeStorageObject(prepared.object_id, { size_bytes: bytes.length, sha256_hex: await digest(bytes) }, options);
     return prepared.object_id;
   },
@@ -339,21 +405,31 @@ export const artefactsMixin = {
     } catch (error) { if (current()) this.error = `${error.message || 'Tracker creation failed.'}${dataFileId ? ' The empty data File was saved in Note to self; keep it for recovery.' : ''}`; }
     finally { this.artefactCreating = false; }
   },
-  async createChannelArtefact(kind) {
+  async createChannelArtefact(kind, templateId = kind === 'html' ? 'explorer' : 'blank', styleId = 'default') {
     if (this.artefactCreating) return;
     const channelId = this.pgContextSelectedChannelId || this.selectedChannelId;
     if (!channelId) { this.error = 'Choose a channel before creating an artefact.'; return; }
-    const title = text(window.prompt(kind === 'excalidraw' ? 'Whiteboard title' : 'Interactive HTML title'));
+    const descriptor = templateDescriptor(kind, templateId, styleId);
+    const title = text(window.prompt('Artefact title'));
     if (!title) return;
     this.artefactCreating = true;
     const context = canvasContext(this), runtime = new CanvasBoardRuntime(context);
     try {
       let id;
-      if (kind === 'excalidraw') id = (await runtime.createBoard({ channelId, title })).file_id;
+      if (kind === 'document') {
+        await this.createDocument(title, { channelId, initialContent: templateSource(kind, templateId, styleId, title) });
+        return;
+      }
+      if (kind === 'excalidraw') id = (await runtime.createBoard({ channelId, title, scene: templateSource(kind, templateId, styleId, title), artefact: descriptor })).file_id;
       else if (kind === 'html') {
-        const source = '<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{font:18px system-ui;padding:2rem}button{font:inherit}</style></head><body><h1>Explore an idea</h1><p>Edit this source or ask your AI to expand it.</p><button onclick="this.textContent=\'An idea starts here\'">Try it</button></body></html>';
+        const source = templateSource(kind, templateId, styleId, title);
         const objectId = await this.uploadArtefactHtml(context, source, title);
-        const payload = await createTowerPgChannelFile(context.workspaceId, channelId, { storage_object_id: objectId, display_name: title, metadata: { html_artifact: true, artefact: { schema_version: 1, type: 'html', format_version: 1, editor_id: 'builtin.html' } } }, { baseUrl: context.baseUrl, appNpub: context.appNpub });
+        const payload = await createTowerPgChannelFile(context.workspaceId, channelId, { storage_object_id: objectId, display_name: title, metadata: { html_artifact: true, artefact: descriptor } }, { baseUrl: context.baseUrl, appNpub: context.appNpub });
+        id = payload.file?.id;
+      } else if (kind === 'system-flow') {
+        const source = JSON.stringify(templateSource(kind, templateId, styleId, title), null, 2);
+        const objectId = await this.uploadArtefactSource(context, source, title, FLOW_CONTENT_TYPE, FLOW_MAX_BYTES);
+        const payload = await createTowerPgChannelFile(context.workspaceId, channelId, { storage_object_id: objectId, display_name: title, metadata: { artefact: descriptor } }, { baseUrl: context.baseUrl, appNpub: context.appNpub });
         id = payload.file?.id;
       } else throw new Error('Unsupported artefact type.');
       const payload = await getTowerPgFile(context.workspaceId, id, { baseUrl: context.baseUrl, appNpub: context.appNpub });

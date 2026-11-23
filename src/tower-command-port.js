@@ -1,3 +1,4 @@
+import { prepareRuntimeCommand } from './napplets/runtime-sync.js';
 import { materializeChannelMove } from './channel-move-materialization.js';
 import { prepareThreadPinCommand } from './thread-pin-sync.js';
 import { markPgTargetArchived } from './pg-archive-state.js';
@@ -148,6 +149,7 @@ async function reconcileTypedCommand(name, result, { owner = '', args = [] } = {
 
 export function prepareTowerWorkspaceCommand(store, name, input = {}) {
   if (name === 'thread-pin.put') return prepareThreadPinCommand(store, input);
+  if (name === 'napplet-runtime.write') return prepareRuntimeCommand(store, input);
   if (name === 'org-data.write') return prepareOrgDataCommand(store, input);
   if (['context.create', 'context.update', 'context.attach', 'context.unlink', 'context.delete'].includes(name)) {
     return {

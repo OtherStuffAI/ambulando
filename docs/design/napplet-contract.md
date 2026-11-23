@@ -39,6 +39,7 @@ This is the canonical agreed product contract in this repository. The authoritat
 [Ambulando common napplet contract](mention:document:8f933fd4-744b-4a0c-ab03-5369f1dff1cc)
 is its source. Changes to implementation references do not imply this contract is delivered.
 
+- [Common runtime v3](napplet-runtime-v3.md) specifies the additive implementation and current limits.
 - [Generic File protocol v2](generic-napplet-v2.md) documents the existing wire format and receipt policy.
 - [File authoring](../generic-napplet-authoring.md) documents current publishing and opening steps.
 - [File data bridge](file-napplet-data.md) documents the existing tracker and preservation constraints.

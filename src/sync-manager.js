@@ -1,3 +1,4 @@
+import { readRuntimeTarget, readRuntimeBundleTarget } from './napplets/runtime-sync.js';
 import { readNappletTarget } from './napplets/generic-reads.js';
 import { queryWorkspaceReport } from './napplets/workspace-report-query.js';
 import { synchronizePrivatePreferences } from './private-preference-sync.js';
@@ -399,6 +400,8 @@ export const syncManagerMixin = {
         'org-data-permissions': { trackFreshness: false, load: (_key, options) => readOrgDataPermissions(this, options) },
         'org-data-installations': { trackFreshness: false, load: (_key, options) => hydrateOrgData(this, { ...options, catalogue: true }) },
         'org-data': { trackFreshness: false, load: (_key, options) => hydrateOrgData(this, options) },
+        'napplet-runtime-bundle': { trackFreshness: false, load: (id, options) => readRuntimeBundleTarget(this, id, options) },
+        'napplet-runtime': { trackFreshness: false, load: (path, options) => readRuntimeTarget(this, path, options) },
         'napplet-read': { trackFreshness: false, load: (key, options) => readNappletTarget(this, key, options) },
         'workspace-report': { trackFreshness: false, load: (_key, options) => queryWorkspaceReport(this, options.range, options) },
         'message-activity': {
@@ -3367,6 +3370,7 @@ export const syncManagerMixin = {
           if (this.orgDataOpen) await this.syncOrgData?.();
           else await this.loadOrgDataInstallations?.({ force: true });
         }
+        if (events.some(e => ['napplet','file','workspace_member','group','channel_grant','scope_access'].includes(e?.entity_type))) { await this.refreshRuntimeAuthority?.(); await this.loadRuntimeApps?.({force:true}); }
         if (events.some(e => ['file','workspace_member','group','channel_grant','scope_access'].includes(e?.entity_type))) await this.reauthorizeArtefactData?.();
         const replayBurst = events.length > PG_SSE_TARGETED_EVENT_LIMIT;
         const targetedOnlyEvents = replayBurst
@@ -3602,7 +3606,7 @@ export const syncManagerMixin = {
     // explicit manual/full reconciliation opens its own progress dialog.
     if (this.session?.npub && this.backendUrl && this.workspaceOwnerNpub) {
       this.getTowerSyncService()?.start({ runSoon: runSoon && !this.syncBackoffMs });
-      if (!this.canvasChatEmbedded) void this.loadOrgDataInstallations?.();
+      if (!this.canvasChatEmbedded) { void this.loadOrgDataInstallations?.(); void this.loadRuntimeApps?.(); }
     }
   },
 
@@ -3653,6 +3657,8 @@ export const syncManagerMixin = {
         await (this.requestTowerSyncFamily?.('workspace-bootstrap') ?? this.runTowerPgWorkspaceSync());
         if (this.towerUsageOpen) await this.refreshHostingBilling?.();
         await this.reauthorizeArtefactData?.();
+        await this.refreshRuntimeAuthority?.();
+        await this.loadRuntimeApps?.();
         if (this.orgDataOpen) await this.syncOrgData?.();
         else await this.loadOrgDataInstallations?.();
         this.markTowerReachabilityRecovered?.('background-sync-success', {

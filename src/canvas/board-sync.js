@@ -145,14 +145,14 @@ export class CanvasBoardRuntime {
   }
 
   /** Creates the persistent board (version 1) in a channel the viewer can write. */
-  async createBoard({ channelId, title, scene = createEmptyBoardScene(), summary = '' }) {
+  async createBoard({ channelId, title, scene = createEmptyBoardScene(), summary = '', artefact = null }) {
     const name = text(title).slice(0, BOARD_LIMITS.title) || 'Untitled board';
     if (!uuid(channelId)) throw new Error('Choose a channel for the new board.');
     const upload = await this.uploadScene(scene, { title: name, summary });
     const payload = await this.api.createTowerPgChannelFile(this.context.workspaceId, channelId, {
       storage_object_id: upload.objectId,
       display_name: boardFileName(name),
-      metadata: { kind: 'excalidraw_board', title: name, artefact: { schema_version: 1, type: 'excalidraw', format_version: 1, editor_id: 'builtin.excalidraw' } },
+      metadata: { kind: 'excalidraw_board', title: name, artefact: artefact || { schema_version: 1, type: 'excalidraw', format_version: 1, editor_id: 'builtin.excalidraw' } },
       ...(text(summary) ? { summary: text(summary).slice(0, BOARD_LIMITS.summary) } : {}),
     }, this.options());
     const fileId = uuid(payload?.file?.id);

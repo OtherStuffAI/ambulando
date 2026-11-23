@@ -77,10 +77,10 @@ export function towerClient({ baseUrl, workspaceId, sign, fetchImpl = fetch }) {
     },
     async uploadObject({ bytes, contentType, fileName }) {
       const prepared = await request('POST', `${ws}/storage/prepare`, { file_name: fileName, content_type: contentType, size_bytes: bytes.byteLength });
+      if (prepared.is_public !== false) throw new Error('Private storage must be confirmed before uploading source.');
       await request('PUT', `/api/v4/storage/${encodeURIComponent(prepared.object_id)}`, { base64_data: Buffer.from(bytes).toString('base64') });
       const { createHash } = await import('node:crypto');
       await request('POST', `/api/v4/storage/${encodeURIComponent(prepared.object_id)}/complete`, { size_bytes: bytes.byteLength, sha256_hex: createHash('sha256').update(bytes).digest('hex') });
-      if (prepared.is_public) throw new Error('Tower prepared a public object; refusing to continue');
       return prepared.object_id;
     },
     getFile: fileId => request('GET', `${ws}/files/${encodeURIComponent(fileId)}`),

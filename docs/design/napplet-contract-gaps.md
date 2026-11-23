@@ -4,6 +4,30 @@ Assessment against the [agreed product contract](napplet-contract.md), 23 Novemb
 2026. This is a planning assessment, not implementation or release acceptance.
 No new wire schema, capability identifier or backend endpoint is specified here.
 
+## Web implementation candidate
+
+The additive [v3 runtime](napplet-runtime-v3.md) now has a source implementation:
+strict common manifest/frame parsers, publisher-bound bundle verification,
+SyncService-owned requests, local projections, personal/team named collection
+CRUD with bounded pages and revision checks, explicit host dataset selection,
+separate app audience/data sharing, automatic compatible updates, access-expansion
+review, keep/delete removal, and a deliberate compatible legacy snapshot import.
+The v1/v2 File runtimes remain unchanged. The reusable publisher uses the existing
+capability broker and NStack File/installation APIs.
+
+Focused tests and a frozen-host browser fixture cover arbitrary post-build apps,
+code updates with retained data, removal choices, identity isolation and revocation.
+Fixtures do not establish live API delivery. Full release checks, NStack activation,
+real authorized client proof and native/device evidence remain separate acceptance
+gates. No personal signer/DM capability is implemented; unsupported requests fail
+explicitly. Prior bundle bytes are unavailable through the audience-only active
+bundle endpoint; a viewer lacking direct prior File access receives a compatibility
+explanation. The backend retains prior releases and stages expanded access without
+replacing the active bundle.
+
+The earlier assessment below records the File runtime baseline and outstanding
+cross-platform acceptance, rather than describing v3 as absent from source.
+
 ## Evidence and limits
 
 The web source supports arbitrary v2 HTML Files with one bound capability:

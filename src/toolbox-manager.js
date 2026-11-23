@@ -1,3 +1,4 @@
+import { runtimeManagerMixin } from './napplets/runtime-manager.js';
 import { genericAppsMixin } from './napplets/generic-apps.js';
 import { saveAppPlacement } from './db.js';
 
@@ -96,6 +97,7 @@ export const toolboxMixin = {
     const fileApps = (this.pinnedThreads || []).filter(pin => pin.type === 'file' && pin.napplet).map(pin => ({ placementId: 'napplet:file:' + pin.id, codeFileId: pin.id, title: pin.napplet.title, iconText: pin.napplet.icon, app_id: pin.napplet.appId, description: 'NStack File napplet', appType: 'Napplet' }));
     const seen = new Set();
     return [
+      ...(this.runtimeAppsPartition === this.runtimeContextKey ? this.runtimeApps : []).map(row => ({placementId:'napplet:runtime:'+row.napplet_id,nappletId:row.napplet_id,title:row.display_name,iconText:row.manifest.icon,appType:'Napplet',description:'Installed napplet · '+row.manifest.bundle_version})),
       ...fileApps,
       ...(this.isTowerPgMode ? [{ placementId: 'napplet:workspace-report', app_id: 'workspace-report', title: 'Workspace Report', description: 'Authorized activity and current work', appType: 'Napplet' }, { placementId: 'napplet:daily-tracker', app_id: 'daily-tracker', title: 'Daily Metrics', description: 'Your private daily metrics', appType: 'Napplet' }] : []),
       ...wapps.filter(wapp => {
@@ -160,7 +162,8 @@ export const toolboxMixin = {
       const opener = this.visibleApps.length > 1 && active?.closest('[data-testid="apps-stack"]')
         ? document.querySelector('[data-testid="apps-stack"] .wapps-stack-hitbox') : active;
       this.closePersonalWappsOverlay();
-      if (entry.codeFileId) this.openGenericNapplet(entry.codeFileId);
+      if (entry.nappletId) this.openRuntimeNapplet(entry.nappletId);
+      else if (entry.codeFileId) this.openGenericNapplet(entry.codeFileId);
       else if (entry.placementId === 'napplet:workspace-report') this.openWorkspaceReport();
       else if (entry.placementId === 'napplet:daily-tracker') this.openDailyMetrics();
       else if (entry.orgDataView) this.openOrgData({ opener, view: entry.orgDataView });
@@ -169,3 +172,6 @@ export const toolboxMixin = {
     } else this.openPersonalWapp(entry);
   },
 };
+
+// Preserve reactive getters when composing the runtime mixin.
+Object.defineProperties(toolboxMixin, Object.getOwnPropertyDescriptors(runtimeManagerMixin));

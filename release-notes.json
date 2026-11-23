@@ -5925,6 +5925,14 @@
       "notes": [
         "Reject sparse or extended arrays before saving generic napplet data, and preserve valid app titles containing closing script text during access checks."
       ]
+    },
+    {
+      "buildNumber": 2753,
+      "label": "Common napplet runtime and controlled artefacts",
+      "notes": [
+        "Adds a common napplet runtime with scoped collections, separate app and data sharing, compatible automatic updates and keep/delete removal. Requires connected NStack runtime support; personal signer capabilities remain unavailable.",
+        "Adds controlled channel starters and styles, editable web System Flow, and selected latest-version imports that preserve original source, assets and provenance. Native flow editing remains unsupported."
+      ]
     }
   ]
 }
