@@ -1,16 +1,21 @@
+import { canonicalProfileNpub, profileHex } from '../profile-identity.js';
 // Connects one same-origin board editor iframe to its board controller over a
 // private MessageChannel. The iframe stays in the DOM when the naplet window is
 // promoted to full screen (showModal), so inline and full-screen editing share
 // one Excalidraw instance and one draft. The editor also renders the board's
 // floating Save (see board-editor/editor.js); it only asks, and the page
 // re-checks the board state before saving.
-export function registerCanvasBoard(Alpine, { controllerFor, actionFor = () => null, runAction = () => false }) {
+export function registerCanvasBoard(Alpine, { controllerFor, nameFor = () => 'Unknown person', releaseNames = () => {}, actionFor = () => null, runAction = () => false }) {
   Alpine.directive('canvas-board', (iframe, { expression }, { evaluateLater, effect, cleanup }) => {
+    const nameScope = `board:${crypto.randomUUID()}`;
     const evaluate = evaluateLater(expression);
+    const authors = Alpine.reactive({ identities: [], key: '' });
     let naplet = null, controller = null, port = null, editorReady = false, action = null;
     const sendAction = () => { if (editorReady && port) port.postMessage({ type: 'action-ui', action }); };
 
     const disconnect = () => {
+      releaseNames(nameScope);
+      authors.identities = []; authors.key = '';
       if (controller && naplet) controller.detach(naplet.id);
       controller = null; editorReady = false;
       if (port) { port.onmessage = null; port.close(); port = null; }
@@ -23,11 +28,20 @@ export function registerCanvasBoard(Alpine, { controllerFor, actionFor = () => n
       if (!controller) return;
       const channel = new MessageChannel();
       port = channel.port1;
-      const napletId = naplet.id, owner = controller;
+      const napletId = naplet.id, owner = controller, connectedPort = port;
       port.onmessage = event => {
+        if (port !== connectedPort || controller !== owner || naplet?.id !== napletId) return;
         const message = event.data || {};
         if (message.type === 'ready') { iframe.dataset.boardConnected = 'true'; editorReady = true; owner.attach(napletId, payload => port?.postMessage(payload)); sendAction(); }
         else if (message.type === 'action' && naplet?.id === napletId) void runAction(naplet, String(message.action || ''));
+        else if (message.type === 'author-identities' && Array.isArray(message.identities) && message.key === owner.editorContent().key) {
+          releaseNames(nameScope);
+          authors.key = message.key;
+          authors.identities = [...new Set(message.identities.slice(0, 2000).filter(identity => {
+            if (typeof identity !== 'string' || identity !== canonicalProfileNpub(identity)) return false;
+            try { profileHex(identity); return true; } catch { return false; }
+          }))];
+        }
         else if (message.type === 'change' && message.scene) void owner.editorChanged(napletId, message.scene);
         else if (message.type === 'comment-op') void owner.commentOperation(napletId, message.operation);
         else if (message.type === 'flushed') owner.editorFlushed(napletId, message.token);
@@ -37,6 +51,10 @@ export function registerCanvasBoard(Alpine, { controllerFor, actionFor = () => n
       iframe.contentWindow.postMessage({ type: 'wingman-board:connect', theme }, location.origin, [channel.port2]);
     };
 
+    effect(() => {
+      const names = Object.fromEntries(authors.identities.map(identity => [identity, nameFor(identity, nameScope)]));
+      if (editorReady && port && authors.key === controller?.editorContent().key) port.postMessage({ type: 'author-names', key: authors.key, names });
+    });
     const onLoad = () => connect();
     iframe.addEventListener('load', onLoad);
     // A naplet's board never changes; the editor accepts one connection per load.

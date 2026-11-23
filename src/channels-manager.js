@@ -1,3 +1,4 @@
+import { readableIdentityLabel } from './profile-identity.js';
 import { channelMoveMixin } from './channel-move-ui.js';
 /**
  * Channel and group management methods extracted from app.js.
@@ -4372,7 +4373,7 @@ export const channelsManagerMixin = {
       : String(memberOrNpub?.npub || '').trim();
     if (!npub) return 'Unknown member';
     const member = typeof memberOrNpub === 'string' ? (this.pgWorkspaceMembers || []).find((entry) => entry.npub === npub) : memberOrNpub;
-    return String(member?.display_name || '').trim() || this.getSenderName?.(npub) || npub;
+    return readableIdentityLabel(member?.display_name, member?.name) || this.getExactSenderName?.(npub) || 'Unknown member';
   },
 
   getPgWorkspaceMemberActorId(npub) {

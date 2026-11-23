@@ -127,3 +127,23 @@ board), so legacy naplet title overrides cannot mask a rename after reopening.
 Repeated naplets, their accessible titles, the controller's save filename and
 cached source choices update after confirmation. Browser coverage uses a signed
 synthetic Tower; a real-workspace permission smoke test remains a review step.
+
+## Profile-aware attribution
+
+Canvas document comments, board discussions and board history resolve exact
+public identities against the existing shared profile/address-book cache. Their
+local name projections observe cache arrivals and renames, preserve custom
+address-book labels and use a neutral unknown-person fallback. They neither
+create a directory nor fetch profiles independently. Projections are bounded to
+2,000 identities, released with document/board views and stopped on page exit.
+
+The embedded editor uses a presentation-only bridge shared with native clients:
+`{ type: 'author-identities', key, identities }` requests names for current
+comment authors; `{ type: 'author-names', key, names }` replaces the display map.
+The host validates exact npub checksums, limits requests to 2,000 entries and
+reads its existing local profile policy. Labels are usable text up to 256
+characters. The editor applies only the current document key, validates the map
+shape and renders names as React text. Load-key changes and clear discard names;
+old ports/sessions cannot decorate a new view. Public identities remain in
+explicit title/key details. Names never enter scene JSON, comments, drafts,
+fingerprints, exports or version history.

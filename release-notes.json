@@ -5947,6 +5947,14 @@
       "notes": [
         "Deck DM headings, chat cards and pinned channels follow cached profile names as they arrive, with a validated npub fallback when a name is unavailable."
       ]
+    },
+    {
+      "buildNumber": 2756,
+      "label": "Profile names in canvas and member labels",
+      "notes": [
+        "Canvas document comments, board discussions and board history show available profile names and update when cached names arrive or change.",
+        "Workspace member and WApp delegation labels use known names when stored labels contain keys, preserving custom names and identity details."
+      ]
     }
   ]
 }

@@ -38,7 +38,7 @@ export const wappManagementManagerMixin = {
   wappActivationApps: [], wappActivationLoading: false,
 
   get wappManagementMembers() { return (this.pgWorkspaceMembers || []).filter((member) => text(member.actor_id || member.id)); },
-  wappMemberName(actorId) { const member = this.wappManagementMembers.find((entry) => text(entry.actor_id || entry.id) === text(actorId)); return text(member?.display_name || member?.name || member?.npub) || text(actorId) || 'Unknown actor'; },
+  wappMemberName(actorId) { const member = this.wappManagementMembers.find((entry) => text(entry.actor_id || entry.id) === text(actorId)); return member ? this.getPgWorkspaceMemberLabel(member) : 'Unknown actor'; },
   wappDelegationStatus: delegationStatus,
   get wappDelegationPreview() { const draft = this.wappDelegationDraft || {}; return capabilityPreview({ delegateName: this.wappMemberName(draft.delegate_actor_id), filters: this.buildWappDelegationFilters(false), expiresAt: draft.expires_at }); },
 

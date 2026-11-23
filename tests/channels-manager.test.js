@@ -945,7 +945,7 @@ describe('channels-manager pure utilities', () => {
       currentWorkspaceGroups: [],
       pgWorkspaceMembers: [],
       newChannelAccessRows: [],
-      getSenderName: vi.fn((npub) => npub === 'npub1owner' ? 'Owner' : npub),
+      getExactSenderName: vi.fn((npub) => npub === 'npub1owner' ? 'Owner' : npub),
       refreshGroups: vi.fn(async function refreshGroups() {
         this.currentWorkspaceGroups = [{
           group_id: 'group-workspace',
@@ -2864,7 +2864,7 @@ describe('channels-manager pure utilities', () => {
           { actor_id: 'actor-existing', npub: 'npub1existing' },
           { actor_id: 'actor-new', npub: 'npub1newmember' },
         ],
-        getSenderName: vi.fn((npub) => npub === 'npub1newmember' ? 'New Member' : npub),
+        getExactSenderName: vi.fn((npub) => npub === 'npub1newmember' ? 'New Member' : npub),
       });
 
       expect(store.getPgGroupMemberCandidates('group-1')).toEqual([{

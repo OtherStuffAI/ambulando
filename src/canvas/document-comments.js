@@ -12,6 +12,7 @@ export function canvasDocumentComments(deps = {}) {
   const read = deps.read || getTowerPgDocComments, create = deps.create || createTowerPgDocComment;
   const database = deps.database || getWorkspaceDb, put = deps.put || upsertComment;
   const reconcile = deps.reconcile || replacePgCommentsForTarget;
+  const nameScope = `document-comments:${crypto.randomUUID()}`;
   let context, docId, owner, rootElement, subscription, disposed = false, generation = 0, focus, pending;
   const options = () => ({ baseUrl: context.baseUrl, appNpub: context.appNpub });
   const current = ticket => !disposed && ticket === generation && owner.naplet.access === 'ready' && owner.naplet.source?.id === docId;
@@ -32,6 +33,7 @@ export function canvasDocumentComments(deps = {}) {
     },
     bindDocumentSource(id) {
       if (id === docId) return;
+      this.$store.canvas.releasePersonNames?.(nameScope);
       generation++; subscription?.unsubscribe(); subscription = null; docId = id;
       this.documentComments = []; this.commentBody = ''; this.replyTo = ''; this.commentAnchor = null;
       this.commentsOpen = false; this.commentsReady = false; this.commentsLoading = false; this.commentBusy = false; this.commentError = ''; pending = null;
@@ -39,13 +41,14 @@ export function canvasDocumentComments(deps = {}) {
     commentAuthor(comment) {
       const npub = String(comment.sender_npub || '');
       if (npub && npub === context.viewer) return 'You';
-      return npub ? `${npub.slice(0, 12)}…${npub.slice(-4)}` : (comment.pg_created_by_actor_id ? `Member ${comment.pg_created_by_actor_id.slice(0, 8)}` : 'Workspace member');
+      return npub ? this.$store.canvas.personName(npub, nameScope) : 'Workspace member';
     },
     commentTime(value) {
       const date = new Date(value);
       return Number.isNaN(date.getTime()) ? '' : date.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
     },
     destroy() {
+      this.$store.canvas.releasePersonNames?.(nameScope);
       disposed = true; generation++; subscription?.unsubscribe();
       globalThis.removeEventListener('focus', focus);
       this.documentComments = []; this.commentBody = ''; this.commentAnchor = null; pending = null;

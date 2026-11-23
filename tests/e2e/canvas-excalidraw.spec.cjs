@@ -121,7 +121,7 @@ test.beforeAll(async () => {
   seedBundle = (await build({
     bundle: true, write: false, format: 'esm', logLevel: 'silent',
     define: { __FLIGHT_DECK_PG_APP_NPUB__: JSON.stringify(identity.app_npub) },
-    stdin: { resolveDir: path.resolve(__dirname, '../..'), contents: `export { saveSettings, createWorkspaceDb } from './src/db.js';\nexport { signLoginEvent, pubkeyToNpub } from './src/auth/nostr.js';\nexport { normalizeWorkspaceEntry } from './src/workspaces.js';` },
+    stdin: { resolveDir: path.resolve(__dirname, '../..'), contents: `export { cacheProfile, getSharedDb, saveSettings, createWorkspaceDb } from './src/db.js';\nexport { signLoginEvent, pubkeyToNpub } from './src/auth/nostr.js';\nexport { normalizeWorkspaceEntry } from './src/workspaces.js';` },
   })).outputFiles[0].text;
 });
 
@@ -537,6 +537,19 @@ test('phone: floating Save sits in Excalidraw top-right without covering tools a
 
 test('spatial pins, safe text, replies, resolve and shape following survive saves and reload', async ({ page, context }) => {
   test.setTimeout(45000);
+  await page.addInitScript(() => {
+    const NativeChannel = window.MessageChannel;
+    window.MessageChannel = class extends NativeChannel {
+      constructor() {
+        super();
+        const send = this.port1.postMessage.bind(this.port1);
+        this.port1.postMessage = (message, ...rest) => {
+          if (message?.type === 'load') window.__boardNameTest = { port: this.port1, key: message.key };
+          return send(message, ...rest);
+        };
+      }
+    };
+  });
   const tower = fakeTower();
   const file = tower.createBoard('Discussion', [element('discussion-shape')]);
   tower.state.naplets.push({ id: uid(), source: { type: 'excalidraw', id: file.id }, title: 'Discussion', layout: { x: 40, y: 60, width: 1000, height: 700, z: 1 } });
@@ -554,6 +567,29 @@ test('spatial pins, safe text, replies, resolve and shape following survive save
   await expect(editor.locator('.board-comment-pin')).toHaveCount(1);
   await expect(editor.locator('.board-comment-messages')).toContainText('<img src=x onerror=alert(1)> Question');
   await expect(editor.locator('.board-comment-messages img')).toHaveCount(0);
+  // Names travel through a separate display projection; live cache changes must
+  // not remount the discussion, clear a draft or write labels into the scene.
+  const author = await editor.locator('.board-comment-messages small').first().getAttribute('title');
+  await editor.getByRole('textbox', { name: 'Reply', exact: true }).fill('Kept draft');
+  await page.evaluate(async author => {
+    const { cacheProfile } = await import('/__seed.js');
+    await cacheProfile(author, { display_name: '<img src=x onerror=alert(1)> Ada' });
+  }, author);
+  await expect(editor.locator('.board-comment-messages small').first()).toContainText('<img src=x onerror=alert(1)> Ada');
+  await expect(editor.locator('.board-comment-messages img')).toHaveCount(0);
+  await expect(editor.getByRole('textbox', { name: 'Reply', exact: true })).toHaveValue('Kept draft');
+  await page.evaluate(async author => {
+    const { cacheProfile } = await import('/__seed.js');
+    await cacheProfile(author, { name: 'Ada renamed' });
+  }, author);
+  await expect(editor.locator('.board-comment-messages small').first()).toContainText('Ada renamed');
+  await page.evaluate(author => {
+    const { port, key } = window.__boardNameTest;
+    port.postMessage({ type: 'author-names', key: `${key}:stale`, names: { [author]: 'Wrong view' } });
+  }, author);
+  await expect(editor.locator('.board-comment-messages small').first()).toContainText('Ada renamed');
+
+
   await editor.getByRole('textbox', { name: 'Reply', exact: true }).fill('A threaded answer');
   await editor.getByRole('button', { name: 'Add reply', exact: true }).click();
   await expect(editor.locator('.board-comment-messages article')).toHaveCount(2);
@@ -563,6 +599,8 @@ test('spatial pins, safe text, replies, resolve and shape following survive save
   expect(saved.elements).toHaveLength(1);
   expect(saved.wingman.comments[0].anchor.element_id).toBe('discussion-shape');
   expect(saved.wingman.comments[0].messages[1].body).toBe('A threaded answer');
+  expect(saved.wingman.comments[0].messages[0].author_npub).toBe(author);
+  expect(JSON.stringify(saved)).not.toContain('Ada renamed');
   // Resolve, hide, reveal and reopen through the thread.
   await editor.getByRole('button', { name: 'Resolve', exact: true }).click();
   await expect(editor.locator('.board-comment-pin')).toHaveCount(0);

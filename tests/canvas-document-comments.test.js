@@ -96,3 +96,14 @@ it('clears drafts and ignores a late read when the source or access changes', as
   expect(state.commentBody).toBe(''); expect(state.commentsOpen).toBe(false); expect(await db.comments.count()).toBe(0);
   state.commentBody = 'Revoked draft'; state.bindDocumentSource(''); expect(state.commentBody).toBe('');
 });
+
+it('resolves comment authors through the live exact canvas projection while preserving self and missing identity fallback', async () => {
+  const { state } = await setup(async () => payload([]));
+  const personName = vi.fn(() => 'Available profile');
+  state.$store.canvas.personName = personName;
+  expect(state.commentAuthor({ sender_npub: 'exact-author' })).toBe('Available profile');
+  expect(personName).toHaveBeenCalledWith('exact-author', expect.stringMatching(/^document-comments:/));
+  personName.mockReturnValue('Renamed profile');
+  expect(state.commentAuthor({ sender_npub: 'exact-author' })).toBe('Renamed profile');
+  expect(state.commentAuthor({})).toBe('Workspace member');
+});

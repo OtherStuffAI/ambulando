@@ -1,3 +1,4 @@
+import { canvasPersonNames } from './person-names.js';
 import { attachCanvasLinkCreation } from './link-create.js';
 import { mountCanvasSettingsDialog } from './settings-dialog.js';
 import { canvasDocumentComments } from './document-comments.js';
@@ -90,6 +91,7 @@ export function canvasPageStore() {
     notice: '', referenceDialog: { napletId: '', markdown: '', url: '', message: '' }, versionsDialog: { napletId: '', returnFocus: null },
     ...canvasTaskTreeStore(),
     ...canvasBoardStore(),
+    ...canvasPersonNames(),
     ...canvasChatStore(),
     ...canvasArtifactPickerStore(),
 
@@ -135,7 +137,7 @@ export function canvasPageStore() {
         this.startChats(this.context(), { persist: body => syncRuntime.addNaplet(body), refresh: () => syncRuntime.refresh() });
         keydown = event => this.handleKeydown(event); addEventListener('keydown', keydown);
         addEventListener('pagehide', () => {
-          syncRuntime?.stop(); assetStore?.clear(); this.stopTaskTrees(); this.stopBoards(); this.stopChats(); this.resetArtifactPicker(); removeEventListener('keydown', keydown);
+          this.stopPersonNames(); syncRuntime?.stop(); assetStore?.clear(); this.stopTaskTrees(); this.stopBoards(); this.stopChats(); this.resetArtifactPicker(); removeEventListener('keydown', keydown);
           // A browser-history cache is not fresh authorization.
           this.status = 'loading'; this.canvas = null; this.naplets = []; this.elements = [];
           this.clearHtmlViews(); this.closeNapletDialogs(); this.clearReferenceFeedback(); document.title = 'Canvas · Ambulando';
@@ -805,6 +807,8 @@ Alpine.data('canvasDocumentComments', canvasDocumentComments);
 registerCanvasHtml(Alpine, { assetStore: () => Alpine.store('canvas').assetStore() });
 registerCanvasHtml(Alpine, { name: 'canvas-html-preview', assetStore: () => Alpine.store('canvas').previewAssetStore() });
 registerCanvasBoard(Alpine, {
+  nameFor: (identity, scope) => Alpine.store('canvas').personName(identity, scope),
+  releaseNames: scope => Alpine.store('canvas').releasePersonNames(scope),
   controllerFor: fileId => Alpine.store('canvas').boardController(fileId),
   actionFor: naplet => Alpine.store('canvas').boardSaveAction(naplet),
   runAction: (naplet, action) => Alpine.store('canvas').runBoardAction(naplet, action),

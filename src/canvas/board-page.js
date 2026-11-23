@@ -181,7 +181,7 @@ export function canvasBoardStore() {
     stepBoardVersion(naplet, delta) { return this.boardController(naplet?.source?.id)?.stepVersion(delta); },
     returnBoardToLatest(naplet) { return this.boardController(naplet?.source?.id)?.returnToLatest(); },
     restoreBoardVersion(naplet) { return this.boardController(naplet?.source?.id)?.restoreViewedVersion(); },
-    boardVersionAuthor(version) { const npub = text(version?.author_npub); return npub ? `${npub.slice(0, 12)}…` : ''; },
+    boardVersionAuthor(version) { const npub = text(version?.author_npub); return npub ? this.personName(npub) : ''; },
     boardVersionTime(version) { const date = new Date(version?.created_at); return Number.isNaN(date.getTime()) ? '' : date.toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }); },
     async loadBoardChoices(db) {
       const [documents, channels] = await Promise.all([db.documents.toArray(), db.channels.toArray()]);
