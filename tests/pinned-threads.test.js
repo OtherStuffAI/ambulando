@@ -122,3 +122,19 @@ it('uses mention unread for muted pins while preserving underlying pin unread an
   s.isChannelMentionsOnly = () => false;
   expect(s.pinnedThreads.every(row=>row.isUnread)).toBe(true);
 });
+
+it('updates existing channel pins from late profiles without rewriting pin identities', () => {
+  const s = store();
+  s.pinnedThreadsContext = s.pinnedThreadsPartition;
+  const channel = {record_id:'dm-channel',kind:'dm',title:'DM: old key',participant_npubs:['alice','peer']};
+  s.pinnedThreadRows = [{id:'dm-channel',type:'channel',channelId:'dm-channel',channel,title:channel.title,unavailable:false},
+    {id:'gone',type:'channel',title:'Channel unavailable',unavailable:true},
+    {id:'thread',type:'thread',title:'Conversation title',channelId:'dm-channel'}];
+  let name = 'npub fallback';
+  s.getChannelLabel = () => name;
+  expect(s.pinnedThreads[0].title).toBe(name);
+  name = 'Kind zero display name';
+  expect(s.pinnedThreads.map(row=>row.title)).toEqual([name,'Channel unavailable','Conversation title']);
+  expect(s.pinnedThreads[0]).toMatchObject({id:'dm-channel',channelId:'dm-channel'});
+  expect(s.pinnedThreadRows[0].title).toBe('DM: old key');
+});

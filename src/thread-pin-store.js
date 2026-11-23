@@ -54,7 +54,7 @@ export async function readThreadPinProjection(db, context, partition) {
       const unavailable = !channel || archived.some(Boolean) || authority?.operation === 'delete' || authority?.row?.deleted_at
         || channel.deleted_at || ['deleted','archived'].includes(channel.record_state)
         || ['stale','access-lost'].includes(channel.pg_access_status) || channel.can_read === false || channel.readable === false;
-      return { ...pin, channelId: pin.id, title: unavailable ? 'Channel unavailable' : channel.title || channel.name || 'Untitled channel',
+      return { ...pin, channel: unavailable ? null : channel, channelId: pin.id, title: unavailable ? 'Channel unavailable' : channel.title || channel.name || 'Untitled channel',
         activityAt: unavailable ? '' : channel.updated_at || '', unavailable: Boolean(unavailable) };
     }
     const family = pin.type === 'file' ? 'file' : pin.type === 'document' ? 'doc' : 'task';

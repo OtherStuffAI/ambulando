@@ -5940,6 +5940,13 @@
       "notes": [
         "Adds a reusable read-only workspace aggregate capability for administrative PostgreSQL and retained object-storage summaries. Existing reports remain compatible; storage requires connected NStack API support and an approved updated cartridge."
       ]
+    },
+    {
+      "buildNumber": 2755,
+      "label": "DM profile names on Deck",
+      "notes": [
+        "Deck DM headings, chat cards and pinned channels follow cached profile names as they arrive, with a validated npub fallback when a name is unavailable."
+      ]
     }
   ]
 }

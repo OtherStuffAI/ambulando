@@ -3,10 +3,13 @@ import {
   normalizeDmParticipants,
 } from './dm-scope.js';
 
-import { readableIdentityLabel } from './profile-identity.js';
+import { canonicalProfileNpub, profileHex, readableIdentityLabel } from './profile-identity.js';
 
 function resolveParticipantName(npub, getSenderName) {
-  return readableIdentityLabel(getSenderName?.(npub)) || 'Unknown person';
+  const name = readableIdentityLabel(getSenderName?.(npub));
+  if (name && name !== 'Unknown person') return name;
+  // Only a complete, decodable public identity is safe as a DM fallback.
+  try { profileHex(npub); return canonicalProfileNpub(npub); } catch { return 'Unknown person'; }
 }
 
 export function resolveChannelParticipants(channel) {

@@ -157,3 +157,39 @@ test('desktop pin panel fits its rows and scrolls after ten',async({page})=>{
   await panel.getByRole('button',{name:'Unpin Pinned sizing thread 0',exact:true}).click();
   await expect(panel).toBeHidden();
 });
+
+test('Deck DM heading, cards and existing channel pins follow late profile names', async ({page}) => {
+  await page.setViewportSize({width:1440,height:1000});
+  await setup(page);
+  const npub=require('nostr-tools').nip19.npubEncode('1'.repeat(64));
+  await page.evaluate(async npub=>{
+    const s=window.Alpine.store('chat');
+    const key='pinned-browser',actor='10000000-0000-4000-8000-000000000001',workspaceId='20000000-0000-4000-8000-000000000001';
+    s.knownWorkspaces=[{workspaceKey:key,workspaceId,workspaceOwnerNpub:s.session.npub,appNpub:'npub1test',directHttpsUrl:'http://127.0.0.1:3100',pgBackendMode:true,pgMe:{actor:{actor_id:actor,npub:s.session.npub},identity:{workspace_id:workspaceId}}}];
+    s.workspaceDbKey=key;s.requestTowerSyncFamily=async()=>{};
+    s.syncPinnedThreadsContext(s.pinnedThreadsPartition);
+    s.resolveChatProfile=()=>{};
+    s.chatProfiles={};s.addressBookPeople=[];s.pgWorkspaceMembers=[];
+    const channel={record_id:'sol-channel',title:`DM: ${npub}`,kind:'dm',participant_npubs:[s.session.npub,npub],record_state:'active'};
+    s.channels=s.channels.map(row=>row.record_id===channel.record_id?channel:row);
+    await window.pinProbeDb.channels.put(channel);
+    s.selectedBoardId='';s.selectedChannelId='sol-channel';s.pgContextSelectedChannelId='sol-channel';
+    await s.togglePersonalPin(channel,'channel');
+  },npub);
+  const inbox=page.locator('[data-deck-column="inbox"]');
+  const pins=page.locator('[data-testid="deck-pinned-threads"]');
+  await expect(inbox.locator('.deck-inbox-title')).toContainText(npub);
+  await expect(inbox.locator('.attention-card-kicker').first()).toHaveText(`Chat · ${npub}`);
+  await expect(pins.locator('.attention-card-title')).toHaveText(npub);
+  const original=await page.evaluate(async()=>({rows:await window.pinProbeDb.thread_pin_outbox.toArray(),channels:await window.pinProbeDb.channels.toArray()}));
+  await page.evaluate(npub=>{window.Alpine.store('chat').chatProfiles={[npub]:{display_name:'Sample display name',name:'sample-handle'}};},npub);
+  await expect(inbox.locator('.deck-inbox-title')).toContainText('Inbox: Sample display name');
+  await expect(inbox.locator('.attention-card-kicker').first()).toHaveText('Chat · Sample display name');
+  await expect(pins.locator('.attention-card-title')).toHaveText('Sample display name');
+  await page.evaluate(npub=>{window.Alpine.store('chat').addressBookPeople=[{npub,label:'Updated sample profile'}];},npub);
+  await expect(pins.locator('.attention-card-title')).toHaveText('Updated sample profile');
+  expect(await page.evaluate(async()=>({rows:await window.pinProbeDb.thread_pin_outbox.toArray(),channels:await window.pinProbeDb.channels.toArray()}))).toEqual(original);
+  await screenshot(page,'dm-profile-labels');
+  await pins.locator('.pinned-thread-open').click();
+  expect(await page.evaluate(()=>window.Alpine.store('chat').pgContextSelectedChannelId)).toBe('sol-channel');
+});

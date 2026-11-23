@@ -78,6 +78,9 @@ browser titles. It starts the existing bounded profile lookup, reads cached name
 immediately, and observes replacements of profile/address-book state. Generated
 `DM:` titles and key-only legacy titles never become visible identity labels;
 missing participant metadata shows "Direct message · identity unavailable".
+When a participant has no usable name, DM labels retain its complete validated
+npub as a text fallback. Channel pins resolve their current label at render time,
+so profile arrivals update already pinned rows without changing stored pin IDs.
 Custom readable channel titles stay intact. This is display-only: no channel
 record, participant list, access grant or routing identity changes.
 

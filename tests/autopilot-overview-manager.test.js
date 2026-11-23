@@ -2259,3 +2259,16 @@ it('does not list a muted channel for ordinary working activity in Unread & Acti
   store.isChannelUnread=()=>false;store.isChannelMentionsOnly=()=>false;
   expect(getter.call(store)).toEqual([channel]);
 });
+
+it('refreshes memoized Deck labels after profiles and member names arrive', () => {
+  const getter=Object.getOwnPropertyDescriptor(autopilotOverviewManagerMixin,'autopilotOverviewThreads').get;
+  const store={navSection:'status', fileMessages:[{record_id:'root',pg_thread_id:'thread',channel_id:'dm',body:'Message',record_state:'active'}],
+    channels:[{record_id:'dm',kind:'dm',title:'DM',participant_npubs:['viewer','peer']}],
+    autopilotOverviewContext:{scopeId:'all',channelId:'all'},session:{npub:'viewer'},scopesMap:{},chatProfiles:{},addressBookPeople:[],pgWorkspaceMembers:[]};
+  store.getChannelLabel=()=>store.chatProfiles.peer?.display_name || store.pgWorkspaceMembers[0]?.display_name || 'Unknown person';
+  expect(getter.call(store)[0].channelLabel).toBe('Unknown person');
+  store.pgWorkspaceMembers=[{npub:'peer',display_name:'Workspace name'}];
+  expect(getter.call(store)[0].channelLabel).toBe('Workspace name');
+  store.chatProfiles={peer:{display_name:'Kind zero name'}};
+  expect(getter.call(store)[0]).toMatchObject({id:'thread',channelId:'dm',channelLabel:'Kind zero name'});
+});

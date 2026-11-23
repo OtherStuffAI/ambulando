@@ -168,3 +168,15 @@ describe('DM display boundaries', () => {
     expect(channel.participant_npubs).toEqual(['me', 'peer']);
   });
 });
+
+it('uses only a complete validated participant npub as the no-name fallback', () => {
+  const npub = 'npub1ujfahuwppkq0xkq7fyzfxzc5qnxxcyuspms8tpr5l222h6xye5fsccv64k';
+  const channel = {kind:'dm',title:`DM: ${npub}`,participant_npubs:['viewer',npub]};
+  const options = {sessionNpub:'viewer',getSenderName:()=> 'Unknown person'};
+  expect(resolveChannelLabel(channel,options)).toBe(npub);
+  options.getSenderName=()=> 'Kind zero name';
+  expect(resolveChannelLabel(channel,options)).toBe('Kind zero name');
+  channel.participant_npubs=['viewer','npub1broken'];
+  options.getSenderName=()=> '';
+  expect(resolveChannelLabel(channel,options)).toBe('Unknown person');
+});

@@ -1744,7 +1744,7 @@ export const autopilotOverviewManagerMixin = {
     const sessionNpub = this.session?.npub || this.signingNpub || '';
     return memoizedProjection(this, 'threads', [
       this.channels, messages, context.scopeId, context.channelId, this.scopesMap,
-      this.groups, this.chatProfiles, this.addressBookPeople, this._wsKeyDisplayMap,
+      this.groups, this.chatProfiles, this.addressBookPeople, this._wsKeyDisplayMap, this.pgWorkspaceMembers,
       sessionNpub, this._unreadChannels,
       this._unreadThreadItems, this.inboxUnreadThreads, this.channelNotificationPreferences, Boolean(this.isTowerPgMode),
     ], () => buildAutopilotOverviewThreads({
@@ -1769,7 +1769,7 @@ export const autopilotOverviewManagerMixin = {
     const sessionNpub = this.session?.npub || this.signingNpub || '';
     return memoizedProjection(this, 'recent-channels', [
       this.channels, messages, contextScopeId, this.scopesMap, this.groups,
-      this.chatProfiles, this.addressBookPeople, this._wsKeyDisplayMap,
+      this.chatProfiles, this.addressBookPeople, this._wsKeyDisplayMap, this.pgWorkspaceMembers,
       sessionNpub, this._unreadChannels, this._unreadThreadItems, this.recentChannelUnreadThreads, this.channelNotificationPreferences,
       Boolean(this.isTowerPgMode),
     ], () => buildRecentChannels(buildAutopilotOverviewThreads({
