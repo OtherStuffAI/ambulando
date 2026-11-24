@@ -71,6 +71,7 @@ for (const width of [320,375,390,430,900,1440]) {
     await page.evaluate(() => { window.Alpine.store('chat').pgNavigationRecoveryPending=false; });
     await capture(page,`${width}-${theme}-inbox`);
     if(width<769) {
+      await page.evaluate(async () => Alpine.store('chat').setChatNavigationEnabled(true));
       await page.locator('.mobile-section-switcher').getByRole('button',{name:'Chat',exact:true}).click();
     } else await page.evaluate(() => window.Alpine.store('chat').navigateTo('chat',{syncRoute:false}));
     await page.evaluate(() => {

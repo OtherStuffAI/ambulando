@@ -65,6 +65,7 @@ for (const width of [320, 390, 720]) {
       await client.detach();
       await strip.evaluate(n => { n.scrollLeft = 0; });
     }
+    await page.evaluate(async () => Alpine.store('chat').setChatNavigationEnabled(true));
     await strip.getByRole('button', { name: 'Chat', exact: true }).focus();
     await page.keyboard.press('Enter');
     await expect.poll(() => page.evaluate(() => Alpine.store('chat').navSection)).toBe('chat');

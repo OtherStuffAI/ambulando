@@ -819,6 +819,7 @@ export function initApp() {
     summaryCollapsedPanels: {},
     summaryPanelPages: {},
     deckInboxEnabled: true,
+    chatNavigationEnabled: false,
     agentsEnabled: false,
     contextEnabled: false,
     dailyNoteEditorOpen: false,
@@ -2434,6 +2435,7 @@ export function initApp() {
           : {};
         this.deckInboxEnabled = resolveDeckInboxEnabled(settings);
         this.myFocusEnabled = resolveMyFocusEnabled(settings);
+        this.chatNavigationEnabled = settings.chatNavigationEnabled === true;
         this.agentsEnabled = settings.agentsEnabled === true;
         this.contextEnabled = settings.contextEnabled === true;
       }
@@ -2536,6 +2538,12 @@ export function initApp() {
       this.deckInboxEnabled = Boolean(enabled);
       const settings = (await getSettings()) || {};
       await saveSettings({ ...settings, deckInboxEnabled: this.deckInboxEnabled });
+    },
+
+    async setChatNavigationEnabled(enabled) {
+      this.chatNavigationEnabled = Boolean(enabled);
+      const settings = (await getSettings()) || {};
+      await saveSettings({ ...settings, chatNavigationEnabled: this.chatNavigationEnabled });
     },
 
     async setAgentsEnabled(enabled) {

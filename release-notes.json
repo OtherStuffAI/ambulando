@@ -5962,6 +5962,13 @@
       "notes": [
         "The phone navigation strip has larger scrollable buttons and a leftmost globe that opens Deck across accessible scopes in the current workspace. Navigation resets the strip to the start; live updates preserve its position."
       ]
+    },
+    {
+      "buildNumber": 2760,
+      "label": "Optional Chat navigation",
+      "notes": [
+        "Chat navigation now defaults hidden. Restore it with Settings → Sections → Show Chat. Existing conversations, drafts and direct conversation links remain available."
+      ]
     }
   ]
 }

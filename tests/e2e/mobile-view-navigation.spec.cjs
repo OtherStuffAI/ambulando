@@ -11,6 +11,7 @@ for (const width of [320, 390, 768, 1440]) {
       s.closeThread({ syncRoute: false });
       s.navigateTo('status', { syncRoute: false });
       s.navCollapsed = false;
+      s.chatNavigationEnabled = true;
       s.agentsEnabled = false;
       s.contextEnabled = false;
     });

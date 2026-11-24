@@ -65,6 +65,13 @@ workspaces or change Tower authority or local materialization rules.
 
 ## Optional views
 
+Settings → Deck layout → Sections includes Show Chat, default off. It persists
+in device-local app settings across reloads and workspace changes. It hides only
+primary Chat navigation entries; current conversations, drafts, Deck entries,
+notifications and explicit conversation routes remain available. Enabling it
+restores Chat in its original navigation position. Deck naming and routing are
+unchanged.
+
 Settings → Deck layout includes independent Show Agents and Show Context options
 alongside Inbox and My Focus. Both default off and persist in the existing
 shared device-local app settings, across reloads and workspace changes. They do

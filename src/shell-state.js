@@ -579,6 +579,7 @@ export function createShellState(options = {}) {
       this.initDocCommentConnector();
       this.startSharedLiveQueries();
       const settings = await getSettings();
+      this.chatNavigationEnabled = settings?.chatNavigationEnabled === true;
       this.agentsEnabled = settings?.agentsEnabled === true;
       this.contextEnabled = settings?.contextEnabled === true;
       if (settings) {
