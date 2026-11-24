@@ -1694,6 +1694,13 @@ export const taskBoardStateMixin = {
     this.selectBoard(scopeId);
   },
 
+  openNavigationWorkspaceHome() {
+    // This explicit destination opens Deck even when scope browsing is locked.
+    // Keep selectWorkContextBoard's draft and thread cleanup before navigation.
+    this.lockedView = null;
+    return this.openAllScopesOverview();
+  },
+
   openAllScopesOverview() {
     if (!this.isCurrentViewLocked) this.resetDeckMobileEntry?.();
     this.currentFolderId = null;

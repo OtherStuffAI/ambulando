@@ -5955,6 +5955,13 @@
         "Canvas document comments, board discussions and board history show available profile names and update when cached names arrive or change.",
         "Workspace member and WApp delegation labels use known names when stored labels contain keys, preserving custom names and identity details."
       ]
+    },
+    {
+      "buildNumber": 2759,
+      "label": "Scrollable navigation with workspace home",
+      "notes": [
+        "The phone navigation strip has larger scrollable buttons and a leftmost globe that opens Deck across accessible scopes in the current workspace. Navigation resets the strip to the start; live updates preserve its position."
+      ]
     }
   ]
 }

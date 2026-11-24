@@ -50,11 +50,14 @@ describe('mobile views outside the drawer', () => {
       ['toolbox', 'Toolbox'],
     ]) {
       expect(mobileSwitcher).toContain(`navigateTo('${section}')`);
-      expect(mobileSwitcher).toContain(`$store.chat.navSection === '${section}' ? 'page' : null`);
+      const currentCondition = section === 'status'
+        ? "$store.chat.navSection === 'status' && ($store.chat.selectedBoardId !== '__all__' || !!$store.chat.activeThreadId)"
+        : `$store.chat.navSection === '${section}'`;
+      expect(mobileSwitcher).toContain(`${currentCondition} ? 'page' : null`);
       expect(mobileSwitcher).toContain(`aria-label="${label}"`);
     }
 
-    expect(mobileSwitcher.match(/class="mobile-section-switcher-btn"/g)).toHaveLength(8);
+    expect(mobileSwitcher.match(/class="mobile-section-switcher-btn"/g)).toHaveLength(9);
     expect(mobileSwitcher).not.toContain("navigateTo('settings')");
 
   });

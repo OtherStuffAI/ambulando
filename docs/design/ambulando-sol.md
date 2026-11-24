@@ -80,6 +80,15 @@ panes, full-width boards, rich editor toolbars, sync/authority details and view
 locks remain because they serve working workflows. Expanded desktop product navigation
 uses the horizontal bar; phones use the fixed bottom view switcher, with
 scope/channel and workspace controls in the drawer.
+The whole phone strip scrolls horizontally, including the leftmost workspace-home
+globe. It opens Deck across all accessible scopes in the current workspace, even
+from a locked view, using existing draft and thread cleanup. The globe is selected
+on workspace-wide Deck. Controls occupy about 1/4.5 of phone width, capped at 96px
+on wider layouts; a visible view lock retains its independent 44px target.
+Navigation identity changes and reload reset the strip to the left; live record
+updates preserve its scroll position. Native touch scrolling and keyboard button
+activation remain browser-owned. Desktop navigation placement is unchanged.
+
 Navigation keeps the original collapsed default; its toggle reveals the expanded
 scope/channel sidebar and horizontal desktop product navigation.
 On mobile, the branding row retains the logo, hamburger, theme and profile menu.

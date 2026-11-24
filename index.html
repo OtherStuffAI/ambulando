@@ -1937,11 +1937,23 @@
               </div>
             </div>
             <nav class="mobile-section-switcher" x-show="!$store.chat.mobileNavOpen"
+              x-data="{}"
+              x-init="$el.scrollLeft = 0; $watch(() => JSON.stringify([$store.chat.currentWorkspaceKey, $store.chat.navSection, $store.chat.selectedBoardId, $store.chat.selectedChannelId, $store.chat.activeThreadId, $store.chat.selectedTaskId, $store.chat.selectedDocId, $store.chat.showTaskDetail, $store.chat.currentFolderId, $store.chat.fileCurrentFolderId]), () => $nextTick(() => { $el.scrollLeft = 0; }))"
+              @pageshow.window="requestAnimationFrame(() => { $el.scrollLeft = 0; })"
               @resize.window="$store.chat.updateNavigationViewport()" aria-label="Scope section navigation">
               <div class="mobile-section-switcher-item">
                 <button type="button" class="mobile-section-switcher-btn"
-                  :class="{ 'mobile-section-switcher-btn-active': $store.chat.navSection === 'status' }"
-                  :aria-current="$store.chat.navSection === 'status' ? 'page' : null"
+                  :class="{ 'mobile-section-switcher-btn-active': $store.chat.navSection === 'status' && $store.chat.selectedBoardId === '__all__' && !$store.chat.activeThreadId }"
+                  :aria-current="$store.chat.navSection === 'status' && $store.chat.selectedBoardId === '__all__' && !$store.chat.activeThreadId ? 'page' : null"
+                  aria-label="Workspace home" title="Workspace home"
+                  @click="$store.chat.openNavigationWorkspaceHome()">
+                  <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a18 18 0 0 1 0 20 18 18 0 0 1 0-20"/></svg>
+                </button>
+              </div>
+              <div class="mobile-section-switcher-item">
+                <button type="button" class="mobile-section-switcher-btn"
+                  :class="{ 'mobile-section-switcher-btn-active': $store.chat.navSection === 'status' && ($store.chat.selectedBoardId !== '__all__' || !!$store.chat.activeThreadId) }"
+                  :aria-current="$store.chat.navSection === 'status' && ($store.chat.selectedBoardId !== '__all__' || !!$store.chat.activeThreadId) ? 'page' : null"
                   aria-label="Deck" title="Deck"
                   @click="$store.chat.navigateTo('status')">
                   <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="/ambulando/icons.svg#layout-dashboard" /></svg>
