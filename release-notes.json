@@ -5969,6 +5969,13 @@
       "notes": [
         "Chat navigation now defaults hidden. Restore it with Settings → Sections → Show Chat. Existing conversations, drafts and direct conversation links remain available."
       ]
+    },
+    {
+      "buildNumber": 2761,
+      "label": "Microphone choice and captured input level",
+      "notes": [
+        "Choose a microphone before recording and see the input reported by your browser. A live captured-input meter and elapsed timer show sound or quiet without animation. Stop still uploads a draft for explicit Send."
+      ]
     }
   ]
 }

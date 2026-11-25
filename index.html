@@ -11545,13 +11545,33 @@
         </div>
 
         <div class="doc-modal-backdrop" x-show="$store.chat.showAudioRecorderModal" x-cloak @click.self="$store.chat.closeAudioRecorder()">
-          <div class="doc-modal-card audio-recorder-modal">
+          <div class="doc-modal-card audio-recorder-modal" role="dialog" aria-modal="true" aria-labelledby="audio-recorder-title" x-sol-dialog @keydown.escape="$store.chat.closeAudioRecorder()">
             <button class="modal-close" type="button" @click="$store.chat.closeAudioRecorder()">&times;</button>
-            <h3>Voice note</h3>
+            <h3 id="audio-recorder-title">Voice note</h3>
             <p class="doc-comment-modal-copy" x-text="$store.chat.audioRecorderTitle"></p>
-            <p class="doc-comment-modal-copy" x-text="$store.chat.audioRecorderStatusLabel || 'Recording starts immediately and uploads when you stop.'"></p>
+            <p class="doc-comment-modal-copy" x-text="$store.chat.audioRecorderStatusLabel || 'Choose a microphone, then Start. Stop uploads a draft; Send posts it.'"></p>
+            <label class="audio-input-choice">Microphone preference
+              <select x-model="$store.chat.audioRecorderPreferredInput" :disabled="$store.chat.audioRecorderState !== 'idle'" @change="$store.chat.refreshAudioInputs()" aria-describedby="audio-input-help">
+                <option value="">System default</option>
+                <template x-for="input in $store.chat.audioRecorderInputs" :key="input.deviceId">
+                  <option :value="input.deviceId" x-text="input.label"></option>
+                </template>
+                <template x-if="$store.chat.audioRecorderPreferredInput &amp;&amp; !$store.chat.audioRecorderInputs.some(input => input.deviceId === $store.chat.audioRecorderPreferredInput)">
+                  <option :value="$store.chat.audioRecorderPreferredInput">Unavailable microphone</option>
+                </template>
+              </select>
+            </label>
+            <p id="audio-input-help" class="doc-comment-modal-copy">Choose before recording. Input changes are locked during a clip to keep your audio.</p>
+            <p class="doc-comment-modal-copy" x-show="$store.chat.audioRecorderInputNotice" x-text="$store.chat.audioRecorderInputNotice"></p>
+            <p class="doc-comment-modal-copy"><span x-text="$store.chat.audioRecorderState === 'idle' || $store.chat.audioRecorderState === 'requesting' || $store.chat.audioRecorderState === 'recording' ? 'Active input: ' : 'Recorded input: '"></span><span data-testid="audio-active-input" x-text="$store.chat.audioRecorderActiveInput"></span></p>
+            <p class="doc-comment-modal-copy" x-show="$store.chat.audioRecorderRouteDetail" x-text="$store.chat.audioRecorderRouteDetail"></p>
+            <div x-show="$store.chat.audioRecorderState === 'recording'" class="audio-input-observation">
+              <meter min="0" max="1" :value="$store.chat.audioRecorderLevel" aria-label="Captured microphone input level" :aria-valuetext="$store.chat.audioRecorderMeterAvailable ? ($store.chat.audioRecorderLevel > 0 ? 'Sound detected' : 'Quiet') : 'Input level unavailable'"></meter>
+              <span data-testid="audio-level-state" x-text="$store.chat.audioRecorderMeterAvailable ? ($store.chat.audioRecorderLevel > 0 ? 'Sound detected' : 'Quiet') : 'Input level unavailable'"></span>
+              <span role="timer" aria-label="Recording elapsed time" x-text="$store.chat.formatAudioDuration($store.chat.audioRecorderDurationSeconds)"></span>
+            </div>
             <template x-if="$store.chat.audioRecorderError">
-              <p class="error-text" x-text="$store.chat.audioRecorderError"></p>
+              <p class="error-text" role="alert" x-text="$store.chat.audioRecorderError"></p>
             </template>
             <template x-if="$store.chat.audioRecorderPreviewUrl">
               <audio class="audio-recorder-preview" :src="$store.chat.audioRecorderPreviewUrl" controls></audio>
@@ -11562,7 +11582,7 @@
             <div class="new-doc-modal-actions">
               <button type="button" class="btn-cancel" @click="$store.chat.closeAudioRecorder()">Cancel</button>
               <button type="button" class="btn-secondary" x-show="$store.chat.audioRecorderState === 'idle'" @click="$store.chat.startAudioRecording()">Start</button>
-              <button type="button" class="btn-secondary" x-show="$store.chat.audioRecorderState === 'recording'" @click="$store.chat.stopAudioRecording()">Stop</button>
+              <button type="button" class="btn-secondary" x-show="['recording', 'interrupted'].includes($store.chat.audioRecorderState)" @click="$store.chat.stopAudioRecording()">Stop</button>
               <button type="button" class="btn-confirm" x-show="$store.chat.audioRecorderState === 'ready'" @click="$store.chat.attachRecordedAudioDraft()">Retry upload</button>
             </div>
           </div>

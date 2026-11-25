@@ -606,3 +606,176 @@ it('stops voice-note batches after a workspace switch without writing or display
   expect(mocks.upsertAudioNote).not.toHaveBeenCalled();
   expect(store.audioNotes).toEqual([]);
 });
+
+describe('single-capture microphone observation and retention', () => {
+  let mediaDevices;
+  let track;
+  let stream;
+  let recorder;
+  let store;
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.clearAllMocks();
+    mocks.isTowerPgBackendMode.mockReturnValue(false);
+    track = { label: 'Observed USB microphone', readyState: 'live', getSettings: () => ({ deviceId: 'usb' }),
+      stop: vi.fn(), addEventListener: vi.fn(), removeEventListener: vi.fn() };
+    stream = { getTracks: () => [track], getAudioTracks: () => [track] };
+    mediaDevices = { getUserMedia: vi.fn().mockResolvedValue(stream), enumerateDevices: vi.fn().mockResolvedValue([
+      { kind: 'audioinput', deviceId: 'usb', label: 'USB microphone' },
+      { kind: 'audiooutput', deviceId: 'speaker', label: 'Speaker' },
+    ]), addEventListener: vi.fn(), removeEventListener: vi.fn() };
+    vi.stubGlobal('navigator', { mediaDevices });
+    vi.stubGlobal('MediaRecorder', class {
+      static isTypeSupported() { return true; }
+      constructor() { recorder = this; this.state = 'inactive'; this.mimeType = 'audio/webm'; }
+      start() { this.state = 'recording'; }
+      stop() {
+        this.state = 'inactive';
+        this.ondataavailable?.({ data: new Blob(['captured audio']) });
+        this.onstop?.();
+      }
+    });
+    vi.stubGlobal('URL', { createObjectURL: vi.fn(() => 'blob:retained'), revokeObjectURL: vi.fn() });
+    mocks.measureAudioDuration.mockResolvedValue(3);
+    store = createStore({ showAudioRecorderModal: false, audioRecorderState: 'idle', audioRecorderPreferredInput: '',
+      audioRecorderInputs: [], messageAudioDrafts: [], workspaceOwnerNpub: 'owner' });
+    // Observe only: no AudioContext support must never prevent capture.
+    vi.stubGlobal('AudioContext', undefined);
+  });
+  afterEach(() => { store.closeAudioRecorder(); vi.useRealTimers(); vi.unstubAllGlobals(); });
+
+  it('lists inputs before any capture and locks a single capture with observed route distinct from preference', async () => {
+    await store.openAudioRecorder('chat');
+    expect(mediaDevices.getUserMedia).not.toHaveBeenCalled();
+    expect(store.audioRecorderInputs).toEqual([{ deviceId: 'usb', label: 'USB microphone' }]);
+    store.audioRecorderPreferredInput = 'preferred';
+    await Promise.all([store.startAudioRecording(), store.startAudioRecording()]);
+    expect(mediaDevices.getUserMedia).toHaveBeenCalledExactlyOnceWith({ audio: { deviceId: { exact: 'preferred' } } });
+    expect(store.audioRecorderActiveInput).toBe('Observed USB microphone');
+    expect(store.audioRecorderRouteDetail).toContain('different input');
+    expect(store.audioRecorderMeterAvailable).toBe(false);
+    vi.advanceTimersByTime(2100);
+    expect(store.audioRecorderDurationSeconds).toBe(2);
+    expect(track.stop).not.toHaveBeenCalled();
+    store.closeAudioRecorder();
+    expect(track.stop).toHaveBeenCalledOnce();
+    expect(mediaDevices.removeEventListener).toHaveBeenCalledWith('devicechange', expect.any(Function));
+    expect(track.removeEventListener).toHaveBeenCalledWith('ended', expect.any(Function));
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('reports permission denial and missing selected input without claiming active route or silently recapturing', async () => {
+    await store.openAudioRecorder('chat');
+    for (const name of ['NotAllowedError', 'OverconstrainedError']) {
+      mediaDevices.getUserMedia.mockRejectedValueOnce({ name });
+      await store.startAudioRecording();
+      expect(store.audioRecorderState).toBe('idle');
+      expect(store.audioRecorderActiveInput).toBe('Not recording');
+      expect(store.audioRecorderError).toMatch(name === 'NotAllowedError' ? /permission denied/ : /unavailable/);
+    }
+    expect(mediaDevices.getUserMedia).toHaveBeenCalledTimes(2);
+  });
+
+  it('releases a delayed permission result after cancellation without reviving capture', async () => {
+    let grant;
+    mediaDevices.getUserMedia.mockReturnValueOnce(new Promise(resolve => { grant = resolve; }));
+    await store.openAudioRecorder('chat');
+    const pending = store.startAudioRecording();
+    store.closeAudioRecorder();
+    grant(stream);
+    await pending;
+    expect(track.stop).toHaveBeenCalledOnce();
+    expect(store.audioRecorderState).toBe('idle');
+    expect(store.showAudioRecorderModal).toBe(false);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('retains captured bytes for existing upload-to-draft and never sends a message on Stop', async () => {
+    await store.openAudioRecorder('chat');
+    await store.startAudioRecording();
+    mocks.encryptAudioBlob.mockResolvedValue({ encryptedBytes: new Uint8Array([1]), mediaEncryption: {} });
+    mocks.prepareStorageObject.mockResolvedValue({ object_id: 'retained-audio' });
+    mocks.uploadStorageObject.mockRejectedValueOnce(new Error('offline'));
+    store.getAudioRecorderStorageGroupIds = () => [];
+    await store.stopAudioRecording();
+    expect(store.audioRecorderState).toBe('ready');
+    expect(await store._audioRecorderBlob.text()).toBe('captured audio');
+    expect(store.audioRecorderPreviewUrl).toBe('blob:retained');
+    expect(store.messageAudioDrafts).toEqual([]);
+    expect(track.stop).toHaveBeenCalledOnce();
+    expect(vi.getTimerCount()).toBe(0);
+    mocks.uploadStorageObject.mockResolvedValueOnce(undefined);
+    await store.attachRecordedAudioDraft();
+    expect(store.messageAudioDrafts).toEqual([expect.objectContaining({ storage_object_id: 'retained-audio', transcript_status: 'pending' })]);
+    expect(store.showAudioRecorderModal).toBe(false);
+    expect(mocks.upsertAudioNote).not.toHaveBeenCalled(); // Materialization still belongs to explicit Send.
+  });
+
+  it('handles disconnection and preserves the clip until Stop; cancel never uploads', async () => {
+    await store.openAudioRecorder('chat');
+    await store.startAudioRecording();
+    track.readyState = 'ended';
+    track.addEventListener.mock.calls.find(([event]) => event === 'ended')[1]();
+    expect(store.audioRecorderActiveInput).toBe('Input disconnected');
+    expect(store.audioRecorderState).toBe('interrupted');
+    expect(store.audioRecorderError).toContain('keep the captured audio');
+    expect(vi.getTimerCount()).toBe(0);
+    store.closeAudioRecorder();
+    expect(mocks.uploadStorageObject).not.toHaveBeenCalled();
+    expect(store.messageAudioDrafts).toEqual([]);
+  });
+
+  it('waits for spontaneous/error final-data ordering before Stop uploads captured bytes', async () => {
+    for (const interrupted of ['stop', 'error']) {
+      await store.openAudioRecorder('chat');
+      await store.startAudioRecording();
+      store.attachRecordedAudioDraft = vi.fn().mockResolvedValue();
+      recorder.state = 'inactive';
+      if (interrupted === 'error') recorder.onerror();
+      const pending = store.stopAudioRecording();
+      await Promise.resolve();
+      expect(store.attachRecordedAudioDraft).not.toHaveBeenCalled();
+      recorder.ondataavailable({ data: new Blob(['final bytes']) });
+      recorder.onstop();
+      await pending;
+      expect(await store._audioRecorderBlob.text()).toBe('final bytes');
+      expect(store.attachRecordedAudioDraft).toHaveBeenCalledOnce();
+      store.closeAudioRecorder();
+    }
+  });
+
+  it('cancellation during upload cannot add a draft to a newly opened recorder', async () => {
+    let complete;
+    mocks.completeStorageObject.mockReturnValueOnce(new Promise(resolve => { complete = resolve; }));
+    await store.openAudioRecorder('chat');
+    await store.startAudioRecording();
+    store.getAudioRecorderStorageGroupIds = () => [];
+    const pending = store.stopAudioRecording();
+    // Drain the upload promise chain until completion is awaiting the fixture.
+    for (let i = 0; i < 10; i++) await Promise.resolve();
+    expect(mocks.completeStorageObject).toHaveBeenCalled();
+    store.closeAudioRecorder();
+    await store.openAudioRecorder('thread');
+    complete();
+    await pending;
+    expect(store.audioRecorderContext).toBe('thread');
+    expect(store.audioRecorderState).toBe('idle');
+    expect(store.showAudioRecorderModal).toBe(true);
+    expect(store.messageAudioDrafts).toEqual([]);
+  });
+
+  it('ignores a stop finalization that completes after cancellation', async () => {
+    let measured;
+    mocks.measureAudioDuration.mockReturnValueOnce(new Promise(resolve => { measured = resolve; }));
+    await store.openAudioRecorder('chat');
+    await store.startAudioRecording();
+    const pending = store.stopAudioRecording();
+    await Promise.resolve();
+    store.closeAudioRecorder();
+    measured(2);
+    await pending;
+    expect(store._audioRecorderBlob).toBe(null);
+    expect(store.audioRecorderPreviewUrl).toBe('');
+    expect(mocks.uploadStorageObject).not.toHaveBeenCalled();
+  });
+});

@@ -22,6 +22,7 @@ import {
   normalizeStorageGroupIds as normalizeStorageAccessGroupIds,
 } from './storage-payloads.js';
 import { decryptAudioBytes, encryptAudioBlob, measureAudioDuration } from './audio-notes.js';
+import { observeCapturedInput, observedAudioInput } from './audio-input-monitor.js';
 import { sameListBySignature } from './utils/state-helpers.js';
 import { isTowerPgBackendMode } from './backend-mode.js';
 import { hydrateTowerPgAudioNotes, resolveTowerPgWorkspaceContext } from './pg-read-hydrator.js';
@@ -308,6 +309,7 @@ export const audioRecordingManagerMixin = {
   },
 
   async openAudioRecorder(context) {
+    if (this.showAudioRecorderModal) return;
     this.audioRecorderContext = context;
     this.audioRecorderState = 'idle';
     this.audioRecorderError = null;
@@ -316,50 +318,159 @@ export const audioRecordingManagerMixin = {
     this.audioRecorderTitle = this.getAudioRecorderDefaultTitle(context);
     this.clearAudioRecorderPreview();
     this.showAudioRecorderModal = true;
-    await Promise.resolve();
-    await this.startAudioRecording();
+    this.audioRecorderActiveInput = 'Not recording';
+    this.audioRecorderRouteDetail = '';
+    await this.refreshAudioInputs();
+    if (!this.showAudioRecorderModal) return;
+    this.observeAudioDevices();
+  },
+
+  observeAudioDevices() {
+    this._audioDeviceCleanup?.();
+    const changed = () => { void this.refreshAudioInputs(); };
+    navigator.mediaDevices?.addEventListener?.('devicechange', changed);
+    this._audioDeviceCleanup = () => navigator.mediaDevices?.removeEventListener?.('devicechange', changed);
+  },
+
+  async refreshAudioInputs() {
+    try {
+      const devices = await navigator.mediaDevices?.enumerateDevices?.() || [];
+      if (!this.showAudioRecorderModal) return;
+      this.audioRecorderInputs = devices.filter(device => device.kind === 'audioinput' && device.deviceId && device.deviceId !== 'default')
+        .map((device, index) => ({ deviceId: device.deviceId, label: device.label || `Microphone ${index + 1}` }));
+      this.audioRecorderInputNotice = this.audioRecorderPreferredInput
+        && !this.audioRecorderInputs.some(device => device.deviceId === this.audioRecorderPreferredInput)
+        ? 'Preferred microphone is unavailable. Choose another input or System default.' : '';
+      this.updateAudioInputRoute();
+    } catch {
+      this.audioRecorderInputNotice = 'Browser could not list microphones. System default remains available.';
+    }
+  },
+
+  updateAudioInputRoute() {
+    if (!this._audioRecorderStream) return;
+    const track = this._audioRecorderStream.getAudioTracks?.()[0];
+    const route = observedAudioInput(track, this.audioRecorderInputs, this.audioRecorderPreferredInput);
+    this.audioRecorderActiveInput = route.name;
+    this.audioRecorderRouteDetail = route.detail;
+  },
+
+  releaseAudioInputObservation() {
+    this._audioDeviceCleanup?.();
+    this._audioDeviceCleanup = null;
+    this._audioMeterCleanup?.();
+    this._audioMeterCleanup = null;
+    clearInterval(this._audioElapsedTimer);
+    this._audioElapsedTimer = null;
+    this._audioTrackCleanup?.();
+    this._audioTrackCleanup = null;
+    this.audioRecorderLevel = 0;
+    this.audioRecorderMeterAvailable = false;
   },
 
   async startAudioRecording() {
+    if (this.audioRecorderState !== 'idle') return;
+    const attempt = Symbol('audio-capture');
+    this._audioCaptureAttempt = attempt;
+    this.audioRecorderState = 'requesting';
     this.audioRecorderError = null;
-    this.audioRecorderStatusLabel = '';
+    this.audioRecorderStatusLabel = 'Waiting for microphone permission…';
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const preference = this.audioRecorderPreferredInput || '';
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: preference ? { deviceId: { exact: preference } } : true });
+      if (this._audioCaptureAttempt !== attempt) {
+        stream.getTracks().forEach(track => track.stop());
+        return;
+      }
       const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
         ? 'audio/webm;codecs=opus'
         : 'audio/webm';
       this._audioRecorderChunks = [];
       this._audioRecorderStream = stream;
-      this._audioRecorder = new MediaRecorder(stream, { mimeType });
+      const recorder = new MediaRecorder(stream, { mimeType });
+      this._audioRecorder = recorder;
       this._audioRecorderStartedAt = Date.now();
-      this._audioRecorder.ondataavailable = (event) => {
-        if (event.data && event.data.size > 0) this._audioRecorderChunks.push(event.data);
+      recorder.ondataavailable = (event) => {
+        if (this._audioCaptureAttempt === attempt && event.data?.size > 0) this._audioRecorderChunks.push(event.data);
       };
-      this._audioRecorder.onerror = () => {
-        this.audioRecorderError = 'Recording failed.';
-        this.audioRecorderState = 'idle';
+      this._audioRecorderStopped = new Promise(resolve => {
+        recorder.onstop = () => {
+          if (this._audioCaptureAttempt === attempt && this.audioRecorderState === 'recording') {
+            this.releaseAudioInputObservation();
+            this.audioRecorderState = 'interrupted';
+            this.audioRecorderStatusLabel = 'Recording stopped. Stop to keep the captured audio.';
+          }
+          resolve();
+        };
+      });
+      recorder.onerror = () => {
+        if (this._audioCaptureAttempt !== attempt) return;
+        this.releaseAudioInputObservation();
+        stream.getTracks().forEach(track => track.stop());
+        // Keep the recorder/chunks so Stop can finalize captured audio.
+        this.audioRecorderState = 'interrupted';
+        this.audioRecorderStatusLabel = 'Recording interrupted.';
+        this.audioRecorderError = 'Recording interrupted. Stop to keep the captured audio.';
       };
-      this._audioRecorder.start();
+      recorder.start();
       this.audioRecorderState = 'recording';
       this.audioRecorderStatusLabel = 'Recording…';
+      this.audioRecorderDurationSeconds = 0;
+      this.updateAudioInputRoute();
+      const track = stream.getAudioTracks?.()[0];
+      const ended = () => {
+        this.updateAudioInputRoute();
+        this.audioRecorderState = 'interrupted';
+        this.audioRecorderStatusLabel = 'Recording interrupted.';
+        this.audioRecorderError = 'Microphone disconnected. Stop to keep the captured audio.';
+        this.releaseAudioInputObservation();
+      };
+      track?.addEventListener?.('ended', ended);
+      this._audioTrackCleanup = () => track?.removeEventListener?.('ended', ended);
+      this._audioMeterCleanup = observeCapturedInput(stream, level => {
+        this.audioRecorderMeterAvailable = level !== null;
+        this.audioRecorderLevel = level || 0;
+      });
+      this.audioRecorderMeterAvailable = !!this._audioMeterCleanup;
+      this._audioElapsedTimer = setInterval(() => {
+        this.audioRecorderDurationSeconds = Math.floor((Date.now() - this._audioRecorderStartedAt) / 1000);
+        this.updateAudioInputRoute();
+      }, 1000);
+      void this.refreshAudioInputs();
     } catch (error) {
-      this.audioRecorderError = error?.message || 'Could not access microphone.';
+      if (this._audioCaptureAttempt !== attempt) return;
+      this.releaseAudioInputObservation();
+      this._audioRecorderStream?.getTracks?.().forEach(track => track.stop());
+      this._audioRecorderStream = null;
+      this._audioRecorder = null;
+      this.audioRecorderState = 'idle';
+      this.observeAudioDevices();
+      this.audioRecorderStatusLabel = '';
+      this.audioRecorderActiveInput = 'Not recording';
+      this.audioRecorderError = error?.name === 'NotAllowedError'
+        ? 'Microphone permission denied. Allow microphone access in browser settings and try again.'
+        : ['NotFoundError', 'OverconstrainedError'].includes(error?.name)
+          ? 'Selected microphone is unavailable. Choose another input or System default.'
+          : error?.message || 'Could not access microphone.';
     }
   },
 
   async stopAudioRecording() {
-    if (!this._audioRecorder || this.audioRecorderState !== 'recording') return;
+    if (!this._audioRecorder || !['recording', 'interrupted'].includes(this.audioRecorderState)) return;
 
     const recorder = this._audioRecorder;
     const stream = this._audioRecorderStream;
+    const attempt = this._audioCaptureAttempt;
+    this.releaseAudioInputObservation();
+    this._audioDeviceCleanup?.();
+    this._audioDeviceCleanup = null;
 
     this.audioRecorderState = 'processing';
     this.audioRecorderStatusLabel = 'Preparing recording…';
 
-    await new Promise((resolve) => {
-      recorder.onstop = resolve;
-      recorder.stop();
-    });
+    if (recorder.state !== 'inactive') recorder.stop();
+    await this._audioRecorderStopped;
+    if (this._audioCaptureAttempt !== attempt) return;
     stream?.getTracks?.().forEach((track) => track.stop());
 
     const mimeType = recorder.mimeType || 'audio/webm;codecs=opus';
@@ -370,6 +481,7 @@ export const audioRecordingManagerMixin = {
 
     const durationFromClock = Math.max(1, Math.round((Date.now() - (this._audioRecorderStartedAt || Date.now())) / 1000));
     const measured = await measureAudioDuration(blob);
+    if (this._audioCaptureAttempt !== attempt) return;
     this.clearAudioRecorderPreview();
     this._audioRecorderBlob = blob;
     this.audioRecorderDurationSeconds = measured || durationFromClock;
@@ -386,7 +498,11 @@ export const audioRecordingManagerMixin = {
   },
 
   closeAudioRecorder() {
-    if (this._audioRecorder && this.audioRecorderState === 'recording') {
+    this._audioCaptureAttempt = null;
+    this.releaseAudioInputObservation();
+    this._audioDeviceCleanup?.();
+    this._audioDeviceCleanup = null;
+    if (this._audioRecorder && this._audioRecorder.state !== 'inactive') {
       try {
         this._audioRecorder.stop();
       } catch {}
@@ -407,6 +523,7 @@ export const audioRecordingManagerMixin = {
 
   async attachRecordedAudioDraft() {
     if (!this._audioRecorderBlob || !this.audioRecorderContext || !this.workspaceOwnerNpub) return;
+    const attempt = this._audioCaptureAttempt;
     this.audioRecorderError = null;
     this.audioRecorderState = 'uploading';
     this.audioRecorderStatusLabel = isTowerPgBackendMode() ? 'Uploading…' : 'Encrypting and uploading…';
@@ -444,6 +561,7 @@ export const audioRecordingManagerMixin = {
         size_bytes: uploadBytes.byteLength,
       });
 
+      if (this._audioCaptureAttempt !== attempt) return;
       const draft = {
         draft_id: crypto.randomUUID(),
         kind: 'audio',
@@ -460,6 +578,7 @@ export const audioRecordingManagerMixin = {
       this.setAudioDraftsForContext(this.audioRecorderContext, nextDrafts);
       this.closeAudioRecorder();
     } catch (error) {
+      if (this._audioCaptureAttempt !== attempt) return;
       this.audioRecorderError = error?.message || 'Failed to upload voice note.';
       this.audioRecorderState = 'ready';
       this.audioRecorderStatusLabel = 'Upload failed. Retry upload when ready.';

@@ -25724,3 +25724,12 @@ button.task-desc-toggle:focus-visible {
 #napplet-runtime-dialog .napplet-consent label { display: block; }
 #napplet-runtime-dialog .napplet-consent :is(textarea, input, select) { box-sizing: border-box; width: 100%; max-width: 100%; }
 #napplet-runtime-dialog .napplet-consent button { margin: .25rem; }
+
+/* Capture-driven levels have no decorative animation, including reduced motion. */
+.audio-input-choice { display: grid; gap: 0.4rem; }
+.audio-input-choice select { width: 100%; min-width: 0; }
+.audio-input-observation { display: flex; align-items: center; flex-wrap: wrap; gap: 0.65rem; }
+.audio-input-observation meter { flex: 1; min-width: 80px; height: 1rem; }
+.audio-input-observation meter::-webkit-meter-bar,
+.audio-input-observation meter::-webkit-meter-optimum-value { transition: none; animation: none; }
+.audio-recorder-modal { overflow-wrap: anywhere; }
