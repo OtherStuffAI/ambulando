@@ -22,6 +22,10 @@ Before changing behavior, read the relevant material in `docs/`. Start with
 - `src/sync-families.js`: sync-family registration
 - `tests/`: unit, integration, and browser coverage
 
+## NStack backend independence
+
+Build Ambulando features through supported generic NStack contracts where those contracts meet the full permission, concurrency, revision and sync requirements. App domain schemas, editor/template registries and workflows belong to Ambulando. Before proposing a NStack endpoint, table or shared-contract change, read the installed `wingman-be-free-platform` skill and `references/pluggable-app-boundary.md`, identify the exact generic capability gap and propose a reusable primitive. Preserve existing typed Docs/Files/chat APIs and record identities until a separately scoped migration is validated. Do not assume app-signed database APIs are safe for end-user clients.
+
 ## Design rules
 
 - Render persisted collections from Dexie, preferably with `liveQuery`.

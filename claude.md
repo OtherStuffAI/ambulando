@@ -22,6 +22,10 @@ Before changing behavior, read the relevant material in `docs/`. Start with
 - `src/sync-families.js`: sync-family registration
 - `tests/`: unit, integration, and browser coverage
 
+## NStack backend independence
+
+Build Ambulando features through supported generic NStack contracts where those contracts meet the full permission, concurrency, revision and sync requirements. App domain schemas, editor/template registries and workflows belong to Ambulando. Before proposing a NStack endpoint, table or shared-contract change, read the installed `wingman-be-free-platform` skill and `references/pluggable-app-boundary.md`, identify the exact generic capability gap and propose a reusable primitive. Preserve existing typed Docs/Files/chat APIs and record identities until a separately scoped migration is validated. Do not assume app-signed database APIs are safe for end-user clients.
+
 ## Design rules
 
 - Render persisted collections from Dexie, preferably with `liveQuery`.
@@ -145,3 +149,9 @@ Check your own queue before starting, at milestones/decisions, validation and ha
 Every worker brief includes manager session ID, Autopilot location/connection, exact supported communication command and task/report destination. Workers ask questions; managers retain worker IDs, check their own queue and worker progress, and answer the exact worker. Use authorized `bun <autopilot-checkout>/clis/sessions.ts send <target-session-id> "<worker session/task; decision; recommendation; blocking status>" --bot-crypto --json`; queue-add only when specifically authorized. Sending may queue while busy; no immediate interrupt guarantee. Continue independent work while awaiting answers and pause dependent decisions.
 
 Own queue management never authorizes consuming another session’s queue. Callback inboxes remain separate: review evidence and follow up, then acknowledge/close only reviewed callbacks. No runtime injection, scope bypass or background polling is implied; recheck before handoff.
+
+<!-- post-work-cleanup:v1 -->
+## Build, simulator and test cleanup
+
+Before declaring build/test work complete, remove the disposable outputs created by the task: temporary build trees, test results, simulator clones, emulator snapshots and scratch downloads. Shut down task-owned test devices and processes when finished. Preserve source, signing material, release deliverables, required evidence, installed user data and anything used by concurrent work. Check ownership and active processes before deleting shared caches or devices; use supported simulator/emulator tooling. Measure disk space before and after cleanup and report what was reclaimed, what remains and why. Cleanup is part of completion; workers must include it in their handoff. Retain large caches or test environments only with an explicit reason and a cleanup owner/time.
+<!-- /post-work-cleanup:v1 -->
