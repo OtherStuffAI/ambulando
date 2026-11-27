@@ -153,6 +153,16 @@ function pgMetadataWithThread(metadata = {}, threadId = null) {
   return base;
 }
 
+function pgFileMetadata(file = {}, previous = null) {
+  const object = value => value && typeof value === 'object' && !Array.isArray(value) ? value : null;
+  // File hydration uses pg_file_metadata, unlike Docs. Retain that snapshot when legacy callers supply
+  // metadata edits; an empty/missing edit is not an instruction to erase unknown persisted fields.
+  const sameRecord = previous?.record_id === file.record_id
+    && (!previous?.pg_workspace_id || !file.pg_workspace_id || previous.pg_workspace_id === file.pg_workspace_id);
+  const canonical = object(file.pg_file_metadata) ?? (sameRecord ? object(previous?.pg_file_metadata) : null);
+  return { ...canonical, ...object(file.metadata), ...object(file.pg_metadata) };
+}
+
 function pgTaskMetadata(task = {}) {
   const base = task.pg_metadata && typeof task.pg_metadata === 'object' && !Array.isArray(task.pg_metadata)
     ? { ...task.pg_metadata }
@@ -365,7 +375,7 @@ export async function createTowerPgFileFromLocal(store, file) {
     folder_id: file.folder_id || file.pg_folder_id || null,
     display_name: file.display_name || file.title || null,
     description: file.description || file.content || null,
-    metadata: pgMetadataWithThread(file.pg_metadata || file.metadata, recordContext.threadId),
+    metadata: pgMetadataWithThread(pgFileMetadata(file), recordContext.threadId),
   }, pgRequestOptions(context));
   return mapPgFileToLocalDocument(result.file, { workspaceOwnerNpub: context.workspaceOwnerNpub });
 }
@@ -375,13 +385,15 @@ export async function updateTowerPgFileFromLocal(store, file, previous = null) {
   if (!context.workspaceId || !context.workspaceOwnerNpub || !context.baseUrl || !file?.record_id) throw new Error('Tower PG file is not ready');
   const { recordContext, channel } = resolveTowerPgChannelForRecord(store, file);
   if (!channel?.record_id) throw new Error('Selected PG channel does not match the file scope');
+  const snapshot = pgFileMetadata(file, previous);
+  const metadata = pgMetadataWithThread(snapshot, recordContext.threadId);
   const result = await updateTowerPgFile(context.workspaceId, file.record_id, {
     row_version: previous?.version || file.version || undefined,
     channel_id: channel.record_id,
     folder_id: file.folder_id ?? file.pg_folder_id ?? null,
     display_name: file.display_name || file.title || null,
     description: file.description || file.content || null,
-    metadata: pgMetadataWithThread(file.pg_metadata || file.metadata, recordContext.threadId),
+    ...(Object.keys(metadata).length || Object.hasOwn(snapshot, 'thread_id') ? { metadata } : {}),
   }, pgRequestOptions(context));
   return mapPgFileToLocalDocument(result.file, { workspaceOwnerNpub: context.workspaceOwnerNpub });
 }

@@ -5976,6 +5976,14 @@
       "notes": [
         "Choose a microphone before recording and see the input reported by your browser. A live captured-input meter and elapsed timer show sound or quiet without animation. Stop still uploads a draft for explicit Send."
       ]
+    },
+    {
+      "buildNumber": 2762,
+      "label": "Preserved File context and connected agent outputs",
+      "notes": [
+        "Renaming or moving Files preserves their existing metadata, associations and editor information.",
+        "New HTML, whiteboard and other agent-published Files retain the originating chat’s verified goal reference while preserving native identities and access."
+      ]
     }
   ]
 }

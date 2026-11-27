@@ -26,7 +26,7 @@ async function folder(files) {
 
 function runCli(args, env = {}) {
   return new Promise(resolve => {
-    const child = spawn(process.env.BUN_BIN || 'bun', [CLI, ...args], { env: { ...process.env, ...env }, stdio: ['ignore', 'pipe', 'pipe'] });
+    const child = spawn(process.env.BUN_BIN || 'bun', [CLI, ...args], { env: { ...process.env, SESSION_ID: '', ...env }, stdio: ['ignore', 'pipe', 'pipe'] });
     let stdout = '', stderr = '';
     child.stdout.on('data', chunk => { stdout += chunk; });
     child.stderr.on('data', chunk => { stderr += chunk; });

@@ -372,7 +372,6 @@ describe('PG write adapter', () => {
       folder_id: null,
       display_name: 'File.pdf',
       description: null,
-      metadata: {},
     }, { baseUrl: 'https://tower.example', appNpub: 'flightdeck_pg' });
     expect(file).toMatchObject({ record_id: 'file-1', pg_channel_id: 'channel-2', version: 6 });
   });

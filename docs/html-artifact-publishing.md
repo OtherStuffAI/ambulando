@@ -48,6 +48,14 @@ retain your source, read the latest version separately and reconcile before publ
 
 `--json` suppresses progress output. `WINGMAN_TOWER_URL` can replace `--tower`.
 
+## Goal-associated agent outputs
+
+New HTML and private image Files inherit the primary goal of the current agent session's authoritative chat. The shared publisher reads session routing with `wingman.ts flightdeck context --json`, validates the workspace/backend and thread, then resolves the Goal File under normal ACLs with its schema and exact-version hash. Only `ambulando_goal: { version: 1, goal_file_id }` references go into File metadata; goal content never becomes visible HTML or chat boilerplate. A denied Goal read retains only the authoritative reference. Missing, malformed or accessible non-Goal targets stop creation.
+
+Use `--chat-thread <thread-uuid>` when explicitly publishing for another accessible chat in the chosen workspace. This reads the named thread; it does not trust a copied goal title or accept an arbitrary goal override. `--context-cli <path-to-wingman.ts>` or `WINGMAN_CONTEXT_CLI` selects the supported context helper. Outside an agent session (`SESSION_ID` absent), publication has no inferred chat association. Context-read failures in an agent session are errors, not silent unassociated publication.
+
+The shared `towerClient.createFile` path also covers whiteboards, new napplet source Files and migrated artefact Files. New records retain existing format/provenance metadata, and their saved association is read back. Existing File revisions keep their current association; opening or revising one in another goal's chat does not reassign it. An uncertain post-create readback names the created File and requires inspection before retrying. These source checks do not establish live agent receipt, client listing or native navigation.
+
 ## Signing
 
 Every request is NIP-98 signed through the Autopilot capability broker:

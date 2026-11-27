@@ -27,6 +27,8 @@ export const USAGE = `Read, edit and publish private Excalidraw boards (Flight D
   bun scripts/excalidraw-board.mjs check    --scene <file>
   bun scripts/excalidraw-board.mjs export   --scene <file> --out <public.excalidraw>
 
+  New boards inherit the current agent chat's goal; --chat-thread <uuid> supplies an explicit source chat.
+  --context-cli selects the supported wingman.ts session context helper (or WINGMAN_CONTEXT_CLI).
   Network commands also need --tower <origin> (or WINGMAN_TOWER_URL) and --workspace <id>.
 
   read     writes the exact version and a sidecar <out>.wingman.json recording its base version.
@@ -60,10 +62,10 @@ async function readSidecar(scenePath) {
 }
 
 /** Signed board operations shared by the CLI and tests (inject fetch/sign in tests). */
-export function boardClient({ baseUrl, workspaceId, sign, fetchImpl = fetch }) {
+export function boardClient({ baseUrl, workspaceId, sign, fetchImpl = fetch, readContext = sign?.sessionContext, chatThreadId }) {
   let signedBy = '';
   const trackedSign = async (...args) => { const result = await sign(...args); signedBy = result.signedBy || ''; return result; };
-  const client = towerClient({ baseUrl, workspaceId, sign: trackedSign, fetchImpl });
+  const client = towerClient({ baseUrl, workspaceId, sign: trackedSign, fetchImpl, readContext, chatThreadId });
   const origin = String(baseUrl).replace(/\/+$/, '');
   const ws = `/api/v4/flightdeck-pg/workspaces/${encodeURIComponent(workspaceId)}`;
   return {
@@ -113,7 +115,7 @@ export function boardClient({ baseUrl, workspaceId, sign, fetchImpl = fetch }) {
 function requireTower(options) {
   const tower = options.tower || process.env.WINGMAN_TOWER_URL;
   if (!tower || !uuid.test(String(options.workspace || ''))) throw new Error('--tower and --workspace are required');
-  return boardClient({ baseUrl: tower, workspaceId: options.workspace, sign: brokerSigner({ cli: options['signer-cli'] || defaultSignerCli() }) });
+  return boardClient({ baseUrl: tower, workspaceId: options.workspace, sign: brokerSigner({ cli: options['signer-cli'] || defaultSignerCli(), contextCli: options['context-cli'] }), chatThreadId: options['chat-thread'] });
 }
 
 function requireUuid(options, key) {

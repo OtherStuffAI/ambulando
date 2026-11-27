@@ -23,6 +23,8 @@ const USAGE = `Publish a local HTML artefact folder to a private Flight Deck Fil
                     Omit to create a new File; reuse the printed file_id for updates.
   --base            Exact HTML version read before authoring; required with --file
   --title           Display name for a new HTML File (default: the document <title>)
+  --chat-thread     Explicit originating chat thread UUID; otherwise use the current agent session
+  --context-cli     Supported wingman.ts CLI for session context (or WINGMAN_CONTEXT_CLI)
   --canvas          Also add a naplet that follows the latest version
   --signer-cli      Capability broker CLI (default: $WINGMAN_CAPABILITY_CLI or
                     $AUTOPILOT_REPO/clis/wingman-capability.ts)
@@ -120,7 +122,7 @@ async function main() {
   if (options.file && !uuid.test(String(options.base || ''))) throw new Error('--base must name the version read before editing an existing HTML File');
   if (options.file && !uuid.test(options.file)) throw new Error('--file must be a File UUID');
   if (options.canvas && !uuid.test(options.canvas)) throw new Error('--canvas must be a Canvas UUID');
-  const client = towerClient({ baseUrl: tower, workspaceId, sign: brokerSigner({ cli: options['signer-cli'] || defaultSignerCli() }) });
+  const client = towerClient({ baseUrl: tower, workspaceId, sign: brokerSigner({ cli: options['signer-cli'] || defaultSignerCli(), contextCli: options['context-cli'] }), chatThreadId: options['chat-thread'] });
 
   const existing = options.file ? await resolveExistingAssets(client, options.file) : null;
   if (existing && channelId && existing.channelId && channelId !== existing.channelId) throw new Error(`--channel does not match the File's channel ${existing.channelId}`);

@@ -135,3 +135,7 @@ message signatures. Browser operations stamp the authenticated viewer in the
 parent controller; File history authenticates the publishing actor. Any actor
 with board write permission can edit the underlying JSON. Cryptographic
 per-message authorship would require a separate signed-message contract.
+
+## Goal-associated creation
+
+New boards created by an agent inherit the authoritative current chat's primary goal through native File metadata, using the shared publisher’s [goal association checks](html-artifact-publishing.md#goal-associated-agent-outputs). Pass `--chat-thread <thread-uuid>` to name an explicit source chat; `--thread` remains a board comment-thread argument. Existing board publication/replies create versions of the original File and preserve its association, comments and assets.
