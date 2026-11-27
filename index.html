@@ -5481,7 +5481,7 @@
             </template>
 
             <template x-if="$store.chat.docsEditorOpen">
-              <section class="docs-editor-v3">
+              <section class="docs-editor-v3" :inert="$store.chat.docPublicationAction === $store.chat.selectedDocId">
                 <div class="internal-reference-feedback" x-show="$store.chat.internalLinkOpening || $store.chat.internalLinkOpenError" x-cloak>
                   <p role="status" x-show="$store.chat.internalLinkOpening">Opening linked record…</p>
                   <p class="error-text" role="alert" x-show="$store.chat.internalLinkOpenError" x-text="$store.chat.internalLinkOpenError"></p>
@@ -5690,6 +5690,11 @@
                   </div>
                   <template x-for="(previous, index) in $store.chat.docReviewPrevious" :key="index"><details><summary x-text="`Preserved earlier merge preview against v${previous.latestVersion}`"></summary><p x-show="previous.unresolved">This earlier preview still had unresolved overlaps.</p><strong x-text="previous.title"></strong><pre x-text="previous.content"></pre></details></template>
                 </section>
+                <div class="doc-edit-access-banner" x-show="$store.chat.docPublicationHold" x-cloak role="status">
+                  <p>Removed from a thread. Your draft stays on this device. Automatic publishing is paused, including when you reopen Docs.</p>
+                  <button type="button" class="btn-secondary" :disabled="$store.chat.docDraftChoice || $store.chat.docDraftReadSaved || $store.chat.docAutosaveState === 'saving'" @click="$store.chat.saveDetachedDocExplicitly()" x-text="$store.chat.docRecovery?.resolution_state === 'open' &amp;&amp; !$store.chat.docEditDraftDirty ? 'Save reviewed recovery to source' : 'Save reviewed draft to source'">Save reviewed draft to source</button>
+                  <button type="button" class="btn-secondary" :disabled="$store.chat.docRecovery || $store.chat.docAutosaveState === 'saving'" @click="$store.chat.discardSelectedDocDraft({ publicationHoldGeneration: $store.chat.docPublicationHold?.generation })">Discard detached local draft</button>
+                </div>
                 <div class="doc-edit-access-banner" x-show="$store.chat.docMergePending" x-cloak role="status">Merged draft ready. Edit the result below, then Save to publish. Automatic saving is paused until you save this result.</div>
 
                 <details

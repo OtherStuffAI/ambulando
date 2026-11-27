@@ -1,5 +1,6 @@
 import { observeDiagnostics } from '../src/diagnostics-events.js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { openWorkspaceDb } from '../src/db.js';
 import {
   createTowerPgAudioNoteFromLocal,
   createTowerPgDocCommentFromLocal,
@@ -103,7 +104,9 @@ function store(seed = {}) {
 }
 
 describe('PG write adapter', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
+    const db = openWorkspaceDb('pg-write-adapter-tests'); await db.open();
+    await Promise.all(db.tables.map(table => table.clear()));
     vi.clearAllMocks();
   });
 
@@ -1772,4 +1775,29 @@ it.each(['workspace', 'identity', 'connection', 'generation'])('stops message de
   });
   await expect(createTowerPgMessageFromLocal(s, { record_id: 'local', pg_workspace_id: 'workspace-1', channel_id: 'channel-1', body: 'Preserve' })).rejects.toThrow('original workspace');
   expect(api.createTowerPgChannelMessage).not.toHaveBeenCalled();
+});
+
+it('fences a detached Doc at the final update transport, including a newer hold after reviewed Save', async () => {
+  const api = await import('../src/api.js');
+  const { consumeThreadDocDetaches, readPublicationHold } = await import('../src/docs/publication-holds.js');
+  const db = openWorkspaceDb('pg-doc-final-hold'); await db.open();
+  await Promise.all(db.tables.map(table => table.clear()));
+  const before = version => ({ id: 'thread', workspace_id: 'workspace-1', row_version: version,
+    metadata: { ambulando_thread_artefacts: { version: 1, items: [{ kind: 'doc', id: 'doc-1' }] } } });
+  const detach = version => db.transaction('rw', db.sync_state, () => consumeThreadDocDetaches(db, before(version - 1), {
+    ...before(version), metadata: { ambulando_thread_artefacts: { version: 1, items: [] } },
+  }));
+  await detach(2);
+  const old = await readPublicationHold(db, 'workspace-1', 'doc-1');
+  await detach(4);
+  api.updateTowerPgDoc.mockClear();
+  const document = { record_id: 'doc-1', pg_save_requires_lease: false, content_storage_object_id: 'storage', version: 1 };
+  await expect(updateTowerPgDocFromLocal(store(), document)).rejects.toThrow('reviewed explicit Save');
+  await expect(updateTowerPgDocFromLocal(store(), { ...document, pg_publication_hold_generation: old.generation })).rejects.toThrow('reviewed explicit Save');
+  expect(api.updateTowerPgDoc).not.toHaveBeenCalled();
+  const reviewed = await readPublicationHold(db, 'workspace-1', 'doc-1');
+  api.updateTowerPgDoc.mockResolvedValue({ doc: { id: 'doc-1', workspace_id: 'workspace-1', row_version: 2, title: 'Saved' } });
+  await updateTowerPgDocFromLocal(store(), { ...document, pg_publication_hold_generation: reviewed.generation });
+  expect(api.updateTowerPgDoc).toHaveBeenCalledTimes(1);
+  expect(api.updateTowerPgDoc.mock.calls[0][2].metadata).not.toHaveProperty('pg_publication_hold_generation');
 });

@@ -1,3 +1,4 @@
+import { readPublicationHold, consumeThreadDocDetaches } from './docs/publication-holds.js';
 import { canonicalProfileNpub, profileHex, mergeUsableProfile, usableProfileText } from './profile-identity.js';
 import { yieldToBrowser } from './utils/yield-to-browser.js';
 import { mergeAgentActivityRecord } from './agent-activity.js';
@@ -1138,6 +1139,7 @@ export async function upsertDocumentDraft(draft = {}) {
   if (!draftKey) throw new Error('Document draft requires workspace_id and document_id');
   const row = sanitizeForStorage({
     ...draft,
+    draft_revision: crypto.randomUUID(),
     draft_key: draftKey,
     workspace_id: workspaceId,
     document_id: documentId,
@@ -1201,14 +1203,15 @@ export async function deleteDocumentDraft(workspaceId, documentId) {
   const draftKey = documentDraftKey(workspaceId, documentId);
   const db = _currentWorkspaceDb;
   if (!draftKey || !db) return false;
-  await queueDocumentDraftWrite(db, draftKey, async () => {
+  return queueDocumentDraftWrite(db, draftKey, () => db.transaction('rw', db.sync_state, db.document_drafts, async () => {
+    if (await readPublicationHold(db, workspaceId, documentId)) return false;
     const previous = await db.document_drafts.get(draftKey);
     if (previous?.preserved_copies?.length) {
       await db.document_drafts.put({ draft_key: draftKey, workspace_id: workspaceId, document_id: documentId,
         draft_status: 'archive', preserved_copies: previous.preserved_copies, updated_at: new Date().toISOString() });
     } else await db.document_drafts.delete(draftKey);
-  });
-  return true;
+    return true;
+  }));
 }
 
 // ---------------------------------------------------------------------------
@@ -1461,7 +1464,15 @@ export async function getMessagesByOwner(ownerNpub) {
 }
 
 export async function upsertMessage(msg) {
-  return wsDb().chat_messages.put(sanitizeForStorage(msg));
+  const db = wsDb(), row = sanitizeForStorage(msg);
+  if (row.pg_record_type !== 'thread' || row.sync_status !== 'synced') return db.chat_messages.put(row);
+  return db.transaction('rw', db.chat_messages, db.sync_state, async () => {
+    const prior = await db.chat_messages.get(row.record_id);
+    if (prior && Number(prior.version) > Number(row.version)) return row.record_id;
+    await consumeThreadDocDetaches(db, prior && { id: prior.record_id, workspace_id: prior.pg_workspace_id, row_version: prior.version, metadata: prior.pg_metadata },
+      { id: row.record_id, workspace_id: row.pg_workspace_id, row_version: row.version, metadata: row.pg_metadata });
+    return db.chat_messages.put(row);
+  });
 }
 
 // Late send completions must never select the workspace that happens to be
@@ -1472,7 +1483,7 @@ export async function withWorkspaceMessageTransaction(workspaceDbKey, operation)
   const db = createWorkspaceDb(workspaceDbKey);
   try {
     await db.open();
-    return await db.transaction('rw', db.chat_messages, operation);
+    return await db.transaction('rw', db.chat_messages, db.sync_state, operation);
   } finally {
     db.close();
   }
@@ -1562,7 +1573,7 @@ export async function replacePgMessagesForChannel(channelId, messages = [], opti
     .map((message) => sanitizeForStorage(message))
     .filter((message) => message?.record_id);
   const db = wsDb();
-  return db.transaction('rw', db.chat_messages, db.pending_writes, db.pg_record_rows, async () => {
+  return db.transaction('rw', db.chat_messages, db.pending_writes, db.pg_record_rows, db.sync_state, async () => {
     const incomingIds = [...new Set(rows.flatMap((row) => [row.record_id, row.pg_client_record_id]).filter(Boolean))];
     const clientIds = [...new Set(rows.map((row) => row.pg_client_record_id).filter(Boolean))];
     const existing = options.authoritative === true
@@ -1632,6 +1643,13 @@ export async function replacePgMessagesForChannel(channelId, messages = [], opti
       && !sameLogicalValue(existingById.get(message.record_id), { ...message, ...messageIndexFields(message) })
     ));
     if (deleteIds.length > 0) await db.chat_messages.bulkDelete(deleteIds);
+    for (const row of changedRows) {
+      if (row.pg_record_type === 'thread') {
+        const prior = existingById.get(row.record_id);
+        await consumeThreadDocDetaches(db, prior && { id: prior.record_id, workspace_id: prior.pg_workspace_id, row_version: prior.version, metadata: prior.pg_metadata },
+          { id: row.record_id, workspace_id: row.pg_workspace_id, row_version: row.version, metadata: row.pg_metadata });
+      }
+    }
     if (changedRows.length > 0) await db.chat_messages.bulkPut(changedRows);
     for (const row of changedRows) {
       if ((!row.parent_message_id && row.pg_thread_id) || row.pg_source_message_id) {

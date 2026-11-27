@@ -1,3 +1,4 @@
+import { consumeThreadDocDetaches } from './docs/publication-holds.js';
 import { materializeChannelScope } from './channel-move-materialization.js';
 import { pinOrderSupportKey, mapThreadPin, threadPinContext, threadPinSupportKey } from './thread-pin-store.js';
 import { mergePgAccessState } from './pg-access-state.js';
@@ -359,6 +360,7 @@ async function applyRecordPage(store, page, options = {}) {
       if (c.operation === 'delete' && ['scope', 'channel'].includes(c.family)) await markPgTargetArchived(c.family, c.id, db);
       if (c.operation === 'upsert' && ['scope', 'channel'].includes(c.family)) await db.pg_archived_targets.delete(`${c.family}:${c.id}`);
       const raw = { ...c, key, generation, parent_id: c.row?.task_id || c.row?.thread_id || prior?.parent_id || null, source_message_id: c.row?.source_message_id || prior?.source_message_id || prior?.row?.source_message_id || null };
+      if (c.family === 'thread' && c.operation === 'upsert') await consumeThreadDocDetaches(db, prior?.row, c.row);
       versions.set(key, raw); changedKeys.add(key);
       if (c.family === 'task_assignment') affectedTasks.add(raw.parent_id || c.id.split(':')[0]);
       if (c.family === 'task') affectedTasks.add(c.id);

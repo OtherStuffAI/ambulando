@@ -5984,6 +5984,38 @@
         "Renaming or moving Files preserves their existing metadata, associations and editor information.",
         "New HTML, whiteboard and other agent-published Files retain the originating chat’s verified goal reference while preserving native identities and access."
       ]
+    },
+    {
+      "buildNumber": 2763,
+      "label": "Preserve detached document drafts",
+      "notes": [
+        "Pause automatic publication when a shared thread removes a document. Keep the local draft across Docs reopen until you review and explicitly save or discard it."
+      ]
+    },
+    {
+      "buildNumber": 2764,
+      "label": "Fence detached draft review to its editor",
+      "notes": [
+        "Keep detached draft Save and discard bound to the reviewed editor, account and recovery generation when navigation or another update happens during the action."
+      ]
+    },
+    {
+      "buildNumber": 2765,
+      "label": "Detached draft validation checkpoint",
+      "notes": [],
+      "noUserVisibleChanges": true
+    },
+    {
+      "buildNumber": 2766,
+      "label": "Recovery promotion validation checkpoint",
+      "notes": [],
+      "noUserVisibleChanges": true
+    },
+    {
+      "buildNumber": 2767,
+      "label": "Discard completion validation checkpoint",
+      "notes": [],
+      "noUserVisibleChanges": true
     }
   ]
 }

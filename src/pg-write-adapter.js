@@ -1,3 +1,5 @@
+import { readPublicationHold } from './docs/publication-holds.js';
+import { getWorkspaceDb } from './db.js';
 import { requestTowerPgContext } from './api.js';
 import {
   createTowerPgChannelAudioNote,
@@ -331,6 +333,8 @@ export async function updateTowerPgDocFromLocal(store, document, previousDocumen
   const body = document.pg_save_requires_lease === false
     ? saveBody
     : addPgEditLeaseToSaveBody(store, previousDocument || document, 'document', saveBody);
+  const hold = await readPublicationHold(getWorkspaceDb(), context.workspaceId, document.record_id);
+  if (hold && document.pg_publication_hold_generation !== hold.generation) throw new Error('Detached document draft requires reviewed explicit Save.');
   const result = await updateTowerPgDoc(context.workspaceId, document.record_id, body, pgRequestOptions(context));
   const accepted = mapPgDocToLocal({
     ...result.doc,

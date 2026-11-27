@@ -5258,7 +5258,7 @@ it('cancels an old queued save instead of executing it in another actor/origin w
   store.saveSelectedPgDocItem = vi.fn(() => new Promise(resolve => { finish = resolve; }));
   const first = store.saveSelectedDocItem();
   const second = store.saveSelectedDocItem();
-  await Promise.resolve();
+  await vi.waitFor(() => expect(store.saveSelectedPgDocItem).toHaveBeenCalledTimes(1));
   store.session = { npub: 'second-actor' };
   store.currentWorkspace = { ...store.currentWorkspace, directHttpsUrl: 'https://second-origin.example' };
   finish(null);
@@ -5444,4 +5444,148 @@ it('archives both a merged draft and its original common-base draft when accepti
   const [copy] = await getPreservedDocumentDraftCopies('workspace', 'doc');
   expect(copy.content).toBe('merged local');
   expect(copy.review_original).toMatchObject({ content: 'original local', base_row_version: 6 });
+});
+
+describe('detached document publication recovery', () => {
+  beforeEach(async () => {
+    const db = openWorkspaceDb('detached-doc-manager'); await db.open();
+    await Promise.all(db.tables.map(table => table.clear()));
+    isTowerPgBackendModeMock.mockReturnValue(true);
+  });
+
+  async function detach(store, record) {
+    const { consumeThreadDocDetaches } = await import('../src/docs/publication-holds.js');
+    const { getWorkspaceDb } = await import('../src/db.js');
+    const database = getWorkspaceDb();
+    store.__detachVersion = Number(store.__detachVersion || 0) + 2;
+    const row = { id: 'thread', workspace_id: store.getSelectedDocWorkspaceId(), row_version: store.__detachVersion - 1,
+      metadata: { ambulando_thread_artefacts: { version: 1, items: [{ kind: 'doc', id: record.record_id }] } } };
+    await database.transaction('rw', database.sync_state, () => consumeThreadDocDetaches(database, row, {
+      ...row, row_version: store.__detachVersion, metadata: { ambulando_thread_artefacts: { version: 1, items: [] } },
+    }));
+    return store.refreshSelectedDocPublicationHold();
+  }
+
+  it('blocks autosave, lifecycle publication and global Docs reopen while retaining a resumable draft', async () => {
+    const { store, record } = createSyncedPgDocSaveStore({ draftDirty: true });
+    store.docsEditorOpen = true;
+    await store.persistSelectedDocDraft();
+    await detach(store, record);
+    const save = vi.spyOn(store, 'saveSelectedPgDocItem');
+    expect(await store.saveSelectedDocItem({ autosave: true })).toBeNull();
+    store.handleDocEditLeaseLifecycleExit();
+    await store.docLeaseLifecycleExitPromise;
+    const { store: reopened } = createSyncedPgDocSaveStore({ draftDirty: false });
+    await reopened.restoreSelectedDocDraft(record, { generation: reopened.docEditAccessGeneration });
+    expect(reopened.docDraftChoice).toBeTruthy();
+    await reopened.resumeSelectedDocDraft();
+    expect(await reopened.saveSelectedDocItem({ autosave: true })).toBeNull();
+    expect(save).not.toHaveBeenCalled();
+    expect(reopened.docPublicationHold?.generation).toBeTruthy();
+    expect((await reopened.getPreservedDocDraft()).content).toBeTruthy();
+  });
+
+  it('requires labelled explicit Save and releases only the generation actually reviewed', async () => {
+    const { store, record } = createSyncedPgDocSaveStore({ draftDirty: true });
+    await store.persistSelectedDocDraft();
+    await detach(store, record);
+    expect(await store.saveSelectedDocItem()).toBeNull();
+    store.saveSelectedPgDocItem = vi.fn(async () => { store.docEditDraftDirty = false; return { ...record, sync_status: 'synced' }; });
+    expect(await store.saveDetachedDocExplicitly()).toBeTruthy();
+    expect(store.docPublicationHold).toBeNull();
+    expect(await store.getPreservedDocDraft()).toBeFalsy();
+  });
+
+  it('refuses stale explicit discard after a renewed detach and keeps the draft', async () => {
+    const { store, record } = createSyncedPgDocSaveStore({ draftDirty: true });
+    await store.persistSelectedDocDraft();
+    const old = await detach(store, record);
+    await detach(store, record);
+    expect(await store.discardSelectedDocDraft({ publicationHoldGeneration: old.generation })).toBe(false);
+    expect(await store.getPreservedDocDraft()).toBeTruthy();
+  });
+  it('rechecks a queued autosave after a canonical detach arrives', async () => {
+    const { store, record } = createSyncedPgDocSaveStore({ draftDirty: true });
+    let finish;
+    store.pgDocSavePromises = { [record.record_id]: new Promise(resolve => { finish = resolve; }) };
+    store.saveSelectedPgDocItem = vi.fn();
+    const queued = store.saveSelectedDocItem({ autosave: true });
+    await detach(store, record);
+    finish(null);
+    expect(await queued).toBeNull();
+    expect(store.saveSelectedPgDocItem).not.toHaveBeenCalled();
+    expect(await store.getPreservedDocDraft()).toBeTruthy();
+  });
+
+  it('does not reset another account/database editor after discard hydration finishes late', async () => {
+    const { store, record } = createSyncedPgDocSaveStore({ draftDirty: true });
+    await store.persistSelectedDocDraft();
+    const hold = await detach(store, record);
+    store.hydrateSelectedDocWithRetry = vi.fn(async () => {
+      const database = openWorkspaceDb('detached-doc-other-account'); await database.open();
+      await Promise.all(database.tables.map(table => table.clear()));
+      store.session = { npub: 'other-account' };
+      store.currentWorkspace = { ...store.currentWorkspace };
+      store.docEditorTitle = 'Other account draft';
+      await upsertDocumentDraft({ workspace_id: store.getSelectedDocWorkspaceId(), document_id: record.record_id,
+        content: 'Other account work', draft_status: 'dirty' });
+      return record;
+    });
+    expect(await store.discardSelectedDocDraft({ publicationHoldGeneration: hold.generation })).toBe(false);
+    expect(store.docEditorTitle).toBe('Other account draft');
+    expect((await store.getPreservedDocDraft()).content).toBe('Other account work');
+  });
+
+  it('publishes the reviewed held content through the real save path before releasing recovery', async () => {
+    const body = 'Reviewed detached work';
+    const { store, record } = createSyncedPgDocSaveStore({ currentModel: richDocContentModel(body), draftDirty: true });
+    await store.persistSelectedDocDraft();
+    await detach(store, record);
+    updateTowerPgDocMock.mockResolvedValueOnce(acceptedPgDoc(44, body));
+    const saved = await store.saveDetachedDocExplicitly();
+    expect(saved?.version).toBe(44);
+    expect(updateTowerPgDocMock).toHaveBeenCalledTimes(1);
+    expect(store.docPublicationHold).toBeNull();
+    expect(await store.getPreservedDocDraft()).toBeFalsy();
+  });
+
+  it('stops recovery promotion before transport when another account/database becomes active', async () => {
+    const { store, record } = createSyncedPgDocSaveStore({ draftDirty: false });
+    store.docRecovery = { id: 'recovery-held', resolution_state: 'open' };
+    getTowerPgDocRecoveryMock.mockImplementationOnce(async () => {
+      const database = openWorkspaceDb('detached-recovery-other-account'); await database.open();
+      await Promise.all(database.tables.map(table => table.clear()));
+      store.session = { npub: 'replacement-account' };
+      store.docEditorTitle = 'Replacement account';
+      return { current_head: { row_version: 44, body_sha256_hex: 'a'.repeat(64) } };
+    });
+    promoteTowerPgDocRecoveryMock.mockClear();
+    expect(await store.promoteSelectedDocRecovery({ publicationHoldGeneration: 'reviewed' })).toBe(false);
+    expect(promoteTowerPgDocRecoveryMock).not.toHaveBeenCalled();
+    expect(store.docEditorTitle).toBe('Replacement account');
+    const { getDocumentById } = await import('../src/db.js');
+    expect(await getDocumentById(record.record_id)).toBeFalsy();
+  });
+
+  it('keeps a replacement account draft when the post-discard hold read completes late', async () => {
+    const { store, record } = createSyncedPgDocSaveStore({ draftDirty: true });
+    await store.persistSelectedDocDraft();
+    const hold = await detach(store, record);
+    const refresh = store.refreshSelectedDocPublicationHold.bind(store);
+    let reads = 0;
+    store.refreshSelectedDocPublicationHold = async () => {
+      if (++reads === 2) {
+        store.session = { npub: 'replacement-account' };
+        store.docLocalDraft = { content: 'Replacement draft' };
+        store.docEditAccessState = 'blocked';
+        return null;
+      }
+      return refresh();
+    };
+    store.hydrateSelectedDocWithRetry = async () => record;
+    expect(await store.discardSelectedDocDraft({ publicationHoldGeneration: hold.generation })).toBe(false);
+    expect(store.docLocalDraft.content).toBe('Replacement draft');
+    expect(store.docEditAccessState).toBe('blocked');
+  });
+
 });

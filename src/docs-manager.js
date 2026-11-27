@@ -1,3 +1,5 @@
+import { liveQuery } from 'dexie';
+import { readPublicationHold, releasePublicationHold } from './docs/publication-holds.js';
 import { captureDocumentDomSelection, captureDocumentPreviewSelection, documentCommentSelection } from './docs/comment-selection.js';
 import { CanvasReferenceCatalog, canvasChatSuggestions, parseCanvasChatReference } from './canvas/chat-references.js';
 import { hydrateCanvasList } from './canvas/sync-service.js';
@@ -36,6 +38,8 @@ import {
   getCommentsByTarget,
   getAudioNoteById,
   getDocumentDraft,
+  getWorkspaceDb,
+  hasWorkspaceDb,
   getDocumentById,
   upsertDocumentDraft,
   deleteDocumentDraft,
@@ -1155,6 +1159,9 @@ export const docsManagerMixin = {
   },
 
   closeDocEditor(options = {}) {
+    this.docPublicationHoldSubscription?.unsubscribe();
+    this.docPublicationHoldSubscription = null;
+    this.docPublicationHold = null;
     const selectedRecord = this.selectedDocument;
     const draftPromise = this.docEditDraftDirty
       ? this.persistSelectedDocDraft({ immediate: true })
@@ -1214,8 +1221,82 @@ export const docsManagerMixin = {
     this.syncRoute?.(true);
   },
 
+  captureDocPublicationAuthority({ ignoreEditorGeneration = false } = {}) {
+    const id = this.selectedDocId, workspace = this.currentWorkspace, actor = this.session?.npub;
+    const database = hasWorkspaceDb() ? getWorkspaceDb() : null;
+    const origin = resolveTowerPgWorkspaceContext(this).baseUrl, generation = this.docEditAccessGeneration;
+    return () => this.selectedDocId === id && this.currentWorkspace === workspace && this.session?.npub === actor
+      && (ignoreEditorGeneration || this.docEditAccessGeneration === generation)
+      && resolveTowerPgWorkspaceContext(this).baseUrl === origin && (hasWorkspaceDb() ? getWorkspaceDb() : null) === database;
+  },
+
+  async refreshSelectedDocPublicationHold() {
+    const current = this.captureDocPublicationAuthority();
+    const id = this.selectedDocId, workspace = this.getSelectedDocWorkspaceId();
+    const hold = hasWorkspaceDb() ? await readPublicationHold(getWorkspaceDb(), workspace, id) : null;
+    if (current()) this.docPublicationHold = hold;
+    return hold;
+  },
+
+  async withDocPublicationAction(operation) {
+    if (this.docPublicationAction) return null;
+    const id = this.selectedDocId, adapter = this.docRichEditorAdapter;
+    const current = this.captureDocPublicationAuthority();
+    this.docPublicationAction = id;
+    this.cancelDocAutosave();
+    adapter?.setEditable?.(false);
+    try { return await operation(); }
+    finally {
+      this.docPublicationAction = null;
+      if (current() && this.docRichEditorAdapter === adapter) adapter?.setEditable?.(this.isSelectedDocRichEditorEditable());
+    }
+  },
+
+  saveDetachedDocExplicitly() {
+    return this.withDocPublicationAction(() => this.saveDetachedDocReviewed());
+  },
+
+  async saveDetachedDocReviewed() {
+    const item = this.selectedDocument, hold = this.docPublicationHold;
+    const current = this.captureDocPublicationAuthority();
+    if (!item || !hold) return null;
+    const workspace = this.getSelectedDocWorkspaceId(), database = getWorkspaceDb();
+    const signature = JSON.stringify([this.docEditorTitle, documentContentSignature(this.buildSelectedDocContentModel())]);
+    const options = { publicationHoldGeneration: hold.generation };
+    const saved = this.docRecovery?.resolution_state === 'open' && !this.docEditDraftDirty
+      ? (await this.promoteSelectedDocRecovery(options) ? this.selectedDocument : null)
+      : await this.saveSelectedDocItem(options);
+    if (!saved || !current() || this.selectedDocId !== item.record_id || workspace !== this.getSelectedDocWorkspaceId()
+      || this.docEditDraftDirty || this.docRecovery?.resolution_state === 'open' || saved.sync_status !== 'synced'
+      || signature !== JSON.stringify([this.docEditorTitle, documentContentSignature(this.buildSelectedDocContentModel())])) return saved;
+    const released = await releasePublicationHold(database, workspace, item.record_id, hold.generation, this.docLocalDraft?.draft_revision);
+    if (current()) {
+      if (released) this.docLocalDraft = null;
+      await this.refreshSelectedDocPublicationHold();
+    }
+    return saved;
+  },
+
   loadDocEditorFromSelection(selectedItem = undefined) {
+    this.docPublicationHoldSubscription?.unsubscribe();
+    this.docPublicationHoldSubscription = null;
+    this.docPublicationHold = null;
     const item = selectedItem === undefined ? this.selectedDocument : selectedItem;
+    if (item?.record_id && hasWorkspaceDb()) {
+      const database = getWorkspaceDb(), workspace = this.getSelectedDocWorkspaceId(item), id = item.record_id;
+      const current = this.captureDocPublicationAuthority({ ignoreEditorGeneration: true });
+      this.docPublicationHoldSubscription = liveQuery(() => readPublicationHold(database, workspace, id)).subscribe({
+        next: hold => {
+          if (!current() || this.selectedDocId !== id || workspace !== this.getSelectedDocWorkspaceId()) return;
+          this.docPublicationHold = hold;
+          if (hold) {
+            this.cancelDocAutosave();
+            if (this.docEditDraftDirty) void this.persistSelectedDocDraft().catch(error => { this.error = error.message; });
+          }
+        },
+        error: error => { if (current()) this.error = `Publication hold could not be read: ${error.message}`; },
+      });
+    }
     this.docReview = null;
     this.docReviewBusy = false;
     this.docMergePending = false;
@@ -1544,6 +1625,7 @@ export const docsManagerMixin = {
     const title = this.docEditorTitle;
     const content = this.docEditorContent;
     const revision = Number(this.docDraftWriteRevision || 0);
+    await this.refreshSelectedDocPublicationHold();
     const draft = options.draft || await getDocumentDraft(workspaceId, item.record_id);
     if (!draft || revision !== Number(this.docDraftWriteRevision || 0)) return null;
     if (Number(options.generation || 0) !== Number(this.docEditAccessGeneration || 0)) return null;
@@ -1566,7 +1648,7 @@ export const docsManagerMixin = {
       && String(draft.title || item.title || 'Untitled document') === String(item.title || 'Untitled document')
       && String(draft.content || '') === String(item.content || '')
       && documentContentSignature(draft) === documentContentSignature(item);
-    if (draftAlreadyCanonical) {
+    if (draftAlreadyCanonical && !this.docPublicationHold) {
       this.setSelectedDocBaseIdentity(head);
       this.docEditBaseContentSignature = documentContentSignature(item);
       this.docEditDraftDirty = false;
@@ -2004,6 +2086,7 @@ export const docsManagerMixin = {
   },
 
   isSelectedDocRichEditorEditable() {
+    if (this.docPublicationAction === this.selectedDocId) return false;
     const item = this.selectedDocument;
     if (!item || this.docDraftRestorePending || this.docDraftChoice || this.docDraftReadSaved) return false;
     if (!isTowerPgBackendMode()) {
@@ -2340,27 +2423,39 @@ export const docsManagerMixin = {
     }
   },
 
-  async discardSelectedDocDraft() {
+  discardSelectedDocDraft(options = {}) {
+    return this.withDocPublicationAction(() => this.discardSelectedDocDraftReviewed(options));
+  },
+
+  async discardSelectedDocDraftReviewed(options = {}) {
+    const current = this.captureDocPublicationAuthority();
     const item = this.selectedDocument;
     if (!item) return false;
+    const workspace = this.getSelectedDocWorkspaceId(item), database = hasWorkspaceDb() ? getWorkspaceDb() : null;
+    const hold = await this.refreshSelectedDocPublicationHold();
+    if (!current() || (hold && options.publicationHoldGeneration !== hold.generation)) return false;
     this.cancelDocAutosave();
     this.cancelDocLocalDraftPersistence();
     try {
-      const deleted = await this.clearSelectedDocDraft(item);
+      const deleted = hold
+        ? await releasePublicationHold(database, workspace, item.record_id, hold.generation, (this.docLocalDraft || this.docDraftChoice)?.draft_revision)
+        : await this.clearSelectedDocDraft(item);
       if (!deleted) throw new Error('local recovery storage is unavailable');
     } catch (error) {
-      this.docEditAccessMessage = `Local draft could not be discarded: ${error?.message || error}`;
+      if (current()) this.docEditAccessMessage = `Local draft could not be discarded: ${error?.message || error}`;
       return false;
     }
-    if (this.selectedDocId !== item.record_id) return false;
+    if (!current()) return false;
 
     let authoritative = item;
     if (isTowerPgBackendMode() && isSyncedPgRecord(item)) {
       authoritative = await this.hydrateSelectedDocWithRetry(item.record_id, { delays: [0] }) || this.selectedDocument || item;
     }
-    if (this.selectedDocId !== item.record_id) return false;
+    if (!current()) return false;
 
     this.applySelectedDocAuthoritativeContent(authoritative, { preserveSelection: false });
+    await this.refreshSelectedDocPublicationHold();
+    if (!current()) return false;
     this.docLocalDraft = null;
     this.docEditAccessState = 'ready';
     this.docEditAccessMessage = '';
@@ -2368,7 +2463,7 @@ export const docsManagerMixin = {
     if (isTowerPgBackendMode() && isSyncedPgRecord(authoritative)) {
       clearPgEditLeaseSession(this, 'document', item.record_id);
       const session = await this.inspectSelectedDocEditLease(authoritative);
-      if (this.selectedDocId !== item.record_id) return false;
+      if (!current()) return false;
       if (session?.inspectedLease) {
         this.docEditAccessState = 'blocked';
         // Let the derived status render the freshly inspected owner and expiry.
@@ -3714,7 +3809,7 @@ export const docsManagerMixin = {
 
   scheduleDocAutosave(options = {}) {
     this.scheduleDocLocalDraftPersistence();
-    if (!this.docsEditorOpen) return;
+    if (!this.docsEditorOpen || this.docPublicationHold) return;
     if (this.docReview || this.docMergePending || this.docEditConflict) return;
     if (this.docEditorMode === 'rich' && ['loading', 'error'].includes(this.docRichEditorLoadState)) return;
     if (this.docEditorMode === 'preview') return;
@@ -4741,6 +4836,16 @@ export const docsManagerMixin = {
         if (!latest || latest.record_id !== recordId || this.currentWorkspace !== queuedWorkspace
           || this.session?.npub !== queuedActor || this.docEditAccessGeneration !== queuedGeneration
           || resolveTowerPgWorkspaceContext(this).baseUrl !== queuedOrigin) return null;
+        const hold = await this.refreshSelectedDocPublicationHold();
+        if (this.currentWorkspace !== queuedWorkspace || this.session?.npub !== queuedActor
+          || this.docEditAccessGeneration !== queuedGeneration || this.selectedDocId !== recordId
+          || resolveTowerPgWorkspaceContext(this).baseUrl !== queuedOrigin) return null;
+        if (hold && (autosave || options.publicationHoldGeneration !== hold.generation)) {
+          if (this.docEditDraftDirty) await this.persistSelectedDocDraft();
+          this.docAutosaveState = 'device';
+          this.docEditAccessMessage = 'Removed from a thread. Automatic publishing is paused; review and explicitly save or discard this draft.';
+          return null;
+        }
         return this.saveSelectedPgDocItem(latest, this.workspaceOwnerNpub, options);
       })();
       this.pgDocSavePromises[recordId] = savePromise;
@@ -5136,6 +5241,7 @@ export const docsManagerMixin = {
         pg_editor_generation: generation,
         pg_editor_workspace: workspaceId,
         pg_save_requires_lease: requiresCanonicalLease,
+        pg_publication_hold_generation: options.publicationHoldGeneration || null,
         sync_status: 'pending',
         updated_at: new Date().toISOString(),
       };
@@ -5346,12 +5452,13 @@ export const docsManagerMixin = {
     }
   },
 
-  async promoteSelectedDocRecovery() {
+  async promoteSelectedDocRecovery(options = {}) {
+    const authority = this.captureDocPublicationAuthority();
     const item = this.selectedDocument;
     const generation = this.docEditAccessGeneration;
     const workspaceId = this.getSelectedDocWorkspaceId(item);
     const submitted = toRaw(this.buildSelectedDocDraftRow() || {});
-    const current = () => this.selectedDocId === item?.record_id
+    const current = () => authority() && this.selectedDocId === item?.record_id
       && generation === this.docEditAccessGeneration && workspaceId === this.getSelectedDocWorkspaceId();
     const unchanged = () => current() && !this.docEditDraftDirty
       && documentContentSignature(this.buildSelectedDocContentModel()) === documentContentSignature(submitted)
@@ -5378,6 +5485,9 @@ export const docsManagerMixin = {
         return false;
       }
       if (!lease?.lease_token) throw new Error('Get edit access before using this recovery as the saved document.');
+      const hold = await this.refreshSelectedDocPublicationHold();
+      if (!current()) return false;
+      if (hold && options.publicationHoldGeneration !== hold.generation) throw new Error('This detached recovery remains on hold. Use Save reviewed draft to source after reviewing the recovery.');
       const result = await promoteTowerPgDocRecovery(context.workspaceId, item.record_id, recoveryId, {
         row_version: currentHead.row_version,
         ...(currentHead.version_id ? { base_version_id: currentHead.version_id } : {}),
